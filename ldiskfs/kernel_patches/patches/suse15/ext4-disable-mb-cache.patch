@@ -1,9 +1,21 @@
+commit 3dabe77a496d1c9b375264da220a90683b219daa
+Author:     Rahul Deshmukh <Rahul.Deshmukh@sun.com>
+AuthorDate: Thu Aug 19 21:02:56 2010 +0400
+b=23368 ldiskfs: add no_mbcache parameter to disable mbcache
+
 mbcache provides absolutely no value for Lustre xattrs (because
 they are unique and cannot be shared between files) and as we can
 see it has a noticable overhead in some cases. In the past there
 was a CONFIG_MBCACHE option that would allow it to be disabled,
 but this was removed in newer kernels, so we will need to patch
 ldiskfs to fix this.
+
+This was added upstream as "nombcache" in v4.12-rc2-47-gcdb7ee4c63.
+
+Linux-commit: cdb7ee4c632759075866bb8da5fb16b764e66ded
+
+Signed-off-by: Rahul Deshmukh <Rahul.Deshmukh@sun.com>
+Reviewed-by: Yang Sheng <sheng.yang@sun.com>
 
 Index: b/fs/ext4/ext4.h
 ===================================================================

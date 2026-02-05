@@ -1,3 +1,14 @@
+commit e3ee697515c1c8fa1480f03ed24e0265380fb323
+Author:     Kalpak Shah <kalpak@clusterfs.com>
+AuthorDate: Thu May 22 16:38:19 2008 +0000
+
+Print dir inode number when displaying corrupt hash code warning
+
+Bugzilla-ID: b=9570
+Signed-off-by: Kalpak Shah <kalpak@clusterfs.com>
+Reviewed-by: Andreas Dilger <adilger@clusterfs.com>
+Reviewed-by: Girish Shilamkar <girish@clusterfs.com>
+
 Index: linux-stage/fs/ext4/namei.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/namei.c

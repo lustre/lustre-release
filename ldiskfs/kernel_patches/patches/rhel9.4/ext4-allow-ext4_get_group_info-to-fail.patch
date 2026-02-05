@@ -1,8 +1,6 @@
 commit 5354b2af34064a4579be8bc0e2f15a7b70f14b5f
 Author:     Theodore Ts'o <tytso@mit.edu>
 AuthorDate: Sat Apr 29 00:06:28 2023 -0400
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Sat May 13 18:02:46 2023 -0400
 
 ext4: allow ext4_get_group_info() to fail
 

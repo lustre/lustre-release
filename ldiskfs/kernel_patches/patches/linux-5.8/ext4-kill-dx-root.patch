@@ -1,8 +1,22 @@
-From aa282f628e4ad75eea7f8ee1b26dea920c238241 Mon Sep 17 00:00:00 2001
-From: Shaun Tancheff <stancheff@cray.com>
-Date: Tue, 6 Aug 2019 17:00:55 -0500
-Subject: [PATCH] + linux-5.3/ext4-kill-dx-root
+commit 24f463435bea176b9139d9ac51315784beae0023
+Author:     Pravin Shelar <Pravin.Shelar@sun.com>
+AuthorDate: Sun Oct 4 18:05:00 2009 +0000
+LU-11922 ldiskfs: add "FID in dirent" support in ext4
 
+Split monolithic definition of dx_root struct to separate dx_root_info
+from fake struct ext4_dir_entry2 for improved code readability.
+This allows "." and ".." dirents to have different sizes if necessary,
+since we can't assume the rec_len 12 if dx_root dirents have dirdata.
+Adds dx_get_dx_info() accessor instead of complex typecast at callers.
+Does not change any functionality.
+
+Bugzilla-ID: b=17670
+Signed-off-by: Bob Glossman <bob.glossman@intel.com>
+Signed-off-by: Yang Sheng <yang.sheng@intel.com>
+Reviewed-by: Andreas Dilger <andreas.dilger@intel.com>
+Reviewed-by: Oleg Drokin <oleg.drokin@intel.com>
+Change-Id: Ifbc294a53bd21eb35d373637d3326fc3c611c9f0
+Reviewed-on: http://review.whamcloud.com/10249
 ---
  fs/ext4/namei.c |  111 +++++++++++++++++++++++++++++---------------------------
  1 file changed, 58 insertions(+), 53 deletions(-)

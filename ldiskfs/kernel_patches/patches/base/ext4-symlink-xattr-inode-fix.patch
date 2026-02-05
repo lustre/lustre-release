@@ -1,3 +1,6 @@
+commit d0c75da783013e61c6c53bdd26337d72b3679961
+Author:     Andreas Dilger <adilger@whamcloud.com>
+AuthorDate: Sat Jun 21 08:55:51 2025 -0600
 ext4: check fast symlink for ea_inode correctly
 
 The check for a fast symlink in the presence of only an
@@ -26,8 +29,15 @@ superblock EA_INODE feature flag, not EXT4_EA_INODE_FL,
 since the latter is only set on the xattr inode itself,
 and not on the inode that references it.
 
+Linux-commit: b4cc4a4077268522e3d0d34de4b2dc144e2330fa
+
 Fixes: fc82228a5e38 ("ext4: support fast symlinks from ext3 file systems")
 Signed-off-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Li Dongyang <dongyangli@ddn.com>
+Reviewed-by: Alex Zhuravlev <bzzz@whamcloud.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: Ia7c1c59fcc005a3be11435325a96b809592540e5
+Reviewed-on: https://review.whamcloud.com/59879
 
 Index: linux-stage/fs/ext4/inode.c
 ===================================================================

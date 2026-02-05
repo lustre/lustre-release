@@ -1,4 +1,23 @@
-Add a proc interface for max_dir_size.
+commit 31e1dbf5a16d19ac34a95f6ccd4a815e10306cef
+Author:     Zhou Bowen <bwzhou@clusterfs.com>
+AuthorDate: Tue May 20 09:07:37 2008 +0000
+
+ldiskfs: add max_dir_size tunable directory limit
+
+Add a parameter max_dir_size_kb to limit the maximum directory size.
+This allows sites to limit very large directories to avoid issues
+with userspace tools like "ls" that cannot handle millions of files
+in a directory efficiently.
+
+The max_dir_size tunable is kept for compatibility with kernels < 3.6
+when the 'max_dir_size_kb' parameter was added to upstream ext4.
+
+Linux-commit: df981d03eeff7971ac7e6ff37000bfa702327ef1
+
+Bugzilla-ID: b=13285
+Signed-off-by: Zhou Bowen <bwzhou@clusterfs.com>
+Reviewed-by: Sergey Glushchenko <deen@clusterfs.com>
+Reviewed-by: Andreas Dilger <adilger@clusterfs.com>
 
 ---
  fs/ext4/sysfs.c | 9 +++++++++

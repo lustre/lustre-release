@@ -3,9 +3,9 @@ Author:     Yang Sheng <ys@whamcloud.com>
 AuthorDate: Tue Jan 24 03:31:27 2017 +0800
 Subject: LU-9031 osd: handle jinode change for ldiskfs
 
-We need take care of jinode for ldiskfs. Since we
-didn't got inode from syscall like sys_open(). So
-have to initailize it in OSD by ourselves.
+We need to take care of jinode for ldiskfs. Since we
+did not get the inode from syscall like sys_open(). So
+we have to initialize it in OSD by ourselves.
 
 Signed-off-by: Yang Sheng <yang.sheng@intel.com>
 Change-Id: Iec6db290c3779a8f7c98e5d1356b71fd928d7c88

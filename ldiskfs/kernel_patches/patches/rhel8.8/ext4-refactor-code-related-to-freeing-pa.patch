@@ -1,8 +1,6 @@
 commit 820897258ad342e78388ee9f5814fc485e79102a
 Author:     Ojaswin Mujoo <ojaswin@linux.ibm.com>
 AuthorDate: Sat Mar 25 13:43:35 2023 +0530
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Thu Apr 6 01:13:12 2023 -0400
 
 ext4: Refactor code related to freeing PAs
 

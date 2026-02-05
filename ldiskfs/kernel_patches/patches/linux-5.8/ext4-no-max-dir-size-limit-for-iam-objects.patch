@@ -1,3 +1,19 @@
+commit 03e6db505be90d35ccacb3af7e15277784e5d448
+Author:     Li Dongyang <dongyangli@ddn.com>
+AuthorDate: Fri Sep 4 09:34:34 2020 +1000
+
+LU-13187 osd-ldiskfs: don't enforce max dir size limit on IAM objects
+
+Add ext4-no-max-dir-size-limit-for-iam-objects.patch to introduce new
+inode state EXT4_STATE_IAM and use it to mark IAM objects.
+
+Test-Parameter: testlist=sanity env=ONLY=129,ONLY_REPEAT=100
+Signed-off-by: Li Dongyang <dongyangli@ddn.com>
+Reviewed-by: Neil Brown <neilb@suse.de>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: James Simmons <jsimmons@infradead.org>
+Change-Id: I3bcc5435ea07edb9fa265dcd8e3261d849495f00
+Reviewed-on: https://review.whamcloud.com/39823
 ---
  fs/ext4/ext4.h  |    1 +
  fs/ext4/namei.c |    6 ++++--

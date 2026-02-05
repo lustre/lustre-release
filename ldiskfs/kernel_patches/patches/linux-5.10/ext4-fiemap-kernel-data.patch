@@ -1,13 +1,18 @@
-Subject: [PATCH] fiemap on kernel allocated buffers
+commit 5cd5a49c7213315d83bca54a2eee97ba57d256cc
+Author:     Shaun Tancheff <shaun.tancheff@hpe.com>
+AuthorDate: Fri Dec 2 04:19:59 2022 -0600
 
-With KERNEL_DS gone lustre needs an alternative for fiemap to
+LU-16321 osd: Allow fiemap on kernel allocated buffers
+
+When KERNEL_DS gone lustre needs an alternative for fiemap to
 copy extents to kernel space memory.
 
 Direct in-kernel calls to inode->f_ops->fiemap() can utilize
 an otherwise unused flag on fiemap_extent_info fi_flags
 to indicate the fiemap extent buffer is allocated in kernel space.
 
-Introduce EXT4_FIEMAP_FLAG_MEMCPY and use it.
+Include ldiskfs patches for ldiskfs_fiemap() to
+define EXT4_FIEMAP_FLAG_MEMCPY and utilize it.
 
 The patch pulls some common code into ext4:
    ext4_fiemap_fill_next_extent <--- fiemap_fill_next_extent
@@ -18,11 +23,18 @@ The patch pulls some common code into ext4:
 and changes ext4_fiemap_fill_next_extent to conditionally
 use memcpy instead of copy_to_user.
 
+Linux-commit: v5.17-rc3-19-g967747bbc084
+
+uaccess: remove CONFIG_SET_FS
+HPE-bug-id: LUS-11337
+Fixes: d0337cab8e ("LU-14195 osd: don't use set_fs() for ->fiemap() calls.")
 Signed-off-by: Shaun Tancheff <shaun.tancheff@hpe.com>
----
- fs/ext4/ext4.h    |   3 +
- fs/ext4/extents.c | 265 +++++++++++++++++++++++++++++++++++++++++++++-
- 2 files changed, 264 insertions(+), 4 deletions(-)
+Reviewed-by: Neil Brown <neilb@suse.de>
+Reviewed-by: Alexander Boyko <alexander.boyko@hpe.com>
+Reviewed-by: Petros Koutoupis <petros.koutoupis@hpe.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: I7a8edb481833fd1bdcf7b6cd6e08397c1754baee
+Reviewed-on: https://review.whamcloud.com/49190
 
 diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
 index c931e3a..0bb54fe 100644

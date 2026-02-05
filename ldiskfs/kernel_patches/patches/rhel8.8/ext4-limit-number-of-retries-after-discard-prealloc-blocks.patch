@@ -1,8 +1,6 @@
 commit 80fa46d6b9e7b1527bfd2197d75431fd9c382161
 Author:     Theodore Ts'o <tytso@mit.edu>
 AuthorDate: Thu Sep 1 18:03:14 2022 -0400
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Thu Sep 22 10:51:19 2022 -0400
 
 ext4: limit the number of retries after discarding preallocations blocks
 

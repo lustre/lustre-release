@@ -1,6 +1,6 @@
-From 0f2ea2fa4bdbfff08778626aed8879bbe7a73d26 Mon Sep 17 00:00:00 2001
-From: Xinliang Liu <xinliang.liu@linaro.org>
-Date: Fri, 1 Sep 2023 08:30:38 +0000
+From 332f8696f462ae8affc0a44494423e4edd88bb29 Mon Sep 17 00:00:00 2001
+From: "Vitaliy Kuznetsov" <vk.en.mail@gmail.com>
+Date: Thu, 15 Jun 2023 11:17:14 +0300
 Subject: [PATCH] ext4: Add periodic superblock update check
 
 This patch introduces a mechanism to periodically check and update
@@ -15,7 +15,11 @@ active, rather than based on a timer that may trigger during disk idle
 periods.
 
 Signed-off-by: Vitaliy Kuznetsov <vk.en.mail@gmail.com>
-Signed-off-by: Xinliang Liu <xinliang.liu@linaro.org>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Alex Zhuravlev <bzzz@whamcloud.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: I06eb9624b663a6ca6b15c6af2373b82f1bb63de6
+Reviewed-on: https://review.whamcloud.com/c/fs/lustre-release/+/51340
 ---
  fs/ext4/super.c | 50 +++++++++++++++++++++++++++++++++++++++++++++++++
  1 file changed, 50 insertions(+)

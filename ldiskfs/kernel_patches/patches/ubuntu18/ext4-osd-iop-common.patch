@@ -1,3 +1,23 @@
+commit bb3dff04ddbbf9a647641d98e293fdf014719313
+Author:     Rahul Deshmukh <deshmukh@clusterfs.com>
+AuthorDate: Wed Nov 19 06:47:42 2008 +0000
+
+ldiskfs: add interface for direct inode/dentry operations
+
+Allow osd-ldiskfs operations to directly allocate inodes without
+directory entries, and remove directory entries without deleting
+the inode.  This allows osd-ldiskfs on the MDT to add and remove
+remote directory entries more easily for remote DNE directory
+and hard link operations as part of compound operations.
+
+The entries in the filesystem will remain consistent at the end
+of every transaction.
+
+Bugzilla-ID: b=11826
+Signed-off-by: Rahul Deshmukh <deshmukh@clusterfs.com>
+Reviewed-by: Nikita Danilov <nikita@clusterfs.com>
+Reviewed-by: Andreas Dilger <adilger@clusterfs.com>
+
 diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
 index 91c73b231e58..e6c4550bbf0e 100644
 --- a/fs/ext4/ext4.h

@@ -1,3 +1,39 @@
+commit 95f8ae5677491508ae7182b4f61ead3d413434ae
+Author:     Artem Blagodarenko <artem.blagodarenko@hpe.com>
+AuthorDate: Thu Jun 6 16:50:11 2019 +0300
+
+LU-12103 ldiskfs: don't search large block range if disk full
+
+Block allocator tries to find:
+1) group with the same range as required
+2) group with the same average range as required
+3) group with required amount of space
+4) any group
+
+For quite full disk step 1 is failed with higth
+probability, but takes a lot of time.
+
+Skip 1st step if disk space < 25%
+Skip 2d step if disk space < 15%
+Skip 3d step if disk space < 5%
+Also check if group has any free space on step 4.
+
+This three thresholds can be adjusted through added interface.
+
+Variables added which counts unsuccessfull group processing loops.
+This can show allocator effectiveness in different circumstances.
+
+This statistics output through mb_alloc file. This file is
+useful to track allocator activity.
+
+Signed-off-by: Artem Blagodarenko <c17828@cray.com>
+Cray-bug-id: LUS-6746
+Reviewed-by: Wang Shilong <wshilong@ddn.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: I18c7147e32951c49e12a2444803aa2995bb4ae2d
+Reviewed-on: https://review.whamcloud.com/35180
+
 ---
  fs/ext4/ext4.h    |    7 ++
  fs/ext4/mballoc.c |  133 ++++++++++++++++++++++++++++++++++++++++++++++++++++++

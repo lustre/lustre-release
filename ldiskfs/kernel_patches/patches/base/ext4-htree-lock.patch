@@ -1,3 +1,6 @@
+commit 8e858671be59ed53fad2d340cf841b026943cc8a
+Author:     Liang Zhen <liang.zhen@intel.com>
+AuthorDate: Fri Jul 8 13:43:08 2011 -0400
 ext4: parallel directory locking for htree
 
 Single directory performance is a critical for HPC workloads. In a
@@ -41,7 +44,8 @@ The idea is simple, like how pdirop is implement at LDLM level.
 Lustre-bug-id: https://jira.whamcloud.com/browse/LU-50
 Lustre-change: http://review.whamcloud.com/375
 Signed-off-by: Liang Zhen <liang@whamcloud.com>
-
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
 
 Index: linux-3.10.0-229.1.2.fc21.x86_64/include/linux/htree_lock.h
 ===================================================================

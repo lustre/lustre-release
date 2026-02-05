@@ -1,8 +1,6 @@
 commit 3c6296046c85333bc52555a670a9093d9e2657bb
 Author:     Ojaswin Mujoo <ojaswin@linux.ibm.com>
 AuthorDate: Tue May 30 18:03:46 2023 +0530
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Mon Jun 26 19:34:56 2023 -0400
 
 ext4: Don't skip prefetching BLOCK_UNINIT groups
 

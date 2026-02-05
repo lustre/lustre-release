@@ -1,3 +1,17 @@
+commit b156790dea16b3c494f5130666a9293fa179fe99
+Author:     Alex Zhuravlev <bzzz@whamcloud.com>
+AuthorDate: Fri Sep 22 16:01:56 2023 +0300
+LU-17136 ldiskfs: increase max extent tree depth
+
+this is an workaround until LU-16843 ready
+
+Signed-off-by: Alex Zhuravlev <bzzz@whamcloud.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Li Dongyang <dongyangli@ddn.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: I5829c10888bf32649fe7a7a72c8ee697647a89cc
+Reviewed-on: https://review.whamcloud.com/c/fs/lustre-release/+/52474
+
 Index: linux-4.18.0-32.el8.x86_64/fs/ext4/ext4.h
 ===================================================================
 --- linux-4.18.0-32.el8.x86_64.orig/fs/ext4/ext4_extents.h

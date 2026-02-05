@@ -1,3 +1,26 @@
+commit 05f31782be20fc4c46082dba02c10bcea59539e3
+Author:     Alex Zhuravlev <bzzz@whamcloud.com>
+AuthorDate: Mon Dec 2 11:23:30 2019 +0300
+LU-12988 ldiskfs: mballoc to prefetch groups
+
+Ahead of scanning. prefetching is done in 8 * flex_bg groups, so
+it should be 8 read-ahead reads for a single allocating thread.
+At the end of allocation the allocating thread waits for read-ahead
+completion and initializes buddy information so that read-aheads
+are not lost in case of memory pressure.
+
+At cr=0 the number of prefetching IOs is limited per allocation
+context to prevent a situation when mballoc loads thousands of
+bitmaps looking for a perfect group and ignoring groups with
+good chunks.
+
+Signed-off-by: Alex Zhuravlev <bzzz@whamcloud.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Wang Shilong <wshilong@ddn.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: If86e3aff75379e064f70c0a66e2d65bdc5593651
+Reviewed-on: https://review.whamcloud.com/36893
+
 --- linux-4.18/fs/ext4/balloc.c	2019-11-28 14:55:26.506546036 +0300
 +++ linux-4.18/fs/ext4/balloc.c	2019-12-02 11:21:50.565975537 +0300
 @@ -404,7 +404,8 @@ verified:

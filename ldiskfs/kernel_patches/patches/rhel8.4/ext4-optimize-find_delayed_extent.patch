@@ -1,3 +1,21 @@
+commit 3dd73b5c5d61a219c702873711055cb1cc80394a
+Author:     Andrew Perepechko <andrew.perepechko@hpe.com>
+AuthorDate: Tue Nov 1 19:26:54 2022 +0300
+LU-16286 ldiskfs: reimplement nodelalloc optimization
+
+fiemap calls perform costly delayed extent search affecting
+BRW performance, however, in Lustre we don't use delayed
+allocation at all. Let's skip this search completely as we did
+in RHEL7.
+
+Signed-off-by: Andrew Perepechko <andrew.perepechko@hpe.com>
+HPE-bug-id: LUS-11161
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Alexander Boyko <alexander.boyko@hpe.com>
+Change-Id: I2c3562cf5cbdf3c5532e4b79b28a040a995322b7
+Reviewed-on: https://review.whamcloud.com/49007
+
 --- linux-stage.orig/fs/ext4/extents.c	2022-09-05 09:04:31.628122705 -0600
 +++ linux-stage/fs/ext4/extents.c	2022-09-06 05:32:57.083369853 -0600
 @@ -5064,6 +5064,13 @@ static int ext4_find_delayed_extent(s

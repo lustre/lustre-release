@@ -1,6 +1,7 @@
-Date: Fri, 14 Dec 2018 22:43:43 -0500
-From: "Theodore Ts'o" <tytso@mit.edu>
-List-Id: <linux-ext4.vger.kernel.org>
+commit 7c800e460661972925a7acab51f023d0b38161b5
+Author:     Theodore Ts'o <tytso@mit.edu>
+AuthorDate: Wed Dec 19 12:28:13 2018 -0500
+ext4: include terminating u32 in size of xattr entries when expanding inodes
 
 In ext4_expand_extra_isize_ea(), we calculate the total size of the
 xattr header, plus the xattr entries so we know how much of the
@@ -10,8 +11,16 @@ entries, or else if there is uninitialized, non-zero bytes after the
 xattr entries and before the xattr values, the list of xattr entries
 won't be properly terminated.
 
+Linux-commit: a805622a757b6d7f65def4141d29317d8e37b8a1
+
 Reported-by: Steve Graham <stgraham2000@gmail.com>
 Signed-off-by: Theodore Ts'o <tytso@mit.edu>
+Signed-off-by: Li Dongyang <dongyangli@ddn.com>
+Reviewed-by: Yang Sheng <ys@whamcloud.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Alex Zhuravlev <bzzz@whamcloud.com>
+Change-Id: I247b935b3cf315481dc4658133a7eee02b6350e9
+Reviewed-on: https://review.whamcloud.com/33893
 ---
  fs/ext4/xattr.c | 2 +-
  1 file changed, 1 insertion(+), 1 deletion(-)

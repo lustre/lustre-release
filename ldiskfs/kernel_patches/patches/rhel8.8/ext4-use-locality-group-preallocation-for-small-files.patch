@@ -1,8 +1,6 @@
 commit a9f2a2931d0e197ab28c6007966053fdababd53f
 Author:     Jan Kara <jack@suse.cz>
 AuthorDate: Thu Sep 8 11:21:27 2022 +0200
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Wed Sep 21 22:12:00 2022 -0400
 
 ext4: use locality group preallocation for small closed files
 

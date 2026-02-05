@@ -1,3 +1,6 @@
+commit 686dee707f8728aa8ba27bcd4cee69f8fbf7b278
+Author:     Alex Zhuravlev <bzzz@whamcloud.com>
+AuthorDate: Wed Mar 1 21:28:25 2023 +0300
 LU-10026 osd-ldiskfs: use preallocation for dense writes
 
 use inode's preallocation chunks as per-inode group preallocation:
@@ -6,13 +9,11 @@ just grab the very first available blocks from the window.
 Test-Parameters: env=ONLY=1000,ONLY_REPEAT=11 testlist=sanity-compr
 Test-Parameters: env=ONLY=fsx,ONLY_REPEAT=11 testlist=sanity-compr
 Signed-off-by: Alex Zhuravlev <bzzz@whamcloud.com>
-Change-Id: I9d36701f569f4c6305bc46f3373bfc054fcd61a9
-Reviewed-on: https://review.whamcloud.com/c/fs/lustre-release/+/50171
-Tested-by: jenkins <devops@whamcloud.com>
-Tested-by: Maloo <maloo@whamcloud.com>
 Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
 Reviewed-by: Artem Blagodarenko <ablagodarenko@ddn.com>
 Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: I9d36701f569f4c6305bc46f3373bfc054fcd61a9
+Reviewed-on: https://review.whamcloud.com/50171
 ---
  fs/ext4/ext4.h    |  3 +++
  fs/ext4/extents.c |  2 ++

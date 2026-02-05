@@ -1,3 +1,24 @@
+commit 76c3fa96dc30f21e95d80f9119972d7358975258
+Author:     Alexander Zarochentsev <alexander.zarochentsev@hpe.com>
+AuthorDate: Tue Aug 9 10:55:48 2022 +0300
+LU-16082 ldiskfs: old-style EA inode handling fix
+
+The upstream version of EA inodes support coming
+with RHEL8 (linux kernel 4.18+) have a slightly different
+implementation of EA inodes support and also have a
+compatibility code to recognize old-style Lustre-only EAs.
+Unfortunately the compatibility code is broken and makes
+old xattr data unaccessible due to a wrong hash value check.
+
+HPE-bug-id: LUS-11133
+Signed-off-by: Alexander Zarochentsev <alexander.zarochentsev@hpe.com>
+Reviewed-by: Alex Zhuravlev <bzzz@whamcloud.com>
+Reviewed-by: Artem Blagodarenko <ablagodarenko@ddn.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: Icd6f93d4ebb33dcd03b58f9eb364905c18ae81dc
+Reviewed-on: https://review.whamcloud.com/48174
+
 Index: linux-stage/fs/ext4/xattr.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/xattr.c

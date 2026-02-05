@@ -1,3 +1,33 @@
+commit a7239d80fc92380a5a56ff1b0adb99d349f9a0dc
+Author:     Li Dongyang <dongyangli@ddn.com>
+AuthorDate: Wed Jul 31 22:03:32 2024 +1000
+LU-18080 ldiskfs: add NO_CHECKS flags for ext4_iget
+
+Since v6.4-rc4-1-gb3e6bcb94590, the upstream kernel introduced
+a strict checking of EXT4_IGET_EA_INODE and it has to match the
+EXT4_EA_INODE_FL from the inode.
+
+This creates a problem for osd scrub as we iterate over the inodes
+according to bitmap we have no idea if the inode is an ea_inode or
+not.
+
+Add a new flag EXT4_IGET_NO_CHECKS and relax the strict checking
+when the flag is used.
+
+Cleanup osd_ldiskfs_iget_special(), the caller of osd_iget() now are
+passing in the additional flags to ext4_iget().
+
+Test-Parameters: trivial
+Test-Parameters: fstype=ldiskfs serverdistro=el9.4 testlist=conf-sanity env=ONLY=32a
+Signed-off-by: Li Dongyang <dongyangli@ddn.com>
+Tested-by: Shuichi Ihara <sihara@ddn.com>
+Reviewed-by: Shaun Tancheff <shaun.tancheff@hpe.com>
+Reviewed-by: Li Xi <lixi@ddn.com>
+Reviewed-by: James Simmons <jsimmons@infradead.org>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: I43c8da68b06c5592e197dd3b5e3f4f7c842cf7c4
+Reviewed-on: https://review.whamcloud.com/55896
+
 diff -ur b/fs/ext4/ext4.h a/fs/ext4/ext4.h
 --- b/fs/ext4/ext4.h	2024-09-15 15:04:20.463952510 -0600
 +++ a/fs/ext4/ext4.h	2024-09-15 15:13:46.530227093 -0600

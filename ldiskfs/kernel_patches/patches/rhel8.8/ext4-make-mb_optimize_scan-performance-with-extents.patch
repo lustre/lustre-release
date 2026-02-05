@@ -1,8 +1,6 @@
 commit 077d0c2c78df6f7260cdd015a991327efa44d8ad
 Author:     Ojaswin Mujoo <ojaswin@linux.ibm.com>
 AuthorDate: Tue Mar 8 15:22:01 2022 +0530
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Sat Mar 12 20:54:21 2022 -0500
 
 ext4: make mb_optimize_scan performance mount option work with extents
 

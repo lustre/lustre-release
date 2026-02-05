@@ -1,4 +1,42 @@
-Subject: [PATCH] P: linux-5.14/ext4-projid-xattrs.patch
+commit 665383d3a1f4d1dc7f404301039432271ad85eaf
+Author:     Li Dongyang <dongyangli@ddn.com>
+AuthorDate: Tue Nov 30 12:13:03 2021 +1100
+LU-12056 ldiskfs: add trusted.projid virtual xattr
+
+Add trusted.projid virtual xattr in ldiskfs to export the
+current project id, intended for ldiskfs level MDT backup.
+
+When the project id is EXT4_DEF_PROJID/0,
+the virtual xattr is hidden from listxattr(2).
+
+It's also hidden on lustre client when parent has the
+project inherit flag and the same project ID,
+to stop mv from setting the virtual xattr on the dest with
+the project id from src, which could be different from dest.
+
+getxattr(2) on trusted.projid will report current project id,
+setxattr(2) will change curent project id and
+removexattr(2) will set project id back to EXT4_DEF_PROJID/0
+
+Both get|setxattr(2) will work even when the virtual xattr is
+hidden.
+
+Invalidate client xattr cache for the inode when changing its
+project id, so the virtual xattr can get the new value
+for next getxattr(2)
+
+Add test cases to verify the virtual projid xattr and backup
+restore MDT using tar can now preserve the project id.
+
+Change mds_backup_restore in test framework, to use
+tar with --xattrs --xattrs-include='trusted.*'" options.
+
+Signed-off-by: Li Dongyang <dongyangli@ddn.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Yang Sheng <ys@whamcloud.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: I29b1aa922ef72d734cdc87125401fa08fb13d4af
+Reviewed-on: https://review.whamcloud.com/45679
 
 ---
  fs/ext4/ext4.h  |  1 +

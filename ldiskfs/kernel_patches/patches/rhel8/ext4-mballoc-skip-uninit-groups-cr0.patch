@@ -1,3 +1,19 @@
+commit ecb68b84807e5165dd8c513023b3d2a6ddadf5ad
+Author:     Alex Zhuravlev <bzzz@whamcloud.com>
+AuthorDate: Mon Feb 24 06:57:24 2020 +0300
+LU-13291 ldiskfs: mballoc don't skip uninit-on-disk groups
+
+as those need no IO to initialize buddy structures and the best
+candidates for new blocks.
+
+Fixes: 6a7a700a1490 ("LU-12988 ldiskfs: skip non-loaded groups at cr=0/1")
+Signed-off-by: Alex Zhuravlev <bzzz@whamcloud.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Wang Shilong <wshilong@ddn.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: Ic3c5a238d8825024d7a0fec6a25e842b7ba1f100
+Reviewed-on: https://review.whamcloud.com/37687
+
 --- linux-4.18/fs/ext4/mballoc.c	2019-11-28 14:55:26.500545920 +0300
 +++ linux-4.18/fs/ext4/mballoc.c	2019-11-28 14:53:18.600086008 +0300
 @@ -1885,6 +1885,21 @@ void ext4_mb_scan_aligned(struct ext4_allocation_context *ac,

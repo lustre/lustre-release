@@ -1,8 +1,6 @@
 commit a078dff870136090b5779ca2831870a6c5539d36
 Author:     Jan Kara <jack@suse.cz>
 AuthorDate: Thu Sep 22 11:09:29 2022 +0200
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Mon Sep 26 13:21:05 2022 -0400
 
 ext4: fixup possible uninitialized variable access in ext4_mb_choose_next_group_cr1()
 

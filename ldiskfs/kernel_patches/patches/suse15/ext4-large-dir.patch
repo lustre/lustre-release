@@ -1,3 +1,6 @@
+commit 8e858671be59ed53fad2d340cf841b026943cc8a
+Author:     Liang Zhen <liang.zhen@intel.com>
+AuthorDate: Fri Jul 8 13:43:08 2011 -0400
 Subject: [PATCH] ext4: add largedir feature
 
 This INCOMPAT_LARGEDIR feature allows larger directories to be created

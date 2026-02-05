@@ -1,3 +1,46 @@
+commit 10fa969f87c2c4306a2da2087008f765f8cd0627
+Author:     Li Dongyang <dongyangli@ddn.com>
+AuthorDate: Wed Mar 12 20:28:53 2025 +1100
+
+LU-17950 ldiskfs: race in ext4_inode_attach_jinode
+
+A race condition could happen when multiple threads
+trying to attach jinode for the same inode:
+
+    Thread 1:
+    ext4_map_blocks
+      ext4_inode_attach_jinode
+        spin_lock(&inode->i_lock)
+        ei->jinode = jinode
+    -> jbd2_journal_init_jbd_inode(ei->jinode, inode)
+
+    Thread 2:
+    ext4_map_blocks
+      ext4_inode_attach_jinode
+        if (ei->jinode || !EXT4_SB(inode->i_sb)->s_journal)
+                return 0;
+      ext4_jbd2_inode_add_write
+    ->  jbd2_journal_file_inode
+
+The problem is in ext4_inode_attach_jinode() the initial check
+of ei->jinode is not protected by inode->i_lock,
+thread 2 could go ahead and use the not yet initialized jinode
+in jbd2_journal_file_inode(), and thread 1 later will
+use jbd2_journal_init_jbd_inode, corrupting the jinode.
+
+Note this issue is specific to ldiskfs because of
+ext4-attach-jinode-in-writepages.patch added
+ext4_inode_attach_jinode() to make sure jinode is initialized
+before calling ext4_jbd2_inode_add_write().
+
+Signed-off-by: Li Dongyang <dongyangli@ddn.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Alex Zhuravlev <bzzz@whamcloud.com>
+Reviewed-by: Yang Sheng <ys@whamcloud.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: Iafd7aa9537505afbf4bc53fef40ea3aa0a94b7da
+Reviewed-on: https://review.whamcloud.com/58381
+
 Index: linux/fs/ext4/inode.c
 ===================================================================
 --- linux.orig/fs/ext4/inode.c

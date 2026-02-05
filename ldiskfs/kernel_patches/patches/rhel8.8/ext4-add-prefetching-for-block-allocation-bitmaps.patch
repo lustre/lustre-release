@@ -1,8 +1,6 @@
 commit cfd73237722135807967f389bcbda558a60a30d6
 Author:     Alex Zhuravlev <bzzz@whamcloud.com>
 AuthorDate: Tue Apr 21 10:54:07 2020 +0300
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Thu Aug 6 01:44:48 2020 -0400
 
 ext4: add prefetching for block allocation bitmaps
 

@@ -1,9 +1,6 @@
 commit 4b68f6df105966f04f45f1eca0561b86f2b3551d
 Author:     Harshad Shirwadkar <harshadshirwadkar@gmail.com>
 AuthorDate: Thu Apr 1 10:21:26 2021 -0700
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Fri Apr 9 11:34:59 2021 -0400
-
 ext4: add MB_NUM_ORDERS macro
 
 A few arrays in mballoc.c use the total number of valid orders as

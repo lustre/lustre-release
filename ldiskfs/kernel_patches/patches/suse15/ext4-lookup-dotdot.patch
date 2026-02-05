@@ -25,7 +25,7 @@ Index: linux-3.10.9-200.fc17.x86_64/fs/ext4/namei.c
  	}
 +	/* ".." shouldn't go into dcache to preserve dcache hierarchy
 +	 * otherwise we'll get parent being a child of actual child.
-+	 * see bug 10458 for details -bzzz */
++	 * see b=10458 for details -bzzz */
 +	if (inode && (dentry->d_name.name[0] == '.' &&
 +		      (dentry->d_name.len == 1 || (dentry->d_name.len == 2 &&
 +					     dentry->d_name.name[1] == '.')))) {

@@ -1,3 +1,32 @@
+commit ad30edf91065d733d7da68de755acf1043429101
+Author: Wang Shilong <wshilong@ddn.com>
+AuthorDate: Fri Aug 11 15:32:31 2023 +1000
+LU-14712 ldiskfs: introduce EXT4_BG_TRIMMED to optimize fstrim
+
+Currently the WAS_TRIMMED flag indicating block group has been
+trimmed is not persistent, and fstrim status will be lost at
+unmount.  As a result, fstrim cannot skip the already trimmed
+groups on remount, which could be slow on very large devices.
+
+To avoid this kind of problem, introduce a new block group flag
+EXT4_BG_TRIMMED to be stored persistently in the block group
+descriptor after trimming each block group.  This adds one extra
+group descriptor write after trimming a block group. When the
+flag is cleared the block group descriptor is journaled  already
+so it does not introduce any overhead.
+
+Add a new super block flag EXT2_FLAGS_TRACK_TRIM, to indicate if
+we should honour persistent EXT4_BG_TRIMMED when doing fstrim.
+The new super block flag can be turned on/off via tune2fs.
+
+Cc: Shuichi Ihara <sihara@ddn.com>
+Cc: Wang Shilong <wangshilong1991@gmail.com>
+Signed-off-by: Wang Shilong <wshilong@ddn.com>
+Signed-off-by: Dongyang Li <dongyangli@ddn.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Change-Id: I7faaca4754b1726ad05d0aafe3e90e0e9f591617
+Reviewed-on: https://review.whamcloud.com/51923
+
 Index: linux-6.12.0-55.27.1.el10_0/fs/ext4/ext4.h
 ===================================================================
 --- linux-6.12.0-55.27.1.el10_0.orig/fs/ext4/ext4.h

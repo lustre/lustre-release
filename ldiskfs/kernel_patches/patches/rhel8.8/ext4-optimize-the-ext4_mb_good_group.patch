@@ -1,8 +1,6 @@
 commit dddcd2f9ebdeca9fbd36526e950bbcd0f7c1765f
 Author:     brookxu <brookxu.cn@gmail.com>
 AuthorDate: Fri Aug 7 22:01:39 2020 +0800
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Tue Aug 18 14:18:36 2020 -0400
 
 ext4: optimize the implementation of ext4_mb_good_group()
 

@@ -1,8 +1,6 @@
 commit 67d25186046145748d5fe4c5019d832215e01c1e
 Author:     Harshad Shirwadkar <harshadshirwadkar@gmail.com>
 AuthorDate: Thu Apr 1 10:21:23 2021 -0700
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Fri Apr 9 11:34:58 2021 -0400
 
 ext4: drop s_mb_bal_lock and convert protected fields to atomic
 

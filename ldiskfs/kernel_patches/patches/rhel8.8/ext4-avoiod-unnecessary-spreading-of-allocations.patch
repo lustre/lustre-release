@@ -1,8 +1,6 @@
 commit 1940265ede6683f6317cba0d428ce6505eaca944
 Author:     Jan Kara <jack@suse.cz>
 AuthorDate: Thu Sep 8 11:21:25 2022 +0200
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Wed Sep 21 22:11:41 2022 -0400
 
 ext4: avoid unnecessary spreading of allocations among groups
 

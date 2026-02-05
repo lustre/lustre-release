@@ -1,3 +1,49 @@
+commit ad30edf91065d733d7da68de755acf1043429101
+Author:     Li Dongyang <dongyangli@ddn.com>
+AuthorDate: Fri Aug 11 15:32:31 2023 +1000
+LU-17980 ldiskfs: add fstrim mount option
+
+Introduce ldiskfs fstrim mount option. to improve online discard
+behavior.  The '-o fstrim' option overrides '-o discard', instead
+of doing online discard, when a block group has more free blocks
+than the tunable bg_trimmed_threshold, it will be scheduled for
+discard for the whole group with a delay, using ext4_trim_all_free().
+
+When more blocks are freed in the block group, the delay will be
+renewed, to aggregate the potential future free blocks, but not
+longer than the tunable 60 seconds from the original discard request.
+
+When a block group is scheduled for discard, it will be skipped in
+the block allocator for the cr0 and cr1 scan, to avoid repeat
+free/allocate on the block group. If we can't find any suitable
+block group in the cr0 and cr1 scan, we will try cr0 and cr1 again
+but this time do not skip the block groups.
+
+'-o fstrim' also accepts an optional fstrim_min_blocks parameter
+which is also tunable via sysfs, to control the min free blocks we
+trim in ext4_trim_all_free().  If the group's average free fragments
+is less than fstrim_min_blocks, we skip the group as it's too
+fragmented and will result in many small trim commands to the
+storage.
+
+There's another sysfs tunable fstrim_avg_frag_no_delay, if the group's
+average free fragments is greater than fstrim_avg_frag_no_delay, we
+try to trim the group right away without delaying and gathering more
+free blocks.
+
+Fix lmd_parse() to pass down the ldiskfs mount options to OST,
+when there's mgsnode option the current code cut off options string,
+losing the extra ldiskfs mount options.
+
+Signed-off-by: Li Dongyang <dongyangli@ddn.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Reviewed-by: Alex Zhuravlev <bzzz@whamcloud.com>
+Tested-by: Eugene Birkine <ebirkine@ddn.com>
+Reviewed-by: Jason Huselton <jhuselton@ddn.com>
+Reviewed-by: Andreas Dilger <adilger@thelustrecollective.com>
+Change-Id: I7f9bc0c10f5caf3ded72b781684579fdd5d796fb
+Reviewed-on: https://review.whamcloud.com/60235
+
 Index: linux-5.14.0-162.23.1.el9_1/fs/ext4/ext4.h
 ===================================================================
 --- linux-5.14.0-162.23.1.el9_1.orig/fs/ext4/ext4.h

@@ -1,3 +1,14 @@
+commit 3675818845f2a4713348c363eb78f696753ad24e
+Author:     Girish Shilamkar <girish@clusterfs.com>
+AuthorDate: Thu May 22 17:01:56 2008 +0000
+
+Fix ext3 inode version field being filled with 0x5a5a5a5a on disk.
+Declare our own in-core i_fs_version to hold the Lustre transno.
+
+Bugzilla-ID: b=15604
+Signed-off-by: Girish Shilamkar <girish@clusterfs.com>
+Reviewed-by: Andreas Dilger <adilger@clusterfs.com>
+
 diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
 index bbe69446..bdd72d46 100644
 --- a/fs/ext4/ext4.h

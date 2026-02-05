@@ -1,8 +1,6 @@
 commit 3fa5d23e68a34dae9df2be168750dc5e03e0e40d
 Author:     Ojaswin Mujoo <ojaswin@linux.ibm.com>
 AuthorDate: Mon Jul 4 11:16:03 2022 +0530
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Tue Aug 2 23:56:17 2022 -0400
 
 ext4: reflect mb_optimize_scan value in options file
 

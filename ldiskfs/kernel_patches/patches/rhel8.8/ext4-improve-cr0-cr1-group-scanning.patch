@@ -1,8 +1,6 @@
 commit 196e402adf2e4cd66f101923409f1970ec5f1af3
 Author:     Harshad Shirwadkar <harshadshirwadkar@gmail.com>
 AuthorDate: Thu Apr 1 10:21:27 2021 -0700
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Fri Apr 9 11:34:59 2021 -0400
 
 ext4: improve cr 0 / cr 1 group scanning
 

@@ -1,3 +1,29 @@
+commit 4c33ce3a86a48ce6da2604a2a8bdab22650b12aa
+Author:     Li Dongyang <dongyangli@ddn.com>
+AuthorDate: Tue Jul 8 20:53:46 2025 +1000
+LU-19158 ldiskfs: add trim statistics
+
+This adds the ldiskfs to record lifetime kbytes discarded and number
+of discard ops in the superblock and export them in the sysfs, under
+/sys/fs/ldiskfs/<disk>/lifetime_discard_kbytes and
+/sys/fs/ldiskfs/<disk>/lifetime_discard_ops.
+
+Also adds a discard histogram for the current mount session
+under /proc/fs/ldiskfs/<disk>/discard_stats, and it looks like this:
+
+sizes: { 8KB: 1, 128KB: 5, 1MB: 1, 2MB: 4, 16MB: 3, 32MB: 2, 64MB: 4, 128MB: 67 }
+count: 87
+
+Writing anything to the procfs entry resets the histogram.
+
+Test-Parameters: trivial
+Signed-off-by: Li Dongyang <dongyangli@ddn.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Artem Blagodarenko <ablagodarenko@ddn.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: I32fe2a722d165699feb5da6effefc08af35aa241
+Reviewed-on: https://review.whamcloud.com/60071
+
 Index: linux-5.14.0-503.35.1.el9_5/fs/ext4/ext4.h
 ===================================================================
 --- linux-5.14.0-503.35.1.el9_5.orig/fs/ext4/ext4.h

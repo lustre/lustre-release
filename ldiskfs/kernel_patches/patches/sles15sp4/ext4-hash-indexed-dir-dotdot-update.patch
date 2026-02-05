@@ -1,4 +1,44 @@
-Subject: [PATCH] linux-5.14/ext4-hash-indexed-dir-dotdot-update.patch
+commit 0536b2a26992f5d2ef9e3537a196afac81281f60
+Author:     Li Dongyang <dongyangli@ddn.com>
+AuthorDate: Wed Apr 17 15:36:55 2024 +1000
+
+LU-17711 osd-ldiskfs: do not delete dotdot during rename
+
+Since upstream kernel commit v5.12-rc4-32-g6c0912739699
+ext4_dir_entry_2 after rec_len will be wiped when deleting
+the entry.
+
+This creates a problem with rename, when we delete dotdot
+first and if it's a dx dir, kernel will wipe entire dx_root
+in the block after dotdot entry.
+
+We can just update the dotdot entry in-place without deleting.
+
+For dx dirs, ext4_update_dotdot() takes care of dotdot and
+inserting dotdot is an update, use it for linear dirs also.
+
+Rewrite ext4_update_dotdot() to get a few fixes:
+*use ext4_read_dirblock to get the first block.
+*do not assert on data read from disk, we check the dot and
+dotdot entry and if anything looks wrong, we return -EFSCORRUPTED.
+*make sure the change is journalled.
+*set metadata_csum correctly for dx dirs.
+
+Update ext4-data-in-dirent.patch, if dotdot entry has no space
+for dirdata, try to expand the dotdot entry by moving the
+entries behind it, or move the dx_root for dx dirs.
+
+Add conf-sanity/154 to verify that the ".." entry was updated
+properly after restore, including with an htree split directory
+with dx_root entry.
+
+Signed-off-by: Li Dongyang <dongyangli@ddn.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Shaun Tancheff <shaun.tancheff@hpe.com>
+Reviewed-by: Jian Yu <yujian@whamcloud.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: I33e862739fa44f583aaa4369190d6d80271db13b
+Reviewed-on: https://review.whamcloud.com/54723
 
 ---
  fs/ext4/namei.c | 71 +++++++++++++++++++++++++++++++++++++++++++++++++

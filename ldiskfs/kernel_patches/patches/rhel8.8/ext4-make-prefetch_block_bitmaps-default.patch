@@ -1,8 +1,6 @@
 commit 21175ca434c5d49509b73cf473618b01b0b85437
 Author:     Harshad Shirwadkar <harshadshirwadkar@gmail.com>
 AuthorDate: Thu Apr 1 10:21:29 2021 -0700
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Fri Apr 9 11:34:59 2021 -0400
 
 ext4: make prefetch_block_bitmaps default
 

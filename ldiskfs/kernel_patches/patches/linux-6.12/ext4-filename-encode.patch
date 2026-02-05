@@ -27,11 +27,11 @@ LDISKFS_XATTR_NAME_RAWENCNAME, that will be used to set correct name
 at linkat.
 
 Signed-off-by: Sebastien Buisson <sbuisson@ddn.com>
-Change-Id: Ia318c39d403b1c448e71bcd5b29862d022d05d0a
-Reviewed-on: https://review.whamcloud.com/c/fs/lustre-release/+/49456
 Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
 Reviewed-by: Li Dongyang <dongyangli@ddn.com>
 Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: Ia318c39d403b1c448e71bcd5b29862d022d05d0a
+Reviewed-on: https://review.whamcloud.com/49456
 ---
  fs/ext4/critical_encode.h | 170 ++++++++++++++++++++++++++++++++++++++
  fs/ext4/dir.c             |  81 +++++++++++-------

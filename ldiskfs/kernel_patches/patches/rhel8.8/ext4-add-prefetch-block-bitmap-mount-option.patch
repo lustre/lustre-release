@@ -1,9 +1,6 @@
 commit 3d392b2676bf3199863a1e5efb2c087ad9d442a4
 Author:     Theodore Ts'o <tytso@mit.edu>
 AuthorDate: Fri Jul 17 00:14:40 2020 -0400
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Fri Aug 7 14:12:35 2020 -0400
-
 ext4: add prefetch_block_bitmaps mount option
 
 For file systems where we can afford to keep the buddy bitmaps cached,

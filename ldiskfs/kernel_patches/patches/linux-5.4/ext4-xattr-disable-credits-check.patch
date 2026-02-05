@@ -1,3 +1,21 @@
+commit 278fa1fb23d293f6dc9add95cc0f1178af91a7db
+Author:     Alex Zhuravlev <bzzz@whamcloud.com>
+AuthorDate: Fri Aug 9 13:55:24 2019 +0300
+
+LU-12652 ldiskfs: disable credits check in 4.18
+
+4.18 has a credits check in xattr_set path with different math
+resulting in false ENOSPC and subsequent failure to update LMA.
+as a result - many tests fail on 4.18, especially with DNE.
+
+Signed-off-by: Alexey Zhuravlev <bzzz@whamcloud.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Wang Shilong <wshilong@ddn.com>
+Reviewed-by: Yang Sheng <ys@whamcloud.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: I82b19c0c24988aed66d74cf2323e93acffb14f31
+Reviewed-on: https://review.whamcloud.com/35750
+
 Index: focal/fs/ext4/xattr.c
 ===================================================================
 --- focal.orig/fs/ext4/xattr.c

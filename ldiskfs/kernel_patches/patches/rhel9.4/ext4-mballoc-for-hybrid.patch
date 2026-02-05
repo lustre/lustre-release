@@ -1,3 +1,7 @@
+commit 05e487a01b40da4e9f952eafa68bfde28074a385
+Author:     Bobi Jam <bobijam@whamcloud.com>
+AuthorDate: Mon Jul 10 19:40:34 2023 +0800
+
 With LVM it is possible to create an LV with SSD storage at the
 beginning of the LV and HDD storage at the end of the LV, and use that
 to separate ext4 metadata allocations (that need small random IOs)
@@ -44,6 +48,14 @@ v2->v3: add sysfs mb_enable_iops_data to enable data block allocation
         from IOPS groups.
 v1->v2: for metadata block allocation, search in IOPS list then normal
         list.
+
+Signed-off-by: Bobi Jam <bobijam@whamcloud.com>
+Reviewed-by: Li Dongyang <dongyangli@ddn.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: Ice2d25b8db19f67e70690f9ccebc419f253b12bd
+Reviewed-on: https://review.whamcloud.com/51625
+
 
 Index: linux-stage/fs/ext4/ext4.h
 ===================================================================

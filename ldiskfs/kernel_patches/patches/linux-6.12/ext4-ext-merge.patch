@@ -18,11 +18,11 @@ submitted to ext4@ maillist:
 https://lore.kernel.org/linux-ext4/7A2B8861-96AA-4815-BB58-180F63F62436@whamcloud.com/
 
 Signed-off-by: Alex Zhuravlev <bzzz@whamcloud.com>
-Change-Id: I746c0917e746eb442d3c69a23f591d9cdade76fa
-Reviewed-on: https://review.whamcloud.com/51096
 Reviewed-by: Artem Blagodarenko <ablagodarenko@ddn.com>
 Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
 Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: I746c0917e746eb442d3c69a23f591d9cdade76fa
+Reviewed-on: https://review.whamcloud.com/51096
 ---
  fs/ext4/extents.c | 178 +++++++++++++++++++++++++++++++++++++++++++++-
  1 file changed, 175 insertions(+), 3 deletions(-)

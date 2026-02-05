@@ -1,8 +1,6 @@
 commit 4fca50d440cc5d4dc570ad5484cc0b70b381bc2a
 Author:     Jan Kara <jack@suse.cz>
 AuthorDate: Thu Sep 8 11:21:24 2022 +0200
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Wed Sep 21 22:11:34 2022 -0400
 
 ext4: make mballoc try target group first even with mb_optimize_scan
 

@@ -1,8 +1,6 @@
 commit 83e80a6e3543f37f74c8e48a5f305b054b65ce2a
 Author:     Jan Kara <jack@suse.cz>
 AuthorDate: Thu Sep 8 11:21:28 2022 +0200
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Wed Sep 21 22:12:03 2022 -0400
 
 ext4: use buckets for cr 1 block scan instead of rbtree
 

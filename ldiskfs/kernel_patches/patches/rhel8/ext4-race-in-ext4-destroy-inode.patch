@@ -1,3 +1,19 @@
+commit 4b51f1df05c4219cd8f910ac8ad58e8de946bb56
+Author:     Alex Zhuravlev <bzzz@whamcloud.com>
+AuthorDate: Wed Jan 31 08:16:12 2024 +0300
+LU-17486 ldiskfs: fix race in ext4_destroy_inode
+
+ext4_i_callback() can race with the access to i_reserved_data_blocks
+in ext4_destroy_inode() when used with preemption-enabled kernel.
+
+Signed-off-by: Alex Zhuravlev <bzzz@whamcloud.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Li Dongyang <dongyangli@ddn.com>
+Reviewed-by: Neil Brown <neilb@suse.de>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: I69c6bcfbb24e6c07d28ebcd2bdd9d9e6f06ec8d1
+Reviewed-on: https://review.whamcloud.com/53868
+
 Index: linux-4.18.0-32.el8.x86_64/fs/ext4/ext4.h
 ===================================================================
 --- linux-4.18.0-32.el8.x86_64.orig/fs/ext4/super.c

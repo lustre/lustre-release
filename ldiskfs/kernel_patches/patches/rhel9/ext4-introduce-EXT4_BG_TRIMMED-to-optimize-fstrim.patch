@@ -1,4 +1,7 @@
-From: Wang Shilong <wshilong@ddn.com>
+commit ad30edf91065d733d7da68de755acf1043429101
+Author: Wang Shilong <wshilong@ddn.com>
+AuthorDate: Fri Aug 11 15:32:31 2023 +1000
+LU-14712 ldiskfs: introduce EXT4_BG_TRIMMED to optimize fstrim
 
 Currently the WAS_TRIMMED flag indicating block group has been
 trimmed is not persistent, and fstrim status will be lost at

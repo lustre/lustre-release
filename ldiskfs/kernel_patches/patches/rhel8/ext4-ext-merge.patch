@@ -1,3 +1,29 @@
+commit 0f7e6c02a9ea5b85d8d97f724bed318268cea60f
+Author:     Alex Zhuravlev <bzzz@whamcloud.com>
+AuthorDate: Tue May 23 16:30:58 2023 +0300
+LU-16843 ldiskfs: merge extent blocks
+
+There are cases (e.g. file written synchronously with discontiguous
+blocks that are later filled in) when a lot of extents are created
+initially, then the extents get merged over time, but there is no
+way to merge the index blocks.  This can cause a very deep extent
+index tree (above 5 levels) and cause problems like:
+
+inode has invalid extent depth: 6
+
+Merge leave/index blocks (one at each level at most) to right/left
+when extents are removed from the index.
+
+submitted to ext4@ maillist:
+https://lore.kernel.org/linux-ext4/7A2B8861-96AA-4815-BB58-180F63F62436@whamcloud.com/
+
+Signed-off-by: Alex Zhuravlev <bzzz@whamcloud.com>
+Reviewed-by: Artem Blagodarenko <ablagodarenko@ddn.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: I746c0917e746eb442d3c69a23f591d9cdade76fa
+Reviewed-on: https://review.whamcloud.com/51096
+
 Index: linux-4.18.0-80.1.2.el8_0/fs/ext4/extents.c
 ===================================================================
 --- linux-4.18.0-80.1.2.el8_0.orig/fs/ext4/extents.c

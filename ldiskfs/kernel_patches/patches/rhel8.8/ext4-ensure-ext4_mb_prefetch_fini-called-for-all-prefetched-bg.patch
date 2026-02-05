@@ -1,8 +1,6 @@
 commit 4f3d1e4533b0982034f316ace85415d3bc57e3da
 Author:     Ojaswin Mujoo <ojaswin@linux.ibm.com>
 AuthorDate: Tue May 30 18:03:47 2023 +0530
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Mon Jun 26 19:34:56 2023 -0400
 
 ext4: Ensure ext4_mb_prefetch_fini() is called for all prefetched BGs
 

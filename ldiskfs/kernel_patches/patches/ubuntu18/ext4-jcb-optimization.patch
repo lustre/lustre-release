@@ -1,8 +1,31 @@
-Change list_add_tail to list_add. It gives advantages to ldiskfs
-in tgt_cb_last_committed. In the beginning of list will be placed
-thandles with the highest transaction numbers. So at the first
-iterations we will have the highest transno. It will save from
-extra call of ptlrpc_commit_replies.
+commit 55afbf5934e145e48a31193de601abd58e605a42
+Author:     Sergey Cheremencev <c17829@cray.com>
+AuthorDate: Wed Apr 8 22:18:07 2015 +0300
+LU-6527 ext4: journal_commit_callback optimization
+
+Don't take spinlock in tgt_cb_last_committed, if
+exp_last_committed was updated with higher trasno.
+Also change list_add_tail to list_add. It gives
+advantages to ldiskfs in tgt_cb_last_committed.
+In the beginning of list will be placed thandles
+with the highest transaction numbers. So at the
+first iterations we will have the highest transno.
+It will save from extra call of
+ptlrpc_commit_replies.
+
+Signed-off-by: Sergey Cheremencev <sergey.cheremencev@seagate.com>
+Xyratex-bug-id: MRP-2575
+Reviewed-by: Alexander Zarochentsev <alexander.zarochentsev@seagate.com>
+Reviewed-by: Alexander Boyko <alexander.boyko@seagate.com>
+Tested-by: Alexander Lezhoev <alexander.lezhoev@seagate.com>
+Reviewed-by: Alexey Leonidovich Lyashkov <alexey.lyashkov@seagate.com>
+Reviewed-by: Alex Zhuravlev <alexey.zhuravlev@intel.com>
+Reviewed-by: Mike Pershin <mike.pershin@intel.com>
+Reviewed-by: Oleg Drokin <oleg.drokin@intel.com>
+Change-Id: Ib6f9cc54dae7d9ac1ca301402299f308b825ede4
+Reviewed-on: http://es-gerrit.xyus.xyratex.com:8080/5907
+Reviewed-on: http://review.whamcloud.com/14611
+
 
 Index: linux-4.15.0/fs/ext4/ext4_jbd2.h
 ===================================================================

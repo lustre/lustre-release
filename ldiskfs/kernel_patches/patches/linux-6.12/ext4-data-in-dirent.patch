@@ -7,20 +7,22 @@ Allows ext4 to store extra data records inside the ext4_dirent
 along with the regular directory entry (type, length, filename).
 Data is stored in ext4 dirent after filename, with a bit flag in
 de->file_type to indicate if any record after de->name is used.
+
 Each in-use record is variable length and must store a 1-byte
 length (including the length byte itself) at the start so that it
 can be skipped if the record type is unknown/uneeded.  The record
 starts after a NUL byte terminator for the filename.  This extra
 space is accounted in de->rec_len but not de->name_len.
 
-Flag EXT4_DIRENT_LUFID is used for a 128-bit file identifier.
+Flag EXT4_DIRENT_LUFID is used to store one or more 128-bit file
+identifiers (FIDs, len=1 + 16 * N bytes).
 Make use of dentry->d_fsdata to pass LUFID to ext4, so no changes
 in ext4_add_entry() interface are required.
 
 Bugzilla-ID: b=17670
 Signed-off-by: Pravin Shelar <Pravin.Shelar@sun.com>
 Reviewed-by: Huang Hua <h.huang@sun.com>
-Signed-off-by: Andreas Dilger <andreas.dilger@sun.com> 
+Signed-off-by: Andreas Dilger <andreas.dilger@sun.com>
 ---
  fs/ext4/dir.c         |   9 +-
  fs/ext4/ext4.h        | 107 ++++++++++++++-

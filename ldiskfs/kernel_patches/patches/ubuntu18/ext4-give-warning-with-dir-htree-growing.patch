@@ -1,3 +1,49 @@
+commit 07660ad33a7d109cced29b6400f99f25adab3f54
+Author:     Wang Shilong <wshilong@whamcloud.com>
+AuthorDate: Thu Jul 2 21:04:45 2015 -0400
+LU-6824 ldiskfs: give warning with dir htree growing
+
+Currently without large dir feature, ldiskfs directory hash tree
+will be limited 2 height, this means directory size is limited about
+1GB, and in fact users are likely to hit ENOSPC when reaching half of
+limit because of bad hash. tested by following scripts.
+
+    i=0
+    filename="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbb"
+    while [ 1 ]
+    do
+            touch $filename"$i"
+            if [ $? -ne 0 ];then
+                    break
+            fi
+            ((i++))
+    done
+
+When directoy size grow about 590M, we hit ENOSPC. Better way is to
+add support to e2fsprogs so that we can use large dir feature.
+As a walkaround way, this patch try to give warning messages to
+console when 10/16 and 11/16 of limit reach.
+
+So this patch will try to give following messages when warning
+limit or hash index tree limit reach:
+
+Directory (inode: 8388610 FID: [0x200000401:0x1:0x0]) has approached
+maximum limit.
+
+Directory (inode: 8388610 FID: [0x200000401:0x1:0x0]) is approaching
+maximum limit.
+
+FID output here is useful for administrators to locate lustre
+file path
+
+Signed-off-by: Wang Shilong <wshilong@ddn.com>
+Reviewed-by: Andreas Dilger <andreas.dilger@intel.com>
+Reviewed-by: Yang Sheng <yang.sheng@intel.com>
+Reviewed-by: James Simmons <uja.ornl@yahoo.com>
+Change-Id: I7f78c421bbb89f76298e0174cc46d774ea82eb06
+Reviewed-on: http://review.whamcloud.com/15548
+
 Index: linux-4.15.0/fs/ext4/ext4.h
 ===================================================================
 --- linux-4.15.0.orig/fs/ext4/ext4.h

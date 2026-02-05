@@ -1,3 +1,38 @@
+commit 4231fab66eab3e984499bf0c6bd4514692a409fa
+Author:     Sebastien Buisson <sbuisson@ddn.com>
+AuthorDate: Thu Jan 6 14:19:02 2022 -0700
+LU-13717 sec: make client encryption compatible with ext4
+
+In order to benefit from encrypted file handling implemented in
+e2fsprogs, we need to adjust the way Lustre deals with encryption
+context of files.
+
+First, the encryption context needs to be stored in an xattr named
+"encryption.c" instead of "security.c". But neither llite nor ldiskfs
+has an xattr handler for this "encryption." xattr type. So we need
+to export ldiskfs_xattr_get and ldiskfs_xattr_set_handle symbols for
+this to work.
+
+Second, we set the LDISKFS_ENCRYPT_FL flag on files for which we set
+the 'encryption.c' xattr. But we just keep this flag for on-disk
+inodes, and make sure the flag is cleared for in-memory inodes.
+The purpose is to help e2fsprogs with encrypted files handling, while
+not disturbing Lustre server side with the encryption flag (servers
+are not supposed to know about it for Lustre client-side encryption).
+
+To maintain compatibility with 2.14 in which encryption context is
+stored in "security.c" xattr, we try to fetch enc context from this
+xattr if getting it from "encryption.c" fails. On client side, in all
+cases everything looks like encryption context is stored in
+"encryption.c".
+
+Signed-off-by: Sebastien Buisson <sbuisson@ddn.com>
+Reviewed-by: James Simmons <jsimmons@infradead.org>
+Reviewed-by: Li Dongyang <dongyangli@ddn.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: I784ec530f0dfdd2743169ba2326ff6c5cdd4e85a
+Reviewed-on: https://review.whamcloud.com/45211
+
 diff -wur a/fs/ext4/ext4.h b/fs/ext4/ext4.h
 --- a/fs/ext4/ext4.h
 +++ b/fs/ext4/ext4.h

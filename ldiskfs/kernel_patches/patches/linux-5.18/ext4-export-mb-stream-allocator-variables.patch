@@ -1,7 +1,19 @@
-From 13afd00ca4268f5cc306bcf42ed4d7511bab4e67 Mon Sep 17 00:00:00 2001
-From: Shaun Tancheff <shaun.tancheff@hpe.com>
-Date: Mon, 14 Nov 2022 01:26:25 -0600
-Subject: [PATCH] linux-5.18/ext4-export-mb-stream-allocator-variables
+commit 75703118588f2b23afd8c8815e5ebb768fc7a8ff
+Author:     Lokesh Nagappa Jaliminche <lokesh.jaliminche@seagate.com>
+AuthorDate: Mon Jul 4 14:34:20 2016 +0530
+LU-8365 ldiskfs: procfs entries for mballoc
+
+Export mballoc streaming block allocator variables
+mb_last_group and mb_last_start through procfs.
+
+Test-Parameters: testgroup=review-ldiskfs
+Cray-bug-id: LUS-3176
+Signed-off-by: Lokesh Nagappa Jaliminche <lokesh.jaliminche@seagate.com>
+Signed-off-by: Alexander Zarochentsev <c17826@cray.com>
+Reviewed-by: Alex Zhuravlev <bzzz@whamcloud.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Change-Id: I5dd00503a81c6819751c9f99b64615b497ef4e28
+Reviewed-on: https://review.whamcloud.com/21142
 
 ---
  fs/ext4/ext4.h    |  2 ++

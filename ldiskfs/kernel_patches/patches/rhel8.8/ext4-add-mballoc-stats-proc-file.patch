@@ -1,9 +1,6 @@
 commit a6c75eaf11032f4a3d2b3ce2265a194ac6e4a7f0
 Author:     Harshad Shirwadkar <harshadshirwadkar@gmail.com>
 AuthorDate: Thu Apr 1 10:21:25 2021 -0700
-Commit:     Theodore Ts'o <tytso@mit.edu>
-CommitDate: Fri Apr 9 11:34:59 2021 -0400
-
 ext4: add mballoc stats proc file
 
 Add new stats for measuring the performance of mballoc. This patch is
