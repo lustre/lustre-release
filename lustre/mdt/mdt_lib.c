@@ -941,6 +941,7 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 			LASSERT(info->mti_attr.ma_lmm !=
 				req_capsule_server_get(pill, &RMF_MDT_MD));
 			req_capsule_shrink(pill, &RMF_MDT_MD, 0, RCL_SERVER);
+			md_packed = 0;
 		}
 	} else if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER)) {
 		req_capsule_shrink(pill, &RMF_MDT_MD, md_size, RCL_SERVER);
