@@ -1413,11 +1413,7 @@ struct ldlm_flock_info {
 	struct file_lock	fa_flc; /* lock copy */
 	enum ldlm_flock_flags	fa_flags;
 	enum ldlm_mode		fa_mode;
-#ifdef HAVE_LM_GRANT_2ARGS
 	int (*fa_notify)(struct file_lock *, int);
-#else
-	int (*fa_notify)(struct file_lock *, struct file_lock *, int);
-#endif
 	int			fa_err;
 	int			fa_ready;
 	wait_queue_head_t       fa_waitq;

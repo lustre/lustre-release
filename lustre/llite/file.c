@@ -2409,14 +2409,6 @@ fini_io:
 	RETURN(rc);
 }
 
-#ifdef HAVE_IOV_ITER_INIT_DIRECTION
-# define ll_iov_iter_init(i, d, v, n, l) \
-	 iov_iter_init((i), (d), (v), (n), (l))
-# else
-# define ll_iov_iter_init(i, d, v, n, l) \
-	 iov_iter_init((i), (v), (n), (l), 0)
-# endif
-
 typedef ssize_t (*iter_fn_t)(struct kiocb *, struct iov_iter *);
 
 static ssize_t do_loop_readv_writev(struct kiocb *iocb, const struct iovec *iov,
@@ -2430,7 +2422,7 @@ static ssize_t do_loop_readv_writev(struct kiocb *iocb, const struct iovec *iov,
 		ssize_t nr;
 		size_t len = vector->iov_len;
 
-		ll_iov_iter_init(&i, rw, vector, 1, len);
+		iov_iter_init(&i, rw, vector, 1, len);
 		nr = fn(iocb, &i);
 		if (nr < 0) {
 			if (!ret)
@@ -5543,11 +5535,7 @@ static void ll_file_flock_async_cb(struct ldlm_flock_info *args)
 
 		wait_event_idle(args->fa_waitq, args->fa_ready);
 
-#ifdef HAVE_LM_GRANT_2ARGS
 		rc = args->fa_notify(&notify_lock, err);
-#else
-		rc = args->fa_notify(&notify_lock, NULL, err);
-#endif
 		if (rc) {
 			CDEBUG_LIMIT(D_ERROR,
 				     "notify failed file_lock=%p err=%d\n",

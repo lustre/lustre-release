@@ -44,17 +44,6 @@
 #endif
 
 #ifdef HAVE_BVEC_ITER
-#define bio_idx(bio)			(bio->bi_iter.bi_idx)
-#define bio_set_sector(bio, sector)	(bio->bi_iter.bi_sector = sector)
-#define bvl_to_page(bvl)		(bvl->bv_page)
-#else
-#define bio_idx(bio)			(bio->bi_idx)
-#define bio_set_sector(bio, sector)	(bio->bi_sector = sector)
-#define bio_sectors(bio)		((bio)->bi_size >> 9)
-#define bvl_to_page(bvl)		(bvl->bv_page)
-#endif
-
-#ifdef HAVE_BVEC_ITER
 #define bio_start_sector(bio) (bio->bi_iter.bi_sector)
 #else
 #define bio_start_sector(bio) (bio->bi_sector)
@@ -137,20 +126,10 @@ static inline int d_in_lookup(struct dentry *dentry)
 #define iterate_shared iterate
 #endif
 
-#ifdef HAVE_VFS_RENAME_5ARGS
-#define ll_vfs_rename(a, b, c, d) vfs_rename(a, b, c, d, NULL)
-#elif defined HAVE_VFS_RENAME_6ARGS
-#define ll_vfs_rename(a, b, c, d) vfs_rename(a, b, c, d, NULL, 0)
-#else
-#define ll_vfs_rename(a, b, c, d) vfs_rename(a, b, c, d)
-#endif
-
 #ifdef HAVE_USER_NAMESPACE_ARG
 #define vfs_unlink(ns, dir, de) vfs_unlink(ns, dir, de, NULL)
-#elif defined HAVE_VFS_UNLINK_3ARGS
-#define vfs_unlink(ns, dir, de) vfs_unlink(dir, de, NULL)
 #else
-#define vfs_unlink(ns, dir, de) vfs_unlink(dir, de)
+#define vfs_unlink(ns, dir, de) vfs_unlink(dir, de, NULL)
 #endif
 
 #ifndef HAVE_MNT_IDMAP_ARG
@@ -180,18 +159,6 @@ static inline int ll_vfs_getattr(struct path *path, struct kstat *st,
 # define inode_lock(inode) mutex_lock(&(inode)->i_mutex)
 # define inode_unlock(inode) mutex_unlock(&(inode)->i_mutex)
 # define inode_trylock(inode) mutex_trylock(&(inode)->i_mutex)
-#endif
-
-#ifndef HAVE_PAGECACHE_GET_PAGE
-#define pagecache_get_page(mapping, index, fp, gfp) \
-	grab_cache_page_nowait(mapping, index)
-#endif
-
-#ifndef HAVE_TRUNCATE_INODE_PAGES_FINAL
-static inline void truncate_inode_pages_final(struct address_space *map)
-{
-	truncate_inode_pages(map, 0);
-}
 #endif
 
 #ifdef HAVE_U64_CAPABILITY
@@ -254,14 +221,6 @@ static inline int posix_acl_update_mode(struct inode *inode, umode_t *mode_p,
 }
 #endif /* HAVE_POSIX_ACL_UPDATE_MODE */
 #endif
-#endif
-
-#ifndef HAVE_IOV_ITER_TRUNCATE
-static inline void iov_iter_truncate(struct iov_iter *i, u64 count)
-{
-	if (i->count > count)
-		i->count = count;
-}
 #endif
 
 /*
@@ -423,11 +382,6 @@ static inline int ll_vfs_removexattr(struct dentry *dentry, struct inode *inode,
 #endif
 }
 
-/* until v3.19-rc5-3-gb4caecd48005 */
-#ifndef BDI_CAP_MAP_COPY
-#define BDI_CAP_MAP_COPY		0
-#endif
-
 /* from v4.1-rc2-56-g89e9b9e07a39, until v5.9-rc3-161-gf56753ac2a90 */
 #ifndef BDI_CAP_CGROUP_WRITEBACK
 #define BDI_CAP_CGROUP_WRITEBACK	0
@@ -443,7 +397,7 @@ static inline int ll_vfs_removexattr(struct dentry *dentry, struct inode *inode,
 #define BDI_CAP_WRITEBACK_ACCT		0
 #endif
 
-#define LL_BDI_CAP_FLAGS	(BDI_CAP_CGROUP_WRITEBACK | BDI_CAP_MAP_COPY | \
+#define LL_BDI_CAP_FLAGS	(BDI_CAP_CGROUP_WRITEBACK | \
 				 BDI_CAP_WRITEBACK | BDI_CAP_WRITEBACK_ACCT)
 
 #ifndef FALLOC_FL_COLLAPSE_RANGE
@@ -462,8 +416,8 @@ static inline int ll_vfs_removexattr(struct dentry *dentry, struct inode *inode,
 #define raw_cpu_ptr(p) __this_cpu_ptr(p)
 #endif
 
-#if defined(HAVE_DIRECTIO_ITER) || defined(HAVE_IOV_ITER_RW) || \
-	defined(HAVE_DIRECTIO_2ARGS) || defined(HAVE_IOV_ITER_GET_PAGES_ALLOC2)
+#if defined(HAVE_DIRECTIO_ITER) || defined(HAVE_DIRECTIO_2ARGS) || \
+    defined(HAVE_IOV_ITER_GET_PAGES_ALLOC2)
 #define HAVE_DIO_ITER 1
 #endif
 

@@ -264,7 +264,8 @@ static void dio_complete_routine(struct bio *bio, int error)
 		CERROR("bi_next: %p, bi_flags: %lx, " __stringify(bi_opf)
 		       ": %x, bi_vcnt: %d, bi_idx: %d, bi->size: %d, bi_end_io: %p, bi_cnt: %d, bi_private: %p\n",
 		       bio->bi_next, (unsigned long)bio->bi_flags,
-		       (unsigned int)bio->bi_opf, bio->bi_vcnt, bio_idx(bio),
+		       (unsigned int)bio->bi_opf, bio->bi_vcnt,
+		       bio->bi_iter.bi_idx,
 		       bio_sectors(bio) << 9, bio->bi_end_io,
 		       atomic_read(&bio->__bi_cnt), bio->bi_private);
 		return;
@@ -276,8 +277,8 @@ static void dio_complete_routine(struct bio *bio, int error)
 
 		bio_for_each_segment_all(bvl, bio, iter_all) {
 			if (likely(error == 0))
-				SetPageUptodate(bvl_to_page(bvl));
-			LASSERT(PageLocked(bvl_to_page(bvl)));
+				SetPageUptodate(bvl->bv_page);
+			LASSERT(PageLocked(bvl->bv_page));
 		}
 		atomic_dec(&iobuf->dr_dev->od_r_in_flight);
 	} else {
@@ -523,7 +524,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 					  block_idx + blocks_left_page - 1, rc);
 				goto out;
 			}
-			bio_set_sector(bio, sector);
+			bio->bi_iter.bi_sector = sector;
 			rc = osd_bio_init(bio, iobuf, bio_start_page_idx);
 			if (rc)
 				goto out;

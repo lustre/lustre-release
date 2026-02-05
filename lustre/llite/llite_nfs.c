@@ -281,11 +281,7 @@ do_nfs_get_name_filldir(struct ll_getname_data *lgd, const char *name,
 	return lgd->lgd_found;
 }
 
-#ifdef HAVE_FILLDIR_USE_CTX_RETURN_BOOL
-static bool
-#else
-static int
-#endif
+static FILLDIR_TYPE
 ll_nfs_get_name_filldir(struct dir_context *ctx, const char *name, int namelen,
 			loff_t hash, u64 ino, unsigned int type)
 {

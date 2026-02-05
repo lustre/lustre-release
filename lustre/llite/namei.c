@@ -32,11 +32,7 @@
 #ifndef HAVE_USER_NAMESPACE_ARG
 #define ll_create_nd(ns, dir, de, mode, ex)	ll_create_nd(dir, de, mode, ex)
 #define ll_mknod(ns, dir, dch, mode, rd)	ll_mknod(dir, dch, mode, rd)
-#ifdef HAVE_IOPS_RENAME_WITH_FLAGS
 #define ll_rename(ns, src, sdc, tgt, tdc, fl)	ll_rename(src, sdc, tgt, tdc, fl)
-#else
-#define ll_rename(ns, src, sdc, tgt, tdc)	ll_rename(src, sdc, tgt, tdc)
-#endif /* HAVE_IOPS_RENAME_WITH_FLAGS */
 #define ll_symlink(nd, dir, dch, old)		ll_symlink(dir, dch, old)
 #endif
 
@@ -2463,11 +2459,8 @@ out:
 
 static int ll_rename(struct mnt_idmap *map,
 		     struct inode *src, struct dentry *src_dchild,
-		     struct inode *tgt, struct dentry *tgt_dchild
-#if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_IOPS_RENAME_WITH_FLAGS)
-		     , unsigned int flags
-#endif
-		     )
+		     struct inode *tgt, struct dentry *tgt_dchild,
+		     unsigned int flags)
 {
 	struct ptlrpc_request *request = NULL;
 	struct ll_sb_info *sbi = ll_i2sbi(src);
@@ -2479,10 +2472,8 @@ static int ll_rename(struct mnt_idmap *map,
 
 	ENTRY;
 
-#if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_IOPS_RENAME_WITH_FLAGS)
 	if (flags)
 		GOTO(out, err = -EINVAL);
-#endif
 
 	CDEBUG(D_VFSTRACE,
 	       "VFS Op:oldname="DNAME", src_dir="DFID"(%p), newname=%pd, tgt_dir="DFID"(%p)\n",
@@ -2492,11 +2483,7 @@ static int ll_rename(struct mnt_idmap *map,
 	if (unlikely(d_mountpoint(src_dchild) || d_mountpoint(tgt_dchild)))
 		GOTO(out, err = -EBUSY);
 
-#if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_IOPS_RENAME_WITH_FLAGS)
 	err = llcrypt_prepare_rename(src, src_dchild, tgt, tgt_dchild, flags);
-#else
-	err = llcrypt_prepare_rename(src, src_dchild, tgt, tgt_dchild, 0);
-#endif
 	if (err)
 		GOTO(out, err);
 	/* we prevent an encrypted file from being renamed

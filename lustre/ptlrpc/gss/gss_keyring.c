@@ -1704,14 +1704,6 @@ out:
 	RETURN(0);
 }
 
-#ifndef HAVE_KEY_MATCH_DATA
-static int
-gss_kt_match(const struct key *key, const void *desc)
-{
-	return strcmp(key->description, (const char *) desc) == 0 &&
-		!test_bit(KEY_FLAG_REVOKED, &key->flags);
-}
-#else /* ! HAVE_KEY_MATCH_DATA */
 static bool
 gss_kt_match(const struct key *key, const struct key_match_data *match_data)
 {
@@ -1730,7 +1722,6 @@ static int gss_kt_match_preparse(struct key_match_data *match_data)
 	match_data->cmp = gss_kt_match;
 	return 0;
 }
-#endif /* HAVE_KEY_MATCH_DATA */
 
 static
 void gss_kt_destroy(struct key *key)
@@ -1765,11 +1756,7 @@ static struct key_type gss_key_type =
 	.def_datalen	= 0,
 	.instantiate	= gss_kt_instantiate,
 	.update		= gss_kt_update,
-#ifdef HAVE_KEY_MATCH_DATA
 	.match_preparse = gss_kt_match_preparse,
-#else
-	.match		= gss_kt_match,
-#endif
 	.destroy	= gss_kt_destroy,
 	.describe	= gss_kt_describe,
 	.revoke		= gss_kt_revoke,

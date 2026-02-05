@@ -1741,9 +1741,7 @@ void osd_execute_truncate(struct osd_object *obj);
 
 struct osd_bio_private {
 	struct work_struct	obp_work;
-#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
 	struct bvec_iter	obp_integrity_iter;
-#endif
 	struct bio		*obp_bio;
 	struct osd_iobuf	*obp_iobuf;
 	void			*obp_integrity_buf;
@@ -1795,11 +1793,7 @@ static inline const char *blk_integrity_name(struct blk_integrity *bi)
 
 static inline unsigned int bip_size(struct bio_integrity_payload *bip)
 {
-#ifdef HAVE_BIP_ITER_BIO_INTEGRITY_PAYLOAD
 	return bip->bip_iter.bi_size;
-#else
-	return bip->bip_size;
-#endif
 }
 #else /* !CONFIG_BLK_DEV_INTEGRITY */
 static inline unsigned short blk_integrity_interval(struct blk_integrity *bi)
