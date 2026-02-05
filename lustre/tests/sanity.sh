@@ -36331,6 +36331,19 @@ test_910()
 }
 run_test 910 "Test the erasure_coding module"
 
+test_920()
+{
+	mount | grep lustre
+	mkdir -p $DIR/$tdir
+
+	#define OBD_FAIL_FID_MULTI	0x1507
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1507
+	touch $DIR/$tdir/$tfile || error "touch failed"
+
+	lfs path2fid $DIR/$tdir/$tfile  # Verify it's a normal FID
+	stat $DIR/$tdir/$tfile || error "File not found after creation"
+}
+run_test 920 "Test multy LUFID"
 
 complete_test $SECONDS
 [ -f $EXT2_DEV ] && rm $EXT2_DEV || true

@@ -1540,8 +1540,9 @@ int osd_fid_unpack(struct lu_fid *fid, const struct osd_fid_pack *pack)
 {
 	int result = 0;
 
-	switch (pack->fp_len) {
-	case sizeof(*fid) + 1:
+	/* More then one fid can be stored but now copy the first one */
+	switch (pack->fp_len > sizeof(*fid) && pack->fp_len % sizeof(*fid)) {
+	case 1:
 		memcpy(fid, pack->fp_area, sizeof(*fid));
 		fid_be_to_cpu(fid, fid);
 		break;

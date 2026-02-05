@@ -4281,15 +4281,31 @@ int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
 static void osd_get_ldiskfs_dirent_param(struct ldiskfs_dentry_param *param,
 					 const struct lu_fid *fid)
 {
+	ENTRY;
 	if (!fid_is_namespace_visible(fid) ||
 	    CFS_FAIL_CHECK(OBD_FAIL_FID_IGIF)) {
 		param->edp_magic = 0;
-		return;
+		RETURN_EXIT;
 	}
 
 	param->edp_magic = LDISKFS_LUFID_MAGIC;
-	param->edp_len =  sizeof(struct lu_fid) + 1;
-	fid_cpu_to_be((struct lu_fid *)param->edp_data, (struct lu_fid *)fid);
+	param->edp_len = sizeof(struct lu_fid) + 1;
+	fid_cpu_to_be((struct lu_fid *)param->edp_data, fid);
+
+	if (CFS_FAIL_CHECK(OBD_FAIL_FID_MULTI)) {
+		CDEBUG(D_INFO, "Place multiple FIDs in dentry param\n");
+		/* place multiple FIDs in dentry param to test the robustness
+		 * of ldiskfs and utilities
+		 */
+		fid_cpu_to_be((struct lu_fid *)(param->edp_data +
+			      sizeof(struct lu_fid)), (struct lu_fid *)fid);
+		fid_cpu_to_be((struct lu_fid *)(param->edp_data +
+			      2 * sizeof(struct lu_fid)),
+			      (struct lu_fid *)fid);
+		param->edp_len += 2 * sizeof(struct lu_fid);
+	}
+
+	RETURN_EXIT;
 }
 
 /**

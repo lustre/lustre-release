@@ -647,6 +647,7 @@ extern bool obd_enable_fname_encoding;
 #define OBD_FAIL_FID_IGIF	0x1504
 #define OBD_FAIL_FID_LOOKUP	0x1505
 #define OBD_FAIL_FID_NOLMA	0x1506
+#define OBD_FAIL_FID_MULTI	0x1507
 
 /* LFSCK */
 #define OBD_FAIL_LFSCK_DELAY1		0x1600
