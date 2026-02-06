@@ -1625,6 +1625,9 @@ newblock:
 	if (IS_ERR(bh)) {
 		*e = PTR_ERR(bh);
 		bh = NULL;
+	} else {
+		LASSERT(buffer_uptodate(bh));
+		memset(bh->b_data, 0, inode->i_sb->s_blocksize);
 	}
 
 	return bh;
