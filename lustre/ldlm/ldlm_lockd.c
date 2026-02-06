@@ -526,7 +526,7 @@ static int __ldlm_del_waiting_lock(struct ldlm_lock *lock)
 			next = list_entry(list_next, struct ldlm_lock,
 					  l_pending_chain);
 			if (next->l_callback_timestamp - now > 0)
-				delta = lock->l_callback_timestamp - now;
+				delta = next->l_callback_timestamp - now;
 
 			mod_timer(&waiting_locks_timer,
 				  jiffies + cfs_time_seconds(delta));
