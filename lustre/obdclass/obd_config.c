@@ -2482,6 +2482,7 @@ int class_config_dump_handler(const struct lu_env *env,
 int class_manual_cleanup(struct obd_device *obd)
 {
 	char flags[3] = "";
+	char name[MAX_OBD_NAME];
 	struct lustre_cfg *lcfg;
 	struct lustre_cfg_bufs bufs;
 	int rc;
@@ -2498,10 +2499,15 @@ int class_manual_cleanup(struct obd_device *obd)
 	if (obd->obd_fail)
 		strlcat(flags, "A", sizeof(flags));
 
-	CDEBUG(D_CONFIG, "Manual cleanup of %s (flags='%s')\n",
-	       obd->obd_name, flags);
+	/* Save obd_name before cleanup/detach as they may drop the
+	 * last reference and free obd (LU-8453).
+	 */
+	strscpy(name, obd->obd_name, sizeof(name));
 
-	lustre_cfg_bufs_reset(&bufs, obd->obd_name);
+	CDEBUG(D_CONFIG, "Manual cleanup of %s (flags='%s')\n",
+	       name, flags);
+
+	lustre_cfg_bufs_reset(&bufs, name);
 	lustre_cfg_bufs_set_string(&bufs, 1, flags);
 	OBD_ALLOC(lcfg, lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
 	if (!lcfg)
@@ -2510,7 +2516,7 @@ int class_manual_cleanup(struct obd_device *obd)
 
 	rc = class_process_config(lcfg, NULL);
 	if (rc) {
-		CERROR("cleanup failed %d: %s\n", rc, obd->obd_name);
+		CERROR("%s: cleanup failed: rc = %d\n", name, rc);
 		GOTO(out, rc);
 	}
 
@@ -2518,7 +2524,7 @@ int class_manual_cleanup(struct obd_device *obd)
 	lcfg->lcfg_command = LCFG_DETACH;
 	rc = class_process_config(lcfg, NULL);
 	if (rc)
-		CERROR("detach failed %d: %s\n", rc, obd->obd_name);
+		CERROR("%s: detach failed: rc = %d\n", name, rc);
 out:
 	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 	RETURN(rc);
