@@ -157,8 +157,10 @@ static inline struct obd_device* chlg_obd_get(struct chlg_registered_dev *dev)
 	struct obd_device *obd;
 
 	mutex_lock(&chlg_registered_dev_lock);
-	if (list_empty(&dev->ced_obds))
+	if (list_empty(&dev->ced_obds)) {
+		mutex_unlock(&chlg_registered_dev_lock);
 		return NULL;
+	}
 
 	obd = list_first_entry(&dev->ced_obds, struct obd_device,
 			       u.cli.cl_chg_dev_linkage);
