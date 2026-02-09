@@ -7987,6 +7987,194 @@ test_64h() {
 }
 run_test 64h "Nodemap enforces local_admin RBAC roles"
 
+test_64i() {
+	local tf=$DIR/$tdir/$tfile
+	local offset_start=100000
+	local offset_limit=100000
+	local quota_limit=10 # MB
+	local dom_size=20971520 # 20MB
+	local rbac
+	local stat
+
+	(( OST1_VERSION >= $(version_code 2.17.50) )) ||
+		skip "Need OST >= 2.17.50 for this test"
+	(( MDS1_VERSION >= $(version_code 2.17.50) )) ||
+		skip "Need MDS >= 2.17.50 for this test"
+
+	do_nodes $(all_mdts_nodes) \
+		$LCTL set_param mdt.*.identity_upcall=NONE
+
+	# Increase dom_stripesize to easier exceed quota_limit for DOM files
+	local dom_saved=$(do_facet mds1 $LCTL get_param -n \
+				  lod.*-MDT0000-mdtlov.dom_stripesize)
+	do_nodes $(all_mdts_nodes) $LCTL set_param -n \
+		lod.*-MDT*-mdtlov.dom_stripesize=$dom_size ||
+		error "set dom_stripesize failed"
+	stack_trap "do_nodes $(all_mdts_nodes) $LCTL set_param -n \
+		lod.*-MDT*-mdtlov.dom_stripesize=$dom_saved"
+
+	stack_trap "$LFS setquota -u $offset_start --delete $MOUNT"
+	stack_trap cleanup_local_client_nodemap_with_mounts
+	mkdir -p ${DIR}/$tdir || error "mkdir ${DIR}/$tdir failed"
+	chown $offset_start ${DIR}/$tdir
+	setup_local_client_nodemap "c0" 1 1
+
+	# Enable quota enforcement for both OST and MDT including block
+	# quota on MDT for DOM files (see quota_slave_dt)
+	stack_trap "set_ost_qtype none"
+	set_ost_qtype "u" || error "enable ost quota failed"
+	stack_trap "set_mdt_qtype none"
+	set_mdt_qtype "u" || error "enable mdt quota failed"
+	do_nodes $(all_mdts_nodes) $LCTL set_param \
+		osd-*.*-MDT*.quota_slave_dt.enabled=u ||
+		error "enable mdt block quota failed"
+	stack_trap "do_nodes $(all_mdts_nodes) $LCTL set_param \
+		osd-*.*-MDT*.quota_slave_dt.enabled=none"
+
+	# Set quota limit on the mapped root UID (offset_start)
+	$LFS setquota -u $offset_start -b 0 -B ${quota_limit}M \
+		-i 0 -I 0 $MOUNT || error "set quota failed"
+
+	echo "Current MOUNT:"
+	ls -al $MOUNT
+
+	do_facet mgs $LCTL nodemap_add_offset --name c0 \
+		--offset $offset_start --limit $offset_limit ||
+		error "cannot set offset for c0"
+	wait_nm_sync c0 offset
+
+	echo "Current MOUNT:"
+	ls -al $MOUNT
+
+	echo "Test 1: admin_nodemap=1, local_admin in RBAC, trusted=1"
+	echo "  Expected: root can bypass quota (write succeeds)"
+	rbac="file_perms,quota_ops,local_admin,server_upcall"
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
+		--value $rbac || error "setting rbac $rbac failed"
+	wait_nm_sync c0 rbac
+
+	# Write should succeed (bypass quota)
+	$DD of=$tf bs=1M count=$((quota_limit + 5)) oflag=direct ||
+		error "write failed, expected success (local_admin)"
+	rm -f $tf
+	wait_delete_completed || error "wait_delete_completed failed"
+
+	echo "Test 2: admin_nodemap=1, local_admin NOT in RBAC, trusted=1"
+	echo "  Expected: root must respect quota (write fails with EDQUOT)"
+	rbac="file_perms,quota_ops,server_upcall"
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
+		--value $rbac || error "setting rbac $rbac failed"
+	wait_nm_sync c0 rbac
+
+	# Write should fail (quota enforced)
+	stat=$(LOCALE=C $DD of=$tf bs=1M \
+		count=$((quota_limit + 5)) oflag=direct 2>&1)
+	echo "dd output: $stat"
+	echo "$stat" | grep -q "Disk quota exceeded" ||
+		error "expected 'Disk quota exceeded' but got: $stat"
+	rm -f $tf
+	wait_delete_completed || error "wait_delete_completed failed"
+
+	echo "Test 3: admin_nodemap=1, local_admin NOT in RBAC, trusted=0"
+	echo "  Expected: root must respect quota (write fails with EDQUOT)"
+	do_facet mgs $LCTL nodemap_modify --name c0 --property trusted \
+		--value 0 || error "setting trusted=0 failed"
+	wait_nm_sync c0 trusted_nodemap
+
+	# Write should fail (quota enforced, trusted doesn't affect this)
+	stat=$(LOCALE=C $DD of=$tf bs=1M \
+		count=$((quota_limit + 5)) oflag=direct 2>&1)
+	echo "dd output: $stat"
+	echo "$stat" | grep -q "Disk quota exceeded" ||
+		error "expected 'Disk quota exceeded' but got: $stat"
+	rm -f $tf
+	wait_delete_completed || error "wait_delete_completed failed"
+
+	echo "Test 4: admin_nodemap=1, local_admin in RBAC, trusted=0"
+	echo "  Expected: root can bypass quota (write succeeds)"
+	rbac="file_perms,quota_ops,local_admin,server_upcall"
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
+		--value $rbac || error "setting rbac $rbac failed"
+	wait_nm_sync c0 rbac
+
+	# Write should succeed (bypass quota, trusted doesn't affect this)
+	$DD of=$tf bs=1M count=$((quota_limit + 5)) oflag=direct ||
+		error "write failed, expected success (local_admin)"
+	rm -f $tf
+	wait_delete_completed || error "wait_delete_completed failed"
+
+	echo "Test 5: admin_nodemap=0, local_admin in RBAC"
+	echo "  Expected: root is squashed, permission denied"
+	do_facet mgs $LCTL nodemap_modify --name c0 --property admin \
+		--value 0 || error "setting admin=0 failed"
+	wait_nm_sync c0 admin_nodemap
+
+	echo "Current MOUNT:"
+	ls -al $MOUNT
+
+	# Write should fail (root is squashed, quota enforced)
+	stat=$(LOCALE=C $DD of=$tf bs=1M \
+		count=$((quota_limit + 5)) oflag=direct 2>&1)
+	echo "dd output: $stat"
+	echo "$stat" | grep -q "Permission denied" ||
+		error "expected 'Permission denied' but got: $stat"
+	rm -f $tf
+	wait_delete_completed || error "wait_delete_completed failed"
+
+	echo "Test 6: admin_nodemap=0, local_admin NOT in RBAC"
+	echo "  Expected: root is squashed, permission denied"
+	rbac="file_perms,quota_ops,server_upcall"
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
+		--value $rbac || error "setting rbac $rbac failed"
+	wait_nm_sync c0 rbac
+
+	# Write should fail (root is squashed, quota enforced)
+	stat=$(LOCALE=C $DD of=$tf bs=1M \
+		count=$((quota_limit + 5)) oflag=direct 2>&1)
+	echo "dd output: $stat"
+	echo "$stat" | grep -q "Permission denied" ||
+		error "expected 'Permission denied' but got: $stat"
+
+	# Restore admin=1, trusted=1 for DOM tests
+	do_facet mgs $LCTL nodemap_modify --name c0 --property admin \
+		--value 1 || error "setting admin=1 failed"
+	do_facet mgs $LCTL nodemap_modify --name c0 --property trusted \
+		--value 1 || error "setting trusted=1 failed"
+	wait_nm_sync c0 trusted_nodemap
+	rm -f $tf
+	wait_delete_completed || error "wait_delete_completed failed"
+
+	echo "Test 7: admin=1, trusted=1, local_admin in RBAC (DOM only)"
+	echo "  Expected: root can bypass quota (DOM write succeeds)"
+	rbac="file_perms,quota_ops,local_admin,server_upcall"
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
+		--value $rbac || error "setting rbac $rbac failed"
+	wait_nm_sync c0 rbac
+
+	$LFS setstripe -E $dom_size -L mdt $tf ||
+		error "setstripe DOM failed"
+	$DD of=$tf bs=1M count=$((quota_limit + 5)) oflag=sync ||
+		error "DOM write failed, expected success (local_admin)"
+	rm -f $tf
+	wait_delete_completed || error "wait_delete_completed failed"
+
+	echo "Test 8: admin=1, trusted=1, local_admin NOT in RBAC (DOM only)"
+	echo "  Expected: root must respect quota (DOM write fails EDQUOT)"
+	rbac="file_perms,quota_ops,server_upcall"
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
+		--value $rbac || error "setting rbac $rbac failed"
+	wait_nm_sync c0 rbac
+
+	$LFS setstripe -E $dom_size -L mdt $tf ||
+		error "setstripe DOM failed"
+	stat=$(LOCALE=C $DD of=$tf bs=1M \
+		count=$((quota_limit + 5)) oflag=sync 2>&1)
+	echo "dd DOM output: $stat"
+	echo "$stat" | grep -q "Disk quota exceeded" ||
+		error "expected DOM 'Disk quota exceeded' but got: $stat"
+}
+run_test 64i "Nodemap quota enforcement with local_admin RBAC and offsets"
+
 look_for_files() {
 	local pattern=$1
 	local neg=$2

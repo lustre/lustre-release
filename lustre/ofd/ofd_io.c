@@ -1506,8 +1506,14 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		}
 
 		if (!IS_ERR_OR_NULL(nodemap)) {
-			/* do not bypass quota enforcement if squashed uid */
-			if (unlikely(mapped_uid == nodemap->nm_squash_uid)) {
+			/* do not bypass quota enforcement if squashed uid or
+			 * offset root without local_admin RBAC role.
+			 * "mapped_uid == 0" is an optimization to avoid calling
+			 * is_local_root() which returns false for regular users
+			 */
+			if (unlikely(mapped_uid == nodemap->nm_squash_uid ||
+				     (mapped_uid == 0 &&
+				      !is_local_root(oa->o_uid, nodemap)))) {
 				int idx;
 
 				for (idx = 0; idx < npages; idx++)
