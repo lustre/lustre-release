@@ -1444,6 +1444,9 @@ void lu_stack_fini(const struct lu_env *env, struct lu_device *top)
 		if (strcmp(scan->ld_type->ldt_name, LUSTRE_OSC_NAME) == 0)
 			break;
 
+		if (strcmp(scan->ld_type->ldt_name, LUSTRE_LOV_NAME) == 0)
+			break;
+
 		next = ldto_device_free(env, scan);
 	}
 }
