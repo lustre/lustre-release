@@ -15,7 +15,6 @@ SUBDIRS := @LDISKFS_SUBDIR@ \
 	@LUSTREIOKIT_SUBDIR@ \
 	Documentation \
 	lib \
-	libcfs \
 	lnet/utils \
 	lustre/utils \
 	lustre/tests \
@@ -26,7 +25,6 @@ DIST_SUBDIRS := ldiskfs \
 	lustre-iokit \
 	Documentation \
 	lib \
-	libcfs \
 	lnet/utils \
 	lustre/utils \
 	lustre/tests \
@@ -69,6 +67,9 @@ if MODULES
 	done
 	$(MKDIR_P) $(DESTDIR)$(modulenetdir)
 	for ko in $$(find lnet/ -name '*.ko' 2>/dev/null); do \
+		$(INSTALL) -m 0644 $${ko} $(DESTDIR)$(modulenetdir)/; \
+	done
+	for ko in $$(find libcfs/ -name '*.ko' 2>/dev/null); do \
 		$(INSTALL) -m 0644 $${ko} $(DESTDIR)$(modulenetdir)/; \
 	done
 endif
@@ -132,7 +133,6 @@ checkpatch:
 	@git diff HEAD~1 | ./contrib/scripts/checkpatch.pl
 
 utils:
-	$(MAKE) -C libcfs/libcfs/util
 	$(MAKE) -C lnet/utils
 	$(MAKE) -C lustre/utils
 
@@ -242,6 +242,8 @@ dist-hook: undef.h
 	find include/ -type f \( -name "*.h" \) \
 		-exec cp --parents {} $(distdir) \;
 	find lustre/include/ -type f \( -name "*.h" \) \
+		-exec cp --parents {} $(distdir) \;
+	find libcfs/ -type f \( -name "*.c" -o -name "*.h" -o -iname "Makefile" \) \
 		-exec cp --parents {} $(distdir) \;
 	find lustre_compat/ -type f \( -name "*.c" -o -name "*.h" -o -iname "Makefile" \) \
 		-exec cp --parents {} $(distdir) \;

@@ -66,7 +66,7 @@ failed:
 	return rc;
 }
 
-void __exit cfs_arch_exit(void)
+void cfs_arch_exit(void)
 {
 	exit_compat_vfree_atomic();
 	shrinker_debugfs_fini();

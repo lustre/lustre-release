@@ -11,6 +11,7 @@
  * This file is part of Lustre, http://www.lustre.org/
  */
 
+#include <linux/init.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
@@ -34,19 +35,9 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <linux/libcfs/libcfs.h>
+#include <lustre_compat/linux/linux-misc.h>
 #include <lnet/lib-lnet.h>
-#include <uapi/linux/lustre/lustre_ver.h>
 #include "tracefile.h"
-
-int cpu_npartitions;
-EXPORT_SYMBOL(cpu_npartitions);
-module_param(cpu_npartitions, int, 0444);
-MODULE_PARM_DESC(cpu_npartitions, "# of CPU partitions");
-
-char *cpu_pattern = "N";
-EXPORT_SYMBOL(cpu_pattern);
-module_param(cpu_pattern, charp, 0444);
-MODULE_PARM_DESC(cpu_pattern, "CPU partitions pattern");
 
 struct lnet_debugfs_symlink_def {
 	const char *name;
@@ -619,7 +610,7 @@ cleanup_lock:
 }
 EXPORT_SYMBOL(libcfs_setup);
 
-static int __init libcfs_init(void)
+int debug_module_init(void)
 {
 	int rc;
 
@@ -631,21 +622,14 @@ static int __init libcfs_init(void)
 		return rc;
 	}
 
-	rc = cfs_arch_init();
-	if (rc < 0) {
-		CERROR("cfs_arch_init: error %d\n", rc);
-		libcfs_debug_cleanup();
-		return rc;
-	}
-
 	lnet_insert_debugfs(lnet_table, THIS_MODULE, &debugfs_state);
 	if (!IS_ERR_OR_NULL(lnet_debugfs_root))
 		lnet_insert_debugfs_links(lnet_debugfs_symlinks);
 
-	return rc;
+	return 0;
 }
 
-static void __exit libcfs_exit(void)
+void debug_module_exit(void)
 {
 	int rc;
 
@@ -668,7 +652,16 @@ static void __exit libcfs_exit(void)
 		pr_err("LustreError: libcfs_debug_cleanup: rc = %d\n", rc);
 
 	debug_format_buffer_free_buffers();
-	cfs_arch_exit();
+}
+
+static int __init libcfs_init(void)
+{
+	return debug_module_init();
+}
+
+static void __exit libcfs_exit(void)
+{
+	debug_module_exit();
 }
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
@@ -676,5 +669,5 @@ MODULE_DESCRIPTION("Lustre helper library");
 MODULE_VERSION(LIBCFS_VERSION);
 MODULE_LICENSE("GPL");
 
-late_initcall(libcfs_init);
-module_exit(libcfs_exit);
+compat_module_init(libcfs_init);
+compat_module_exit(libcfs_exit);

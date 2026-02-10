@@ -5,5 +5,3 @@
 #
 
 obj-m += libcfs/
-
-@INCLUDE_RULES@
