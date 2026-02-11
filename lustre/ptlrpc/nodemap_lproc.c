@@ -1117,11 +1117,14 @@ static int nodemap_parent_seq_show(struct seq_file *seq, void *data)
 }
 
 /**
- * Reads and prints the gssonly_identification flag for the given nodemap.
+ * nodemap_gssonly_identify_seq_show() - Reads & prints gssonly_identification
+ *                                       flag for the given nodemap.
+ * @m: seq file in proc fs
+ * @data: unused
  *
- * \param	m		seq file in proc fs
- * \param	data		unused
- * \retval	0		success
+ * Returns:
+ * * %0 success
+ * * %negative failure
  */
 static int nodemap_gssonly_identify_seq_show(struct seq_file *m, void *data)
 {
