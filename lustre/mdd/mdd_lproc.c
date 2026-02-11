@@ -643,13 +643,15 @@ static int mdd_lfsck_layout_seq_show(struct seq_file *m, void *data)
 LDEBUGFS_SEQ_FOPS_RO(mdd_lfsck_layout);
 
 /**
- * Show default number of stripes for O_APPEND files.
+ * append_stripe_count_show() - Show default number of stripes for O_APPEND
+ *                              files.
+ * @kobj: Kernel object (OFD)
+ * @attr: Pointer to struct attribute
+ * @buf: buffer where the output string will be written [out]
  *
- * \param[in] m		seq file
- * \param[in] v		unused for single entry
- *
- * \retval 0		on success,
- * \retval negative	error code if failed
+ * Return:
+ * * %0 on success,
+ * * %negative error code if failed
  */
 static ssize_t append_stripe_count_show(struct kobject *kobj,
 					struct attribute *attr, char *buf)
@@ -661,16 +663,16 @@ static ssize_t append_stripe_count_show(struct kobject *kobj,
 }
 
 /**
- * Set default number of stripes for O_APPEND files.
+ * append_stripe_count_store() - Set default number of stripes for O_APPEND
+ *                               files.
+ * @kobj: Kernel object (OFD)
+ * @attr: Pointer to struct attribute
+ * @buffer: string containing the default number of stripes for new files
+ * @count: @buffer length
  *
- * \param[in] file	proc file
- * \param[in] buffer	string containing the default number of stripes
- *			for new files
- * \param[in] count	@buffer length
- * \param[in] off	unused for single entry
- *
- * \retval @count	on success
- * \retval negative	error code otherwise
+ * Return:
+ * * %0 on success,
+ * * %negative error code otherwise
  */
 static ssize_t append_stripe_count_store(struct kobject *kobj,
 					 struct attribute *attr,
@@ -695,14 +697,14 @@ static ssize_t append_stripe_count_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(append_stripe_count);
 
 /**
- * Show default OST pool for O_APPEND files.
+ * append_pool_show() - Show default OST pool for O_APPEND files.
+ * @kobj: Kernel object (OFD, proc object)
+ * @attr: Pointer to struct attribute (attribute proc attribute)
+ * @buf: buffer where the output string will be written [out]
  *
- * \param[in] kobject	proc object
- * \param[in] attribute proc attribute
- * \param[in] buf	output buffer
- *
- * \retval 0		on success,
- * \retval negative	error code if failed
+ * Return:
+ * * %0 on success,
+ * * %negative error code if failed
  */
 static ssize_t append_pool_show(struct kobject *kobj,
 				struct attribute *attr, char *buf)
@@ -714,15 +716,15 @@ static ssize_t append_pool_show(struct kobject *kobj,
 }
 
 /**
- * Set default OST pool for O_APPEND files.
+ * append_pool_store() - Set default OST pool for O_APPEND files.
+ * @kobj: proc object
+ * @attr: proc attribute
+ * @buffer: user inputted pool name
+ * @count: @buffer length
  *
- * \param[in] kobject	proc object
- * \param[in] attribute proc attribute
- * \param[in] buffer	user inputted pool name
- * \param[in] count	@buffer length
- *
- * \retval @count	on success
- * \retval negative	error code otherwise
+ * Return:
+ * * @count on success
+ * * %negative error code otherwise
  */
 static ssize_t append_pool_store(struct kobject *kobj, struct attribute *attr,
 				 const char *buffer, size_t count)
