@@ -358,10 +358,15 @@ AC_ARG_WITH([linux-config],
 
 # -------- check if .config exists --
 LB_CHECK_FILE([$LINUX_CONFIG], [],
-	[AC_MSG_ERROR([
+	[KVER=$(basename $LINUX_OBJ | sed 's/^build$//' | sed 's/^linux-//')
+	 AS_IF([test -z "$KVER"], [KVER=$(uname -r)])
+	 LB_CHECK_FILE([/boot/config-$KVER],
+		[LINUX_CONFIG=/boot/config-$KVER],
+		[AC_MSG_ERROR([
 
 Kernel config could not be found.
 ])
+	])
 ])
 AC_SUBST(LINUX_CONFIG)
 
