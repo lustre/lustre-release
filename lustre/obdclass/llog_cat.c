@@ -1098,12 +1098,17 @@ static int llog_cat_reverse_process_cb(const struct lu_env *env,
 				       struct llog_rec_hdr *rec, void *data)
 {
 	struct llog_process_data *d = data;
-	struct llog_handle *llh;
+	struct llog_handle *llh = NULL;
 	int rc;
 
 	ENTRY;
 	rc = llog_cat_process_common(env, cat_llh, rec, &llh);
+	if (rc)
+		GOTO(out, rc);
 
+	rc = llog_reverse_process(env, llh, d->lpd_cb, d->lpd_data, NULL);
+
+out:
 	/* The empty plain log was destroyed while processing */
 	if (rc == LLOG_DEL_PLAIN) {
 		rc = llog_cat_cleanup(env, cat_llh, llh,
@@ -1115,17 +1120,9 @@ static int llog_cat_reverse_process_cb(const struct lu_env *env,
 		/* processing callback ask to skip the llog -> continue */
 		rc = 0;
 	}
-	if (rc)
-		RETURN(rc);
 
-	rc = llog_reverse_process(env, llh, d->lpd_cb, d->lpd_data, NULL);
-
-	/* The empty plain was destroyed while processing */
-	if (rc == LLOG_DEL_PLAIN)
-		rc = llog_cat_cleanup(env, cat_llh, llh,
-				      llh->u.phd.phd_cookie.lgc_index);
-
-	llog_handle_put(env, llh);
+	if (llh)
+		llog_handle_put(env, llh);
 	RETURN(rc);
 }
 

@@ -2481,6 +2481,155 @@ ctxt_release:
 }
 
 
+#define	MAX_FIDS	1024
+
+struct llog_test_fids {
+	int nr;
+	struct llog_logid	ids[MAX_FIDS];
+};
+
+static int cat_collect_fid_cb(const struct lu_env *env, struct llog_handle *llh,
+			struct llog_rec_hdr *rec, void *data)
+{
+	struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
+	struct llog_test_fids *ltf = data;
+
+	if (rec->lrh_type != LLOG_LOGID_MAGIC) {
+		int rc = -EINVAL;
+
+		CERROR("%s: catalog "DFID" bad record type %x != %x: rc = %d\n",
+		       "llog_test", PLOGID(&llh->lgh_id),
+		       rec->lrh_type, LLOG_LOGID_MAGIC, rc);
+		RETURN(rc);
+	}
+
+	if (ltf->nr < MAX_FIDS) {
+		ltf->ids[ltf->nr] = lir->lid_id;
+		ltf->nr++;
+	}
+
+	RETURN(0);
+}
+
+/* test llog processing with missing plain llogs */
+static int llog_test_13(const struct lu_env *env, struct obd_device *obd)
+{
+	struct llog_test_fids *ltf = NULL;
+	struct llog_handle *cath;
+	struct llog_mini_rec lmr;
+	struct llog_cookie cookie;
+	struct llog_ctxt *ctxt;
+	char name[10];
+	int i, rc, rc2;
+
+	ENTRY;
+
+	OBD_ALLOC_PTR(ltf);
+	if (ltf == NULL)
+		RETURN(-ENOMEM);
+
+	ctxt = llog_get_context(obd, LLOG_TEST_ORIG_CTXT);
+	LASSERT(ctxt);
+
+	lmr.lmr_hdr.lrh_len = lmr.lmr_tail.lrt_len = LLOG_MIN_REC_SIZE;
+	lmr.lmr_hdr.lrh_type = LLOG_OP_MAGIC;
+
+	scnprintf(name, sizeof(name), "%x", llog_test_rand + 3);
+	CWARN("13a: create a catalog log with name: %s\n", name);
+	rc = llog_open_create(env, ctxt, &cath, NULL, name);
+	if (rc) {
+		CERROR("13a: llog_create with name %s failed: %d\n", name, rc);
+		GOTO(ctxt_release, rc);
+	}
+	rc = llog_init_handle(env, cath, LLOG_F_IS_CAT, &uuid);
+	if (rc) {
+		CERROR("13a: can't init llog handle: %d\n", rc);
+		GOTO(out, rc);
+	}
+
+	cfs_fail_loc = 0x1319;
+	cfs_fail_val = 128;
+
+	for (i = 0; i < 2048; i++) {
+		CWARN("13b: write 1 record into the catalog\n");
+		rc = llog_cat_add(env, cath, &lmr.lmr_hdr, &cookie);
+		if (rc != 1) {
+			CERROR("13b: write 1 cat record failed at: %d\n", rc);
+			GOTO(out, rc);
+		}
+	}
+	cat_counter = 0;
+	/* count plain llog ids */
+	rc = llog_process(env, cath, cat_collect_fid_cb, ltf, NULL);
+	llog_cat_close(env, cath);
+	CERROR("13b: found %d plain llogs\n", ltf->nr);
+
+	CWARN("13c: erase plain llog\n");
+	rc = llog_erase(env, ctxt, ltf->ids + 2, NULL);
+	if (rc) {
+		CERROR("13c: can't erase llog: rc=%d\n", rc);
+		GOTO(ctxt_release, rc);
+	}
+
+	rc = llog_open(env, ctxt, &cath, NULL, name, LLOG_OPEN_EXISTS);
+	if (rc) {
+		CERROR("13c: can't reopen catalog: rc=%d\n", rc);
+		GOTO(ctxt_release, rc);
+	}
+	rc = llog_init_handle(env, cath, LLOG_F_IS_CAT, &uuid);
+	if (rc) {
+		CERROR("13c: can't init catalog: rc=%d\n", rc);
+		GOTO(ctxt_release, rc);
+	}
+
+	plain_counter = 0;
+	rc = llog_cat_process(env, cath, plain_print_cb, "foobar", 0, 0);
+	CWARN("13d: forward process: found=%d rc=%d\n", plain_counter, rc);
+
+	llog_cat_close(env, cath);
+
+	CWARN("13e: erase another plain llog\n");
+	rc = llog_erase(env, ctxt, ltf->ids + 4, NULL);
+	if (rc) {
+		CERROR("13e: can't erase llog: rc=%d\n", rc);
+		GOTO(ctxt_release, rc);
+	}
+
+	rc = llog_open(env, ctxt, &cath, NULL, name, LLOG_OPEN_EXISTS);
+	if (rc) {
+		CERROR("13e: can't reopen catalog: rc=%d\n", rc);
+		GOTO(ctxt_release, rc);
+	}
+	rc = llog_init_handle(env, cath, LLOG_F_IS_CAT, &uuid);
+	if (rc) {
+		CERROR("13e: can't init catalog: rc=%d\n", rc);
+		GOTO(ctxt_release, rc);
+	}
+
+	plain_counter = 0;
+	rc = llog_cat_reverse_process(env, cath, plain_print_cb, "foobar");
+	CWARN("13e: backward process: found=%d rc=%d\n", plain_counter, rc);
+
+out:
+	CWARN("13f: put newly-created catalog\n");
+	rc2 = llog_cat_close(env, cath);
+	if (rc2) {
+		CERROR("13f: close log %s failed: %d\n", name, rc2);
+		if (rc == 0)
+			rc = rc2;
+	}
+ctxt_release:
+	llog_ctxt_put(ctxt);
+
+	OBD_FREE_PTR(ltf);
+
+	cfs_fail_loc = 0;
+	cfs_fail_val = 0;
+
+	RETURN(rc);
+}
+
+
 /*
  * -------------------------------------------------------------------------
  * Tests above, boring obd functions below
@@ -2547,6 +2696,14 @@ static int llog_run_tests(const struct lu_env *env, struct obd_device *obd)
 	if (rc)
 		GOTO(cleanup, rc);
 
+	rc = llog_test_13(env, obd);
+	if (rc)
+		GOTO(cleanup_ctxt, rc);
+
+	/*
+	 * INCREASE LIMIT OF MESSAGES IN sanity/60b ADDING A NEW TEST:
+	 * [[ $LLOG_COUNT -gt 130 ]]
+	 */
 cleanup:
 	err = llog_destroy(env, llh);
 	if (err)
