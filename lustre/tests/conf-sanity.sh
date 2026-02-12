@@ -12470,6 +12470,64 @@ test_162() {
 }
 run_test 162 "replace nids with -o noclient"
 
+cleanup_164() {
+	# Ensure all test mounts are cleaned up
+	for i in {1..5}; do
+		umount_client $MOUNT/$tdir.$i 2>/dev/null || true
+	done
+	rmdir $MOUNT/$tdir.{1..5} 2>/dev/null || true
+
+	cleanup
+}
+
+test_164() {
+	(( $MDS1_VERSION >= $(version_code 2.17.50) )) ||
+		skip "Need MDS version >= 2.17.50"
+
+	formatall
+	setup
+
+	mkdir -p $MOUNT/$tdir.{1..5} ||
+		error "mkdir -p $MOUNT/$tdir.{1..5} failed"
+
+	stack_trap cleanup_164
+
+	# Save expected_clients after new mounti
+	local orig=$(do_facet mds1 "$LCTL get_param expected_clients")
+	echo "after initial mount: $orig"
+
+	do_facet mds1 "$LCTL set_param expected_clients=1"
+	stack_trap "do_facet mds1 $LCTL set_param $orig"
+
+	# Mount additional clients
+	for i in {1..5}; do
+		mount_client $MOUNT/$tdir.$i ||
+			error "mount $MOUNT/$tdir.$i failed"
+	done
+
+	# Check max_clients after mounting additional clients
+	local max_c=$(do_facet mds1 "$LCTL get_param -n expected_clients")
+	echo "expected_clients after mounting 5 additional clients: $max_c"
+
+	# Unmount additional clients
+	for i in {1..5}; do
+		umount_client $MOUNT/$tdir.$i ||
+			error "failed to unmount $MOUNT/$tdir.$i"
+	done
+
+	local final_max=$(do_facet mds1 "$LCTL get_param -n expected_clients")
+	echo "expected_clients after unmount: $final_max"
+
+	# Verify the parameter persisted after unmount
+	(( $final_max == $max_c )) ||
+		error "expected_clients should persist after unmount: $final_max != $max_c"
+
+	local exp_c=$((5 + $MDSCOUNT))
+	(( $max_c == $exp_c )) ||
+		error "expected_clients should be $exp_c, got $max_c"
+}
+run_test 164 "test expected_clients parameter and max client tracking"
+
 cleanup_200() {
 	local modopts=$1
 	stopall

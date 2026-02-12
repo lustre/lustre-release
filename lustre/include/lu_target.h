@@ -182,6 +182,8 @@ struct lu_target {
 	 * recorded in the last_rcvd file
 	 */
 	atomic_t		 lut_num_clients;
+	/* Maximum number of clients ever connected */
+	atomic_t		 lut_max_clients;
 	/* Client generation to identify client slot reuse */
 	atomic_t		 lut_client_generation;
 	/** reply_data file */

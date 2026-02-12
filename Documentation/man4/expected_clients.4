@@ -1,0 +1,51 @@
+.TH EXPECTED_CLIENTS 4 2026-02-10 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+epected_clients \- approximate total number of clients mountpoints
+.SH SYNOPSIS
+.SY "lctl set_param expected_clients"
+.YS
+.SS PROPERTIES
+.TP
+.B Perms
+.BR 644 " | " -rw-r--r--.
+.TP
+.B Scope
+Global
+.TP
+.B Config
+always present
+.TP
+.B Initial default
+.B expected_clients=1
+.SH DESCRIPTION
+.B expected_clients
+stores the approximate number of client mounts that a server may have at one time.
+Knowing this value during startup allows services to configure various tables,
+tunable values, etc. appropriately for the system once it is fully started.
+This avoids code having to make inaccurate guesses as to future system size.
+.PP
+The
+.B expected_clients
+value need only be an order-of-magnitude estimate for the client count.
+It will automatically be updated on each server if the actual number of
+clients mounted at any one time exceed the set value,
+so it typically does not need to be explicitly set.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B expected_clients
+.EE
+.SH EXAMPLES
+Configure the system to expect about 1000 clients to connect:
+.EX
+lctl set_param -P expected_clients=1000
+.EE
+.SH AVAILABILITY
+.B expected_clients
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" commit #
+.SH SEE ALSO
+.BR at_max (4),
+.BR conns_per_peer (4)

@@ -246,6 +246,52 @@ static int ldebugfs_exp_export_seq_show(struct seq_file *m, void *data)
 }
 LDEBUGFS_SEQ_FOPS_RO(ldebugfs_exp_export);
 
+/* Global client tracking for parameter tuning */
+static unsigned int expected_clients = 1;
+
+module_param(expected_clients, uint, 0644);
+MODULE_PARM_DESC(expected_clients,
+	"Order-of-magnitude estimate of client count for parameter tuning");
+
+static DEFINE_SPINLOCK(lustre_client_stats_lock);
+
+int class_expected_clients_update(unsigned int max_clients)
+{
+	if (unlikely(max_clients == 0 || max_clients > LR_MAX_CLIENTS)) {
+		int rc = -EOVERFLOW;
+
+		/* if this is ever a problem, increase/fix LR_MAX_CLIENTS */
+		CWARN("%s: invalid expected_clients=%u, ignoring: rc = %d\n",
+		      "global", max_clients, rc);
+		return rc;
+	}
+
+
+	if (max_clients < expected_clients)
+		return 0;
+
+	spin_lock(&lustre_client_stats_lock);
+	expected_clients = max_clients;
+	spin_unlock(&lustre_client_stats_lock);
+
+	CDEBUG(D_INFO, "updated expected_clients=%u\n", expected_clients);
+
+	return 0;
+}
+EXPORT_SYMBOL(class_expected_clients_update);
+
+unsigned int class_expected_clients_get(void)
+{
+	return expected_clients;
+}
+EXPORT_SYMBOL(class_expected_clients_get);
+
+void class_expected_clients_set(unsigned int new_clients)
+{
+	expected_clients = new_clients;
+}
+EXPORT_SYMBOL(class_expected_clients_set);
+
 static void lprocfs_free_client_stats(struct nid_stat *client_stat)
 {
 	CDEBUG(D_CONFIG, "stat %p - data %p/%p\n", client_stat,

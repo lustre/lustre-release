@@ -111,6 +111,35 @@ LUSTRE_STATIC_UINT_ATTR(ping_interval, &ping_interval);
 #ifdef HAVE_SERVER_SUPPORT
 LUSTRE_STATIC_UINT_ATTR(ldlm_timeout, &ldlm_timeout);
 LUSTRE_STATIC_UINT_ATTR(bulk_timeout, &bulk_timeout);
+
+static ssize_t expected_clients_show(struct kobject *kobj,
+				     struct attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%u\n", class_expected_clients_get());
+}
+
+static ssize_t expected_clients_store(struct kobject *kobj,
+				      struct attribute *attr,
+				      const char *buffer, size_t count)
+{
+	unsigned int val;
+	int rc;
+
+	rc = kstrtouint(buffer, 10, &val);
+	if (rc)
+		return rc;
+
+	if (val == 0)
+		return -EINVAL;
+
+	if (val > LR_MAX_CLIENTS)
+		return -EINVAL;
+
+	class_expected_clients_set(val);
+
+	return count;
+}
+LUSTRE_RW_ATTR(expected_clients);
 #endif
 
 static ssize_t memused_show(struct kobject *kobj, struct attribute *attr,
@@ -584,9 +613,10 @@ static struct attribute *lustre_attrs[] = {
 	&lustre_attr_memused_max.attr,
 	&lustre_attr_memused.attr,
 #ifdef HAVE_SERVER_SUPPORT
-	&lustre_attr_enable_health_write.attr,
-	&lustre_sattr_ldlm_timeout.u.attr,
 	&lustre_sattr_bulk_timeout.u.attr,
+	&lustre_attr_enable_health_write.attr,
+	&lustre_attr_expected_clients.attr,
+	&lustre_sattr_ldlm_timeout.u.attr,
 	&lustre_attr_no_transno.attr,
 #endif
 	&lustre_attr_enable_fname_encoding.attr,

@@ -2875,7 +2875,7 @@ static void check_lr_server_data(void)
 	CHECK_MEMBER(lr_server_data, lsd_catalog_ogen);
 	CHECK_MEMBER(lr_server_data, lsd_peeruuid);
 	CHECK_MEMBER(lr_server_data, lsd_osd_index);
-	CHECK_MEMBER(lr_server_data, lsd_padding1);
+	CHECK_MEMBER(lr_server_data, lsd_max_clients);
 	CHECK_MEMBER(lr_server_data, lsd_start_epoch);
 	CHECK_MEMBER(lr_server_data, lsd_trans_table);
 	CHECK_MEMBER(lr_server_data, lsd_trans_table_time);

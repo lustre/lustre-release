@@ -471,6 +471,7 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	lut->lut_last_rcvd = NULL;
 	lut->lut_client_bitmap = NULL;
 	atomic_set(&lut->lut_num_clients, 0);
+	atomic_set(&lut->lut_max_clients, 0);
 	atomic_set(&lut->lut_client_generation, 0);
 	lut->lut_reply_data = NULL;
 	lut->lut_reply_bitmap = NULL;

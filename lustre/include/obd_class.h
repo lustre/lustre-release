@@ -92,6 +92,12 @@ extern struct xarray obd_devs;
 struct obd_export *class_conn2export(struct lustre_handle *);
 #ifdef HAVE_SERVER_SUPPORT
 struct obd_type *class_add_symlinks(const char *name, bool enable_proc);
+int class_expected_clients_update(unsigned int max_clients);
+unsigned int class_expected_clients_get(void);
+void class_expected_clients_set(unsigned int new_clients);
+#else
+static inline unsigned int class_expected_clients_get(void) { return 1; }
+static inline void class_expected_clients_set(unsigned int new) { };
 #endif
 int class_register_type(const struct obd_ops *dt_ops,
 			const struct md_ops *md_ops, bool enable_proc,

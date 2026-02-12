@@ -6105,10 +6105,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lr_server_data, lsd_osd_index));
 	LASSERTF((int)sizeof(((struct lr_server_data *)0)->lsd_osd_index) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct lr_server_data *)0)->lsd_osd_index));
-	LASSERTF((int)offsetof(struct lr_server_data, lsd_padding1) == 144, "found %lld\n",
-		 (long long)(int)offsetof(struct lr_server_data, lsd_padding1));
-	LASSERTF((int)sizeof(((struct lr_server_data *)0)->lsd_padding1) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct lr_server_data *)0)->lsd_padding1));
+	LASSERTF((int)offsetof(struct lr_server_data, lsd_max_clients) == 144, "found %lld\n",
+		 (long long)(int)offsetof(struct lr_server_data, lsd_max_clients));
+	LASSERTF((int)sizeof(((struct lr_server_data *)0)->lsd_max_clients) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lr_server_data *)0)->lsd_max_clients));
 	LASSERTF((int)offsetof(struct lr_server_data, lsd_start_epoch) == 148, "found %lld\n",
 		 (long long)(int)offsetof(struct lr_server_data, lsd_start_epoch));
 	LASSERTF((int)sizeof(((struct lr_server_data *)0)->lsd_start_epoch) == 4, "found %lld\n",

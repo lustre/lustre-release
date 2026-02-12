@@ -25,6 +25,42 @@
 /** version recovery epoch */
 #define LR_EPOCH_BITS	32
 
+/**
+ * Update maximum client count tracking
+ *
+ * Update the maximum number of clients ever connected to this target
+ * if it is larger than previously seen.
+ *
+ * \param[in] lut	target to update
+ */
+static void tgt_update_max_clients(struct lu_target *lut)
+{
+	unsigned int current_clients;
+	unsigned int max_clients;
+	int rc;
+
+	if (unlikely(!lut || !lut->lut_obd))
+		return;
+
+	current_clients = atomic_read(&lut->lut_num_clients);
+	max_clients = atomic_read(&lut->lut_max_clients);
+
+	if (current_clients > max_clients) {
+		rc = class_expected_clients_update(current_clients);
+		if (rc != 0) {
+			CDEBUG(D_INFO,
+			       "%s: error setting expected_clients=%u: rc = %d\n",
+			       lut->lut_obd->obd_name, current_clients, rc);
+			return;
+		}
+
+		atomic_set(&lut->lut_max_clients, current_clients);
+		lut->lut_lsd.lsd_max_clients = current_clients;
+		CDEBUG(D_INFO, "%s: new maximum client count %u\n",
+		       lut->lut_obd->obd_name, current_clients);
+	}
+}
+
 /* Allocate a bitmap for a chunk of reply data slots */
 static int tgt_bitmap_chunk_alloc(struct lu_target *lut, int chunk)
 {
@@ -684,9 +720,9 @@ static int tgt_server_data_write(const struct lu_env *env,
 int tgt_server_data_update(const struct lu_env *env, struct lu_target *tgt,
 			   int sync)
 {
-	struct tgt_thread_info	*tti = tgt_th_info(env);
-	struct thandle		*th;
-	int			 rc = 0;
+	struct tgt_thread_info *tti = tgt_th_info(env);
+	struct thandle *th;
+	int rc = 0;
 
 	ENTRY;
 
@@ -699,6 +735,8 @@ int tgt_server_data_update(const struct lu_env *env, struct lu_target *tgt,
 	spin_lock(&tgt->lut_translock);
 	tgt->lut_lsd.lsd_last_transno = tgt->lut_last_transno;
 	spin_unlock(&tgt->lut_translock);
+
+	tgt_update_max_clients(tgt);
 
 	if (tgt->lut_bottom->dd_rdonly)
 		RETURN(0);
@@ -1102,8 +1140,10 @@ repeat:
 		RETURN(rc);
 	}
 
-	if (tgt_is_multimodrpcs_client(exp))
+	if (tgt_is_multimodrpcs_client(exp)) {
 		atomic_inc(&tgt->lut_num_clients);
+		tgt_update_max_clients(tgt);
+	}
 
 	RETURN(0);
 }
@@ -1743,6 +1783,7 @@ static int tgt_clients_data_init(const struct lu_env *env,
 
 		if (tgt_is_multimodrpcs_record(tgt, lcd)) {
 			atomic_inc(&tgt->lut_num_clients);
+			tgt_update_max_clients(tgt);
 
 			/* compute the highest valid client generation */
 			generation = max(generation, lcd->lcd_generation);
@@ -1856,6 +1897,7 @@ int tgt_server_data_init(const struct lu_env *env, struct lu_target *tgt)
 		lsd->lsd_client_size = LR_CLIENT_SIZE;
 		lsd->lsd_subdir_count = OBJ_SUBDIR_COUNT;
 		lsd->lsd_osd_index = index;
+		lsd->lsd_max_clients = 0;
 		lsd->lsd_feature_rocompat = tgt_scd[type].rocinit;
 		lsd->lsd_feature_incompat = tgt_scd[type].incinit;
 	} else {
@@ -1949,6 +1991,16 @@ int tgt_server_data_init(const struct lu_env *env, struct lu_target *tgt)
 	       (last_rcvd_size - lsd->lsd_client_start) /
 		lsd->lsd_client_size);
 	CDEBUG(D_INODE, "========END DUMPING LAST_RCVD========\n");
+
+	/* Initialize maximum client count */
+	if (lsd->lsd_max_clients > LR_MAX_CLIENTS) {
+		CWARN("%s: stored max_clients %u > max allowed %lu, reset to 0\n",
+		      tgt_name(tgt), lsd->lsd_max_clients, LR_MAX_CLIENTS);
+		lsd->lsd_max_clients = 0;
+	}
+	atomic_set(&tgt->lut_max_clients, (int)lsd->lsd_max_clients);
+	CDEBUG(D_INFO, "%s: restored maximum client count: %u\n",
+	       tgt_name(tgt), lsd->lsd_max_clients);
 
 	if (lsd->lsd_server_size == 0 || lsd->lsd_client_start == 0 ||
 	    lsd->lsd_client_size == 0) {

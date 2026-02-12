@@ -260,7 +260,7 @@ static inline void lsd_le_to_cpu(struct lr_server_data *buf,
 	lsd->lsd_catalog_ogen = le32_to_cpu(buf->lsd_catalog_ogen);
 	memcpy(lsd->lsd_peeruuid, buf->lsd_peeruuid, sizeof(lsd->lsd_peeruuid));
 	lsd->lsd_osd_index = le32_to_cpu(buf->lsd_osd_index);
-	lsd->lsd_padding1 = le32_to_cpu(buf->lsd_padding1);
+	lsd->lsd_max_clients = le32_to_cpu(buf->lsd_max_clients);
 	lsd->lsd_start_epoch = le32_to_cpu(buf->lsd_start_epoch);
 	for (i = 0; i < LR_EXPIRE_INTERVALS; i++)
 		lsd->lsd_trans_table[i] = le64_to_cpu(buf->lsd_trans_table[i]);
@@ -288,7 +288,7 @@ static inline void lsd_cpu_to_le(struct lr_server_data *lsd,
 	buf->lsd_catalog_ogen = cpu_to_le32(lsd->lsd_catalog_ogen);
 	memcpy(buf->lsd_peeruuid, lsd->lsd_peeruuid, sizeof(buf->lsd_peeruuid));
 	buf->lsd_osd_index = cpu_to_le32(lsd->lsd_osd_index);
-	buf->lsd_padding1 = cpu_to_le32(lsd->lsd_padding1);
+	buf->lsd_max_clients = cpu_to_le32(lsd->lsd_max_clients);
 	buf->lsd_start_epoch = cpu_to_le32(lsd->lsd_start_epoch);
 	for (i = 0; i < LR_EXPIRE_INTERVALS; i++)
 		buf->lsd_trans_table[i] = cpu_to_le64(lsd->lsd_trans_table[i]);

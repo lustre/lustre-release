@@ -157,7 +157,7 @@ struct lr_server_data {
 	__u32 lsd_catalog_ogen;    /* recovery catalog inode generation */
 	__u8  lsd_peeruuid[40];    /* UUID of MDS associated with this OST */
 	__u32 lsd_osd_index;	   /* index number of OST in LOV */
-	__u32 lsd_padding1;	   /* was lsd_mdt_index, unused in 2.4.0 */
+	__u32 lsd_max_clients;	   /* max number of clients ever connected */
 	__u32 lsd_start_epoch;	   /* VBR: start epoch from last boot */
 	/** transaction values since lsd_trans_table_time */
 	__u64 lsd_trans_table[LR_EXPIRE_INTERVALS];
