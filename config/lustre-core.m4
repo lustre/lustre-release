@@ -3941,6 +3941,31 @@ AC_DEFUN([LC_HAVE_CSUM_TYPE_BLK_INTEGRITY], [
 ]) # LC_HAVE_CSUM_TYPE_BLK_INTEGRITY
 
 #
+# LC_HAVE_FOLIO_MEMCG_LOCK_STATIC
+#
+# Linux commit v6.10-rc6-285-ge93d4166b40a8
+#   mm: memcg: put cgroup v1-specific code under a config option
+# Linux commit v6.12-rc6-127-ga29c0e4b2e867
+#  memcg-v1: remove memcg move locking code
+#
+AC_DEFUN([LC_SRC_HAVE_FOLIO_MEMCG_LOCK_STATIC],[
+	LB2_LINUX_TEST_SRC([folio_memcg_lock_static_inline], [
+		#include <linux/memcontrol.h>
+
+		static inline void folio_memcg_lock(struct folio *folio);
+	],[
+		folio_memcg_lock(NULL);
+	],[])
+])
+AC_DEFUN([LC_HAVE_FOLIO_MEMCG_LOCK_STATIC],[
+	LB2_MSG_LINUX_TEST_RESULT([if folio_memcg_lock() is static inline],
+	[folio_memcg_lock_static_inline], [
+		AC_DEFINE(HAVE_FOLIO_MEMCG_LOCK_STATIC, 1,
+			[folio_memcg_lock() is static inline])
+	])
+]) # LC_HAVE_FOLIO_MEMCG_LOCK_STATIC
+
+#
 # LC_HAVE_LINUX_UNALIGNED_HEADER
 #
 # Linux v6.12-rc1-3-g5f60d5f6bbc1
@@ -4605,6 +4630,9 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	# 6.10
 	LC_SRC_HAVE_CSUM_TYPE_BLK_INTEGRITY
 
+	# 6.11
+	LC_SRC_HAVE_FOLIO_MEMCG_LOCK_STATIC
+
 	# 6.12
 	LC_SRC_HAVE_LINUX_UNALIGNED_HEADER
 	LC_SRC_HAVE_WRITE_BEGIN_FOLIO
@@ -4890,6 +4918,9 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 6.10
 	LC_HAVE_CSUM_TYPE_BLK_INTEGRITY
+
+	# 6.11
+	LC_HAVE_FOLIO_MEMCG_LOCK_STATIC
 
 	# 6.12
 	LC_HAVE_LINUX_UNALIGNED_HEADER

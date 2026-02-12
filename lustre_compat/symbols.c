@@ -85,7 +85,8 @@ EXPORT_SYMBOL(compat_apply_workqueue_attrs);
 # define ALLOC_WQ_ATTRS_FUNC	"alloc_workqueue_attrs"
 #endif
 
-#if !defined(FOLIO_MEMCG_LOCK_EXPORTED) && defined(HAVE_FOLIO_MEMCG_LOCK)
+#if defined(CONFIG_MEMCG) && !defined(HAVE_FOLIO_MEMCG_LOCK_STATIC) \
+ && defined(HAVE_FOLIO_MEMCG_LOCK) && !defined(FOLIO_MEMCG_LOCK_EXPORTED)
 static void (*__folio_memcg_lock)(struct folio *folio);
 
 void folio_memcg_lock(struct folio *folio)
@@ -143,7 +144,8 @@ int lustre_symbols_init(void)
 	if (!__apply_workqueue_attrs)
 		return -EINVAL;
 
-#if !defined(FOLIO_MEMCG_LOCK_EXPORTED) && defined(HAVE_FOLIO_MEMCG_LOCK)
+#if defined(CONFIG_MEMCG) && !defined(HAVE_FOLIO_MEMCG_LOCK_STATIC) \
+ && defined(HAVE_FOLIO_MEMCG_LOCK) && !defined(FOLIO_MEMCG_LOCK_EXPORTED)
 	__folio_memcg_lock = cfs_kallsyms_lookup_name("folio_memcg_lock");
 	if (!__folio_memcg_lock)
 		return -EINVAL;
