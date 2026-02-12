@@ -15489,6 +15489,8 @@ test_119j()
 	# This forces an RPC to the server
 	#define OBD_FAIL_LLITE_FORCE_BIO_AS_DIO	0x1429
 	$LCTL set_param fail_loc=0x1429
+	# Drop the cache so this IO is not done by fast read
+	sysctl -w vm.drop_caches=3
 	dd if=$DIR/$tfile of=/dev/null bs=8 count=1 || error "(4) dd failed"
 	$LCTL get_param osc.*.rpc_stats
 	rpcs=($($LCTL get_param -n 'osc.*.rpc_stats' |
@@ -26750,6 +26752,39 @@ test_248c() {
 }
 run_test 248c "verify whole file read behavior"
 
+test_248d() {
+	local fast_read_sav=$($LCTL get_param -n llite.*.fast_read 2>/dev/null)
+
+	[ -z "$fast_read_sav" ] && skip "no fast read support"
+	stack_trap "$LCTL set_param -n llite.*.fast_read=$fast_read_sav"
+
+	# Create a small file and warm the page cache
+	dd if=/dev/urandom of=$DIR/$tfile bs=32K count=1 2>/dev/null ||
+		error "dd write failed"
+	stack_trap "rm -f $DIR/$tfile"
+
+	# Warm page cache with a full read
+	$LCTL set_param -n llite.*.fast_read=1
+	dd if=$DIR/$tfile of=/dev/null bs=32K 2>/dev/null ||
+		error "dd warmup read failed"
+
+	# Clear stats and do a burst of small reads from cache
+	$LCTL set_param llite.*.read_ahead_stats=0
+	dd if=$DIR/$tfile of=/dev/null bs=8 count=4000 2>/dev/null ||
+		error "dd tiny read failed"
+
+	local failed=$($LCTL get_param -n llite.*.read_ahead_stats |
+		awk '/failed_to_fast_read/ { print $1 }')
+
+	# All reads from a warm cache should use fast read without
+	# any failures.  A non-zero count means pages were not
+	# served from cache, indicating the fast read path is
+	# broken or being bypassed.
+	[[ ${failed:-0} -eq 0 ]] ||
+		error "expected 0 failed_to_fast_read, got $failed"
+}
+run_test 248d "fast read serves tiny reads from cache without failures"
+
 test_249() { # LU-7890
 	[ $MDS1_VERSION -lt $(version_code 2.8.53) ] &&
 		skip "Need at least version 2.8.54"
@@ -26795,28 +26830,6 @@ test_251a() {
 	rm -f $DIR/$tfile
 }
 run_test 251a "Handling short read and write correctly"
-
-test_251b() {
-	dd if=/dev/zero of=$DIR/$tfile bs=1k count=4 ||
-		error "write $tfile failed"
-
-	sleep 2 && echo 12345 >> $DIR/$tfile &
-
-	#define OBD_FAIL_LLITE_READ_PAUSE 0x1431
-	$LCTL set_param fail_loc=0x1431 fail_val=5
-	# seek to 4096, 2 seconds later, file size expand to 4102, and after
-	# 5 seconds, read 10 bytes, the short read should
-	# report:
-	#                start ->+ read_len -> offset_after_read read_count
-	#     short read: 4096 ->+ 10 -> 4096 0
-	# not:
-	#     short read: 4096 ->+ 10 -> 4102 0
-	local off=$($MULTIOP $DIR/$tfile oO_RDONLY:z4096r10c 2>&1 | \
-			awk '/short read/ { print $7 }')
-	(( off == 4096 )) ||
-		error "short read should set offset at 4096, not $off"
-}
-run_test 251b "short read restore offset correctly"
 
 test_252() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"

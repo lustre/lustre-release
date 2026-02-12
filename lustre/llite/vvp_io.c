@@ -163,21 +163,19 @@ static int vvp_prep_size(const struct lu_env *env, struct cl_object *obj,
 		}
 		/*
 		 * region is within kms and, hence, within real file
-		 * size (A). We need to increase i_size to cover the
+		 * size (A). We need to fix i_size to cover the
 		 * read region so that generic_file_read() will do its
 		 * job, but that doesn't mean the kms size is
 		 * _correct_, it is only the _minimum_ size. If
-		 * someone does a stat they will get the correct size
-		 * which will always be >= the kms value here.
+		 * someone does a read outside of kms - glimpse needed.
+		 * size might to be wrong due lock cancelation in middle.
 		 * b=11081
 		 */
-		if (i_size_read(inode) < kms) {
-			i_size_write(inode, kms);
-			CDEBUG(D_VFSTRACE,
-			       DFID" updating i_size %llu\n",
-			       PFID(lu_object_fid(&obj->co_lu)),
-			       (__u64)i_size_read(inode));
-		}
+		i_size_write(inode, kms);
+		CDEBUG(D_VFSTRACE,
+		       DFID" updating i_size %llu\n",
+		       PFID(lu_object_fid(&obj->co_lu)),
+		       (__u64)i_size_read(inode));
 	}
 
 	vvp_object_size_unlock(obj);
