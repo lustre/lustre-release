@@ -16,6 +16,4 @@ lnet-objs += $(lnet-objs-y)
 
 CFLAGS_lnet_rdma.o += -I @GDS_PATH@ -I@CUDA_PATH@
 
-default: all
-
 @INCLUDE_RULES@

@@ -10,7 +10,7 @@
 
 ifeq ($(PATCHLEVEL),)
 
-include autoMakefile
+-include autoMakefile
 
 else
 

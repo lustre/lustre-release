@@ -16,7 +16,8 @@ SUBDIRS := @LDISKFS_SUBDIR@ \
 	Documentation \
 	lib \
 	libcfs \
-	lnet \
+	lnet/utils \
+	lnet/include \
 	lustre/utils \
 	lustre/tests \
 	lustre/scripts \
@@ -27,7 +28,8 @@ DIST_SUBDIRS := ldiskfs \
 	Documentation \
 	lib \
 	libcfs \
-	lnet \
+	lnet/utils \
+	lnet/include \
 	lustre/utils \
 	lustre/tests \
 	lustre/scripts \
@@ -62,6 +64,10 @@ if MODULES
 	$(MKDIR_P) $(DESTDIR)$(modulefsdir)
 	for ko in $$(find lustre/ ldiskfs/ -name '*.ko' 2>/dev/null); do \
 		$(INSTALL) -m 0644 $${ko} $(DESTDIR)$(modulefsdir)/; \
+	done
+	$(MKDIR_P) $(DESTDIR)$(modulenetdir)
+	for ko in $$(find lnet/ -name '*.ko' 2>/dev/null); do \
+		$(INSTALL) -m 0644 $${ko} $(DESTDIR)$(modulenetdir)/; \
 	done
 endif
 
@@ -194,7 +200,22 @@ if EXTERNAL_KO2IBLND
 	$(MODULE_TARGET)=$(PWD)/lnet/klnds/o2iblnd -o tmp_include_depends -o scripts -o \
 	include/config/MARKER $@
 endif # EXTERNAL_KO2IBLND
+if BUILT_IN_KO2IBLND
+	cp -vf lnet/klnds/in-kernel-o2iblnd/ko2iblnd.ko \
+		lnet/klnds/in-kernel-o2iblnd/in-kernel-ko2iblnd.ko
+endif # BUILT_IN_KO2IBLND
 endif # LINUX
+
+if BUILT_IN_KO2IBLND
+if !EXTERNAL_KO2IBLND
+install-data-hook:
+	(cd "$(DESTDIR)$(modulenetdir)"; \
+	 $(LN_S) -f in-kernel-ko2iblnd.ko ko2iblnd.ko)
+
+uninstall-hook:
+	(cd "$(DESTDIR)$(modulenetdir)"; rm -f ko2iblnd.ko)
+endif # !EXTERNAL_KO2IBLND
+endif # BUILT_IN_KO2IBLND
 
 endif # MODULES
 
@@ -221,6 +242,8 @@ dist-hook: undef.h
 		-exec cp --parents {} $(distdir) \;
 	find lustre/ -type f \( -name "*.c" -o -name "*.h" -o -iname "Makefile" \) \
 		-exec cp --parents {} $(distdir) \;
+	find lnet/ -type f \( -name "*.c" -o -name "*.h" -o -iname "Makefile" \) \
+		-exec cp --parents {} $(distdir) \;
 	find $(distdir) -name .deps -o \
 			-name CVS -o \
 			-name .svn -o \
@@ -243,6 +266,7 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	contrib \
 	lustre/kernel_patches \
 	lustre/ChangeLog \
+	lnet/ChangeLog \
 	rpm
 
 rpm-local:

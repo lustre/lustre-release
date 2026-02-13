@@ -31,4 +31,3 @@ o2iblnd_modparams.c: ../o2iblnd/o2iblnd_modparams.c
 	sed $(strip $(o2ib_sed_flags)) $< > $@
 
 @INCLUDE_RULES@
-
