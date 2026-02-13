@@ -6,7 +6,7 @@
 
 ifneq ($(BUILD_EXT_O2IB),)
 
-MODULES := ko2iblnd
+obj-m += ko2iblnd.o
 
 endif
 
@@ -14,8 +14,6 @@ ko2iblnd-objs := o2iblnd.o o2iblnd_cb.o o2iblnd_modparams.o
 
 # Need to make sure that an external OFED source pool overrides
 # any in-kernel OFED sources
-NOSTDINC_FLAGS += @EXTRA_OFED_CONFIG@ @EXTRA_OFED_INCLUDE@
+NOSTDINC_FLAGS += $(EXTRA_OFED_CONFIG) $(EXTRA_OFED_INCLUDE)
 # Identify this as the External driver build
-NOSTDINC_FLAGS += -DEXTERNAL_OFED_BUILD -DEXTERNAL_OFED_VERSION='"@EXT_O2IB_VER@"'
-
-@INCLUDE_RULES@
+NOSTDINC_FLAGS += -DEXTERNAL_OFED_BUILD -DEXTERNAL_OFED_VERSION='"$(EXT_O2IB_VER)"'

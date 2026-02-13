@@ -4,7 +4,8 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-MODULES := ko2iblnd
+obj-m += ko2iblnd.o
+
 ko2iblnd-objs := o2iblnd.o o2iblnd_cb.o o2iblnd_modparams.o
 
 in-kernel-ko2iblnd_headers := o2iblnd.h o2iblnd-idl.h
@@ -29,5 +30,3 @@ o2iblnd_cb.c: ../o2iblnd/o2iblnd_cb.c
 
 o2iblnd_modparams.c: ../o2iblnd/o2iblnd_modparams.c
 	sed $(strip $(o2ib_sed_flags)) $< > $@
-
-@INCLUDE_RULES@

@@ -1566,19 +1566,9 @@ AM_CONDITIONAL(BUILD_KFILND,       test x$KFILND  = "xkfilnd")
 #
 AC_DEFUN([LN_CONFIG_FILES], [
 AC_CONFIG_FILES([
-lnet/Makefile
 lnet/include/Makefile
 lnet/include/lnet/Makefile
 lnet/include/uapi/linux/lnet/Makefile
-lnet/klnds/Makefile
-lnet/klnds/o2iblnd/Makefile
-lnet/klnds/in-kernel-o2iblnd/Makefile
-lnet/klnds/efalnd/Makefile
-lnet/klnds/gnilnd/Makefile
-lnet/klnds/socklnd/Makefile
-lnet/klnds/kfilnd/Makefile
-lnet/lnet/Makefile
-lnet/selftest/Makefile
 lnet/utils/Makefile
 lnet/utils/lnetconfig/Makefile
 ])

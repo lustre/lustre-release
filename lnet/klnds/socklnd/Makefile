@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-MODULES := ksocklnd
+obj-m += ksocklnd.o
 
 ksocklnd-objs := \
 	socklnd.o \
@@ -12,5 +12,3 @@ ksocklnd-objs := \
 	socklnd_lib.o \
 	socklnd_modparams.o \
 	socklnd_proto.o
-
-@INCLUDE_RULES@

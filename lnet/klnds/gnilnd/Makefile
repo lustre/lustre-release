@@ -4,10 +4,9 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-MODULES := kgnilnd
+obj-m += kgnilnd.o
+
 kgnilnd-objs := gnilnd.o gnilnd_cb.o gnilnd_modparams.o gnilnd_debug.o gnilnd_proc.o \
 		gnilnd_sysctl.o gnilnd_stack.o gnilnd_conn.o
 
-EXTRA_POST_CFLAGS := -D"SVN_CODE_REV=KBUILD_STR(${SVN_CODE_REV})" @GNICPPFLAGS@
-
-@INCLUDE_RULES@
+ccflags-y := -D"SVN_CODE_REV=KBUILD_STR(${SVN_CODE_REV})" $(GNICPPFLAGS)

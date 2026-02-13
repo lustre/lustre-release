@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-MODULES := lnet
+obj-m += lnet.o
 
 lnet-objs-$(CONFIG_SMP) = lib-cpt.o
 lnet-objs := api-ni.o config.o nidstrings.o lnet_rdma.o lock.o
@@ -14,6 +14,4 @@ lnet-objs += router.o lnet_debugfs.o acceptor.o peer.o net_fault.o udsp.o
 lnet-objs += lnet-crypto.o adler.o
 lnet-objs += $(lnet-objs-y)
 
-CFLAGS_lnet_rdma.o += -I @GDS_PATH@ -I@CUDA_PATH@
-
-@INCLUDE_RULES@
+CFLAGS_lnet_rdma.o += -I $(GDS_PATH) -I$(CUDA_PATH)

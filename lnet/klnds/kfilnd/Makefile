@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-MODULES := kkfilnd
+obj-m += kkfilnd.o
 
 kkfilnd-objs := \
 	kfilnd.o \
@@ -15,8 +15,6 @@ kkfilnd-objs := \
 	kfilnd_dom.o \
 	kfilnd_peer.o \
 	kfilnd_cq.o \
-	kfilnd_debugfs.o \
+	kfilnd_debugfs.o
 
-EXTRA_POST_CFLAGS += @KFICPPFLAGS@
-
-@INCLUDE_RULES@
+ccflags-y += $(KFICPPFLAGS)
