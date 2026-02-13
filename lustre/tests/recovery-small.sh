@@ -1143,7 +1143,8 @@ test_26b() {      # bug 10140 - evict dead exports by pinger
 	zconf_mount $HOSTNAME $MOUNT2 ||
                 { error "Failed to mount $MOUNT2"; return 2; }
 	# make sure all imports are connected and not IDLE
-	do_facet client $LFS df > /dev/null
+	wait_clients_import_state $HOSTNAME mds1 FULL
+	wait_clients_import_state $HOSTNAME ost1 FULL
 
 	local mds_nexp=$(do_facet mds1 \
 		lctl get_param -n mdt.${mds1_svc}.num_exports)
