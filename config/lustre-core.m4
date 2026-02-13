@@ -4451,48 +4451,6 @@ AS_IF([test "x$enable_quota" != xno -a "x$enable_utils" != xno], [
 ]) # LC_QUOTA
 
 #
-# LC_OSD_ADDON
-#
-# configure support for optional OSD implementation
-#
-AC_DEFUN([LC_OSD_ADDON], [
-AC_MSG_CHECKING([whether to use OSD addon])
-AC_ARG_WITH([osd],
-	AS_HELP_STRING([--with-osd=path],
-		[set path to optional osd]),
-	[
-	case "$with_osd" in
-	no)
-		ENABLEOSDADDON=0
-		;;
-	*)
-		OSDADDON="$with_osd"
-		ENABLEOSDADDON=1
-		;;
-	esac
-	], [
-		ENABLEOSDADDON=0
-	])
-AS_IF([test $ENABLEOSDADDON -eq 0], [
-	AC_MSG_RESULT([no])
-	OSDADDON=""
-], [
-	OSDMODNAME=$(basename $OSDADDON)
-	AS_IF([test -e $LUSTRE/$OSDMODNAME], [
-		AC_MSG_RESULT([cannot link])
-		OSDADDON=""
-	], [ln -s $OSDADDON $LUSTRE/$OSDMODNAME], [
-		AC_MSG_RESULT([$OSDMODNAME])
-		OSDADDON="obj-m += $OSDMODNAME/"
-	], [
-		AC_MSG_RESULT([cannot link])
-		OSDADDON=""
-	])
-])
-AC_SUBST(OSDADDON)
-]) # LC_OSD_ADDON
-
-#
 # LC_CONFIG_CRYPTO
 #
 # Check whether to enable Lustre client crypto

@@ -13,6 +13,3 @@ obj-$(CONFIG_LUSTRE_FS) += lov/ osc/ mdc/ lmv/ llite/ fld/
 obj-$(CONFIG_LUSTRE_FS_LDISKFS) += osd-ldiskfs/
 obj-$(CONFIG_LUSTRE_FS_ZFS) += osd-zfs/
 
-ifneq ($(OSDADDON),)
-$(eval $(OSDADDON))
-endif

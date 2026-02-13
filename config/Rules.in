@@ -45,6 +45,4 @@ export ZFS := @ZFS@
 export ZFS_OBJ := @ZFS_OBJ@
 export SPL := @SPL@
 export SPL_OBJ := @SPL_OBJ@
-export OSDADDON := @OSDADDON@
-
 endif # PATCHLEVEL
