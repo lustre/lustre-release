@@ -17,7 +17,6 @@ SUBDIRS := @LDISKFS_SUBDIR@ \
 	lib \
 	libcfs \
 	lnet/utils \
-	lnet/include \
 	lustre/utils \
 	lustre/tests \
 	lustre/scripts \
@@ -29,7 +28,6 @@ DIST_SUBDIRS := ldiskfs \
 	lib \
 	libcfs \
 	lnet/utils \
-	lnet/include \
 	lustre/utils \
 	lustre/tests \
 	lustre/scripts \
@@ -47,6 +45,10 @@ endif
 install-data-local:
 	for fname in $$(find lustre/include/lustre -type f -name '*.h'); do \
 		target=$$(echo $${fname} | sed 's:^lustre/include/::g'); \
+		$(INSTALL) -D -m 0644 $${fname} $(DESTDIR)$(includedir)/$${target}; \
+	done
+	for fname in $$(find lnet/include/uapi/linux/lnet -type f -name '*.h'); do \
+		target=$$(echo $${fname} | sed 's:^lnet/include/uapi/::g'); \
 		$(INSTALL) -D -m 0644 $${fname} $(DESTDIR)$(includedir)/$${target}; \
 	done
 	for fname in $$(find lustre/include/uapi/linux/lustre -type f -name '*.h'); do \
