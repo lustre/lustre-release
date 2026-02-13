@@ -12,9 +12,3 @@ target_objs += out_lib.o update_trans.o
 target_objs += update_records.o update_recovery.o
 target_objs += tgt_grant.o tgt_fmd.o barrier.o
 target_objs += tgt_mount.o
-
-EXTRA_DIST = $(target_objs:.o=.c) tgt_internal.h
-
-ifneq "$(MODULES)" "ptlrpc"
-@INCLUDE_RULES@
-endif

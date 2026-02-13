@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+
+obj-m += mdc.o
+
+mdc-objs-y := mdc_request.o \
+	      mdc_reint.o \
+	      lproc_mdc.o \
+	      mdc_lib.o \
+	      mdc_locks.o \
+	      mdc_changelog.o \
+	      mdc_dev.o \
+	      mdc_batch.o
+
+mdc-objs-$(CONFIG_FS_POSIX_ACL) += mdc_acl.o
+
+mdc-objs := $(mdc-objs-y)

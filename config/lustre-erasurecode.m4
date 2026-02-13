@@ -25,6 +25,5 @@ AC_DEFUN([EC_CONFIG_FILES], [
 AC_CONFIG_FILES([
 lustre/utils/erasurecode/Makefile
 lustre/utils/erasurecode/autoMakefile
-lustre/ec/Makefile
 ])
 ]) # EC_CONFIG_FILES

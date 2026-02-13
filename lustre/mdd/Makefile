@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-MODULES := mdd
+obj-m += mdd.o
 mdd-objs := \
 	mdd_acl.o \
 	mdd_changelog.o \
@@ -16,7 +16,3 @@ mdd-objs := \
 	mdd_orphans.o \
 	mdd_permission.o \
 	mdd_trans.o
-
-EXTRA_DIST := $(mdd-objs:%.o=%.c) mdd_internal.h
-
-@INCLUDE_RULES@

@@ -1,6 +1,7 @@
 /*.log
 /*.xml
 /Makefile.in
+/Makefile
 /XMLCONFIG
 /aheadmany
 /aiocp

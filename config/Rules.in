@@ -26,4 +26,25 @@ KBUILD_EXTRA_SYMBOLS += @EXTRA_SYMBOLS@
 
 obj-m += $(patsubst %,%.o,$(MODULES))
 
+# Build configuration exports for plain Makefiles
+@SERVER_TRUE@export CONFIG_LUSTRE_FS_SERVER := m
+@CLIENT_TRUE@export CONFIG_LUSTRE_FS := m
+@TESTS_TRUE@export CONFIG_LUSTRE_FS_TESTS := m
+@LDISKFS_ENABLED_TRUE@export CONFIG_LUSTRE_FS_LDISKFS := m
+@ZFS_ENABLED_TRUE@export CONFIG_LUSTRE_FS_ZFS := m
+@GSS_TRUE@export CONFIG_LUSTRE_FS_GSS := m
+@GSS_SSK_TRUE@export CONFIG_LUSTRE_FS_GSS_SSK := m
+@GSS_KEYRING_TRUE@export CONFIG_LUSTRE_FS_GSS_KEYRING := m
+@SPL_ENABLED_TRUE@export CONFIG_LUSTRE_FS_SPL := m
+
+export LUSTRE := @LUSTRE@
+export LINUX := @LINUX@
+export LDISKFS_DIR := @LDISKFS_DIR@
+export ABS_TOP_BUILDDIR := @abs_top_builddir@
+export ZFS := @ZFS@
+export ZFS_OBJ := @ZFS_OBJ@
+export SPL := @SPL@
+export SPL_OBJ := @SPL_OBJ@
+export OSDADDON := @OSDADDON@
+
 endif # PATCHLEVEL

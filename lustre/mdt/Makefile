@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-MODULES := mdt
+obj-m += mdt.o
 mdt-objs := mdt_handler.o mdt_lib.o mdt_reint.o mdt_xattr.o mdt_recovery.o
 mdt-objs += mdt_open.o mdt_identity.o mdt_lproc.o mdt_fs.o mdt_som.o
 mdt-objs += mdt_lvb.o mdt_hsm.o mdt_mds.o mdt_io.o mdt_restripe.o
@@ -14,5 +14,3 @@ mdt-objs += mdt_hsm_cdt_client.o
 mdt-objs += mdt_hsm_cdt_agent.o
 mdt-objs += mdt_coordinator.o
 mdt-objs += mdt_batch.o
-
-@INCLUDE_RULES@

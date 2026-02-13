@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-MODULES := lov
+obj-m += lov.o
 lov-objs := lov_dev.o \
 	lov_ea.o \
 	lov_io.o \
@@ -20,7 +20,3 @@ lov-objs := lov_dev.o \
 	lovsub_dev.o \
 	lovsub_object.o \
 	lproc_lov.o
-
-EXTRA_DIST = $(lov-objs:.o=.c) lov_internal.h lov_cl_internal.h
-
-@INCLUDE_RULES@

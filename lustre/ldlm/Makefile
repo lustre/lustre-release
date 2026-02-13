@@ -13,9 +13,3 @@ ldlm_objs += ldlm_request.o ldlm_lockd.o
 ldlm_objs += ldlm_flock.o ldlm_inodebits.o
 ldlm_objs += ldlm_pool.o ldlm_reclaim.o
 ldlm_objs += ldlm_cache_policy.o
-
-EXTRA_DIST = $(ldlm_objs:.o=.c) $(ldlm_server_objs:.o=.c) ldlm_internal.h
-
-ifneq "$(MODULES)" "ptlrpc"
-@INCLUDE_RULES@
-endif

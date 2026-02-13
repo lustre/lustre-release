@@ -1,4 +1,5 @@
 /Makefile.in
+/Makefile
 /mkfs.lustre
 /mount.lustre
 /mount.lustre_tgt

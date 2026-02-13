@@ -1,4 +1,5 @@
 /Makefile.in
+/Makefile
 /createmany-mpi
 /mdsrate
 /parallel_grouplock

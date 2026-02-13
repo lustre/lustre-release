@@ -8,10 +8,26 @@
 # Template to generate top-level Makefile
 #
 
+this-makefile := $(lastword $(MAKEFILE_LIST))
+lsrctree := $(realpath $(dir $(this-makefile)))
+
 ifneq (@LDISKFS_SUBDIR@,)
 obj-m += @LDISKFS_SUBDIR@/
 endif
 obj-m += libcfs/ lnet/
 obj-m += lustre/
+
+subdir-ccflags-y := -include $(lsrctree)/undef.h
+subdir-ccflags-y += -include $(lsrctree)/config.h
+subdir-ccflags-y += -I$(lsrctree)/libcfs/include
+subdir-ccflags-y += -I$(lsrctree)/libcfs/include/libcfs
+subdir-ccflags-y += -I$(lsrctree)/lnet/include/uapi
+subdir-ccflags-y += -I$(lsrctree)/lnet/include
+subdir-ccflags-y += -I$(lsrctree)/lustre/include/uapi
+subdir-ccflags-y += -I$(lsrctree)/lustre/include
+subdir-ccflags-y += -I$(lsrctree)/include
+subdir-ccflags-y += $(call cc-option, -Wno-format-truncation)
+subdir-ccflags-y += $(call cc-option, -Wno-stringop-truncation)
+subdir-ccflags-y += $(call cc-option, -Wno-stringop-overflow)
 
 @INCLUDE_RULES@

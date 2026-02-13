@@ -1,5 +1,6 @@
 /lustre.spec
 /Makefile.in
+/Makefile
 /version_tag.pl
 /lc_net.sh
 /lc_modprobe.sh

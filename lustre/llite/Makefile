@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-MODULES := lustre
+obj-m += lustre.o
 lustre-objs := dcache.o dir.o file.o llite_lib.o llite_nfs.o
 lustre-objs += rw.o lproc_llite.o namei.o symlink.o llite_mmap.o
 lustre-objs += xattr.o xattr_cache.o
@@ -18,9 +18,3 @@ lustre-objs += llite_foreign.o llite_foreign_symlink.o
 
 lustre-$(CONFIG_FS_POSIX_ACL) += acl.o
 lustre-objs += $(lustre-y)
-
-EXTRA_DIST := $(lustre-objs:.o=.c) xattr.c rw26.c super25.c acl.c
-EXTRA_DIST += llite_internal.h vvp_internal.h pcc.h
-EXTRA_DIST += foreign_symlink.h
-
-@INCLUDE_RULES@

@@ -4,10 +4,9 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-MODULES := ptlrpc
-ptlrpc_dir := $(dir $(lastword $(MAKEFILE_LIST)))
-LDLM := @top_srcdir@/lustre/ldlm/
-TARGET := @top_srcdir@/lustre/target/
+obj-m += ptlrpc.o
+LDLM := ../ldlm/
+TARGET := ../target/
 
 ptlrpc_objs := client.o recover.o connection.o niobuf.o pack_generic.o
 ptlrpc_objs += events.o ptlrpc_module.o service.o pinger.o
@@ -23,23 +22,19 @@ nodemap_objs := nodemap_handler.o nodemap_lproc.o nodemap_range.o
 nodemap_objs += nodemap_idmap.o nodemap_member.o nodemap_storage.o
 nodemap_objs += nodemap_fileset_alt.o
 
--include $(ptlrpc_dir)/../ldlm/Makefile
-@SERVER_TRUE@-include $(ptlrpc_dir)/../target/Makefile
+-include $(src)/../ldlm/Makefile
+ifdef CONFIG_LUSTRE_FS_SERVER
+-include $(src)/../target/Makefile
+endif
 
 ptlrpc-objs := $(ptlrpc_objs)
 ptlrpc-objs += $(patsubst %,$(LDLM)%,$(ldlm_objs))
-@SERVER_TRUE@ptlrpc-objs += $(nodemap_objs) $(nrs_server_objs)
-@SERVER_TRUE@ptlrpc-objs += pack_server.o llog_server.o
-@SERVER_TRUE@ptlrpc-objs += $(patsubst %,$(TARGET)%,$(target_objs))
+ifdef CONFIG_LUSTRE_FS_SERVER
+ptlrpc-objs += $(nodemap_objs) $(nrs_server_objs)
+ptlrpc-objs += pack_server.o llog_server.o
+ptlrpc-objs += $(patsubst %,$(TARGET)%,$(target_objs))
+endif
 
-@GSS_TRUE@obj-m += gss/
+obj-$(CONFIG_LUSTRE_FS_GSS) += gss/
 
-EXTRA_DIST := $(ptlrpc_objs:.o=.c) ptlrpc_internal.h
-EXTRA_DIST += $(nodemap_objs:.o=.c) nodemap_internal.h heap.h
-EXTRA_DIST += $(nrs_server_objs:.o=.c)
-EXTRA_DIST += pack_server.c
-EXTRA_DIST += llog_server.c
-
-EXTRA_PRE_CFLAGS := -I@LUSTRE@/ldlm -I@LUSTRE@/target
-
-@INCLUDE_RULES@
+ccflags-y := -I$(LUSTRE)/ldlm -I$(LUSTRE)/target

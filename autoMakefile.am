@@ -17,7 +17,11 @@ SUBDIRS := @LDISKFS_SUBDIR@ \
 	lib \
 	libcfs \
 	lnet \
-	lustre
+	lustre/include \
+	lustre/utils \
+	lustre/tests \
+	lustre/scripts \
+	lustre/conf
 
 DIST_SUBDIRS := ldiskfs \
 	lustre-iokit \
@@ -25,10 +29,22 @@ DIST_SUBDIRS := ldiskfs \
 	lib \
 	libcfs \
 	lnet \
-	lustre \
+	lustre/include \
+	lustre/utils \
+	lustre/tests \
+	lustre/scripts \
+	lustre/conf \
 	config
 
 AUTOMAKE_OPTIONS = foreign
+
+install-data-local:
+if MODULES
+	$(MKDIR_P) $(DESTDIR)$(modulefsdir)
+	for ko in $$(find lustre/ ldiskfs/ -name '*.ko' 2>/dev/null); do \
+		$(INSTALL) -m 0644 $${ko} $(DESTDIR)$(modulefsdir)/; \
+	done
+endif
 
 if DEQUOTE_CC_VERSION_TEXT
 DEQUOTE = yes
@@ -201,18 +217,11 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	undef.h				\
 	autogen.sh			\
 	modules.order			\
-	config/lustre-version.m4
-
-# Find Lustre kernel modules
-modulefs_DATA = $(shell find lustre/ -name *.ko)
-modulefs_DATA += $(shell find ldiskfs/ -name *.ko)
-EXTRA_DIST += $(modulefs_DATA)
-
-# contrib is a directory.  Putting a directory in EXTRA_DIST
-# recursively includes the entire directory contents in the
-# distribution tarball (the tarball created with "make dist").
-EXTRA_DIST += contrib
-EXTRA_DIST += rpm
+	config/lustre-version.m4 \
+	contrib \
+	lustre/kernel_patches \
+	lustre/ChangeLog \
+	rpm
 
 rpm-local:
 	@(if test -z "$(RPMBUILD)"; then \

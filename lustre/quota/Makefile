@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-MODULES := lquota
+obj-m += lquota.o
 
 qmt-objs := \
 	qmt_dev.o \
@@ -34,11 +34,3 @@ lquota-objs := \
 	$(qsd-objs) \
 	$(qmt-objs) \
 	$(quota-objs)
-
-EXTRA_DIST := $(lquota-objs:%.o=%.c)
-EXTRA_DIST += \
-    lquota_internal.h \
-    qmt_internal.h \
-    qsd_internal.h
-
-@INCLUDE_RULES@
