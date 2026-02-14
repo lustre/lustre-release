@@ -174,8 +174,10 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 		AS_IF(
 			[test -z "$KPLEV"], [
 				AC_MSG_WARN([Failed to determine Kernel patch level. Assume latest.])
-				LDISKFS_SERIES="6.8.0-45-ubuntu24.series"
+				LDISKFS_SERIES="6.8.0-100-ubuntu24.series"
 			],
+			[test $KPLEV -ge 100], [LDISKFS_SERIES="6.8.0-100-ubuntu24.series"],
+			[test $KPLEV -ge 90], [LDISKFS_SERIES="6.8.0-90-ubuntu24.series"],
 			[test $KPLEV -ge 44], [LDISKFS_SERIES="6.8.0-45-ubuntu24.series"],
 			[LDISKFS_SERIES="6.7-ml.series"]
 		)
