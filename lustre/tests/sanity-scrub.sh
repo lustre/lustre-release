@@ -1054,20 +1054,20 @@ test_10b() {
 #run_test 10b "non-stopped OI scrub should auto restarts after MDS remount (2)"
 
 test_11() {
-	[ "$mds1_FSTYPE" != "ldiskfs" ] &&
-		skip "ldiskfs special test"
+	[[ "$mds1_FSTYPE" == "ldiskfs" ]] || skip "ldiskfs special test"
 
-	local CREATED=100
+	local created=100
 	local n
 
 	check_mount_and_prep
 
-	for n in $(seq $MDSCOUNT); do
-		test_mkdir -i $((n - 1)) -c1 $DIR/$tdir/mds$n ||
-			error "(1) Fail to mkdir $DIR/$tdir/mds$n"
+	for ((n = 1; n <= $MDSCOUNT; n++)); do
+		local mdsdir=$tdir.mds$n
+		test_mkdir -i $((n - 1)) -c1 $DIR/$tdir/$mdsdir ||
+			error "(1) Fail to mkdir $DIR/$tdir/$mdsdir"
 
-		createmany -o $DIR/$tdir/mds$n/f $CREATED ||
-			error "(2) Fail to create under $tdir/mds$n"
+		createmany -o $DIR/$tdir/$mdsdir/$tfile. $created ||
+			error "(2) Fail to create under $tdir/$mdsdir"
 	done
 
 	# reset OI scrub start point by force
@@ -1081,12 +1081,11 @@ test_11() {
 	# notice we're creating a new llog for every OST on every startup
 	# new features can make this even less stable, so we only check that
 	# the number of skipped files is more than the number or known created
-	local MINIMUM=$((CREATED + 1)) # files + directory
-	for n in $(seq $MDSCOUNT); do
-		local SKIPPED=$(scrub_status $n | awk '/^noscrub/ { print $2 }')
-		[ $SKIPPED -lt $MINIMUM ] &&
-			error "(5) Expect at least $MINIMUM objects" \
-				"skipped on mds$n, but got $SKIPPED"
+	local minimum=$((created + 1)) # files + directory
+	for ((n = 1; n <= $MDSCOUNT; n++)); do
+		local skipped=$(scrub_status $n | awk '/^noscrub/ { print $2 }')
+		(( $skipped >= $minimum )) ||
+			error "(5) Expect at least $minimum objects skipped on mds$n, but got $skipped"
 
 		checked0[$n]=$(scrub_status $n | awk '/^checked/ { print $2 }')
 	done
@@ -1095,14 +1094,15 @@ test_11() {
 	scrub_start 6 -r
 	scrub_check_status 7 completed
 
-	# OI scrub should skip the new created object only once
-	for n in $(seq $MDSCOUNT); do
-		SKIPPED=$(scrub_status $n | awk '/^noscrub/ { print $2 }')
+	# because client is not mounted upon entry of this test
+	# check_mount_and_prep->setup_all will set param, which will cause
+	# params config llog recreated, which is a new object
+	for ((n = 1; n <= $MDSCOUNT; n++)); do
+		skipped=$(scrub_status $n | awk '/^noscrub/ { print $2 }')
 		checked1[$n]=$(scrub_status $n | awk '/^checked/ { print $2 }')
 
-		[ ${checked0[$n]} -ne ${checked1[$n]} -o $SKIPPED -eq 0 ] ||
-			error "(8) Expect 0 objects skipped on mds$n, but" \
-				"got $SKIPPED"
+		(( ${checked0[$n]} != ${checked1[$n]} || $skipped <= 1 )) ||
+			error "(8) Expect <= 1 object skipped on mds$n, but got $skipped ${checked0[$n]} ${checked1[$n]}"
 	done
 }
 run_test 11 "OI scrub skips the new created objects only once"

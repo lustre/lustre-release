@@ -2106,16 +2106,14 @@ int class_config_llog_handler(const struct lu_env *env,
 		 */
 		if (cfg->cfg_instance &&
 		    lcfg->lcfg_command == LCFG_SPTLRPC_CONF) {
-			/* After ASLR changes cfg_instance this needs fixing */
-			/* "obd" is set in config_log_find_or_add() */
-			struct obd_device *obd = (void *)cfg->cfg_instance;
+			struct lustre_sb_info *lsi = s2lsi(cfg->cfg_sb);
 
 			lustre_cfg_bufs_set(&bufs, 2, bufs.lcfg_buf[1],
 					    bufs.lcfg_buflen[1]);
 			lustre_cfg_bufs_set(&bufs, 1, bufs.lcfg_buf[0],
 					    bufs.lcfg_buflen[0]);
 			lustre_cfg_bufs_set_string(&bufs, 0,
-						   obd->obd_name);
+						   lsi->lsi_mgc->obd_name);
 		}
 
 		/*

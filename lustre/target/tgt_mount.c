@@ -267,41 +267,6 @@ static int server_stop_mgs(struct super_block *sb)
 	RETURN(rc);
 }
 
-/* Since there's only one mgc per node, we have to change it's fs to get
- * access to the right disk.
- */
-static int server_mgc_set_fs(const struct lu_env *env,
-			     struct obd_device *mgc, struct super_block *sb)
-{
-	struct lustre_sb_info *lsi = s2lsi(sb);
-	int rc;
-
-	ENTRY;
-	CDEBUG(D_MOUNT, "Set mgc disk for %s\n", lsi->lsi_lmd->lmd_dev);
-
-	/* cl_mgc_sem in mgc insures we sleep if the mgc_fs is busy */
-	rc = obd_set_info_async(env, mgc->obd_self_export,
-				sizeof(KEY_SET_FS), KEY_SET_FS,
-				sizeof(*sb), sb, NULL);
-	if (rc != 0)
-		CERROR("can't set_fs %d\n", rc);
-
-	RETURN(rc);
-}
-
-static int server_mgc_clear_fs(const struct lu_env *env,
-			       struct obd_device *mgc)
-{
-	int rc;
-
-	ENTRY;
-	CDEBUG(D_MOUNT, "Unassign mgc disk\n");
-	rc = obd_set_info_async(env, mgc->obd_self_export,
-				sizeof(KEY_CLEAR_FS), KEY_CLEAR_FS,
-				0, NULL, NULL);
-	RETURN(rc);
-}
-
 static inline bool is_mdc_device(const char *devname)
 {
 	char *ptr;
@@ -1798,7 +1763,6 @@ static int server_start_targets(struct super_block *sb)
 	struct obd_device *obd;
 	struct lustre_sb_info *lsi = s2lsi(sb);
 	struct config_llog_instance cfg;
-	struct lu_env mgc_env;
 	struct lu_device *dev;
 	char *name_service, *obd_name_service = NULL;
 	struct obd_type *type = NULL;
@@ -1851,33 +1815,23 @@ static int server_start_targets(struct super_block *sb)
 		msleep(2 * MSEC_PER_SEC);
 	}
 
-	rc = lu_env_init(&mgc_env, LCT_MG_THREAD);
-	if (rc != 0)
-		GOTO(out_stop_service, rc);
-
-	/* Set the mgc fs to our server disk.  This allows the MGC to
-	 * read and write configs locally, in case it can't talk to the MGS.
-	 */
-	rc = server_mgc_set_fs(&mgc_env, lsi->lsi_mgc, sb);
-	if (rc < 0)
-		GOTO(out_env, rc);
-
 	/* Register with MGS */
 	rc = server_register_target(lsi);
 	if (rc < 0)
-		GOTO(out_mgc, rc);
+		GOTO(out_stop_service, rc);
 
 	/* Let the target look up the mount using the target's name
 	 * (we can't pass the sb or mnt through class_process_config.)
 	 */
 	rc = server_register_mount(lsi->lsi_svname, sb);
 	if (rc < 0)
-		GOTO(out_mgc, rc);
+		GOTO(out_stop_service, rc);
 
 	/* Start targets using the llog named for the target */
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.cfg_callback = class_config_llog_handler;
 	cfg.cfg_sub_clds = CONFIG_SUB_SERVER;
+	atomic_inc(&lsi->lsi_mgc->u.cli.cl_mgc_tgt_processing);
 	rc = lustre_process_log(sb, lsi->lsi_svname, &cfg);
 	if (rc < 0) {
 		CERROR("failed to start server %s: %d\n",
@@ -1952,10 +1906,9 @@ static int server_start_targets(struct super_block *sb)
 	}
 
 out_mgc:
-	/* Release the mgc fs for others to use */
-	server_mgc_clear_fs(&mgc_env, lsi->lsi_mgc);
-out_env:
-	lu_env_fini(&mgc_env);
+	atomic_dec(&lsi->lsi_mgc->u.cli.cl_mgc_tgt_processing);
+	if (rc)
+		lustre_end_log(sb, lsi->lsi_svname, NULL);
 out_stop_service:
 	/* in case of error upper function call
 	 * server_put_super->server_stop_servers()

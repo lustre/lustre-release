@@ -361,11 +361,11 @@ struct client_obd {
 	struct obd_histogram	cl_mod_rpcs_hist;
 
 	/* mgc datastruct */
-	struct mutex		cl_mgc_mutex;
-	struct local_oid_storage *cl_mgc_los;
-	struct dt_object	*cl_mgc_configs_dir;
 	struct obd_export	*cl_mgc_mgsexp;
 	atomic_t		cl_mgc_refcount;
+	/* number of targets currently processing their config logs */
+	atomic_t		cl_mgc_tgt_processing;
+
 	/* in-flight control list and total RPCs counter */
 	struct list_head	cl_flight_waiters;
 	__u32			cl_rpcs_in_flight;
@@ -895,7 +895,6 @@ static inline bool obd_mdt_recovery_abort(struct obd_device *obd)
 #define KEY_CHANGELOG_USER	"changelog_user"
 #define KEY_FID2PATH            "fid2path"
 #define KEY_CHECKSUM            "checksum"
-#define KEY_CLEAR_FS            "clear_fs"
 #define KEY_CONN_DATA           "conn_data"
 #define KEY_EVICT_BY_NID        "evict_by_nid"
 #define KEY_FIEMAP              "fiemap"
@@ -912,7 +911,6 @@ static inline bool obd_mdt_recovery_abort(struct obd_device *obd)
 #define KEY_READ_ONLY           "read-only"
 #define KEY_REGISTER_TARGET     "register_target"
 #define KEY_NID_NOTIFY		"nid_notify"
-#define KEY_SET_FS              "set_fs"
 #define KEY_TGT_COUNT           "tgt_count"
 /*      KEY_SET_INFO in lustre_idl.h */
 #define KEY_SPTLRPC_CONF        "sptlrpc_conf"

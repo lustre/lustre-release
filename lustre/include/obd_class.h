@@ -300,8 +300,22 @@ static inline bool logname_is_barrier(const char *logname)
 	return false;
 }
 
+/* config_llog::cfl_flags, shared by the clds of one logname on this host */
+enum config_llog_flags {
+	/* sptlrpc config fetched and processed, only done once per host */
+	CFL_PROCESSED,
+};
+
+struct config_llog {
+	refcount_t	cfl_refcount;
+	struct mutex	cfl_lock;
+	unsigned long	cfl_flags;
+	char		cfl_logname[];
+};
+
 /* list of active configuration logs  */
 struct config_llog_data {
+	struct config_llog	   *cld_llog;
 	struct ldlm_res_id	    cld_resid;
 	struct lustre_handle	    cld_lockh;
 	struct config_llog_instance cld_cfg;
@@ -315,12 +329,16 @@ struct config_llog_data {
 	struct obd_export	   *cld_mgcexp;
 	struct mutex		    cld_lock;
 	enum mgs_cfg_type	    cld_type;
+	struct lu_env		    cld_env;
+	struct obd_llog_group	    cld_olg;
+	struct local_oid_storage   *cld_los;
 	unsigned int		    cld_stopping:1, /* we were told to stop
 						     * watching */
 				    cld_lostlock:1, /* lock not requeued */
 				    cld_processed:1;  /* successfully fetched */
-	char			    cld_logname[];
 };
+
+#define cld_logname	cld_llog->cfl_logname
 
 struct lustre_profile {
 	struct list_head	 lp_list;

@@ -371,7 +371,6 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	}
 
 	init_rwsem(&cli->cl_sem);
-	mutex_init(&cli->cl_mgc_mutex);
 	cli->cl_seq = NULL;
 	init_rwsem(&cli->cl_seq_rwsem);
 	cli->cl_conn_count = 0;
@@ -513,6 +512,7 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	cli->cl_mod_tag_bitmap = NULL;
 
 	INIT_LIST_HEAD(&cli->cl_chg_dev_linkage);
+	atomic_set(&cli->cl_mgc_tgt_processing, 0);
 
 	if (connect_op == MDS_CONNECT) {
 		cli->cl_max_mod_rpcs_in_flight = cli->cl_max_rpcs_in_flight - 1;

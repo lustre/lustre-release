@@ -80,12 +80,14 @@ int mgc_process_server_cfg_log(struct lu_env *env, struct llog_ctxt **ctxt,
 			       struct lustre_sb_info *lsi,
 			       struct obd_device *mgc,
 			       struct config_llog_data *cld,
-			       int local_only, bool copy_only);
+			       int mgslock);
 int mgc_process_config_server(const struct lu_env *env, struct lu_device *lu,
 			      struct lustre_cfg *lcfg);
 int mgc_barrier_glimpse_ast(struct ldlm_lock *lock, void *data);
-int mgc_get_local_copy(struct obd_device *mgc, struct super_block *sb,
-		       struct config_llog_data *cld);
+int mgc_fs_setup(const struct lu_env *env, struct obd_device *obd,
+		 struct super_block *sb, struct config_llog_data *cld);
+int mgc_fs_clear(const struct lu_env *env, struct obd_device *obd,
+		 struct config_llog_data *cld);
 #else /* CONFIG_LUSTRE_FS_SERVER */
 #define mgc_barrier_glimpse_ast NULL
 #endif /* CONFIG_LUSTRE_FS_SERVER */

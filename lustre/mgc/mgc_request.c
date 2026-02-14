@@ -135,13 +135,22 @@ static void config_log_put(struct config_llog_data *cld)
 		config_log_put(cld->cld_recover);
 		config_log_put(cld->cld_params);
 		config_log_put(cld->cld_sptlrpc);
-		if (cld_is_sptlrpc(cld)) {
-			cld->cld_stopping = 1;
-			sptlrpc_conf_log_stop(cld->cld_logname);
-		}
 
+#ifdef CONFIG_LUSTRE_FS_SERVER
+		if (cld->cld_los)
+			mgc_fs_clear(&cld->cld_env, cld->cld_mgcexp->exp_obd,
+				     cld);
+#endif
+		if (refcount_dec_and_test(&cld->cld_llog->cfl_refcount)) {
+			if (cld_is_sptlrpc(cld))
+				sptlrpc_conf_log_stop(cld->cld_logname);
+			OBD_FREE(cld->cld_llog,
+				 sizeof(*(cld->cld_llog)) +
+				 strlen(cld->cld_logname) + 1);
+		}
 		class_export_put(cld->cld_mgcexp);
-		OBD_FREE(cld, sizeof(*cld) + strlen(cld->cld_logname) + 1);
+		lu_env_fini(&cld->cld_env);
+		OBD_FREE_PTR(cld);
 	}
 
 	EXIT;
@@ -184,47 +193,123 @@ struct config_llog_data *do_config_log_add(struct obd_device *obd,
 					   struct config_llog_instance *cfg,
 					   struct super_block *sb)
 {
+	struct config_llog *llog;
 	struct config_llog_data *cld;
-	int rc;
+	struct config_llog_data *found = NULL;
+	struct config_llog_data *tmp;
 	int logname_size;
+	int rc;
 
 	ENTRY;
-
+	LASSERT(cfg);
 	CDEBUG(D_MGC, "do adding config log %s-%016lx\n", logname,
-	       cfg ? cfg->cfg_instance : 0);
+	       cfg->cfg_instance);
 
 	logname_size = strlen(logname) + 1;
-	OBD_ALLOC(cld, sizeof(*cld) + logname_size);
-	if (!cld)
+	OBD_ALLOC(llog, sizeof(*llog) + logname_size);
+	if (!llog)
 		RETURN(ERR_PTR(-ENOMEM));
 
-	rc = mgc_logname2resid(logname, &cld->cld_resid, type);
-	if (rc) {
-		OBD_FREE(cld, sizeof(*cld) + logname_size);
-		RETURN(ERR_PTR(rc));
-	}
+	OBD_ALLOC_PTR(cld);
+	if (!cld)
+		GOTO(err_llog, rc = -ENOMEM);
 
-	strscpy(cld->cld_logname, logname, logname_size);
-	if (cfg)
-		cld->cld_cfg = *cfg;
-	else
-		cld->cld_cfg.cfg_callback = class_config_llog_handler;
+	rc = mgc_logname2resid(logname, &cld->cld_resid, type);
+	if (rc)
+		GOTO(err_cld, rc);
+
+	strscpy(llog->cfl_logname, logname, logname_size);
+	refcount_set(&llog->cfl_refcount, 1);
+	mutex_init(&llog->cfl_lock);
+
+	cld->cld_cfg = *cfg;
 	mutex_init(&cld->cld_lock);
 	cld->cld_cfg.cfg_last_idx = 0;
 	cld->cld_cfg.cfg_flags = 0;
 	cld->cld_cfg.cfg_sb = sb;
 	cld->cld_type = type;
 	refcount_set(&cld->cld_refcount, 1);
+	llog_group_init(&cld->cld_olg);
 
 	/* Keep the mgc around until we are done */
 	cld->cld_mgcexp = class_export_get(obd->obd_self_export);
 
-	if (cld_is_sptlrpc(cld))
-		sptlrpc_conf_log_start(logname);
+	rc = lu_env_init(&cld->cld_env, LCT_MG_THREAD);
+	if (rc)
+		GOTO(err_put, rc);
+
+#ifdef CONFIG_LUSTRE_FS_SERVER
+	if (sb && IS_SERVER(s2lsi(sb)) && !IS_MGS(s2lsi(sb)) &&
+	    (cld_is_sptlrpc(cld) || cld->cld_type == MGS_CFG_T_CONFIG ||
+	     cld->cld_type == MGS_CFG_T_PARAMS)) {
+		rc = mgc_fs_setup(&cld->cld_env, obd, sb, cld);
+		if (rc)
+			GOTO(err_env, rc);
+	}
+#endif
 
 	spin_lock(&config_list_lock);
-	list_add(&cld->cld_list_chain, &config_llog_list);
+	/* any search done before getting here dropped config_list_lock, and
+	 * config_log_add()/config_recover_log_add() do not search at all, so
+	 * a target mounting in parallel may have added this cld meanwhile
+	 */
+	list_for_each_entry(tmp, &config_llog_list, cld_list_chain) {
+		if (tmp->cld_stopping)
+			continue;
+		if (cfg->cfg_instance != tmp->cld_cfg.cfg_instance)
+			continue;
+		if (strcmp(logname, tmp->cld_logname) == 0) {
+			found = tmp;
+			config_log_get(found);
+			break;
+		}
+	}
+	if (!found) {
+		bool live = false;
+
+		list_for_each_entry(tmp, &config_llog_list, cld_list_chain) {
+			if (strcmp(logname, tmp->cld_llog->cfl_logname) != 0)
+				continue;
+			if (!cld->cld_llog) {
+				cld->cld_llog = tmp->cld_llog;
+				refcount_inc(&cld->cld_llog->cfl_refcount);
+			}
+			if (!tmp->cld_stopping)
+				live = true;
+		}
+		/* every cld that fetched this log is on its way out, so what
+		 * it left behind need not be what the MGS has now: a stopping
+		 * sptlrpc cld would otherwise hand over CFL_PROCESSED and the
+		 * new mount would run on the old rules
+		 */
+		if (cld->cld_llog && !live)
+			clear_bit(CFL_PROCESSED, &cld->cld_llog->cfl_flags);
+		if (!cld->cld_llog)
+			cld->cld_llog = llog;
+		list_add(&cld->cld_list_chain, &config_llog_list);
+	}
 	spin_unlock(&config_list_lock);
+
+	if (found) {
+		/* drop the cld built above and use the one already there;
+		 * mgc_fs_clear() reports cld_logname, which lives in llog
+		 */
+		cld->cld_llog = llog;
+#ifdef CONFIG_LUSTRE_FS_SERVER
+		mgc_fs_clear(&cld->cld_env, obd, cld);
+#endif
+		lu_env_fini(&cld->cld_env);
+		class_export_put(cld->cld_mgcexp);
+		OBD_FREE_PTR(cld);
+		OBD_FREE(llog, sizeof(*llog) + logname_size);
+		RETURN(found);
+	}
+
+	if (cld->cld_llog != llog)
+		OBD_FREE(llog, sizeof(*llog) + logname_size);
+
+	if (cld_is_sptlrpc(cld))
+		sptlrpc_conf_log_start(logname);
 
 	if (cld_is_sptlrpc(cld) || cld_is_nodemap(cld) || cld_is_barrier(cld)) {
 		rc = mgc_process_log(obd, cld);
@@ -234,6 +319,17 @@ struct config_llog_data *do_config_log_add(struct obd_device *obd,
 	}
 
 	RETURN(cld);
+#ifdef CONFIG_LUSTRE_FS_SERVER
+err_env:
+	lu_env_fini(&cld->cld_env);
+#endif
+err_put:
+	class_export_put(cld->cld_mgcexp);
+err_cld:
+	OBD_FREE_PTR(cld);
+err_llog:
+	OBD_FREE(llog, sizeof(*llog) + logname_size);
+	RETURN(ERR_PTR(rc));
 }
 
 static struct config_llog_data *
@@ -270,6 +366,8 @@ config_recover_log_add(struct obd_device *obd, char *fsname,
 	return cld;
 }
 
+static inline void config_mark_cld_stop(struct config_llog_data *cld);
+
 static struct config_llog_data *
 config_log_find_or_add(struct obd_device *obd, char *logname,
 		       struct super_block *sb, enum mgs_cfg_type type,
@@ -278,24 +376,21 @@ config_log_find_or_add(struct obd_device *obd, char *logname,
 	struct config_llog_instance lcfg = *cfg;
 	struct config_llog_data *cld;
 
-	/* Sptlrpc config is common for all targets, so it uses MGC OBD
-	 * as instance, but have also 'sb' provided to create local copy
-	 */
-	if (sb && type != MGS_CFG_T_SPTLRPC)
+	if (sb)
 		lcfg.cfg_instance = ll_get_cfg_instance(sb);
 	else
 		lcfg.cfg_instance = (unsigned long)obd;
 
 	cld = config_log_find(logname, &lcfg);
 	if (unlikely(cld)) {
-#ifdef CONFIG_LUSTRE_FS_SERVER
-		/* If a target finds existing sptlrpc config
-		 * then create its local copy explicitly
+		if (!cld->cld_stopping)
+			return cld;
+		/* cfg_instance is the super_block address, which a quick
+		 * umount/remount can hand back: a cld the old mount left on
+		 * the list waiting for its lock cancel must not be reused,
+		 * and do_config_log_add() skips those too
 		 */
-		if (sb && cld_is_sptlrpc(cld))
-			mgc_get_local_copy(obd, sb, cld);
-#endif
-		return cld;
+		config_log_put(cld);
 	}
 
 	return do_config_log_add(obd, logname, type, &lcfg, sb);
@@ -441,16 +536,20 @@ config_log_add(struct obd_device *obd, char *logname,
 	RETURN(cld);
 
 out_cld:
+	config_mark_cld_stop(cld);
 	config_log_put(cld);
 #ifdef CONFIG_LUSTRE_FS_SERVER
 out_barrier:
+	config_mark_cld_stop(barrier_cld);
 	config_log_put(barrier_cld);
 out_nodemap:
 	config_log_put(nodemap_cld);
 #endif
 out_params:
+	config_mark_cld_stop(params_cld);
 	config_log_put(params_cld);
 out_sptlrpc:
+	config_mark_cld_stop(sptlrpc_cld);
 	config_log_put(sptlrpc_cld);
 out_err:
 	return ERR_PTR(rc);
@@ -465,8 +564,15 @@ static inline void config_mark_cld_stop_nolock(struct config_llog_data *cld)
 	spin_unlock(&config_list_lock);
 
 	CDEBUG(D_INFO, "lockh %#llx\n", cld->cld_lockh.cookie);
-	if (!ldlm_lock_addref_try(&cld->cld_lockh, LCK_CR))
+	if (!ldlm_lock_addref_try(&cld->cld_lockh, LCK_CR)) {
 		ldlm_lock_decref_and_cancel(&cld->cld_lockh, LCK_CR);
+		cld->cld_lockh.cookie = 0ULL;
+	}
+
+#ifdef CONFIG_LUSTRE_FS_SERVER
+	if (cld->cld_los)
+		mgc_fs_clear(&cld->cld_env, cld->cld_mgcexp->exp_obd, cld);
+#endif
 }
 
 static inline void config_mark_cld_stop(struct config_llog_data *cld)
@@ -531,9 +637,7 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
 	config_log_put(cld_params);
 	config_mark_cld_stop(cld_barrier);
 	config_log_put(cld_barrier);
-	/* don't explicitly set cld_stopping on sptlrpc lock here, as other
-	 * targets may be active, it will be done in config_log_put if necessary
-	 */
+	config_mark_cld_stop(cld_sptlrpc);
 	config_log_put(cld_sptlrpc);
 	/* don't set cld_stopping on nm lock as other targets may be active */
 	config_log_put(cld_nodemap);
@@ -731,6 +835,8 @@ static void mgc_requeue_add(struct config_llog_data *cld)
 	spin_lock(&config_list_lock);
 	if (!(rq_state & RQ_STOP) && !cld->cld_stopping) {
 		cld->cld_lostlock = 1;
+		if (cld_is_sptlrpc(cld))
+			clear_bit(CFL_PROCESSED, &cld->cld_llog->cfl_flags);
 		rq_state |= RQ_NOW;
 		wakeup = true;
 	}
@@ -937,7 +1043,25 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		}
 
 		lock->l_ast_data = NULL;
-		cld->cld_lockh.cookie = 0;
+		/* Now that targets start in parallel, this cancel can be for
+		 * a lock mgc_process_log() has already replaced.  Drop the
+		 * handle only if it still refers to this lock, or the live
+		 * lock's handle is lost and the log is re-processed for
+		 * nothing.  mgc_process_log() publishes the handle before
+		 * this callback can reach the cld.  cld_lock is not taken
+		 * here because the cancel can run underneath a caller that
+		 * already holds it; what keeps mgc_requeue_add() below out
+		 * of that path is cld_stopping, which is set before the
+		 * decref_and_cancel() that gets here.
+		 */
+		ldlm_lock2handle(lock, &lockh);
+		if (cmpxchg64(&cld->cld_lockh.cookie, lockh.cookie, 0) !=
+		    lockh.cookie) {
+			CDEBUG(D_MGC, "log %s: stale lock, won't requeue\n",
+			       cld->cld_logname);
+			config_log_put(cld);
+			break;
+		}
 		/* Are we done with this log? */
 		if (cld->cld_stopping) {
 			CDEBUG(D_MGC, "log %s: stopping, won't requeue\n",
@@ -1007,8 +1131,8 @@ int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
 	req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER, 0);
 	ptlrpc_request_set_replen(req);
 
-	/* check for server by local storage set via server_mgc_set_fs() */
-	if (exp->exp_obd->u.cli.cl_mgc_los)
+	/* processing target config logs */
+	if (atomic_read(&exp->exp_obd->u.cli.cl_mgc_tgt_processing))
 		short_limit = 1;
 
 	/* Limit how long we will wait for the enqueue to complete */
@@ -1660,11 +1784,10 @@ out:
 static int mgc_process_cfg_log(struct obd_device *mgc,
 			       struct config_llog_data *cld, int orig_rc)
 {
+	struct lu_env *env = &cld->cld_env;
 	struct llog_ctxt *ctxt;
-	struct lustre_sb_info *lsi = NULL;
-	struct lu_env *env;
 	bool local_only = orig_rc != 0;
-	int rc;
+	int rc = 0;
 
 	ENTRY;
 	LASSERT(cld);
@@ -1674,41 +1797,36 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 	if (local_only)
 		RETURN(orig_rc);
 #endif
-	if (cld->cld_cfg.cfg_sb)
-		lsi = s2lsi(cld->cld_cfg.cfg_sb);
-	/* sptlrpc is shared config and shouldn't leave sb in cld */
-	if (cld_is_sptlrpc(cld))
-		cld->cld_cfg.cfg_sb = NULL;
-
-	OBD_ALLOC_PTR(env);
-	if (!env)
-		RETURN(-ENOMEM);
-
-	rc = lu_env_init(env, LCT_MG_THREAD);
-	if (rc)
-		GOTO(out_free, rc);
-
-	ctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
+	if (cld->cld_los)
+		ctxt = llog_group_get_ctxt(&cld->cld_olg,
+					   LLOG_CONFIG_REPL_CTXT);
+	else
+		ctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
 	LASSERT(ctxt);
 
 #ifdef CONFIG_LUSTRE_FS_SERVER
-	/* IS_SERVER(lsi) doesn't work if MGC is shared between client/server
-	 * distinguish server mount by local storage set by server_mgc_set_fs()
-	 */
-	if (lsi && mgc->u.cli.cl_mgc_los) {
-		if (!IS_MGS(lsi))
-			rc = mgc_process_server_cfg_log(env, &ctxt, lsi, mgc,
-							cld, !local_only, 0);
-	} else if (local_only) {
+	if (cld->cld_los)
+		rc = mgc_process_server_cfg_log(env, &ctxt,
+						s2lsi(cld->cld_cfg.cfg_sb),
+						mgc, cld, !local_only);
+	else if (local_only && !(cld->cld_cfg.cfg_sb &&
+				 IS_MGS(s2lsi(cld->cld_cfg.cfg_sb))))
+		/* without the MGS lock and without a local copy there is
+		 * nothing left to parse; a combined MGS/MDT falls through
+		 * and reads its config from the MGS it runs itself
+		 */
 		rc = orig_rc;
-	}
 #endif
 	/* When returned from mgc_process_server_cfg_log() the rc can be:
 	 *   0 - config llog context is returned for parsing below
 	 *   EALREADY - config was parsed already
 	 *   rc < 0 - fatal error, local and remote parsing are not available
 	 */
-	if (!rc)
+	if (cld_is_sptlrpc(cld))
+		mutex_lock(&cld->cld_llog->cfl_lock);
+
+	if (!rc && !(cld_is_sptlrpc(cld) &&
+		     test_bit(CFL_PROCESSED, &cld->cld_llog->cfl_flags)))
 		rc = class_config_parse_llog(env, ctxt, cld->cld_logname,
 					     &cld->cld_cfg);
 	if (rc < 0)
@@ -1717,18 +1835,23 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 	 * update settings on existing OBDs.
 	 * the logname must be <fsname>-sptlrpc
 	 */
-	if (cld_is_sptlrpc(cld))
+	if (cld_is_sptlrpc(cld) &&
+	    !test_bit(CFL_PROCESSED, &cld->cld_llog->cfl_flags))
 		class_notify_sptlrpc_conf(cld->cld_logname,
 					  strlen(cld->cld_logname) -
 					  strlen("-sptlrpc"));
+	/* without the MGS lock the parse came from the local copy as it
+	 * stood, which need not be the MGS' current config, so leave the
+	 * flag clear and let the next requeue fetch and parse it
+	 */
+	if (cld_is_sptlrpc(cld) && !local_only)
+		set_bit(CFL_PROCESSED, &cld->cld_llog->cfl_flags);
 	rc = 0;
 	EXIT;
-
 out_pop:
+	if (cld_is_sptlrpc(cld))
+		mutex_unlock(&cld->cld_llog->cfl_lock);
 	__llog_ctxt_put(env, ctxt);
-	lu_env_fini(env);
-out_free:
-	OBD_FREE_PTR(env);
 	return rc;
 }
 
@@ -1809,10 +1932,13 @@ restart:
 	if (rcl == 0) {
 		/* Get the cld, it will be released in mgc_blocking_ast. */
 		config_log_get(cld);
-		rc = ldlm_lock_set_data(&lockh, (void *)cld);
-		LASSERT(!lustre_handle_is_used(&cld->cld_lockh));
-		LASSERT(rc == 0);
+		/* publish the handle before ldlm_lock_set_data() lets the
+		 * blocking AST find the cld, or a cancel arriving in between
+		 * is taken for a stale lock and never requeued
+		 */
 		cld->cld_lockh = lockh;
+		rc = ldlm_lock_set_data(&lockh, (void *)cld);
+		LASSERT(rc == 0);
 	} else {
 		CDEBUG(D_MGC, "Can't get cfg lock: %d\n", rcl);
 		cld->cld_lockh.cookie = 0;
