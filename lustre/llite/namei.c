@@ -2574,9 +2574,7 @@ const struct inode_operations ll_dir_inode_operations = {
 	.get_inode_acl	= ll_get_inode_acl,
 #endif
 	.get_acl	= ll_get_acl,
-#ifdef HAVE_IOP_SET_ACL
 	.set_acl	= ll_set_acl,
-#endif
 #ifdef HAVE_FILEATTR_GET
 	.fileattr_get	= ll_fileattr_get,
 	.fileattr_set	= ll_fileattr_set,
@@ -2597,7 +2595,5 @@ const struct inode_operations ll_special_inode_operations = {
 	.get_inode_acl	= ll_get_inode_acl,
 #endif
 	.get_acl	= ll_get_acl,
-#ifdef HAVE_IOP_SET_ACL
 	.set_acl	= ll_set_acl,
-#endif
 };

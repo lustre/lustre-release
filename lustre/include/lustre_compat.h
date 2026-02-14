@@ -197,7 +197,6 @@ static inline int ll_vfs_getattr(struct path *path, struct kstat *st,
 #define posix_acl_valid(a, b)		posix_acl_valid(b)
 #endif
 
-#ifdef HAVE_IOP_SET_ACL
 #ifdef CONFIG_LUSTRE_FS_POSIX_ACL
 #if !defined(HAVE_USER_NAMESPACE_ARG) && \
 	!defined(HAVE_POSIX_ACL_UPDATE_MODE) && \
@@ -220,7 +219,6 @@ static inline int posix_acl_update_mode(struct inode *inode, umode_t *mode_p,
 	return 0;
 }
 #endif /* HAVE_POSIX_ACL_UPDATE_MODE */
-#endif
 #endif
 
 /*

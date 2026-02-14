@@ -111,7 +111,6 @@ struct posix_acl *ll_get_acl(
 	return ll_get_acl_common(inode, type, rcu);
 }
 
-#ifdef HAVE_IOP_SET_ACL
 int ll_set_acl(struct mnt_idmap *map,
 #ifdef HAVE_ACL_WITH_DENTRY
 	       struct dentry *dentry,
@@ -178,4 +177,3 @@ out:
 		set_cached_acl(inode, type, acl);
 	RETURN(rc);
 }
-#endif /* HAVE_IOP_SET_ACL */
