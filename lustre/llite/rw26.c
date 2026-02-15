@@ -629,7 +629,13 @@ static int ll_tiny_write_begin(struct page *vmpage, struct address_space *mappin
  * to hold data for buffered i/o on the 'write' path.
  * Called by generic_perform_write() to allocate one page [or one folio]
  */
-static int ll_write_begin(struct file *file, struct address_space *mapping,
+static int ll_write_begin(
+#ifdef HAVE_WRITE_BEGIN_KIOCB
+			  const struct kiocb *kiocb,
+#else
+			  struct file *file,
+#endif
+			  struct address_space *mapping,
 			  loff_t pos, unsigned int len,
 #ifdef HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN_WITH_FLAGS
 			  unsigned int flags,
@@ -640,7 +646,10 @@ static int ll_write_begin(struct file *file, struct address_space *mapping,
 	const struct lu_env  *env = NULL;
 	struct vvp_io *vio;
 	struct cl_io   *io = NULL;
-	struct cl_page *page = NULL;
+	struct cl_page *cl_page = NULL;
+#ifdef HAVE_WRITE_BEGIN_KIOCB
+	struct file *file = kiocb->ki_filp;
+#endif
 	struct inode *inode = file_inode(file);
 	struct cl_object *clob = ll_i2info(mapping->host)->lli_clob;
 	pgoff_t index = pos >> PAGE_SHIFT;
@@ -730,26 +739,28 @@ again:
 		goto again;
 	}
 
-	page = cl_page_find(env, clob, folio_index_page(vmpage), vmpage,
+	cl_page = cl_page_find(env, clob, folio_index_page(vmpage), vmpage,
 			    CPT_CACHEABLE);
-	if (IS_ERR(page))
-		GOTO(out, result = PTR_ERR(page));
+	if (IS_ERR(cl_page))
+		GOTO(out, result = PTR_ERR(cl_page));
 
-	lcc->lcc_page = page;
+	lcc->lcc_page = cl_page;
 
-	cl_page_assume(env, io, page);
+	cl_page_assume(env, io, cl_page);
 	if (!PageUptodate(vmpage)) {
 		/*
 		 * We're completely overwriting an existing page,
 		 * so _don't_ set it up to date until commit_write
 		 */
 		if (from == 0 && to == PAGE_SIZE) {
-			CL_PAGE_HEADER(D_PAGE, env, page, "full page write\n");
+			CL_PAGE_HEADER(D_PAGE, env, cl_page,
+				       "full page write\n");
 		} else {
 			/* TODO: can be optimized at OSC layer to check if it
 			 * is a lockless IO. In that case, it's not necessary
 			 * to read the data. */
-			result = ll_prepare_partial_page(env, io, page, file);
+			result = ll_prepare_partial_page(env, io, cl_page,
+							 file);
 			if (result) {
 				/* vmpage should have been unlocked */
 				put_page(vmpage);
@@ -769,9 +780,8 @@ out:
 			put_page(vmpage);
 		}
 		/* On tiny_write failure, page and io are always null. */
-		if (!IS_ERR_OR_NULL(page)) {
-			cl_page_put(env, page);
-		}
+		if (!IS_ERR_OR_NULL(cl_page))
+			cl_page_put(env, cl_page);
 		if (io)
 			io->ci_result = result;
 	} else {
@@ -817,12 +827,22 @@ out:
 	RETURN(rc);
 }
 
-static int ll_write_end(struct file *file, struct address_space *mapping,
+/* called by generic_perform_write after each page/folio is filled */
+static int ll_write_end(
+#ifdef HAVE_WRITE_BEGIN_KIOCB
+			const struct kiocb *kiocb,
+#else
+			struct file *file,
+#endif
+			struct address_space *mapping,
 			loff_t pos, unsigned len, unsigned copied,
 			struct wbe_folio *folio, void *fsdata)
 {
 	struct ll_cl_context *lcc = fsdata;
 	const struct lu_env *env;
+#ifdef HAVE_WRITE_BEGIN_KIOCB
+	struct file *file = kiocb->ki_filp;
+#endif
 	struct cl_io *io;
 	struct vvp_io *vio;
 	struct cl_page *cl_page;

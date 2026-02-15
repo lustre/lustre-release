@@ -3175,6 +3175,220 @@ AC_DEFUN([LC_HAVE_TRY_LOOKUP_NOPERM], [
 ]) # LC_HAVE_TRY_LOOKUP_NOPERM
 
 #
+# LC_HAVE_BLK_INTEGRITY_HAS_METADATA_SIZE
+#
+# Linux commit v6.16-rc1-1-gc6603b1d6556
+#     block: rename tuple_size field in blk_integrity_metadata_size
+#
+AC_DEFUN([LC_SRC_BLK_INTEGRITY_HAS_METADATA_SIZE],[
+	LB2_LINUX_TEST_SRC([blk_integrity_metadata_size], [
+		#include <linux/blkdev.h>
+	],[
+		struct blk_integrity *bi __attribute__ ((unused)) = NULL;
+
+		bi->metadata_size = 0;
+	],[-Werror])
+])
+AC_DEFUN([LC_BLK_INTEGRITY_HAS_METADATA_SIZE],[
+	LB2_MSG_LINUX_TEST_RESULT([if blk_integrity has metadata_size],
+	[blk_integrity_metadata_size], [
+		AC_DEFINE([get_metadata_size(bi)], [((bi)->metadata_size)],
+			  [Use metadata_size for metadata_size])
+	],[
+		AC_DEFINE([get_metadata_size(bi)], [((bi)->tuple_size)],
+			  [Use tuple_size for metadata_size])
+	])
+]) # LC_HAVE_BLK_INTEGRITY_HAS_METADATA_SIZE
+
+#
+# LC_HAVE_SET_DEFAULT_D_OP
+#
+# Linux commit v6.16-rc1-6-g05fb0e666495
+#     new helper: set_default_d_op()
+#
+AC_DEFUN([LC_SRC_HAVE_SET_DEFAULT_D_OP],[
+	LB2_LINUX_TEST_SRC([set_default_d_op], [
+		#include <linux/dcache.h>
+	],[
+		struct super_block *sb __attribute__ ((unused)) = NULL;
+
+		set_default_d_op(sb, (const struct dentry_operations *)NULL);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_SET_DEFAULT_D_OP],[
+	LB2_MSG_LINUX_TEST_RESULT([if set_default_d_op exists],
+	[set_default_d_op], [
+		AC_DEFINE([HAVE_SET_DEFAULT_D_OP], 1,
+			  [set_default_d_op exists])
+	],[
+		AC_DEFINE([set_default_d_op(sb, ops)],
+			  [((sb)->s_d_op = (ops))],
+			  [set_default_d_op not available])
+	])
+]) # LC_HAVE_BLK_INTEGRITY_HAS_METADATA_SIZE
+
+#
+# LC_HAVE_FILE_KATTR
+#
+# Linux commit v6.16-rc1-8-gca115d7e7546
+#     tree-wide: s/struct fileattr/struct file_kattr/g
+#
+AC_DEFUN([LC_SRC_HAVE_FILE_KATTR],[
+	LB2_LINUX_TEST_SRC([struct_file_kattr], [
+		#include <linux/fileattr.h>
+	],[
+		struct file_kattr *ka __attribute__ ((unused)) = NULL;
+
+		ka->flags = 0;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_FILE_KATTR],[
+	LB2_MSG_LINUX_TEST_RESULT([if struct file_kattr exists],
+	[struct_file_kattr], [
+		AC_DEFINE([HAVE_FILE_KATTR], 1, [struct file_kattr exists])
+	],[
+		AC_DEFINE([file_kattr], [fileattr],
+			  [Use fileattr for struct file_kattr])
+	])
+]) # LC_HAVE_FILE_KATTR
+
+#
+# LC_HAVE_SIMPLE_DENTRY_OPERATIONS
+#
+# Linux commit v6.16-rc1-16-g0b136e7d18fa
+#     kill simple_dentry_operations
+#
+AC_DEFUN([LC_SRC_HAVE_SIMPLE_DENTRY_OPERATIONS],[
+	LB2_LINUX_TEST_SRC([simple_dentry_operations], [
+		#include <linux/fs.h>
+	],[
+		const struct dentry_operations *dop = &simple_dentry_operations;
+
+		(void)dop;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_SIMPLE_DENTRY_OPERATIONS],[
+	LB2_MSG_LINUX_TEST_RESULT([if simple_dentry_operations exists],
+	[simple_dentry_operations], [
+		AC_DEFINE([sb_dentry_not_cache(sb)],
+			  [((sb)->s_d_op = &simple_dentry_operations)],
+			  [Use simple_dentry_operations to not cache dentries])
+	],[
+		AC_DEFINE([sb_dentry_not_cache(sb)],
+			  [((sb)->s_d_flags |= DCACHE_DONTCACHE)],
+			  [Use simple_dentry_operations to not cache dentries])
+	])
+]) # LC_HAVE_SIMPLE_DENTRY_OPERATIONS
+
+#
+# LC_HAVE_WRITE_BEGIN_KIOCB
+#
+# Linux commit v6.16-rc1-20-ge9d8e2bf2320
+#   fs: change write_begin/write_end interface to take struct kiocb *
+#
+AC_DEFUN([LC_SRC_HAVE_WRITE_BEGIN_KIOCB],[
+	LB2_LINUX_TEST_SRC([write_begin_with_kiocb], [
+		#include <linux/fs.h>
+
+		static
+		int ll_write_begin(const struct kiocb *iocb,
+				   struct address_space *m,
+				   loff_t pos, unsigned len,
+				   struct folio **foliop, void **fsdata)
+		{
+			*foliop = NULL;
+			*fsdata = NULL;
+			return 0;
+		}
+
+		static
+		int ll_write_end(const struct kiocb *iocb,
+				 struct address_space *m,
+				 loff_t pos, unsigned len, unsigned copied,
+				 struct folio *folio, void *fsdata)
+		{
+			return 0;
+		}
+
+		const struct address_space_operations ll_aops = {
+			.write_begin	= ll_write_begin,
+			.write_end	= ll_write_end,
+		};
+	],[
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_WRITE_BEGIN_KIOCB],[
+	LB2_MSG_LINUX_TEST_RESULT([if write_begin() takes kiocb],
+	[write_begin_with_kiocb], [
+		AC_DEFINE(HAVE_WRITE_BEGIN_FOLIO, 1,
+			[write_begin() takes folio])
+		AC_DEFINE(HAVE_WRITE_BEGIN_KIOCB, 1,
+			[write_begin() takes struct kiocb])
+	])
+]) # LC_HAVE_WRITE_BEGIN_FOLIO
+
+#
+# LC_FS_STRUCT_HAS_SEQLOCK
+#
+# Linux commit v6.16-rc1-39-ga683a5b2ba23
+#     fold fs_struct->{lock,seq} into a seqlock
+#
+AC_DEFUN([LC_SRC_FS_STRUCT_HAS_SEQLOCK],[
+	LB2_LINUX_TEST_SRC([fs_struct_seqlock], [
+		#include <linux/fs_struct.h>
+	],[
+		struct fs_struct *fs = NULL;
+
+		write_seqlock(&fs->seq);
+		write_sequnlock(&fs->seq);
+	],[-Werror])
+])
+AC_DEFUN([LC_FS_STRUCT_HAS_SEQLOCK],[
+	LB2_MSG_LINUX_TEST_RESULT([if fs_struct has seqlock],
+	[fs_struct_seqlock], [
+		AC_DEFINE([fs_write_seqlock(fs)],
+			  [write_seqlock(&(fs)->seq)],
+			  [fs_struct has seqlock: write_seqlock])
+		AC_DEFINE([fs_write_sequnlock(fs)],
+			  [write_sequnlock(&(fs)->seq)],
+			  [fs_struct has seqlock: write_sequnlock])
+	], [
+		AC_DEFINE([fs_write_seqlock(fs)],
+			  [do { spin_lock(&(fs)->lock); \
+				write_seqcount_begin(&(fs)->seq); } while (0)],
+			  [fs_struct does not have seqlock: write_seqlock])
+		AC_DEFINE([fs_write_sequnlock(fs)],
+			  [do { write_seqcount_end(&(fs)->seq); \
+				spin_unlock(&(fs)->lock); } while (0)],
+			  [fs_struct does not have seqlock: write_sequnlock])
+	])
+]) # LC_FS_STRUCT_HAS_SEQLOCK
+
+#
+# LC_HAVE_NETIF_GET_FLAGS
+#
+# Linux commit v6.16-rc1-39-ga683a5b2ba23
+#     fold fs_struct->{lock,seq} into a seqlock
+#
+AC_DEFUN([LC_SRC_HAVE_NETIF_GET_FLAGS],[
+	LB2_LINUX_TEST_SRC([netif_get_flags], [
+		#include <linux/netdevice.h>
+	],[
+		(void)netif_get_flags((const struct net_device *)NULL);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_NETIF_GET_FLAGS],[
+	LB2_MSG_LINUX_TEST_RESULT([if netif_get_flags exists],
+	[netif_get_flags], [
+		AC_DEFINE(HAVE_NETIF_GET_FLAGS, 1, [netif_get_flags exists])
+	], [
+		AC_DEFINE([netif_get_flags(dev)],
+			  [dev_get_flags((dev))],
+			  [netif_get_flags does not exist, use dev_get_flags])
+	])
+]) # LC_HAVE_NETIF_GET_FLAGS
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -3359,6 +3573,15 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 
 	# 6.16
 	LC_SRC_HAVE_TRY_LOOKUP_NOPERM
+
+	# 6.17
+	LC_SRC_BLK_INTEGRITY_HAS_METADATA_SIZE
+	LC_SRC_HAVE_SET_DEFAULT_D_OP
+	LC_SRC_HAVE_FILE_KATTR
+	LC_SRC_HAVE_SIMPLE_DENTRY_OPERATIONS
+	LC_SRC_HAVE_WRITE_BEGIN_KIOCB
+	LC_SRC_FS_STRUCT_HAS_SEQLOCK
+	LC_SRC_HAVE_NETIF_GET_FLAGS
 ])
 
 AC_DEFUN([LC_PROG_LINUX_RESULTS], [
@@ -3556,6 +3779,15 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 6.16
 	LC_HAVE_TRY_LOOKUP_NOPERM
+
+	# 6.17
+	LC_BLK_INTEGRITY_HAS_METADATA_SIZE
+	LC_HAVE_SET_DEFAULT_D_OP
+	LC_HAVE_FILE_KATTR
+	LC_HAVE_SIMPLE_DENTRY_OPERATIONS
+	LC_HAVE_WRITE_BEGIN_KIOCB
+	LC_FS_STRUCT_HAS_SEQLOCK
+	LC_HAVE_NETIF_GET_FLAGS
 ])
 
 #

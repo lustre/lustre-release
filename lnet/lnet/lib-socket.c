@@ -572,7 +572,7 @@ int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns,
 
 	rtnl_lock();
 	for_each_netdev(ns, dev) {
-		int flags = dev_get_flags(dev);
+		int flags = netif_get_flags(dev);
 		int node_id, cpt;
 		int count;
 

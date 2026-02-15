@@ -214,7 +214,7 @@ static int ksocklnd_ni_get_eth_intf_speed(struct lnet_ni *ni)
 
 	rtnl_lock();
 	for_each_netdev(ni->ni_net_ns, dev) {
-		int flags = dev_get_flags(dev);
+		int flags = netif_get_flags(dev);
 		struct in_device *in_dev;
 
 		if (flags & IFF_LOOPBACK) /* skip the loopback IF */

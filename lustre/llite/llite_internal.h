@@ -1482,9 +1482,9 @@ int ll_read_inode2(struct inode *inode, void *opaque);
 void ll_truncate_inode_pages_final(struct inode *inode);
 void ll_delete_inode(struct inode *inode);
 #ifdef HAVE_FILEATTR_GET
-int ll_fileattr_get(struct dentry *dentry, struct fileattr *fa);
+int ll_fileattr_get(struct dentry *dentry, struct file_kattr *fa);
 int ll_fileattr_set(struct mnt_idmap *mnt_userns,
-		    struct dentry *dentry, struct fileattr *fa);
+		    struct dentry *dentry, struct file_kattr *fa);
 #endif
 int ll_iocontrol(struct inode *inode, struct file *file,
 		 unsigned int cmd, void __user *uarg);

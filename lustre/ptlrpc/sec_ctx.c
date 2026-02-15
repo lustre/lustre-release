@@ -31,13 +31,10 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 	path.mnt = mnt;
 	path.dentry = dentry;
 	path_get(&path);
-	spin_lock(&fs->lock);
-	write_seqcount_begin(&fs->seq);
+	fs_write_seqlock(fs);
 	old_pwd = fs->pwd;
 	fs->pwd = path;
-	write_seqcount_end(&fs->seq);
-	spin_unlock(&fs->lock);
-
+	fs_write_sequnlock(fs);
 	if (old_pwd.dentry)
 		path_put(&old_pwd);
 }

@@ -615,7 +615,13 @@ static int memfs_dcache_readdir(struct file *file, struct dir_context *ctx)
  * Copied from @simple_write_end in the kernel.
  * It does not export on the new kernel such as rhel9.
  */
-static int memfs_write_end(struct file *file, struct address_space *mapping,
+static int memfs_write_end(
+#ifdef HAVE_WRITE_BEGIN_KIOCB
+			   const struct kiocb *kiocb,
+#else
+			   struct file *file,
+#endif
+			   struct address_space *mapping,
 			   loff_t pos, unsigned int len, unsigned int copied,
 			   struct wbe_folio *vmfolio, void *fsdata)
 {
@@ -627,8 +633,10 @@ static int memfs_write_end(struct file *file, struct address_space *mapping,
 	if (!PageUptodate(page)) {
 		if (copied < len) {
 			unsigned int from = pos & (PAGE_SIZE - 1);
+			unsigned int start = from + copied;
+			unsigned int size = len - copied;
 
-			zero_user(page, from + copied, len - copied);
+			zero_user_segments(page, start, start + size, 0, 0);
 		}
 		SetPageUptodate(page);
 	}
@@ -831,7 +839,7 @@ static int memfs_fill_super(struct super_block *sb, struct fs_context *fc)
 	sb->s_blocksize_bits = PAGE_SHIFT;
 	sb->s_magic = WBCFS_MAGIC;
 	sb->s_op = &memfs_ops;
-	sb->s_d_op = &simple_dentry_operations;
+	sb_dentry_not_cache(sb);
 	sb->s_time_gran = 1;
 	uuid_gen(&sb->s_uuid);
 

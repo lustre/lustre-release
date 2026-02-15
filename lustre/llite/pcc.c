@@ -2515,7 +2515,8 @@ ssize_t pcc_file_read_iter(struct kiocb *iocb,
 		unsigned int offs = 0;
 
 		mapping = file_inode(pccf->pccf_file)->i_mapping;
-		vmpage = grab_cache_page(mapping, index);
+		vmpage = find_or_create_page(mapping, index,
+					     mapping_gfp_mask(mapping));
 		if (vmpage == NULL)
 			continue;
 
@@ -3456,7 +3457,7 @@ static int pcc_inode_reset_iattr(struct inode *lustre_inode,
 static int __pcc_file_reset_projid(struct file *file, __u32 projid)
 {
 #ifdef HAVE_FILEATTR_GET
-	struct fileattr fa = { .fsx_projid = projid };
+	struct file_kattr fa = { .fsx_projid = projid };
 	struct dentry *dentry = file->f_path.dentry;
 	struct inode *inode = d_inode(dentry);
 	int rc;

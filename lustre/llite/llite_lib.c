@@ -1391,7 +1391,7 @@ int ll_fill_super(struct super_block *sb)
 #endif
 
 	/* kernel >= 2.6.38 store dentry operations in sb->s_d_op. */
-	sb->s_d_op = &ll_d_ops;
+	set_default_d_op(sb, &ll_d_ops);
 
 	/* UUID handling */
 	generate_random_uuid(uuid.b);
@@ -2152,7 +2152,7 @@ static int ll_io_zero_page(struct inode *inode, pgoff_t index, pgoff_t offset,
 	/* Thanks to PagePrivate2 flag, ll_io_read_page() did not unlock
 	 * the vmpage, so we are good to proceed and zero range in page.
 	 */
-	zero_user(vmpage, offset, len);
+	zero_user_segments(vmpage, offset, offset + len, 0, 0);
 
 	if (holdinglock && clpage) {
 		/* explicitly write newly modified page */
@@ -3339,14 +3339,14 @@ static int fileattr_set(struct inode *inode, int flags)
 }
 
 #ifdef HAVE_FILEATTR_GET
-int ll_fileattr_get(struct dentry *dentry, struct fileattr *fa)
+int ll_fileattr_get(struct dentry *dentry, struct file_kattr *fa)
 {
 	return fileattr_get(d_inode(dentry), &fa->flags,
 			    &fa->fsx_xflags, &fa->fsx_projid);
 }
 
 int ll_fileattr_set(struct mnt_idmap *mnt_userns,
-		    struct dentry *dentry, struct fileattr *fa)
+		    struct dentry *dentry, struct file_kattr *fa)
 {
 	if (fa->fsx_valid)
 		return ll_set_project(d_inode(dentry), fa->fsx_xflags,

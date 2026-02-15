@@ -118,9 +118,10 @@ int __llcrypt_prepare_lookup(struct inode *dir, struct dentry *dentry,
 
 	if (fname->is_ciphertext_name) {
 		spin_lock(&dentry->d_lock);
-		dentry->d_flags |= DCACHE_ENCRYPTED_NAME;
+		dentry->d_op = &llcrypt_d_ops;
+		dentry->d_flags |= DCACHE_ENCRYPTED_NAME | DCACHE_OP_REVALIDATE;
 		spin_unlock(&dentry->d_lock);
-		d_set_d_op(dentry, &llcrypt_d_ops);
+		/* d_splice_alias_ops(NULL, dentry, &llcrypt_d_ops); ? */
 	}
 	return err;
 }
