@@ -1077,9 +1077,9 @@ static void handle_short_read(int nob_read, size_t page_count,
 		LASSERT(page_count > 0);
 
 		if (pga[i]->bp_count > nob_read) {
-			kaddr = kmap_local_page(pga[i]->bp_page);
+			kaddr = brw_kmap_local(pga[i]);
 			/* EOF inside this page */
-			ptr = kaddr + (pga[i]->bp_off & ~PAGE_MASK);
+			ptr = kaddr + brw_page_offset(pga[i]);
 			memset(ptr + nob_read, 0, pga[i]->bp_count - nob_read);
 			kunmap_local(kaddr);
 			page_count--;
@@ -1094,8 +1094,8 @@ static void handle_short_read(int nob_read, size_t page_count,
 
 	/* zero remaining pages */
 	while (page_count-- > 0) {
-		kaddr = kmap_local_page(pga[i]->bp_page);
-		ptr = kaddr + (pga[i]->bp_off & ~PAGE_MASK);
+		kaddr = brw_kmap_local(pga[i]);
+		ptr = kaddr + brw_page_offset(pga[i]);
 		memset(ptr, 0, pga[i]->bp_count);
 		kunmap_local(kaddr);
 		i++;
@@ -1168,7 +1168,7 @@ static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
 
 #if IS_ENABLED(CONFIG_CRC_T10DIF)
 static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
-				   size_t pg_count, struct brw_page **pga,
+				   size_t folios, struct brw_page **pga,
 				   int opc, obd_dif_csum_fn *fn,
 				   int sector_size,
 				   u32 *check_sum, bool resend)
@@ -1176,7 +1176,7 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 	struct ahash_request *req;
 	/* Used Adler as the default checksum type on top of DIF tags */
 	unsigned char cfs_alg = cksum_obd2cfs(OBD_CKSUM_T10_TOP);
-	struct page *__page;
+	struct folio *__folio;
 	unsigned char *buffer;
 	__be16 *guard_start;
 	int guard_number;
@@ -1187,10 +1187,10 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 	int rc = 0, rc2;
 	int i = 0;
 
-	LASSERT(pg_count > 0);
+	LASSERT(folios > 0);
 
-	__page = alloc_page(GFP_KERNEL);
-	if (__page == NULL)
+	__folio = folio_alloc(GFP_KERNEL, 0);
+	if (IS_ERR_OR_NULL(__folio))
 		return -ENOMEM;
 
 	req = cfs_crypto_hash_init(cfs_alg, NULL, 0);
@@ -1201,23 +1201,24 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 		GOTO(out, rc);
 	}
 
-	buffer = kmap(__page);
+	buffer = ll_kmap_local_folio(__folio, 0);
 	guard_start = (__be16 *)buffer;
 	guard_number = PAGE_SIZE / sizeof(*guard_start);
 	CDEBUG(D_PAGE | (resend ? D_HA : 0),
-	       "GRD tags per page=%u, resend=%u, bytes=%u, pages=%zu\n",
-	       guard_number, resend, nob, pg_count);
+	       "GRD tags per page=%u, resend=%u, bytes=%u, folios=%zu\n",
+	       guard_number, resend, nob, folios);
 
-	while (nob > 0 && pg_count > 0) {
-		int off = pga[i]->bp_off & ~PAGE_MASK;
+	while (nob > 0 && folios > 0) {
+		int off = brw_page_offset(pga[i]);
 		unsigned int count =
 			pga[i]->bp_count > nob ? nob : pga[i]->bp_count;
 		int guards_needed = DIV_ROUND_UP(off + count, sector_size) -
 					(off / sector_size);
 
 		if (guards_needed > guard_number - used_number) {
-			cfs_crypto_hash_update_page(req, __page, 0,
-				used_number * sizeof(*guard_start));
+			cfs_crypto_hash_update_page(req,
+						    folio_page(__folio, 0), 0,
+					used_number * sizeof(*guard_start));
 			used_number = 0;
 		}
 
@@ -1226,7 +1227,7 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 		 */
 		if (unlikely(i == 0 && opc == OST_READ &&
 			     CFS_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE))) {
-			void *ptr = kmap_local_page(pga[i]->bp_page);
+			void *ptr = brw_kmap_local(pga[i]);
 
 			memcpy(ptr + off, "bad1", min_t(typeof(nob), 4, nob));
 			kunmap_local(ptr);
@@ -1236,8 +1237,10 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 		 * The left guard number should be able to hold checksums of a
 		 * whole page
 		 */
-		rc = obd_page_dif_generate_buffer(obd_name, pga[i]->bp_page,
-						  pga[i]->bp_off & ~PAGE_MASK,
+		rc = obd_page_dif_generate_buffer(obd_name,
+						  pga[i]->bp_folio,
+						  pga[i]->bp_pgno,
+						  brw_page_offset(pga[i]),
 						  count,
 						  guard_start + used_number,
 						  guard_number - used_number,
@@ -1245,8 +1248,8 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 						  fn);
 		if (unlikely(resend))
 			CDEBUG(D_PAGE | D_HA,
-			       "pga[%u]: used %u off %llu+%u gen checksum: %*phN\n",
-			       i, used, pga[i]->bp_off & ~PAGE_MASK, count,
+			       "pga[%u]: used %u off %u+%u gen checksum: %*phN\n",
+			       i, used, brw_page_offset(pga[i]), count,
 			       (int)(used * sizeof(*guard_start)),
 			       guard_start + used_number);
 		if (rc)
@@ -1254,15 +1257,15 @@ static int osc_checksum_bulk_t10pi(const char *obd_name, int nob,
 
 		used_number += used;
 		nob -= pga[i]->bp_count;
-		pg_count--;
+		folios--;
 		i++;
 	}
-	kunmap(kmap_to_page(buffer));
+	ll_kunmap_local(buffer);
 	if (rc)
 		GOTO(out_hash, rc);
 
 	if (used_number != 0)
-		cfs_crypto_hash_update_page(req, __page, 0,
+		cfs_crypto_hash_update_page(req, folio_page(__folio, 0), 0,
 			used_number * sizeof(*guard_start));
 
 out_hash:
@@ -1280,7 +1283,7 @@ out_hash:
 		*check_sum = cksum;
 	}
 out:
-	__free_page(__page);
+	folio_put(__folio);
 	return rc;
 }
 #else /* !CONFIG_CRC_T10DIF */
@@ -1325,17 +1328,16 @@ static int osc_checksum_bulk(int nob, size_t pg_count,
 		 */
 		if (i == 0 && opc == OST_READ &&
 		    CFS_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE)) {
-			void *ptr = kmap_local_page(pga[i]->bp_page);
-			int off = pga[i]->bp_off & ~PAGE_MASK;
+			void *ptr = brw_kmap_local(pga[i]);
+			int off = brw_page_offset(pga[i]);
 
 			memcpy(ptr + off, "bad1", min_t(typeof(nob), 4, nob));
 			kunmap_local(ptr);
 		}
-		cfs_crypto_hash_update_page(req, pga[i]->bp_page,
-					    pga[i]->bp_off & ~PAGE_MASK,
-					    count);
-		LL_CDEBUG_PAGE(D_PAGE, pga[i]->bp_page, "off %d\n",
-			       (int)(pga[i]->bp_off & ~PAGE_MASK));
+		cfs_crypto_hash_update_page(req, brw_folio_page(pga[i]),
+					    brw_page_offset(pga[i]), count);
+		LL_CDEBUG_PAGE(D_PAGE, brw_folio_page(pga[i]), "off %d\n",
+			       brw_page_offset(pga[i]));
 
 		nob -= pga[i]->bp_count;
 		pg_count--;
@@ -1381,37 +1383,41 @@ static int osc_checksum_bulk_rw(const char *obd_name,
 #ifdef CONFIG_LL_ENCRYPTION
 /**
  * osc_encrypt_pagecache_blocks() - overlay to llcrypt_encrypt_pagecache_blocks
- * @srcpage:      The locked pagecache page containing the block(s) to encrypt
- * @dstpage:      The page to put encryption result
+ * @src:       The locked system cache folio containing the block(s) to encrypt
+ * @srcpg:     The locked page offset
+ * @dst:       The folio to put encryption result
+ * @dstpg:     The folio offset to put encryption result
  * @len:       Total size of the block(s) to encrypt.  Must be a nonzero
  *		multiple of the filesystem's block size.
- * @offs:      Byte offset within @page of the first block to encrypt.  Must be
+ * @offs:      Byte offset within @folio of the first block to encrypt.  Must be
  *		a multiple of the filesystem's block size.
  * @gfp_flags: Memory allocation flags
  *
- * This overlay function is necessary to be able to provide our own bounce page.
+ * This overlay function is necessary to be able to provide our own bounce
+ * folio.
  */
-static struct page *osc_encrypt_pagecache_blocks(struct page *srcpage,
-						 struct page *dstpage,
-						 unsigned int len,
-						 unsigned int offs,
-						 gfp_t gfp_flags)
-
+static struct folio *osc_encrypt_pagecache_blocks(struct folio *src,
+						  s32 srcpg,
+						  struct folio *dst,
+						  s32 dstpg,
+						  unsigned int len,
+						  unsigned int offs,
+						  gfp_t gfp_flags)
 {
-	const struct inode *inode = srcpage->mapping->host;
+	const struct inode *inode = src->mapping->host;
 	const unsigned int blockbits = inode->i_blkbits;
 	const unsigned int blocksize = 1 << blockbits;
-	pgoff_t index = folio_index_page(srcpage);
+	pgoff_t index = src->index + (srcpg > 0 ? srcpg : 0);
 	u64 lblk_num = ((u64)index << (PAGE_SHIFT - blockbits)) +
 		(offs >> blockbits);
 	unsigned int i;
 	int err;
 
-	if (unlikely(!dstpage))
-		return llcrypt_encrypt_pagecache_blocks(srcpage, len, offs,
+	if (unlikely(!dst))
+		return llcrypt_encrypt_pagecache_blocks(src, srcpg, len, offs,
 							gfp_flags);
 
-	if (WARN_ON_ONCE(!PageLocked(srcpage)))
+	if (WARN_ON_ONCE(!folio_test_locked(src)))
 		return ERR_PTR(-EINVAL);
 
 	if (WARN_ON_ONCE(len <= 0 || !IS_ALIGNED(len | offs, blocksize)))
@@ -1419,19 +1425,19 @@ static struct page *osc_encrypt_pagecache_blocks(struct page *srcpage,
 
 	/* Set PagePrivate2 for disambiguation in
 	 * osc_finalize_bounce_page().
-	 * It means cipher page was not allocated by llcrypt.
+	 * It means cipher folio was not allocated by llcrypt.
 	 */
-	SetPagePrivate2(dstpage);
+	folio_set_private_2(dst);
 
 	for (i = offs; i < offs + len; i += blocksize, lblk_num++) {
-		err = llcrypt_encrypt_block(inode, srcpage, dstpage, blocksize,
-					    i, lblk_num, gfp_flags);
+		err = llcrypt_encrypt_block(inode, src, srcpg, dst, dstpg,
+					    blocksize, i, lblk_num, gfp_flags);
 		if (err)
 			return ERR_PTR(err);
 	}
-	SetPagePrivate(dstpage);
-	set_page_private(dstpage, (unsigned long)srcpage);
-	return dstpage;
+	folio_set_private(dst);
+	folio_bounce_private(dst, dstpg, src, srcpg);
+	return dst;
 }
 
 /**
@@ -1441,43 +1447,45 @@ static struct page *osc_encrypt_pagecache_blocks(struct page *srcpage,
  * This overlay function is necessary to handle bounce pages
  * allocated by ourselves.
  */
-static inline void osc_finalize_bounce_page(struct page **pagep)
+static inline void osc_finalize_bounce_page(struct folio **foliop, s32 *pgno)
 {
-	struct page *page = *pagep;
+	struct folio *folio = *foliop;
 
-	ClearPageChecked(page);
+	folio_clear_checked(folio);
 	/* PagePrivate2 was set in osc_encrypt_pagecache_blocks
-	 * to indicate the cipher page was allocated by ourselves.
+	 * to indicate the cipher folio was allocated by ourselves.
 	 * So we must not free it via llcrypt.
 	 */
-	if (unlikely(!page || !PagePrivate2(page)))
-		return llcrypt_finalize_bounce_page(pagep);
+	if (unlikely(!folio || !folio_test_private_2(folio)))
+		return llcrypt_finalize_bounce_page(foliop, pgno);
 
-	if (llcrypt_is_bounce_page(page)) {
-		*pagep = llcrypt_pagecache_page(page);
-		ClearPagePrivate2(page);
-		set_page_private(page, (unsigned long)NULL);
-		ClearPagePrivate(page);
+	if (llcrypt_is_bounce_page(folio, *pgno)) {
+		*foliop = llcrypt_pagecache_page(folio, *pgno);
+		*pgno = 0 - *pgno;
+		folio_clear_private_2(folio);
+		(void)folio_change_private(folio, NULL);
+		folio_clear_private(folio);
 	}
 }
 #else /* !CONFIG_LL_ENCRYPTION */
-#define osc_encrypt_pagecache_blocks(srcpage, dstpage, len, offs, gfp_flags) \
-	llcrypt_encrypt_pagecache_blocks(srcpage, len, offs, gfp_flags)
-#define osc_finalize_bounce_page(page) llcrypt_finalize_bounce_page(page)
+#define osc_encrypt_pagecache_blocks(src, p1, dst, p2, len, offs, gfp_flags) \
+	llcrypt_encrypt_pagecache_blocks(src, p1, len, offs, gfp_flags)
+#define osc_finalize_bounce_page(folio, pgno)	\
+	llcrypt_finalize_bounce_page(folio, pgno)
 #endif
 
 static inline void osc_release_bounce_pages(struct brw_page **pga,
 					    u32 page_count)
 {
 #ifdef HAVE_LUSTRE_CRYPTO
-	struct page **pa = NULL;
+	struct folio **pa = NULL;
 	int i, j = 0;
 
 	if (!pga[0])
 		return;
 
 #ifdef CONFIG_LL_ENCRYPTION
-	if (PageChecked(pga[0]->bp_page)) {
+	if (folio_test_checked(pga[0]->bp_folio)) {
 		OBD_ALLOC_PTR_ARRAY_LARGE(pa, page_count);
 		if (!pa)
 			return;
@@ -1489,17 +1497,18 @@ static inline void osc_release_bounce_pages(struct brw_page **pga,
 		 * called from osc_brw_prep_request()
 		 * are identified thanks to the PageChecked flag.
 		 */
-		if (PageChecked(pga[i]->bp_page)) {
+		if (folio_test_checked(pga[i]->bp_folio)) {
 			if (pa)
-				pa[j++] = pga[i]->bp_page;
-			osc_finalize_bounce_page(&pga[i]->bp_page);
+				pa[j++] = pga[i]->bp_folio;
+			osc_finalize_bounce_page(&pga[i]->bp_folio,
+						 &pga[i]->bp_pgno);
 		}
 		pga[i]->bp_count -= pga[i]->bp_count_diff;
 		pga[i]->bp_off += pga[i]->bp_off_diff;
 	}
 
 	if (pa) {
-		obd_pool_put_pages_array(pa, j);
+		obd_pool_put_folios_array(pa, j);
 		OBD_FREE_PTR_ARRAY_LARGE(pa, page_count);
 	}
 #endif
@@ -1529,7 +1538,7 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 	struct cl_page *clpage;
 
 	ENTRY;
-	if (pga[0]->bp_page) {
+	if (pga[0]->bp_folio) {
 		clpage = oap2cl_page(brw_page2oap(pga[0]));
 		inode = clpage->cp_inode;
 		if (clpage->cp_type == CPT_TRANSIENT)
@@ -1554,7 +1563,7 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 
 	if (opc == OST_WRITE && inode && IS_ENCRYPTED(inode) &&
 	    llcrypt_has_encryption_key(inode)) {
-		struct page **pa = NULL;
+		struct folio **pa = NULL;
 
 #ifdef CONFIG_LL_ENCRYPTION
 		OBD_ALLOC_PTR_ARRAY_LARGE(pa, page_count);
@@ -1563,7 +1572,7 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 			RETURN(-ENOMEM);
 		}
 
-		rc = obd_pool_get_pages_array(pa, page_count);
+		rc = obd_pool_get_folios_array(pa, page_count);
 		if (rc) {
 			CDEBUG(D_SEC, "failed to allocate from enc pool: %d\n",
 			       rc);
@@ -1574,7 +1583,7 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 
 		for (i = 0; i < page_count; i++) {
 			struct brw_page *brwpg = pga[i];
-			struct page *data_page = NULL;
+			struct folio *folio = NULL;
 			bool retried = false;
 			bool lockedbymyself;
 			u32 nunits =
@@ -1584,56 +1593,59 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 
 retry_encrypt:
 			nunits = round_up(nunits, LUSTRE_ENCRYPTION_UNIT_SIZE);
-			/* The page can already be locked when we arrive here.
+			/* The folio can already be locked when we arrive here.
 			 * This is possible when cl_page_assume/vvp_page_assume
-			 * is stuck on wait_on_page_writeback with page lock
+			 * is stuck on wait_on_page_writeback with folio lock
 			 * held. In this case there is no risk for the lock to
 			 * be released while we are doing our encryption
-			 * processing, because writeback against that page will
+			 * processing, because writeback against that folio will
 			 * end in vvp_page_completion_write/cl_page_completion,
-			 * which means only once the page is fully processed.
+			 * which means only once the folio is fully processed.
 			 */
-			lockedbymyself = trylock_page(brwpg->bp_page);
+			lockedbymyself = folio_trylock(brwpg->bp_folio);
 			if (directio) {
-				map_orig = brwpg->bp_page->mapping;
-				brwpg->bp_page->mapping = inode->i_mapping;
-				index_orig = folio_index_page(brwpg->bp_page);
+				map_orig = brwpg->bp_folio->mapping;
+				brwpg->bp_folio->mapping = inode->i_mapping;
+				index_orig = brwpg->bp_folio->index;
 				clpage = oap2cl_page(brw_page2oap(brwpg));
-				page_folio(brwpg->bp_page)->index =
-							clpage->cp_page_index;
+				brwpg->bp_folio->index = clpage->cp_page_index;
 			}
-			data_page =
-				osc_encrypt_pagecache_blocks(brwpg->bp_page,
-							    pa ? pa[i] : NULL,
-							    nunits, 0,
-							    GFP_NOFS);
+			folio = osc_encrypt_pagecache_blocks(brwpg->bp_folio,
+							     brwpg->bp_pgno,
+							     pa ? pa[i] : NULL,
+							     0,
+							     nunits, 0,
+							     GFP_NOFS);
 			if (directio) {
-				brwpg->bp_page->mapping = map_orig;
-				page_folio(brwpg->bp_page)->index = index_orig;
+				brwpg->bp_folio->mapping = map_orig;
+				brwpg->bp_folio->index = index_orig;
 			}
 			if (lockedbymyself)
-				unlock_page(brwpg->bp_page);
-			if (IS_ERR(data_page)) {
-				rc = PTR_ERR(data_page);
+				folio_unlock(brwpg->bp_folio);
+			if (IS_ERR(folio)) {
+				rc = PTR_ERR(folio);
 				if (rc == -ENOMEM && !retried) {
 					retried = true;
 					rc = 0;
 					goto retry_encrypt;
 				}
 				if (pa) {
-					obd_pool_put_pages_array(pa + i,
-								 page_count - i);
+					obd_pool_put_folios_array(
+						pa + i, page_count - i);
 					OBD_FREE_PTR_ARRAY_LARGE(pa,
 								 page_count);
 				}
 				ptlrpc_request_free(req);
 				RETURN(rc);
 			}
-			/* Set PageChecked flag on bounce page for
-			 * disambiguation in osc_release_bounce_pages().
+			/* Set checked flag on bounce folio for disambiguation
+			 * in osc_release_bounce_pages(). folio is 0 order
+			 * so toggle the pgno to negative saved and it is not
+			 * used with the bounce folio.
 			 */
-			SetPageChecked(data_page);
-			brwpg->bp_page = data_page;
+			folio_set_checked(folio);
+			brwpg->bp_folio = folio;
+			brwpg->bp_pgno = -brwpg->bp_pgno;
 			/* there should be no gap in the middle of page array */
 			if (i == page_count - 1) {
 				struct osc_async_page *oap =
@@ -1682,7 +1694,7 @@ retry_encrypt:
 		   ll_has_encryption_key(inode)) {
 		for (i = 0; i < page_count; i++) {
 			struct brw_page *pg = pga[i];
-			u32 nunits = (pg->bp_off & ~PAGE_MASK) + pg->bp_count;
+			u32 nunits = brw_page_offset(pg) + pg->bp_count;
 
 			nunits = round_up(nunits, LUSTRE_ENCRYPTION_UNIT_SIZE);
 			/* count/off are forced to cover the whole encryption
@@ -1733,7 +1745,7 @@ retry_encrypt:
 		short_io_size = 0;
 
 	/* If this is an empty RPC to old server, just ignore it */
-	if (!short_io_size && !pga[0]->bp_page) {
+	if (!short_io_size && !pga[0]->bp_folio) {
 		ptlrpc_request_free(req);
 		RETURN(-ENODATA);
 	}
@@ -1831,16 +1843,17 @@ no_bulk:
 			 "i: %d/%d pg: %px off: %llu, count: %u\n",
 			 i, page_count, pg, pg->bp_off, pg->bp_count);
 		LASSERTF(i == 0 || pg->bp_off > pg_prev->bp_off,
-			 "i %d p_c %u pg %px [pri %lu ind %lu] off %llu prev_pg %px [pri %lu ind %lu] off %llu\n",
+			 "i %d p_c %u pg %px [pri %px ind %lu] off %llu prev_pg %px [pri %px ind %lu] off %llu\n",
 			 i, page_count,
-			 pg->bp_page, page_private(pg->bp_page),
-			 folio_index_page(pg->bp_page), pg->bp_off,
-			 pg_prev->bp_page, page_private(pg_prev->bp_page),
-			 folio_index_page(pg_prev->bp_page), pg_prev->bp_off);
+			 pg->bp_folio, folio_get_private(pg->bp_folio),
+			 pg->bp_folio->index, pg->bp_off,
+			 pg_prev->bp_folio,
+			 folio_get_private(pg_prev->bp_folio),
+			 pg_prev->bp_folio->index, pg_prev->bp_off);
 		LASSERT((pga[0]->bp_flag & OBD_BRW_SRVLOCK) ==
 			(pg->bp_flag & OBD_BRW_SRVLOCK));
 		if (short_io_size != 0 && opc == OST_WRITE) {
-			unsigned char *ptr = kmap_local_page(pg->bp_page);
+			unsigned char *ptr = brw_kmap_local(pg);
 
 			LASSERT(short_io_size >= requested_nob + pg->bp_count);
 			memcpy(short_io_buf + requested_nob,
@@ -1848,8 +1861,9 @@ no_bulk:
 			       pg->bp_count);
 			kunmap_local(ptr);
 		} else if (short_io_size == 0) {
-			desc->bd_frag_ops->add_kiov_frag(desc, pg->bp_page,
-							 poff, pg->bp_count);
+			desc->bd_frag_ops->add_kiov_frag(desc,
+						brw_folio_page(pg),
+						poff, pg->bp_count);
 		}
 		requested_nob += pg->bp_count;
 
@@ -2030,7 +2044,8 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 
 	for (i = 0; i < page_count; i++) {
 		len = pga[i]->bp_count;
-		buf = kmap(pga[i]->bp_page);
+		buf = ll_kmap_local_folio(pga[i]->bp_folio,
+					  brw_pgno(pga[i]) << PAGE_SHIFT);
 		while (len != 0) {
 			rc = kernel_write(filp, buf, len, &filp->f_pos);
 			if (rc < 0) {
@@ -2041,7 +2056,7 @@ static void dump_all_bulk_pages(struct obdo *oa, __u32 page_count,
 			len -= rc;
 			buf += rc;
 		}
-		kunmap(kmap_to_page(buf));
+		ll_kunmap_local(buf);
 	}
 
 	rc = vfs_fsync_range(filp, 0, LLONG_MAX, 1);
@@ -2247,8 +2262,8 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 				    nob : aa->aa_ppga[i]->bp_count;
 
 			CDEBUG(D_CACHE, "page %p count %d\n",
-			       aa->aa_ppga[i]->bp_page, count);
-			ptr = kmap_local_page(aa->aa_ppga[i]->bp_page);
+			       aa->aa_ppga[i]->bp_folio, count);
+			ptr = brw_kmap_local(aa->aa_ppga[i]);
 			memcpy(ptr + (aa->aa_ppga[i]->bp_off & ~PAGE_MASK), buf,
 			       count);
 			kunmap_local((void *) ptr);
@@ -2356,16 +2371,15 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 
 			while (offs < PAGE_SIZE) {
 				/* do not decrypt if page is all 0s */
-				if (memchr_inv(page_address(brwpg->bp_page) +
-					       offs, 0,
-					       LUSTRE_ENCRYPTION_UNIT_SIZE) ==
-						NULL) {
+				if (is_empty_folio(brwpg->bp_folio, offs,
+				    LUSTRE_ENCRYPTION_UNIT_SIZE)) {
 					/* if page is empty forward info to
 					 * upper layers (ll_io_zero_page) by
 					 * clearing PagePrivate2
 					 */
 					if (!offs)
-						ClearPagePrivate2(brwpg->bp_page);
+						folio_clear_private_2(
+							brwpg->bp_folio);
 					break;
 				}
 
@@ -2389,7 +2403,8 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 					     i += blocksize, lblk_num++) {
 						rc =
 						  llcrypt_decrypt_block_inplace(
-							  inode, brwpg->bp_page,
+							  inode,
+							  brw_folio_page(brwpg),
 							  blocksize, i,
 							  lblk_num);
 						if (rc)
@@ -2397,7 +2412,7 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 					}
 				} else {
 					rc = llcrypt_decrypt_pagecache_blocks(
-						brwpg->bp_page,
+						brwpg->bp_folio, brwpg->bp_pgno,
 						LUSTRE_ENCRYPTION_UNIT_SIZE,
 						offs);
 				}

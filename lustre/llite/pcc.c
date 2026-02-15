@@ -2923,7 +2923,7 @@ static int pcc_mmap_pages_convert(struct inode *inode,
 	unsigned int nr;
 	int rc = 0;
 
-	ll_folio_batch_init(&fbatch, 0);
+	ll_folio_batch_init(&fbatch);
 	for ( ; ; ) {
 		struct page *page;
 		int i;
@@ -2934,11 +2934,7 @@ static int pcc_mmap_pages_convert(struct inode *inode,
 			break;
 
 		for (i = 0; i < nr; i++) {
-#if defined(HAVE_FOLIO_BATCH) && defined(HAVE_FILEMAP_GET_FOLIOS)
-			page = &fbatch.folios[i]->page;
-#else
-			page = fbatch.pages[i];
-#endif
+			page = fpgptr(fbatch_at(&fbatch, i));
 			lock_page(page);
 			wait_on_page_writeback(page);
 

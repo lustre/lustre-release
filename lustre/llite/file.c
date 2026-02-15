@@ -494,13 +494,18 @@ static inline int ll_dom_readpage(void *data, struct page *page)
 			unsigned int offs = 0;
 
 			while (offs < PAGE_SIZE) {
+				struct folio *vmfolio;
+				s32 pgno;
+
 				/* decrypt only if page is not empty */
 				if (memcmp(page_address(page) + offs,
 					   page_address(ZERO_PAGE(0)),
 					   LUSTRE_ENCRYPTION_UNIT_SIZE) == 0)
 					break;
-
-				rc = llcrypt_decrypt_pagecache_blocks(page,
+				vmfolio = page_folio(page);
+				pgno = folio_page_idx(vmfolio, page);
+				rc = llcrypt_decrypt_pagecache_blocks(vmfolio,
+								      pgno,
 						    LUSTRE_ENCRYPTION_UNIT_SIZE,
 								      offs);
 				if (rc)
@@ -519,7 +524,7 @@ static inline int ll_dom_readpage(void *data, struct page *page)
 	return rc;
 }
 
-#ifdef HAVE_READ_CACHE_PAGE_WANTS_FILE
+#ifdef HAVE_READ_CACHE_FOLIO_WANTS_FILE
 static inline int ll_dom_read_folio(struct file *file, struct folio *folio0)
 {
 	return ll_dom_readpage(file->private_data, folio_page(folio0, 0));

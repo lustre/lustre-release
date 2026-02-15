@@ -31,6 +31,7 @@
 #include <lustre_compat/linux/linux-fs.h>
 #include <lustre_compat/linux/shrinker.h>
 #include <lustre_compat/linux/xarray.h>
+#include <lustre_compat/linux/folio.h>
 #include <obd_support.h>
 
 #include <lustre_compat/linux/linux-misc.h>
@@ -517,6 +518,12 @@ static inline void ll_security_release_secctx(char *secdata, u32 seclen,
 #define ll_set_acl(ns, inode, acl, type)	ll_set_acl(inode, acl, type)
 #endif
 
+#ifdef HAVE_RADIX_TREE_REPLACE_SLOT_3ARGS
+# define radix_tree_rcu	__rcu
+#else /* !HAVE_RADIX_TREE_REPLACE_SLOT_3ARGS */
+# define radix_tree_rcu
+#endif /* HAVE_RADIX_TREE_REPLACE_SLOT_3ARGS */
+
 #ifdef HAVE_IOPS_MKDIR_RETURNS_DENTRY
 #define ll_vfs_mkdir(id, inode, dentry, mode)	\
 	vfs_mkdir((id), (inode), (dentry), (mode))
@@ -530,220 +537,6 @@ static inline void ll_security_release_secctx(char *secdata, u32 seclen,
 	(dentry);							\
 })
 #endif
-
-static inline struct page *ll_read_cache_page(struct address_space *mapping,
-					      pgoff_t index, filler_t *filler,
-					      void *data)
-{
-#ifdef HAVE_READ_CACHE_PAGE_WANTS_FILE
-	struct file dummy_file;
-
-	dummy_file.f_ra.ra_pages = 32; /* unused, modified on ra error */
-	dummy_file.private_data = data;
-	return read_cache_page(mapping, index, filler, &dummy_file);
-#else
-	return read_cache_page(mapping, index, filler, data);
-#endif /* HAVE_READ_CACHE_PAGE_WANTS_FILE */
-}
-
-#if defined(HAVE_FOLIO_BATCH) && defined(HAVE_FILEMAP_GET_FOLIOS)
-# define ll_folio_batch_init(batch, n)	folio_batch_init(batch)
-# define ll_filemap_get_folios(m, s, e, fbatch) \
-	 filemap_get_folios(m, &s, e, fbatch)
-# define fbatch_at(fbatch, f)		((fbatch)->folios[(f)])
-# define fbatch_at_npgs(fbatch, f)	folio_nr_pages((fbatch)->folios[(f)])
-# define fbatch_at_pg(fbatch, f, pg)	folio_page((fbatch)->folios[(f)], (pg))
-# define folio_batch_add_page(fbatch, page) \
-	 folio_batch_add(fbatch, page_folio(page))
-# ifndef HAVE_FOLIO_BATCH_REINIT
-static inline void folio_batch_reinit(struct folio_batch *fbatch)
-{
-	fbatch->nr = 0;
-}
-# endif /* HAVE_FOLIO_BATCH_REINIT */
-
-static inline pgoff_t folio_index_page(struct page *page)
-{
-	struct folio *_f = page_folio(page);
-
-	return _f->index + folio_page_idx(_f, page);
-}
-
-#else /* !HAVE_FOLIO_BATCH && !HAVE_FILEMAP_GET_FOLIOS */
-
-# ifdef HAVE_PAGEVEC
-#  define folio_batch			pagevec
-# endif
-# define folio_batch_init(pvec)		pagevec_init(pvec)
-# define folio_batch_reinit(pvec)	pagevec_reinit(pvec)
-# define folio_batch_count(pvec)	pagevec_count(pvec)
-# define folio_batch_space(pvec)	pagevec_space(pvec)
-# define folio_batch_add_page(pvec, page) \
-	 pagevec_add(pvec, page)
-# define folio_batch_release(pvec) \
-	 pagevec_release(((struct pagevec *)pvec))
-# ifdef HAVE_PAGEVEC_INIT_ONE_PARAM
-#  define ll_folio_batch_init(pvec, n)	pagevec_init(pvec)
-# else
-#  define ll_folio_batch_init(pvec, n)	pagevec_init(pvec, n)
-# endif
-#ifdef HAVE_PAGEVEC_LOOKUP_THREE_PARAM
-# define ll_filemap_get_folios(m, s, e, pvec) \
-	 pagevec_lookup(pvec, m, &s)
-#else
-# define ll_filemap_get_folios(m, s, e, pvec) \
-	 pagevec_lookup(pvec, m, s, PAGEVEC_SIZE)
-#endif
-# define fbatch_at(pvec, n)		((pvec)->pages[(n)])
-# define fbatch_at_npgs(pvec, n)	1
-# define fbatch_at_pg(pvec, n, pg)	((pvec)->pages[(n)])
-# define folio_index_page(pg)		((pg)->index)
-
-#endif /* HAVE_FOLIO_BATCH && HAVE_FILEMAP_GET_FOLIOS */
-
-#ifndef HAVE_GENERIC_ERROR_REMOVE_FOLIO
-#ifdef HAVE_FOLIO_BATCH
-#define generic_folio			folio
-#else
-#define generic_folio			page
-#define folio_page(page, n)		(page)
-#define folio_nr_pages(page)		(1)
-#define page_folio(page)		(page)
-#endif
-static inline int generic_error_remove_folio(struct address_space *mapping,
-					     struct generic_folio *folio)
-{
-	int pg, npgs = folio_nr_pages(folio);
-	int err = 0;
-
-	for (pg = 0; pg < npgs; pg++) {
-		err = generic_error_remove_page(mapping, folio_page(folio, pg));
-		if (err)
-			break;
-	}
-	return err;
-}
-#endif
-
-/**
- * delete_from_page_cache is not exported anymore
- */
-#ifdef HAVE_DELETE_FROM_PAGE_CACHE
-#define cfs_delete_from_page_cache(page)	delete_from_page_cache((page))
-#else
-static inline void cfs_delete_from_page_cache(struct page *page)
-{
-	if (!page->mapping)
-		return;
-	LASSERT(PageLocked(page));
-	if (S_ISREG(page->mapping->host->i_mode)) {
-		generic_error_remove_folio(page->mapping, page_folio(page));
-	} else {
-		loff_t lstart = folio_index_page(page) << PAGE_SHIFT;
-		loff_t lend = lstart + PAGE_SIZE - 1;
-		struct address_space *mapping = page->mapping;
-
-		get_page(page);
-		unlock_page(page);
-		truncate_inode_pages_range(mapping, lstart, lend);
-		lock_page(page);
-		put_page(page);
-	}
-}
-#endif
-
-#ifdef HAVE_NSPROXY_COUNT_AS_REFCOUNT
-#define nsproxy_dec(ns)		refcount_dec(&(ns)->count)
-#else
-#define nsproxy_dec(ns)		atomic_dec(&(ns)->count)
-#endif
-
-#ifndef HAVE_INODE_GET_CTIME
-#define inode_get_ctime(i)		((i)->i_ctime)
-#define inode_set_ctime_to_ts(i, ts)	((i)->i_ctime = ts)
-#define inode_set_ctime_current(i) \
-	inode_set_ctime_to_ts((i), current_time((i)))
-
-static inline struct timespec64 inode_set_ctime(struct inode *inode,
-						time64_t sec, long nsec)
-{
-	struct timespec64 ts = { .tv_sec  = sec,
-				 .tv_nsec = nsec };
-
-	return inode_set_ctime_to_ts(inode, ts);
-}
-#endif /* !HAVE_INODE_GET_CTIME */
-
-#ifndef HAVE_INODE_GET_MTIME_SEC
-
-#define inode_get_ctime_sec(i)		(inode_get_ctime((i)).tv_sec)
-
-#define inode_get_atime(i)		((i)->i_atime)
-#define inode_get_atime_sec(i)		((i)->i_atime.tv_sec)
-#define inode_set_atime_to_ts(i, ts)	((i)->i_atime = ts)
-
-static inline struct timespec64 inode_set_atime(struct inode *inode,
-						time64_t sec, long nsec)
-{
-	struct timespec64 ts = { .tv_sec  = sec,
-				 .tv_nsec = nsec };
-	return inode_set_atime_to_ts(inode, ts);
-}
-
-#define inode_get_mtime(i)		((i)->i_mtime)
-#define inode_get_mtime_sec(i)		((i)->i_mtime.tv_sec)
-#define inode_set_mtime_to_ts(i, ts)	((i)->i_mtime = ts)
-
-static inline struct timespec64 inode_set_mtime(struct inode *inode,
-						time64_t sec, long nsec)
-{
-	struct timespec64 ts = { .tv_sec  = sec,
-				 .tv_nsec = nsec };
-	return inode_set_mtime_to_ts(inode, ts);
-}
-#endif  /* !HAVE_INODE_GET_MTIME_SEC */
-
-#ifdef HAVE_WRITE_BEGIN_FOLIO
-/* .write_begin is passed **folio which is put with .write_end *folio */
-#define wbe_folio			folio
-#define wbe_page_folio(page)		page_folio((page))
-static inline struct page *wbe_folio_page(struct folio *folio)
-{
-	LASSERT(folio_nr_pages(folio) == 1);
-	return folio_page(folio, 0);
-}
-#else
-/* .write_begin is passed **page which is put with .write_end *page */
-#define wbe_folio			page
-#define wbe_page_folio(page)		(page)
-#define wbe_folio_page(page)		(page)
-#endif
-
-#ifndef HAVE_PAGE_PRIVATE_2
-#define PagePrivate2(page)	test_bit(PG_private_2, &((page)->flags))
-#define SetPagePrivate2(page)	set_bit(PG_private_2, &((page)->flags))
-#define ClearPagePrivate2(page)	clear_bit(PG_private_2, &((page)->flags))
-#endif
-
-#ifdef HAVE_FOLIO_MAPCOUNT
-/* clone of fs/proc/internal.h:
- *   folio_precise_page_mapcount(struct folio *folio, struct page *page)
- */
-static inline int folio_mapcount_page(struct page *page)
-{
-	struct folio *folio = page_folio(page);
-	int mapcount = atomic_read(&page->_mapcount) + 1;
-
-	if (page_mapcount_is_type(mapcount))
-		mapcount = 0;
-	if (folio_test_large(folio))
-		mapcount += folio_entire_mapcount(folio);
-
-	return mapcount;
-}
-#else /* !HAVE_FOLIO_MAPCOUNT */
-#define folio_mapcount_page(pg)			page_mapcount((pg))
-#endif /* HAVE_FOLIO_MAPCOUNT */
 
 #ifdef HAVE_RADIX_TREE_REPLACE_SLOT_3ARGS
 # define radix_tree_rcu	__rcu

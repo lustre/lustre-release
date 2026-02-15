@@ -1440,7 +1440,7 @@ exit:
 	RETURN(rc);
 }
 
-#ifdef HAVE_READ_CACHE_PAGE_WANTS_FILE
+#ifdef HAVE_READ_CACHE_FOLIO_WANTS_FILE
 static inline int mdc_read_folio_remote(struct file *file, struct folio *folio)
 {
 	return ll_mdc_read_page_remote(file->private_data,

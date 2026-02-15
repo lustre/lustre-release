@@ -93,14 +93,35 @@ struct obd_type {
 
 struct brw_page {
 	u64		 bp_off;
-	struct page	*bp_page;
+	struct folio	*bp_folio;
 	u32		 bp_count;
 	u32		 bp_flag;
 	/* used for encryption: difference with offset in clear text page */
 	u16		 bp_off_diff;
 	/* used for encryption: difference with count in clear text page */
 	u16		 bp_count_diff;
+	s32		 bp_pgno;
 } __attribute__((packed));
+
+static inline u32 brw_page_offset(struct brw_page *brwpg)
+{
+	return brwpg->bp_off & ~PAGE_MASK;
+}
+
+static inline size_t brw_pgno(struct brw_page *brwpg)
+{
+	return brwpg->bp_pgno > 0 ? brwpg->bp_pgno : 0;
+}
+
+static inline void *brw_kmap_local(struct brw_page *brwpg)
+{
+	return kmap_local_folio(brwpg->bp_folio, brw_pgno(brwpg) << PAGE_SHIFT);
+}
+
+static inline struct page *brw_folio_page(struct brw_page *brwpg)
+{
+	return folio_page(brwpg->bp_folio, brw_pgno(brwpg));
+}
 
 struct timeout_item {
 	enum timeout_event ti_event;

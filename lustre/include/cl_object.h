@@ -561,7 +561,7 @@ struct cl_object_header {
  *
  *            - by starting from VM-locked struct page and following some
  *              hosting environment method (e.g., following ->private pointer in
- *              the case of Linux kernel), see cl_vmpage_page();
+ *              the case of Linux kernel), see cl_page_from_folio();
  *
  *        - when the page enters cl_page_state::CPS_FREEING state, all these
  *          ways are severed with the proper synchronization
@@ -962,6 +962,23 @@ static inline struct page *cl_page_vmpage(const struct cl_page *page)
 {
 	LASSERT(page->cp_vmpage != NULL);
 	return page->cp_vmpage;
+}
+
+static inline int cl_folio_pgno(const struct cl_page *cl_page)
+{
+#ifdef HAVE___FILEMAP_GET_FOLIO
+	struct folio *folio = page_folio(cl_page->cp_vmpage);
+	int pgno = folio_page_idx(folio, cl_page->cp_vmpage);
+
+	return pgno;
+#else
+	return 0;
+#endif
+}
+
+static inline void *cl_kmap_local(struct cl_page *pg)
+{
+	return kmap_local_page(pg->cp_vmpage);
 }
 
 static inline pgoff_t cl_page_index(const struct cl_page *cp)
@@ -2247,6 +2264,12 @@ void cl_page_print(const struct lu_env *env, void *cookie,
 void cl_page_header_print(const struct lu_env *env, void *cookie,
 			  lu_printer_t printer, const struct cl_page *pg);
 struct cl_page *cl_vmpage_page(struct page *vmpage, struct cl_object *obj);
+
+static inline struct cl_page *cl_page_from_folio(struct page *vmpage,
+						 pgoff_t index, bool get)
+{
+	return cl_vmpage_page(vmpage, NULL);
+}
 
 /**
  * \name ownership

@@ -1049,7 +1049,7 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 	io->ci_obj = cl_object_top(osc2cl(obj));
 	io->ci_ignore_layout = 1;
 	fbatch = &osc_env_info(env)->oti_fbatch;
-	ll_folio_batch_init(fbatch, 0);
+	ll_folio_batch_init(fbatch);
 	rc = cl_io_init(env, io, CIT_MISC, io->ci_obj);
 	if (rc < 0)
 		GOTO(out, rc);
@@ -1470,7 +1470,7 @@ static void osc_consume_write_grant(struct client_obd *cli,
 	cli->cl_dirty_pages++;
 	pga->bp_flag |= OBD_BRW_FROM_GRANT;
 	CDEBUG(D_CACHE, "using %lu grant credits for brw %p page %p\n",
-	       PAGE_SIZE, pga, pga->bp_page);
+	       PAGE_SIZE, pga, pga->bp_folio);
 }
 
 /* the companion to osc_consume_write_grant, called when a brw has completed.
@@ -2420,7 +2420,8 @@ int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
 		return round_up(sizeof(*oap), 8);
 
 	oap->oap_obj = osc;
-	oap->oap_page = page->cp_vmpage;
+	oap->oap_brw_page.bp_folio = page_folio(page->cp_vmpage);
+	oap->oap_brw_page.bp_pgno = cl_folio_pgno(page);
 	oap->oap_obj_off = offset;
 	LASSERT(!(offset & ~PAGE_MASK));
 
@@ -2435,8 +2436,9 @@ int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
 	INIT_LIST_HEAD(&oap->oap_pending_item);
 	INIT_LIST_HEAD(&oap->oap_rpc_item);
 
-	CDEBUG(D_INFO, "oap %p vmpage %p obj off %llu\n",
-	       oap, oap->oap_page, oap->oap_obj_off);
+	CDEBUG(D_INFO, "oap %p folio %p pg:%d obj off %llu\n",
+	       oap, oap->oap_brw_page.bp_folio, oap->oap_brw_page.bp_pgno,
+	       oap->oap_obj_off);
 	RETURN(0);
 }
 EXPORT_SYMBOL(osc_prep_async_page);
@@ -2512,9 +2514,11 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 	 * since this page is not in any list yet. */
 	oap->oap_async_flags = 0;
 	oap->oap_brw_flags = brw_flags;
+	oap->oap_brw_page.bp_pgno = cl_folio_pgno(ops->ops_cl.cpl_page);
 
-	OSC_IO_DEBUG(osc, "oap %p page %p added for cmd %d\n",
-		     oap, oap->oap_page, oap->oap_cmd & OBD_BRW_RWMASK);
+	OSC_IO_DEBUG(osc, "oap %p folio %p pg:%d added for cmd %d\n",
+		     oap, oap->oap_brw_page.bp_folio,
+		     oap->oap_brw_page.bp_pgno, oap->oap_cmd & OBD_BRW_RWMASK);
 
 	index = osc_index(oap2osc(oap));
 
@@ -3531,7 +3535,7 @@ bool osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 	idx = start;
 	pvec = osc_env_info(env)->oti_pvec;
 	fbatch = &osc_env_info(env)->oti_fbatch;
-	ll_folio_batch_init(fbatch, 0);
+	ll_folio_batch_init(fbatch);
 	spin_lock(&osc->oo_tree_lock);
 	while ((nr = radix_tree_gang_lookup(&osc->oo_tree, pvec,
 					    idx, OTI_PVEC_SIZE)) > 0) {

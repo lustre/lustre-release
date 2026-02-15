@@ -705,7 +705,7 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 	int i;
 
 	osd_brw_stats_update(osd, iobuf);
-	ll_folio_batch_init(&fbatch, 0);
+	ll_folio_batch_init(&fbatch);
 
 	for (i = 0; i < npages; i++) {
 		struct page *page = lnb[i].lnb_page;

@@ -123,7 +123,7 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 	struct folio_batch fbatch;
 	int i;
 
-	ll_folio_batch_init(&fbatch, 0);
+	ll_folio_batch_init(&fbatch);
 	for (i = 0; i < npages; i++) {
 		struct page *page = lnb[i].lnb_page;
 

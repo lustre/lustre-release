@@ -1572,26 +1572,6 @@ AC_DEFUN([LC_BI_STATUS], [
 ]) # LC_BI_STATUS
 
 #
-# LC_PAGEVEC_INIT_ONE_PARAM
-#
-# 4.14 pagevec_init takes one parameter
-#
-AC_DEFUN([LC_SRC_PAGEVEC_INIT_ONE_PARAM], [
-	LB2_LINUX_TEST_SRC([pagevec_init], [
-		#include <linux/pagevec.h>
-	],[
-		pagevec_init(NULL);
-	])
-])
-AC_DEFUN([LC_PAGEVEC_INIT_ONE_PARAM], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'pagevec_init' takes one parameter],
-	[pagevec_init], [
-		AC_DEFINE(HAVE_PAGEVEC_INIT_ONE_PARAM, 1,
-			['pagevec_init' takes one parameter])
-	])
-]) # LC_PAGEVEC_INIT_ONE_PARAM
-
-#
 # LC_PAGEVEC_LOOKUP_THREE_PARAM
 #
 # 4.14 pagevec_lookup takes three parameters
@@ -2578,6 +2558,30 @@ AC_DEFUN([LC_FOLIO_MEMCG_LOCK], [
 ]) # LC_FOLIO_MEMCG_LOCK
 
 #
+# LC_HAVE___FILEMAP_GET_FOLIO
+#
+# Linux commit v5.15-rc3-88-g3f0c6a07fee6
+#  mm/filemap: Add filemap_get_folio
+#
+AC_DEFUN([LC_SRC_HAVE___FILEMAP_GET_FOLIO], [
+	LB2_LINUX_TEST_SRC([__filemap_get_folio], [
+		#include <linux/pagemap.h>
+	],[
+		struct address_space *m = NULL;
+		pgoff_t start = 0;
+
+		(void)__filemap_get_folio(m, start, 0, 0);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE___FILEMAP_GET_FOLIO], [
+	AC_MSG_CHECKING([if __filemap_get_folio() exists])
+	LB2_LINUX_TEST_RESULT([__filemap_get_folio], [
+		AC_DEFINE(HAVE___FILEMAP_GET_FOLIO, 1,
+			[__filemap_get_folio() exists])
+	])
+]) # LC_HAVE___FILEMAP_GET_FOLIO
+
+#
 # LC_HAVE_KIOCB_COMPLETE_2ARGS
 #
 # kernel v5.15-rc6-145-g6b19b766e8f0
@@ -2651,6 +2655,29 @@ AC_DEFUN([LC_HAVE_WB_STAT_MOD], [
 			[wb_stat_mod() exists])
 	])
 ]) # LC_HAVE_WB_STAT_MOD
+
+#
+# LC_HAVE_FOLIO_BATCH
+#
+# linux kernel v5.16-rc4-36-g10331795fb79
+#   pagevec: Add folio_batch
+#
+AC_DEFUN([LC_SRC_HAVE_FOLIO_BATCH], [
+	LB2_LINUX_TEST_SRC([struct_folio_batch_exists], [
+		#include <linux/pagevec.h>
+	],[
+		struct folio_batch fbatch __attribute__ ((unused));
+
+		folio_batch_init(&fbatch);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_FOLIO_BATCH], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'struct folio_batch' is available],
+	[struct_folio_batch_exists], [
+		AC_DEFINE(HAVE_FOLIO_BATCH, 1,
+			['struct folio_batch' is available])
+	])
+]) # LC_HAVE_FOLIO_BATCH
 
 #
 # LC_HAVE_INVALIDATE_FOLIO
@@ -2774,13 +2801,13 @@ AC_DEFUN([LC_HAVE_ADDRESS_SPACE_OPERATIONS_READ_FOLIO], [
 ]) # LC_HAVE_ADDRESS_SPACE_OPERATIONS_READ_FOLIO
 
 #
-# LC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE
+# LC_HAVE_READ_CACHE_FOLIO_FILLER_WITH_FILE
 #
 # Linux commit v5.18-rc5-280-ge9b5b23e957e
 #   fs: Change the type of filler_t
 #
-AC_DEFUN([LC_SRC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE], [
-	LB2_LINUX_TEST_SRC([read_cache_page_filler_with_file], [
+AC_DEFUN([LC_SRC_HAVE_READ_CACHE_FOLIO_FILLER_WITH_FILE], [
+	LB2_LINUX_TEST_SRC([read_cache_folio_filler_with_file], [
 		#include <linux/pagemap.h>
 		static inline int _filler(struct file *file, struct folio *f)
 		{
@@ -2789,17 +2816,17 @@ AC_DEFUN([LC_SRC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE], [
 	],[
 		struct address_space *mapping = NULL;
 		struct file *file = NULL;
-		struct page *page = read_cache_page(mapping, 0, _filler, file);
-		(void)page;
+		struct folio *folio = read_cache_folio(mapping, 0, _filler, file);
+		(void)folio;
 	],[-Werror])
 ])
-AC_DEFUN([LC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE], [
-	LB2_MSG_LINUX_TEST_RESULT([if read_cache_page() filler_t needs struct file],
-	[read_cache_page_filler_with_file], [
-		AC_DEFINE(HAVE_READ_CACHE_PAGE_WANTS_FILE, 1,
-			[read_cache_page() filler_t needs struct file])
+AC_DEFUN([LC_HAVE_READ_CACHE_FOLIO_FILLER_WITH_FILE], [
+	LB2_MSG_LINUX_TEST_RESULT([if read_cache_folio() filler_t needs struct file],
+	[read_cache_folio_filler_with_file], [
+		AC_DEFINE(HAVE_READ_CACHE_FOLIO_WANTS_FILE, 1,
+			[read_cache_folio() filler_t needs struct file])
 	])
-]) # LC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE
+]) # LC_HAVE_READ_CACHE_FOLIO_FILLER_WITH_FILE
 
 #
 # LC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
@@ -3594,27 +3621,55 @@ AC_DEFUN([LC_HAVE_GET_USER_PAGES_WITHOUT_VMA], [
 ]) # LC_HAVE_GET_USER_PAGES_WITHOUT_VMA
 
 #
-# LC_HAVE_FOLIO_BATCH
+# LC_HAVE_BIO_ADD_FOLIO
 #
-# linux kernel v5.16-rc4-36-g10331795fb79
-#   pagevec: Add folio_batch
+# linux kernel v6.4-rc4-431-gbdadc6d83156
+#   scatterlist: add sg_set_folio()
 #
-AC_DEFUN([LC_SRC_HAVE_FOLIO_BATCH], [
-	LB2_LINUX_TEST_SRC([struct_folio_batch_exists], [
-		#include <linux/pagevec.h>
+AC_DEFUN([LC_SRC_HAVE_BIO_ADD_FOLIO], [
+	LB2_LINUX_TEST_SRC([bio_add_folio], [
+		#include <linux/bio.h>
 	],[
-		struct folio_batch fbatch __attribute__ ((unused));
+		struct bio *bio = NULL;
+		struct folio *folio = NULL;
+		bool okay = bio_add_folio(bio, folio, PAGE_SIZE, 0);
 
-		folio_batch_init(&fbatch);
+		if (okay)
+			return okay;
+		return false;
 	],[-Werror])
 ])
-AC_DEFUN([LC_HAVE_FOLIO_BATCH], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'struct folio_batch' is available],
-	[struct_folio_batch_exists], [
-		AC_DEFINE(HAVE_FOLIO_BATCH, 1,
-			['struct folio_batch' is available])
+AC_DEFUN([LC_HAVE_BIO_ADD_FOLIO], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'bio_add_folio()' is available],
+	[bio_add_folio], [
+		AC_DEFINE(HAVE_BIO_ADD_FOLIO, 1,
+			['bio_add_folio()' is available])
+	],[],[module])
+]) # LC_HAVE_BIO_ADD_FOLIO
+
+#
+# LC_HAVE_SG_SET_FOLIO
+#
+# linux kernel v6.4-rc4-431-gbdadc6d83156
+#   scatterlist: add sg_set_folio()
+#
+AC_DEFUN([LC_SRC_HAVE_SG_SET_FOLIO], [
+	LB2_LINUX_TEST_SRC([sg_set_folio], [
+		#include <linux/scatterlist.h>
+	],[
+		struct scatterlist *sg = NULL;
+		struct folio *folio = NULL;
+
+		sg_set_folio(sg, folio, PAGE_SIZE, 0);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_SG_SET_FOLIO], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'sg_set_folio()' is available],
+	[sg_set_folio], [
+		AC_DEFINE(HAVE_SG_SET_FOLIO, 1,
+			['sg_set_folio()' is available])
 	])
-]) # LC_HAVE_FOLIO_BATCH
+]) # LC_HAVE_SG_SET_FOLIO
 
 #
 # LC_HAVE_STRUCT_PAGEVEC
@@ -4480,7 +4535,6 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_GET_INODE_USAGE
 
 	# 4.14
-	LC_SRC_PAGEVEC_INIT_ONE_PARAM
 	LC_SRC_BI_BDEV
 	LC_SRC_INTERVAL_TREE_CACHED
 
@@ -4553,6 +4607,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	# 5.16
 	LC_SRC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG
 	LC_SRC_FOLIO_MEMCG_LOCK
+	LC_SRC_HAVE___FILEMAP_GET_FOLIO
 	LC_SRC_HAVE_KIOCB_COMPLETE_2ARGS
 
 	# 5.17
@@ -4564,7 +4619,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 
 	# 5.19
 	LC_SRC_HAVE_ADDRESS_SPACE_OPERATIONS_READ_FOLIO
-	LC_SRC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE
+	LC_SRC_HAVE_READ_CACHE_FOLIO_FILLER_WITH_FILE
 	LC_SRC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
 	LC_SRC_HAVE_LSMCONTEXT_INIT
 	LC_SRC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX
@@ -4607,6 +4662,8 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_ENUM_ITER_PIPE
 	LC_SRC_HAVE_GET_USER_PAGES_WITHOUT_VMA
 	LC_SRC_HAVE_FOLIO_BATCH
+	LC_SRC_HAVE_BIO_ADD_FOLIO
+	LC_SRC_HAVE_SG_SET_FOLIO
 	LC_SRC_HAVE_STRUCT_PAGEVEC
 
 	# 6.6
@@ -4762,7 +4819,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_GET_INODE_USAGE
 
 	# 4.14
-	LC_PAGEVEC_INIT_ONE_PARAM
 	LC_BI_BDEV
 	LC_INTERVAL_TREE_CACHED
 
@@ -4839,6 +4895,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	# 5.16
 	LC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG
 	LC_FOLIO_MEMCG_LOCK
+	LC_HAVE___FILEMAP_GET_FOLIO
 	LC_HAVE_KIOCB_COMPLETE_2ARGS
 	LC_FOLIO_MEMCG_LOCK_EXPORTED
 	LC_EXPORTS_DELETE_FROM_PAGE_CACHE
@@ -4852,7 +4909,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 5.19
 	LC_HAVE_ADDRESS_SPACE_OPERATIONS_READ_FOLIO
-	LC_HAVE_READ_CACHE_PAGE_FILLER_WITH_FILE
+	LC_HAVE_READ_CACHE_FOLIO_FILLER_WITH_FILE
 	LC_HAVE_ADDRESS_SPACE_OPERATIONS_RELEASE_FOLIO
 	LC_HAVE_LSMCONTEXT_INIT
 	LC_SECURITY_DENTRY_INIT_SECURTY_WITH_CTX
@@ -4895,6 +4952,8 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_ENUM_ITER_PIPE
 	LC_HAVE_GET_USER_PAGES_WITHOUT_VMA
 	LC_HAVE_FOLIO_BATCH
+	LC_HAVE_BIO_ADD_FOLIO
+	LC_HAVE_SG_SET_FOLIO
 	LC_HAVE_STRUCT_PAGEVEC
 	LC_EXPORTS_FILEMAP_SPLICE_READ
 

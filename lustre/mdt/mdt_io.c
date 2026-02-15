@@ -978,9 +978,11 @@ mdt_object_fallocate_zero(const struct lu_env *env, struct obd_export *exp,
 			GOTO(out, rc);
 
 		for (i = 0; i < npages; i++) {
-			memset(kmap(lnbs[i].lnb_page) + lnbs[i].lnb_page_offset,
-			       0, lnbs[i].lnb_len);
-			kunmap(lnbs[i].lnb_page);
+			void *kaddr = kmap_local_page(lnbs[i].lnb_page);
+
+			memset(kaddr + lnbs[i].lnb_page_offset, 0,
+			       lnbs[i].lnb_len);
+			kunmap_local(kaddr);
 		}
 
 		/* mdt_write will handle write, resource put, etc. */
@@ -2232,4 +2234,3 @@ void mdt_dom_discard_data(struct mdt_thread_info *info,
 
 	RETURN_EXIT;
 }
-

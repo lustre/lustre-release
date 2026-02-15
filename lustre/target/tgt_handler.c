@@ -2188,6 +2188,8 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 				       guard_start + used_number);
 		}
 		if (!use_t10_grd || unlikely(resend)) {
+			struct folio *folio;
+			s32 pgno;
 			__be16 guard_tmp[MAX_GUARD_NUMBER];
 			__be16 *guards = guard_start + used_number;
 			int used_tmp = -1, *usedp = &used;
@@ -2196,8 +2198,10 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 				guards = guard_tmp;
 				usedp = &used_tmp;
 			}
+			folio = page_folio(local_nb[i].lnb_page);
+			pgno = folio_page_idx(folio, local_nb[i].lnb_page);
 			rc = obd_page_dif_generate_buffer(obd_name,
-				local_nb[i].lnb_page,
+				folio, pgno,
 				local_nb[i].lnb_page_offset & ~PAGE_MASK,
 				local_nb[i].lnb_len, guards,
 				guard_number - used_number, usedp, sector_size,

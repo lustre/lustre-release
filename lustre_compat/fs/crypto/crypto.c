@@ -34,22 +34,11 @@
 #include <crypto/aes.h>
 #include <crypto/skcipher.h>
 #include "llcrypt_private.h"
-
+#include <lustre_compat.h>
 #ifdef HAVE_CIPHER_H
 #include <crypto/internal/cipher.h>
 
 MODULE_IMPORT_NS(CRYPTO_INTERNAL);
-#endif
-
-#if defined(HAVE_FOLIO_BATCH) && defined(HAVE_FILEMAP_GET_FOLIOS)
-static inline pgoff_t folio_index_page(struct page *page)
-{
-	struct folio *_f = page_folio(page);
-
-	return _f->index + folio_page_idx(_f, page);
-}
-#else
-# define folio_index_page(pg)		((pg)->index)
 #endif
 
 static unsigned int num_prealloc_crypto_pages = 32;
@@ -68,7 +57,7 @@ MODULE_PARM_DESC(client_encryption_engine, "Client encryption engine");
 
 enum llcrypt_crypto_engine_type llcrypt_crypto_engine = LLCRYPT_ENGINE_AES_NI;
 
-static mempool_t *llcrypt_bounce_page_pool = NULL;
+static mempool_t *llcrypt_bounce_pool = NULL;
 
 static LIST_HEAD(llcrypt_free_ctxs);
 static DEFINE_SPINLOCK(llcrypt_ctx_lock);
@@ -84,6 +73,30 @@ void llcrypt_enqueue_decrypt_work(struct work_struct *work)
 	queue_work(llcrypt_read_workqueue, work);
 }
 EXPORT_SYMBOL(llcrypt_enqueue_decrypt_work);
+
+/*
+ * A simple mempool-backed page allocator that allocates folios
+ * of the order specified by pool_data.
+ */
+static void *llpool_alloc_folios(gfp_t gfp_mask, void *pool_data)
+{
+	struct folio *folio = folio_alloc(gfp_mask, (long)pool_data);
+
+	if (IS_ERR_OR_NULL(folio))
+		return NULL;
+	return folio;
+}
+
+static void llpool_free_folios(void *element, void *pool_data)
+{
+	folio_put(element);
+}
+
+static inline mempool_t *llmempool_create_folio_pool(int min_nr, long order)
+{
+	return mempool_create(min_nr, llpool_alloc_folios, llpool_free_folios,
+			      (void *)order);
+}
 
 /**
  * llcrypt_release_ctx() - Release a decryption context
@@ -141,26 +154,26 @@ struct llcrypt_ctx *llcrypt_get_ctx(gfp_t gfp_flags)
 }
 EXPORT_SYMBOL(llcrypt_get_ctx);
 
-struct page *llcrypt_alloc_bounce_page(gfp_t gfp_flags)
+struct folio *llcrypt_alloc_bounce(gfp_t gfp_flags)
 {
-	return mempool_alloc(llcrypt_bounce_page_pool, gfp_flags);
+	return mempool_alloc(llcrypt_bounce_pool, gfp_flags);
 }
 
 /**
- * llcrypt_free_bounce_page() - free a ciphertext bounce page
+ * llcrypt_free_bounce_folio() - free a ciphertext bounce folio
  *
- * Free a bounce page that was allocated by llcrypt_encrypt_pagecache_blocks(),
- * or by llcrypt_alloc_bounce_page() directly.
+ * Free a bounce folio that was allocated by llcrypt_encrypt_pagecache_blocks(),
+ * or by llcrypt_alloc_bounce() directly.
  */
-void llcrypt_free_bounce_page(struct page *bounce_page)
+void llcrypt_free_bounce_folio(struct folio *bounce_folio)
 {
-	if (!bounce_page)
+	if (!bounce_folio)
 		return;
-	set_page_private(bounce_page, (unsigned long)NULL);
-	ClearPagePrivate(bounce_page);
-	mempool_free(bounce_page, llcrypt_bounce_page_pool);
+	folio_change_private(bounce_folio, NULL);
+	folio_clear_private(bounce_folio);
+	mempool_free(bounce_folio, llcrypt_bounce_pool);
 }
-EXPORT_SYMBOL(llcrypt_free_bounce_page);
+EXPORT_SYMBOL(llcrypt_free_bounce_folio);
 
 void llcrypt_generate_iv(union llcrypt_iv *iv, u64 lblk_num,
 			 const struct llcrypt_info *ci)
@@ -175,11 +188,25 @@ void llcrypt_generate_iv(union llcrypt_iv *iv, u64 lblk_num,
 		crypto_cipher_encrypt_one(ci->ci_essiv_tfm, iv->raw, iv->raw);
 }
 
+static inline void memcpy_folio_page(struct folio *dst, s32 dpg,
+				     struct folio *src, s32 spg)
+{
+	size_t doff __maybe_unused = dpg > 0 ? PAGE_SIZE * dpg : 0;
+	size_t soff __maybe_unused = spg > 0 ? PAGE_SIZE * spg : 0;
+	void *to = kmap_local_folio(dst, doff);
+	void *from = kmap_local_folio(src, soff);
+
+	if (to != from)
+		memcpy(to, from, PAGE_SIZE);
+	kunmap_local(from);
+	kunmap_local(to);
+}
+
 /* Encrypt or decrypt a single filesystem block of file contents */
 int llcrypt_crypt_block(const struct inode *inode, llcrypt_direction_t rw,
-			u64 lblk_num, struct page *src_page,
-			struct page *dest_page, unsigned int len,
-			unsigned int offs, gfp_t gfp_flags)
+			u64 lblk_num, struct folio *src_folio, s32 spg,
+			struct folio *dest_folio, s32 dpg, size_t len,
+			size_t offs, gfp_t gfp_flags)
 {
 	union llcrypt_iv iv;
 	struct skcipher_request *req = NULL;
@@ -187,12 +214,12 @@ int llcrypt_crypt_block(const struct inode *inode, llcrypt_direction_t rw,
 	struct scatterlist dst, src;
 	struct llcrypt_info *ci = llcrypt_info(inode);
 	struct crypto_skcipher *tfm = ci->ci_ctfm;
+	size_t doff = dpg > 0 ? PAGE_SIZE * dpg : 0;
+	size_t soff = spg > 0 ? PAGE_SIZE * spg : 0;
 	int res = 0;
 
 	if (tfm == NULL) {
-		if (dest_page != src_page)
-			memcpy(page_address(dest_page), page_address(src_page),
-			       PAGE_SIZE);
+		memcpy_folio_page(dest_folio, dpg, src_folio, spg);
 		return 0;
 	}
 
@@ -212,9 +239,9 @@ int llcrypt_crypt_block(const struct inode *inode, llcrypt_direction_t rw,
 		crypto_req_done, &wait);
 
 	sg_init_table(&dst, 1);
-	sg_set_page(&dst, dest_page, len, offs);
+	sg_set_folio(&dst, dest_folio, len, offs + doff);
 	sg_init_table(&src, 1);
-	sg_set_page(&src, src_page, len, offs);
+	sg_set_folio(&src, src_folio, len, offs + soff);
 	skcipher_request_set_crypt(req, &src, &dst, len, &iv);
 	if (rw == FS_DECRYPT)
 		res = crypto_wait_req(crypto_skcipher_decrypt(req), &wait);
@@ -230,130 +257,133 @@ int llcrypt_crypt_block(const struct inode *inode, llcrypt_direction_t rw,
 }
 
 /**
- * llcrypt_encrypt_pagecache_blocks() - Encrypt filesystem blocks from a pagecache page
- * @page:      The locked pagecache page containing the block(s) to encrypt
- * @len:       Total size of the block(s) to encrypt.  Must be a nonzero
+ * llcrypt_encrypt_pagecache_blocks() - Encrypt filesystem blocks from a
+ *					pagecache page
+ * @folio:	The locked pagecache page containing the block(s) to encrypt
+ * @len:	Total size of the block(s) to encrypt.  Must be a nonzero
  *		multiple of the filesystem's block size.
- * @offs:      Byte offset within @page of the first block to encrypt.  Must be
- *		a multiple of the filesystem's block size.
- * @gfp_flags: Memory allocation flags
+ * @offs:	Byte offset within @folio of the first block to encrypt.
+ *		Must be a multiple of the filesystem's block size.
+ * @gfp_flags:	Memory allocation flags
  *
- * A new bounce page is allocated, and the specified block(s) are encrypted into
- * it.  In the bounce page, the ciphertext block(s) will be located at the same
- * offsets at which the plaintext block(s) were located in the source page; any
- * other parts of the bounce page will be left uninitialized.  However, normally
- * blocksize == PAGE_SIZE and the whole page is encrypted at once.
+ * A new bounce folio is allocated, and the specified block(s) are encrypted
+ * into it.  In the bounce folio, the ciphertext block(s) will be located at
+ * the same offsets at which the plaintext block(s) were located in the source
+ * folio; any other parts of the bounce folio will be left uninitialized.
+ * However, normally blocksize == PAGE_SIZE and the whole folio is encrypted
+ * at once.
  *
  * This is for use by the filesystem's ->writepages() method.
  *
- * Return: the new encrypted bounce page on success; an ERR_PTR() on failure
+ * Return: the new encrypted bounce folio on success; an ERR_PTR() on failure
  */
-struct page *llcrypt_encrypt_pagecache_blocks(struct page *page,
-					      unsigned int len,
-					      unsigned int offs,
-					      gfp_t gfp_flags)
-
+struct folio *llcrypt_encrypt_pagecache_blocks(struct folio *folio, s32 pgno,
+					       unsigned int len,
+					       unsigned int offs,
+					       gfp_t gfp_flags)
 {
-	const struct inode *inode = page->mapping->host;
+	const struct inode *inode = folio->mapping->host;
 	const unsigned int blockbits = inode->i_blkbits;
 	const unsigned int blocksize = 1 << blockbits;
-	struct page *ciphertext_page;
-	pgoff_t index = folio_index_page(page);
+	struct folio *ciphertext;
+	pgoff_t index = folio->index + (pgno > 0 ? pgno : 0);
 	u64 lblk_num = ((u64)index << (PAGE_SHIFT - blockbits)) +
 		       (offs >> blockbits);
 	unsigned int i;
 	int err;
 
-	if (WARN_ON_ONCE(!PageLocked(page)))
+	if (WARN_ON_ONCE(!folio_test_locked(folio)))
 		return ERR_PTR(-EINVAL);
 
 	if (WARN_ON_ONCE(len <= 0 || !IS_ALIGNED(len | offs, blocksize)))
 		return ERR_PTR(-EINVAL);
 
-	ciphertext_page = llcrypt_alloc_bounce_page(gfp_flags);
-	if (!ciphertext_page)
+	ciphertext = llcrypt_alloc_bounce(gfp_flags);
+	if (!ciphertext)
 		return ERR_PTR(-ENOMEM);
 
 	for (i = offs; i < offs + len; i += blocksize, lblk_num++) {
 		err = llcrypt_crypt_block(inode, FS_ENCRYPT, lblk_num,
-					  page, ciphertext_page,
+					  folio, pgno, ciphertext, 0,
 					  blocksize, i, gfp_flags);
 		if (err) {
-			llcrypt_free_bounce_page(ciphertext_page);
+			llcrypt_free_bounce_folio(ciphertext);
 			return ERR_PTR(err);
 		}
 	}
-	SetPagePrivate(ciphertext_page);
-	set_page_private(ciphertext_page, (unsigned long)page);
-	return ciphertext_page;
+	folio_set_private(ciphertext);
+	folio_bounce_private(ciphertext, 0, folio, pgno);
+	return ciphertext;
 }
 EXPORT_SYMBOL(llcrypt_encrypt_pagecache_blocks);
 
 /**
- * llcrypt_encrypt_block() - Encrypt a filesystem block in a page
+ * llcrypt_encrypt_block() - Encrypt a filesystem block in a folio
  * @inode:     The inode to which this block belongs
- * @src:       The page containing the block to encrypt
- * @dst:       The page which will contain the encrypted data
+ * @src:       The folio containing the block to encrypt
+ * @dst:       The folio which will contain the encrypted data
  * @len:       Size of block to encrypt.  Doesn't need to be a multiple of the
  *		fs block size, but must be a multiple of LL_CRYPTO_BLOCK_SIZE.
- * @offs:      Byte offset within @page at which the block to encrypt begins
+ * @offs:      Byte offset within @folio at which the block to encrypt begins
  * @lblk_num:  Filesystem logical block number of the block, i.e. the 0-based
  *		number of the block within the file
  * @gfp_flags: Memory allocation flags
  *
  * Encrypt a possibly-compressed filesystem block that is located in an
- * arbitrary page, not necessarily in the original pagecache page.  The @inode
- * and @lblk_num must be specified, as they can't be determined from @page.
+ * arbitrary folio, not necessarily in the original pagecache folio.  The @inode
+ * and @lblk_num must be specified, as they can't be determined from @folio.
  * The decrypted data will be stored in @dst.
  *
  * Return: 0 on success; -errno on failure
  */
-int llcrypt_encrypt_block(const struct inode *inode, struct page *src,
-			  struct page *dst, unsigned int len, unsigned int offs,
-			  u64 lblk_num, gfp_t gfp_flags)
+int llcrypt_encrypt_block(const struct inode *inode, struct folio *src, s32 spg,
+			  struct folio *dst, s32 dpg, unsigned int len,
+			  unsigned int offs, u64 lblk_num, gfp_t gfp_flags)
 {
-	return llcrypt_crypt_block(inode, FS_ENCRYPT, lblk_num, src, dst,
-				   len, offs, gfp_flags);
+	return llcrypt_crypt_block(inode, FS_ENCRYPT, lblk_num, src, spg, dst,
+				   dpg, len, offs, gfp_flags);
 }
 EXPORT_SYMBOL(llcrypt_encrypt_block);
 
 /**
- * llcrypt_decrypt_pagecache_blocks() - Decrypt filesystem blocks in a pagecache page
- * @page:      The locked pagecache page containing the block(s) to decrypt
+ * llcrypt_decrypt_pagecache_blocks() - Decrypt filesystem blocks in a
+ *					pagecache folio
+ * @folio:      The locked pagecache folio containing the block(s) to decrypt
  * @len:       Total size of the block(s) to decrypt.  Must be a nonzero
  *		multiple of the filesystem's block size.
- * @offs:      Byte offset within @page of the first block to decrypt.  Must be
+ * @offs:      Byte offset within @folio of the first block to decrypt.  Must be
  *		a multiple of the filesystem's block size.
  *
- * The specified block(s) are decrypted in-place within the pagecache page,
+ * The specified block(s) are decrypted in-place within the pagecache folio,
  * which must still be locked and not uptodate.  Normally, blocksize ==
- * PAGE_SIZE and the whole page is decrypted at once.
+ * PAGE_SIZE and the whole folio is decrypted at once.
  *
  * This is for use by the filesystem's ->readpages() method.
  *
  * Return: 0 on success; -errno on failure
  */
-int llcrypt_decrypt_pagecache_blocks(struct page *page, unsigned int len,
-				     unsigned int offs)
+int llcrypt_decrypt_pagecache_blocks(struct folio *folio, s32 pgno,
+				     unsigned int len, unsigned int offs)
 {
-	const struct inode *inode = page->mapping->host;
+	const struct inode *inode = folio->mapping->host;
 	const unsigned int blockbits = inode->i_blkbits;
 	const unsigned int blocksize = 1 << blockbits;
-	pgoff_t index = folio_index_page(page);
+	pgoff_t index = folio->index + (pgno > 0 ? pgno : 0);
 	u64 lblk_num = ((u64)index << (PAGE_SHIFT - blockbits)) +
 		       (offs >> blockbits);
 	unsigned int i;
 	int err;
 
-	if (WARN_ON_ONCE(!PageLocked(page)))
+	if (WARN_ON_ONCE(!folio_test_locked(folio)))
 		return -EINVAL;
 
 	if (WARN_ON_ONCE(len <= 0 || !IS_ALIGNED(len | offs, blocksize)))
 		return -EINVAL;
 
 	for (i = offs; i < offs + len; i += blocksize, lblk_num++) {
-		err = llcrypt_crypt_block(inode, FS_DECRYPT, lblk_num, page,
-					  page, blocksize, i, GFP_NOFS);
+		err = llcrypt_crypt_block(inode, FS_DECRYPT, lblk_num,
+					  folio, pgno, folio, pgno,
+					  blocksize, i, GFP_NOFS);
 		if (err)
 			return err;
 	}
@@ -362,29 +392,29 @@ int llcrypt_decrypt_pagecache_blocks(struct page *page, unsigned int len,
 EXPORT_SYMBOL(llcrypt_decrypt_pagecache_blocks);
 
 /**
- * llcrypt_decrypt_block() - Cache a decrypted filesystem block in a page
+ * llcrypt_decrypt_block() - Cache a decrypted filesystem block in a folio
  * @inode:     The inode to which this block belongs
- * @src:       The page containing the block to decrypt
- * @dst:       The page which will contain the plain data
+ * @src:       The folio containing the block to decrypt
+ * @dst:       The folio which will contain the plain data
  * @len:       Size of block to decrypt.  Doesn't need to be a multiple of the
  *		fs block size, but must be a multiple of LL_CRYPTO_BLOCK_SIZE.
- * @offs:      Byte offset within @page at which the block to decrypt begins
+ * @offs:      Byte offset within @folio at which the block to decrypt begins
  * @lblk_num:  Filesystem logical block number of the block, i.e. the 0-based
  *		number of the block within the file
  *
  * Decrypt a possibly-compressed filesystem block that is located in an
- * arbitrary page, not necessarily in the original pagecache page.  The @inode
- * and @lblk_num must be specified, as they can't be determined from @page.
+ * arbitrary folio, not necessarily in the original pagecache folio.  The @inode
+ * and @lblk_num must be specified, as they can't be determined from @folio.
  * The encrypted data will be stored in @dst.
  *
  * Return: 0 on success; -errno on failure
  */
-int llcrypt_decrypt_block(const struct inode *inode, struct page *src,
-			  struct page *dst, unsigned int len, unsigned int offs,
-			  u64 lblk_num, gfp_t gfp_flags)
+int llcrypt_decrypt_block(const struct inode *inode, struct folio *src, s32 spg,
+			  struct folio *dst, s32 dpg, unsigned int len,
+			  unsigned int offs, u64 lblk_num, gfp_t gfp_flags)
 {
-	return llcrypt_crypt_block(inode, FS_DECRYPT, lblk_num, src, dst,
-				   len, offs, gfp_flags);
+	return llcrypt_crypt_block(inode, FS_DECRYPT, lblk_num, src, spg, dst,
+				   dpg, len, offs, gfp_flags);
 }
 EXPORT_SYMBOL(llcrypt_decrypt_block);
 
@@ -447,8 +477,8 @@ static void llcrypt_destroy(void)
 	list_for_each_entry_safe(pos, n, &llcrypt_free_ctxs, free_list)
 		kmem_cache_free(llcrypt_ctx_cachep, pos);
 	INIT_LIST_HEAD(&llcrypt_free_ctxs);
-	mempool_destroy(llcrypt_bounce_page_pool);
-	llcrypt_bounce_page_pool = NULL;
+	mempool_destroy(llcrypt_bounce_pool);
+	llcrypt_bounce_pool = NULL;
 }
 
 /**
@@ -469,7 +499,7 @@ int llcrypt_initialize(unsigned int cop_flags)
 		return 0;
 
 	mutex_lock(&llcrypt_init_mutex);
-	if (llcrypt_bounce_page_pool)
+	if (llcrypt_bounce_pool)
 		goto already_initialized;
 
 	for (i = 0; i < num_prealloc_crypto_ctxs; i++) {
@@ -481,9 +511,9 @@ int llcrypt_initialize(unsigned int cop_flags)
 		list_add(&ctx->free_list, &llcrypt_free_ctxs);
 	}
 
-	llcrypt_bounce_page_pool =
-		mempool_create_page_pool(num_prealloc_crypto_pages, 0);
-	if (!llcrypt_bounce_page_pool)
+	llcrypt_bounce_pool =
+		llmempool_create_folio_pool(num_prealloc_crypto_pages, 0);
+	if (!llcrypt_bounce_pool)
 		goto fail;
 
 already_initialized:

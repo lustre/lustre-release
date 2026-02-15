@@ -538,7 +538,7 @@ static void discard_cl_pages(const struct lu_env *env, struct cl_io *io,
 	struct folio_batch *fbatch = &osc_env_info(env)->oti_fbatch;
 	int i;
 
-	ll_folio_batch_init(fbatch, 0);
+	ll_folio_batch_init(fbatch);
 	for (i = 0; i < max_index; i++) {
 		struct cl_page *page = pvec[i];
 

@@ -259,10 +259,11 @@ extern struct kmem_cache *llcrypt_info_cachep;
 extern int llcrypt_initialize(unsigned int cop_flags);
 extern int llcrypt_crypt_block(const struct inode *inode,
 			       llcrypt_direction_t rw, u64 lblk_num,
-			       struct page *src_page, struct page *dest_page,
-			       unsigned int len, unsigned int offs,
+			       struct folio *src_page, s32 spg,
+			       struct folio *dest_page, s32 dpg,
+			       size_t len, size_t offs,
 			       gfp_t gfp_flags);
-extern struct page *llcrypt_alloc_bounce_page(gfp_t gfp_flags);
+extern struct folio *llcrypt_alloc_bounce(gfp_t gfp_flags);
 extern const struct dentry_operations llcrypt_d_ops;
 
 extern void __printf(3, 4) __cold

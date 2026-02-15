@@ -666,6 +666,13 @@ static inline void **page_from_pagearray(void *array, int index)
 	return (void **)&pa[index];
 }
 
+static inline void **folio_from_folioarray(void *array, int index)
+{
+	struct folio **pa = (struct folio **)array;
+
+	return (void **)&pa[index];
+}
+
 static inline void **object_from_bufarray(void *array, int index)
 {
 	return (void **)array;
@@ -843,6 +850,13 @@ int obd_pool_get_pages_array(struct page **pa, unsigned int count)
 }
 EXPORT_SYMBOL(obd_pool_get_pages_array);
 
+int obd_pool_get_folios_array(struct folio **pa, unsigned int count)
+{
+	return __obd_pool_get_objects((void *)pa, count, 0,
+					folio_from_folioarray);
+}
+EXPORT_SYMBOL(obd_pool_get_folios_array);
+
 /* get 2^order pages region */
 int obd_pool_get_objects(void **pages, unsigned int order)
 {
@@ -946,6 +960,17 @@ void obd_pool_put_pages_array(struct page **pa, unsigned int count)
 		CDEBUG(D_SEC, "error putting pages in pool: %d\n", rc);
 }
 EXPORT_SYMBOL(obd_pool_put_pages_array);
+
+void obd_pool_put_folios_array(struct folio **pa, unsigned int count)
+{
+	int rc;
+
+	rc = __obd_pool_put_objects((void *)pa, count, 0,
+				    folio_from_folioarray);
+	if (rc)
+		CDEBUG(D_SEC, "error putting pages in pool: %d\n", rc);
+}
+EXPORT_SYMBOL(obd_pool_put_folios_array);
 
 /* put 2^order pages region */
 void obd_pool_put_objects(void *buf, unsigned int order)

@@ -418,7 +418,7 @@ int osc_io_commit_async(const struct lu_env *env,
 		}
 	}
 
-	ll_folio_batch_init(fbatch, 0);
+	ll_folio_batch_init(fbatch);
 
 	while (qin->pl_nr > 0) {
 		struct osc_async_page *oap;

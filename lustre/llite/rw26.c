@@ -890,14 +890,14 @@ out:
 
 static int ll_write_end(struct file *file, struct address_space *mapping,
 			loff_t pos, unsigned len, unsigned copied,
-			struct wbe_folio *vmfolio, void *fsdata)
+			struct wbe_folio *folio, void *fsdata)
 {
 	struct ll_cl_context *lcc = fsdata;
 	const struct lu_env *env;
 	struct cl_io *io;
 	struct vvp_io *vio;
-	struct cl_page *page;
-	struct page *vmpage = wbe_folio_page(vmfolio);
+	struct cl_page *cl_page;
+	struct page *vmpage = wbe_folio_page(folio);
 	unsigned from = pos & (PAGE_SIZE - 1);
 	enum cl_io_priority prio = IO_PRIO_NORMAL;
 	bool unplug = false;
@@ -916,11 +916,11 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 
 	LASSERT(lcc != NULL);
 	env  = lcc->lcc_env;
-	page = lcc->lcc_page;
+	cl_page = lcc->lcc_page;
 	io   = lcc->lcc_io;
 	vio  = vvp_env_io(env);
 
-	LASSERT(cl_page_is_owned(page, io));
+	LASSERT(cl_page_is_owned(cl_page, io));
 	if (copied > 0) {
 		struct cl_page_list *plist = &vio->u.readwrite.vui_queue;
 #ifdef SB_I_CGROUPWB
@@ -943,18 +943,19 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 		spin_unlock(&inode->i_lock);
 #endif
 
-		lcc->lcc_page = NULL; /* page will be queued */
+		lcc->lcc_page = NULL; /* cl_page will be queued */
 
 		/* Add it into write queue */
-		cl_page_list_add(plist, page, true);
-		if (plist->pl_nr == 1) /* first page */
+		cl_page_list_add(plist, cl_page, true);
+		if (plist->pl_nr == 1) /* first cl_page */
 			vio->u.readwrite.vui_from = from;
 		else
 			LASSERT(from == 0);
 		vio->u.readwrite.vui_to = from + copied;
 
 		/* To address the deadlock in balance_dirty_pages() where
-		 * this dirty page may be written back in the same thread. */
+		 * this dirty cl_page may be written back in the same thread.
+		 */
 		if (PageDirty(vmpage))
 			unplug = true;
 
@@ -962,15 +963,15 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 		if (plist->pl_nr >= PTLRPC_MAX_BRW_PAGES)
 			unplug = true;
 
-		CL_PAGE_DEBUG(D_VFSTRACE, env, page,
-			      "queued page: %d.\n", plist->pl_nr);
+		CL_PAGE_DEBUG(D_VFSTRACE, env, cl_page,
+			      "queued cl_page: %d.\n", plist->pl_nr);
 	} else {
-		cl_page_disown(env, io, page);
+		cl_page_disown(env, io, cl_page);
 
 		lcc->lcc_page = NULL;
-		cl_page_put(env, page);
+		cl_page_put(env, cl_page);
 
-		/* page list is not contiguous now, commit it now */
+		/* cl_page list is not contiguous now, commit it now */
 		unplug = true;
 	}
 	/* the last call into ->write_begin() can unplug the queue */
