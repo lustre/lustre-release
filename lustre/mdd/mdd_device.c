@@ -189,12 +189,8 @@ static int mdd_init0(const struct lu_env *env, struct mdd_device *mdd,
 static struct lu_device *mdd_device_fini(const struct lu_env *env,
 					 struct lu_device *d)
 {
-	struct mdd_device *mdd = lu2mdd_dev(d);
-
 	if (d->ld_site)
 		lu_dev_del_linkage(d->ld_site, d);
-
-	mdd_procfs_fini(mdd);
 	return NULL;
 }
 
@@ -637,6 +633,9 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 			GOTO(out_uclose, rc);
 		}
 	}
+
+	mdd->mdd_cl.mc_flags |= CLM_INIT_DONE;
+	smp_wmb();
 
 	llog_ctxt_put(ctxt);
 	llog_ctxt_put(uctxt);
@@ -1215,6 +1214,7 @@ static int mdd_process_config(const struct lu_env *env,
 		mdd_generic_thread_stop(&m->mdd_orphan_cleanup_thread);
 		break;
 	case LCFG_CLEANUP:
+		mdd_procfs_fini(m);
 		rc = next->ld_ops->ldo_process_config(env, next, cfg);
 		lu_dev_del_linkage(d->ld_site, d);
 		mdd_device_shutdown(env, m, cfg);

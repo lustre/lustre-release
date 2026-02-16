@@ -199,11 +199,15 @@ static int lprocfs_changelog_users_cb(const struct lu_env *env,
 
 static int mdd_changelog_users_seq_show(struct seq_file *m, void *data)
 {
-	struct lu_env		 env;
-	struct mdd_device	*mdd = m->private;
-	struct llog_ctxt	*ctxt;
-	__u64			 cur;
-	int			 rc;
+	struct mdd_device *mdd = m->private;
+	struct llog_ctxt *ctxt;
+	struct lu_env env;
+	__u64 cur;
+	int rc;
+
+	smp_rmb();
+	if ((mdd->mdd_cl.mc_flags & CLM_INIT_DONE) == 0)
+		return -ENXIO;
 
         ctxt = llog_get_context(mdd2obd_dev(mdd),
 				LLOG_CHANGELOG_USER_ORIG_CTXT);
@@ -237,7 +241,11 @@ static int mdd_changelog_size_ctxt(const struct lu_env *env,
 				   struct mdd_device *mdd,
 				   int index, __u64 *val)
 {
-	struct llog_ctxt	*ctxt;
+	struct llog_ctxt *ctxt;
+
+	smp_rmb();
+	if ((mdd->mdd_cl.mc_flags & CLM_INIT_DONE) == 0)
+		return -ENXIO;
 
 	ctxt = llog_get_context(mdd2obd_dev(mdd),
 				index);
