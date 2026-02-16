@@ -12851,6 +12851,20 @@ force_new_seq_ost() {
 	consume_precreations $dir $mfacet $OSTIDX
 	do_facet $mfacet $LCTL set_param \
 		osp.$mdtosc_proc.prealloc_force_new_seq=0
+
+	# wait upto lod.*.qos_maxage to precreate to happen
+	# so OST is ready for new creations
+	local delay=$(do_facet $mfacet $LCTL get_param -n lod.*$FSNAME*.qos_maxage |
+		      awk '{ print $1 + 5; exit; }')
+	local i
+	for ((i = 0; i < delay; i++)); do
+		local last=$(do_facet $mfacet $LCTL \
+			get_param -n osp.$mdtosc_proc.prealloc_last_id)
+		local next=$(do_facet $mfacet $LCTL \
+			get_param -n osp.$mdtosc_proc.prealloc_next_id)
+		(( last - next > 2 )) && break
+		sleep 1
+	done
 }
 
 force_new_seq() {

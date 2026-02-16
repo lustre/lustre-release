@@ -12313,6 +12313,9 @@ test_155() {
 	touch $DIR/$tdir/$tfile
 	local seq1=$($LFS getstripe --yaml $DIR/$tdir/$tfile |
 		     awk -F ':' '/l_fid:/ {print $2}' | tr -d [:blank:])
+	local idx=$($LFS getstripe --yaml $DIR/$tdir/$tfile |
+		     awk '/l_ost_idx:/ {print $3}')
+	(( $idx != 0 )) && skip_env "couldn't create on ost1"
 
 	stopall
 	setupall
@@ -12321,6 +12324,9 @@ test_155() {
 	touch $DIR/$tdir/${tfile}2
 	local seq2=$($LFS getstripe --yaml $DIR/$tdir/${tfile}2 |
 		     awk -F ':' '/l_fid:/ {print $2}' | tr -d [:blank:])
+	idx=$($LFS getstripe --yaml $DIR/$tdir/${tfile}2 |
+		     awk '/l_ost_idx:/ {print $3}')
+	(( $idx != 0 )) && skip_env "couldn't create on ost1 (2)"
 
 	(( seq2 == seq1 + 1 )) || error "gap in seq: old $seq1 new $seq2"
 }
