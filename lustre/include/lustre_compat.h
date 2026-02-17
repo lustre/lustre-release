@@ -50,19 +50,6 @@
 #define bio_start_sector(bio) (bio->bi_sector)
 #endif
 
-#ifdef HAVE_BI_BDEV
-# define bio_get_dev(bio)	((bio)->bi_bdev)
-# define bio_get_disk(bio)	(bio_get_dev(bio)->bd_disk)
-# define bio_get_queue(bio)	bdev_get_queue(bio_get_dev(bio))
-
-# ifndef HAVE_BIO_SET_DEV
-#  define bio_set_dev(bio, bdev) (bio_get_dev(bio) = (bdev))
-# endif
-#else
-# define bio_get_disk(bio)	((bio)->bi_disk)
-# define bio_get_queue(bio)	(bio_get_disk(bio)->queue)
-#endif
-
 #ifndef HAVE_BI_OPF
 #define bi_opf bi_rw
 #endif
@@ -119,10 +106,6 @@ static inline int d_in_lookup(struct dentry *dentry)
 	list_for_each_entry((child), &(dentry)->d_subdirs, d_child)
 #endif
 
-#ifndef HAVE_VM_FAULT_T
-#define vm_fault_t int
-#endif
-
 #ifndef HAVE_FOP_ITERATE_SHARED
 #define iterate_shared iterate
 #endif
@@ -143,16 +126,13 @@ static inline int ll_vfs_getattr(struct path *path, struct kstat *st,
 {
 	int rc;
 
-#if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_INODEOPS_ENHANCED_GETATTR)
 #ifdef AT_GETATTR_NOSEC /* added in v6.7-rc1-1-g8a924db2d7b5 */
 	if (flags & AT_GETATTR_NOSEC)
 		rc = vfs_getattr_nosec(path, st, request_mask, flags);
 	else
 #endif /* AT_GETATTR_NOSEC */
-	rc = vfs_getattr(path, st, request_mask, flags);
-#else
-	rc = vfs_getattr(path, st);
-#endif
+		rc = vfs_getattr(path, st, request_mask, flags);
+
 	return rc;
 }
 
@@ -198,30 +178,6 @@ static inline int ll_vfs_getattr(struct path *path, struct kstat *st,
 #define posix_acl_valid(a, b)		posix_acl_valid(b)
 #endif
 
-#ifdef CONFIG_LUSTRE_FS_POSIX_ACL
-#if !defined(HAVE_USER_NAMESPACE_ARG) && \
-	!defined(HAVE_POSIX_ACL_UPDATE_MODE) && \
-	!defined(HAVE_MNT_IDMAP_ARG)
-static inline int posix_acl_update_mode(struct inode *inode, umode_t *mode_p,
-			  struct posix_acl **acl)
-{
-	umode_t mode = inode->i_mode;
-	int error;
-
-	error = posix_acl_equiv_mode(*acl, &mode);
-	if (error < 0)
-		return error;
-	if (error == 0)
-		*acl = NULL;
-	if (!in_group_p(inode->i_gid) &&
-	    !capable_wrt_inode_uidgid(inode, CAP_FSETID))
-		mode &= ~S_ISGID;
-	*mode_p = mode;
-	return 0;
-}
-#endif /* HAVE_POSIX_ACL_UPDATE_MODE */
-#endif
-
 /*
  * mount MS_* flags split from superblock SB_* flags
  * if the SB_* flags are not available use the MS_* flags
@@ -256,49 +212,6 @@ static inline struct iovec iov_iter_iovec(const struct iov_iter *iter)
 }
 #endif
 
-static inline void __user *get_vmf_address(struct vm_fault *vmf)
-{
-#ifdef HAVE_VM_FAULT_ADDRESS
-	return (void __user *)vmf->address;
-#else
-	return vmf->virtual_address;
-#endif
-}
-
-#ifdef HAVE_VM_OPS_USE_VM_FAULT_ONLY
-# define __ll_filemap_fault(vma, vmf) filemap_fault(vmf)
-#else
-# define __ll_filemap_fault(vma, vmf) filemap_fault(vma, vmf)
-#endif
-
-#ifndef HAVE_CURRENT_TIME
-static inline struct timespec current_time(struct inode *inode)
-{
-	return CURRENT_TIME;
-}
-#endif
-
-#ifndef time_after32
-/**
- * time_after32 - compare two 32-bit relative times
- * @a: the time which may be after @b
- * @b: the time which may be before @a
- *
- * Needed for kernels earlier than v4.14-rc1~134^2
- *
- * time_after32(a, b) returns true if the time @a is after time @b.
- * time_before32(b, a) returns true if the time @b is before time @a.
- *
- * Similar to time_after(), compare two 32-bit timestamps for relative
- * times.  This is useful for comparing 32-bit seconds values that can't
- * be converted to 64-bit values (e.g. due to disk format or wire protocol
- * issues) when it is known that the times are less than 68 years apart.
- */
-#define time_after32(a, b)     ((s32)((u32)(b) - (u32)(a)) < 0)
-#define time_before32(b, a)    time_after32(a, b)
-
-#endif
-
 /* kernel version less than 4.2, smp_store_mb is not defined, use set_mb */
 #ifndef smp_store_mb
 #define smp_store_mb(var, value) set_mb(var, value) /* set full mem barrier */
@@ -306,17 +219,6 @@ static inline struct timespec current_time(struct inode *inode)
 
 #ifndef HAVE_IN_COMPAT_SYSCALL
 #define in_compat_syscall	is_compat_task
-#endif
-
-#ifdef HAVE_I_PAGES
-#define page_tree i_pages
-#define ll_xa_lock_irqsave(lockp, flags) xa_lock_irqsave(lockp, flags)
-#define ll_xa_unlock_irqrestore(lockp, flags) xa_unlock_irqrestore(lockp, flags)
-#else
-#define i_pages tree_lock
-#define ll_xa_lock_irqsave(lockp, flags) spin_lock_irqsave(lockp, flags)
-#define ll_xa_unlock_irqrestore(lockp, flags) spin_unlock_irqrestore(lockp, \
-								     flags)
 #endif
 
 #ifndef KMEM_CACHE_USERCOPY
@@ -334,35 +236,15 @@ static inline bool ll_security_xattr_wanted(struct inode *in)
 #endif
 }
 
-static inline int ll_vfs_getxattr(struct dentry *dentry, struct inode *inode,
-				  const char *name,
-				  void *value, size_t size)
-{
-#if defined(HAVE_MNT_IDMAP_ARG) || defined(HAVE_USER_NAMESPACE_ARG) || \
-	defined(HAVE_VFS_SETXATTR)
-	return __vfs_getxattr(dentry, inode, name, value, size);
-#else
-	if (unlikely(!inode->i_op->getxattr))
-		return -ENODATA;
-
-	return inode->i_op->getxattr(dentry, name, value, size);
-#endif
-}
-
 static inline int ll_vfs_setxattr(struct dentry *dentry, struct inode *inode,
 				  const char *name,
 				  const void *value, size_t size, int flags)
 {
 #if defined(HAVE_MNT_IDMAP_ARG) || defined(HAVE_USER_NAMESPACE_ARG)
 	return __vfs_setxattr(&nop_mnt_idmap, dentry, inode, name,
-			    VFS_SETXATTR_VALUE(value), size, flags);
-#elif defined(HAVE_VFS_SETXATTR)
-	return __vfs_setxattr(dentry, inode, name, value, size, flags);
+			      VFS_SETXATTR_VALUE(value), size, flags);
 #else
-	if (unlikely(!inode->i_op->setxattr))
-		return -EOPNOTSUPP;
-
-	return inode->i_op->setxattr(dentry, name, value, size, flags);
+	return __vfs_setxattr(dentry, inode, name, value, size, flags);
 #endif
 }
 
@@ -371,13 +253,8 @@ static inline int ll_vfs_removexattr(struct dentry *dentry, struct inode *inode,
 {
 #if defined(HAVE_MNT_IDMAP_ARG) || defined(HAVE_USER_NAMESPACE_ARG)
 	return __vfs_removexattr(&nop_mnt_idmap, dentry, name);
-#elif defined(HAVE_VFS_SETXATTR)
-	return __vfs_removexattr(dentry, name);
 #else
-	if (unlikely(!inode->i_op->setxattr))
-		return -EOPNOTSUPP;
-
-	return inode->i_op->removexattr(dentry, name);
+	return __vfs_removexattr(dentry, name);
 #endif
 }
 
@@ -537,12 +414,6 @@ static inline void ll_security_release_secctx(char *secdata, u32 seclen,
 	(dentry);							\
 })
 #endif
-
-#ifdef HAVE_RADIX_TREE_REPLACE_SLOT_3ARGS
-# define radix_tree_rcu	__rcu
-#else /* !HAVE_RADIX_TREE_REPLACE_SLOT_3ARGS */
-# define radix_tree_rcu
-#endif /* HAVE_RADIX_TREE_REPLACE_SLOT_3ARGS */
 
 #ifndef QSTR
 #define QSTR(name) QSTR_LEN((name), strlen((name)))

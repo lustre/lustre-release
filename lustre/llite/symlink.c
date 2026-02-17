@@ -270,7 +270,6 @@ static const char *ll_follow_link(struct dentry *dentry, void **cookie)
  *
  * Return: 0 on success, -errno on failure
  */
-#if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_INODEOPS_ENHANCED_GETATTR)
 static int ll_getattr_link(
 #if defined(HAVE_USER_NAMESPACE_ARG)
 			   struct mnt_idmap *map,
@@ -303,14 +302,8 @@ static int ll_getattr_link(
 	do_delayed_call(&done);
 	return 0;
 }
-#else /* HAVE_INODEOPS_ENHANCED_GETATTR */
-#define ll_getattr_link ll_getattr
-#endif
 
 const struct inode_operations ll_fast_symlink_inode_operations = {
-#ifdef HAVE_IOP_GENERIC_READLINK
-	.readlink	= generic_readlink,
-#endif
 	.setattr	= ll_setattr,
 #ifdef HAVE_IOP_GET_LINK
 	.get_link	= ll_get_link,

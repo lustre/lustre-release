@@ -2909,13 +2909,8 @@ int sptlrpc_pack_user_desc(struct lustre_msg *msg, int offset)
 	ngroups = current_cred()->group_info->ngroups;
 	if (pud->pud_ngroups > ngroups)
 		pud->pud_ngroups = ngroups;
-#ifdef HAVE_GROUP_INFO_GID
 	memcpy(pud->pud_groups, current_cred()->group_info->gid,
 	       pud->pud_ngroups * sizeof(__u32));
-#else /* !HAVE_GROUP_INFO_GID */
-	memcpy(pud->pud_groups, current_cred()->group_info->blocks[0],
-	       pud->pud_ngroups * sizeof(__u32));
-#endif /* HAVE_GROUP_INFO_GID */
 	task_unlock(current);
 
 	return 0;

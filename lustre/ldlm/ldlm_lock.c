@@ -1301,7 +1301,7 @@ struct ldlm_lock *search_itree(struct ldlm_resource *res,
 	for (idx = 0; idx < LCK_MODE_NUM; idx++) {
 		struct ldlm_interval_tree *tree = &res->lr_itree[idx];
 
-		if (INTERVAL_TREE_EMPTY(&tree->lit_root))
+		if (RB_EMPTY_ROOT(&tree->lit_root.rb_root))
 			continue;
 
 		if (!(tree->lit_mode & *data->lmd_mode))

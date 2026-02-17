@@ -1440,7 +1440,7 @@ static bool ldlm_resource_extent_new(struct ldlm_resource *res)
 	for (idx = 0; idx < LCK_MODE_NUM; idx++) {
 		res->lr_itree[idx].lit_size = 0;
 		res->lr_itree[idx].lit_mode = BIT(idx);
-		res->lr_itree[idx].lit_root = INTERVAL_TREE_ROOT;
+		res->lr_itree[idx].lit_root = RB_ROOT_CACHED;
 	}
 	return true;
 }
@@ -1460,7 +1460,7 @@ static bool ldlm_resource_inodebits_new(struct ldlm_resource *res)
 static bool ldlm_resource_flock_new(struct ldlm_resource *res)
 {
 	res->lr_flock_node.lfn_needs_reprocess = false;
-	res->lr_flock_node.lfn_root = INTERVAL_TREE_ROOT;
+	res->lr_flock_node.lfn_root = RB_ROOT_CACHED;
 	atomic_set(&res->lr_flock_node.lfn_unlock_pending, 0);
 
 	return true;

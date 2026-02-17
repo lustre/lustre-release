@@ -327,7 +327,7 @@ static int key_set_payload(struct key *key, unsigned int index,
 static void bind_key_ctx(struct key *key, struct ptlrpc_cli_ctx *ctx)
 {
 	LASSERT(atomic_read(&ctx->cc_refcount) > 0);
-	LASSERT(ll_read_key_usage(key) > 0);
+	LASSERT(refcount_read(&key->usage) > 0);
 	LASSERT(ctx2gctx_keyring(ctx)->gck_key == NULL);
 	LASSERT(!key_get_payload(key, 0));
 
@@ -1036,7 +1036,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 	if (likely(ctx)) {
 		LASSERT(atomic_read(&ctx->cc_refcount) >= 1);
 		LASSERT(ctx2gctx_keyring(ctx)->gck_key == key);
-		LASSERT(ll_read_key_usage(key) >= 2);
+		LASSERT(refcount_read(&key->usage) >= 2);
 
 		/* simply take a ref and return. it's upper layer's
 		 * responsibility to detect & replace dead ctx.
@@ -1310,7 +1310,7 @@ int gss_sec_display_kr(struct ptlrpc_sec *sec, struct seq_file *seq)
 			   ctx->cc_expire ?  ctx->cc_expire - now : 0,
 			   flags_str, atomic_read(&gctx->gc_seq),
 			   gctx->gc_win, key ? key->serial : 0,
-			   key ? ll_read_key_usage(key) : 0,
+			   key ? refcount_read(&key->usage) : 0,
 			   gss_handle_to_u64(&gctx->gc_handle),
 			   gss_handle_to_u64(&gctx->gc_svc_handle),
 			   mech);
@@ -1746,10 +1746,10 @@ void gss_kt_describe(const struct key *key, struct seq_file *s)
 static void gss_kt_revoke(struct key *key)
 {
 	CDEBUG(D_SEC, "revoking key %08x (%p) ref %d\n",
-	       key->serial, key, ll_read_key_usage(key));
+	       key->serial, key, refcount_read(&key->usage));
 	kill_key_locked(key);
 	CDEBUG(D_SEC, "key %08x (%p) revoked ref %d\n",
-	       key->serial, key, ll_read_key_usage(key));
+	       key->serial, key, refcount_read(&key->usage));
 }
 
 static struct key_type gss_key_type =

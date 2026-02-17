@@ -57,18 +57,14 @@ static inline struct ldlm_lock *extent_prev_lock(struct ldlm_lock *lock)
 }
 
 static inline struct ldlm_lock *extent_insert_unique(
-	struct ldlm_lock *node, struct interval_tree_root *root)
+	struct ldlm_lock *node, struct rb_root_cached *root)
 {
 	struct rb_node **link, *rb_parent = NULL;
 	u64 start = START(node), last = LAST(node);
 	struct ldlm_lock *parent;
 	bool leftmost = true;
 
-#ifdef HAVE_INTERVAL_TREE_CACHED
 	link = &root->rb_root.rb_node;
-#else
-	link = &root->rb_node;
-#endif
 	while (*link) {
 		rb_parent = *link;
 		parent = rb_entry(rb_parent, struct ldlm_lock, l_rb);
@@ -93,19 +89,15 @@ static inline struct ldlm_lock *extent_insert_unique(
 
 	node->l_subtree_last = last;
 	rb_link_node(&node->l_rb, rb_parent, link);
-#ifdef HAVE_INTERVAL_TREE_CACHED
 	rb_insert_augmented_cached(&node->l_rb, root,
 				   leftmost, &extent_augment);
-#else
-	rb_insert_augmented(&node->l_rb, root,
-			    &extent_augment);
-#endif
+
 	return NULL;
 }
 
 static inline void extent_replace(struct ldlm_lock *in_tree,
 				  struct ldlm_lock *new,
-				  struct interval_tree_root *tree)
+				  struct rb_root_cached *tree)
 {
 	struct rb_node *p = rb_parent(&in_tree->l_rb);
 
@@ -121,21 +113,15 @@ static inline void extent_replace(struct ldlm_lock *in_tree,
 				    rb_color(new->l_rb.rb_right));
 	rb_set_parent_color(&new->l_rb, p, rb_color(&in_tree->l_rb));
 
-	if (!p) {
-#ifdef HAVE_INTERVAL_TREE_CACHED
+	if (!p)
 		tree->rb_root.rb_node = &new->l_rb;
-#else
-		tree->rb_node = &new->l_rb;
-#endif
-	} else if (p->rb_left == &in_tree->l_rb) {
+	else if (p->rb_left == &in_tree->l_rb)
 		p->rb_left = &new->l_rb;
-	} else {
+	else
 		p->rb_right = &new->l_rb;
-	}
-#ifdef HAVE_INTERVAL_TREE_CACHED
+
 	if (tree->rb_leftmost == &in_tree->l_rb)
 		tree->rb_leftmost = &new->l_rb;
-#endif
 }
 
 #ifdef HAVE_SERVER_SUPPORT
@@ -229,7 +215,7 @@ static void ldlm_extent_internal_policy_granted(struct ldlm_lock *req,
 
 		conflicting += tree->lit_size;
 
-		if (!INTERVAL_TREE_EMPTY(&tree->lit_root)) {
+		if (!RB_EMPTY_ROOT(&tree->lit_root.rb_root)) {
 			struct ldlm_lock *lck = NULL;
 
 			LASSERTF(!extent_iter_first(&tree->lit_root,
@@ -496,7 +482,7 @@ ldlm_extent_compat_queue(struct list_head *queue, struct ldlm_lock *req,
 
 		for (idx = 0; idx < LCK_MODE_NUM; idx++) {
 			tree = &res->lr_itree[idx];
-			if (INTERVAL_TREE_EMPTY(&tree->lit_root))
+			if (RB_EMPTY_ROOT(&tree->lit_root.rb_root))
 				continue;
 
 			data.mode = tree->lit_mode;
@@ -809,7 +795,7 @@ void ldlm_resource_prolong(struct ldlm_prolong_args *arg)
 	lock_res(res);
 	for (idx = 0; idx < LCK_MODE_NUM; idx++) {
 		tree = &res->lr_itree[idx];
-		if (INTERVAL_TREE_EMPTY(&tree->lit_root))
+		if (RB_EMPTY_ROOT(&tree->lit_root.rb_root))
 			continue;
 
 		/* There is no possibility to check for the groupID
@@ -1081,7 +1067,7 @@ void ldlm_extent_unlink_lock(struct ldlm_lock *lock)
 	LASSERT(lock->l_granted_mode == BIT(idx));
 	tree = &res->lr_itree[idx];
 
-	LASSERT(!INTERVAL_TREE_EMPTY(&tree->lit_root));
+	LASSERT(!RB_EMPTY_ROOT(&tree->lit_root.rb_root));
 
 	tree->lit_size--;
 
@@ -1115,7 +1101,7 @@ void ldlm_extent_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
 	wpolicy->l_extent.end = lpolicy->l_extent.end;
 	wpolicy->l_extent.gid = lpolicy->l_extent.gid;
 }
-void ldlm_extent_search(struct interval_tree_root *root,
+void ldlm_extent_search(struct rb_root_cached *root,
 			u64 start, u64 end,
 			bool (*matches)(struct ldlm_lock *lock, void *data),
 			void *data)

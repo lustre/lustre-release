@@ -38,7 +38,7 @@ INTERVAL_TREE_DEFINE(struct range_lock, rl_rb, __u64, rl_subtree_last,
  */
 void range_lock_tree_init(struct range_lock_tree *tree)
 {
-	tree->rlt_root = INTERVAL_TREE_ROOT;
+	tree->rlt_root = RB_ROOT_CACHED;
 	tree->rlt_sequence = 0;
 	spin_lock_init(&tree->rlt_lock);
 }

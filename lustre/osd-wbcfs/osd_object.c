@@ -338,7 +338,7 @@ static int osd_mkfile(const struct lu_env *env, struct osd_object *obj,
 		.ia_uid = GLOBAL_ROOT_UID,
 		.ia_gid = GLOBAL_ROOT_GID,
 	};
-	const struct osd_timespec omit = { .tv_nsec = UTIME_OMIT };
+	const struct timespec64 omit = { .tv_nsec = UTIME_OMIT };
 	const struct lu_fid *fid = lu_object_fid(&obj->oo_dt.do_lu);
 
 	if (attr->la_valid & LA_UID)

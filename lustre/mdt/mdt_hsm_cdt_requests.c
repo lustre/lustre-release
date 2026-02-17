@@ -121,7 +121,7 @@ struct progress_node {
 INTERVAL_TREE_DEFINE(struct progress_node, pn_rb, __u64, pn_subtree_last,
 		     START, LAST, static, progress)
 
-#define progress_first(root) rb_entry_safe(interval_tree_first(root),	\
+#define progress_first(root) rb_entry_safe(rb_first_cached(root),	\
 					   struct progress_node, pn_rb)
 
 /*
@@ -200,7 +200,7 @@ static int hsm_update_work(struct cdt_req_progress *crp,
 static void mdt_cdt_init_request_tree(struct cdt_req_progress *crp)
 {
 	spin_lock_init(&crp->crp_lock);
-	crp->crp_root = INTERVAL_TREE_ROOT;
+	crp->crp_root = RB_ROOT_CACHED;
 	if (0)
 		/* Silence a warning about unused function */
 		progress_iter_next(NULL, 0, 0);

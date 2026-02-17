@@ -193,16 +193,10 @@ static inline struct osd_object *osd_dt_obj(const struct dt_object *d)
 	return osd_obj(&d->do_lu);
 }
 
-#if defined HAVE_INODE_TIMESPEC64 || defined HAVE_INODE_GET_MTIME_SEC
-#define osd_timespec			timespec64
-#else
-#define osd_timespec			timespec
-#endif
-
-static inline struct osd_timespec osd_inode_time(struct inode *inode,
-						 s64 seconds)
+static inline struct timespec64 osd_inode_time(struct inode *inode,
+					       s64 seconds)
 {
-	struct osd_timespec ts = { .tv_sec = seconds };
+	struct timespec64 ts = { .tv_sec = seconds };
 
 	return ts;
 }

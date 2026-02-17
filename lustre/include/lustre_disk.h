@@ -152,9 +152,6 @@ struct lustre_sb_info {
 };
 
 #define LSI_UMOUNT_FAILOVER              0x00200000
-#ifndef HAVE_SUPER_SETUP_BDI_NAME
-#define LSI_BDI_INITIALIZED		 0x00400000
-#endif
 #ifdef CONFIG_LL_ENCRYPTION
 #define LSI_FILENAME_ENC		 0x00800000 /* enable name encryption */
 #endif

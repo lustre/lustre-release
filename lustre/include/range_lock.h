@@ -48,7 +48,7 @@ struct range_lock {
 };
 
 struct range_lock_tree {
-	struct interval_tree_root	rlt_root;
+	struct rb_root_cached		rlt_root;
 	spinlock_t			rlt_lock;
 	__u64				rlt_sequence;
 };

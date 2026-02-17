@@ -38,10 +38,6 @@
 #define FMODE_EXEC 0
 #endif
 
-#ifndef HAVE_VM_FAULT_RETRY
-#define VM_FAULT_RETRY 0
-#endif
-
 /** Only used on client-side for indicating the tail of dir hash/offset. */
 #define LL_DIR_END_OFF          0x7fffffffffffffffULL
 #define LL_DIR_END_OFF_32BIT    0x7fffffffUL
@@ -356,9 +352,7 @@ static inline void lli_jobinfo_cpy(const struct ll_inode_info *lli,
 #define setattr_prepare(ns, de, at)		inode_change_ok(de->d_inode, at)
 #endif
 #define ll_inode_permission(ns, inode, mask)	ll_inode_permission(inode, mask)
-#ifdef HAVE_INODEOPS_ENHANCED_GETATTR
 #define ll_getattr(ns, path, stat, mask, fl)	ll_getattr(path, stat, mask, fl)
-#endif /* HAVE_INODEOPS_ENHANCED_GETATTR */
 #endif
 
 #ifdef IOCB_APPEND
@@ -1367,12 +1361,8 @@ void ll_track_file_opens(struct inode *inode);
 extern void ll_rw_stats_tally(struct ll_sb_info *sbi, pid_t pid,
 			      struct ll_file_data *file, loff_t pos,
 			      size_t count, int rw);
-#if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_INODEOPS_ENHANCED_GETATTR)
 int ll_getattr(struct mnt_idmap *, const struct path *path,
 	       struct kstat *stat, u32 request_mask, unsigned int flags);
-#else
-int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
-#endif /* HAVE_USER_NAMESPACE_ARG */
 int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 		      unsigned int flags, bool foreign);
 #ifdef CONFIG_LUSTRE_FS_POSIX_ACL

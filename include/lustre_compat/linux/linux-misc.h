@@ -213,19 +213,6 @@ rb_find_add(struct rb_node *node, struct rb_root *tree,
 }
 #endif /* !HAVE_RB_FIND */
 
-/* interval tree */
-#ifdef HAVE_INTERVAL_TREE_CACHED
-#define interval_tree_root rb_root_cached
-#define interval_tree_first rb_first_cached
-#define INTERVAL_TREE_ROOT RB_ROOT_CACHED
-#define INTERVAL_TREE_EMPTY(_root) RB_EMPTY_ROOT(&(_root)->rb_root)
-#else
-#define interval_tree_root rb_root
-#define interval_tree_first rb_first
-#define INTERVAL_TREE_ROOT RB_ROOT
-#define INTERVAL_TREE_EMPTY(_root) RB_EMPTY_ROOT(_root)
-#endif /* HAVE_INTERVAL_TREE_CACHED */
-
 #ifndef memset_startat
 /** from linux 5.19 include/linux/string.h: */
 #define memset_startat(obj, v, member)					\

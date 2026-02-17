@@ -794,11 +794,6 @@ extern atomic64_t libcfs_kmem;
  */
 #define OBD_MEMORY_BATCH (16 * 1024 * 1024)
 
-#ifndef HAVE_PERCPU_COUNTER_ADD_BATCH
-#define percpu_counter_add_batch(fbc, amount, batch) \
-	__percpu_counter_add(fbc, amount, batch)
-#endif
-
 static inline void obd_memory_add(size_t size)
 {
 	percpu_counter_add_batch(&obd_memory, size, OBD_MEMORY_BATCH);

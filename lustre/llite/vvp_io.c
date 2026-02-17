@@ -1044,7 +1044,7 @@ static void vvp_set_batch_dirty(struct folio_batch *fbatch)
 		}
 	}
 
-	ll_xa_lock_irqsave(&mapping->i_pages, flags);
+	xa_lock_irqsave(&mapping->i_pages, flags);
 
 	/* Notes on differences with __set_page_dirty_nobuffers:
 	 * 1. We don't need to call page_mapping because we know this is a page
@@ -1074,7 +1074,7 @@ static void vvp_set_batch_dirty(struct folio_batch *fbatch)
 			folio_memcg_unlock_page(page);
 		}
 	}
-	ll_xa_unlock_irqrestore(&mapping->i_pages, flags);
+	xa_unlock_irqrestore(&mapping->i_pages, flags);
 
 	CDEBUG(D_VFSTRACE, "mapping %p, count %d, dirtied %d\n", mapping,
 	       count, dirtied);
@@ -1430,7 +1430,7 @@ static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
 	if (vmf->page) {
 		/* success, vmpage is locked */
 		LL_CDEBUG_PAGE(D_PAGE, vmf->page, "got addr %p type NOPAGE\n",
-			       get_vmf_address(vmf));
+			       (void *)vmf->address);
 		if (unlikely(!(cfio->ft_flags & VM_FAULT_LOCKED))) {
 			lock_page(vmf->page);
 			cfio->ft_flags |= VM_FAULT_LOCKED;
@@ -1442,12 +1442,12 @@ static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
 	}
 
 	if (cfio->ft_flags & VM_FAULT_SIGBUS) {
-		CDEBUG(D_PAGE, "got addr %p - SIGBUS\n", get_vmf_address(vmf));
+		CDEBUG(D_PAGE, "got addr %p - SIGBUS\n", (void *)vmf->address);
 		return -EFAULT;
 	}
 
 	if (cfio->ft_flags & VM_FAULT_OOM) {
-		CDEBUG(D_PAGE, "got addr %p - OOM\n", get_vmf_address(vmf));
+		CDEBUG(D_PAGE, "got addr %p - OOM\n", (void *)vmf->address);
 		return -ENOMEM;
 	}
 

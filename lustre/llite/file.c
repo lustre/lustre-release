@@ -6350,7 +6350,6 @@ fill_attr:
 	if (!S_ISDIR(inode->i_mode))
 		ll_inode_size_unlock(inode);
 
-#if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_INODEOPS_ENHANCED_GETATTR)
 	if (flags & AT_STATX_DONT_SYNC) {
 		if (stat->size == 0 &&
 		    lli->lli_attr_valid & OBD_MD_FLLAZYSIZE)
@@ -6376,7 +6375,6 @@ fill_attr:
 	if (stat->attributes & LUSTRE_ENCRYPT_FL)
 		stat->attributes |= STATX_ATTR_ENCRYPTED;
 	stat->result_mask &= request_mask;
-#endif
 
 	ll_stats_ops_tally(sbi, LPROC_LL_GETATTR,
 			   ktime_us_delta(ktime_get(), kstart));
@@ -6389,20 +6387,12 @@ fill_attr:
 	return 0;
 }
 
-#if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_INODEOPS_ENHANCED_GETATTR)
 int ll_getattr(struct mnt_idmap *map, const struct path *path,
 	       struct kstat *stat, u32 request_mask, unsigned int flags)
 {
 	return ll_getattr_dentry(path->dentry, stat, request_mask, flags,
 				 false);
 }
-#else
-int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat)
-{
-	return ll_getattr_dentry(de, stat, STATX_BASIC_STATS,
-				 AT_STATX_SYNC_AS_STAT, false);
-}
-#endif
 
 static int cl_falloc(struct file *file, struct inode *inode, int mode,
 		     loff_t offset, loff_t len)

@@ -218,12 +218,9 @@ static inline bool is_empty_folio(struct folio *folio, size_t off,
 #if defined(HAVE_FILEMAP_GET_FOLIOS)
 # define ll_filemap_get_folios(m, s, e, fbatch) \
 	 filemap_get_folios(m, &s, e, fbatch)
-#elif defined(HAVE_PAGEVEC_LOOKUP_THREE_PARAM)
-# define ll_filemap_get_folios(m, s, e, pvec) \
-	 pagevec_lookup((struct pagevec *)pvec, m, &s)
 #else
 # define ll_filemap_get_folios(m, s, e, pvec) \
-	 pagevec_lookup((struct pagevec *)pvec, m, s, PAGEVEC_SIZE)
+	 pagevec_lookup((struct pagevec *)pvec, m, &s)
 #endif
 
 #if defined(HAVE_FOLIO_BATCH)

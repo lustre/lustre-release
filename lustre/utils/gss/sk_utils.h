@@ -28,21 +28,13 @@
 #include <openssl/err.h>
 #include <sys/types.h>
 
+#include <linux/cryptouser.h>
 #include <linux/lnet/lnet-crypto.h>
 #include "lsupport.h"
 
 #ifndef ARRAY_SIZE
 # define ARRAY_SIZE(a) ((sizeof(a)) / (sizeof((a)[0])))
 #endif /* !ARRAY_SIZE */
-
-/* LL_CRYPTO_MAX_NAME value must match value of
- * CRYPTO_MAX_ALG_NAME in include/linux/crypto.h
- */
-#ifdef HAVE_CRYPTO_MAX_ALG_NAME_128
-#define LL_CRYPTO_MAX_NAME 128
-#else
-#define LL_CRYPTO_MAX_NAME 64
-#endif
 
 #if OPENSSL_VERSION_NUMBER < 0x10100000L
 static inline HMAC_CTX *HMAC_CTX_new(void)
@@ -198,11 +190,12 @@ struct sk_keyfile_config {
 	unsigned char	skc_p[SK_MAX_P_BYTES];
 } __attribute__((packed));
 
-/* Format passed to the kernel from userspace */
+/* Format passed to the kernel from userspace
+ * Internally to the kernel alg name is expected to be 128 */
 struct sk_kernel_ctx {
 	uint32_t	skc_version;
-	char		skc_hmac_alg[LL_CRYPTO_MAX_NAME];
-	char		skc_crypt_alg[LL_CRYPTO_MAX_NAME];
+	char		skc_hmac_alg[CRYPTO_MAX_NAME * 2];
+	char		skc_crypt_alg[CRYPTO_MAX_NAME * 2];
 	uint32_t	skc_expire;
 	uint32_t	skc_host_random;
 	uint32_t	skc_peer_random;

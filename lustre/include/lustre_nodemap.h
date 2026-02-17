@@ -305,8 +305,8 @@ void nodemap_putref(struct lu_nodemap *nodemap);
 #ifdef HAVE_SERVER_SUPPORT
 
 struct nodemap_range_tree {
-	struct interval_tree_root nmrt_range_interval_root;
-	unsigned int nmrt_range_highest_id;
+	struct rb_root_cached	nmrt_range_interval_root;
+	unsigned int		nmrt_range_highest_id;
 };
 
 struct nodemap_config {

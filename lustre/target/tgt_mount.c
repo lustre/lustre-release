@@ -27,9 +27,7 @@
 #include <linux/version.h>
 #include <linux/delay.h>
 #include <linux/file.h>
-#ifdef HAVE_FSMAP_H
 #include <linux/fsmap.h>
-#endif
 #include <linux/uaccess.h>
 
 #include <llog_swab.h>
@@ -2253,26 +2251,17 @@ static const struct super_operations server_ops = {
 # define IDMAP_ARG idmap,
 #else
 # define IDMAP_ARG
-# ifdef HAVE_INODEOPS_ENHANCED_GETATTR
-#  define server_getattr(ns, path, st, rq, fl) server_getattr(path, st, rq, fl)
-# endif
+# define server_getattr(ns, path, st, rq, fl) server_getattr(path, st, rq, fl)
 #endif
 
 /*
  * inode operations for Lustre server mountpoints
  */
-#if defined(HAVE_USER_NAMESPACE_ARG) || defined(HAVE_INODEOPS_ENHANCED_GETATTR)
 static int server_getattr(struct mnt_idmap *idmap,
 			  const struct path *path, struct kstat *stat,
 			  u32 request_mask, unsigned int flags)
 {
 	struct inode *inode = d_inode(path->dentry);
-#else
-static int server_getattr(struct vfsmount *mnt, struct dentry *de,
-			  struct kstat *stat)
-{
-	struct inode *inode = de->d_inode;
-#endif
 	struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
 	struct vfsmount *root_mnt;
 	struct inode *root_inode;
@@ -2325,10 +2314,8 @@ static bool is_cmd_supported(unsigned int cmd)
 		return true;
 	case LL_IOC_RESIZE_FS:
 		return true;
-#ifdef HAVE_FSMAP_H
 	case FS_IOC_GETFSMAP:
 		return true;
-#endif
 	case FS_IOC_GETFSLABEL:
 		return true;
 	case FS_IOC_SETFSLABEL:

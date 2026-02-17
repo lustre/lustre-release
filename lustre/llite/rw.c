@@ -2150,14 +2150,11 @@ int ll_readpage(struct file *file, struct page *vmpage)
 		ra_assert = true;
 	}
 
-
-#ifdef HAVE_BDI_IO_PAGES
 	if (ra_assert || sb->s_bdi->io_pages != 0) {
 		CERROR("%s: bdi io_pages %lu\n",
 		       sbi->ll_fsname, sb->s_bdi->io_pages);
 		ra_assert = true;
 	}
-#endif
 	if (ra_assert)
 		LASSERT(!ra_assert);
 

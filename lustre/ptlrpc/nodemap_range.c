@@ -144,7 +144,7 @@ struct lu_nid_range *range_create_generic(
 	if (!list_empty(&tmp_nidlist))
 		list_splice(&tmp_nidlist, &range->rn_nidlist);
 	range->rn_tree = NULL;
-	range->rn_subtree.nmrt_range_interval_root = INTERVAL_TREE_ROOT;
+	range->rn_subtree.nmrt_range_interval_root = RB_ROOT_CACHED;
 
 	return range;
 }

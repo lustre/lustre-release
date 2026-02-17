@@ -787,7 +787,7 @@ struct ldlm_interval_tree {
 	/** Tree size. */
 	int				lit_size;
 	enum ldlm_mode			lit_mode;  /* lock mode */
-	struct interval_tree_root	lit_root; /* actual interval tree */
+	struct rb_root_cached	lit_root; /* actual interval tree */
 };
 
 /**
@@ -806,7 +806,7 @@ struct ldlm_ibits_node {
 struct ldlm_flock_node {
 	atomic_t		lfn_unlock_pending;
 	bool			lfn_needs_reprocess;
-	struct interval_tree_root lfn_root;
+	struct rb_root_cached	lfn_root;
 };
 
 /** Whether to track references to exports by LDLM locks. */
@@ -1131,22 +1131,12 @@ enum ldlm_match_flags {
 	LDLM_MATCH_SKIP_UNUSED = BIT(5),
 };
 
-#ifdef HAVE_INTERVAL_TREE_CACHED
 #define extent_last(tree) rb_entry_safe(rb_last(&tree->lit_root.rb_root),\
 					struct ldlm_lock, l_rb)
 #define extent_first(tree) rb_entry_safe(rb_first(&tree->lit_root.rb_root),\
 					 struct ldlm_lock, l_rb)
 #define extent_top(tree) rb_entry_safe(tree->lit_root.rb_root.rb_node,	\
 				       struct ldlm_lock, l_rb)
-#else
-#define extent_last(tree) rb_entry_safe(rb_last(&tree->lit_root),	\
-					struct ldlm_lock, l_rb)
-#define extent_first(tree) rb_entry_safe(rb_first(&tree->lit_root),	\
-					 struct ldlm_lock, l_rb)
-#define extent_top(tree) rb_entry_safe(tree->lit_root.rb_node,		\
-				       struct ldlm_lock, l_rb)
-#endif
-
 #define extent_next(lock) rb_entry_safe(rb_next(&lock->l_rb),		\
 					struct ldlm_lock, l_rb)
 #define extent_prev(lock) rb_entry_safe(rb_prev(&lock->l_rb),		\

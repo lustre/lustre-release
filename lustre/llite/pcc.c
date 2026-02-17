@@ -1652,8 +1652,8 @@ static int pcc_try_dataset_attach(struct inode *inode, __u32 gen,
 		GOTO(out, rc = 0);
 	}
 
-	rc = ll_vfs_getxattr(pcc_dentry, pcc_dentry->d_inode, pcc_xattr_layout,
-			     &pcc_gen, sizeof(pcc_gen));
+	rc = __vfs_getxattr(pcc_dentry, pcc_dentry->d_inode, pcc_xattr_layout,
+			    &pcc_gen, sizeof(pcc_gen));
 	if (rc < 0)
 		/* ignore this error */
 		GOTO(out_put_pcc_dentry, rc = 0);
@@ -2725,10 +2725,10 @@ int pcc_inode_getattr(struct inode *inode, u32 request_mask,
 	if (IS_ENCRYPTED(inode) && pcci->pcci_type == LU_PCC_READONLY) {
 		loff_t encsize;
 
-		rc = ll_vfs_getxattr(pcci->pcci_path.dentry,
-				     pcci->pcci_path.dentry->d_inode,
-				     pcc_xattr_encsize,
-				     &encsize, sizeof(encsize));
+		rc = __vfs_getxattr(pcci->pcci_path.dentry,
+				    pcci->pcci_path.dentry->d_inode,
+				    pcc_xattr_encsize,
+				    &encsize, sizeof(encsize));
 		if (rc > 0)
 			size = encsize;
 	}
@@ -3238,12 +3238,7 @@ int pcc_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf,
 	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_PCC_DETACH_MKWRITE))
 		GOTO(out, rc = VM_FAULT_SIGBUS);
 
-#ifdef HAVE_VM_OPS_USE_VM_FAULT_ONLY
 	rc = pccv->pccv_vm_ops->page_mkwrite(vmf);
-#else
-	rc = pccv->pccv_vm_ops->page_mkwrite(vma, vmf);
-#endif
-
 out:
 	pcc_io_fini(inode, PIT_PAGE_MKWRITE, rc, cached);
 
@@ -3289,12 +3284,7 @@ int pcc_fault(struct vm_area_struct *vma, struct vm_fault *vmf,
 	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_PCC_FAKE_ERROR))
 		GOTO(out, rc = VM_FAULT_SIGBUS);
 
-#ifdef HAVE_VM_OPS_USE_VM_FAULT_ONLY
 	rc = pccv->pccv_vm_ops->fault(vmf);
-#else
-	rc = pccv->pccv_vm_ops->fault(vma, vmf);
-#endif
-
 out:
 	pcc_io_fini(inode, PIT_FAULT, rc, cached);
 

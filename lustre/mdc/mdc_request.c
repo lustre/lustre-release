@@ -1132,14 +1132,14 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 	unsigned long flags;
 	int found;
 
-	ll_xa_lock_irqsave(&mapping->i_pages, flags);
-	found = radix_tree_gang_lookup(&mapping->page_tree,
+	xa_lock_irqsave(&mapping->i_pages, flags);
+	found = radix_tree_gang_lookup(&mapping->i_pages,
 				       (void **)&page, offset, 1);
 	if (found > 0 && !xa_is_value(page)) {
 		struct lu_dirpage *dp;
 
 		get_page(page);
-		ll_xa_unlock_irqrestore(&mapping->i_pages, flags);
+		xa_unlock_irqrestore(&mapping->i_pages, flags);
 		/*
 		 * In contrast to find_lock_page() we are sure that directory
 		 * page cannot be truncated (while DLM lock is held) and,
@@ -1190,7 +1190,7 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 			page = ERR_PTR(-EIO);
 		}
 	} else {
-		ll_xa_unlock_irqrestore(&mapping->i_pages, flags);
+		xa_unlock_irqrestore(&mapping->i_pages, flags);
 		page = NULL;
 	}
 	return page;

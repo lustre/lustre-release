@@ -52,6 +52,19 @@
  #include <linux/blk-integrity.h>
 #endif
 
+#ifdef HAVE_BI_BDEV
+#define bio_get_dev(bio)	((bio)->bi_bdev)
+#define bio_get_disk(bio)	(bio_get_dev(bio)->bd_disk)
+#define bio_get_queue(bio)	bdev_get_queue(bio_get_dev(bio))
+
+#ifndef HAVE_BIO_SET_DEV
+# define bio_set_dev(bio, bdev)	(bio_get_dev(bio) = (bdev))
+#endif
+#else
+#define bio_get_disk(bio)	((bio)->bi_disk)
+#define bio_get_queue(bio)	(bio_get_disk(bio)->queue)
+#endif
+
 struct inode;
 extern struct kmem_cache *dynlock_cachep;
 
@@ -623,16 +636,10 @@ struct osd_iobuf {
 #define osd_dirty_inode(inode, flag)  (inode)->i_sb->s_op->dirty_inode((inode), flag)
 #define osd_i_blocks(inode, size) ((size) >> (inode)->i_blkbits)
 
-#if defined HAVE_INODE_TIMESPEC64 || defined HAVE_INODE_GET_MTIME_SEC
-# define osd_timespec			timespec64
-#else
-# define osd_timespec			timespec
-#endif
-
-static inline struct osd_timespec osd_inode_time(struct inode *inode,
-						 s64 seconds)
+static inline struct timespec64 osd_inode_time(struct inode *inode,
+					       s64 seconds)
 {
-	struct osd_timespec ts = { .tv_sec = seconds };
+	struct timespec64 ts = { .tv_sec = seconds };
 
 	return ts;
 }
@@ -888,7 +895,7 @@ static inline int __osd_xattr_get(struct inode *inode, struct dentry *dentry,
 	    strcmp(name, XATTR_NAME_ACL_DEFAULT) == 0)
 		return __osd_acl_get(inode, name, buf, len);
 	else
-		return ll_vfs_getxattr(dentry, inode, name, buf, len);
+		return __vfs_getxattr(dentry, inode, name, buf, len);
 }
 
 static inline int __osd_xattr_set(struct osd_thread_info *info,
@@ -1729,10 +1736,6 @@ void osd_execute_truncate(struct osd_object *obj);
 	unmap_underlying_metadata((bdev), (block))
 #endif
 
-#ifndef HAVE_BI_STATUS
-#define bi_status bi_error
-#endif
-
 /*
  * Maximum size of xattr attributes for FEATURE_INCOMPAT_EA_INODE 1Mb
  * This limit is arbitrary, but is reasonable for the xattr API.
@@ -1759,14 +1762,6 @@ void osd_bio_integrity_verify_fn(struct work_struct *work);
 #else
 #define osd_bio_nr_segs(bio)		bio_segments((bio))
 #endif /* HAVE_BIO_BI_PHYS_SEGMENTS */
-
-#ifdef HAVE_GET_INODE_USAGE
-#define lock_dquot_transfer(inode) down_read(&LDISKFS_I(inode)->xattr_sem)
-#define unlock_dquot_transfer(inode) up_read(&LDISKFS_I(inode)->xattr_sem)
-#else
-#define lock_dquot_transfer(inode) do {} while (0)
-#define unlock_dquot_transfer(inode) do {} while (0)
-#endif
 
 #if IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY)
 static inline unsigned short blk_integrity_interval(struct blk_integrity *bi)

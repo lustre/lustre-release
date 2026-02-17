@@ -590,7 +590,7 @@ static inline struct mdt_thread_info *mdt_th_info(const struct lu_env *env)
 
 struct cdt_req_progress {
 	spinlock_t		 crp_lock;	/**< protect tree */
-	struct interval_tree_root crp_root;	/**< tree to track extent
+	struct rb_root_cached	 crp_root;	/**< tree to track extent
 						 *   moved */
 	__u64			 crp_total;
 };

@@ -1343,33 +1343,6 @@ void ll_lli_init(struct ll_inode_info *lli)
 
 #define MAX_STRING_SIZE 128
 
-#ifndef HAVE_SUPER_SETUP_BDI_NAME
-static int super_setup_bdi_name(struct super_block *sb, char *fmt, ...)
-{
-	struct  lustre_sb_info *lsi = s2lsi(sb);
-	char buf[MAX_STRING_SIZE];
-	va_list args;
-	int err;
-
-	err = bdi_init(&lsi->lsi_bdi);
-	if (err)
-		return err;
-
-	lsi->lsi_flags |= LSI_BDI_INITIALIZED;
-	lsi->lsi_bdi.capabilities = BDI_CAP_MAP_COPY;
-	lsi->lsi_bdi.name = "lustre";
-	va_start(args, fmt);
-	vsnprintf(buf, MAX_STRING_SIZE, fmt, args);
-	va_end(args);
-	err = bdi_register(&lsi->lsi_bdi, NULL, "%s", buf);
-	va_end(args);
-	if (!err)
-		sb->s_bdi = &lsi->lsi_bdi;
-
-	return err;
-}
-#endif /* !HAVE_SUPER_SETUP_BDI_NAME */
-
 int ll_fill_super(struct super_block *sb)
 {
 	struct	lustre_profile *lprof = NULL;
@@ -1457,9 +1430,7 @@ int ll_fill_super(struct super_block *sb)
 
 	/* disable kernel readahead */
 	sb->s_bdi->ra_pages = 0;
-#ifdef HAVE_BDI_IO_PAGES
 	sb->s_bdi->io_pages = 0;
-#endif
 	sb->s_bdi->capabilities |= LL_BDI_CAP_FLAGS;
 #ifdef SB_I_CGROUPWB
 	sb->s_iflags |= SB_I_CGROUPWB;
@@ -1620,13 +1591,6 @@ skip_cleanup:
 		class_del_profile(profilenm);
 
 	ll_bdi_device_unregister(sb->s_bdi);
-
-#ifndef HAVE_SUPER_SETUP_BDI_NAME
-	if (lsi->lsi_flags & LSI_BDI_INITIALIZED) {
-		bdi_destroy(&lsi->lsi_bdi);
-		lsi->lsi_flags &= ~LSI_BDI_INITIALIZED;
-	}
-#endif
 
 	llcrypt_free_dummy_policy(&lsi->lsi_dummy_enc_policy);
 	ll_free_sbi(sb);
@@ -3167,9 +3131,9 @@ void ll_truncate_inode_pages_final(struct inode *inode)
 	 */
 	nrpages = mapping->nrpages;
 	if (nrpages) {
-		ll_xa_lock_irqsave(&mapping->i_pages, flags);
+		xa_lock_irqsave(&mapping->i_pages, flags);
 		nrpages = mapping->nrpages;
-		ll_xa_unlock_irqrestore(&mapping->i_pages, flags);
+		xa_unlock_irqrestore(&mapping->i_pages, flags);
 	} /* Workaround end */
 
 	if (nrpages) {

@@ -3374,9 +3374,9 @@ static int osd_transfer_project(struct inode *inode, __u32 projid,
 
 	transfer_to[PRJQUOTA] = dqget(sb, make_kqid_projid(kprojid));
 	if (transfer_to[PRJQUOTA]) {
-		lock_dquot_transfer(inode);
+		down_read(&LDISKFS_I(inode)->xattr_sem);
 		err = __dquot_transfer(inode, transfer_to);
-		unlock_dquot_transfer(inode);
+		up_read(&LDISKFS_I(inode)->xattr_sem);
 		dqput(transfer_to[PRJQUOTA]);
 		if (err)
 			return err;
@@ -3409,9 +3409,9 @@ static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr,
 		iattr.ia_uid = make_kuid(&init_user_ns, attr->la_uid);
 		iattr.ia_gid = make_kgid(&init_user_ns, attr->la_gid);
 
-		lock_dquot_transfer(inode);
+		down_read(&LDISKFS_I(inode)->xattr_sem);
 		rc = osd_dquot_transfer(&nop_mnt_idmap, inode, &iattr);
-		unlock_dquot_transfer(inode);
+		up_read(&LDISKFS_I(inode)->xattr_sem);
 		if (rc) {
 			CERROR("%s: quota transfer failed. Is quota enforcement enabled on the ldiskfs filesystem? rc = %d\n",
 			       osd_ino2name(inode), rc);
@@ -3596,7 +3596,7 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
 		.ia_uid = GLOBAL_ROOT_UID,
 		.ia_gid = GLOBAL_ROOT_GID,
 	};
-	const struct osd_timespec omit = { .tv_nsec = UTIME_OMIT };
+	const struct timespec64 omit = { .tv_nsec = UTIME_OMIT };
 
 	if (attr->la_valid & LA_UID)
 		iattr.ia_uid = make_kuid(&init_user_ns, attr->la_uid);

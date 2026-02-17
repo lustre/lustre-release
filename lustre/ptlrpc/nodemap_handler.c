@@ -4714,9 +4714,9 @@ struct nodemap_config *nodemap_config_alloc(void)
 
 	INIT_LIST_HEAD(&config->nmc_netmask_setup);
 	INIT_LIST_HEAD(&config->nmc_ban_netmask_setup);
-	config->nmc_range_tree.nmrt_range_interval_root = INTERVAL_TREE_ROOT;
+	config->nmc_range_tree.nmrt_range_interval_root = RB_ROOT_CACHED;
 	config->nmc_ban_range_tree.nmrt_range_interval_root =
-		INTERVAL_TREE_ROOT;
+		RB_ROOT_CACHED;
 
 	return config;
 }

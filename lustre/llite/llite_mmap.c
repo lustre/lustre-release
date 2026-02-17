@@ -255,7 +255,7 @@ int ll_filemap_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	 */
 	do {
 		seq = read_seqbegin(&ll_i2info(inode)->lli_page_inv_lock);
-		ret = __ll_filemap_fault(vma, vmf);
+		ret = filemap_fault(vmf);
 	} while (read_seqretry(&ll_i2info(inode)->lli_page_inv_lock, seq) &&
 		 (ret & VM_FAULT_SIGBUS));
 
@@ -364,14 +364,9 @@ out:
 	RETURN(fault_ret);
 }
 
-#ifdef HAVE_VM_OPS_USE_VM_FAULT_ONLY
 static vm_fault_t ll_fault(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
-#else
-static vm_fault_t ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
-{
-#endif
 	int count = 0;
 	bool printed = false;
 	bool cached;
@@ -453,15 +448,9 @@ restart:
 	return result;
 }
 
-#ifdef HAVE_VM_OPS_USE_VM_FAULT_ONLY
 static vm_fault_t ll_page_mkwrite(struct vm_fault *vmf)
 {
 	struct vm_area_struct *vma = vmf->vma;
-#else
-static vm_fault_t ll_page_mkwrite(struct vm_area_struct *vma,
-				  struct vm_fault *vmf)
-{
-#endif
 	int count = 0;
 	bool printed = false;
 	bool retry;

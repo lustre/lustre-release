@@ -428,15 +428,6 @@ void __dbg_memdump(char *name, void *ptr, int size)
         OBD_FREE(buf, bufsize);
 }
 
-static inline unsigned int ll_read_key_usage(struct key *key)
-{
-#ifdef HAVE_KEY_USAGE_REFCOUNT
-	return refcount_read(&key->usage);
-#else
-	return atomic_read(&key->usage);
-#endif
-}
-
 #define RSI_UPCALL_PATH "/usr/sbin/l_getauth"
 #define UC_RSICACHE_HASH_SIZE 64
 extern struct upcall_cache_ops rsi_upcall_cache_ops;

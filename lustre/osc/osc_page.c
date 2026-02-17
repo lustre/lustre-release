@@ -265,8 +265,8 @@ int osc_page_init(const struct lu_env *env, struct cl_object *obj,
 					++osc->oo_npages;
 					opg->ops_intree = 1;
 				} else if (result == -EEXIST) {
-					void radix_tree_rcu **slot;
 					struct osc_page *old;
+					void __rcu **slot;
 
 					slot = radix_tree_lookup_slot(
 							&osc->oo_tree, index);
