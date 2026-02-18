@@ -1735,6 +1735,7 @@ static struct lu_device *mdc_device_alloc(const struct lu_env *env,
 	obd = class_name2obd(lustre_cfg_string(cfg, 0));
 	if (obd == NULL)
 		RETURN(ERR_PTR(-ENODEV));
+	obd->obd_lu_dev = d;
 
 	rc = mdc_setup(obd, cfg);
 	if (rc < 0) {
@@ -1759,11 +1760,11 @@ static struct lu_device *mdc_device_fini(const struct lu_env *env,
 
 	ENTRY;
 
+	lprocfs_free_md_stats(obd);
+	ptlrpc_lprocfs_unregister_obd(obd);
 	osc_precleanup_common(obd);
 	mdc_changelog_cdev_finish(obd);
 	mdc_llog_finish(obd);
-	lprocfs_free_md_stats(obd);
-	ptlrpc_lprocfs_unregister_obd(obd);
 
 	RETURN(NULL);
 }
