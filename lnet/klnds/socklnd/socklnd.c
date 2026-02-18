@@ -1951,6 +1951,7 @@ ksocknal_handle_link_state_change(struct net_device *dev,
 	struct ksock_interface *ksi = NULL;
 	struct sockaddr_in *sa;
 	DECLARE_CONST_IN_IFADDR(ifa);
+	struct net *dev_netns = dev_net(dev);
 
 	ifindex = dev->ifindex;
 
@@ -1969,6 +1970,13 @@ ksocknal_handle_link_state_change(struct net_device *dev,
 			continue;
 
 		ni = net->ksnn_ni;
+
+		/* Skip devices from a different namespace */
+		if (!net_eq(dev_netns, ni->ni_net_ns)) {
+			CDEBUG(D_NET, "Skipping device %s from namespace %p (expected %p)\n",
+			       dev->name, dev_netns, ni->ni_net_ns);
+			continue;
+		}
 
 		in_dev = __in_dev_get_rtnl(dev);
 		if (!in_dev) {
