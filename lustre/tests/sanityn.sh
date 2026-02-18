@@ -5694,6 +5694,8 @@ run_test 80a "migrate directory when some children is being opened"
 cleanup_80b() {
 	trap 0
 	kill -9 $migrate_pid
+	wait $migrate_pid 2>/dev/null
+	wait_delete_completed
 }
 
 success_count=0
@@ -5773,27 +5775,27 @@ test_80b() {
 run_test 80b "Accessing directory during migration"
 
 test_81a() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
 
 	rm -rf $DIR1/$tdir
+	mkdir -p $DIR1/$tdir || error "mkdir $tdir failed"
 
-	mkdir -p $DIR1/$tdir
+	$LFS setdirstripe -i0 -c$MDSCOUNT $DIR1/$tdir/d0 ||
+		error "setdirstripe d0 failed"
+	$LFS setdirstripe -i0 -c$MDSCOUNT $DIR1/$tdir/d1 ||
+		error "setdirstripe d1 failed"
 
-	$LFS setdirstripe -i0 -c$MDSCOUNT  $DIR1/$tdir/d0
-	$LFS setdirstripe -i0 -c$MDSCOUNT  $DIR1/$tdir/d1
-
-	cd $DIR1/$tdir
-	touch d0/0	|| error "create 0 failed"
-	mv d0/0	d1/0	|| error "rename d0/0 d1/0 failed"
-	stat d0/0	&& error "stat mv filed succeed"
+	touch $DIR1/$tdir/d0/0 || error "create 0 failed"
+	mv $DIR1/$tdir/d0/0 $DIR1/$tdir/d1/0 || error "rename d0/0 d1/0 failed"
+	stat $DIR1/$tdir/d0/0 && error "stat mv file succeed"
 	mv $DIR2/$tdir/d1/0 $DIR2/$tdir/d0/0 || error "rename d1/0 d0/0 failed"
-	stat d0/0	|| error "stat failed"
+	stat $DIR1/$tdir/d0/0 || error "stat failed"
 
-	local t=$(ls -ai $DIR1/$tdir/d0 | sort -u | wc -l)
+	local files=$(ls -ai $DIR1/$tdir/d0 | sort -u | wc -l)
 
-	if [ $t -ne 3 ]; then
+	if (( $files != 3 )); then
 		ls -ai $DIR1/$tdir/d0
-		error "expect 3 get $t"
+		error "expect 3 files, got $files"
 	fi
 
 	return 0
