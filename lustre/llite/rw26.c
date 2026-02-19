@@ -221,39 +221,10 @@ static int ll_releasepage(struct page *vmpage, RELEASEPAGE_ARG_TYPE gfp_mask)
 }
 #endif /* HAVE_AOPS_RELEASE_FOLIO */
 
-/*
- * Lustre could relax a bit for alignment, io count is not
- * necessary page alignment.
- */
 bool ll_iov_iter_is_unaligned(struct iov_iter *i)
 {
-	size_t orig_size = i->count;
-	size_t count = orig_size & ~PAGE_MASK;
-	unsigned long res;
-
-	if (iov_iter_count(i) & ~PAGE_MASK)
-		return true;
-
-	if (!iov_iter_is_aligned(i, ~PAGE_MASK, 0))
-		return true;
-
-	if (!count)
-		return iov_iter_alignment(i) & ~PAGE_MASK;
-
-	if (orig_size > PAGE_SIZE) {
-		iov_iter_truncate(i, orig_size - count);
-		res = iov_iter_alignment(i);
-		iov_iter_reexpand(i, orig_size);
-
-		return res & ~PAGE_MASK;
-	}
-
-	res = iov_iter_alignment(i);
-	/* start address is page aligned */
-	if ((res & ~PAGE_MASK) == orig_size)
-		return false;
-
-	return res & ~PAGE_MASK;
+	return (iov_iter_count(i) & ~PAGE_MASK) ||
+	       (iov_iter_alignment(i) & ~PAGE_MASK);
 }
 
 static int
