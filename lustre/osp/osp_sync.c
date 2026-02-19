@@ -898,8 +898,10 @@ static int osp_sync_new_unlink_job(struct osp_device *d,
 	LASSERT(body);
 	ostid_set_seq(&body->oa.o_oi, rec->lur_oseq);
 	rc = ostid_set_id(&body->oa.o_oi, rec->lur_oid);
-	if (rc)
-		return rc;
+	if (rc) {
+		ptlrpc_req_put(req);
+		RETURN(rc);
+	}
 	body->oa.o_misc = rec->lur_count;
 	body->oa.o_valid = OBD_MD_FLGROUP | OBD_MD_FLID;
 	if (rec->lur_count)
@@ -943,11 +945,15 @@ static int osp_sync_new_unlink64_job(struct osp_device *d,
 		RETURN(PTR_ERR(req));
 
 	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
-	if (body == NULL)
+	if (body == NULL) {
+		ptlrpc_req_put(req);
 		RETURN(-EFAULT);
+	}
 	rc = fid_to_ostid(&rec->lur_fid, &body->oa.o_oi);
-	if (rc < 0)
+	if (rc < 0) {
+		ptlrpc_req_put(req);
 		RETURN(rc);
+	}
 	body->oa.o_misc = rec->lur_count;
 	body->oa.o_valid = OBD_MD_FLGROUP | OBD_MD_FLID |
 			   OBD_MD_FLOBJCOUNT;
