@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # usage: acceptance-small.sh [test list]
 #	if no tests are specified, they are taken from test-groups/regression

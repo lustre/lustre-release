@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 # functions used by other scripts
 

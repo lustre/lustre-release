@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 # a framework for stacking EXIT traps
 # this could, should be further enhanced to allow stacks of traps for various

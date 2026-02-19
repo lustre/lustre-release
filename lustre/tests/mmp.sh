@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # Tests for multiple mount protection (MMP) feature.
 #

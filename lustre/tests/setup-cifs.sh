@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 # Requires the pre-configured samba machine
 # RPMS required are :

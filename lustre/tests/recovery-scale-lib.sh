@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 # global variables and functions used by:
 # recovery-mds-scale, recovery-oss-scale and recovery-random-scale

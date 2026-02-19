@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 # this is an alternative FD for stdout, to be used especially when we are
 # taking stdout from a function as it's return value.  i.e. foo=$(bar)

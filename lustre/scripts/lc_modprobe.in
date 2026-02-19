@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # lc_modprobe - add lustre module options into modprobe.conf or 
 #               modules.conf

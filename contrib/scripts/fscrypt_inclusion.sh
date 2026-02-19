@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 #
 # Purpose of this script is to show the method used to integrate fscrypt

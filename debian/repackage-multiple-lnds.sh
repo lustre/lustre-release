@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 # Repackage LNDs into multiple packages:
 KVERS=$1
 VER=$2

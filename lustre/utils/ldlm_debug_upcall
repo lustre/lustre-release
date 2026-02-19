@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # usage: debug_upcall.sh <lctl-dk-log-file>
 #

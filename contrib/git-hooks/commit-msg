@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # A hook script to check the commit log message to ensure that it has
 # a well-formed commit summary and body, a valid Signed-off-by: line,

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 die() {
 	echo -e $* >&2

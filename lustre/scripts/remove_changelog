@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 # remove_changelog: emergency remove changelog files from server.
 #

@@ -60,7 +60,7 @@ clients on an IB network (connected via LNET routers), with half the
 clients reading and half the clients writing.
 .LP
 .nf
-#!/bin/bash
+#!/usr/bin/bash
 export LST_SESSION=$$
 lst new_session read/write
 lst add_group servers 192.168.10.[8,10,12-16]@tcp

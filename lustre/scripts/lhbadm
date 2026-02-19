@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 # lhbadm - handle some common heartbeat/lustre failover ops
 

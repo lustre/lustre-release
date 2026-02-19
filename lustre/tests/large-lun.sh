@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # This script is used to test large size LUN support in Lustre.
 #

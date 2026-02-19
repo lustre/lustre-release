@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 # this will cause debugfs to create the /tmp/debugfs.mark file once it has
 # passed the MMP startup, then continue reading input until it is killed
 MARKFILE=$(mktemp)

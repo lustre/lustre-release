@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # NOTE
 # In order to be able to do the runcon commands in test_4,

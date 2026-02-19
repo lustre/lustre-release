@@ -1,4 +1,4 @@
-#! /bin/sh
+#! /usr/bin/bash
 # SPDX-License-Identifier: GPL-2.0-only
 
 #
@@ -240,7 +240,7 @@ export CCACHE_DIR=$ccache_dir
 
 cd $tgt || fail 4 "Cannot cd into $tgt"
 
-echo '#! /bin/sh'   >  $cc_script || fail 5 "Cannot write into $cc_script"
+echo '#! /usr/bin/bash'   >  $cc_script || fail 5 "Cannot write into $cc_script"
 echo 'ccache cc $*' >> $cc_script || fail 6 "Cannot append to $cc_script"
 chmod u+rx $cc_script || fail 7 "Cannot chmod u+rx $cc_script"
 

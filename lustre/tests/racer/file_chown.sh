@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 trap 'kill $(jobs -p)' EXIT
 
 DIR=$1

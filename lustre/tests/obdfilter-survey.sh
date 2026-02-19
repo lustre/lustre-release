@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 set -e
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}

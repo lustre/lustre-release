@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 trap 'kill $(jobs -p)' EXIT
 RACER_ENABLE_PFL=${RACER_ENABLE_PFL:-true}
 RACER_ENABLE_DOM=${RACER_ENABLE_DOM:-true}

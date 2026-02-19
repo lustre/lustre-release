@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # Run select tests by setting ONLY, or as arguments to the script.
 # Skip specific tests by setting EXCEPT.
@@ -4922,7 +4922,7 @@ test_34h() {
 run_test 34h "ftruncate file under grouplock should not block"
 
 test_35a() {
-	cp /bin/sh $DIR/f35a
+	cp /usr/bin/bash $DIR/f35a
 	chmod 444 $DIR/f35a
 	chown $RUNAS_ID $DIR/f35a
 	$RUNAS $DIR/f35a && error || true

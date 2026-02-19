@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # lc_servip - script for verifying the service IP and the real
 #             interface IP in a remote host are in the same subnet

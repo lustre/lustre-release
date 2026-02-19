@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # Was Test 11 in cmd3.
 # For duration of 24 hours repeatedly failover a random OSS at

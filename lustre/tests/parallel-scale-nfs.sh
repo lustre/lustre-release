@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 NFSVERSION=${1:-"3"}
 

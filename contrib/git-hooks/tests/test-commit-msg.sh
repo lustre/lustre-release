@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 program=$0
 progdir=$(\cd $(dirname $0) >/dev/null && pwd)

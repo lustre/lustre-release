@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 PROG=$(basename $0)
 [ "$1" = "-h" -o "$1" = "--help" ] && echo "usage: $PROG [patch dir]" && exit 0
 [ "$1" = "-v" ] && shift && VERBOSE="echo" || VERBOSE=":"

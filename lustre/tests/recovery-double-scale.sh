@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # All pairwise combinations of node failures.
 # Was cmd3-17

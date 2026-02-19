@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 # lfs_migrate: a simple tool to copy and check files.
 #

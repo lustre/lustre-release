@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
@@ -105,7 +105,7 @@ test_smoke_sub () {
 
 	local nc=$(echo ${clients//,/ } | wc -w)
 	local ns=$(echo ${servers//,/ } | wc -w)
-	echo '#!/bin/bash'
+	echo '#!/usr/bin/bash'
 	echo 'set -e'
 
 	echo 'cleanup () { trap 0; echo killing $1 ... ; kill -9 $1 || true; }'

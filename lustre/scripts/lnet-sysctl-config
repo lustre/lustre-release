@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 sysctl_conf_file="/etc/lnet-sysctl.conf"
 sysctl_conf_bak="/etc/lnet-sysctl.bak"

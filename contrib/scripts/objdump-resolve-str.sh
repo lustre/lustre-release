@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/usr/bin/bash
 
 function usage() {
 	echo "Usage: $0 .."

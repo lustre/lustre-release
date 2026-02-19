@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 # Run select tests by setting ONLY, or as arguments to the script.
 # Skip specific tests by setting EXCEPT.
 #

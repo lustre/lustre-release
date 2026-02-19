@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # krb5_login.sh - obtain and cache Kerberos ticket-granting ticket
 #

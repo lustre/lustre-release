@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 # haconfig - config helper to process heartbeat V1 config skel files
 

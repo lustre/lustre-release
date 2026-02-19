@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # lc_cluman - script for generating the Red Hat Cluster Manager
 #	      HA software's configuration files

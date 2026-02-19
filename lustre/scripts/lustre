@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # lustre	This shell script takes care of starting and stopping
 #	       the lustre services.

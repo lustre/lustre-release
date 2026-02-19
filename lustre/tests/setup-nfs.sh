@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 DEFAULT_NFS_OPTIONS=${DEFAULT_NFS_OPTIONS:-"rw,async,no_root_squash"}
 DEFAULT_EXPORTS_FILE=${DEFAULT_EXPORTS_FILE:-"/etc/exports.d/lustre.exports"}

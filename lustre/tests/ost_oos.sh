@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 export NAME=${NAME:-local}
 export OSTSIZE=10000

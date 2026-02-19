@@ -1,4 +1,4 @@
-#! /bin/bash
+#! /usr/bin/bash
 
 declare -r prog=$(basename $0 .sh)
 declare -r progdir=$(cd $(dirname $0) > /dev/null ; pwd -P)

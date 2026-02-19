@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 # -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
 # vim:shiftwidth=4:softtabstop=4:tabstop=4:
 

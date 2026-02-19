@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # Script which does some basic tests to ensure we haven't regressed.
 

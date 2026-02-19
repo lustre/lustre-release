@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 # SPDX-License-Identifier: GPL-2.0
 
 #
@@ -49,7 +49,7 @@ thrhi=${thrhi:-4096}
 # multipath, technology fc/sas/ib)
 # For example:
 #   $ cat bin/dev2cpus
-#   #!/bin/bash
+#   #!/usr/bin/bash
 #   dev=$(basename $1)
 #   pci=$(readlink -f /sys/class/block/$dev | cut -d/ -f1-5)
 #   cat ${pci}/local_cpulist

@@ -1,4 +1,4 @@
-selftest_script = ['#!/bin/bash\n',
+selftest_script = ['#!/usr/bin/bash\n',
 'SZ=%s\n'
 'TM=%d\n',
 'BRW=%s\n',

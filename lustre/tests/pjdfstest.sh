@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/usr/bin/bash
 set -e
 
 {
 cat << 'HEADER'
-#!/bin/bash
+#!/usr/bin/bash
 set -e
 
 ONLY=${ONLY:-"$*"}

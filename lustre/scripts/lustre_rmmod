@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # Takes a list of modules and unloads them and all dependent modules.
 # If a module cannot be unloaded (e.g. it's in use), an error is

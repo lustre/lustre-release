@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 
 LUSTRE=${LUSTRE:-$(dirname "$0")/..}
 

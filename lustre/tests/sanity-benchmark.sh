@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 #
 # Test basic functionality of the filesystem using simple
 # benchmarks.

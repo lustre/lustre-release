@@ -8,4 +8,6 @@ comma_list.*mdts_nodes||mdts_nodes
 sprintf||snprintf
 strcat||strncat
 strcpy||strncpy
+/bin/bash||/usr/bin/bash
+/bin/sh||/usr/bin/bash
 version_code.*2.1[7-9]||version 2.16.x should be used

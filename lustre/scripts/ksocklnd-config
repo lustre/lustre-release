@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/bash
 me="${0##*/}"
 
 # convert number of mask bits to x.x.x.x or x:x:x:x:x:x:x:x mask format
