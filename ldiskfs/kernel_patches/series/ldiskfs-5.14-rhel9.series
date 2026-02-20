@@ -36,3 +36,4 @@ linux-5.14/ext4-enc-flag.patch
 rhel9/ext4-add-periodic-superblock-update.patch
 rhel9/ext4-add-DISCARD-stats.patch
 rhel9/ext4-add-fstrim-mount-option.patch
+base/ext4-adjust-mmp-wait-time.patch
