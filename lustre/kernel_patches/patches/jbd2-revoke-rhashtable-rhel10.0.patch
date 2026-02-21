@@ -1,3 +1,30 @@
+commit a399af4e3b1ab2c5d83292d4487c4d18de551659
+Author: Jan Kara <jack@suse.cz>
+Date:   Tue Jan 21 15:09:26 2025 +0100
+
+jbd2: Avoid long replay times due to high number or revoke blocks
+
+Some users are reporting journal replay takes a long time when there is
+excessive number of revoke blocks in the journal. Reported times are
+like:
+
+    1048576 records - 95 seconds
+    2097152 records - 580 seconds
+
+The problem is that hash chains in the revoke table gets excessively
+long in these cases. Fix the problem by sizing the revoke table
+appropriately before the revoke pass.
+
+Thanks to Alexey Zhuravlev <azhuravlev@ddn.com> for benchmarking the
+patch with large numbers of revoke blocks [1].
+
+[1] https://lore.kernel.org/all/20250113183107.7bfef7b6@x390.bzzz77.ru
+
+Signed-off-by: Jan Kara <jack@suse.cz>
+Reviewed-by: Andreas Dilger <adilger@dilger.ca>
+Reviewed-by: Zhang Yi <yi.zhang@huawei.com>
+Link: https://patch.msgid.link/20250121140925.17231-2-jack@suse.cz
+Signed-off-by: Theodore Ts'o <tytso@mit.edu>
 Index: linux/fs/jbd2/recovery.c
 ===================================================================
 --- linux.orig/fs/jbd2/recovery.c

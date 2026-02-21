@@ -1,3 +1,18 @@
+commit 80a9e94df1865287dc67676528d3141a020288be
+Author:     Li Dongyang <dongyangli@ddn.com>
+AuthorDate: Thu Oct 10 20:54:25 2024 +1100
+
+scsi: silent page allocation failure in virtio_scsi
+
+virtio_scsi uses GFP_ATOMIC to allocate memory, with large
+requests sometimes the allocation fails.
+We don't need to throw up the allocation error and dump stack
+for this as virtio_scsi will return SCSI_MLQUEUE_HOST_BUSY
+which translates to BLK_STS_RESOURCE and that will be
+handled by upper layers.
+
+Signed-off-by: Li Dongyang <dongyangli@ddn.com>
+Change-Id: I7117711d05794d57ab294f3bc6746de1979afc22
 Index: linux-4.18.0-553.16.1.el8_10/drivers/scsi/virtio_scsi.c
 ===================================================================
 --- linux-4.18.0-553.16.1.el8_10.orig/drivers/scsi/virtio_scsi.c
