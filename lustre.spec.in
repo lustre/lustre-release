@@ -178,6 +178,8 @@
 %endif
 %global kmod_devel_pkg %{kmod_prefix}%{lustre_name}%{kmod_postfix}-devel
 %global requires_release_major_minor %(echo %version | cut -d. -f1).%(echo %version | cut -d. -f2)
+# keep BTF sections (.BTF split + .BTF.base distilled base) in modules
+%{expand:%%global _find_debuginfo_opts %{?_find_debuginfo_opts} --keep-section '.BTF' --keep-section '.BTF.base'}
 %endif
 
 # RHEL >= 7 comes with systemd

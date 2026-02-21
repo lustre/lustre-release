@@ -112,6 +112,7 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec	\
 	autogen.sh			\
 	modules.order			\
 	config/lustre-version.m4 \
+	config/embed-btf.sh \
 	contrib \
 	lustre/kernel_patches \
 	lustre/ChangeLog \
