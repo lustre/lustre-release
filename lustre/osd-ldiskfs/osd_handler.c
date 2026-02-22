@@ -6553,7 +6553,7 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 	struct buffer_head *bh;
 	struct lu_fid *fid = (struct lu_fid *)rec;
 	struct htree_lock *hlock = NULL;
-	int ino;
+	__u32 ino;
 	int rc;
 
 	ENTRY;
