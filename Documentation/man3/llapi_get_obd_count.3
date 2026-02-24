@@ -1,0 +1,53 @@
+.TH LLAPI_GET_OBD_COUNT 3 2026-02-24 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_get_obd_count \- get number of MDT/OST targets for Lustre mountpoint
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_get_obd_count(char *" mnt ", int *" count ", int " is_mdt ");"
+.fi
+.SH DESCRIPTION
+.B llapi_get_obd_count()
+returns the number of Object Storage Targets (OSTs) or Metadata Targets (MDTs),
+configured for the Lustre filesystem mounted at
+.BR mnt .
+.PP
+.I mnt
+is the path to the Lustre mount point or a directory within it.
+.PP
+.I count
+is a pointer to an integer where the resulting target count will be stored.
+.PP
+.I is_mdt
+is a boolean. If non-zero, it returns the MDT count;
+if zero, it returns the OST count.
+.SH RETURN VALUES
+.B llapi_get_obd_count()
+returns 0 on success. On failure, it returns a negative errno value.
+.SH ERRORS
+.TP 15
+.B \-ENOENT
+The path specified by
+.I mnt
+does not exist.
+.TP 15
+.B \-ENOTDIR
+The path specified by
+.I mnt
+is not a directory.
+.TP 15
+.B \-ENOTTY
+The path specified by
+.I mnt
+is not on a Lustre filesystem.
+.SH AVAILABILITY
+.B llapi_get_obd_count()
+is part of the
+.BR lustre (7)
+user application interface library since release 1.8.0
+.\" Added in commit 1.6.0-2132-gcefa8cda2b
+.SH SEE ALSO
+.BR llapi_lmv_get_uuids (3),
+.BR llapi_lov_get_uuids (3),
+.BR lustreapi (7)

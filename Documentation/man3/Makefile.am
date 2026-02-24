@@ -29,6 +29,7 @@ LIBMAN = 					\
 	llapi_get_lum_file.3			\
 	llapi_get_lum_file_fd.3			\
 	llapi_getname.3				\
+	llapi_get_obd_count.3			\
 	llapi_group_lock.3			\
 	llapi_group_unlock.3			\
 	llapi_heat_get.3			\
