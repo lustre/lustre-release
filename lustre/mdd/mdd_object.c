@@ -730,10 +730,6 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		if (la->la_valid & LA_MTIME && la->la_mtime <= oattr->la_mtime)
 			la->la_valid &= ~LA_MTIME;
 		RETURN(0);
-	} else if ((la->la_valid & LA_ATIME) && (la->la_valid & LA_CTIME)) {
-		/* save the time when atime was changed, in case this is
-		 * set-in-past, to not lose it later on close. */
-		obj->mod_atime_set = la->la_ctime;
 	}
 
 	/* Check if flags change. */
@@ -914,9 +910,24 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		/**
 		 * The pure setattr, it has the priority over what is
 		 * already set, do not drop it if ctime is equal.
+		 *
+		 * Inter-client clock skew can cause the client's
+		 * ctime to be less than the existing ctime (set by
+		 * another client whose clock is ahead). Rather than
+		 * dropping all time updates, clamp the ctime to at
+		 * least the existing value so that explicit
+		 * time-setting operations (e.g. utimensat) are not
+		 * silently rejected.
 		 */
 		if (la->la_ctime < oattr->la_ctime)
-			la->la_valid &= ~(LA_ATIME | LA_MTIME | LA_CTIME);
+			la->la_ctime = oattr->la_ctime;
+	}
+
+	if ((la->la_valid & LA_ATIME) && (la->la_valid & LA_CTIME)) {
+		/* save the time when atime was changed, in case this is
+		 * set-in-past, to not lose it later on close.
+		 */
+		obj->mod_atime_set = la->la_ctime;
 	}
 
 	RETURN(0);

@@ -21369,6 +21369,39 @@ test_160u() { # LU-17400
 }
 run_test 160u "changelog rename record type name and sname strings are correct"
 
+test_160v() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	(( CLIENTCOUNT >= 2 )) || skip "need >= 2 clients"
+	[[ $MDS1_VERSION -ge $(version_code 2.17.50) ]] ||
+		skip "Need MDS version at least 2.17.50"
+
+	local target_mtime
+	local mtime_after
+	local saved_date
+
+	test_mkdir $DIR/$tdir || error "failed to mkdir $DIR/$tdir"
+	touch $DIR/$tdir/$tfile
+
+	# Advance CLIENT2 clock so its touch sets ctime ahead
+	saved_date=$(do_node $CLIENT2 date +%s)
+	do_node $CLIENT2 date -s @$((saved_date + 5))
+	stack_trap "do_node $CLIENT2 date -s @\$(date +%s)" EXIT
+
+	do_node $CLIENT2 touch $MOUNT/$tdir/$tfile
+	do_node $CLIENT2 date -s @$(date +%s)
+
+	target_mtime=$(date -d "2020-01-01" +%s)
+
+	# Local client sets mtime; ctime < file's ctime from CLIENT2
+	touch -m -d @$target_mtime $DIR/$tdir/$tfile
+
+	cancel_lru_locks mdc
+	mtime_after=$(stat -c %Y $DIR/$tdir/$tfile)
+	[[ "$mtime_after" == "$target_mtime" ]] ||
+		error "mtime not updated: expected $target_mtime, got $mtime_after"
+}
+run_test 160v "setattr preserves mtime update despite inter-client clock skew"
+
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
