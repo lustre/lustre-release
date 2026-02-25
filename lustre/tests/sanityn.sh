@@ -5533,6 +5533,49 @@ test_77r() { #LU-14976
 }
 run_test 77r "Change type of tbf policy at run time"
 
+test_77s() { #LU-19597
+	(( MDS1_VERSION >= $(version_code 2.16.61-40) )) ||
+		skip "need MDS >= 2.16.61-40"
+
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
+
+	local nrs_policies=mds.MDS.mdt.nrs_policies
+	local nrs_tbf_rule=mds.MDS.mdt.nrs_tbf_rule
+	local cache_path=/sys/module/ptlrpc/parameters/tbf_jobid_cache_size
+	local cache_size=$(do_facet mds1 "cat $cache_path")
+	local -a saved_params=( $($LCTL get_param jobid_var jobid_name ) )
+
+	stack_trap "$LCTL set_param ${saved_params[*]}"
+	$LCTL set_param jobid_name=%e.%p jobid_var=TEST_77s_JOBVAR
+
+	stack_trap "do_facet mds1 'echo $cache_size > $cache_path'"
+	cache_size=10
+	do_facet mds1 "echo $cache_size > $cache_path"
+
+	stack_trap "do_facet mds1 $LCTL set_param $nrs_policies=fifo"
+	do_facet mds1 "$LCTL set_param $nrs_policies='tbf jobid'" ||
+		error "fail to start 'tbf jobid' policy"
+
+	do_facet mds1 "$LCTL set_param $nrs_tbf_rule='start touch jobid={touch.*} rate=1000'" ||
+		error "fail to start rule 'touch'"
+	do_facet mds1 "$LCTL set_param $nrs_tbf_rule='start unlink jobid={unlink.*} rate=1000'" ||
+		error "fail to start rule 'unlink'"
+
+	printf '%s\n' {$DIR1,$DIR2}/$tdir/${tfile}-{0001..1000} |
+		xargs -P20 -n5 touch
+	do_facet mds1 "$LCTL get_param $nrs_tbf_rule" |
+		awk '/^touch/ {print $0; if ($NF > '$cache_size') exit(1);}' ||
+		error "TBF LRU shrinker failed (too much refs for 'touch' rule)"
+
+	printf '%s\n' $DIR1/$tdir/${tfile}-{0001..1000} |
+		xargs -P20 -n1 unlink
+	do_facet mds1 "$LCTL get_param $nrs_tbf_rule" |
+		awk '/^unlink/ {print $0; if ($NF > '$cache_size') exit(1);}' ||
+		error "TBF LRU shrinker failed (too much refs for 'unlink' rule)"
+
+}
+run_test 77s "Check TBF LRU shrinker"
+
 test_78() { #LU-6673
 	local rc
 	local osts=$(osts_nodes)

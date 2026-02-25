@@ -34,17 +34,28 @@ struct nrs_tbf_jobid {
 	struct list_head tj_linkage;
 };
 
+enum nrs_tbf_field {
+	NRS_TBF_FIELD_JOBID = 0,
+	NRS_TBF_FIELD_NID,
+	NRS_TBF_FIELD_OPCODE,
+	NRS_TBF_FIELD_UID,
+	NRS_TBF_FIELD_GID,
+	NRS_TBF_FIELD_PROJID,
+	__NRS_TBF_FIELD_MAX,
+};
+
 enum nrs_tbf_flag {
-	NRS_TBF_FLAG_INVALID	= 0x0000000,
-	NRS_TBF_FLAG_JOBID	= 0x0000001,
-	NRS_TBF_FLAG_NID	= 0x0000002,
-	NRS_TBF_FLAG_OPCODE	= 0x0000004,
-	NRS_TBF_FLAG_UID	= 0x0000008,
-	NRS_TBF_FLAG_GID	= 0x0000010,
-	NRS_TBF_FLAG_PROJID	= 0x0000020,
-	NRS_TBF_FLAG_ALL	= NRS_TBF_FLAG_NID | NRS_TBF_FLAG_JOBID |
-				  NRS_TBF_FLAG_UID | NRS_TBF_FLAG_GID |
-				  NRS_TBF_FLAG_PROJID | NRS_TBF_FLAG_OPCODE,
+	NRS_TBF_FLAG_INVALID	= 0,
+	NRS_TBF_FLAG_JOBID	= BIT(NRS_TBF_FIELD_JOBID),
+	NRS_TBF_FLAG_NID	= BIT(NRS_TBF_FIELD_NID),
+	NRS_TBF_FLAG_OPCODE	= BIT(NRS_TBF_FIELD_OPCODE),
+	NRS_TBF_FLAG_UID	= BIT(NRS_TBF_FIELD_UID),
+	NRS_TBF_FLAG_GID	= BIT(NRS_TBF_FIELD_GID),
+	NRS_TBF_FLAG_PROJID	= BIT(NRS_TBF_FIELD_PROJID),
+	__NRS_TBF_FLAG_END	= BIT(__NRS_TBF_FIELD_MAX),
+	NRS_TBF_FLAG_ALL	= (__NRS_TBF_FLAG_END - 1),
+	NRS_TBF_FLAG_IDS	= NRS_TBF_FLAG_UID | NRS_TBF_FLAG_GID |
+				  NRS_TBF_FLAG_PROJID,
 };
 
 struct tbf_id {
@@ -59,12 +70,10 @@ struct nrs_tbf_id {
 	struct list_head	nti_linkage;
 };
 
-struct nrs_tbf_key {
-	enum nrs_tbf_flag	tk_flags;
-	struct lnet_nid		tk_nid;
-	__u32			tk_opcode;
-	struct tbf_id		tk_id;	/* UID and GID */
-	char			tk_jobid[LUSTRE_JOBID_SIZE];
+enum nrs_tbf_cli_bits {
+	NRS_TBF_CLI_HEAP_BIT = 0,	/** class in binheap */
+	NRS_TBF_CLI_LRU_BIT,		/** class in LRU */
+	NRS_TBF_CLI_DEL_BIT,		/** class is being removed (debug) */
 };
 
 struct nrs_tbf_client {
@@ -72,9 +81,6 @@ struct nrs_tbf_client {
 	struct ptlrpc_nrs_resource	 tc_res;
 	/** Node in the hash table. */
 	struct rhash_head		 tc_rhash;
-	struct hlist_node		 tc_hnode;
-	/** Key of the TBF cli. */
-	struct nrs_tbf_key		 tc_key;
 	/** Reference number of the client. */
 	refcount_t			 tc_ref;
 	/** Lock to protect rule and linkage. */
@@ -107,24 +113,23 @@ struct nrs_tbf_client {
 	/** Node in binary heap. */
 	struct binheap_node		 tc_node;
 	/** Whether the client is in heap. */
-	bool				 tc_in_heap;
+	unsigned long			 tc_state;
 	/** Sequence of the newest rule. */
-	__u32				 tc_rule_sequence;
+	u32				 tc_rule_sequence;
 	/**
 	 * Linkage into LRU list. Protected bucket lock of
-	 * nrs_tbf_head::th_cli_hash.
+	 * nrs_tbf_head::th_lru_lock.
 	 */
 	struct list_head		 tc_lru;
 	/**
 	 * RCU head for rhashtable handling
 	 */
 	struct rcu_head			 tc_rcu_head;
+	/** Valid field in key (key format). */
+	enum nrs_tbf_flag		 tc_key_valid;
+	/** Key of the TBF cli (variable size). */
+	u8				 tc_key[];
 };
-
-#define tc_nid		tc_key.tk_nid
-#define tc_opcode	tc_key.tk_opcode
-#define tc_id		tc_key.tk_id
-#define tc_jobid	tc_key.tk_jobid
 
 #define MAX_TBF_NAME (16)
 
@@ -145,6 +150,19 @@ struct nrs_tbf_rule {
 	struct list_head		 tr_nids;
 	/** Nid list string of the rule.*/
 	char				*tr_nids_str;
+	/** Jobid list of the rule. */
+	struct list_head		 tr_jobids;
+	/** Jobid list string of the rule.*/
+	char				*tr_jobids_str;
+	/** uid/gid list of the rule. */
+	struct list_head		tr_ids;
+	/** uid/gid list string of the rule. */
+	char				*tr_ids_str;
+	/** Opcode bitmap of the rule. */
+	unsigned long			*tr_opcodes;
+	u32				tr_opcodes_cnt;
+	/** Opcode list string of the rule.*/
+	char				*tr_opcodes_str;
 	/** Condition list of the rule.*/
 	struct list_head		tr_conds;
 	/** Generic condition string of the rule. */
@@ -167,24 +185,6 @@ struct nrs_tbf_rule {
 	__u64				 tr_generation;
 };
 
-struct nrs_tbf_ops {
-	char *o_name;
-	int (*o_startup)(struct ptlrpc_nrs_policy *, struct nrs_tbf_head *);
-	struct nrs_tbf_client *(*o_cli_find)(struct nrs_tbf_head *,
-					     struct ptlrpc_request *);
-	struct nrs_tbf_client *(*o_cli_findadd)(struct nrs_tbf_head *,
-						struct nrs_tbf_client *);
-	void (*o_cli_put)(struct nrs_tbf_head *, struct nrs_tbf_client *);
-	void (*o_cli_init)(struct nrs_tbf_client *, struct ptlrpc_request *);
-	int (*o_rule_init)(struct ptlrpc_nrs_policy *,
-			   struct nrs_tbf_rule *,
-			   struct nrs_tbf_cmd *);
-	int (*o_rule_dump)(struct nrs_tbf_rule *, struct seq_file *);
-	int (*o_rule_match)(struct nrs_tbf_rule *,
-			    struct nrs_tbf_client *);
-	void (*o_rule_fini)(struct nrs_tbf_rule *);
-};
-
 #define NRS_TBF_TYPE_JOBID	"jobid"
 #define NRS_TBF_TYPE_NID	"nid"
 #define NRS_TBF_TYPE_OPCODE	"opcode"
@@ -198,15 +198,12 @@ struct nrs_tbf_ops {
 struct nrs_tbf_type {
 	const char		*ntt_name;
 	enum nrs_tbf_flag	 ntt_flag;
-	struct nrs_tbf_ops	*ntt_ops;
+	size_t			 ntt_size;
+	int (*ntt_str)(void *data, char *str, int len);
 };
 
-struct nrs_tbf_bucket {
-	/**
-	 * LRU list, updated on each access to client. Protected by
-	 * bucket lock of nrs_tbf_head::th_cli_hash.
-	 */
-	struct list_head	ntb_lru;
+enum nrs_tbf_state_bits {
+	NRS_TBF_SHRINKING_BIT = 0,
 };
 
 /**
@@ -221,6 +218,10 @@ struct nrs_tbf_head {
 	 * Hash of clients.
 	 */
 	struct rhashtable		 th_cli_rhash ____cacheline_aligned_in_smp;
+	/**
+	 * Hashtable parametets.
+	 */
+	struct rhashtable_params	 th_rhash_params;
 	/**
 	 * List of rules.
 	 */
@@ -254,17 +255,9 @@ struct nrs_tbf_head {
 	 */
 	struct binheap			*th_binheap;
 	/**
-	 * Hash of clients.
-	 */
-	struct cfs_hash			*th_cli_hash;
-	/**
 	 * Type of TBF policy.
 	 */
 	char				 th_type[NRS_TBF_TYPE_MAX_LEN + 1];
-	/**
-	 * Rule operations.
-	 */
-	struct nrs_tbf_ops		*th_ops;
 	/**
 	 * Flag of type.
 	 */
@@ -273,6 +266,22 @@ struct nrs_tbf_head {
 	 * Index of bucket on hash table while purging.
 	 */
 	int				 th_purge_start;
+	/**
+	 * Head state (see enum nrs_tbf_state_bits).
+	 */
+	unsigned long			 th_state;
+	/**
+	 * Lock to protect the CLI LRU list.
+	 */
+	spinlock_t			 th_lru_lock;
+	/**
+	 * Number of CLI objects in LRU.
+	 */
+	atomic_t			 th_lru_cnt;
+	/**
+	 * LRU cache list for CLI objects
+	 */
+	struct list_head		 th_lru_list;
 };
 
 enum nrs_tbf_cmd_type {
@@ -286,35 +295,18 @@ struct nrs_tbf_cmd {
 	char					*tc_name;
 	union {
 		struct nrs_tbf_cmd_start {
-			__u64			 ts_rpc_rate;
-			struct list_head	 ts_nids;
-			char			*ts_nids_str;
-			struct list_head	 ts_jobids;
-			char			*ts_jobids_str;
-			struct list_head	 ts_ids;
-			char			*ts_ids_str;
-			char			*ts_opcodes_str;
+			u64			 ts_rpc_rate;
 			struct list_head	 ts_conds;
 			char			*ts_conds_str;
-			__u32			 ts_valid_type;
+			u32			 ts_valid_type;
 			enum nrs_rule_flags	 ts_rule_flags;
 			char			*ts_next_name;
 		} tc_start;
 		struct nrs_tbf_cmd_change {
-			__u64			 tc_rpc_rate;
+			u64			 tc_rpc_rate;
 			char			*tc_next_name;
 		} tc_change;
 	} u;
-};
-
-enum nrs_tbf_field {
-	NRS_TBF_FIELD_NID,
-	NRS_TBF_FIELD_JOBID,
-	NRS_TBF_FIELD_OPCODE,
-	NRS_TBF_FIELD_UID,
-	NRS_TBF_FIELD_GID,
-	NRS_TBF_FIELD_PROJID,
-	NRS_TBF_FIELD_MAX
 };
 
 struct nrs_tbf_expression {
