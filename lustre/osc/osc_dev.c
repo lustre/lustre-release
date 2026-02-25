@@ -162,8 +162,8 @@ static struct lu_device *osc_device_fini(const struct lu_env *env,
 
 	ENTRY;
 
-	osc_precleanup_common(obd);
 	ptlrpc_lprocfs_unregister_obd(obd);
+	osc_precleanup_common(obd);
 
 	RETURN(NULL);
 }
@@ -200,6 +200,7 @@ static struct lu_device *osc_device_alloc(const struct lu_env *env,
 	/* Setup OSC OBD */
 	obd = class_name2obd(lustre_cfg_string(cfg, 0));
 	LASSERT(obd != NULL);
+	obd->obd_lu_dev = d;
 	rc = osc_setup(obd, cfg);
 	if (rc) {
 		osc_device_free(env, d);
