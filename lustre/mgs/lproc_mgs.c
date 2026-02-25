@@ -339,9 +339,9 @@ void lproc_mgs_cleanup(struct mgs_device *mgs)
 	sysfs_remove_link(&obd->obd_kset.kobj, "osd");
 
 	lprocfs_free_per_client_stats(obd);
-	lprocfs_obd_cleanup(obd);
 	ldebugfs_free_obd_stats(obd);
 	lprocfs_free_md_stats(obd);
+	lprocfs_obd_cleanup(obd);
 }
 
 void mgs_counter_incr(struct obd_export *exp, int opcode)
