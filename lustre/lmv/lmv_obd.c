@@ -2135,6 +2135,55 @@ static struct lu_tgt_desc *lmv_locate_tgt_by_space(struct lmv_obd *lmv,
 	return tgt;
 }
 
+/**
+ * lmv_locate_tgt_next_avail() - Select next available MDT
+ * @lmv: LMV device
+ * @op_data: operation data containing user/group IDs
+ * @cur: current MDT
+ * @exclude_bitmap: bitmap of MDT indices to exclude from selection (already
+ * tried)
+ *
+ *
+ * Return:
+ * Pointer to lu_tgt_desc of selected MDT, or error pointer.
+ */
+static
+struct lu_tgt_desc *lmv_locate_tgt_next_avail(struct lmv_obd *lmv,
+					      struct md_op_data *op_data,
+					      struct lmv_tgt_desc *cur,
+					      unsigned long *exclude_bitmap)
+{
+	__u32 count = lmv->lmv_mdt_count;
+	__u32 start;
+	__u32 i;
+
+	if (count <= 1)
+		return ERR_PTR(-EDQUOT);
+
+	/* Make start random to spread creates across MDTs */
+	start = (cur->ltd_index + get_random_u32()) % count;
+
+	for (i = 0; i < count ; i++) {
+		__u32 idx = (start+i) % count;
+
+		struct lu_tgt_desc *tgt;
+
+		if (test_bit(idx, exclude_bitmap))
+			continue;
+
+		tgt = lmv_tgt_retry(lmv, idx);
+		if (!tgt || !tgt->ltd_active)
+			continue;
+		if (tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE)
+			continue;
+
+		op_data->op_mds = tgt->ltd_index;
+		return tgt;
+	}
+
+	return ERR_PTR(-EDQUOT);
+}
+
 static bool lmv_tgt_nocreate(struct lmv_obd *lmv, struct lmv_tgt_desc *tgt)
 {
 	if (likely(!(tgt->ltd_statfs.os_state & OS_STATFS_NOCREATE)))
@@ -2227,9 +2276,13 @@ static int lmv_create(struct obd_export *exp, struct md_op_data *op_data,
 	struct lmv_obd *lmv = &obd->u.lmv;
 	struct lmv_tgt_desc *tgt;
 	struct mdt_body *repbody;
+	DECLARE_BITMAP(exclude_bitmap, LMV_MAX_TGT_COUNT);
+	int quota_retry = 0;
 	int rc;
 
 	ENTRY;
+
+	bitmap_zero(exclude_bitmap, LMV_MAX_TGT_COUNT);
 
 	if (!lmv->lmv_mdt_descs.ltd_lmv_desc.ld_active_tgt_count)
 		RETURN(-EIO);
@@ -2277,6 +2330,58 @@ retry:
 		if (*request == NULL)
 			RETURN(rc);
 		CDEBUG(D_INODE, "Created - "DFID"\n", PFID(&op_data->op_fid2));
+	}
+
+	/* If we hit quota limit and this is a directory creation, try to
+	 * find an alternative MDT with available quota space. Retry up to
+	 * the number of active MDTs.
+	 */
+	if (rc == -EDQUOT && S_ISDIR(mode) &&
+	    quota_retry < lmv->lmv_mdt_descs.ltd_lmv_desc.ld_active_tgt_count &&
+	    lmv->lmv_mdt_descs.ltd_lmv_desc.ld_active_tgt_count > 1) {
+		struct lmv_tgt_desc *new_tgt;
+
+		/* below message is checked in sanity-quota test_98 */
+		CDEBUG(D_QUOTA,
+		       "mkdir hit EDQUOT on MDT%04x (retry %d/%u), searching for alternative MDT\n",
+		       tgt->ltd_index, quota_retry,
+		       lmv->lmv_mdt_descs.ltd_lmv_desc.ld_active_tgt_count);
+
+		set_bit(tgt->ltd_index, exclude_bitmap);
+
+		new_tgt = lmv_locate_tgt_next_avail(lmv, op_data, tgt,
+						    exclude_bitmap);
+		if (!IS_ERR(new_tgt) && new_tgt != tgt) {
+			CDEBUG(D_INFO,
+			       "\nretrying mkdir on MDT%04x (was MDT%04x)\n",
+			       new_tgt->ltd_index, tgt->ltd_index);
+
+			if (*request != NULL) {
+				ptlrpc_req_put(*request);
+				*request = NULL;
+			}
+
+			tgt = new_tgt;
+			quota_retry++;
+			/* Reset FID2 for retry, and allocate a new FID */
+			fid_zero(&op_data->op_fid2);
+			rc = lmv_fid_alloc(NULL, exp, &op_data->op_fid2, op_data);
+			if (rc)
+				RETURN(rc);
+			goto retry;
+		}
+
+		CDEBUG(D_QUOTA,
+		       "Failed to find alternative MDT: new_tgt=%p, tgt=%p, is_err=%d\n",
+		       new_tgt, tgt, IS_ERR(new_tgt));
+	} else {
+		if (rc == -EDQUOT) {
+			CDEBUG(D_QUOTA,
+			       "EDQUOT but conditions not met: S_ISDIR=%d, retry_count=%d/%u, mdt_count=%u\n",
+			       S_ISDIR(mode), quota_retry,
+			       lmv->lmv_mdt_descs.ltd_lmv_desc.ld_active_tgt_count,
+			       lmv->lmv_mdt_descs.ltd_lmv_desc.ld_active_tgt_count);
+		}
 	}
 
 	/* dir restripe needs to send to MDT where dir is located */

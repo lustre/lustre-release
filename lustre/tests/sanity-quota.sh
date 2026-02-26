@@ -7908,6 +7908,53 @@ test_97d() {
 }
 run_test 97d "LQA disk persistence using standard commands"
 
+test_98() {
+	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+
+	local testdir="$DIR/$tdir"
+
+	# Use the current round-robin index and map it into the
+	# range of configured MDT indices [0..MDSCOUNT-1].
+	local rr_idx=$($LCTL get_param -n lmv.*.qos_rr_index | head -1)
+	local idx=$((rr_idx % MDSCOUNT))
+	local expected_mdt=$(((rr_idx+1) % MDSCOUNT))
+
+	wait_clients_import_state $HOSTNAME mds$((idx+1)) FULL
+	wait_clients_import_state $HOSTNAME mds$((expected_mdt+1)) FULL
+
+	local idx_hex
+	printf -v idx_hex "%04x" "$idx"
+
+	local old_rr=$($LCTL get_param -n lmv.*.qos_threshold_rr | head -1)
+	stack_trap "$LCTL set_param lmv.*.qos_threshold_rr=$old_rr"
+
+	#define OBD_FAIL_QUOTA_EDQUOT            0xA02
+	stack_trap "do_facet mds$((idx+1)) $LCTL set_param fail_loc=0"
+	do_facet mds$((idx+1)) $LCTL set_param fail_loc=0x80000A02
+
+	$LCTL set_param lmv.*.qos_threshold_rr=100
+
+	local old_qos_maxage=$($LCTL get_param -n lmv.*.qos_maxage)
+	$LCTL set_param lmv.*.qos_maxage=10
+	stack_trap "$LCTL set_param -n lmv.*.qos_maxage=$old_qos_maxage"
+	# import can be used only after (qos_maxage >> 1)s after setup
+	sleep 5
+
+	echo "First MDT: $idx, expected retry MDT: $expected_mdt"
+
+	mkdir "$testdir" || error "mkdir failed - retry mechanism not working"
+
+	[[ -d "$testdir" ]] || error "Directory not created after retry"
+
+	local stripe_index=$($LFS getdirstripe -i $testdir)
+
+	(( stripe_index != idx )) ||
+		error "Failed to create directory on another MDT"
+
+	echo "Directory successfully created on MDT$stripe_index after retry"
+}
+run_test 98 "Verify MDT retry on -EDQUOT during mkdir"
+
 quota_fini()
 {
 	do_nodes $(comma_list $(nodes_list)) \

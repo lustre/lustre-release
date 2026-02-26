@@ -6226,9 +6226,9 @@ static int lod_declare_create(const struct lu_env *env, struct dt_object *dt,
 			      struct dt_allocation_hint *hint,
 			      struct dt_object_format *dof, struct thandle *th)
 {
-	struct dt_object   *next = dt_object_child(dt);
-	struct lod_object  *lo = lod_dt_obj(dt);
-	int		    rc;
+	struct dt_object *next = dt_object_child(dt);
+	struct lod_object *lo = lod_dt_obj(dt);
+	int rc;
 	ENTRY;
 
 	LASSERT(dof);
@@ -6241,6 +6241,10 @@ static int lod_declare_create(const struct lu_env *env, struct dt_object *dt,
 	rc = lod_sub_declare_create(env, next, attr, hint, dof, th);
 	if (rc != 0)
 		GOTO(out, rc);
+
+	/* Inject EDQUOT for sanity-quota test_98 */
+	if (CFS_FAIL_CHECK(OBD_FAIL_QUOTA_EDQUOT) && S_ISDIR(attr->la_mode))
+		GOTO(out, rc = -EDQUOT);
 
 	/*
 	 * it's lod_ah_init() that has decided the object will be striped
