@@ -219,9 +219,7 @@ static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
 	}
 
 	/* Pass the notification up the chain.  */
-	if (obd->obd_observer)
-		rc = obd_notify(obd->obd_observer, watched, ev);
-
+	rc = obd_notify_observer(obd, watched, ev);
 	RETURN(rc);
 }
 
@@ -537,6 +535,8 @@ out_disc:
 		--lmv->lmv_mdt_descs.ltd_lmv_desc.ld_active_tgt_count;
 		obd_register_observer(tgt->ltd_exp->exp_obd, NULL);
 		obd_disconnect(tgt->ltd_exp);
+		tgt->ltd_exp->exp_obd->obd_upcall.onu_owner = NULL;
+		tgt->ltd_exp->exp_obd->obd_upcall.onu_upcall = NULL;
 	}
 
 	goto unlock;
@@ -601,6 +601,8 @@ static int lmv_disconnect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 		       tgt->ltd_exp->exp_obd->obd_name,
 		       tgt->ltd_uuid.uuid, rc);
 	}
+	tgt->ltd_exp->exp_obd->obd_upcall.onu_owner = NULL;
+	tgt->ltd_exp->exp_obd->obd_upcall.onu_upcall = NULL;
 	tgt->ltd_exp = NULL;
 	RETURN(0);
 }

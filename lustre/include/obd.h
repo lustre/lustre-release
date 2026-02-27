@@ -606,7 +606,9 @@ enum obd_notify_event {
 	OBD_NOTIFY_OCD,
 	/* Administratively deactivate/activate event */
 	OBD_NOTIFY_DEACTIVATE,
-	OBD_NOTIFY_ACTIVATE
+	OBD_NOTIFY_ACTIVATE,
+	/* GSSIAM token refresh event */
+	OBD_NOTIFY_GSSIAM,
 };
 
 /*

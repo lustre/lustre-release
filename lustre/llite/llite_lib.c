@@ -15,6 +15,7 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
+#include <linux/audit.h>
 #include <linux/cpu.h>
 #include <linux/delay.h>
 #include <linux/file.h>
@@ -325,6 +326,98 @@ static void ll_force_readonly(struct super_block *sb, struct obd_export *exp,
 	obd_disconnect(exp);
 }
 
+static int ll_upcall_notify_gssiam(struct obd_device *watched,
+				   struct super_block *sb)
+{
+	struct client_obd *cli = &watched->u.cli;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	struct lustre_mount_data *lmd = sbi->lsi->lsi_lmd;
+	struct lustre_gssiam_mount_info *gssiam = NULL;
+	const char *fs_subdir = lmd->lmd_fileset ?
+				lmd->lmd_fileset : "/";
+	int subdir_sz = strlen(fs_subdir) + 1;
+	int principal_sz = sbi->ll_user_principal ?
+			    strlen(sbi->ll_user_principal) + 1 : 0;
+	int rc = 0;
+
+	if (cli->cl_import->imp_sec->ps_gssiam)
+		return 0;
+
+	OBD_ALLOC_PTR(gssiam);
+	if (!gssiam)
+		RETURN(-ENOMEM);
+
+	gssiam->lgmi_loginuid = sbi->ll_loginuid;
+
+	OBD_ALLOC(gssiam->lgmi_subdir, subdir_sz);
+	if (!gssiam->lgmi_subdir)
+		GOTO(out_gssiam, rc = -ENOMEM);
+	strscpy(gssiam->lgmi_subdir, fs_subdir, subdir_sz);
+
+	if (principal_sz > 0) {
+		OBD_ALLOC(gssiam->lgmi_principal, principal_sz);
+		if (!gssiam->lgmi_principal)
+			GOTO(out_subdir, rc = -ENOMEM);
+		strscpy(gssiam->lgmi_principal, sbi->ll_user_principal,
+			principal_sz);
+	}
+
+	if (test_bit(LMD_FLG_DEV_RDONLY, lmd->lmd_flags) ||
+	    sb->s_flags & SB_RDONLY)
+		gssiam->lgmi_options |= OBD_CONNECT_RDONLY;
+
+	CDEBUG(D_SUPER, "copy IAM subdir:%s options:%u login:%u principal:%s\n",
+	       gssiam->lgmi_subdir, gssiam->lgmi_options, gssiam->lgmi_loginuid,
+	       gssiam->lgmi_principal ? gssiam->lgmi_principal : "");
+
+	cli->cl_import->imp_sec->ps_gssiam = gssiam;
+
+out_subdir:
+	if (rc)
+		OBD_FREE(gssiam->lgmi_subdir, subdir_sz);
+out_gssiam:
+	if (rc)
+		OBD_FREE_PTR(gssiam);
+
+	return rc;
+}
+
+static int
+ll_upcall_notify(struct obd_device *host, struct obd_device *watched,
+		 enum obd_notify_event ev, void *owner)
+{
+	struct super_block *sb = owner;
+	struct ll_sb_info *sbi;
+	int result = 0;
+
+	ENTRY;
+
+	if (!sb || !s2lsi(sb))
+		RETURN(-EINVAL);
+
+	sbi = ll_s2sbi(sb);
+	if (!sbi)
+		RETURN(-EINVAL);
+
+	if ((strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME) != 0 &&
+	    strcmp(watched->obd_type->typ_name, LUSTRE_MDC_NAME) != 0)) {
+		result = -EINVAL;
+		CWARN("%s: unexpected notification from %s %s: rc = %d\n",
+		      host->obd_name, watched->obd_type->typ_name,
+		      watched->obd_name, result);
+		RETURN(result);
+	}
+
+	if (ev == OBD_NOTIFY_GSSIAM)
+		RETURN(ll_upcall_notify_gssiam(watched, sb));
+
+	if (ev == OBD_NOTIFY_ACTIVE &&
+	    strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME) == 0)
+		result = cl_ocd_update(host, watched, ev, &sbi->ll_lco);
+
+	RETURN(result);
+}
+
 static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 {
 	struct inode *root = NULL;
@@ -342,6 +435,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 	int encctxlen;
 
 	ENTRY;
+
 	sbi->ll_md_obd = class_name2obd(md);
 	if (!sbi->ll_md_obd) {
 		CERROR("%s: not setup or attached: rc = %d\n", md, -EINVAL);
@@ -442,6 +536,18 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 	if (test_bit(LL_SBI_ALWAYS_PING, sbi->ll_flags))
 		data->ocd_connect_flags &= ~OBD_CONNECT_PINGLESS;
 
+	/* Cache the login UID of the mount process. This is specifically
+	 * needed for GSSIAM authentication (passed down via upcalls).
+	 * It cannot be dynamically retrieved inside ll_upcall_notify_gssiam()
+	 * because when the security context is re-established asynchronously
+	 * during server failover or reconnect recovery, the upcall
+	 * notification runs in the context of background ptlrpcd kernel
+	 * threads where the active login UID cannot be resolved (resulting
+	 * in -1). Caching it here ensures the original mount-time login UID
+	 * is preserved for recovery.
+	 */
+	sbi->ll_loginuid = from_kuid(&init_user_ns,
+				     audit_get_loginuid(current));
 	obd_connect_set_secctx(data);
 	if (ll_sbi_has_encrypt(sbi)) {
 		obd_connect_set_enc_fid2path(data);
@@ -458,6 +564,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 retry_connect:
 	if (sb->s_flags & SB_RDONLY)
 		data->ocd_connect_flags |= OBD_CONNECT_RDONLY;
+
+	sbi->ll_md_obd->obd_upcall.onu_owner = sb;
+	sbi->ll_md_obd->obd_upcall.onu_upcall = ll_upcall_notify;
 	err = obd_connect(NULL, &sbi->ll_md_exp, sbi->ll_md_obd,
 			  &sbi->ll_sb_uuid, data, sbi->ll_cache);
 	if (err == -EBUSY) {
@@ -674,8 +783,8 @@ retry_connect:
 	       data->ocd_connect_flags,
 	       data->ocd_version, data->ocd_grant);
 
-	sbi->ll_dt_obd->obd_upcall.onu_owner = &sbi->ll_lco;
-	sbi->ll_dt_obd->obd_upcall.onu_upcall = cl_ocd_update;
+	sbi->ll_dt_obd->obd_upcall.onu_owner = sb;
+	sbi->ll_dt_obd->obd_upcall.onu_upcall = ll_upcall_notify;
 
 	data->ocd_brw_size = DT_MAX_BRW_SIZE;
 
@@ -886,10 +995,18 @@ out_root:
 	cl_sb_fini(sb);
 out_lock_cn_cb:
 	obd_disconnect(sbi->ll_dt_exp);
+	if (sbi->ll_dt_obd) {
+		sbi->ll_dt_obd->obd_upcall.onu_owner = NULL;
+		sbi->ll_dt_obd->obd_upcall.onu_upcall = NULL;
+	}
 	sbi->ll_dt_exp = NULL;
 	sbi->ll_dt_obd = NULL;
 out_md:
 	obd_disconnect(sbi->ll_md_exp);
+	if (sbi->ll_md_obd) {
+		sbi->ll_md_obd->obd_upcall.onu_owner = NULL;
+		sbi->ll_md_obd->obd_upcall.onu_upcall = NULL;
+	}
 	sbi->ll_md_exp = NULL;
 	sbi->ll_md_obd = NULL;
 out:
@@ -982,9 +1099,17 @@ static void client_common_put_super(struct super_block *sb)
 
 	cl_sb_fini(sb);
 
+	if (sbi->ll_dt_obd) {
+		sbi->ll_dt_obd->obd_upcall.onu_owner = NULL;
+		sbi->ll_dt_obd->obd_upcall.onu_upcall = NULL;
+	}
 	obd_disconnect(sbi->ll_dt_exp);
 	sbi->ll_dt_exp = NULL;
 
+	if (sbi->ll_md_obd) {
+		sbi->ll_md_obd->obd_upcall.onu_owner = NULL;
+		sbi->ll_md_obd->obd_upcall.onu_upcall = NULL;
+	}
 	obd_disconnect(sbi->ll_md_exp);
 	sbi->ll_md_exp = NULL;
 

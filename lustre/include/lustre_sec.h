@@ -829,6 +829,14 @@ struct sptlrpc_sepol {
 /* Taken from lustre_disk.h, needed for ps_nm_name */
 #define LUSTRE_NODEMAP_NAME_LENGTH     16
 
+/* GSSIAM mount information needed, gotten through upcall during mount */
+struct lustre_gssiam_mount_info {
+	char *lgmi_subdir;
+	char *lgmi_principal;
+	__u32 lgmi_options;
+	uid_t lgmi_loginuid;
+};
+
 /**
  * The ptlrpc_sec represents the client side ptlrpc security facilities,
  * each obd_import (both regular and reverse import) must associate with
@@ -864,6 +872,9 @@ struct ptlrpc_sec {
 	struct list_head		ps_gc_list;
 	time64_t			ps_gc_interval;	/* in seconds */
 	time64_t			ps_gc_next;	/* in seconds */
+
+	/* Client IAM descriptor */
+	struct lustre_gssiam_mount_info *ps_gssiam;
 };
 
 static inline int flvr_is_rootonly(__u32 flavor)

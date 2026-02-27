@@ -1002,6 +1002,7 @@ struct ll_sb_info {
 	__u32 ll_secctx_name_size;
 
 	char			 *ll_user_principal;
+	uid_t			  ll_loginuid;
 
 	/* LU-14535: the list of "lfs quota -a" */
 	struct list_head	 ll_all_quota_list;
