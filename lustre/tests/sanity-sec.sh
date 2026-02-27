@@ -12293,6 +12293,33 @@ test_102() {
 }
 run_test 102 "SSK automatic key loading from mount point"
 
+test_300() {
+	local principal="mock_iam_test"
+	local mount_opts=$(csa_add "$MOUNT_OPTS" "" "user_principal=$principal")
+	local client1=${clients_arr[0]}
+
+	log "Mount with user_principal=$principal"
+	zconf_umount_clients $client1 $MOUNT || true
+	zconf_mount_clients $client1 $MOUNT "$mount_opts" ||
+		error "mount failed"
+
+	do_node $client1 "mount | grep ' $MOUNT ' |
+		grep -q 'user_principal=$principal'" ||
+		error "user_principal=$principal not in opts on $client"
+
+	zconf_umount_clients $client1 $MOUNT || error "umount failed"
+
+	log "Mount with only user_principal (should fail)"
+	mount_opts=$(csa_add "$MOUNT_OPTS" "" "user_principal")
+	if zconf_mount_clients $client1 $MOUNT "$mount_opts"; then
+		zconf_umount_clients $client1 $MOUNT || true
+		error "mount with only -o user_principal succeeded"
+	else
+		log "Mount failed as expected with only -o user_principal"
+	fi
+}
+run_test 300 "test user_principal mount option parsing"
+
 log "cleanup: ======================================================"
 
 sec_unsetup() {

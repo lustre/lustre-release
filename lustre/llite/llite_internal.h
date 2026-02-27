@@ -804,6 +804,7 @@ enum ll_sbi_flags {
 	LL_SBI_STATFS_PROJECT,		/* statfs returns project quota */
 	LL_SBI_TEST_DUMMY_ENCRYPTION,	/* test dummy encryption */
 	LL_SBI_USER_FID2PATH,		/* fid2path by unprivileged users */
+	LL_SBI_USER_PRINCIPAL,		/* user principal for IAM */
 	LL_SBI_USER_XATTR,		/* support user xattr */
 	LL_SBI_VERBOSE,			/* verbose mount/umount */
 	LL_SBI_NUM_MOUNT_OPT,
@@ -985,6 +986,8 @@ struct ll_sb_info {
 	/* cached file security context xattr name. e.g: security.selinux */
 	char *ll_secctx_name;
 	__u32 ll_secctx_name_size;
+
+	char			 *ll_user_principal;
 
 	/* LU-14535: the list of "lfs quota -a" */
 	struct list_head	 ll_all_quota_list;

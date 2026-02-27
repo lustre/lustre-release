@@ -48,6 +48,9 @@
 #include <cl_object.h>
 #include <obd_cksum.h>
 #include "llite_internal.h"
+#include <linux/key.h>
+#include <linux/key-type.h>
+#include <lustre_sec.h>
 
 struct kmem_cache *ll_file_data_slab;
 
@@ -302,6 +305,8 @@ static void ll_free_sbi(struct super_block *sb)
 		}
 		if (sbi->ll_secctx_name)
 			ll_secctx_name_free(sbi);
+
+		kfree(sbi->ll_user_principal);
 
 		ll_free_rw_stats_info(sbi);
 		pcc_super_fini(&sbi->ll_pcc_super);
@@ -1049,6 +1054,7 @@ static const match_table_t ll_sbi_flags_name = {
 	{LL_SBI_TEST_DUMMY_ENCRYPTION,	"test_dummy_encryption"},
 	{LL_SBI_USER_FID2PATH,		"user_fid2path"},
 	{LL_SBI_USER_FID2PATH,		"nouser_fid2path"},
+	{LL_SBI_USER_PRINCIPAL,		"user_principal=%s"},
 	{LL_SBI_USER_XATTR,		"user_xattr"},
 	{LL_SBI_USER_XATTR,		"nouser_xattr"},
 	{LL_SBI_VERBOSE,		"verbose"},
@@ -1261,7 +1267,25 @@ static int ll_options(char *options, struct super_block *sb)
 				/* enable foreign symlink support */
 				set_bit(token, sbi->ll_flags);
 			} else {
-				LCONSOLE_ERROR("invalid %s option\n", s1);
+				LCONSOLE_ERROR("%s: invalid %s option\n",
+					       get_profile_name(sb), s1);
+			}
+			break;
+		case LL_SBI_USER_PRINCIPAL:
+			if (args->from) {
+				char *old = sbi->ll_user_principal;
+
+				sbi->ll_user_principal = match_strdup(args);
+				if (!sbi->ll_user_principal) {
+					sbi->ll_user_principal = old;
+					RETURN(-ENOMEM);
+				}
+				kfree(old);
+				set_bit(token, sbi->ll_flags);
+			} else {
+				LCONSOLE_ERROR("%s: invalid %s option\n",
+					       get_profile_name(sb), s1);
+				RETURN(-EINVAL);
 			}
 			break;
 		default:
@@ -4041,6 +4065,10 @@ int ll_show_options(struct seq_file *seq, struct dentry *dentry)
 			    LL_SBI_FOREIGN_SYMLINK) {
 				seq_show_option(seq, "foreign_symlink",
 						sbi->ll_foreign_symlink_prefix);
+			} else if (ll_sbi_flags_name[i].token ==
+				   LL_SBI_USER_PRINCIPAL) {
+				seq_show_option(seq, "user_principal",
+						sbi->ll_user_principal);
 			} else {
 				seq_printf(seq, ",%s",
 					   ll_sbi_flags_name[i].pattern);
