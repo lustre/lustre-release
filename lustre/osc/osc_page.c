@@ -738,6 +738,7 @@ static long osc_lru_list_shrink(const struct lu_env *env,
 	int index = 0;
 	int max_pages_to_scan;
 	int pages_scanned = 0;
+	int obj_switches = 0;
 	int rc = 0;
 	enum shrink_action action;
 	int actnum[SK_ACTION_MAX] = { 0 };
@@ -783,6 +784,8 @@ static long osc_lru_list_shrink(const struct lu_env *env,
 		LASSERT(page->cp_obj != NULL);
 		if (clobj != page->cp_obj) {
 			struct cl_object *tmp = page->cp_obj;
+
+			obj_switches++;
 
 			cl_object_get(tmp);
 			spin_unlock(&cli->cl_lru_list_lock);
@@ -847,10 +850,10 @@ static long osc_lru_list_shrink(const struct lu_env *env,
 			break;
 	}
 
-	CDEBUG(D_CACHE, "%s: LRU %s empty %d pages_scanned %d i%ld/u%ld/b%ld/l%ld actcnt %d/%d/%d/%d/%d count %ld\n",
+	CDEBUG(D_CACHE, "%s: LRU %s empty %d scanned %d obj_sw %d i%ld/u%ld/b%ld/l%ld actcnt %d/%d/%d/%d/%d count %ld\n",
 	       cli_name(cli),
 	       reason == SK_REASON_NORMAL_LRU ? "normal" : "unevict",
-	       list_empty(lru_list), pages_scanned,
+	       list_empty(lru_list), pages_scanned, obj_switches,
 	       atomic_long_read(&cli->cl_lru_in_list),
 	       atomic_long_read(&cli->cl_unevict_lru_in_list),
 	       atomic_long_read(&cli->cl_lru_busy),
@@ -1445,6 +1448,7 @@ unsigned long osc_cache_shrink_scan(struct shrinker *sk,
 	long local_scanned = 0;
 	long target_for_this_osc;
 	int oscs_processed = 0;
+	bool full_round = false;
 	int rc;
 	__u16 refcheck;
 	const char *stop_reason = "processed_all_oscs";
@@ -1469,6 +1473,7 @@ unsigned long osc_cache_shrink_scan(struct shrinker *sk,
 			stop_anchor = cli;
 		else if (cli == stop_anchor) {
 			stop_reason = "completed_full_round";
+			full_round = true;
 			break;
 		}
 
@@ -1520,6 +1525,24 @@ out:
 	       oscs_processed, shrank, sc->nr_to_scan, sc->nr_scanned,
 	       sc->nr_scanned ? (shrank * 100 / sc->nr_scanned) : 0,
 	       stop_reason);
+
+	/*
+	 * If we visited every OSC without freeing a single page,
+	 * tell the kernel to stop calling us.
+	 *
+	 * do_shrink_slab() calls count_objects once, then loops
+	 * calling scan_objects with total_scan = 2 * freeable.
+	 * When drop_caches runs, invalidate_mapping_pages() may
+	 * empty our LRUs between the count and the scan.  With
+	 * empty LRUs we report nr_scanned=0, so the kernel's
+	 * total_scan -= nr_scanned makes no progress and the
+	 * loop runs indefinitely.
+	 */
+	if (shrank == 0 && full_round) {
+		CDEBUG(D_CACHE, "SHRINK_STOP: %d OSCs visited, scanned %ld, nothing freed\n",
+		       oscs_processed, total_scanned);
+		return SHRINK_STOP;
+	}
 
 	return shrank;
 }
