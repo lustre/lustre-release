@@ -319,7 +319,7 @@ static int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 {
 	struct lmv_obd *lmv = &obd->u.lmv;
 	struct obd_device *mdc_obd;
-	struct obd_export *mdc_exp;
+	struct obd_export *mdc_exp = NULL;
 	struct lu_fld_target target;
 	int  rc;
 
@@ -341,40 +341,39 @@ static int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 		RETURN(-EINVAL);
 	}
 
-	rc = obd_connect(NULL, &mdc_exp, mdc_obd, &obd->obd_uuid,
-			 &lmv->conn_data, lmv->lmv_cache);
+	/* Propagate upcall to MDC so it can be triggered before connection */
+	mdc_obd->obd_upcall = obd->obd_upcall;
+	rc = obd_register_observer(mdc_obd, obd);
 	if (rc) {
-		CERROR("target %s connect error %d\n", tgt->ltd_uuid.uuid, rc);
+		CERROR("%s: target %s register_observer error: rc = %d\n",
+		       obd->obd_name, tgt->ltd_uuid.uuid, rc);
 		RETURN(rc);
 	}
+
+	rc = obd_connect(NULL, &mdc_exp, mdc_obd, &obd->obd_uuid,
+			 &lmv->conn_data, lmv->lmv_cache);
+	if (rc)
+		GOTO(out_observer, rc);
 
 	/* Init fid sequence client for this mdc and add new fld target.  */
 	rc = client_fid_init(mdc_obd, mdc_exp, LUSTRE_SEQ_METADATA);
 	if (rc)
-		RETURN(rc);
+		GOTO(out_disconnect, rc);
 
 	target.ft_srv = NULL;
 	target.ft_exp = mdc_exp;
 	target.ft_idx = tgt->ltd_index;
 
-	fld_client_add_target(&lmv->lmv_fld, &target);
-
-	rc = obd_register_observer(mdc_obd, obd);
-	if (rc) {
-		obd_disconnect(mdc_exp);
-		CERROR("target %s register_observer error %d\n",
-		       tgt->ltd_uuid.uuid, rc);
-		RETURN(rc);
-	}
+	rc = fld_client_add_target(&lmv->lmv_fld, &target);
+	if (rc)
+		GOTO(out_fid, rc);
 
 	if (obd->obd_observer) {
 		/* Tell the observer about the new target.  */
 		rc = obd_notify(obd->obd_observer, mdc_exp->exp_obd,
 				OBD_NOTIFY_ACTIVE);
-		if (rc) {
-			obd_disconnect(mdc_exp);
-			RETURN(rc);
-		}
+		if (rc)
+			GOTO(out_fld, rc);
 	}
 
 	tgt->ltd_active = 1;
@@ -384,10 +383,8 @@ static int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 	md_init_ea_size(tgt->ltd_exp, lmv->max_easize, lmv->max_def_easize);
 
 	rc = lu_qos_add_tgt(&lmv->lmv_qos, tgt);
-	if (rc) {
-		obd_disconnect(mdc_exp);
-		RETURN(rc);
-	}
+	if (rc)
+		GOTO(out_tgt, rc);
 
 	CDEBUG(D_CONFIG, "Connected to %s(%s) successfully (%d)\n",
 	       mdc_obd->obd_name, mdc_obd->obd_uuid.uuid,
@@ -395,12 +392,32 @@ static int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 
 	lmv_statfs_check_update(obd, tgt);
 
-	if (lmv->lmv_tgts_kobj)
+	if (lmv->lmv_tgts_kobj) {
 		/* Even if we failed to create the link, that's fine */
 		rc = sysfs_create_link(lmv->lmv_tgts_kobj,
 				       &mdc_obd->obd_kset.kobj,
 				       mdc_obd->obd_name);
+		if (rc)
+			CWARN("%s: create sysfs link failure: rc = %d\n",
+			      obd->obd_name, rc);
+	}
+
 	RETURN(0);
+
+out_tgt:
+	tgt->ltd_active = 0;
+	tgt->ltd_exp = NULL;
+	lmv->lmv_mdt_descs.ltd_lmv_desc.ld_active_tgt_count--;
+out_fld:
+	fld_client_del_target(&lmv->lmv_fld, tgt->ltd_index);
+out_fid:
+	client_fid_fini(mdc_obd);
+out_disconnect:
+	obd_disconnect(mdc_exp);
+out_observer:
+	obd_register_observer(mdc_obd, NULL);
+	mdc_obd->obd_upcall.onu_upcall = NULL;
+	return rc;
 }
 
 static void lmv_del_target(struct lmv_obd *lmv, struct lu_tgt_desc *tgt)
