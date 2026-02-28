@@ -47,6 +47,8 @@
 #include <linux/string.h>
 #include <linux/atomic.h>
 #include <linux/random.h>
+#include <linux/user_namespace.h>
+#include <linux/uidgid.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <lustre_net.h>
@@ -66,11 +68,17 @@ static struct upcall_cache *gssiam_upcall_cache;
 
 static inline __u64 gssiam_sec_cache_key(struct ptlrpc_sec *sec)
 {
-	if (sec && sec->ps_gssiam && sec->ps_gssiam->lgmi_principal)
-		return lustre_hash_fnv_1a_64(sec->ps_gssiam->lgmi_principal,
-				     strlen(sec->ps_gssiam->lgmi_principal));
+	if (sec && sec->ps_gssiam) {
+		const char *p = sec->ps_gssiam->lgmi_principal;
+
+		if (p && *p)
+			return lustre_hash_fnv_1a_64(p, strlen(p));
+		return (__u64)sec->ps_gssiam->lgmi_loginuid;
+	}
 	return 0;
 }
+
+static struct kobject *gssiam_kobj;
 
 struct gssiam_sec {
 	struct ptlrpc_sec		gis_base;
@@ -94,6 +102,195 @@ static inline struct gssiam_cli_ctx *gss_ctx2gssiam(struct ptlrpc_cli_ctx *ctx)
 {
 	return container_of(ctx, struct gssiam_cli_ctx, gicc_base);
 }
+
+/* Upcall Cache Operations */
+static void gssiam_entry_init(struct upcall_cache_entry *entry, void *args)
+{
+	struct ptlrpc_sec *sec = args;
+
+	entry->u.gssiam.gd_uc_entry = entry;
+	entry->u.gssiam.gd_token = NULL;
+	entry->u.gssiam.gd_token_len = 0;
+	entry->u.gssiam.gd_subdir = NULL;
+	entry->u.gssiam.gd_options = 0;
+	entry->u.gssiam.gd_auth_permission = GSSIAM_AUTH_DENY;
+	if (sec && sec->ps_gssiam)
+		entry->u.gssiam.gd_loginuid = sec->ps_gssiam->lgmi_loginuid;
+	else
+		entry->u.gssiam.gd_loginuid = from_kuid(&init_user_ns,
+							INVALID_UID);
+
+	if (sec && sec->ps_gssiam && sec->ps_gssiam->lgmi_principal) {
+		OBD_STRDUP(entry->u.gssiam.gd_principal,
+			   sec->ps_gssiam->lgmi_principal);
+		if (!entry->u.gssiam.gd_principal)
+			UC_CACHE_SET_INVALID(entry);
+	} else {
+		entry->u.gssiam.gd_principal = NULL;
+	}
+}
+
+static void gssiam_entry_free(struct upcall_cache *cache,
+			       struct upcall_cache_entry *entry)
+{
+	OBD_FREE_STR(entry->u.gssiam.gd_principal);
+	OBD_FREE(entry->u.gssiam.gd_token,
+		 entry->u.gssiam.gd_token_len);
+	OBD_FREE_STR(entry->u.gssiam.gd_subdir);
+}
+
+static int gssiam_upcall_compare(struct upcall_cache *cache,
+				  struct upcall_cache_entry *entry,
+				  __u64 key, void *args)
+{
+	struct ptlrpc_sec *sec = args;
+	const char *principal;
+	const char *p1, *p2;
+
+	if (entry->ue_key != key)
+		return -1;
+
+	if (!sec)
+		return 0;
+
+	if (!sec->ps_gssiam) {
+		/* sec is not NULL, but ps_gssiam is not yet
+		 * populated: no identity to match
+		 */
+		return -1;
+	}
+
+	if (entry->u.gssiam.gd_loginuid != sec->ps_gssiam->lgmi_loginuid)
+		return -1;
+
+	principal = sec->ps_gssiam->lgmi_principal;
+
+	p1 = entry->u.gssiam.gd_principal ? entry->u.gssiam.gd_principal : "";
+	p2 = principal ? principal : "";
+
+	if (strcmp(p1, p2) != 0)
+		return -1;
+
+	return 0;
+}
+
+/*
+ * gssiam_principal_match() - Compare a kernel principal string (p1) with a
+ * downcall principal buffer (p2, of length len2).
+ *
+ * Note: len2 (data->idd_principal_len) includes the '\0' null terminator
+ * (and any trailing '\0' padding), so we strip trailing '\0' bytes
+ * before comparing lengths and content.
+ */
+static bool gssiam_principal_match(const char *p1, const char *p2,
+				   size_t len2)
+{
+	size_t len1 = p1 ? strlen(p1) : 0;
+
+	while (len2 > 0 && p2 && p2[len2 - 1] == '\0')
+		len2--;
+
+	return len1 == len2 && (len1 == 0 || memcmp(p1, p2, len1) == 0);
+}
+
+static int gssiam_downcall_compare(struct upcall_cache *cache,
+				    struct upcall_cache_entry *entry,
+				    __u64 key, void *args)
+{
+	struct gssiam_downcall_data *data = args;
+	const char *p1, *p2;
+
+	if (!data)
+		return 0;
+
+	if (entry->u.gssiam.gd_loginuid != data->idd_loginuid)
+		return -1;
+
+	p1 = entry->u.gssiam.gd_principal;
+	p2 = (data->idd_principal_len > 0) ?  idd_principal(data) : NULL;
+
+	if (!gssiam_principal_match(p1, p2, data->idd_principal_len))
+		return -1;
+
+	return 0;
+}
+
+static int gssiam_do_upcall(struct upcall_cache *cache,
+			     struct upcall_cache_entry *entry)
+{
+	char *argv[7];
+	char *envp[] = {
+		"HOME=/",
+		"PATH=/sbin:/usr/sbin",
+		NULL
+	};
+	char buf[32];
+	char lbuf[32];
+	int rc, argc = 0;
+
+	snprintf(buf, sizeof(buf), "%llu", entry->ue_key);
+
+	down_read(&cache->uc_upcall_rwsem);
+	if (cache->uc_upcall[0] == '\0') {
+		rc = -EINVAL;
+		CERROR("%s: upcall path is empty: rc = %d\n",
+		       cache->uc_name, rc);
+		GOTO(out, rc);
+	}
+
+	argv[argc++] = cache->uc_upcall;
+	if (entry->u.gssiam.gd_principal &&
+	    strlen(entry->u.gssiam.gd_principal) > 0) {
+		argv[argc++] = "-p";
+		argv[argc++] = entry->u.gssiam.gd_principal;
+	}
+
+	snprintf(lbuf, sizeof(lbuf), "%u", entry->u.gssiam.gd_loginuid);
+	argv[argc++] = "-l";
+	argv[argc++] = lbuf;
+
+	argv[argc++] = buf;
+	argv[argc] = NULL;
+
+	rc = call_usermodehelper(argv[0], argv, envp, UMH_WAIT_EXEC);
+	if (rc < 0)
+		CERROR("%s: upcall %s %s failed: rc = %d\n",
+		       cache->uc_name, argv[0], buf, rc);
+
+out:
+	up_read(&cache->uc_upcall_rwsem);
+	return rc;
+}
+
+static int gssiam_parse_downcall(struct upcall_cache *cache,
+				 struct upcall_cache_entry *entry,
+				 void *args)
+{
+	struct gssiam_downcall_data *data = args;
+
+	if (data->idd_token_len > 0) {
+		OBD_ALLOC(entry->u.gssiam.gd_token, data->idd_token_len);
+		if (!entry->u.gssiam.gd_token)
+			return -ENOMEM;
+		entry->u.gssiam.gd_token_len = data->idd_token_len;
+		memcpy(entry->u.gssiam.gd_token, idd_token(data),
+		       entry->u.gssiam.gd_token_len);
+		entry->u.gssiam.gd_auth_permission = GSSIAM_AUTH_RW;
+	} else {
+		entry->u.gssiam.gd_auth_permission = GSSIAM_AUTH_DENY;
+	}
+
+	return 0;
+}
+
+static struct upcall_cache_ops gssiam_upcall_ops = {
+	.init_entry	= gssiam_entry_init,
+	.free_entry	= gssiam_entry_free,
+	.upcall_compare	= gssiam_upcall_compare,
+	.downcall_compare = gssiam_downcall_compare,
+	.do_upcall	= gssiam_do_upcall,
+	.parse_downcall	= gssiam_parse_downcall,
+};
 
 static inline bool gssiam_is_connect(struct ptlrpc_request *req)
 {
@@ -901,19 +1098,167 @@ static struct ptlrpc_sec_policy sptlrpc_gssiam_policy = {
 	.sp_sops   = &gssiam_sops,
 };
 
+static ssize_t gssiam_upcall_show(struct kobject *kobj, struct attribute *attr,
+				   char *buf)
+{
+	ssize_t len;
+
+	down_read(&gssiam_upcall_cache->uc_upcall_rwsem);
+	len = scnprintf(buf, PAGE_SIZE, "%s\n",
+			gssiam_upcall_cache->uc_upcall);
+	up_read(&gssiam_upcall_cache->uc_upcall_rwsem);
+
+	return len;
+}
+
+static
+ssize_t gssiam_upcall_store(struct kobject *kobj, struct attribute *attr,
+			    const char *buf, size_t count)
+{
+	int rc;
+
+	rc = upcall_cache_set_upcall(gssiam_upcall_cache, buf, count, true);
+	if (rc)
+		CERROR("%s: incorrect gssiam upcall %.*s: rc = %d\n",
+		       gssiam_upcall_cache->uc_name, (int)count, buf, rc);
+
+	return rc ?: count;
+}
+LUSTRE_RW_ATTR(gssiam_upcall);
+
+static
+ssize_t gssiam_downcall_store(struct kobject *kobj, struct attribute *attr,
+			       const char *buffer, size_t count)
+{
+	const struct gssiam_downcall_data *param;
+	size_t size = sizeof(*param);
+	int rc;
+
+	if (count < size) {
+		rc = -EINVAL;
+		CERROR("%s: gssiam downcall data too small: %zu: rc = %d\n",
+		       gssiam_upcall_cache->uc_name, count, rc);
+		return rc;
+	}
+
+	param = (const struct gssiam_downcall_data *)buffer;
+	if (param->idd_magic != GSSIAM_DOWNCALL_MAGIC) {
+		rc = -EINVAL;
+		CERROR("%s: gssiam downcall bad magic: %08x: rc = %d\n",
+			gssiam_upcall_cache->uc_name, param->idd_magic, rc);
+		return rc;
+	}
+
+	if (param->idd_token_len > count - size ||
+	    param->idd_principal_len > count - size ||
+	    (param->idd_principal_len > 0 &&
+	     __ALIGN_KERNEL(param->idd_token_len, 8) +
+	     (size_t)param->idd_principal_len > count - size)) {
+		rc = -EINVAL;
+		CERROR("%s: gssiam downcall invalid string lengths: token_len=%u principal_len=%u count=%zu: rc = %d\n",
+		       gssiam_upcall_cache->uc_name, param->idd_token_len,
+		       param->idd_principal_len, count, rc);
+		return rc;
+	}
+
+	rc = upcall_cache_downcall(gssiam_upcall_cache, param->idd_err,
+				   param->idd_key, (void *)param);
+
+	return rc ? rc : count;
+}
+LUSTRE_WO_ATTR(gssiam_downcall);
+
+static
+ssize_t gssiam_flush_store(struct kobject *kobj, struct attribute *attr,
+			    const char *buffer, size_t count)
+{
+	unsigned long long key;
+	int rc;
+
+	/*
+	 * gssiam_sec_cache_key() produces 64-bit fnv_1a_64() hash keys that
+	 * span the full unsigned 64-bit range. Use kstrtoull() to avoid
+	 * -ERANGE errors when keys exceed LLONG_MAX.
+	 */
+	rc = kstrtoull(buffer, 0, &key);
+	if (rc) {
+		long long sval;
+
+		/*
+		 * kstrtoull() rejects negative numbers. If -1 is passed as
+		 * the flush-all sentinel, parse it via kstrtoll().
+		 */
+		rc = kstrtoll(buffer, 0, &sval);
+		if (rc || sval != -1)
+			return rc ? rc : -EINVAL;
+
+		/* Invalidate all upcall cache entries */
+		key = ULLONG_MAX;
+	}
+
+	if (key == ULLONG_MAX) {
+		/* Invalidate all upcall cache entries */
+		upcall_cache_invalidate_all(gssiam_upcall_cache);
+	} else {
+		/* Invalidate the entry indicated by the key */
+		upcall_cache_invalidate_one(gssiam_upcall_cache,
+					    (__u64)key, NULL);
+	}
+	return count;
+}
+LUSTRE_WO_ATTR(gssiam_flush);
+
+static struct attribute *gssiam_attrs[] = {
+	&lustre_attr_gssiam_upcall.attr,
+	&lustre_attr_gssiam_downcall.attr,
+	&lustre_attr_gssiam_flush.attr,
+	NULL
+};
+
+static struct attribute_group gssiam_attr_group = {
+	.attrs = gssiam_attrs,
+};
+
+static int gssiam_tunables_init(void)
+{
+	int rc;
+
+	gssiam_kobj = kobject_create_and_add("gssiam", sptlrpc_kobj);
+	if (!gssiam_kobj)
+		return -ENOMEM;
+
+	rc = sysfs_create_group(gssiam_kobj, &gssiam_attr_group);
+	if (rc) {
+		kobject_put(gssiam_kobj);
+		gssiam_kobj = NULL;
+	}
+	return rc;
+}
+
+static void gssiam_tunables_fini(void)
+{
+	if (gssiam_kobj) {
+		sysfs_remove_group(gssiam_kobj, &gssiam_attr_group);
+		kobject_put(gssiam_kobj);
+		gssiam_kobj = NULL;
+	}
+}
+
 #define UC_GSSIAM_HASH_SIZE 128
 #define GSSIAM_UPCALL_PATH "/usr/sbin/l_gssiam_upcall"
 #define GSSIAM_CACHE_NAME "gssiam"
 
 int __init sptlrpc_gssiam_init(void)
 {
+	int rc;
+
 	gssiam_upcall_cache = upcall_cache_init(GSSIAM_CACHE_NAME,
 						 GSSIAM_UPCALL_PATH,
 						 UC_GSSIAM_HASH_SIZE,
 						 3600, /* entry expire */
 						 30, /* acquire expire */
 						 false, /* replay */
-						 NULL);
+						 &gssiam_upcall_ops);
 	if (IS_ERR(gssiam_upcall_cache)) {
 		int rc = PTR_ERR(gssiam_upcall_cache);
 
@@ -924,10 +1269,17 @@ int __init sptlrpc_gssiam_init(void)
 	}
 
 	/* XXX register GSSIAM policy once all patches are landed */
+	rc = gssiam_tunables_init();
+	if (rc) {
+		upcall_cache_cleanup(gssiam_upcall_cache);
+		return rc;
+	}
+
 	return 0;
 }
 
 void sptlrpc_gssiam_exit(void)
 {
+	gssiam_tunables_fini();
 	upcall_cache_cleanup(gssiam_upcall_cache);
 }

@@ -34,6 +34,9 @@
 #include <string.h>
 #include <fcntl.h>
 #include <ctype.h>
+#include <assert.h>
+#include <unistd.h>
+#include <libcfs/util/string.h>
 #include "err_util.h"
 
 static int verbosity = 0;
@@ -135,3 +138,73 @@ void print_hex(int pri, unsigned char *cp, int length)
 	}
 }
 
+const char *const log_prefix[] = {
+	[LL_ERR]        = "ERROR",
+	[LL_WARN]       = "WARNING",
+	[LL_INFO]       = "INFO",
+	[LL_DEBUG]      = "DEBUG",
+	[LL_TRACE]      = "TRACE",
+};
+
+loglevel_t g_log_level = LL_WARN;
+
+void lgss_set_loglevel(loglevel_t level)
+{
+	assert(level < LL_MAX);
+	g_log_level = level;
+}
+
+void __logmsg(loglevel_t level, const char *func, const char *format, ...)
+{
+	va_list ap;
+	int offset;
+	char buf[1024];
+
+	offset = scnprintf(buf, sizeof(buf), "[%d]:%s:%s(): ",
+			   getpid(), log_prefix[level], func);
+
+	va_start(ap, format);
+	vsnprintf(buf + offset, sizeof(buf) - offset, format, ap);
+	va_end(ap);
+
+	syslog(LOG_INFO, "%s", buf);
+}
+
+void log_hexl(int pri, unsigned char *cp, int length)
+{
+	logmsg(pri, "length %d\n", length);
+	log_hex(pri, cp, length);
+}
+
+void log_hex(int pri, unsigned char *cp, int length)
+{
+	int i, j, jm;
+	unsigned char c;
+	char buffer[66];
+	char *p;
+
+	for (i = 0; i < length; i += 0x10) {
+		memset(buffer, ' ', sizeof(buffer));
+		buffer[sizeof(buffer) - 1] = '\0';
+
+		p = buffer;
+		sprintf(p, "  %04x: ", (unsigned int)i);
+		p += 8;
+		jm = length - i;
+		jm = jm > 16 ? 16 : jm;
+
+		for (j = 0; j < jm; j++)
+			p += sprintf(p, "%02x%s", (unsigned int)cp[i + j],
+				     j % 2 == 1 ? " " : "");
+		*p = ' ';
+		for (; j < 16; j++)
+			p += 2 + (j % 2);
+		p++;
+
+		for (j = 0; j < jm; j++) {
+			c = cp[i + j];
+			sprintf(p++, "%c", isprint(c) ? c : '.');
+		}
+		logmsg(pri, "%s", buffer);
+	}
+}

@@ -79,25 +79,10 @@ int lgss_mutex_unlock(lgss_mutex_id_t mid);
  * log facilities                       *
  ****************************************/
 
-extern loglevel_t g_log_level;
-
-void lgss_set_loglevel(loglevel_t level);
-
-void __logmsg(loglevel_t level, const char *func, const char *format, ...)
-	__attribute__((format(printf, 3, 4)));
-
 void __logmsg_gss(loglevel_t level, const char *func, const gss_OID mech,
 		  uint32_t major, uint32_t minor, const char *format, ...)
 	__attribute__((format(printf, 6, 7)));
 
-void log_hexl(int pri, unsigned char *cp, int length);
-void log_hex(int pri, unsigned char *cp, int length);
-
-#define logmsg(loglevel, format, args...)                               \
-do {                                                                    \
-	if (loglevel <= g_log_level)					\
-                __logmsg(loglevel, __FUNCTION__, format, ##args);       \
-} while (0)
 
 #define logmsg_gss(loglevel, mech, major, minor, format, args...)       \
 do {                                                                    \

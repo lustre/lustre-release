@@ -4,7 +4,7 @@ AM_CFLAGS := -fPIC \
 	     -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS=1 \
 	     -D_GNU_SOURCE
 
-sbin_PROGRAMS =
+sbin_PROGRAMS = l_gssiam_upcall
 
 if GSS_KEYRING
 sbin_PROGRAMS += lsvcgssd lgss_keyring l_getauth
@@ -82,6 +82,13 @@ lgss_keyring_SOURCES = \
 lgss_keyring_CFLAGS = $(AM_CFLAGS) $(CFLAGS) $(KRBCFLAGS) -D _NEW_BUILD_
 lgss_keyring_LDADD = $(top_builddir)/lustre/utils/liblustreapi.la $(GSSAPI_LIBS) $(KRBLIBS) -lm -lkeyutils
 lgss_keyring_LDFLAGS = $(KRBLDFLAGS)
+
+l_gssiam_upcall_SOURCES = \
+	l_gssiam_upcall.c \
+	err_util.c
+
+l_gssiam_upcall_CFLAGS = $(AM_CFLAGS) $(CFLAGS) -D _NEW_BUILD_ -I$(top_srcdir)/lustre/utils
+l_gssiam_upcall_LDADD = $(top_builddir)/lib/libcfs/libcfs.la
 
 if GSS_SSK
 l_getauth_SOURCES += sk_utils.c sk_utils.h lgss_sk_utils.c

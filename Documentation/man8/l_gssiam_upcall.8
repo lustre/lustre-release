@@ -1,0 +1,93 @@
+.TH L_GSSIAM_UPCALL 8 2026-08-16 Lustre "Lustre Configuration Utilities"
+.SH NAME
+l_gssiam_upcall \- Handle Lustre GSSIAM security flavor upcalls
+.SH SYNOPSIS
+.SY l_gssiam_upcall
+.RB [ -d | --debug ]
+.RB [ -p | --principal
+.IR PRINCIPAL ]
+.RB [ -l | --loginuid
+.IR LOGINUID ]
+.I KEY
+.YS
+.SH DESCRIPTION
+.B l_gssiam_upcall
+is the reference implementation of the GSSIAM (Identity Access Management)
+security flavor user cache upcall. When a client performs a mount or connects
+to a server using the
+.B gssiam
+security flavor, the kernel requires a valid GSSIAM token for the user. It
+invokes
+.B l_gssiam_upcall
+to retrieve the enterprise GSSIAM token from the local environment and pass
+it back to the kernel via the
+.B gssiam_downcall
+sysfs interface.
+.SH CONFIGURATION
+The behavior of the upcall and downcall mechanism is configured via sysfs/lctl
+tunables on the client.
+.SS Client Tunables
+.TP
+.B sptlrpc.gssiam.gssiam_upcall
+Specifies the path to the executable invoked to fetch a GSSIAM token. The
+default is
+.B /usr/sbin/l_gssiam_upcall
+but this can be changed using:
+.RS
+.B lctl set_param sptlrpc.gssiam.gssiam_upcall=/path/to/upcall
+.RE
+.TP
+.B sptlrpc.gssiam.gssiam_downcall
+A write-only sysfs file used by the upcall to return the token to the kernel.
+Data written to this file must conform to the
+.B gssiam_downcall_data
+binary structure.
+.TP
+.B sptlrpc.gssiam.gssiam_flush
+Writing a
+.I KEY
+to this file flushes the cached GSSIAM token for that specific
+user. Writing -1 clears all cached tokens for the GSSIAM security flavor.
+.SH OPTIONS
+.TP
+.BR -d ", " --debug
+Run in debug mode. This will print the generated token and principal to stdout
+instead of executing the downcall to the kernel sysfs interface.
+.TP
+.BR -p ", " --principal \ \fIPRINCIPAL\fR
+(Optional) The principal name to use for the token lookup.
+.TP
+.BR -l ", " --loginuid \ \fILOGINUID\fR
+(Optional) The login UID of the process that mounted the filesystem.
+.TP
+.I KEY
+The key of the user requesting the token, is used to identify the mount session,
+which requests the token. It must be the last parameter.
+.SH EXAMPLES
+Configure the client upcall path:
+.RS
+.EX
+.B mgs# lctl set_param -P \c
+.B sptlrpc.gssiam.gssiam_upcall=/usr/local/bin/my_gssiam_upcall
+.EE
+.RE
+.PP
+Flush all cached GSSIAM tokens on the client:
+.RS
+.EX
+.B client# lctl set_param sptlrpc.gssiam.gssiam_flush=-1
+.EE
+.RE
+.SH AVAILABILITY
+The
+.B l_gssiam_upcall
+command is part of the
+.BR lustre (7)
+filesystem package since release 2.17.57.
+.\" Added in commit v2_17_57
+.SH SEE ALSO
+.BR lustre (7),
+.BR l_getidentity (8),
+.BR l_gssiam_auth (8),
+.BR lctl (8),
+.BR lctl-set_param (8)

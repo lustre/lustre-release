@@ -5,6 +5,7 @@
 #
 
 MANFILES = 					\
+	l_gssiam_upcall.8			\
 	lctl.8					\
 	lctl-dl.8				\
 	lctl-device_list.8			\

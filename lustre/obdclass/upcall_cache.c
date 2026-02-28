@@ -35,8 +35,17 @@ static struct upcall_cache_entry *alloc_entry(struct upcall_cache *cache,
 	init_waitqueue_head(&entry->ue_waitq);
 	entry->ue_acquire_expire = 0;
 	entry->ue_expire = 0;
-	if (cache->uc_ops->init_entry)
+	if (cache->uc_ops->init_entry) {
 		cache->uc_ops->init_entry(entry, args);
+		/* Once the init_entry failed(allocation failure, it will be
+		 * marked as INVALID. Since the entry is not cached yet, so
+		 * let's just free it without the cache lock.
+		 */
+		if (UC_CACHE_IS_INVALID(entry)) {
+			free_entry(cache, entry);
+			return NULL;
+		}
+	}
 	return entry;
 }
 
@@ -581,6 +590,27 @@ void upcall_cache_invalidate_one(struct upcall_cache *cache, __u64 key,
 	upcall_cache_flush_entry(cache, key, args, UC_CACHE_INVALID);
 }
 EXPORT_SYMBOL(upcall_cache_invalidate_one);
+
+void upcall_cache_invalidate_all(struct upcall_cache *cache)
+{
+	struct upcall_cache_entry *entry, *next;
+	int i;
+
+	ENTRY;
+
+	write_lock(&cache->uc_lock);
+	for (i = 0; i < cache->uc_hashsize; i++) {
+		list_for_each_entry_safe(entry, next,
+					 &cache->uc_hashtable[i], ue_hash) {
+			get_entry(entry);
+			UC_CACHE_SET_INVALID(entry);
+			put_entry(cache, entry);
+		}
+	}
+	write_unlock(&cache->uc_lock);
+	EXIT;
+}
+EXPORT_SYMBOL(upcall_cache_invalidate_all);
 
 struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
 				       int hashsz, time64_t entry_expire,

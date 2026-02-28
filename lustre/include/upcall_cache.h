@@ -174,6 +174,7 @@ static inline void upcall_cache_flush_all(struct upcall_cache *cache)
 void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key, void *args);
 void upcall_cache_invalidate_one(struct upcall_cache *cache, __u64 key,
 				 void *args);
+void upcall_cache_invalidate_all(struct upcall_cache *cache);
 struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
 				       int hashsz, time64_t entry_expire,
 				       time64_t acquire_expire, bool replayable,

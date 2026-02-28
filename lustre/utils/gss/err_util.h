@@ -54,4 +54,21 @@ void printerr(int priority, char *format, ...)
 void print_hexl(int pri, unsigned char *cp, int length);
 void print_hex(int pri, unsigned char *cp, int length);
 
+extern const char *const log_prefix[LL_MAX];
+extern loglevel_t g_log_level;
+
+void lgss_set_loglevel(loglevel_t level);
+
+void __logmsg(loglevel_t level, const char *func, const char *format, ...)
+	__attribute__((format(printf, 3, 4)));
+
+void log_hexl(int pri, unsigned char *cp, int length);
+void log_hex(int pri, unsigned char *cp, int length);
+
+#define logmsg(loglevel, format, args...)				\
+do {									\
+	if (loglevel <= g_log_level)					\
+		__logmsg(loglevel, __FUNCTION__, format, ##args);	\
+} while (0)
+
 #endif /* _ERR_UTIL_H_ */

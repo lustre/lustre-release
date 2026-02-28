@@ -3270,6 +3270,48 @@ ec_split_stripes(int total, int suggested, struct ec_split_comp *sc)
 	sc->esc_k1 = total / num_buckets;      /* bs     */
 }
 
+#define GSSIAM_DOWNCALL_MAGIC 0x1A2B3C4D
+
+/**
+ * struct gssiam_downcall_data - Payload structure written to the GSSIAM
+ * downcall sysfs channel (sptlrpc/gssiam/gssiam_downcall) by userspace
+ * upcall helpers (such as l_gssiam_upcall).
+ *
+ * @idd_magic: Magic number, must be GSSIAM_DOWNCALL_MAGIC (0x1A2B3C4D).
+ * @idd_err: Downcall status (0 for success, or negative errno on error).
+ * @idd_token_len: Length of the raw binary/string IAM token in bytes
+ *                 (excludes trailing '\0' terminator).
+ * @idd_principal_len: Length of the principal string in bytes (includes
+ *                     the trailing '\0' terminator, or 0 if no principal).
+ * @idd_key: Upcall request key to match the pending kernel cache entry.
+ * @idd_loginuid: Login UID of the requesting process, or (__u32)-1 if unset.
+ * @idd_reserved: Reserved field for future use; should be set to 0.
+ * @idd_data: Flexible array containing the contiguous payload buffers:
+ *            - Token: Located at offset 0 (use idd_token(data)).
+ *            - Principal: Located at offset __ALIGN_KERNEL(idd_token_len, 8)
+ *                         (use idd_principal(data)).
+ */
+struct gssiam_downcall_data {
+	__u32 idd_magic;
+	__s32 idd_err;
+	__u32 idd_token_len;
+	__u32 idd_principal_len;
+	__u64 idd_key;
+	__u32 idd_loginuid;
+	__u32 idd_reserved;
+	char  idd_data[];
+};
+
+static inline char *idd_token(struct gssiam_downcall_data *data)
+{
+	return data->idd_data;
+}
+
+static inline char *idd_principal(struct gssiam_downcall_data *data)
+{
+	return (data)->idd_data + __ALIGN_KERNEL((data)->idd_token_len, 8);
+}
+
 #if defined(__cplusplus)
 }
 #endif
