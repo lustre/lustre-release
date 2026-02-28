@@ -2316,7 +2316,8 @@ static int ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt,
 	 * for null-flavored rpc, msg has been unpacked by sptlrpc, although
 	 * redo it wouldn't be harmful.
 	 */
-	if (SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_NULL) {
+	if (SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_NULL &&
+	    SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_GSSIAM) {
 		rc = ptlrpc_unpack_req_msg(req, req->rq_reqlen);
 		if (rc != 0) {
 			CERROR("error unpacking request: ptl %d from %s x%llu\n",

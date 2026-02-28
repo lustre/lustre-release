@@ -159,6 +159,8 @@ __u32 sptlrpc_name2flavor_base(const char *name)
 		return SPTLRPC_FLVR_SKI;
 	if (!strcmp(name, "skpi"))
 		return SPTLRPC_FLVR_SKPI;
+	if (strcmp(name, "gssiam") == 0)
+		return SPTLRPC_FLVR_GSSIAM;
 
 	return SPTLRPC_FLVR_INVALID;
 }
@@ -172,6 +174,8 @@ const char *sptlrpc_flavor2name_base(__u32 flvr)
 		return "null";
 	else if (base == SPTLRPC_FLVR_BASE(SPTLRPC_FLVR_PLAIN))
 		return "plain";
+	else if (base == SPTLRPC_FLVR_BASE(SPTLRPC_FLVR_GSSIAM))
+		return "gssiam";
 	else if (base == SPTLRPC_FLVR_BASE(SPTLRPC_FLVR_GSSNULL))
 		return "gssnull";
 	else if (base == SPTLRPC_FLVR_BASE(SPTLRPC_FLVR_KRB5N))
@@ -1175,8 +1179,14 @@ static int do_cli_unwrap_reply(struct ptlrpc_request *req)
 	}
 	LASSERT(rc || req->rq_repmsg || req->rq_resend);
 
-	if (SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_NULL &&
-	    !req->rq_ctx_init)
+	/*
+	 * If the reply message is embedded inside a wrapper message
+	 * (e.g. plain or GSS framing), reset the swab mask for the
+	 * coming inner message unpacking in unpack_reply().
+	 * For direct null-framed replies (rq_repmsg == rq_repdata),
+	 * preserve the swab mask from the initial unpacking above.
+	 */
+	if (req->rq_repmsg != req->rq_repdata && !req->rq_ctx_init)
 		req->rq_rep_swab_mask = 0;
 	RETURN(rc);
 }
@@ -1300,6 +1310,8 @@ int sptlrpc_cli_unwrap_early_reply(struct ptlrpc_request *req,
 	early_req->rq_repdata_len = early_size;
 	early_req->rq_early = 1;
 	early_req->rq_reqmsg = req->rq_reqmsg;
+	early_req->rq_ctx_init = req->rq_ctx_init;
+	early_req->rq_gss_framed = req->rq_gss_framed;
 
 	rc = do_cli_unwrap_reply(early_req);
 	if (rc) {
@@ -2510,7 +2522,8 @@ int sptlrpc_svc_unwrap_request(struct ptlrpc_request *req)
 	 * if it's not null flavor (which means embedded packing msg),
 	 * reset the swab mask for the comming inner msg unpacking.
 	 */
-	if (SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_NULL)
+	if (SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_NULL &&
+	    SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_GSSIAM)
 		req->rq_req_swab_mask = 0;
 
 	/* sanity check for the request source */

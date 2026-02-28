@@ -326,10 +326,10 @@ void gss_cli_ctx_flags2str(unsigned long flags, char *buf, int bufsize);
 /* gss_keyring.c */
 #ifndef HAVE_GSS_KEYRING
 static inline int  __init gss_init_keyring(void) { return 0; }
-static inline void __exit gss_exit_keyring(void) { return; }
+static inline void gss_exit_keyring(void) { return; }
 #else
 int  __init gss_init_keyring(void);
-void __exit gss_exit_keyring(void);
+void gss_exit_keyring(void);
 #endif
 extern unsigned int gss_check_upcall_ns;
 
@@ -410,6 +410,10 @@ void cleanup_sk_module(void);
 static inline int init_sk_module(void) { return 0; }
 static inline void cleanup_sk_module(void) { return; }
 #endif /* HAVE_OPENSSL_SSK */
+
+/* sec_gssiam.c */
+int __init sptlrpc_gssiam_init(void);
+void sptlrpc_gssiam_exit(void);
 
 #define RSI_UPCALL_PATH "/usr/sbin/l_getauth"
 #define UC_RSICACHE_HASH_SIZE 64

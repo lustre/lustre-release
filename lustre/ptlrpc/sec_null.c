@@ -29,26 +29,10 @@ static struct ptlrpc_sec        null_sec;
 static struct ptlrpc_cli_ctx    null_cli_ctx;
 static struct ptlrpc_svc_ctx    null_svc_ctx;
 
-/*
- * we can temporarily use the topmost 8-bits of lm_secflvr to identify
- * the source sec part.
- */
-static inline
-void null_encode_sec_part(struct lustre_msg *msg, enum lustre_sec_part sp)
+int null_ctx_sign_common(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req,
+			 __u32 secflvr)
 {
-	msg->lm_secflvr |= (((__u32) sp) & 0xFF) << 24;
-}
-
-static inline
-enum lustre_sec_part null_decode_sec_part(struct lustre_msg *msg)
-{
-	return (msg->lm_secflvr >> 24) & 0xFF;
-}
-
-static
-int null_ctx_sign(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
-{
-	req->rq_reqbuf->lm_secflvr = SPTLRPC_FLVR_NULL;
+	req->rq_reqbuf->lm_secflvr = secflvr;
 
 	if (!test_bit(IMPF_DLM_FAKE, req->rq_import->imp_flags)) {
 		struct obd_device *obd = req->rq_import->imp_obd;
@@ -59,8 +43,13 @@ int null_ctx_sign(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 	req->rq_reqdata_len = req->rq_reqlen;
 	return 0;
 }
+EXPORT_SYMBOL(null_ctx_sign_common);
 
-static
+static int null_ctx_sign(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
+{
+	return null_ctx_sign_common(ctx, req, SPTLRPC_FLVR_NULL);
+}
+
 int null_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 {
 	__u32   cksums, cksumc;
@@ -85,6 +74,7 @@ int null_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 
 	return 0;
 }
+EXPORT_SYMBOL(null_ctx_verify);
 
 static
 struct ptlrpc_sec *null_create_sec(struct obd_import *imp,
@@ -134,7 +124,6 @@ int null_flush_ctx_cache(struct ptlrpc_sec *sec, uid_t uid, int grace,
 	return 0;
 }
 
-static
 int null_alloc_reqbuf(struct ptlrpc_sec *sec,
 		      struct ptlrpc_request *req,
 		      int msgsize)
@@ -157,8 +146,8 @@ int null_alloc_reqbuf(struct ptlrpc_sec *sec,
 	req->rq_reqmsg = req->rq_reqbuf;
 	return 0;
 }
+EXPORT_SYMBOL(null_alloc_reqbuf);
 
-static
 void null_free_reqbuf(struct ptlrpc_sec *sec,
 		      struct ptlrpc_request *req)
 {
@@ -175,8 +164,8 @@ void null_free_reqbuf(struct ptlrpc_sec *sec,
 		req->rq_reqbuf_len = 0;
 	}
 }
+EXPORT_SYMBOL(null_free_reqbuf);
 
-static
 int null_alloc_repbuf(struct ptlrpc_sec *sec,
 		      struct ptlrpc_request *req,
 		      int msgsize)
@@ -193,8 +182,8 @@ int null_alloc_repbuf(struct ptlrpc_sec *sec,
 	req->rq_repbuf_len = msgsize;
 	return 0;
 }
+EXPORT_SYMBOL(null_alloc_repbuf);
 
-static
 void null_free_repbuf(struct ptlrpc_sec *sec,
 		      struct ptlrpc_request *req)
 {
@@ -204,8 +193,8 @@ void null_free_repbuf(struct ptlrpc_sec *sec,
 	req->rq_repbuf = NULL;
 	req->rq_repbuf_len = 0;
 }
+EXPORT_SYMBOL(null_free_repbuf);
 
-static
 int null_enlarge_reqbuf(struct ptlrpc_sec *sec,
 			struct ptlrpc_request *req,
 			int segment, int newsize)
@@ -260,11 +249,25 @@ int null_enlarge_reqbuf(struct ptlrpc_sec *sec,
 
 	return 0;
 }
+EXPORT_SYMBOL(null_enlarge_reqbuf);
 
 static struct ptlrpc_svc_ctx null_svc_ctx = {
 	.sc_refcount    = REFCOUNT_INIT(1),
 	.sc_policy      = &null_policy,
 };
+
+void null_accept_common(struct ptlrpc_request *req,
+			struct ptlrpc_svc_ctx *svc_ctx)
+{
+	req->rq_sp_from = null_decode_sec_part(req->rq_reqbuf);
+
+	req->rq_reqmsg = req->rq_reqbuf;
+	req->rq_reqlen = req->rq_reqdata_len;
+
+	req->rq_svc_ctx = svc_ctx;
+	refcount_inc(&req->rq_svc_ctx->sc_refcount);
+}
+EXPORT_SYMBOL(null_accept_common);
 
 static
 int null_accept(struct ptlrpc_request *req)
@@ -277,18 +280,10 @@ int null_accept(struct ptlrpc_request *req)
 		return SECSVC_DROP;
 	}
 
-	req->rq_sp_from = null_decode_sec_part(req->rq_reqbuf);
-
-	req->rq_reqmsg = req->rq_reqbuf;
-	req->rq_reqlen = req->rq_reqdata_len;
-
-	req->rq_svc_ctx = &null_svc_ctx;
-	refcount_inc(&req->rq_svc_ctx->sc_refcount);
-
+	null_accept_common(req, &null_svc_ctx);
 	return SECSVC_OK;
 }
 
-static
 int null_alloc_rs(struct ptlrpc_request *req, int msgsize)
 {
 	struct ptlrpc_reply_state *rs;
@@ -319,8 +314,8 @@ int null_alloc_rs(struct ptlrpc_request *req, int msgsize)
 	req->rq_reply_state = rs;
 	return 0;
 }
+EXPORT_SYMBOL(null_alloc_rs);
 
-static
 void null_free_rs(struct ptlrpc_reply_state *rs)
 {
 	struct ptlrpc_svc_ctx *ctx = rs->rs_svc_ctx;
@@ -331,15 +326,14 @@ void null_free_rs(struct ptlrpc_reply_state *rs)
 	if (!rs->rs_prealloc)
 		OBD_FREE_LARGE(rs, rs->rs_size);
 }
+EXPORT_SYMBOL(null_free_rs);
 
-static
-int null_authorize(struct ptlrpc_request *req)
+void
+null_authorize_common(struct ptlrpc_request *req, __u32 secflvr)
 {
 	struct ptlrpc_reply_state *rs = req->rq_reply_state;
 
-	LASSERT(rs);
-
-	rs->rs_repbuf->lm_secflvr = SPTLRPC_FLVR_NULL;
+	rs->rs_repbuf->lm_secflvr = secflvr;
 	rs->rs_repdata_len = req->rq_replen;
 	req->rq_reply_off = 0;
 
@@ -353,7 +347,12 @@ int null_authorize(struct ptlrpc_request *req)
 					      MSG_PTLRPC_BODY_OFF);
 		lustre_msg_set_cksum(rs->rs_repbuf, cksum);
 	}
+}
+EXPORT_SYMBOL(null_authorize_common);
 
+static int null_authorize(struct ptlrpc_request *req)
+{
+	null_authorize_common(req, SPTLRPC_FLVR_NULL);
 	return 0;
 }
 

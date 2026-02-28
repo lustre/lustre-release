@@ -4100,6 +4100,13 @@ struct ladvise_hdr {
 	struct lu_ladvise	lah_advise[];	/* advices in this header */
 };
 
+enum gssiam_auth_type {
+	GSSIAM_AUTH_DENY		= 0,
+	GSSIAM_AUTH_RO			= 0x00000001,
+	GSSIAM_AUTH_RW			= 0x00000002,
+	GSSIAM_AUTH_EXPIRED		= 0x00000004,
+};
+
 #if defined(__cplusplus)
 }
 #endif

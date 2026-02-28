@@ -298,6 +298,21 @@ void sptlrpc_fini(void);
 __u32 __req_capsule_offset(const struct req_capsule *pill,
 			   const struct req_msg_field *field,
 			   enum req_location loc);
+/*
+ * we can temporarily use the topmost 8-bits of lm_secflvr to identify
+ * the source sec part.
+ */
+static inline
+void null_encode_sec_part(struct lustre_msg *msg, enum lustre_sec_part sp)
+{
+	msg->lm_secflvr |= (((__u32) sp) & 0xFF) << 24;
+}
+
+static inline
+enum lustre_sec_part null_decode_sec_part(struct lustre_msg *msg)
+{
+	return (msg->lm_secflvr >> 24) & 0xFF;
+}
 
 static inline bool ptlrpc_recoverable_error(int rc)
 {

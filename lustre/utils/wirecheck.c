@@ -3480,6 +3480,16 @@ static void check_lu_pcc_state(void)
 	CHECK_MEMBER(lu_pcc_state, pccs_path);
 }
 
+static void check_gssiam_auth_type(void)
+{
+	BLANK_LINE();
+	COMMENT("Checks for enum gssiam_auth_type");
+	CHECK_VALUE(GSSIAM_AUTH_DENY);
+	CHECK_VALUE_X(GSSIAM_AUTH_RO);
+	CHECK_VALUE_X(GSSIAM_AUTH_RW);
+	CHECK_VALUE_X(GSSIAM_AUTH_EXPIRED);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -3951,6 +3961,8 @@ main(int argc, char **argv)
 	check_lu_pcc_detach();
 	check_lu_pcc_detach_fid();
 	check_lu_pcc_state();
+
+	check_gssiam_auth_type();
 
 	printf("}\n");
 

@@ -1102,6 +1102,7 @@ struct ptlrpc_request {
 				/* security tfm flags */
 				rq_pack_udesc:1,
 				rq_pack_bulk:1,
+				rq_gss_framed:1,
 				/* doesn't expect reply FIXME */
 				rq_no_reply:1,
 				rq_pill_init:1, /* pill initialized */

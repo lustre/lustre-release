@@ -535,7 +535,8 @@ void upcall_cache_flush(struct upcall_cache *cache, int force)
 }
 EXPORT_SYMBOL(upcall_cache_flush);
 
-void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key, void *args)
+static void upcall_cache_flush_entry(struct upcall_cache *cache, __u64 key,
+				     void *args, enum upcall_cache_state state)
 {
 	struct list_head *head;
 	struct upcall_cache_entry *entry;
@@ -561,12 +562,25 @@ void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key, void *args)
 		      ktime_get_real_seconds(), entry->ue_acquire_expire,
 		      entry->ue_expire);
 		get_entry(entry);
-		UC_CACHE_SET_EXPIRED(entry);
+		entry->ue_flags |= state;
 		put_entry(cache, entry);
 	}
 	write_unlock(&cache->uc_lock);
+	EXIT;
+}
+
+void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key, void *args)
+{
+	upcall_cache_flush_entry(cache, key, args, UC_CACHE_EXPIRED);
 }
 EXPORT_SYMBOL(upcall_cache_flush_one);
+
+void upcall_cache_invalidate_one(struct upcall_cache *cache, __u64 key,
+				 void *args)
+{
+	upcall_cache_flush_entry(cache, key, args, UC_CACHE_INVALID);
+}
+EXPORT_SYMBOL(upcall_cache_invalidate_one);
 
 struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
 				       int hashsz, time64_t entry_expire,

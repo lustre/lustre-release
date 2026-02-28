@@ -18,6 +18,7 @@
 #include <uapi/linux/lustre/lustre_disk.h>
 #include <obd.h>
 #include <lustre_sec.h>
+#include <lustre_gssiam.h>
 
 /* The special identity_upcall value "INTERNAL" implements a particular behavior
  * which does not involve an actual upcall. Instead, the cache is filled with
@@ -31,10 +32,12 @@
  * @{
  */
 
-#define UC_CACHE_NEW            0x01
-#define UC_CACHE_ACQUIRING      0x02
-#define UC_CACHE_INVALID        0x04
-#define UC_CACHE_EXPIRED        0x08
+enum upcall_cache_state {
+	UC_CACHE_NEW		= 0x01,
+	UC_CACHE_ACQUIRING	= 0x02,
+	UC_CACHE_INVALID	= 0x04,
+	UC_CACHE_EXPIRED	= 0x08,
+};
 
 #define UC_CACHE_IS_NEW(i)          ((i)->ue_flags & UC_CACHE_NEW)
 #define UC_CACHE_IS_INVALID(i)      ((i)->ue_flags & UC_CACHE_INVALID)
@@ -102,6 +105,7 @@ struct upcall_cache_entry {
 		struct md_identity	identity;
 		struct gss_rsi		rsi;
 		struct gss_rsc		rsc;
+		struct gssiam_desc       gssiam;
 	} u;
 };
 
@@ -168,6 +172,8 @@ static inline void upcall_cache_flush_all(struct upcall_cache *cache)
 }
 
 void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key, void *args);
+void upcall_cache_invalidate_one(struct upcall_cache *cache, __u64 key,
+				 void *args);
 struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
 				       int hashsz, time64_t entry_expire,
 				       time64_t acquire_expire, bool replayable,

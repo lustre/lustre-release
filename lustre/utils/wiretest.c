@@ -7526,4 +7526,14 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lu_pcc_state, pccs_path));
 	LASSERTF((int)sizeof(((struct lu_pcc_state *)0)->pccs_path) == 4096, "found %lld\n",
 		 (long long)(int)sizeof(((struct lu_pcc_state *)0)->pccs_path));
+
+	/* Checks for enum gssiam_auth_type */
+	LASSERTF(GSSIAM_AUTH_DENY == 0, "found %lld\n",
+		 (long long)GSSIAM_AUTH_DENY);
+	LASSERTF(GSSIAM_AUTH_RO == 0x00000001, "found 0x%08llX\n",
+		 (long long)GSSIAM_AUTH_RO);
+	LASSERTF(GSSIAM_AUTH_RW == 0x00000002, "found 0x%08llX\n",
+		 (long long)GSSIAM_AUTH_RW);
+	LASSERTF(GSSIAM_AUTH_EXPIRED == 0x00000004, "found 0x%08llX\n",
+		 (long long)GSSIAM_AUTH_EXPIRED);
 }

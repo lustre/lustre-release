@@ -1992,7 +1992,7 @@ int __init gss_init_keyring(void)
 	return 0;
 }
 
-void __exit gss_exit_keyring(void)
+void gss_exit_keyring(void)
 {
 	unregister_key_type(&gss_key_type);
 	sptlrpc_unregister_policy(&gss_policy_keyring);

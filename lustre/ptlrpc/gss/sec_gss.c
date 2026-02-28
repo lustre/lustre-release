@@ -2899,17 +2899,23 @@ static int __init sptlrpc_gss_init(void)
 	if (rc)
 		goto out_kerberos;
 
+	rc = sptlrpc_gssiam_init();
+	if (rc)
+		goto out_sk;
+
 	/* register policy after all other stuff be initialized, because it
 	 * might be in used immediately after the registration.
 	 */
 	rc = gss_init_keyring();
 	if (rc)
-		goto out_sk;
+		goto out_gssiam;
 
 	gss_init_at_reply_offset();
 
 	return 0;
 
+out_gssiam:
+	sptlrpc_gssiam_exit();
 out_sk:
 	cleanup_sk_module();
 out_kerberos:
@@ -2928,7 +2934,10 @@ out_tunables:
 static void __exit sptlrpc_gss_exit(void)
 {
 	gss_exit_keyring();
+	sptlrpc_gssiam_exit();
+	cleanup_sk_module();
 	cleanup_kerberos_module();
+	cleanup_null_module();
 	gss_exit_svc_upcall();
 	gss_exit_cli_upcall();
 	gss_exit_tunables();

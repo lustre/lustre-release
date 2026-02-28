@@ -71,6 +71,7 @@ enum sptlrpc_policy {
 	SPTLRPC_POLICY_NULL             = 0,
 	SPTLRPC_POLICY_PLAIN            = 1,
 	SPTLRPC_POLICY_GSS              = 2,
+	SPTLRPC_POLICY_GSSIAM		= 3,
 	SPTLRPC_POLICY_MAX,
 };
 
@@ -89,6 +90,11 @@ enum sptlrpc_mech_gss {
 	SPTLRPC_MECH_GSS_KRB5           = 1,
 	SPTLRPC_MECH_GSS_SK             = 2,
 	SPTLRPC_MECH_GSS_MAX,
+};
+
+enum sptlrpc_mech_gssiam {
+	SPTLRPC_MECH_GSSIAM_NULL	= 0,
+	SPTLRPC_MECH_GSSIAM_MAX,
 };
 
 enum sptlrpc_service_type {
@@ -243,6 +249,12 @@ enum sptlrpc_bulk_service {
 		  SPTLRPC_SVC_PRIV,			\
 		  SPTLRPC_BULK_DEFAULT,			\
 		  SPTLRPC_BULK_SVC_PRIV)
+#define SPTLRPC_FLVR_GSSIAM				\
+	MAKE_FLVR(SPTLRPC_POLICY_GSSIAM,		\
+		  SPTLRPC_MECH_GSSIAM_NULL,		\
+		  SPTLRPC_SVC_NULL,			\
+		  SPTLRPC_BULK_DEFAULT,			\
+		  SPTLRPC_BULK_SVC_NULL)
 
 #define SPTLRPC_FLVR_DEFAULT            SPTLRPC_FLVR_NULL
 
@@ -880,14 +892,16 @@ static inline int flvr_is_rootonly(__u32 flavor)
 {
 	return (SPTLRPC_FLVR_POLICY(flavor) == SPTLRPC_POLICY_GSS &&
 		(SPTLRPC_FLVR_MECH(flavor) == SPTLRPC_MECH_GSS_NULL ||
-		 SPTLRPC_FLVR_MECH(flavor) == SPTLRPC_MECH_GSS_SK));
+		 SPTLRPC_FLVR_MECH(flavor) == SPTLRPC_MECH_GSS_SK)) ||
+	       SPTLRPC_FLVR_POLICY(flavor) == SPTLRPC_POLICY_GSSIAM;
 }
 
 static inline int flvr_allows_user_desc(__u32 flavor)
 {
 	return (SPTLRPC_FLVR_POLICY(flavor) == SPTLRPC_POLICY_GSS &&
 		(SPTLRPC_FLVR_MECH(flavor) == SPTLRPC_MECH_GSS_NULL ||
-		 SPTLRPC_FLVR_MECH(flavor) == SPTLRPC_MECH_GSS_SK));
+		 SPTLRPC_FLVR_MECH(flavor) == SPTLRPC_MECH_GSS_SK)) ||
+	       SPTLRPC_FLVR_POLICY(flavor) == SPTLRPC_POLICY_GSSIAM;
 }
 
 static inline int sec_is_reverse(struct ptlrpc_sec *sec)
@@ -984,6 +998,24 @@ static inline int size_roundup_power2(int size)
  */
 void _sptlrpc_enlarge_msg_inplace(struct lustre_msg *msg, int segment,
 				  int newsize);
+
+/* sec_null helpers */
+int null_alloc_reqbuf(struct ptlrpc_sec *sec, struct ptlrpc_request *req,
+		      int msgsize);
+void null_free_reqbuf(struct ptlrpc_sec *sec, struct ptlrpc_request *req);
+int null_alloc_repbuf(struct ptlrpc_sec *sec, struct ptlrpc_request *req,
+		      int msgsize);
+void null_free_repbuf(struct ptlrpc_sec *sec, struct ptlrpc_request *req);
+int null_enlarge_reqbuf(struct ptlrpc_sec *sec, struct ptlrpc_request *req,
+			int segment, int newsize);
+int null_alloc_rs(struct ptlrpc_request *req, int msgsize);
+void null_free_rs(struct ptlrpc_reply_state *rs);
+int null_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req);
+int null_ctx_sign_common(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req,
+			 __u32 secflvr);
+void null_authorize_common(struct ptlrpc_request *req, __u32 secflvr);
+void null_accept_common(struct ptlrpc_request *req,
+			struct ptlrpc_svc_ctx *svc_ctx);
 
 /*
  * security policies
