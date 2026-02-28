@@ -415,6 +415,21 @@ static inline void cleanup_sk_module(void) { return; }
 int __init sptlrpc_gssiam_init(void);
 void sptlrpc_gssiam_exit(void);
 
+#ifdef CONFIG_LUSTRE_FS_SERVER
+int gssiam_handle_init(struct ptlrpc_request *req, struct gss_svc_reqctx *grctx,
+		       struct obd_device *target, rawobj_t *in_token,
+		       __u32 **secdata, __u32 *seclen);
+#else
+static inline int gssiam_handle_init(struct ptlrpc_request *req,
+				     struct gss_svc_reqctx *grctx,
+				     struct obd_device *target,
+				     rawobj_t *in_token,
+				     __u32 **secdata, __u32 *seclen)
+{
+	return SECSVC_DROP;
+}
+#endif /* CONFIG_LUSTRE_FS_SERVER */
+
 #define RSI_UPCALL_PATH "/usr/sbin/l_getauth"
 #define UC_RSICACHE_HASH_SIZE 64
 extern struct upcall_cache_ops rsi_upcall_cache_ops;

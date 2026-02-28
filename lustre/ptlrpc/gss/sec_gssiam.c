@@ -268,6 +268,9 @@ static int gssiam_parse_downcall(struct upcall_cache *cache,
 {
 	struct gssiam_downcall_data *data = args;
 
+	if (data->idd_token_len > GSSIAM_MAX_TOKEN_LEN)
+		return -EINVAL;
+
 	if (data->idd_token_len > 0) {
 		OBD_ALLOC(entry->u.gssiam.gd_token, data->idd_token_len);
 		if (!entry->u.gssiam.gd_token)
@@ -284,12 +287,12 @@ static int gssiam_parse_downcall(struct upcall_cache *cache,
 }
 
 static struct upcall_cache_ops gssiam_upcall_ops = {
-	.init_entry	= gssiam_entry_init,
-	.free_entry	= gssiam_entry_free,
-	.upcall_compare	= gssiam_upcall_compare,
-	.downcall_compare = gssiam_downcall_compare,
-	.do_upcall	= gssiam_do_upcall,
-	.parse_downcall	= gssiam_parse_downcall,
+	.do_upcall		= gssiam_do_upcall,
+	.downcall_compare	= gssiam_downcall_compare,
+	.free_entry		= gssiam_entry_free,
+	.init_entry		= gssiam_entry_init,
+	.parse_downcall		= gssiam_parse_downcall,
+	.upcall_compare		= gssiam_upcall_compare,
 };
 
 static inline bool gssiam_is_connect(struct ptlrpc_request *req)
@@ -484,9 +487,9 @@ int gssiam_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 }
 
 static struct ptlrpc_ctx_ops gssiam_ctx_ops = {
+	.die		= gssiam_ctx_die,
 	.sign		= gssiam_ctx_sign,
 	.verify		= gssiam_ctx_verify,
-	.die		= gssiam_ctx_die,
 };
 
 static void gssiam_destroy_sec(struct ptlrpc_sec *sec)
@@ -775,8 +778,7 @@ static void
 gssiam_ctx_free(struct gssiam_cli_ctx *ctx)
 {
 	rawobj_free(&ctx->gicc_ich_handle);
-	if (ctx->gicc_lid.lid_token)
-		OBD_FREE(ctx->gicc_lid.lid_token, ctx->gicc_lid.lid_token_len);
+	OBD_FREE(ctx->gicc_lid.lid_token, ctx->gicc_lid.lid_token_len);
 	OBD_FREE_STR(ctx->gicc_lid.lid_subdir);
 	OBD_FREE_PTR(ctx);
 }
@@ -1012,17 +1014,17 @@ static void gssiam_kill_sec(struct ptlrpc_sec *sec)
 }
 
 static struct ptlrpc_sec_cops gssiam_sec_cops = {
+	.alloc_repbuf	= gssiam_alloc_repbuf,
+	.alloc_reqbuf	= gssiam_alloc_reqbuf,
 	.create_sec	= gssiam_create_sec,
 	.destroy_sec	= gssiam_destroy_sec,
+	.enlarge_reqbuf	= gssiam_enlarge_reqbuf,
+	.flush_ctx_cache = gssiam_flush_ctx_cache,
+	.free_repbuf	= gssiam_free_repbuf,
+	.free_reqbuf	= gssiam_free_reqbuf,
 	.kill_sec	= gssiam_kill_sec,
 	.lookup_ctx	= gssiam_lookup_ctx,
 	.release_ctx	= gssiam_release_ctx,
-	.flush_ctx_cache = gssiam_flush_ctx_cache,
-	.alloc_reqbuf	= gssiam_alloc_reqbuf,
-	.free_reqbuf	= gssiam_free_reqbuf,
-	.alloc_repbuf	= gssiam_alloc_repbuf,
-	.free_repbuf	= gssiam_free_repbuf,
-	.enlarge_reqbuf	= gssiam_enlarge_reqbuf,
 };
 
 static struct ptlrpc_svc_ctx gssiam_svc_ctx = {
@@ -1076,8 +1078,36 @@ static void gssiam_invalidate_ctx(struct ptlrpc_svc_ctx *ctx)
 /* server operations */
 static int gssiam_accept(struct ptlrpc_request *req)
 {
-	/* XXX the following patch will check the gssiam req */
+	if (req->rq_flvr.sf_rpc != SPTLRPC_FLVR_GSSIAM) {
+		CERROR("%s: rpc flavor 0x%x: rc = %d\n",
+		       libcfs_nidstr(&req->rq_peer.nid),
+		       req->rq_flvr.sf_rpc, -EPROTO);
+		return SECSVC_DROP;
+	}
+
+	/*
+	 * Under GSS framing, rq_reqbuf is the wrapper message and the embedded
+	 * lustre_msg with the opcode is in segment 1. Check buflens[0] to
+	 * distinguish GSS-framed requests (SEC_CTX_INIT and Connect) from
+	 * Null-framed data RPCs.
+	 */
+	if (req->rq_reqbuf->lm_buflens[0] == PTLRPC_GSS_HEADER_SIZE) {
+		struct gss_header *ghdr;
+
+		ghdr = lustre_msg_buf(req->rq_reqbuf, 0, sizeof(*ghdr));
+		if (ghdr && ghdr->gh_version == PTLRPC_GSS_VERSION) {
+			if (ghdr->gh_svc != SPTLRPC_SVC_NULL) {
+				CERROR("%s: invalid gssiam svc %u: rc = %d\n",
+				       libcfs_nidstr(&req->rq_peer.nid),
+				       ghdr->gh_svc, -EPROTO);
+				return SECSVC_DROP;
+			}
+			return gss_svc_accept(&sptlrpc_gssiam_policy, req);
+		}
+	}
+
 	null_accept_common(req, &gssiam_svc_ctx);
+
 	return SECSVC_OK;
 }
 
@@ -1209,9 +1239,9 @@ ssize_t gssiam_flush_store(struct kobject *kobj, struct attribute *attr,
 LUSTRE_WO_ATTR(gssiam_flush);
 
 static struct attribute *gssiam_attrs[] = {
-	&lustre_attr_gssiam_upcall.attr,
 	&lustre_attr_gssiam_downcall.attr,
 	&lustre_attr_gssiam_flush.attr,
+	&lustre_attr_gssiam_upcall.attr,
 	NULL
 };
 
@@ -1270,12 +1300,10 @@ int __init sptlrpc_gssiam_init(void)
 
 	/* XXX register GSSIAM policy once all patches are landed */
 	rc = gssiam_tunables_init();
-	if (rc) {
+	if (rc)
 		upcall_cache_cleanup(gssiam_upcall_cache);
-		return rc;
-	}
 
-	return 0;
+	return rc;
 }
 
 void sptlrpc_gssiam_exit(void)

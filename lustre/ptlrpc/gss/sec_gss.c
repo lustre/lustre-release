@@ -708,7 +708,7 @@ int gss_cli_ctx_handle_err_notify(struct ptlrpc_cli_ctx *ctx,
 	 * get rid of this ctx.
 	 */
 	rc = sptlrpc_req_replace_dead_ctx(req, NULL);
-	if (rc == 0)
+	if (!rc)
 		req->rq_resend = 1;
 
 	return rc;
@@ -2041,6 +2041,12 @@ int gss_svc_handle_init(struct ptlrpc_request *req, struct gss_wire_ctx *gw)
 		rc = SECSVC_DROP;
 		CDEBUG(D_SEC, "%s: can't extract token: rc = %d\n",
 		       target->obd_name, rc);
+		RETURN(rc);
+	}
+
+	if (SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) == SPTLRPC_POLICY_GSSIAM) {
+		rc = gssiam_handle_init(req, grctx, target, &in_token,
+					&secdata, &seclen);
 		RETURN(rc);
 	}
 

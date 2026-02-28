@@ -11,6 +11,10 @@ ptlrpc_gss-objs := sec_gss.o gss_bulk.o gss_cli_upcall.o gss_svc_upcall.o \
 		   gss_generic_token.o gss_mech_switch.o gss_krb5_mech.o \
 		   gss_null_mech.o gss_crypto.o sec_gssiam.o
 
+ifdef CONFIG_LUSTRE_FS_SERVER
+ptlrpc_gss-objs += sec_gssiam_srv.o
+endif
+
 ifdef CONFIG_LUSTRE_FS_GSS_SSK
 ptlrpc_gss-objs += gss_sk_mech.o
 endif

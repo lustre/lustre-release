@@ -2313,11 +2313,15 @@ static int ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt,
 	}
 
 	/*
-	 * for null-flavored rpc, msg has been unpacked by sptlrpc, although
-	 * redo it wouldn't be harmful.
+	 * For direct null-framed requests (rq_reqmsg == rq_reqbuf), the
+	 * message was already unpacked in sptlrpc_svc_unwrap_request(),
+	 * so re-unpacking it here would be harmless but pointless.
+	 *
+	 * For wrapped requests (rq_reqmsg != rq_reqbuf, such as GSS,
+	 * PLAIN, or GSS-framed GSSIAM SEC_CTX_INIT / Connect RPCs),
+	 * unpack the newly extracted inner clear-text message.
 	 */
-	if (SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_NULL &&
-	    SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_GSSIAM) {
+	if (req->rq_reqmsg != req->rq_reqbuf) {
 		rc = ptlrpc_unpack_req_msg(req, req->rq_reqlen);
 		if (rc != 0) {
 			CERROR("error unpacking request: ptl %d from %s x%llu\n",

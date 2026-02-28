@@ -3271,6 +3271,7 @@ ec_split_stripes(int total, int suggested, struct ec_split_comp *sc)
 }
 
 #define GSSIAM_DOWNCALL_MAGIC 0x1A2B3C4D
+#define GSSIAM_MAX_TOKEN_LEN  4096
 
 /**
  * struct gssiam_downcall_data - Payload structure written to the GSSIAM

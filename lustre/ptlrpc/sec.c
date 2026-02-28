@@ -2519,11 +2519,18 @@ int sptlrpc_svc_unwrap_request(struct ptlrpc_request *req)
 	LASSERT(req->rq_svc_ctx || rc == SECSVC_DROP);
 
 	/*
-	 * if it's not null flavor (which means embedded packing msg),
-	 * reset the swab mask for the comming inner msg unpacking.
+	 * If the clear-text request message is embedded inside a wrapper
+	 * message (e.g. plain, GSS, or GSS-framed GSSIAM where
+	 * rq_reqmsg != rq_reqbuf), reset the swab mask so the upcoming
+	 * inner message unpacking in ptlrpc_server_handle_req_in() can
+	 * unpack the inner message cleanly.
+	 *
+	 * For direct null-framed requests (e.g. standard NULL flavor or regular
+	 * GSSIAM data RPCs where rq_reqmsg == rq_reqbuf), preserve the swab
+	 * mask that was already recorded during the initial
+	 * __lustre_unpack_msg() above.
 	 */
-	if (SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_NULL &&
-	    SPTLRPC_FLVR_POLICY(req->rq_flvr.sf_rpc) != SPTLRPC_POLICY_GSSIAM)
+	if (req->rq_reqmsg != req->rq_reqbuf)
 		req->rq_req_swab_mask = 0;
 
 	/* sanity check for the request source */
