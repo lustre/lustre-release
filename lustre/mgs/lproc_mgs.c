@@ -240,6 +240,7 @@ LUSTRE_OBD_UINT_PARAM_ATTR(at_min);
 LUSTRE_OBD_UINT_PARAM_ATTR(at_max);
 LUSTRE_OBD_UINT_PARAM_ATTR(at_history);
 LUSTRE_OBD_UINT_PARAM_ATTR(at_unhealthy_factor);
+LUSTRE_OBD_UINT_PARAM_ATTR(ldlm_enqueue_min);
 
 static struct attribute *mgs_attrs[] = {
 	&lustre_attr_evict_client.attr,
@@ -252,6 +253,7 @@ static struct attribute *mgs_attrs[] = {
 	&lustre_attr_at_max.attr,
 	&lustre_attr_at_history.attr,
 	&lustre_attr_at_unhealthy_factor.attr,
+	&lustre_attr_ldlm_enqueue_min.attr,
 	NULL,
 };
 

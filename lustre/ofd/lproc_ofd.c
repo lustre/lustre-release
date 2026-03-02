@@ -1198,6 +1198,7 @@ LDEBUGFS_SEQ_FOPS_RW_TYPE(ofd, nid_stats_clear);
 LUSTRE_OBD_UINT_PARAM_ATTR(at_min);
 LUSTRE_OBD_UINT_PARAM_ATTR(at_max);
 LUSTRE_OBD_UINT_PARAM_ATTR(at_history);
+LUSTRE_OBD_UINT_PARAM_ATTR(ldlm_enqueue_min);
 
 static struct attribute *ofd_attrs[] = {
 	&lustre_attr_access_log_mask.attr,
@@ -1239,6 +1240,7 @@ static struct attribute *ofd_attrs[] = {
 	&lustre_attr_tot_pending.attr,
 	&lustre_attr_soft_sync_limit.attr,
 	&lustre_attr_sync_journal.attr,
+	&lustre_attr_ldlm_enqueue_min.attr,
 	NULL,
 };
 

@@ -94,6 +94,7 @@ LUSTRE_RW_ATTR(dynamic_nids);
 LUSTRE_OBD_UINT_PARAM_ATTR(at_min);
 LUSTRE_OBD_UINT_PARAM_ATTR(at_max);
 LUSTRE_OBD_UINT_PARAM_ATTR(at_history);
+LUSTRE_OBD_UINT_PARAM_ATTR(ldlm_enqueue_min);
 
 static struct attribute *mgc_attrs[] = {
 	&lustre_attr_mgs_conn_uuid.attr,
@@ -103,6 +104,7 @@ static struct attribute *mgc_attrs[] = {
 	&lustre_attr_at_min.attr,
 	&lustre_attr_at_max.attr,
 	&lustre_attr_at_history.attr,
+	&lustre_attr_ldlm_enqueue_min.attr,
 	NULL,
 };
 

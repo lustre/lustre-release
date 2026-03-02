@@ -1965,10 +1965,14 @@ test_68 () #bug 13813
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
     at_start || return 0
-    local ldlm_enqueue_min=$(find /sys -name ldlm_enqueue_min)
-    [ -z "$ldlm_enqueue_min" ] && skip "missing /sys/.../ldlm_enqueue_min" && return 0
-    local ldlm_enqueue_min_r=$(do_facet ost1 "find /sys -name ldlm_enqueue_min")
-    [ -z "$ldlm_enqueue_min_r" ] && skip "missing /sys/.../ldlm_enqueue_min in the ost1" && return 0
+    local ldlm_enqueue_min=$(find /sys/module -name ldlm_enqueue_min)
+    [ -z "$ldlm_enqueue_min" ] &&
+	    skip "missing /sys/module/.../ldlm_enqueue_min" && return 0
+    local ldlm_enqueue_min_r=$(do_facet ost1 "find /sys/module \
+			       -name ldlm_enqueue_min")
+    [ -z "$ldlm_enqueue_min_r" ] &&
+	    skip "missing /sys/module/.../ldlm_enqueue_min in the ost1" &&
+	    return 0
     local ENQ_MIN=$(cat $ldlm_enqueue_min)
     local ENQ_MIN_R=$(do_facet ost1 "cat $ldlm_enqueue_min_r")
 	echo $TIMEOUT >> $ldlm_enqueue_min
