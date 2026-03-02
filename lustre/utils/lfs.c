@@ -688,7 +688,7 @@ command_t cmdlist[] = {
  *
  * Return 0 on unrecognized hash (failure) or positive value on success
  */
-static int check_hashtype(const char *hashtype)
+static enum lmv_hash_type check_hashtype(const char *hashtype)
 {
 	int type_num;
 	int i;
@@ -706,7 +706,7 @@ static int check_hashtype(const char *hashtype)
 		if (strcmp(hashtype, mdt_hash_name[i]) == 0)
 			return i;
 out:
-	return 0;
+	return LMV_HASH_TYPE_UNKNOWN;
 }
 
 static uint32_t check_foreign_type_name(const char *foreign_type_name)
@@ -3036,6 +3036,7 @@ struct lfs_setstripe_args {
 	__u32			 lsa_comp_flags;
 	__u32			 lsa_comp_neg_flags;
 	unsigned long long	 lsa_pattern;
+	enum lmv_hash_type	 lsa_hash;
 	unsigned int		 lsa_mirror_count;
 	int			 lsa_nr_tgts;
 	bool			 lsa_first_comp;
@@ -3055,6 +3056,7 @@ static inline void setstripe_args_init(struct lfs_setstripe_args *lsa)
 	lsa->lsa_stripe_count = LLAPI_LAYOUT_DEFAULT;
 	lsa->lsa_stripe_off = LLAPI_LAYOUT_DEFAULT;
 	lsa->lsa_pattern = LLAPI_LAYOUT_RAID0;
+	lsa->lsa_hash = LMV_HASH_TYPE_UNKNOWN;
 	lsa->lsa_pool_name = NULL;
 
 	lsa->lsa_mirror_count = mirror_count;
@@ -3096,6 +3098,7 @@ static inline bool setstripe_args_specified(struct lfs_setstripe_args *lsa)
 		lsa->lsa_stripe_count != LLAPI_LAYOUT_DEFAULT ||
 		lsa->lsa_stripe_off != LLAPI_LAYOUT_DEFAULT ||
 		lsa->lsa_pattern != LLAPI_LAYOUT_RAID0 ||
+		lsa->lsa_hash != LMV_HASH_TYPE_UNKNOWN ||
 		lsa->lsa_comp_end != 0);
 }
 
@@ -4391,8 +4394,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 				return CMD_HELP;
 			}
 
-			lsa.lsa_pattern = check_hashtype(optarg);
-			if (lsa.lsa_pattern == 0) {
+			lsa.lsa_hash = check_hashtype(optarg);
+			if (lsa.lsa_hash == LMV_HASH_TYPE_UNKNOWN) {
 				fprintf(stderr,
 					"%s %s: bad stripe hash type '%s'\n",
 					progname, argv[0], optarg);
@@ -5024,10 +5027,7 @@ create_mirror:
 		}
 		lmu->lum_stripe_offset = lsa.lsa_stripe_off;
 
-		if (lsa.lsa_pattern != LLAPI_LAYOUT_RAID0)
-			lmu->lum_hash_type = lsa.lsa_pattern;
-		else
-			lmu->lum_hash_type = LMV_HASH_TYPE_UNKNOWN;
+		lmu->lum_hash_type = lsa.lsa_hash;
 
 		if (overstriped)
 			lmu->lum_hash_type |= LMV_HASH_FLAG_OVERSTRIPED;
@@ -8492,8 +8492,8 @@ static int lfs_setdirstripe(int argc, char **argv)
 			fallthrough;
 #endif
 		case 'H':
-			lsa.lsa_pattern = check_hashtype(optarg);
-			if (lsa.lsa_pattern == 0) {
+			lsa.lsa_hash = check_hashtype(optarg);
+			if (lsa.lsa_hash == LMV_HASH_TYPE_UNKNOWN) {
 				fprintf(stderr,
 					"%s %s: bad directory hash type '%s'\n",
 					progname, argv[0], optarg);
@@ -8727,10 +8727,7 @@ static int lfs_setdirstripe(int argc, char **argv)
 	else
 		param->lsp_stripe_offset = lsa.lsa_stripe_off;
 
-	if (lsa.lsa_pattern != LLAPI_LAYOUT_RAID0)
-		param->lsp_stripe_pattern = lsa.lsa_pattern;
-	else
-		param->lsp_stripe_pattern = LMV_HASH_TYPE_UNKNOWN;
+	param->lsp_stripe_pattern = lsa.lsa_hash;
 
 	if (overstriped) {
 		param->lsp_stripe_pattern |= LMV_HASH_FLAG_OVERSTRIPED;
