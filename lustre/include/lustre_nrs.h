@@ -94,7 +94,7 @@ struct ptlrpc_nrs_pol_ops {
 	 *
 	 * \param[in,out] policy The policy being stopped
 	 *
-	 * \see nrs_policy_stop0()
+	 * \see __nrs_policy_stop()
 	 */
 	void	(*op_policy_stop)(struct ptlrpc_nrs_policy *policy);
 	/**

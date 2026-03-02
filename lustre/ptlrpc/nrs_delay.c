@@ -127,7 +127,7 @@ static int nrs_delay_start(struct ptlrpc_nrs_policy *policy, char *arg)
  * ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED; deallocates the delay-specific
  * private data structure.
  *
- * see nrs_policy_stop0()
+ * see __nrs_policy_stop()
  */
 static void nrs_delay_stop(struct ptlrpc_nrs_policy *policy)
 {

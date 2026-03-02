@@ -2200,7 +2200,7 @@ out:
  * ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED; deallocates the policy-specific
  * private data structure.
  *
- * see nrs_policy_stop0()
+ * see __nrs_policy_stop()
  */
 static void nrs_tbf_stop(struct ptlrpc_nrs_policy *policy)
 {

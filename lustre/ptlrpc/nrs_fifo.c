@@ -71,7 +71,7 @@ static int nrs_fifo_start(struct ptlrpc_nrs_policy *policy, char *arg)
  *
  * Is called before the policy transitions into
  * ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED; deallocates the policy-specific
- * private data structure.  see nrs_policy_stop0()
+ * private data structure. see __nrs_policy_stop()
  */
 static void nrs_fifo_stop(struct ptlrpc_nrs_policy *policy)
 {

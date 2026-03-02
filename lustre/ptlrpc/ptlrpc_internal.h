@@ -137,20 +137,20 @@ void ptlrpc_nrs_req_add(struct ptlrpc_service_part *svcpt,
 			struct ptlrpc_request *req, bool hp);
 
 struct ptlrpc_request *
-ptlrpc_nrs_req_get_nolock0(struct ptlrpc_service_part *svcpt, bool hp,
-			   bool peek, bool force);
+__ptlrpc_nrs_req_get_nolock(struct ptlrpc_service_part *svcpt, bool hp,
+			    bool peek, bool force);
 
 static inline struct ptlrpc_request *
 ptlrpc_nrs_req_get_nolock(struct ptlrpc_service_part *svcpt, bool hp,
 			  bool force)
 {
-	return ptlrpc_nrs_req_get_nolock0(svcpt, hp, false, force);
+	return __ptlrpc_nrs_req_get_nolock(svcpt, hp, false, force);
 }
 
 static inline struct ptlrpc_request *
 ptlrpc_nrs_req_peek_nolock(struct ptlrpc_service_part *svcpt, bool hp)
 {
-	return ptlrpc_nrs_req_get_nolock0(svcpt, hp, true, true);
+	return __ptlrpc_nrs_req_get_nolock(svcpt, hp, true, true);
 }
 
 void ptlrpc_nrs_req_del_nolock(struct ptlrpc_request *req);

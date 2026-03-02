@@ -62,7 +62,7 @@ static int nrs_policy_ctl_locked(struct ptlrpc_nrs_policy *policy,
 	       -ENOSYS);
 }
 
-static void nrs_policy_stop0(struct ptlrpc_nrs_policy *policy)
+static void __nrs_policy_stop(struct ptlrpc_nrs_policy *policy)
 {
 	ENTRY;
 
@@ -102,7 +102,7 @@ static inline void nrs_policy_started_get(struct ptlrpc_nrs_policy *policy)
 static void nrs_policy_started_put(struct ptlrpc_nrs_policy *policy)
 {
 	if (refcount_dec_and_test(&policy->pol_start_ref))
-		nrs_policy_stop0(policy);
+		__nrs_policy_stop(policy);
 }
 
 static int nrs_policy_stop_locked(struct ptlrpc_nrs_policy *policy)
@@ -945,7 +945,7 @@ static int nrs_register_policies_locked(struct ptlrpc_nrs *nrs)
 }
 
 /**
- * nrs_svcpt_setup_locked0() - Initializes NRS head
+ * __nrs_svcpt_setup_locked() - Initializes NRS head
  * @nrs: the NRS head
  * @svcpt: the PTLRPC service partition to setup
  *
@@ -958,8 +958,8 @@ static int nrs_register_policies_locked(struct ptlrpc_nrs *nrs)
  * * %-ve error
  * * %0 success
  */
-static int nrs_svcpt_setup_locked0(struct ptlrpc_nrs *nrs,
-				   struct ptlrpc_service_part *svcpt)
+static int __nrs_svcpt_setup_locked(struct ptlrpc_nrs *nrs,
+				    struct ptlrpc_service_part *svcpt)
 {
 	enum ptlrpc_nrs_queue_type queue = PTLRPC_NRS_QUEUE_REG;
 	int rc;
@@ -1011,7 +1011,7 @@ static int nrs_svcpt_setup_locked(struct ptlrpc_service_part *svcpt)
 	 * Initialize the regular NRS head.
 	 */
 	nrs = nrs_svcpt2nrs(svcpt, false);
-	rc = nrs_svcpt_setup_locked0(nrs, svcpt);
+	rc = __nrs_svcpt_setup_locked(nrs, svcpt);
 	if (rc < 0)
 		GOTO(out, rc);
 
@@ -1028,7 +1028,7 @@ static int nrs_svcpt_setup_locked(struct ptlrpc_service_part *svcpt)
 		GOTO(out, rc = -ENOMEM);
 
 	nrs = nrs_svcpt2nrs(svcpt, true);
-	rc = nrs_svcpt_setup_locked0(nrs, svcpt);
+	rc = __nrs_svcpt_setup_locked(nrs, svcpt);
 
 out:
 	RETURN(rc);
@@ -1515,7 +1515,7 @@ static void nrs_request_removed(struct ptlrpc_nrs_policy *policy)
 }
 
 /**
- * ptlrpc_nrs_req_get_nolock0() - Obtains a request for handling from an NRS
+ * __ptlrpc_nrs_req_get_nolock() - Obtains a request for handling from an NRS
  * head of service partition @svcpt.
  * @svcpt: the service partition
  * @hp: whether to obtain a request from the regular or high-priority NRS head.
@@ -1527,8 +1527,8 @@ static void nrs_request_removed(struct ptlrpc_nrs_policy *policy)
  * Returns request to be handled or NULL if the head has no request to serve
  */
 struct ptlrpc_request *
-ptlrpc_nrs_req_get_nolock0(struct ptlrpc_service_part *svcpt, bool hp,
-			   bool peek, bool force)
+__ptlrpc_nrs_req_get_nolock(struct ptlrpc_service_part *svcpt, bool hp,
+			    bool peek, bool force)
 {
 	struct ptlrpc_nrs	  *nrs = nrs_svcpt2nrs(svcpt, hp);
 	struct ptlrpc_nrs_policy  *policy;
