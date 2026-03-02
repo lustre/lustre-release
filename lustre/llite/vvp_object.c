@@ -222,9 +222,9 @@ static const struct cl_object_operations vvp_ops = {
 	.coo_req_projid_set = vvp_req_projid_set,
 };
 
-static int vvp_object_init0(const struct lu_env *env,
-			    struct vvp_object *vob,
-			    const struct cl_object_conf *conf)
+static int __vvp_object_init(const struct lu_env *env,
+			     struct vvp_object *vob,
+			     const struct cl_object_conf *conf)
 {
 	vob->vob_inode = conf->coc_inode;
 	cl_object_page_init(&vob->vob_cl, sizeof(struct cl_page_slice));
@@ -247,7 +247,7 @@ static int vvp_object_init(const struct lu_env *env, struct lu_object *obj,
 
 		cconf = lu2cl_conf(conf);
 		lu_object_add(obj, below);
-		result = vvp_object_init0(env, vob, cconf);
+		result = __vvp_object_init(env, vob, cconf);
 	} else
 		result = -ENOMEM;
 

@@ -1852,19 +1852,19 @@ void ll_statahead_enter(struct inode *dir, struct dentry *dentry);
 /* glimpse.c */
 blkcnt_t dirty_cnt(struct inode *inode);
 
-int cl_glimpse_size0(struct inode *inode, int agl);
+int __cl_glimpse_size(struct inode *inode, int agl);
 int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
 		    struct inode *inode, struct cl_object *clob, int agl);
 
 static inline int cl_glimpse_size(struct inode *inode)
 {
-	return cl_glimpse_size0(inode, 0);
+	return __cl_glimpse_size(inode, 0);
 }
 
 /* AGL is 'async glimpse lock',is speculative lock taken as part of statahead */
 static inline int cl_agl(struct inode *inode)
 {
-	return cl_glimpse_size0(inode, 1);
+	return __cl_glimpse_size(inode, 1);
 }
 
 int ll_file_lock_ahead(struct file *file, struct llapi_lu_ladvise *ladvise);

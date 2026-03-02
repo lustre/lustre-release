@@ -133,9 +133,8 @@ restart:
 	RETURN(io);
 }
 
-/* Sharing code of page_mkwrite method for rhel5 and rhel6 */
-static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
-			    bool *retry)
+static int __ll_page_mkwrite(struct vm_area_struct *vma, struct page *vmpage,
+			     bool *retry)
 {
 	struct lu_env           *env;
 	struct cl_io            *io;
@@ -263,7 +262,7 @@ int ll_filemap_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 }
 
 /**
- * ll_fault0() - Lustre implementation of a vm_operations_struct::fault()
+ * __ll_fault() - Lustre implementation of a vm_operations_struct::fault()
  * method, called by VM to server page fault (both in kernel and user space).
  * @vma: is virtiual area struct related to page fault
  * @vmf: structure which describe type and address where hit fault
@@ -273,7 +272,7 @@ int ll_filemap_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
  * * VM_FAULT_ERROR on general error
  * * NOPAGE_OOM not have memory for allocate new page
  */
-static vm_fault_t ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
+static vm_fault_t __ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 	struct inode *inode = file_inode(vma->vm_file);
 	struct lu_env           *env;
@@ -397,7 +396,7 @@ static vm_fault_t ll_fault(struct vm_fault *vmf)
 		return VM_FAULT_SIGBUS;
 
 restart:
-	result = ll_fault0(vma, vmf);
+	result = __ll_fault(vma, vmf);
 	if (vmf->page &&
 	    !(result & (VM_FAULT_RETRY | VM_FAULT_ERROR | VM_FAULT_LOCKED))) {
 		struct page *vmpage = vmf->page;
@@ -471,7 +470,7 @@ static vm_fault_t ll_page_mkwrite(struct vm_fault *vmf)
 	file_update_time(vma->vm_file);
 	do {
 		retry = false;
-		result = ll_page_mkwrite0(vma, vmf->page, &retry);
+		result = __ll_page_mkwrite(vma, vmf->page, &retry);
 
 		if (!printed && ++count > 16) {
 			const struct dentry *de = file_dentry(vma->vm_file);

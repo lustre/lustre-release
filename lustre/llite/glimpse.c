@@ -157,7 +157,7 @@ int cl_io_get(struct inode *inode, struct lu_env **envout,
 	return result;
 }
 
-int cl_glimpse_size0(struct inode *inode, int agl)
+int __cl_glimpse_size(struct inode *inode, int agl)
 {
 	/*
 	 * We don't need ast_flags argument to cl_glimpse_size(), because
