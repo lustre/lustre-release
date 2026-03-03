@@ -1383,7 +1383,8 @@ struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio,
 		sdio->csd_creator_free = sync;
 		sdio->csd_write = write;
 		sdio->csd_unaligned = unaligned;
-		spin_lock_init(&sdio->csd_lock);
+		init_waitqueue_head(&sdio->csd_write_waitq);
+		spin_lock_init(&sdio->csd_write_lock);
 
 		atomic_add(1,  &ll_aio->cda_sync.csi_sync_nr);
 
@@ -1606,7 +1607,6 @@ static ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
 	size_t original_count = count;
 	int short_copies = 0;
 	bool mm_used = false;
-	bool locked = false;
 	unsigned int i = 0;
 	int status = 0;
 	int rw;
@@ -1623,15 +1623,44 @@ static ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
 	/* read copying is protected by the reference count on the sdio, since
 	 * it's done as part of getting rid of the sdio, but write copying is
 	 * done at the start, where there may be multiple ptlrpcd threads
-	 * using this sdio, so we must lock and check if the copying has
-	 * been done
+	 * using this sdio, so we must synchronize access
 	 */
 	if (rw == WRITE) {
-		spin_lock(&sdio->csd_lock);
-		locked = true;
-		if (sdio->csd_write_copied)
-			GOTO(out, status = 0);
+		unsigned long flags;
+
+		/* Use the wait queue's internal spinlock to protect state.
+		 * We only hold it briefly to check/update flags, not during
+		 * the actual copy operations which can sleep.
+		 */
+		spin_lock_irqsave(&sdio->csd_write_lock, flags);
+
+		/* Wait if another thread is currently copying */
+		while (sdio->csd_write_copying && !sdio->csd_write_copied) {
+			DEFINE_WAIT(wait);
+
+			prepare_to_wait(&sdio->csd_write_waitq, &wait,
+					TASK_UNINTERRUPTIBLE);
+			spin_unlock_irqrestore(&sdio->csd_write_lock, flags);
+
+			schedule();
+
+			spin_lock_irqsave(&sdio->csd_write_lock, flags);
+			finish_wait(&sdio->csd_write_waitq, &wait);
+		}
+
+		/* If copy is already done (or failed), return the status */
+		if (sdio->csd_write_copied) {
+			ssize_t ret = sdio->csd_write_status;
+
+			spin_unlock_irqrestore(&sdio->csd_write_lock, flags);
+			RETURN(ret);
+		}
+
+		/* We're the first thread here, claim the copy operation */
+		sdio->csd_write_copying = true;
+		spin_unlock_irqrestore(&sdio->csd_write_lock, flags);
 	}
+
 	/* if there's no mm, io is being done from a kernel thread, so there's
 	 * no need to transition to its mm context anyway.
 	 *
@@ -1654,6 +1683,9 @@ static ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
 		if (unlikely(ll_iov_iter_fault_in_readable(iter, count)))
 			GOTO(out, status = -EFAULT);
 	}
+
+	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_DIO_COPY_ERR))
+		GOTO(out, status = -EFAULT);
 
 	/* modeled on kernel generic_file_buffered_read/write()
 	 *
@@ -1725,9 +1757,6 @@ static ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
 		i++;
 	}
 
-	if (rw == WRITE && status == 0)
-		sdio->csd_write_copied = true;
-
 	/* if we complete successfully, we should reach all of the pages */
 	LASSERTF(ergo(status == 0, i == cdp->cdp_page_count - 1),
 		 "status: %d, i: %d, cdp->cdp_page_count %u, count %zu\n",
@@ -1737,8 +1766,23 @@ out:
 	if (mm_used)
 		kthread_unuse_mm(mm);
 
-	if (locked)
-		spin_unlock(&sdio->csd_lock);
+	/* For write operations, update state and wake any waiting threads */
+	if (rw == WRITE) {
+		unsigned long flags;
+		ssize_t result = original_count - count ?
+			original_count - count : status;
+
+		spin_lock_irqsave(&sdio->csd_write_lock, flags);
+		/* Store result (bytes copied or error) for waiting threads */
+		sdio->csd_write_status = result;
+		/* Mark copy as complete (successfully or not) */
+		sdio->csd_write_copied = true;
+		sdio->csd_write_copying = false;
+		spin_unlock_irqrestore(&sdio->csd_write_lock, flags);
+
+		/* Wake up any threads waiting for the copy to complete */
+		wake_up_all(&sdio->csd_write_waitq);
+	}
 
 	/* the total bytes copied, or status */
 	RETURN(original_count - count ? original_count - count : status);

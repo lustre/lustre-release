@@ -2626,10 +2626,13 @@ struct cl_sub_dio {
 	struct cl_dio_pages	csd_dio_pages;
 	struct iov_iter		csd_iter;
 	struct cl_iter_dup	csd_dup;
-	spinlock_t		csd_lock;
+	wait_queue_head_t	csd_write_waitq;
+	spinlock_t		csd_write_lock;
+	ssize_t			csd_write_status;
 	unsigned		csd_creator_free:1,
 				csd_write:1,
 				csd_unaligned:1,
+				csd_write_copying:1,
 				csd_write_copied:1;
 };
 

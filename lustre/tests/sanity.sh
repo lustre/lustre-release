@@ -15977,6 +15977,41 @@ test_119q()
 }
 run_test 119q "Test patchded Unaligned DIO readv() and writev()"
 
+test_119r() {
+	unaligned_dio_or_skip
+
+	# Test error handling in unaligned DIO user copy with racing threads
+	local file=$DIR/$tfile
+
+	$LFS setstripe -c 2 $file || error "setstripe failed"
+	stack_trap "rm -f $file"
+
+	# Create a file with some data
+	dd if=/dev/urandom of=$file bs=1M count=1 || error "dd failed"
+
+	# Set fail_loc to inject error in DIO copy
+	#define OBD_FAIL_LLITE_DIO_COPY_ERR		    0x1437
+	$LCTL set_param fail_loc=0x1437
+	stack_trap "$LCTL set_param fail_loc=0"
+
+	# Use rwv to do unaligned DIO write at offset 1024 with size 4096
+	# This is unaligned because offset 1024 is not page-aligned
+	local output
+	output=$(rwv -f $file -Dw -n 1 1024 4096 2>&1) &&
+		error "Unaligned DIO write should have failed but succeeded"
+
+	echo "$output" | grep -q "Bad address" ||
+		error "Expected 'Bad address' error, got: $output"
+
+	# Clear fail_loc
+	$LCTL set_param fail_loc=0
+
+	# Verify normal aligned DIO works after error
+	dd if=/dev/zero of=$file bs=4096 count=1 oflag=direct ||
+		error "DIO write failed after clearing fail_loc"
+}
+run_test 119r "Test error handling in unaligned DIO user copy"
+
 test_120a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
