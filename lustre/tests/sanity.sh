@@ -31649,6 +31649,28 @@ test_398s() {
 }
 run_test 398s "i/o error on mirror file read"
 
+test_398t() { # LU-19536
+	unaligned_dio_or_skip
+
+	$LFS setstripe -c 1 $DIR/$tfile || error "setstripe failed"
+
+	# Use a non-page-aligned block size to trigger unaligned
+	# DIO path. The fail_loc makes ll_allocate_dio_buffer
+	# fail after allocating the pages array, exercising the
+	# cleanup path which had a double-free bug.
+#define OBD_FAIL_LLITE_DIO_BUFFER_ALLOC       0x1438
+	$LCTL set_param fail_loc=0x80001438
+
+	dd if=/dev/zero of=$DIR/$tfile bs=1024 count=64 oflag=direct 2>/dev/null
+
+	$LCTL set_param fail_loc=0
+	# write may fail or succeed (if retried), but must not crash
+
+	# verify the system is still functional
+	echo "sanity check" > $DIR/$tfile || error "write after fail_loc failed"
+}
+run_test 398t "DIO buffer alloc failure must not crash (double-free)"
+
 test_fake_rw() {
 	local read_write=$1
 	if [ "$read_write" = "write" ]; then
