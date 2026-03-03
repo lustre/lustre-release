@@ -3614,14 +3614,17 @@ test_154b() {
 run_test 154b "restore update llog after failed recovery"
 
 test_155() {
-	(( MDS1_VERSION >= $(version_code 2.15.58.110) )) ||
-		skip "need MDS >= v2_15_58-110-g71f8e5d6506f for ptlrpc fix"
+	(( MDS1_VERSION >= $(version_code v2_15_58-110-g71f8e5d6506f) )) ||
+		skip "need MDS >= 2.15.58.110 for ptlrpc fix"
 
-	local lsoutput1
+	sync; cancel_lru_locks
+	local lsoutput1=$(mktemp -p ${TMP:-/tmp} $TESTNAME.1.XXXXXX})
+	local lsoutput2=$(mktemp -p ${TMP:-/tmp} $TESTNAME.2.XXXXXX})
 	local lsoutput2
 
-	touch $DIR/$tfile
-	lsoutput1=$(ls -l $DIR)
+	touch $DIR/$tfile || error "creating $tfile"
+	ls -l $DIR > $lsoutput1 || error "ls1 failed"
+	stack_trap "rm -f $lsoutput1 $lsoutput2"
 
 	zconf_umount $HOSTNAME $MOUNT || error "umount failed"
 	# make sure that last_rcvd update is committed
@@ -3632,8 +3635,8 @@ test_155() {
 
 	fail_nodf mds1
 
-	lsoutput2=$(ls -l $DIR) || error "ls failed"
-	[[ $lsoutput1 == $lsoutput2 ]] || error "$lsoutput1 != $lsoutput2"
+	ls -l $DIR > $lsoutput2 || error "ls2 failed"
+	diff -wu0 $lsoutput1 $lsoutput2 || error "ls1 != ls2"
 }
 run_test 155 "failover after client remount"
 
