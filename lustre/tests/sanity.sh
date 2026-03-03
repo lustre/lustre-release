@@ -19728,6 +19728,37 @@ test_154i()
 }
 run_test 154i "fid2path for path longer than PATH_MAX"
 
+test_154j()
+{
+	(( $MDSCOUNT >= 2 )) || skip_env "needs >= 2 MDTs"
+	(( $MDS1_VERSION >= $(version_code v2_15_65-55-gf5251cb7af) )) ||
+		skip "need MDS >= 2.15.65.55 for fid2path > PATH_MAX handling"
+
+	local long=thislongpathnameisforaverydeepsubdirthatwewanttotestagainst
+	local depth
+	local path
+	local fid
+
+	# place $tdir on MDT0 and create a remote dir on MDT1 so that
+	# fid2path has to cross the MDT boundary
+	$LFS mkdir -i 0 $DIR/$tdir || error "mkdir MDT0 failed"
+	$LFS mkdir -i 1 $DIR/$tdir/remote || error "lfs mkdir -i 1 failed"
+
+	cd $DIR/$tdir/remote
+
+	# Create 66 nested dirs. Each ~60 chars, total MDT1 path ~4088.
+	# Combined with MDT0 path ($tdir ~12+ chars), exceeds PATH_MAX.
+	for (( depth = 0; depth <= 65; depth++ )); do
+		mkdir $long$depth || error "mkdir $long$depth failed"
+		cd $long$depth
+	done
+
+	fid=$($LFS path2fid .) || error "path2fid failed"
+	path=$($LFS fid2path $MOUNT $fid) || error "fid2path failed"
+	echo -e "Path for fid $fid is:\n$path"
+}
+run_test 154j "fid2path for long path crossing MDT boundary"
+
 test_155_small_load() {
     local temp=$TMP/$tfile
     local file=$DIR/$tfile

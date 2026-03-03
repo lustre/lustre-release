@@ -661,7 +661,7 @@ repeat_fid2path:
 		ori_gf = (struct getinfo_fid2path *)karg;
 		if (strlen(ori_gf->gf_u.gf_path) + 1 +
 		    strlen(gf->gf_u.gf_path) + 1 > ori_gf->gf_pathlen)
-			GOTO(out_fid2path, rc = -EOVERFLOW);
+			GOTO(out_fid2path, rc = -ENAMETOOLONG);
 
 		ptr = ori_gf->gf_u.gf_path;
 		oldisenc = ptr[0] == '/';
