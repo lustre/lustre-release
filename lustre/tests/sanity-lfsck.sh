@@ -144,7 +144,7 @@ wait_all_targets_blocked() {
 		"$MDSCOUNT" $timeout || {
 		local mdts=$(comma_list $(mdts_nodes))
 		local count=$(do_facet mds1 "$lfsck_query" |
-			      awk '/^${com}_mdts_$status/ { print $2 }')
+			      awk "/^${com}_mdts_${status}/ { print \$2 }")
 
 		do_facet mds1 "$lfsck_query"
 		echo "==== MDT LOGS ===="
