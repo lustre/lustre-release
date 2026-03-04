@@ -169,19 +169,6 @@ static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 	return rc;
 }
 
-static int do_lcfg_nid(char *cfgname, struct lnet_nid *nid, int cmd,
-		       char *s1)
-{
-	lnet_nid_t nid4 = 0;
-	char *nidstr = NULL;
-
-	if (nid_is_nid4(nid))
-		nid4 = lnet_nid_to_nid4(nid);
-	else
-		nidstr = libcfs_nidstr(nid);
-	return do_lcfg(cfgname, nid4, cmd, s1, nidstr, NULL, NULL);
-}
-
 /**
  * lustre_start_simple() - Call class_attach and class_setup.
  * @obdname: name of new obd device
@@ -438,8 +425,7 @@ int lustre_start_mgc(struct super_block *sb)
 				if (nidnet && libcfs_str2net(nidnet) !=
 					      LNET_NID_NET(&id.nid))
 					continue;
-				rc = do_lcfg_nid(mgcname, &id.nid,
-						LCFG_ADD_UUID, nidstr);
+				rc = class_add_uuid(nidstr, &id.nid);
 			}
 		} else {
 			/* Target must have at least one mgsnode */
@@ -457,8 +443,7 @@ int lustre_start_mgc(struct super_block *sb)
 					      LNET_NID_NET(&nid))
 					continue;
 
-				rc = do_lcfg_nid(mgcname, &nid,
-						 LCFG_ADD_UUID, nidstr);
+				rc = class_add_uuid(nidstr, &nid);
 				if (rc == 0)
 					++i;
 				/* Stop at the first failover NID */
@@ -470,7 +455,7 @@ int lustre_start_mgc(struct super_block *sb)
 		/* Use NIDs from mount line: uml1,1@elan:uml2,2@elan:/lustre */
 		ptr = lsi->lsi_lmd->lmd_dev;
 		while (class_parse_nid(ptr, &nid, &ptr) == 0) {
-			rc = do_lcfg_nid(mgcname, &nid, LCFG_ADD_UUID, nidstr);
+			rc = class_add_uuid(nidstr, &nid);
 			if (rc == 0)
 				++i;
 			/* Stop at the first failover NID */
