@@ -1484,7 +1484,8 @@ int ll_allocate_dio_buffer(struct cl_dio_pages *cdp, size_t io_size)
 	if (cdp->cdp_pages == NULL)
 		GOTO(out, result = -ENOMEM);
 
-	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_DIO_BUFFER_ALLOC))
+	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_DIO_BUFFER_ALLOC) ||
+	    CFS_FAIL_CHECK(OBD_FAIL_LLITE_DIO_DRAIN_RETRY))
 		GOTO(out, result = -ENOMEM);
 
 	result = obd_pool_get_pages_array(cdp->cdp_pages, cdp->cdp_page_count);

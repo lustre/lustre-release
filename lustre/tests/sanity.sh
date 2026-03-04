@@ -31671,6 +31671,42 @@ test_398t() { # LU-19536
 }
 run_test 398t "DIO buffer alloc failure must not crash (double-free)"
 
+test_398u() { # LU-19536
+	unaligned_dio_or_skip
+
+	# Force ENOMEM mid-IO to exercise the drain+retry path.
+	#
+	# OBD_FAIL_LLITE_DIO_DRAIN_RETRY (0x1439) does two things:
+	# 1) PRECHECK caps each sub_dio to PAGE_SIZE, so a single
+	#    write() generates many loop iterations with in-flight
+	#    sub_dios.
+	# 2) CFS_FAIL_CHECK with SKIP|ONCE triggers ENOMEM in
+	#    ll_allocate_dio_buffer after fail_val successes.
+	#
+	# With fail_val=5, iterations 1-5 succeed (tot_bytes > 0),
+	# iteration 6 gets ENOMEM, and the drain+retry path fires.
+	$LFS setstripe -c -1 $DIR/$tfile || error "setstripe"
+#define OBD_FAIL_LLITE_DIO_DRAIN_RETRY        0x1439
+	$LCTL set_param fail_loc=0xa0001439 fail_val=5
+
+	# bs=4608 (4096+512): not page-aligned but 512-aligned for
+	# O_DIRECT.  write 1 at offset 0 is page-aligned (regular
+	# DIO), write 2 at offset 4608 is unaligned.  With sub_dios
+	# capped to PAGE_SIZE, each unaligned write generates 2 loop
+	# iterations (4096+512), so 3 unaligned writes = 6 alloc
+	# calls.  fail_val=5 skips 5, fails the 6th — at which
+	# point tot_bytes > 0 (one iteration succeeded in this
+	# call), so drain+retry fires.
+	dd if=/dev/zero of=$DIR/$tfile bs=4608 count=10 \
+		oflag=direct || error "dd with drain retry failed"
+	$LCTL set_param fail_loc=0
+
+	local sz=$(stat -c %s $DIR/$tfile)
+	(( sz == 10 * 4608 )) ||
+		error "file size $sz != expected $((10 * 4608))"
+}
+run_test 398u "DIO pool ENOMEM triggers drain and retry"
+
 test_fake_rw() {
 	local read_write=$1
 	if [ "$read_write" = "write" ]; then

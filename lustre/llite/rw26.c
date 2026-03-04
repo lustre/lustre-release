@@ -360,6 +360,7 @@ static ssize_t ll_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 	struct cl_sub_dio *sdio;
 	size_t bytes = iov_iter_count(iter);
 	ssize_t tot_bytes = 0, result = 0;
+	ssize_t bytes_at_drain = 0;
 	loff_t file_offset = iocb->ki_pos;
 	int rw = iov_iter_rw(iter);
 	bool sync_submit = false;
@@ -458,6 +459,9 @@ static ssize_t ll_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 		struct cl_dio_pages *cdp;
 
 		bytes = min_t(size_t, iov_iter_count(iter), MAX_DIO_SIZE);
+		/* Cap sub_dio size for drain+retry testing */
+		if (CFS_FAIL_PRECHECK(OBD_FAIL_LLITE_DIO_DRAIN_RETRY))
+			bytes = min_t(size_t, bytes, PAGE_SIZE);
 		if (rw == READ) {
 			if (file_offset >= i_size_read(inode))
 				break;
@@ -481,10 +485,40 @@ static ssize_t ll_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 					   iter, rw, bytes, file_offset,
 					   unaligned);
 		if (unlikely(result <= 0)) {
-			cl_sync_io_note(env, &sdio->csd_sync, result);
+			bool retry = (result == -ENOMEM && unaligned
+				      && tot_bytes > bytes_at_drain);
+
+			/* Note the failed sub_dio.  When retrying,
+			 * pass rc=0 so the alloc ENOMEM doesn't
+			 * poison the parent anchor's sync_rc.
+			 */
+			cl_sync_io_note(env, &sdio->csd_sync,
+					retry ? 0 : result);
 			if (sync_submit) {
 				LASSERT(sdio->csd_creator_free);
 				cl_sub_dio_free(sdio);
+			}
+			if (retry) {
+				/* ENOMEM but we have in-flight sub_dios
+				 * holding pages.  Drain them to reclaim
+				 * pages, then retry.
+				 *
+				 * By calling cl_sync_io_wait_recycle,
+				 * cl_dio_aio_end runs — but unaligned
+				 * DIO is never AIO, so it won't
+				 * prematurely complete to userspace.
+				 */
+				LASSERT(!ll_dio_aio->cda_is_aio);
+				rc2 = cl_sync_io_wait_recycle(env,
+					&ll_dio_aio->cda_sync, 0, 0);
+				if (rc2 < 0)
+					GOTO(out, result = rc2);
+				bytes_at_drain = tot_bytes;
+				result = 0;
+				CDEBUG(D_VFSTRACE,
+				       "DIO pool ENOMEM, drained at %zd bytes, retrying\n",
+				       tot_bytes);
+				continue;
 			}
 			GOTO(out, result);
 		}
