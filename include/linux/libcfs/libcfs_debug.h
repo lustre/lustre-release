@@ -300,4 +300,6 @@ static inline void cfs_tty_write_msg(const char *msg)
 	tty_kref_put(tty);
 }
 
+#define D_MOUNT		(D_SUPER | D_CONFIG)
+
 #endif	/* __LIBCFS_DEBUG_H__ */

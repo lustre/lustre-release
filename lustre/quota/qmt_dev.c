@@ -39,7 +39,7 @@
  *
  * The qmt_device_type structure is registered when the lquota module is
  * loaded and all the steps described above are automatically done when the MDT
- * set up the Quota Master Target via calls to class_attach/class_setup, see
+ * set up the Quota Master Target via calls to class_attach_name/class_setup, see
  * mdt_quota_init() for more details.
  *
  * Author: Johann Lombardi <johann.lombardi@intel.com>

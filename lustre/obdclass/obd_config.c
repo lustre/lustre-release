@@ -673,62 +673,26 @@ char *lustre_cfg_string(struct lustre_cfg *lcfg, u32 index)
 }
 EXPORT_SYMBOL(lustre_cfg_string);
 
-/********************** class fns **********************/
-
-/**
- * class_attach() - Create a new OBD device and set the type, name and uuid.
- * @lcfg: pointer to lustre_cfg (holds parameters like: device name, type, UUID)
- *
- * Create a new OBD device and set the type, name and uuid.  If successful,
- * the new device can be accessed by either name or uuid.
- *
- * Eg: device name: lustre-MDT0000, lustre-OST0001
- * Eg: type: mdt, ost
- * Eg: UUID: lustre-MDT0000_UUID, lustre-OST0000_UUID
- *
- * Return:
- * * %0 on success
- * * %negative on error
- */
-int class_attach(struct lustre_cfg *lcfg)
+struct obd_device *class_attach_name(const char *typename,
+				     const char *name, const char *uuid)
 {
 	struct obd_export *exp;
-	struct obd_device *obd = NULL;
-	char *typename, *name, *uuid;
-	int rc, len;
+	struct obd_device *obd;
+	int rc;
 
 	ENTRY;
 
-	if (!LUSTRE_CFG_BUFLEN(lcfg, 1)) {
-		CERROR("No type passed!\n");
-		RETURN(-EINVAL);
-	}
-	typename = lustre_cfg_string(lcfg, 1);
-
-	if (!LUSTRE_CFG_BUFLEN(lcfg, 0)) {
-		CERROR("No name passed!\n");
-		RETURN(-EINVAL);
-	}
-	name = lustre_cfg_string(lcfg, 0);
-	if (!LUSTRE_CFG_BUFLEN(lcfg, 2)) {
-		CERROR("No UUID passed!\n");
-		RETURN(-EINVAL);
-	}
-
-	uuid = lustre_cfg_string(lcfg, 2);
-	len = strlen(uuid);
-	if (len >= sizeof(obd->obd_uuid)) {
+	if (strlen(uuid) >= sizeof(struct obd_uuid)) {
 		CERROR("%s: uuid must be < %d bytes long\n",
-		       name, (int)sizeof(obd->obd_uuid));
-		RETURN(-EINVAL);
+		       name, (int)sizeof(struct obd_uuid));
+		RETURN(ERR_PTR(-EINVAL));
 	}
 
 	obd = class_newdev(typename, name, uuid);
 	if (IS_ERR(obd)) { /* Already exists or out of obds */
-		rc = PTR_ERR(obd);
 		CERROR("Cannot create device %s of type %s : %d\n",
-		       name, typename, rc);
-		RETURN(rc);
+		       name, typename, (int)PTR_ERR(obd));
+		RETURN(obd);
 	}
 	LASSERTF(obd->obd_magic == OBD_DEVICE_MAGIC,
 		 "obd %px obd_magic %08X != %08X\n",
@@ -738,9 +702,8 @@ int class_attach(struct lustre_cfg *lcfg)
 
 	exp = class_new_export_self(obd, &obd->obd_uuid);
 	if (IS_ERR(exp)) {
-		rc = PTR_ERR(exp);
 		class_free_dev(obd);
-		RETURN(rc);
+		RETURN(ERR_CAST(exp));
 	}
 
 	obd->obd_self_export = exp;
@@ -749,16 +712,16 @@ int class_attach(struct lustre_cfg *lcfg)
 	rc = class_register_device(obd);
 	if (rc != 0) {
 		class_decref(obd, "newdev", obd);
-		RETURN(rc);
+		RETURN(ERR_PTR(rc));
 	}
 
 	set_bit(OBDF_ATTACHED, obd->obd_flags);
 	CDEBUG(D_IOCTL, "OBD: dev %d attached type %s with refcount %d\n",
 	       obd->obd_minor, typename, kref_read(&obd->obd_refcount));
 
-	RETURN(0);
+	RETURN(obd);
 }
-EXPORT_SYMBOL(class_attach);
+EXPORT_SYMBOL(class_attach_name);
 
 /**
  * class_setup() - Set obd device active
@@ -1508,7 +1471,10 @@ int class_process_config(struct lustre_cfg *lcfg, struct kobject *kobj)
 	/* Commands that don't need a device */
 	switch (lcfg->lcfg_command) {
 	case LCFG_ATTACH: {
-		err = class_attach(lcfg);
+		obd = class_attach_name(lustre_cfg_string(lcfg, 1),
+					lustre_cfg_string(lcfg, 0),
+					lustre_cfg_string(lcfg, 2));
+		err = PTR_ERR_OR_ZERO(obd);
 		GOTO(out, err);
 	}
 	case LCFG_ADD_UUID: {

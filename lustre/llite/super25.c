@@ -13,8 +13,6 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-#define D_MOUNT (D_SUPER | D_CONFIG/*|D_WARNING */)
-
 #include <linux/module.h>
 #include <linux/types.h>
 #include <linux/version.h>

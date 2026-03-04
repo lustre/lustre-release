@@ -5996,28 +5996,9 @@ static int mdt_stack_init(const struct lu_env *env, struct mdt_device *mdt,
 		GOTO(free_bufs, rc = -EINVAL);
 	}
 
-	lustre_cfg_bufs_reset(bufs, name);
-	lustre_cfg_bufs_set_string(bufs, 1, LUSTRE_MDD_NAME);
-	lustre_cfg_bufs_set_string(bufs, 2, uuid);
-	lustre_cfg_bufs_set_string(bufs, 3, lprof->lp_dt);
-
-	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
-	if (!lcfg)
-		GOTO(put_profile, rc = -ENOMEM);
-	lustre_cfg_init(lcfg, LCFG_ATTACH, bufs);
-
-	rc = class_attach(lcfg);
-	if (rc)
-		GOTO(lcfg_cleanup, rc);
-
-	obd = class_name2obd(name);
-	if (!obd) {
-		CERROR("Can not find obd %s (%s in config)\n",
-		       MDD_OBD_NAME, lustre_cfg_string(cfg, 0));
-		GOTO(lcfg_cleanup, rc = -EINVAL);
-	}
-
-	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
+	obd = class_attach_name(LUSTRE_MDD_NAME, name, uuid);
+	if (IS_ERR(obd))
+		GOTO(put_profile, rc = PTR_ERR(obd));
 
 	lustre_cfg_bufs_reset(bufs, name);
 	lustre_cfg_bufs_set_string(bufs, 1, uuid);
@@ -6063,8 +6044,8 @@ static int mdt_stack_init(const struct lu_env *env, struct mdt_device *mdt,
 class_detach:
 	if (rc)
 		class_detach(obd, lcfg);
-lcfg_cleanup:
-	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
+	if (lcfg)
+		OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 put_profile:
 	class_put_profile(lprof);
 free_bufs:
@@ -6130,28 +6111,9 @@ static int mdt_quota_init(const struct lu_env *env, struct mdt_device *mdt,
 		GOTO(cleanup_mem, rc = -EINVAL);
 	}
 
-	lustre_cfg_bufs_reset(bufs, qmtname);
-	lustre_cfg_bufs_set_string(bufs, 1, LUSTRE_QMT_NAME);
-	lustre_cfg_bufs_set_string(bufs, 2, uuid);
-	lustre_cfg_bufs_set_string(bufs, 3, lprof->lp_dt);
-
-	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
-	if (!lcfg)
-		GOTO(put_profile, rc = -ENOMEM);
-	lustre_cfg_init(lcfg, LCFG_ATTACH, bufs);
-
-	rc = class_attach(lcfg);
-	if (rc)
-		GOTO(lcfg_cleanup, rc);
-
-	obd = class_name2obd(qmtname);
-	if (!obd) {
-		CERROR("Can not find obd %s (%s in config)\n", qmtname,
-		       lustre_cfg_string(cfg, 0));
-		GOTO(lcfg_cleanup, rc = -EINVAL);
-	}
-
-	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
+	obd = class_attach_name(LUSTRE_QMT_NAME, qmtname, uuid);
+	if (IS_ERR(obd))
+		GOTO(put_profile, rc = PTR_ERR(obd));
 
 	lustre_cfg_bufs_reset(bufs, qmtname);
 	lustre_cfg_bufs_set_string(bufs, 1, uuid);

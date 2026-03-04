@@ -210,7 +210,8 @@ int class_process_config(struct lustre_cfg *lcfg, struct kobject *kobj);
 ssize_t class_set_global(const char *param);
 ssize_t class_modify_config(struct lustre_cfg *lcfg, const char *prefix,
 			    struct kobject *kobj);
-int class_attach(struct lustre_cfg *lcfg);
+struct obd_device *class_attach_name(const char *typename, const char *name,
+				     const char *uuid);
 int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
 int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg);
 int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg);

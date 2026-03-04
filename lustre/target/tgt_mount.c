@@ -16,7 +16,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#define D_MOUNT (D_SUPER | D_CONFIG /* | D_WARNING */)
 
 #include <linux/types.h>
 #include <linux/generic-radix-tree.h>

@@ -16,7 +16,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#define D_MOUNT (D_SUPER|D_CONFIG/*|D_WARNING */)
 #define PRINT_CMD CDEBUG
 
 #include <linux/types.h>
@@ -133,81 +132,6 @@ int lustre_end_log(struct super_block *sb, char *logname,
 }
 EXPORT_SYMBOL(lustre_end_log);
 
-/**************** OBD start *******************/
-
-/*
- * lustre_cfg_bufs are a holdover from 1.4; we can still set these up from
- * lctl (and do for echo cli/srv.
- */
-static int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
-		   char *s1, char *s2, char *s3, char *s4)
-{
-	struct lustre_cfg_bufs bufs;
-	struct lustre_cfg *lcfg = NULL;
-	int rc;
-
-	CDEBUG(D_TRACE, "lcfg %s %#x %s %s %s %s\n", cfgname,
-	       cmd, s1, s2, s3, s4);
-
-	lustre_cfg_bufs_reset(&bufs, cfgname);
-	if (s1)
-		lustre_cfg_bufs_set_string(&bufs, 1, s1);
-	if (s2)
-		lustre_cfg_bufs_set_string(&bufs, 2, s2);
-	if (s3)
-		lustre_cfg_bufs_set_string(&bufs, 3, s3);
-	if (s4)
-		lustre_cfg_bufs_set_string(&bufs, 4, s4);
-
-	OBD_ALLOC(lcfg, lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
-	if (!lcfg)
-		return -ENOMEM;
-	lustre_cfg_init(lcfg, cmd, &bufs);
-	lcfg->lcfg_nid = nid;
-	rc = class_process_config(lcfg, NULL);
-	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
-	return rc;
-}
-
-/**
- * lustre_start_simple() - Call class_attach and class_setup.
- * @obdname: name of new obd device
- * @type: type of device to start/setup/attach (mdt, ost, mgc)
- * @uuid: uuid of the device
- * @s1: optional argument
- * @s2: optional argument
- * @s3: optional argument
- * @s4: optional argument
- *
- * Call class_attach and class_setup.  These methods in turn call
- * OBD type-specific methods.
- *
- * Return:
- * * %0 on success
- * * %negative on failure
- */
-SERVER_ONLY
-int lustre_start_simple(char *obdname, char *type, char *uuid,
-			char *s1, char *s2, char *s3, char *s4)
-{
-	int rc;
-
-	CDEBUG(D_MOUNT, "Starting OBD %s (typ=%s)\n", obdname, type);
-
-	rc = do_lcfg(obdname, 0, LCFG_ATTACH, type, uuid, NULL, NULL);
-	if (rc) {
-		CERROR("%s attach error %d\n", obdname, rc);
-		return rc;
-	}
-	rc = do_lcfg(obdname, 0, LCFG_SETUP, s1, s2, s3, s4);
-	if (rc) {
-		CERROR("%s setup error %d\n", obdname, rc);
-		do_lcfg(obdname, 0, LCFG_DETACH, NULL, NULL, NULL, NULL);
-	}
-	return rc;
-}
-SERVER_ONLY_EXPORT_SYMBOL(lustre_start_simple);
-
 static DEFINE_MUTEX(mgc_start_lock);
 
 /*
@@ -263,6 +187,73 @@ static bool lustre_add_mgc_failnodes(struct obd_device *obd, char *ptr)
 
 	return large_nids;
 }
+
+/**
+ * lustre_start_simple() - Attach and set up an OBD device without lcfg.
+ * @obdname: name of new obd device
+ * @type: type of device (mdt, ost, mgc, etc.)
+ * @uuid: uuid of the device
+ * @s1: first optional setup argument
+ * @s2: second optional setup argument
+ * @s3: third optional setup argument
+ * @s4: fourth optional setup argument
+ *
+ * Create and set up a new OBD device without requiring the caller to
+ * construct a lustre_cfg.  Equivalent to calling class_attach_name() followed
+ * by class_setup().
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
+ */
+SERVER_ONLY
+int lustre_start_simple(char *obdname, char *type,
+			char *uuid, char *s1, char *s2,
+			char *s3, char *s4)
+{
+	struct lustre_cfg_bufs bufs;
+	struct lustre_cfg *lcfg;
+	struct obd_device *obd;
+	int rc;
+
+	ENTRY;
+
+	CDEBUG(D_MOUNT, "Starting OBD %s (typ=%s)\n", obdname, type);
+
+	obd = class_attach_name(type, obdname, uuid);
+	if (IS_ERR(obd)) {
+		CERROR("%s attach error %d\n", obdname, (int)PTR_ERR(obd));
+		RETURN(PTR_ERR(obd));
+	}
+
+	/* Build a minimal setup lcfg carrying s1-s4 for type-specific setup */
+	lustre_cfg_bufs_reset(&bufs, obdname);
+	if (s1)
+		lustre_cfg_bufs_set_string(&bufs, 1, s1);
+	if (s2)
+		lustre_cfg_bufs_set_string(&bufs, 2, s2);
+	if (s3)
+		lustre_cfg_bufs_set_string(&bufs, 3, s3);
+	if (s4)
+		lustre_cfg_bufs_set_string(&bufs, 4, s4);
+
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
+	if (!lcfg) {
+		class_detach(obd, NULL);
+		RETURN(-ENOMEM);
+	}
+	lustre_cfg_init(lcfg, LCFG_SETUP, &bufs);
+
+	rc = class_setup(obd, lcfg);
+	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
+	if (rc) {
+		CERROR("%s setup error %d\n", obdname, rc);
+		class_detach(obd, NULL);
+	}
+
+	RETURN(rc);
+}
+SERVER_ONLY_EXPORT_SYMBOL(lustre_start_simple);
 
 /**
  * lustre_start_mgc() - Set up a MGC OBD to process startup logs

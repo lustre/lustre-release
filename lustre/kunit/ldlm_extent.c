@@ -93,8 +93,6 @@ enum tests {
 
 static int ldlm_extent_init(void)
 {
-	struct lustre_cfg *cfg;
-	struct lustre_cfg_bufs bufs;
 	char *name, *uuid;
 	struct ldlm_resource *res;
 	struct obd_device *obd;
@@ -111,17 +109,9 @@ static int ldlm_extent_init(void)
 	OBD_ALLOC(name, MAX_OBD_NAME);
 	OBD_ALLOC(uuid, MAX_OBD_NAME);
 	strscpy(name, "test", MAX_OBD_NAME);
-	lustre_cfg_bufs_reset(&bufs, name);
 	snprintf(uuid, MAX_OBD_NAME, "%s_UUID", name);
 
-	lustre_cfg_bufs_set_string(&bufs, 1,
-				   LUSTRE_TEST_LDLM_DEVICE);
-	lustre_cfg_bufs_set_string(&bufs, 2, uuid);
-	OBD_ALLOC(cfg, lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
-	lustre_cfg_init(cfg, LCFG_ATTACH, &bufs);
-
-	class_attach(cfg);
-	obd = class_name2obd("test");
+	obd = class_attach_name(LUSTRE_TEST_LDLM_DEVICE, name, uuid);
 	ns = ldlm_namespace_new(obd, "extent-test", LDLM_NAMESPACE_CLIENT,
 				LDLM_NAMESPACE_MODEST,
 				LDLM_NS_TYPE_MDT);
@@ -221,11 +211,10 @@ static int ldlm_extent_init(void)
 		       tnum, loops, min_iters, sum / loops,
 		       int_sqrt((sumsq - sum*sum/loops) / loops-1));
 	}
-	class_detach(obd, cfg);
+	class_detach(obd, NULL);
 
 	OBD_FREE(name, MAX_OBD_NAME);
 	OBD_FREE(uuid, MAX_OBD_NAME);
-	OBD_FREE(cfg, lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
 
 	ldlm_resource_putref(res);
 	ldlm_namespace_free_post(ns);
