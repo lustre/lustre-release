@@ -6043,7 +6043,7 @@ static int mdt_stack_init(const struct lu_env *env, struct mdt_device *mdt,
 	EXIT;
 class_detach:
 	if (rc)
-		class_detach(obd, lcfg);
+		class_detach(obd);
 	if (lcfg)
 		OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 put_profile:
@@ -6164,7 +6164,7 @@ class_cleanup:
 	}
 class_detach:
 	if (rc)
-		class_detach(obd, lcfg);
+		class_detach(obd);
 lcfg_cleanup:
 	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 put_profile:

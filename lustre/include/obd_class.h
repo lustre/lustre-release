@@ -214,7 +214,7 @@ struct obd_device *class_attach_name(const char *typename, const char *name,
 				     const char *uuid);
 int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
 int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg);
-int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg);
+int class_detach(struct obd_device *obd);
 
 int class_find_param(char *buf, char *key, char **valp);
 struct cfg_interop_param *class_find_old_param(const char *param,

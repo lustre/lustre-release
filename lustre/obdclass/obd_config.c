@@ -848,7 +848,6 @@ EXPORT_SYMBOL(class_setup);
 /**
  * class_detach() - detach obd device (set it inactive)
  * @obd: pointer to obd device which is being detach (inactive)
- * @lcfg: pointer to lustre_cfg (holds parameters like: device name, type, UUID)
  *
  * We have finished using this OBD and are ready to destroy it.
  * There can be no more references to this obd.
@@ -857,7 +856,7 @@ EXPORT_SYMBOL(class_setup);
  * * %0 on success
  * * %negative on error
  */
-int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
+int class_detach(struct obd_device *obd)
 {
 	ENTRY;
 
@@ -1617,7 +1616,7 @@ int class_process_config(struct lustre_cfg *lcfg, struct kobject *kobj)
 		GOTO(out, err);
 	}
 	case LCFG_DETACH: {
-		err = class_detach(obd, lcfg);
+		err = class_detach(obd);
 		GOTO(out, err = 0);
 	}
 	case LCFG_CLEANUP: {

@@ -211,7 +211,7 @@ static int ldlm_extent_init(void)
 		       tnum, loops, min_iters, sum / loops,
 		       int_sqrt((sumsq - sum*sum/loops) / loops-1));
 	}
-	class_detach(obd, NULL);
+	class_detach(obd);
 
 	OBD_FREE(name, MAX_OBD_NAME);
 	OBD_FREE(uuid, MAX_OBD_NAME);

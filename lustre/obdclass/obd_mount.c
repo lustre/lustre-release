@@ -239,7 +239,7 @@ int lustre_start_simple(char *obdname, char *type,
 
 	OBD_ALLOC(lcfg, lustre_cfg_len(bufs.lcfg_bufcount, bufs.lcfg_buflen));
 	if (!lcfg) {
-		class_detach(obd, NULL);
+		class_detach(obd);
 		RETURN(-ENOMEM);
 	}
 	lustre_cfg_init(lcfg, LCFG_SETUP, &bufs);
@@ -248,7 +248,7 @@ int lustre_start_simple(char *obdname, char *type,
 	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
 	if (rc) {
 		CERROR("%s setup error %d\n", obdname, rc);
-		class_detach(obd, NULL);
+		class_detach(obd);
 	}
 
 	RETURN(rc);
