@@ -696,10 +696,10 @@ static void cl_env_dec(enum cache_stats_item item)
 #endif
 }
 
-static void cl_env_init0(struct cl_env *cle, void *debug)
+static void cl_env_init(struct cl_env *cle, void *debug)
 {
 	LASSERT(cle->ce_ref == 0);
-	LASSERT(cle->ce_magic == &cl_env_init0);
+	LASSERT(cle->ce_magic == &cl_env_init);
 	LASSERT(cle->ce_debug == NULL);
 
 	cle->ce_ref = 1;
@@ -717,7 +717,7 @@ static struct lu_env *cl_env_new(__u32 ctx_tags, __u32 ses_tags, void *debug)
 		int rc;
 
 		INIT_LIST_HEAD(&cle->ce_linkage);
-		cle->ce_magic = &cl_env_init0;
+		cle->ce_magic = &cl_env_init;
 		env = &cle->ce_lu;
 		rc = lu_env_init(env, LCT_CL_THREAD|ctx_tags);
 		if (rc == 0) {
@@ -726,7 +726,7 @@ static struct lu_env *cl_env_new(__u32 ctx_tags, __u32 ses_tags, void *debug)
 			if (rc == 0) {
 				lu_context_enter(&cle->ce_ses);
 				env->le_ses = &cle->ce_ses;
-				cl_env_init0(cle, debug);
+				cl_env_init(cle, debug);
 			} else
 				lu_env_fini(env);
 		}
@@ -777,7 +777,7 @@ static struct lu_env *cl_env_obtain(void *debug)
                 env = &cle->ce_lu;
                 rc = lu_env_refill(env);
                 if (rc == 0) {
-                        cl_env_init0(cle, debug);
+			cl_env_init(cle, debug);
                         lu_context_enter(&env->le_ctx);
                         lu_context_enter(&cle->ce_ses);
                 } else {
@@ -1001,7 +1001,7 @@ static int cl_env_percpu_init(void)
 		env = &cle->ce_lu;
 
 		INIT_LIST_HEAD(&cle->ce_linkage);
-		cle->ce_magic = &cl_env_init0;
+		cle->ce_magic = &cl_env_init;
 		rc = lu_env_init(env, LCT_CL_THREAD | tags);
 		if (rc == 0) {
 			rc = lu_context_init(&cle->ce_ses, LCT_SESSION | tags);
@@ -1076,7 +1076,7 @@ struct lu_env *cl_env_percpu_get(void)
 	struct cl_env *cle;
 
 	cle = &cl_env_percpu[get_cpu()];
-	cl_env_init0(cle, __builtin_return_address(0));
+	cl_env_init(cle, __builtin_return_address(0));
 
 	return &cle->ce_lu;
 }
