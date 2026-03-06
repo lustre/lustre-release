@@ -1,28 +1,80 @@
-.TH LFS 1 2025-12-20 Lustre "Lustre User Utilities"
+.TH LFS 1 2026-03-06 Lustre "Lustre User Utilities"
 .SH NAME
-lfs \- client utility for Lustre-specific file layout and other attributes
+lfs \- Lustre client utility for file layouts and space usage
 .SH SYNOPSIS
 .SY lfs
+.I COMMAND
+.RI [ ARGS ]
 .SY lfs
-.B --version
-.SY lfs
-.B --list-commands
-.SY lfs
-.B help
 .YS
 .SH DESCRIPTION
 .B lfs
-can be used to create a new file with a specific striping pattern, determine
-the default striping pattern, gather the extended attributes (object numbers
-and location) for a specific file. It can be invoked interactively without any
-arguments or in a non-interactive mode with one of the arguments supported.
-.SH COMMANDS
-A number of sub-commands supported by lfs are listed below. Other commands
-are described in separate man pages of the form
+is used by all users to create new files with a specific layout pattern,
+show the layout (geomety and OST objects) for a specific file or directory,
+show the space and inode usage of filesystem targets, and more.
+It can be invoked non-interactivly to execute the specified
+.BR COMMAND ,
+or it can be run interactively without arguments to execute multiple commands.
+.PP
+The most common commands are:
+.BR df ,
+.BR find ,
+.BR getstripe ,
+.BR setstripe ,
+.BR migrate ,
+.BR mirror ,
+and
+.BR project .
+Most commands are described in separate man pages of the form
 .BI lfs- COMMAND
 as listed in the
 .B SEE ALSO
 section at the end.
+Some sub-commands do not have their own detailed man page are listed below.
+.SH OPTIONS
+The following options can be used to invoke
+.BR lfs .
+.TP
+.BI help " COMMAND"
+To get basic help on the meaning and syntax of a command.
+.TP
+.BR --ignore_errors ", " ignore_errors
+Ignore errors during script processing.
+.TP
+.B --list-commands
+Output a list of the commands supported by the lctl utility.
+.TP
+.BR -V ", " --version
+Output the build version of the utility itself.
+.TP
+.BR exit ", " quit
+Quit an interactive session.
+.SH BASH COMPLETION
+The
+.B lfs
+command supports
+.BR bash-completion (1)
+for tab completion of sub-command names and their options,
+with proper package installation and supporing shell usage.
+This can greatly simplify finding available commands,
+their options, and in many cases option arguments.
+.PP
+To list commands, type
+.RB ' lfs\ TAB ',
+or after partially completing a command name.
+To list long options (more descriptive and easily understood) type
+.RI ' COMMAND
+.BR --TAB ',
+and to list short options type
+.RI ' COMMAND
+.BR -TAB '.
+Some commands also allow context-specific completion of arguments to the
+command-line option, for example generating a list of mountpoints for the
+.B df
+command, or a list of OST pools for the
+.B --pool
+option.
+.SH COMMANDS
 .TP
 .BR check " {" mgts | mdts | osts | all "} [" \fIPATH ]
 Display the status of the MGTs, MDTs or OSTs (as specified in the command)
@@ -36,12 +88,26 @@ the server status. NOTE:
 may be preferable for some use cases.
 .TP
 .BR data_version
-See
+Show the last modified version code for a file. See
 .BR lfs-data_version (1).
 .TP
 .B flushctx
-See
+Flush security context of a user.  See
 .BR lfs-flushctx (1).
+.TP
+.B migrate
+Migrate a file to new OST(s), or directory to new MDTs. See
+.BR lfs-migrate (1).
+.TP
+.BR mkdir | setdirstripe
+Create a directory with a specific layout or MDTs.  See
+.BR lfs-mkdir (1).
+.TP
+.BR mdts " [" PATH ]
+List all the MDTs for all mounted filesystems. If a
+.I PATH
+is provided that is located on a lustre mounted file system
+then only the MDTs belonging to that filesystem are displayed.
 .TP
 .BR osts " [" PATH ]
 List all the OSTs for all mounted filesystems. If a
@@ -55,12 +121,6 @@ NOTE:
 .B lfs check osts
 may be preferable for some use cases.
 .TP
-.BR mdts " [" PATH ]
-List all the MDTs for all mounted filesystems. If a
-.I PATH
-is provided that is located on a lustre mounted file system
-then only the MDTs belonging to that filesystem are displayed.
-.TP
 .BR pool_list " {" \fIFILESYSTEM }[ .\fIPOOLNAME "] | {" \fIPATHNAME }
 List the pools in
 .I FILESYSTEM
@@ -69,6 +129,15 @@ or
 or the OSTs in
 .IR FILESYSTEM.POOL .
 .TP
+.BR project
+Shows or sets the PROJECT ID of a file or directory. See
+.BR lfs-project (1).
+.TP
+.BR rm_entry " | " rmentry
+Remove the name entry of a remote directory. This command will only delete
+the name entry, making the remote directory inaccessible. This can only be
+done by the administrator.
+.TP
 .BI swap_layouts "FILENAME1 FILENAME2"
 Swap the data (layout and OST objects) of two regular files. The
 two files have to be in the same filesystem, owned by the same user,
@@ -76,55 +145,13 @@ reside on the same MDT and writable by the user.
 .P
 Swapping the layout of two directories is not permitted.
 .TP
-.B mkdir
-lfs mkdir is documented in the man page: lfs-mkdir(1). NOTE:
-.B lfs setdirstripe
-is an alias of the command
-.B lfs mkdir
-.TP
-.B migrate
-See lfs-migrate(1).
-.TP
 .B setstripe
-See lfs-setstripe(1).
+Set the layout on a new file, or default on a directory. See
+.BR lfs-setstripe (1).
 .TP
 .B unlink_foreign
 Remove the foreign files/dirs that are prevented to be using
 regular unlink/rmdir commands/syscalls. Works also for regular files/dirs.
-.TP
-.BR rm_entry " | " rmentry
-Remove the name entry of a remote directory. This command will only delete
-the name entry, making the remote directory inaccessible. This can only be
-done by the administrator.
-.TP
-.B --version
-Output the build version of the lfs utility.
-Use "lctl lustre_build_version" to get the version of the Lustre kernel modules
-.TP
-.B --list-commands
-Output a list of the commands supported by the lfs utility
-.TP
-.B help
-Provides brief help on the various arguments
-.TP
-.B exit/quit
-Quit the interactive lfs session
-.SH NOTES
-The usage of
-.BR "lfs find" ,
-.BR "lfs getstripe" ,
-.BR "lfs hsm_*" ,
-.BR "lfs setstripe" ,
-.BR "lfs migrate" ,
-.BR "lfs getdirstripe" ,
-.BR "lfs setdirstripe" ,
-.BR "lfs mkdir" ,
-.BR "lfs flushctx" ,
-.BR "lfs changelog" ,
-.B "lfs changelog_clear"
-and
-.B "lfs project"
-are explained in separate man pages.
 .SH EXAMPLES
 Check the status of all servers (MGT, MDT, OST):
 .RS
@@ -154,7 +181,6 @@ command is part of the
 filesystem package since release 0.10.0
 .\" Added in commit 0.9.1
 .SH SEE ALSO
-.BR lctl (8),
 .BR lfs-changelog (1),
 .BR lfs-changelog_clear (1),
 .BR lfs-data_version (1),
@@ -186,4 +212,5 @@ filesystem package since release 0.10.0
 .BR lfs-somsync (1),
 .BR lfs-swap_layouts (1),
 .BR lfs-unlink_foreign (1),
-.BR lustre (7)
+.BR lustre (7),
+.BR lctl (8)

@@ -1,71 +1,133 @@
-.TH LCTL 8 2025-01-31 Lustre "Lustre Configuration Utilities"
+.TH LCTL 8 2026-03-06 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl \- Lustre filesystem administrator configuration tool
 .SH SYNOPSIS
 .SY lctl
 .SY lctl
-.B --device
-.I DEVNO
+.RB [ --device
+.IR DEVICE ]
 .I COMMAND
 .RI [ ARGS ]
-.SY lctl
-.B --version
-.SY lctl
-.B --list-commands
 .YS
 .SH DESCRIPTION
 .B lctl
-is used to directly control Lustre via an ioctl interface, allowing
-various configuration, maintenance, and debugging features to be accessed.
+is used by a storage administrator to perform various Lustre operations,
+allowing configuration, maintenance, and debugging features to be accessed.
+It can be invoked non-interactivly to execute the specified
+.BR COMMAND ,
+or it can be run interactively without arguments to execute multiple commands.
+In some cases,
+.I COMMAND
+must be executed on a specific
+.IR DEVICE ,
+which can be specified on the command-line,
+or interactively before the command is run.
 .PP
-.B lctl
-can be invoked in interactive mode by issuing lctl command.
-After that, commands are issued as below. The most common commands in lctl are
-.BR dl ,
-.BR dk ,
-.BR device ,
-.B network
-.RB { up | down },
+The most common commands are:
+.BR debug_daemon ,
+.BR debug_kernel ,
+.BR device_list ,
+.BR get_param ,
+.BR set_param ,
 .BR list_nids ,
-.B ping
-.IR nid ,
-.BR help ,
-.BR quit .
-.PP
-To get a complete listing of available commands, type
+.BR mark ,
+and
+.BR ping .
+Most sub-commands are explained in separate man pages of the form
+.BI lctl- COMMAND
+as listed in the
+.B SEE ALSO
+section at the end.
+Some sub-commands do not have their own detailed man page are listed below.
+.SH OPTIONS
+The following options can be used to invoke
+.BR lctl .
+.TP
+.B --device
+Specify the
+.I DEVICE
+name or number to be used for the operation.  The
+.B device_list
+command shows a list of locally configured devices.
+.TP
+.BI help " COMMAND"
+To get basic help on the meaning and syntax of a command.
+.TP
 .B --list-commands
-at the lctl prompt. To get basic help on the meaning and syntax of a
-command, type
-.B help
-.I command
-Command completion is activated with the TAB key,
-and command history is available via the up- and down-arrow keys.
+Output a list of the commands supported by the lctl utility.
+.TP
+.BR --ignore_errors ", " ignore_errors
+Ignore errors during script processing.
+.TP
+.B lustre_build_version
+Output the build version of the Lustre kernel modules.
+.TP
+.BR -V ", " --version
+Output the build version of the utility itself.
+.TP
+.BR exit ", " quit
+Quit an interactive session.
+.SH BASH COMPLETION
+The
+.B lctl
+command supports
+.BR bash-completion (1)
+for tab completion of sub-command names and their options,
+with proper package installation and supporing shell usage.
+This can greatly simplify finding available commands,
+their options, and in many cases option arguments.
 .PP
-For non-interactive use, one uses the second invocation,
-which runs command after connecting to the device.
+To list commands, type
+.RB ' lctl\ TAB ',
+or after partially completing a command name.
+To list long options (more descriptive and easily understood) type
+.RI ' COMMAND
+.BR --TAB ',
+and to list short options type
+.RI ' COMMAND
+.BR -TAB '.
+Some commands also allow context-specific completion of arguments to the
+command-line option, for example generating a list of OBD devices for the
+.B --device
+option, or a list of OST pools for the
+.B pool_*
+commands.
+.SH COMMANDS
 .SS System Configuration
-The on-line tool set for backup or removal of Lustre system configuration.
+The on-line tool set for displaying, modifying, backup, or removal of Lustre
+system configuration.
 For detail, please see:
-.br
-.BR lctl-lcfg (8)
+.BR lctl-get_param (8),
+.BR lctl-set_param (8),
+.BR lctl-llog_print (8),
+and
+.BR lctl-lcfg_* (8).
 .SS Network Configuration
 .TP
 .BR network { up | down }|{ tcp | o2ib }
 Start or stop LNET, or select a network type for other
 .B lctl
-LNET commands
+LNET commands.  See also
+.BR lnetctl (8)
+for most LNet configuration commands.
+.TP
+.B conn_list
+Print all the connected remote NIDs for a given
+.B network
+type.
+.TP
+.B interface_list
+Print the network interface information for a given
+.B NETWORK
+type.
 .TP
 .BI list_nids
 Print all Network Identifiers on the local node. LNET must be running.
 .TP
-.BI which_nid " NIDLIST"
-From a list of nids for a remote node, show which interface communication
-will take place on.
-.TP
-.BI replace_nids " DEVICE_NAME NIDS_LIST"
-Replace the LNet NIDs. See
-.BR lctl-replace_nids (8)
-for details.
+.B peer_list
+Print the known peers for a given
+.B NETWORK
+type.
 .TP
 .BI ping " NID TIMEOUT"
 Check LNET connectivity via an LNET ping. This will use the fabric
@@ -73,38 +135,26 @@ appropriate to the specified NID. By default lctl will attempt to
 reach the remote node up to 120 seconds and then timeout. To disable
 the timeout just specify an negative timeout value.
 .TP
-.B interface_list
-Print the network interface information for a given
-.B network
-type.
-.TP
-.B peer_list
-Print the known peers for a given
-.B network
-type.
-.TP
-.B conn_list
-Print all the connected remote NIDs for a given
-.B network
-type.
+.BI replace_nids " DEVICE_NAME NIDS_LIST"
+Replace the LNet NIDs. See
+.BR lctl-replace_nids (8)
+for details.
 .TP
 .B route_list
 Print the complete routing table.
+.TP
+.BI which_nid " NIDLIST"
+From a list of nids for a remote node, show which interface communication
+will take place on.
 .SS Device Selection
 .TP
 .BI device " DEVNAME"
 This will select the specified OBD device.
 All other commands depend on the device being set.
 .TP
-.BR device_list " [" --target | -t "] [ "--yaml | -y ]
-Show all the local Lustre OBDs.
-.B dl
-is the same command. The
-.B -t
-option additonally will report the server's export NID linked to the local OBD.
-The
-.B -y
-option will display the OBD device information in YAML format.
+.BR device_list
+Show all the local Lustre OBDs.  See
+.BR lctl-device_list (8).
 .SS Device Operations
 .TP
 .BI conf_param " \fR[" "-d\fR] " DEVICE \fR| FSNAME . PARAMETER = VALUE
@@ -184,7 +234,7 @@ Register a new changelog user on specified MDT device with specified parameters.
 .TP
 .BR lctl-changelog_deregister (8)
 Deregister an existing changelog user on the specified MDT.
-.SS NODEMAP
+.SS Nodemap
 The nodemap feature allows UIDs, GIDs, and PROJIDs from remote systems to be
 mapped to local sets of UIDs, GIDs, and PROJIDs while retaining POSIX ownership,
 permissions and quota information. As a result, multiple sites with conflicting
@@ -288,11 +338,11 @@ Stop LFSCK on the specified MDT or OST device.
 .TP
 .BR lctl-lfsck-query (8)
 Get the LFSCK global status via the specified MDT device.
-.SS BARRIER
+.SS Barrier
 The tools set for write (modify) barrier on all MDTs. For detail, please see:
 .TP
 .BR lctl-barrier (8)
-.SS SNAPSHOT
+.SS Snapshot
 ZFS backend based snapshot tools set. The tool loads system configuration
 from the file
 .B /etc/ldev.conf
@@ -389,41 +439,18 @@ List all the subsystem and debug types.
 .TP
 .BI modules " PATH"
 Provide gdb-friendly module information.
-.SH OPTIONS
-The following options can be used to invoke lctl.
-.TP
-.B --device
-The device to be used for the operation. This can be specified by name or
-number. See
-.B device_list
-.TP
-.BR --ignore_errors ", " ignore_errors
-Ignore errors during script processing
-.TP
-.B lustre_build_version
-Output the build version of the Lustre kernel modules
-.TP
-.B --version
-Output the build version of the lctl utility
-.TP
-.B --list-commands
-Output a list of the commands supported by the lctl utility
-.TP
-.B help
-Provides brief help on the various arguments
-.TP
-.BR exit ", " quit
-Quit the interactive lctl session
 .SH EXAMPLES
+List the devices configured on the local node:
 .EX
-.B # lctl
-.B lctl > dl
+.B # lctl dl
   0 UP mgc MGC192.168.0.20@tcp bfbb24e3-7deb-2ffa-eab0-44dffe00f692 5
   1 UP ost OSS OSS_uuid 3
   2 UP obdfilter testfs-OST0000 testfs-OST0000_UUID 3
-.B lctl > dk /tmp/log
+.EE
+Dump the kernel debug log to a file for review:
+.EX
+.B # lctl dk /tmp/debug.log
 Debug log: 87 lines, 87 kept, 0 dropped.
-.B lctl > quit
 .EE
 .SH AVAILABILITY
 .B lctl
