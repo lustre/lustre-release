@@ -565,8 +565,8 @@ int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 			      enum cl_io_priority prio);
 int osc_cache_wait_range(const struct lu_env *env, struct osc_object *obj,
 			 pgoff_t start, pgoff_t end);
-int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
-		   struct osc_object *osc, int async);
+int __osc_io_unplug(const struct lu_env *env, struct client_obd *cli,
+		    struct osc_object *osc, int async);
 static inline void osc_wake_cache_waiters(struct client_obd *cli)
 {
 	wake_up(&cli->cl_cache_waiters);
@@ -576,14 +576,14 @@ static inline int osc_io_unplug_async(const struct lu_env *env,
 				      struct client_obd *cli,
 				      struct osc_object *osc)
 {
-	return osc_io_unplug0(env, cli, osc, 1);
+	return __osc_io_unplug(env, cli, osc, 1);
 }
 
 static inline void osc_io_unplug(const struct lu_env *env,
 				 struct client_obd *cli,
 				 struct osc_object *osc)
 {
-	(void)osc_io_unplug0(env, cli, osc, 0);
+	(void)__osc_io_unplug(env, cli, osc, 0);
 }
 
 typedef bool (*osc_page_gang_cbt)(const struct lu_env *, struct cl_io *,

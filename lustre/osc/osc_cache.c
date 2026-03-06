@@ -40,10 +40,10 @@ static int osc_io_unplug_async(const struct lu_env *env,
 static void osc_free_grant(struct client_obd *cli, unsigned int nr_pages,
 			   unsigned int lost_grant, unsigned int dirty_grant);
 
-static void osc_extent_tree_dump0(int mask, struct osc_object *obj,
-				  const char *func, int line);
+static void __osc_extent_tree_dump(int mask, struct osc_object *obj,
+				   const char *func, int line);
 #define osc_extent_tree_dump(mask, obj) \
-	osc_extent_tree_dump0(mask, obj, __func__, __LINE__)
+	__osc_extent_tree_dump(mask, obj, __func__, __LINE__)
 
 static void osc_unreserve_grant(struct client_obd *cli, unsigned int reserved,
 				unsigned int unused);
@@ -154,8 +154,8 @@ static inline struct osc_extent *first_extent(struct osc_object *obj)
 }
 
 /* object must be locked by caller. */
-static int osc_extent_sanity_check0(struct osc_extent *ext,
-				    const char *func, const int line)
+static int __osc_extent_sanity_check(struct osc_extent *ext,
+				     const char *func, const int line)
 {
 	struct osc_object *obj = ext->oe_obj;
 	struct osc_async_page *oap;
@@ -247,7 +247,7 @@ out:
 }
 
 #define sanity_check_nolock(ext) \
-	osc_extent_sanity_check0(ext, __func__, __LINE__)
+	__osc_extent_sanity_check(ext, __func__, __LINE__)
 
 #define sanity_check(ext) ({						\
 	int __res;							\
@@ -1289,8 +1289,8 @@ out:
 	RETURN(rc);
 }
 
-static void osc_extent_tree_dump0(int mask, struct osc_object *obj,
-				  const char *func, int line)
+static void __osc_extent_tree_dump(int mask, struct osc_object *obj,
+				   const char *func, int line)
 {
 	struct osc_extent *ext;
 	int cnt;
@@ -2389,8 +2389,8 @@ __must_hold(&cli->cl_loi_list_lock)
 	EXIT;
 }
 
-int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
-		   struct osc_object *osc, int async)
+int __osc_io_unplug(const struct lu_env *env, struct client_obd *cli,
+		    struct osc_object *osc, int async)
 {
 	int rc = 0;
 
@@ -2408,7 +2408,7 @@ int osc_io_unplug0(const struct lu_env *env, struct client_obd *cli,
 	}
 	return rc;
 }
-EXPORT_SYMBOL(osc_io_unplug0);
+EXPORT_SYMBOL(__osc_io_unplug);
 
 int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
 			struct cl_page *page, loff_t offset)

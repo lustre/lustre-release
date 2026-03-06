@@ -388,7 +388,7 @@ static int osc_lock_flush(struct osc_object *obj, pgoff_t start, pgoff_t end,
 }
 
 /**
- * osc_dlm_blocking_ast0() - Helper for osc_dlm_blocking_ast()
+ * __osc_dlm_blocking_ast() - Helper for osc_dlm_blocking_ast()
  * @env: lustre environment
  * @dlmlock: A pointer to struct ldlm_lock
  * @data: unused
@@ -402,9 +402,9 @@ static int osc_lock_flush(struct osc_object *obj, pgoff_t start, pgoff_t end,
  * * %0 on success
  * * %negative on failure
  */
-static int osc_dlm_blocking_ast0(const struct lu_env *env,
-				 struct ldlm_lock *dlmlock, void *data,
-				 int flag)
+static int __osc_dlm_blocking_ast(const struct lu_env *env,
+				  struct ldlm_lock *dlmlock, void *data,
+				  int flag)
 {
 	struct cl_object	*obj = NULL;
 	int			result = 0;
@@ -557,7 +557,7 @@ static int osc_ldlm_blocking_ast(struct ldlm_lock *dlmlock,
 			break;
 		}
 
-		result = osc_dlm_blocking_ast0(env, dlmlock, data, flag);
+		result = __osc_dlm_blocking_ast(env, dlmlock, data, flag);
 		cl_env_put(env, &refcheck);
 		break;
 	}
