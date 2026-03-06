@@ -791,9 +791,17 @@ restart:
 				 ext, EXTSTR"\n", EXTPARA(cur));
 
 			if (ext->oe_state > OES_CACHE || ext->oe_hp ||
-			    ext->oe_fsync_wait) {
+			    ext->oe_fsync_wait || ext->oe_memalloc) {
 				/* for simplicity, we wait for this extent to
-				 * finish before going forward. */
+				 * finish before going forward.
+				 * Also wait if oe_memalloc is set, which means
+				 * a page in this extent has been marked
+				 * PG_writeback by osc_flush_async_page() but
+				 * the RPC has not been submitted yet. Holding
+				 * this extent would remove it from the urgent
+				 * list and prevent the RPC from being sent,
+				 * causing a deadlock if the writer later hits
+				 * that PG_writeback page in cl_page_assume(). */
 				conflict = osc_extent_get(ext);
 				break;
 			}
@@ -804,10 +812,11 @@ restart:
 
 		/* non-overlapped extent */
 		if (ext->oe_state != OES_CACHE || ext->oe_hp ||
-		    ext->oe_fsync_wait)
+		    ext->oe_fsync_wait || ext->oe_memalloc)
 			/* we can't do anything for a non OES_CACHE extent, or
 			 * if there is someone waiting for this extent to be
-			 * flushed, try next one. */
+			 * flushed, or if a writeback page is pending RPC
+			 * submission (oe_memalloc), try next one. */
 			continue;
 
 		if (osc_extent_merge(env, ext, cur) == 0) {
