@@ -7264,7 +7264,7 @@ test_56c() {
 	restore_lustre_params < $p
 
 	wait_update_facet client \
-		"$LFS df -v | awk '/$ost_name/ { print \\\$7 }'" "$old_status" ||
+		"$LFS df --output=state --ost=$ost_idx" "$old_status" ||
 	{
 		new_status=$(ost_dev_status $ost_idx)
 

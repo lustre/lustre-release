@@ -512,7 +512,7 @@ command_t cmdlist[] = {
 	 "report filesystem disk space usage or inodes usage "
 	 "of each MDS and all OSDs or a batch belonging to a specific pool.\n"
 	 "Usage: df [--inodes|-i] [--human-readable|-h] [--lazy|-l]\n"
-	 "[--mdt|-m[INDEX]] [--ost|-o[INDEX]] [--output|-u] [--no-header|-N]\n"
+	 "[--mdt|-m[INDEX]] [--ost|-o[INDEX]] [--output|-u FIELD_LIST] [--no-header|-N]\n"
 	 "[--only-summary|-s] [--pool|-p FSNAME[.POOL]] [PATH]"},
 	{"getname", lfs_getname, 0,
 	 "list instances and specified mount points [for specified path only]\n"
@@ -8002,7 +8002,65 @@ enum showdf_fields {
 	SHOWDF_INODES = (SHOWDF_ITOTAL|SHOWDF_IUSED|SHOWDF_IFREE|SHOWDF_IPCT),
 	SHOWDF_MNTDIR = 0x0400,
 	SHOWDF_DEVICE = 0x0800,
+	SHOWDF_STATE  = 0x1000,
 };
+
+struct showdf_field_name {
+	const char *sdfn_name;
+	enum showdf_fields sdfn_field;
+};
+
+static const struct showdf_field_name showdf_field_names[] = {
+	{ .sdfn_name = "uuid",		.sdfn_field = SHOWDF_UUID },
+	{ .sdfn_name = "source",	.sdfn_field = SHOWDF_UUID },
+	{ .sdfn_name = "device",	.sdfn_field = SHOWDF_UUID },
+	{ .sdfn_name = "btotal",	.sdfn_field = SHOWDF_BTOTAL },
+	{ .sdfn_name = "size",		.sdfn_field = SHOWDF_BTOTAL },
+	{ .sdfn_name = "total",		.sdfn_field = SHOWDF_BTOTAL },
+	{ .sdfn_name = "bused",		.sdfn_field = SHOWDF_BUSED },
+	{ .sdfn_name = "used",		.sdfn_field = SHOWDF_BUSED },
+	{ .sdfn_name = "bfree",		.sdfn_field = SHOWDF_BFREE },
+	{ .sdfn_name = "free",		.sdfn_field = SHOWDF_BFREE },
+	{ .sdfn_name = "bavail",	.sdfn_field = SHOWDF_BAVAIL },
+	{ .sdfn_name = "avail",		.sdfn_field = SHOWDF_BAVAIL },
+	{ .sdfn_name = "bpct",		.sdfn_field = SHOWDF_BPCT },
+	{ .sdfn_name = "pcent",		.sdfn_field = SHOWDF_BPCT },
+	{ .sdfn_name = "usepct",	.sdfn_field = SHOWDF_BPCT },
+	{ .sdfn_name = "pct",		.sdfn_field = SHOWDF_BPCT },
+	{ .sdfn_name = "itotal",	.sdfn_field = SHOWDF_ITOTAL },
+	{ .sdfn_name = "inodes",	.sdfn_field = SHOWDF_ITOTAL },
+	{ .sdfn_name = "iused",		.sdfn_field = SHOWDF_IUSED },
+	{ .sdfn_name = "ifree",		.sdfn_field = SHOWDF_IFREE },
+	{ .sdfn_name = "iavail",	.sdfn_field = SHOWDF_IFREE },
+	{ .sdfn_name = "ipct",		.sdfn_field = SHOWDF_IPCT },
+	{ .sdfn_name = "ipcent",	.sdfn_field = SHOWDF_IPCT },
+	{ .sdfn_name = "iusepct",	.sdfn_field = SHOWDF_IPCT },
+	{ .sdfn_name = "target",	.sdfn_field = SHOWDF_MNTDIR },
+	{ .sdfn_name = "state",		.sdfn_field = SHOWDF_STATE },
+};
+
+static enum showdf_fields showdf_str2field(const char *name)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(showdf_field_names); i++) {
+		if (strcmp(name, showdf_field_names[i].sdfn_name) == 0)
+			return showdf_field_names[i].sdfn_field;
+	}
+
+	return 0;
+}
+
+static void showdf_print_available_fields(void)
+{
+	int i;
+
+	fprintf(stderr, "Available fields:");
+	for (i = 0; i < ARRAY_SIZE(showdf_field_names); i++)
+		fprintf(stderr, " %s", showdf_field_names[i].sdfn_name);
+
+	fprintf(stderr, "\n");
+}
 
 #define COOK(value, base)					\
 ({								\
@@ -8047,11 +8105,36 @@ static void print_field_value(long long value, enum mntdf_flags flags, int base,
 		int i = COOK(cook_val, base);
 
 		if (i > 0)
-			printf(HDF" ", cook_val, suffix[i - 1]);
+			printf(HDF, cook_val, suffix[i - 1]);
 		else
-			printf(CDF" ", value);
+			printf(CDF, value);
 	} else {
-		printf(CDF" ", value);
+		printf(CDF, value);
+	}
+}
+
+static void print_os_state(struct obd_statfs *stat, enum mntdf_flags flags)
+{
+	if (stat->os_state) {
+		__u32 state = stat->os_state;
+
+		while (state != 0) {
+			const struct obd_statfs_state_name *osn;
+
+			osn = obd_statfs_state_name_find(state);
+			if (!osn) {
+				/* Unknown flag(s) for remainder.
+				 * Print in octal to avoid confusion
+				 * with existing 'a' and 'f' flags
+				 * if printed in hex.
+				 */
+				printf("(%#o)", state);
+				break;
+			}
+			if (osn->osn_err || flags & MNTDF_VERBOSE)
+				printf("%c", osn->osn_name);
+			state ^= osn->osn_state;
+		}
 	}
 }
 
@@ -8079,9 +8162,12 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 
 			fields |= field;
 
+			if (i > 0)
+				printf(" ");
+
 			switch (field) {
 			case SHOWDF_UUID:
-				printf(UUF" ", uuid);
+				printf(UUF, uuid);
 				break;
 			case SHOWDF_BTOTAL:
 				btotal = (stat->os_blocks *
@@ -8110,7 +8196,7 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 			case SHOWDF_BPCT:
 				ratio = obd_statfs_ratio(stat, false);
 
-				printf(RDF" ", ratio);
+				printf(RDF, ratio);
 				break;
 			case SHOWDF_ITOTAL:
 				itotal = stat->os_files;
@@ -8130,38 +8216,18 @@ static int showdf(char *mntdir, struct obd_statfs *stat,
 			case SHOWDF_IPCT:
 				iratio = obd_statfs_ratio(stat, true);
 
-				printf(RDF" ", iratio);
+				printf(RDF, iratio);
 				break;
 			case SHOWDF_MNTDIR:
 				printf(" %-s", mntdir);
+				if (type && fields)
+					printf("[%s:%d]", type, index);
+				break;
+			case SHOWDF_STATE:
+				print_os_state(stat, flags);
 				break;
 			default:
 				break;
-			}
-		}
-		if (type && fields & SHOWDF_MNTDIR)
-			printf("[%s:%d]", type, index);
-
-		if (stat->os_state) {
-			__u32 state = stat->os_state;
-
-			printf(" ");
-			while (state != 0) {
-				const struct obd_statfs_state_name *osn;
-
-				osn = obd_statfs_state_name_find(state);
-				if (!osn) {
-					/* Unknown flag(s) for remainder.
-					 * Print in octal to avoid confusion
-					 * with existing 'a' and 'f' flags
-					 * if printed in hex.
-					 */
-					printf("(%#o)", state);
-					break;
-				}
-				if (osn->osn_err || flags & MNTDF_VERBOSE)
-					printf("%c", osn->osn_name);
-				state ^= osn->osn_state;
 			}
 		}
 
@@ -8228,8 +8294,9 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 				return -ENODEV;
 			}
 			poolname++;
-		} else
+		} else {
 			poolname = pool;
+		}
 	}
 
 	fd = open(mntdir, O_RDONLY);
@@ -8250,6 +8317,7 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 			field_order[field_count++] = SHOWDF_IFREE;
 			field_order[field_count++] = SHOWDF_IPCT;
 			field_order[field_count++] = SHOWDF_MNTDIR;
+			field_order[field_count++] = SHOWDF_STATE;
 		} else {
 			field_count = 0;
 			field_order[field_count++] = SHOWDF_UUID;
@@ -8258,6 +8326,7 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 			field_order[field_count++] = SHOWDF_BAVAIL;
 			field_order[field_count++] = SHOWDF_BPCT;
 			field_order[field_count++] = SHOWDF_MNTDIR;
+			field_order[field_count++] = SHOWDF_STATE;
 		}
 	}
 
@@ -9130,48 +9199,18 @@ static int lfs_df(int argc, char **argv)
 
 				opt = strtok_r(optarg, ",", &saveptr);
 				while (opt != NULL) {
-					enum showdf_fields field = 0;
+					enum showdf_fields field;
 
-					if (strcmp(opt, "source") == 0 ||
-					    strcmp(opt, "device") == 0)
-						field = SHOWDF_UUID;
-					else if (strcmp(opt, "size") == 0 ||
-						 strcmp(opt, "total") == 0 ||
-						 strcmp(opt, "btotal") == 0)
-						field = SHOWDF_BTOTAL;
-					else if (strcmp(opt, "itotal") == 0 ||
-						 strcmp(opt, "inodes") == 0)
-						field = SHOWDF_ITOTAL;
-					else if (strcmp(opt, "used") == 0 ||
-						 strcmp(opt, "bused") == 0)
-						field = SHOWDF_BUSED;
-					else if (strcmp(opt, "iused") == 0)
-						field = SHOWDF_IUSED;
-					else if (strcmp(opt, "free") == 0 ||
-						 strcmp(opt, "bfree") == 0)
-						field = SHOWDF_BFREE;
-					else if (strcmp(opt, "avail") == 0 ||
-						 strcmp(opt, "bavail") == 0)
-						field = SHOWDF_BAVAIL;
-					else if (strcmp(opt, "iavail") == 0 ||
-						 strcmp(opt, "ifree") == 0)
-						field = SHOWDF_IFREE;
-					else if (strcmp(opt, "pcent") == 0 ||
-						 strcmp(opt, "usepct") == 0 ||
-						 strcmp(opt, "bpct") == 0 ||
-						 strcmp(opt, "pct") == 0)
-						field = SHOWDF_BPCT;
-					else if (strcmp(opt, "ipcent") == 0 ||
-						 strcmp(opt, "iusepct") == 0 ||
-						 strcmp(opt, "ipct") == 0)
-						field = SHOWDF_IPCT;
-					else if (strcmp(opt, "target") == 0)
-						field = SHOWDF_MNTDIR;
-
-					if (field != 0) {
-						fields |= field;
-						field_order[field_count++] = field;
+					field = showdf_str2field(opt);
+					if (field == 0) {
+						fprintf(stderr,
+						       "%s: unknown field '%s' for --output option\n",
+						       progname, opt);
+						showdf_print_available_fields();
+						return CMD_HELP;
 					}
+					fields |= field;
+					field_order[field_count++] = field;
 					opt = strtok_r(NULL, ",", &saveptr);
 				}
 			}

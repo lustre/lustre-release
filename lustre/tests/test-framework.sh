@@ -2890,10 +2890,10 @@ ost_dev_status() {
 	local ost_idx=$1
 	local mnt_pnt=${2:-$MOUNT}
 	local opts=$3
-	local ost_uuid
+	local state
 
-	ost_uuid=$(ostuuid_from_index $ost_idx $mnt_pnt)
-	lfs_df $opts $mnt_pnt | awk '/'$ost_uuid'/ { print $7 }'
+	state=$(lfs_df $opts --output=state --ost=$ost_idx $mnt_pnt)
+	echo "$state"
 }
 
 setup_quota(){
