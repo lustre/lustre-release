@@ -41,4 +41,5 @@ rhel9.5/ext4-add-periodic-superblock-update.patch
 rhel10.0/ext4-add-DISCARD-stats.patch
 rhel9.4/ext4-add-IGET_NO_CHECKS-flag.patch
 rhel10.0/ext4-mballoc-for-hybrid.patch
+rhel10.0/ext4-add-fstrim-mount-option.patch
 base/ext4-adjust-mmp-wait-time.patch
