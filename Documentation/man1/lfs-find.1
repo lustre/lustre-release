@@ -1,4 +1,4 @@
-.TH LFS-FIND 1 "2025-05-23" Lustre "Lustre User Utilities"
+.TH LFS-FIND 1 2026-03-06 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-find \- Lustre client utility to list files with specific attributes
 .SH SYNOPSIS
@@ -810,6 +810,27 @@ MDT inode attributes for each matching filename. If it can make a
 positive or negative decision for a file based only on the MDT attributes
 (e.g. newer than specified time, user/group/project ID) it will not fetch
 the OST object attributes for that file.
+.SH BASH COMPLETION
+The
+.B lfs find
+command supports
+.BR bash-completion (1)
+for tab completion of option names and in some cases their arguments,
+with proper package installation and supporing shell usage.
+This can simplify usage when specifying complex search commands.
+.PP
+To list mountpoints, type
+.RB ' lfs\ find\ TAB '.
+To list long options (more descriptive and easily understood) type
+.RB ' --TAB ',
+and to list short options type
+.RB ' -TAB '.
+Some arguments also allow context-specific completion to the
+command-line option, for example generating a list of OST devices for the
+.B -ost
+option, or a list of OST pools for the
+.B -pool
+option.
 .SH BUGS
 The
 .B lfs find
@@ -817,8 +838,10 @@ command isn't as comprehensive as
 .BR find (1).
 In particular, it doesn't support complex boolean expressions with
 .B -o
-(logical OR), only logical AND of all expressions. The order that parameters
-are specified does not affect how the files are matched.
+(logical OR), only logical AND of most expressions.
+The parameter ordering does not affect how the files are matched.
+Specifying multiple identical options generally clobbers the earlier option
+(e.g. it is not possible to specify a range of stripe counts or multiple pools).
 .SH EXAMPLES
 Efficiently lists all files in a given directory and its subdirectories,
 without fetching any file attributes:
@@ -846,11 +869,11 @@ Recursively list all regular files in given directory more than 30 days old:
 Recursively find all files in
 .B test
 that have objects on OST0002 or OST0003 and migrate them to other OSTs. See
-.BR lfs_migrate (1)
+.BR lfs migrate (1)
 for more details:
 .EX
 .RS
-.B # lfs find /mnt/lustre/test -o OST0002,OST0003 -print0 | lfs_migrate -y
+.B # lfs find /mnt/lustrefs --ost 2,3 -type f -print0 | lfs migrate -0
 .RE
 .EE
 .PP
@@ -929,7 +952,7 @@ filesystem package since release 0.10.0
 .BR lfs-getdirstripe (1),
 .BR lfs-getstripe (1),
 .BR lfs-migrate (1),
-.BR lustre (7),
+.BR xargs (1),
 .BR projid (5),
-.BR regex (7),
-.BR xargs (1)
+.BR lustre (7),
+.BR regex (7)

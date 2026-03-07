@@ -1,4 +1,4 @@
-.TH LCTL-GET_PARAM 8 2024-08-13 Lustre "Lustre Configuration Utilities"
+.TH LCTL-GET_PARAM 8 2026-03-06 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-get_param \- retrieve configuration parameters
 .SH SYNOPSIS
@@ -9,10 +9,10 @@ lctl-get_param \- retrieve configuration parameters
 .RB [ --header | -H ]
 .RB [ --links | -l ]
 .RB [ --no-links | -L ]
-.RB [ --no-name | -n ]
-.RB [ --only-name | -N ]
 .RB [ --merge | -m ]
 .RB [ --no-merge | -M ]
+.RB [ --no-name | -n ]
+.RB [ --only-name | -N ]
 .BR [ --module | -o ]
 .RB [ --path | -p ]
 .RB [ --readable | -r ]
@@ -104,7 +104,7 @@ useful when using patterns. This option is equivalent to
 Include modules params in the parameter search path, meaning that matching
 module parameters will be shown along side with Lustre parameters.
 .TP
-.B -p ", " --path
+.BR -p ", " --path
 Print the parameter path instead of the parameter name.
 .TP
 .BR -r ", " --readable
@@ -130,6 +130,19 @@ to print parameters that are both readable and writable.
 Some paramters can be presented in a YAML format but are not by default. This
 will format the parameter data in YAML. If the YAML provides a source: field
 it can be suppressed with the -n option.
+.SH BASH COMPLETION
+This command supports
+.BR bash-completion (1)
+for tab completion of parameter names available on the local node,
+with suitable shell and package installation.
+This can greatly simplify finding which parameters are available,
+instead of running
+.BR lctl-list_param (8)
+repeatedly.
+To list long options (more descriptive and easily understood) type
+.RB ' --TAB ',
+and to list short options type
+.RB ' -TAB '.
 .SH EXAMPLES
 Use wildcards to obtain all matching parameters:
 .RS

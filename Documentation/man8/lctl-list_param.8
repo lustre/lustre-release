@@ -1,4 +1,4 @@
-.TH LCTL-LIST_PARAM 8 2024-08-13 Lustre "Lustre Configuration Utilities"
+.TH LCTL-LIST_PARAM 8 2026-03-06 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-list_param \- list configuration parameter names
 .SH SYNOPSIS
@@ -88,6 +88,19 @@ parameters containing any of the following:
 Print only parameters that have write permission. Can be used with
 .RB [ -r | --readable ]
 to print parameters that are both readable and writable.
+.SH BASH COMPLETION
+This command supports
+.BR bash-completion (1)
+for tab completion of parameter names available on the local node,
+with suitable shell and package installation.
+This can greatly simplify finding which parameters are available,
+instead of running
+.BR lctl-list_param (8)
+repeatedly.
+To list long options (more descriptive and easily understood) type
+.RB ' --TAB ',
+and to list short options type
+.RB ' -TAB '.
 .SH EXAMPLES
 Use wildcards to obtain all matching parameters:
 .RS
@@ -180,7 +193,7 @@ mgs.MGS.gss
 .EE
 .RE
 .PP
-To get a full list of tunable parameters on the filesystem combine -t with -wr
+To get a full list of tunable parameters on the filesystem combine -t with -wr:
 .RS
 .EX
 .B # lctl list_param -R -L -t -wr ost.OSS.ost_seq
@@ -200,7 +213,7 @@ ost.OSS.ost_seq.req_buffers_max
 .PP
 Using --merge will collapse copies of the same parameter if they have the exact
 same name. Multiple copies are often caused by symlinks pointing to the same
-directory that has already been searched
+directory that has already been searched.  To show all parameters:
 .RS
 .EX
 .B # lctl list_param -R --no-merge osp.lustre-OST0000-osc-MDT0000
@@ -221,7 +234,7 @@ osp.lustre-OST0000-osc-MDT0000.create_count
 .EE
 .RE
 .PP
-Using --dshbak will collapse multiple OSTs and MDTs so params are easier to read
+Use --dshbak will collapse multiple OSTs and MDTs so params are easier to read:
 .RS
 .EX
 .B # lctl list_param -R osp.*
