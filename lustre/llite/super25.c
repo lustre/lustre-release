@@ -400,5 +400,5 @@ MODULE_DESCRIPTION("Lustre Client File System");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(lustre_init);
+late_initcall_sync(lustre_init);
 module_exit(lustre_exit);

@@ -8511,5 +8511,5 @@ MODULE_DESCRIPTION("Lustre Metadata Target ("LUSTRE_MDT_NAME")");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(mdt_init);
+late_initcall_sync(mdt_init);
 module_exit(mdt_exit);

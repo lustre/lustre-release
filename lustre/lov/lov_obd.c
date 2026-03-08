@@ -1417,5 +1417,5 @@ MODULE_DESCRIPTION("Lustre Logical Object Volume");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(lov_init);
+late_initcall_sync(lov_init);
 module_exit(lov_exit);

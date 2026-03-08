@@ -2114,5 +2114,5 @@ MODULE_DESCRIPTION("Lustre Management Client");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(mgc_init);
+late_initcall_sync(mgc_init);
 module_exit(mgc_exit);

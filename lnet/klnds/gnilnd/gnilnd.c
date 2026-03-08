@@ -2875,5 +2875,5 @@ MODULE_DESCRIPTION("Gemini LNet Network Driver");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(kgnilnd_init);
+late_initcall_sync(kgnilnd_init);
 module_exit(kgnilnd_exit);

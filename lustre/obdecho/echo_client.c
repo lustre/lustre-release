@@ -2623,7 +2623,7 @@ MODULE_DESCRIPTION("Lustre Echo Client test driver");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(obdecho_init);
+late_initcall_sync(obdecho_init);
 module_exit(obdecho_exit);
 
 /* echo_client */

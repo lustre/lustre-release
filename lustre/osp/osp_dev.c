@@ -1957,5 +1957,5 @@ MODULE_DESCRIPTION("Lustre OSD Storage Proxy ("LUSTRE_OSP_NAME")");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(osp_init);
+late_initcall_sync(osp_init);
 module_exit(osp_exit);

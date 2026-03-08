@@ -524,5 +524,5 @@ MODULE_DESCRIPTION("Lustre FID Location Database");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(fld_init);
+late_initcall_sync(fld_init);
 module_exit(fld_exit);

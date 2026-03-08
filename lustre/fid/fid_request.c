@@ -505,5 +505,5 @@ MODULE_DESCRIPTION("Lustre File IDentifier");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(fid_init);
+late_initcall_sync(fid_init);
 module_exit(fid_exit);

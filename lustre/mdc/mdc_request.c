@@ -3202,5 +3202,5 @@ MODULE_DESCRIPTION("Lustre Metadata Client");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(mdc_init);
+late_initcall_sync(mdc_init);
 module_exit(mdc_exit);

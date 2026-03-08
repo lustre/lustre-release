@@ -63,5 +63,5 @@ MODULE_DESCRIPTION("M to N erasure code handling");
 MODULE_VERSION("1.0.0");
 MODULE_LICENSE("Dual BSD/GPL");
 
-module_init(ec_init);
+late_initcall_sync(ec_init);
 module_exit(ec_exit);

@@ -3184,5 +3184,5 @@ MODULE_DESCRIPTION("EFA LNet Network Driver");
 MODULE_VERSION(DRV_MODULE_VERSION);
 MODULE_LICENSE("GPL");
 
-module_init(kefalnd_init);
+late_initcall_sync(kefalnd_init);
 module_exit(kefalnd_exit);

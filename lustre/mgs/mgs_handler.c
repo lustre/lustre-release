@@ -1899,5 +1899,5 @@ MODULE_DESCRIPTION("Lustre Management Server (MGS)");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(mgs_init);
+late_initcall_sync(mgs_init);
 module_exit(mgs_exit);

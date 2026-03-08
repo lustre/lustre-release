@@ -2766,5 +2766,5 @@ MODULE_DESCRIPTION("TCP Socket LNet Network Driver");
 MODULE_VERSION("2.8.0");
 MODULE_LICENSE("GPL");
 
-module_init(ksocklnd_init);
+late_initcall_sync(ksocklnd_init);
 module_exit(ksocklnd_exit);

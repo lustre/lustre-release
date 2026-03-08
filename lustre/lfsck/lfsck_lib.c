@@ -3960,5 +3960,5 @@ MODULE_DESCRIPTION("Lustre File System Checker");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(lfsck_init);
+late_initcall_sync(lfsck_init);
 module_exit(lfsck_exit);

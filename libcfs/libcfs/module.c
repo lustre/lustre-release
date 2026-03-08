@@ -676,5 +676,5 @@ MODULE_DESCRIPTION("Lustre helper library");
 MODULE_VERSION(LIBCFS_VERSION);
 MODULE_LICENSE("GPL");
 
-module_init(libcfs_init);
+late_initcall(libcfs_init);
 module_exit(libcfs_exit);

@@ -9173,5 +9173,5 @@ MODULE_DESCRIPTION("Lustre Object Storage Device ("LUSTRE_OSD_LDISKFS_NAME")");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(osd_init);
+late_initcall_sync(osd_init);
 module_exit(osd_exit);

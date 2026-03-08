@@ -3445,5 +3445,5 @@ MODULE_DESCRIPTION("Lustre Object Filtering Device");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(ofd_init);
+late_initcall_sync(ofd_init);
 module_exit(ofd_exit);

@@ -141,5 +141,5 @@ MODULE_DESCRIPTION("Lustre Request Processor and Lock Management");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(ptlrpc_init);
+late_initcall_sync(ptlrpc_init);
 module_exit(ptlrpc_exit);

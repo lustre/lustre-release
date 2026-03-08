@@ -4035,5 +4035,5 @@ MODULE_DESCRIPTION("OpenIB gen2 LNet Network Driver");
 MODULE_VERSION("2.8.0" OFED_VERSION);
 MODULE_LICENSE("GPL");
 
-module_init(ko2iblnd_init);
+late_initcall_sync(ko2iblnd_init);
 module_exit(ko2iblnd_exit);

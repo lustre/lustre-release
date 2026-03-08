@@ -2483,5 +2483,5 @@ MODULE_DESCRIPTION("Lustre Meta-data Device Driver ("LUSTRE_MDD_NAME")");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(mdd_init);
+late_initcall_sync(mdd_init);
 module_exit(mdd_exit);

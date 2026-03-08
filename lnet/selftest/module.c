@@ -160,5 +160,5 @@ MODULE_DESCRIPTION("LNet Selftest");
 MODULE_VERSION("2.8.0");
 MODULE_LICENSE("GPL");
 
-module_init(lnet_selftest_init);
+late_initcall_sync(lnet_selftest_init);
 module_exit(lnet_selftest_exit);

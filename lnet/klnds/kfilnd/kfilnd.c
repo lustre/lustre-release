@@ -639,5 +639,5 @@ MODULE_DESCRIPTION("Kfabric Lustre Network Driver");
 MODULE_VERSION(KFILND_VERSION);
 MODULE_LICENSE("GPL");
 
-module_init(kfilnd_init);
+late_initcall_sync(kfilnd_init);
 module_exit(kfilnd_exit);

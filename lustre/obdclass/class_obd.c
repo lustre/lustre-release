@@ -1075,5 +1075,5 @@ MODULE_DESCRIPTION("Lustre Class Driver");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(obdclass_init);
+late_initcall_sync(obdclass_init);
 module_exit(obdclass_exit);

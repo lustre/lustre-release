@@ -511,5 +511,5 @@ MODULE_DESCRIPTION("Lustre Networking layer");
 MODULE_VERSION(LNET_VERSION);
 MODULE_LICENSE("GPL");
 
-module_init(lnet_init);
+late_initcall(lnet_init);
 module_exit(lnet_exit);

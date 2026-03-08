@@ -4594,5 +4594,5 @@ MODULE_DESCRIPTION("Lustre Logical Metadata Volume");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(lmv_init);
+late_initcall_sync(lmv_init);
 module_exit(lmv_exit);

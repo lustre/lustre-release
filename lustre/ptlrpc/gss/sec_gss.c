@@ -2910,5 +2910,5 @@ MODULE_DESCRIPTION("Lustre GSS security policy");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(sptlrpc_gss_init);
+late_initcall_sync(sptlrpc_gss_init);
 module_exit(sptlrpc_gss_exit);

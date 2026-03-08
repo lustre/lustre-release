@@ -609,5 +609,5 @@ MODULE_DESCRIPTION("Lustre Quota");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(lquota_init);
+late_initcall_sync(lquota_init);
 module_exit(lquota_exit);

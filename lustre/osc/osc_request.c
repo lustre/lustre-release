@@ -4306,5 +4306,5 @@ MODULE_DESCRIPTION("Lustre Object Storage Client (OSC)");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(osc_init);
+late_initcall_sync(osc_init);
 module_exit(osc_exit);

@@ -2853,5 +2853,5 @@ MODULE_DESCRIPTION("Lustre Logical Object Device ("LUSTRE_LOD_NAME")");
 MODULE_VERSION(LUSTRE_VERSION_STRING);
 MODULE_LICENSE("GPL");
 
-module_init(lod_init);
+late_initcall_sync(lod_init);
 module_exit(lod_exit);
