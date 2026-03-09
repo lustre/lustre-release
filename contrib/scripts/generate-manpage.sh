@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 
 # Generate a man page with section-specific content
 # Usage: ./generate_manpage.sh NAME SECTION [OUTPUT_FILE]

@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 PROG=$(basename $0)
 [ "$1" = "-h" -o "$1" = "--help" ] && echo "usage: $PROG [patch dir]" && exit 0
 [ "$1" = "-d" ] && shift && DELETE="git rm" || DELETE="echo Unused"

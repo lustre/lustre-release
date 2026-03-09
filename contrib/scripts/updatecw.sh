@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 # Adds Intel copyright notices to files modified by Intel.
 # Does not add copyright notices to files that are missing them.
 #
