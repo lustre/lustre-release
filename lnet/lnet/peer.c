@@ -1636,7 +1636,8 @@ out_unlock:
 }
 EXPORT_SYMBOL(LNetPrimaryNID);
 
-int LNetPeerDiscovered(struct lnet_nid *nid)
+/* NOTE: with @recreate=true function may sleep in slow path */
+int LNetPeerDiscovered(struct lnet_nid *nid, bool recreate)
 {
 	struct lnet_peer_ni *lpni;
 	struct lnet_peer *lp = NULL;
@@ -1647,8 +1648,11 @@ int LNetPeerDiscovered(struct lnet_nid *nid)
 		return 1;
 
 	cpt = lnet_net_lock_current();
-	lpni = lnet_peerni_by_nid_locked(nid, NULL, cpt);
-	if (IS_ERR(lpni)) {
+	if (recreate)
+		lpni = lnet_peerni_by_nid_locked(nid, NULL, cpt);
+	else
+		lpni = lnet_peer_ni_find_locked(nid);
+	if (IS_ERR_OR_NULL(lpni)) {
 		CDEBUG(D_NET, "No peer for NID %s, skip for now\n",
 		       libcfs_nidstr(nid));
 		lnet_net_unlock(cpt);

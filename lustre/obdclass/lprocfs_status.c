@@ -993,6 +993,8 @@ static inline const char *conn_uptodate2str(int status)
 		return "discovering";
 	if (status == -EAGAIN)
 		return "rediscover";
+	if (status == -ENETRESET)
+		return "stale";
 	return "unknown";
 }
 

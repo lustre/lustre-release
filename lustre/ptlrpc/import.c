@@ -468,6 +468,41 @@ int ptlrpc_reconnect_import(struct obd_import *imp)
 }
 EXPORT_SYMBOL(ptlrpc_reconnect_import);
 
+#define REFRESH_NIDS_MAX 16
+/**
+ * import_refresh_connections() - refresh connections with lost peers.
+ * @imp: obd_import whose connections need refreshing
+ *
+ * Function performs an opportunistic refresh of missing peers. Efforts are
+ * capped to a small amount of NIDs to mitigate costly slow-path operations
+ * and lock contention inside LNetPeerDiscovered(). Unprocessed NIDs are
+ * deferred to a subsequent demand-driven call.
+ */
+static void import_refresh_connections(struct obd_import *imp)
+{
+	struct obd_import_conn *conn;
+	struct lnet_nid nids_arr[REFRESH_NIDS_MAX];
+	char nidstr[LNET_NIDSTR_SIZE] = { 0 };
+	int rc, i, nids = 0;
+
+	spin_lock(&imp->imp_lock);
+	list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
+		if (conn->oic_uptodate != -ENETRESET)
+			continue;
+		nids_arr[nids++] = conn->oic_conn->c_peer.nid;
+		if (nids == REFRESH_NIDS_MAX)
+			break;
+	}
+	spin_unlock(&imp->imp_lock);
+
+	for (i = 0; i < nids; i++) {
+		rc = LNetPeerDiscovered(&nids_arr[i], true);
+		libcfs_nidstr_r(&nids_arr[i], nidstr, LNET_NIDSTR_SIZE);
+		CDEBUG(D_HA, "%s: restore NID %s missing peer: rc = %d\n",
+		       imp->imp_obd->obd_name, nidstr, rc);
+	}
+}
+
 /*
  * Connection on import @imp is changed to another one (if more than one is
  * present). We typically chose connection that we have not tried to connect to
@@ -479,7 +514,7 @@ static int import_select_connection(struct obd_import *imp)
 	struct obd_export *dlmexp;
 	char *target_start;
 	int target_len;
-	bool tried_all = true;
+	bool tried_all = true, to_refresh = false;
 	int rc = 0;
 
 	ENTRY;
@@ -509,7 +544,7 @@ static int import_select_connection(struct obd_import *imp)
 		       libcfs_nidstr(&conn->oic_conn->c_peer.nid),
 		       conn->oic_last_attempt);
 		conn->oic_uptodate =
-			LNetPeerDiscovered(&conn->oic_conn->c_peer.nid);
+			LNetPeerDiscovered(&conn->oic_conn->c_peer.nid, false);
 		/* connection status is changed to good state, try it like
 		 * this is first attempt
 		 */
@@ -518,6 +553,12 @@ static int import_select_connection(struct obd_import *imp)
 			tried_all = false;
 			break;
 		}
+		/* NID has no related LNet peer, need to re-establish it.
+		 * That can't be done under spinlock, so just remember it
+		 * and force refresh outside lock.
+		 */
+		if (conn->oic_uptodate == -ENETRESET)
+			to_refresh = true;
 
 		/* LNET ping failed, skip peer completely */
 		if (conn->oic_uptodate == -EHOSTUNREACH) {
@@ -625,6 +666,9 @@ connect:
 
 out_unlock:
 	spin_unlock(&imp->imp_lock);
+	if (to_refresh)
+		import_refresh_connections(imp);
+
 	RETURN(rc);
 }
 
