@@ -28,6 +28,7 @@
 #include <linux/libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 #include <lnet/lnet_compat.h>
+#include <linux/if_vlan.h>
 
 int
 lnet_sock_write(struct socket *sock, void *buffer, int nob, int timeout)
@@ -567,6 +568,7 @@ int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns,
 {
 	struct lnet_inetdev *ifaces = NULL;
 	struct net_device *dev;
+	struct net_device *cpt_dev;
 	int nalloc = 0;
 	int nip = 0;
 
@@ -585,7 +587,12 @@ int lnet_inet_enumerate(struct lnet_inetdev **dev_list, struct net *ns,
 			continue;
 		}
 
-		node_id = dev_to_node(&dev->dev);
+		cpt_dev = dev;
+#if IS_ENABLED(CONFIG_VLAN_8021Q)
+		if (is_vlan_dev(dev) && vlan_dev_real_dev(dev))
+			cpt_dev = vlan_dev_real_dev(dev);
+#endif
+		node_id = dev_to_node(&cpt_dev->dev);
 		cpt = cfs_cpt_of_node(lnet_cpt_table(), node_id);
 
 		if (v6_first) {
