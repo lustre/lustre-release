@@ -11704,10 +11704,11 @@ change_project() {
 getquota() {
 	local type=$1
 	local id=$2
-	local uuid
+	local target=${3%_UUID}
 	local spec=$4
 	local pool=$5
 	local pool_arg
+	local idx
 
 	sync_all_data > /dev/null 2>&1 || true
 
@@ -11719,12 +11720,12 @@ getquota() {
 	[[ "$spec" =~ "curspace" ]] && spec="space"
 	[[ "$spec" =~ "curinode" ]] && spec="inodes"
 	[[ ! -z "$pool" ]] && pool_arg="--pool $pool "
-	[[ "$3" =~ "OST" ]] && uuid="--ost $(echo "$3" | tail -c 4) "
-	[[ "$3" =~ "MDT" ]] && uuid="--mdt $(echo "$3" | tail -c 4) "
+	[[ "$target" =~ "OST" ]] && idx="--ost 0x${target: -4} "
+	[[ "$target" =~ "MDT" ]] && idx="--mdt 0x${target: -4} "
 
 	echo -n "$type $id $uuid $spec:" 1>&2
-	$LFS quota -q $uuid --$spec "$type" "$id" $pool_arg$DIR | tr -d "*" 1>&2
-	$LFS quota -q $uuid --$spec "$type" "$id" $pool_arg$DIR | tr -d "*"
+	$LFS quota -q $idx --$spec "$type" "$id" $pool_arg$DIR | tr -d "*" 1>&2
+	$LFS quota -q $idx --$spec "$type" "$id" $pool_arg$DIR | tr -d "*"
 }
 
 # set mdt quota type

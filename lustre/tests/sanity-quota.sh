@@ -2872,7 +2872,7 @@ test_12b() {
 run_test 12b "Inode quota rebalancing"
 
 test_13(){
-	local TESTFILE=$DIR/$tdir/$tfile
+	local testfile=$DIR/$tdir/$tfile
 	# the name of lwp on ost1 name is MDT0000-lwp-OST0000
 	local procf="ldlm.namespaces.*MDT0000-lwp-OST0000.lru_size"
 
@@ -2883,37 +2883,37 @@ test_13(){
 
 	$LFS setquota -u $TSTUSR -b 0 -B 10M -i 0 -I 0 $DIR ||
 		error "set quota failed"
-	$LFS setstripe $TESTFILE -c 1 -i 0 || error "setstripe $TESTFILE failed"
-	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
+	$LFS setstripe $testfile -c 1 -i 0 || error "setstripe $testfile failed"
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
 
 	# clear the locks in cache first
 	do_facet ost1 $LCTL set_param -n $procf=clear
 	local init_nlock=$(do_facet ost1 $LCTL get_param -n $procf)
 
 	# write to acquire the per-ID lock
-	$RUNAS $DD of=$TESTFILE count=1 oflag=sync ||
+	$RUNAS $DD of=$testfile count=1 oflag=sync ||
 		quota_error a $TSTUSR "dd failed"
 
 	local nlock=$(do_facet ost1 $LCTL get_param -n $procf)
-	[ $nlock -eq $((init_nlock + 1)) ] ||
+	(( $nlock == $init_nlock + 1 )) ||
 		error "lock count($nlock) != $init_lock + 1"
 
 	# clear quota doesn't trigger per-ID lock cancellation
 	resetquota -u $TSTUSR
 	nlock=$(do_facet ost1 $LCTL get_param -n $procf)
-	[ $nlock -eq $((init_nlock + 1)) ] ||
+	(( $nlock == $init_nlock + 1 )) ||
 		error "per-ID lock is lost on quota clear"
 
 	# clear the per-ID lock
 	do_facet ost1 $LCTL set_param -n $procf=clear
 	nlock=$(do_facet ost1 $LCTL get_param -n $procf)
-	[ $nlock -eq $init_nlock ] || error "per-ID lock isn't cleared"
+	(( $nlock == $init_nlock )) || error "per-ID lock isn't cleared"
 
 	# spare quota should be released
-	local OSTUUID=$(ostname_from_index 0)
-	local limit=$(getquota -u $TSTUSR $OSTUUID bhardlimit)
-	local space=$(getquota -u $TSTUSR $OSTUUID curspace)
-	[ $limit -le $space ] ||
+	local ostname=$(ostname_from_index 0)
+	local limit=$(getquota -u $TSTUSR $ostname bhardlimit)
+	local space=$(getquota -u $TSTUSR $ostname curspace)
+	(( $limit <= $space )) ||
 		error "spare quota isn't released, limit:$limit, space:$space"
 }
 run_test 13 "Cancel per-ID lock in the LRU list"
@@ -3418,47 +3418,48 @@ test_22() {
 run_test 22 "enable/disable quota by 'lctl conf_param/set_param -P'"
 
 test_23_sub() {
-	local TESTFILE="$DIR/$tdir/$tfile"
-	local LIMIT=$1
+	local testfile="$DIR/$tdir/$tfile"
+	local limit=$1
 
 	setup_quota_test || error "setup quota failed with $?"
 
 	set_ost_qtype $QTYPE || error "Enable ost quota failed"
 
 	# test for user
-	log "User quota (limit: $LIMIT MB)"
-	$LFS setquota -u $TSTUSR -b 0 -B "$LIMIT"M -i 0 -I 0 $DIR ||
+	log "User quota (limit: $limit MB)"
+	$LFS setquota -u $TSTUSR -b 0 -B "$limit"M -i 0 -I 0 $DIR ||
 		error "set quota failed"
 	quota_show_check b u $TSTUSR
 
-	$LFS setstripe $TESTFILE -c 1 -i 0 || error "setstripe $TESTFILE failed"
-	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
+	$LFS setstripe $testfile -c 1 -i 0 || error "setstripe $testfile failed"
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
 
 	log "Step1: trigger EDQUOT with O_DIRECT"
 	log "Write half of file"
-	$RUNAS $DD of=$TESTFILE count=$((LIMIT/2)) oflag=direct ||
+	$RUNAS $DD of=$testfile count=$((limit/2)) oflag=direct ||
 		quota_error u $TSTUSR "(1) Write failure, expect success." \
-			"limit=$LIMIT"
+			"limit=$limit"
 	log "Write out of block quota ..."
-	$RUNAS $DD of=$TESTFILE count=$((LIMIT/2 + 1)) seek=$((LIMIT/2)) \
+	$RUNAS $DD of=$testfile count=$((limit/2 + 1)) seek=$((limit/2)) \
 		oflag=direct conv=notrunc &&
 		quota_error u $TSTUSR "(2) Write success, expect EDQUOT." \
-			"limit=$LIMIT"
+			"limit=$limit"
 	log "Step1: done"
 
 	log "Step2: rewrite should succeed"
-	$RUNAS $DD of=$TESTFILE count=1 oflag=direct conv=notrunc||
+	$RUNAS $DD of=$testfile count=1 oflag=direct conv=notrunc||
 		quota_error u $TSTUSR "(3) Write failure, expect success." \
-			"limit=$LIMIT"
+			"limit=$limit"
 	log "Step2: done"
 
 	cleanup_quota_test
 
-	local OST0_UUID=$(ostname_from_index 0)
-	local OST0_QUOTA_USED=$(getquota -u $TSTUSR $OST0_UUID curspace)
-	[ $OST0_QUOTA_USED -ne 0 ] &&
-		($SHOW_QUOTA_USER; \
-		quota_error u $TSTUSR "quota isn't released")
+	local ostname=$(ostname_from_index 0)
+	local OST0_QUOTA_USED=$(getquota -u $TSTUSR $ostname curspace)
+	(( $OST0_QUOTA_USED == 0 )) || {
+		$SHOW_QUOTA_USER
+		quota_error u $TSTUSR "quota isn't released"
+	}
 	$SHOW_QUOTA_USER
 }
 
@@ -6545,7 +6546,7 @@ test_84()
 		skip "need OSS >= v2_15_53-115-ga2fd4d3aee for insane quota fix"
 
 	local dir1="$DIR/$tdir/dir1"
-	local TESTFILE1="$dir1/$tfile-1"
+	local testfile1="$dir1/$tfile-1"
 	local waited=0
 	local grant=0
 	local grant2=0
@@ -6572,11 +6573,11 @@ test_84()
 	mkdir -p $dir1 || error "failed to mkdir"
 	chown $TSTUSR.$TSTUSR $dir1 || error "chown $dir1 failed"
 
-	$LFS setstripe -c 1 -i 0 $TESTFILE1
-	$LFS getstripe $TESTFILE1
-	chown $TSTUSR.$TSTUSR $TESTFILE1
+	$LFS setstripe -c 1 -i 0 $testfile1
+	$LFS getstripe $testfile1
+	chown $TSTUSR.$TSTUSR $testfile1
 
-	$RUNAS $DD of=$TESTFILE1 count=60 conv=nocreat oflag=direct ||
+	$RUNAS $DD of=$testfile1 count=60 conv=nocreat oflag=direct ||
 		quota_error g $TSTUSR "write failed"
 
 	sync_all_data || true
@@ -6586,13 +6587,14 @@ test_84()
 
 	# the grant quota should be larger than 0
 	waited=0
+	local ostname=$(ostname_from_index 0)
 	while (( $waited < 60 )); do
-		grant=$(getquota -g $TSTUSR lustre-OST0000 bhardlimit $qp)
-		grant2=$(getquota -g $TSTUSR lustre-OST0000 bhardlimit)
+		grant=$(getquota -g $TSTUSR $ostname bhardlimit $qp)
+		grant2=$(getquota -g $TSTUSR $ostname bhardlimit)
 		(( ${grant} > 0 && ${grant2} > 0 )) && break
 
 		do_facet ost1 $LCTL set_param \
-				osd-*.*-OST0000.quota_slave.force_reint=1
+				osd-*.$ostname.quota_slave.force_reint=1
 		sleep 1
 		waited=$((waited + 1))
 	done
@@ -6619,8 +6621,8 @@ test_84()
 	# the grant quota should be set as insane value
 	waited=0
 	while (( $waited < 60 )); do
-		grant=$(getquota -g $TSTUSR lustre-OST0000 bhardlimit $qp)
-		grant2=$(getquota -g $TSTUSR lustre-OST0000 bhardlimit)
+		grant=$(getquota -g $TSTUSR $ostname bhardlimit $qp)
+		grant2=$(getquota -g $TSTUSR $ostname bhardlimit)
 		(( ${#grant} == 20 && ${#grant2} == 20 )) && break
 
 		sleep 1
@@ -6647,9 +6649,9 @@ test_84()
 	$LFS quota -gv --pool $qp $TSTUSR $DIR
 
 	# the grant quota should be reset
-	grant=$(getquota -g $TSTUSR lustre-OST0000 bhardlimit)
+	grant=$(getquota -g $TSTUSR $ostname bhardlimit)
 	(( ${#grant} == 20 )) && error "grant is not cleared"
-	grant=$(getquota -g $TSTUSR lustre-OST0000 bhardlimit $qp)
+	grant=$(getquota -g $TSTUSR $ostname bhardlimit $qp)
 	(( ${#grant} == 20 )) && error "pool grant is not cleared"
 
 	$LFS quota -gv $TSTUSR --pool $qp $DIR
@@ -6662,14 +6664,14 @@ test_84()
 		error "failed to set group quota for $TSTUSR"
 	$LFS quota -gv $TSTUSR $DIR
 
-	$RUNAS $DD of=$TESTFILE1 count=200 conv=nocreat oflag=direct &&
+	$RUNAS $DD of=$testfile1 count=200 conv=nocreat oflag=direct &&
 		quota_error g $TSTUSR "dd succeed, expect EDQUOT"
 
 	$LFS setquota -g $TSTUSR -B 300M $DIR ||
 		error "failed to set group quota for $TSTUSR"
 	$LFS quota -gv $TSTUSR $DIR
 
-	$RUNAS $DD of=$TESTFILE1 count=200 conv=nocreat oflag=direct ||
+	$RUNAS $DD of=$testfile1 count=200 conv=nocreat oflag=direct ||
 		quota_error g $TSTUSR "dd failed, expect succeed"
 }
 run_test 84 "Reset quota should fix the insane granted quota"
@@ -7152,8 +7154,8 @@ run_test 92 "Cannot set inode limit with Quota Pools"
 
 test_93()
 {
-	(( OST1_VERSION >= $(version_code 2.16.52) )) ||
-		skip "Need OST version at least 2.16.52"
+	(( OST1_VERSION >= $(version_code v2_16_53-39-g47ce8c5341) )) ||
+		skip "Need OST >= 2.16.53.39 for projid update"
 
 	local testfile="$DIR/$tdir/$tfile"
 	local cnt=30
@@ -7168,7 +7170,8 @@ test_93()
 	sync; sync_all_data || true
 	sleep 5
 
-	usage=$(getquota -p $TSTPRJID ${FSNAME}-OST0000 curspace)
+	local ostname=$(ostname_from_index 0)
+	usage=$(getquota -p $TSTPRJID $ostname curspace)
 	(( usage == 0 )) || error "usage for $TSTPRJID should be 0"
 
 	#define OBD_FAIL_OUT_DROP_PROJID_SET	0x170c
@@ -7179,7 +7182,7 @@ test_93()
 	sync; sync_all_data || true
 	sleep 5
 
-	usage=$(getquota -p $TSTPRJID ${FSNAME}-OST0000 curspace)
+	usage=$(getquota -p $TSTPRJID $ostname curspace)
 	(( usage == 0 )) || error "usage for $TSTPRJID should still be 0"
 
 	$DD of=$testfile conv=notrunc oflag=append count=5 ||
@@ -7190,7 +7193,7 @@ test_93()
 	sleep 5
 
 	usage=$(getquota -p $TSTPRJID global curspace)
-	(( usage > (cnt * 1024 * 9 / 10) )) ||
+	(( usage > cnt * 1024 * 9 / 10 )) ||
 		error "usage for $TSTPRJID is incorrect: $usage"
 }
 run_test 93 "update projid while client write to OST"
