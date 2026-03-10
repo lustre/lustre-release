@@ -2258,9 +2258,17 @@ retry:
 	if (rc)
 		RETURN(rc);
 
-	CDEBUG(D_INODE, "CREATE name '"DNAME"' "DFID" on "DFID" -> mds #%x\n",
-		encode_fn_opdata(op_data), PFID(&op_data->op_fid2),
-		PFID(&op_data->op_fid1), op_data->op_mds);
+	if (lmv_dir_striped(op_data->op_lso1))
+		op_data->op_layout_version =
+			op_data->op_lso1->lso_lsm.lsm_md_layout_version;
+	else
+		op_data->op_layout_version = 1;
+
+	CDEBUG(D_INODE, "CREATE name '"DNAME"' "DFID" on "DFID
+	       " -> mds #%x, layout version %u\n",
+	       encode_fn_opdata(op_data), PFID(&op_data->op_fid2),
+	       PFID(&op_data->op_fid1), op_data->op_mds,
+	       op_data->op_layout_version);
 
 	op_data->op_flags |= MF_MDC_CANCEL_FID1;
 	rc = md_create(tgt->ltd_exp, op_data, data, datalen, mode, uid, gid,

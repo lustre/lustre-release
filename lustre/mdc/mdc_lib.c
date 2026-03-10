@@ -233,6 +233,7 @@ void mdc_create_pack(struct req_capsule *pill, struct md_op_data *op_data,
 	set_mrc_cr_flags(rec, flags);
 	rec->cr_bias     = op_data->op_bias;
 	rec->cr_umask    = current_umask();
+	rec->cr_layout_ver = op_data->op_layout_version;
 
 	mdc_pack_name(pill, &RMF_NAME, op_data->op_name, op_data->op_namelen);
 	if (data) {
@@ -332,6 +333,8 @@ void mdc_open_pack(struct req_capsule *pill, struct md_op_data *op_data,
 
 		/* pack SELinux policy info if any */
 		mdc_file_sepol_pack(pill, sepol);
+
+		rec->cr_layout_ver = op_data->op_layout_version;
 	}
 
 	if (lmm) {

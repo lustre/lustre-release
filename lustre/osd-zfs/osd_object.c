@@ -2135,6 +2135,24 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
 	RETURN(0);
 }
 
+static bool osd_check_stale(struct dt_object *dt)
+{
+	struct osd_object *obj = osd_dt_obj(dt);
+
+	CDEBUG(D_INODE, "obj %pK updated %d\n", obj, obj->oo_lmv_updated);
+	return (obj->oo_lmv_updated == 1);
+}
+
+static bool osd_change_stale(struct dt_object *dt, bool val)
+{
+	struct osd_object *obj = osd_dt_obj(dt);
+	bool stale = (obj->oo_lmv_updated == 1);
+
+	obj->oo_lmv_updated = val;
+
+	return stale;
+}
+
 static const struct dt_object_operations osd_obj_ops = {
 	.do_attr_get		= osd_attr_get,
 	.do_declare_attr_set	= osd_declare_attr_set,
@@ -2156,6 +2174,8 @@ static const struct dt_object_operations osd_obj_ops = {
 	.do_xattr_del		= osd_xattr_del,
 	.do_xattr_list		= osd_xattr_list,
 	.do_object_sync		= osd_object_sync,
+	.do_check_stale		= osd_check_stale,
+	.do_change_stale	= osd_change_stale,
 };
 
 static const struct lu_object_operations osd_lu_obj_ops = {

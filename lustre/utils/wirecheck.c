@@ -1388,7 +1388,7 @@ check_mdt_rec_create(void)
 	CHECK_MEMBER(mdt_rec_create, cr_opcode);
 	CHECK_MEMBER(mdt_rec_create, cr_cap);
 	CHECK_MEMBER(mdt_rec_create, cr_fsuid);
-	CHECK_MEMBER(mdt_rec_create, cr_padding_1_h);
+	CHECK_MEMBER(mdt_rec_create, cr_layout_ver);
 	CHECK_MEMBER(mdt_rec_create, cr_fsgid);
 	CHECK_MEMBER(mdt_rec_create, cr_padding_2_h);
 	CHECK_MEMBER(mdt_rec_create, cr_suppgid1);

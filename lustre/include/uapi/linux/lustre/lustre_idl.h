@@ -2116,7 +2116,7 @@ struct mdt_rec_create {
 	__u32		cr_opcode;
 	__u32		cr_cap;
 	__u32		cr_fsuid;
-	__u32		cr_padding_1_h;
+	__u32		cr_layout_ver;	/* parent dir layout version */
 	__u32		cr_fsgid;
 	__u32		cr_padding_2_h;
 	__u32		cr_suppgid1;
@@ -2141,7 +2141,7 @@ struct mdt_rec_create {
 	__u32		cr_flags_l;	/* for use with open, low  32 bits  */
 	__u32		cr_flags_h;	/* for use with open, high 32 bits */
 	__u32		cr_umask;	/* umask for create */
-	__u32		cr_padding_4;   /* rr_padding_4 */
+	__u32		cr_padding_4;	/* rr_padding_4 */
 };
 
 /* instance of mdt_reint_rec */

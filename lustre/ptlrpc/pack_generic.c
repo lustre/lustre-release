@@ -2259,7 +2259,7 @@ void lustre_swab_mdt_rec_reint (struct mdt_rec_reint *rr)
 	__swab32s(&rr->rr_opcode);
 	__swab32s(&rr->rr_cap);
 	__swab32s(&rr->rr_fsuid);
-	/* rr_padding_1_h is unused */
+	__swab32s(&rr->rr_padding_1_h);
 	__swab32s(&rr->rr_fsgid);
 	/* rr_padding_2_h is unused */
 	__swab32s(&rr->rr_suppgid1);

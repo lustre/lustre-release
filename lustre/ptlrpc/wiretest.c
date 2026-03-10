@@ -2960,10 +2960,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mdt_rec_create, cr_fsuid));
 	LASSERTF((int)sizeof(((struct mdt_rec_create *)0)->cr_fsuid) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct mdt_rec_create *)0)->cr_fsuid));
-	LASSERTF((int)offsetof(struct mdt_rec_create, cr_padding_1_h) == 12, "found %lld\n",
-		 (long long)(int)offsetof(struct mdt_rec_create, cr_padding_1_h));
-	LASSERTF((int)sizeof(((struct mdt_rec_create *)0)->cr_padding_1_h) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct mdt_rec_create *)0)->cr_padding_1_h));
+	LASSERTF((int)offsetof(struct mdt_rec_create, cr_layout_ver) == 12, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_rec_create, cr_layout_ver));
+	LASSERTF((int)sizeof(((struct mdt_rec_create *)0)->cr_layout_ver) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_rec_create *)0)->cr_layout_ver));
 	LASSERTF((int)offsetof(struct mdt_rec_create, cr_fsgid) == 16, "found %lld\n",
 		 (long long)(int)offsetof(struct mdt_rec_create, cr_fsgid));
 	LASSERTF((int)sizeof(((struct mdt_rec_create *)0)->cr_fsgid) == 4, "found %lld\n",

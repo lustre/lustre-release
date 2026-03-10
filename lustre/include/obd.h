@@ -1055,6 +1055,8 @@ struct md_op_data {
 	__u32			op_stripe_index;
 	/* Archive ID for PCC attach */
 	__u32			op_archive_id;
+	/* layout version to pass from lmv to mdc level */
+	__u32			op_layout_version;
 };
 
 struct md_readdir_info {

@@ -162,7 +162,8 @@ struct osd_object {
 				oo_compat_dot_created:1,
 				oo_compat_dotdot_created:1,
 				oo_prealloc_writes:1,
-				oo_on_orphan_list:1;
+				oo_on_orphan_list:1,
+				oo_lmv_updated:1;
 
 	/* the i_flags in LMA */
 	__u32                   oo_lma_flags;

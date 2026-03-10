@@ -719,6 +719,9 @@ static int mdt_create(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	if (unlikely(rc == 0 && !recreate_obj))
 		GOTO(unlock_parent, rc = -EEXIST);
 
+	if (!mdt_layout_version_check(info, parent, rr->rr_layout_ver))
+		GOTO(unlock_parent, rc = -ESTALE);
+
 	if (info->mti_intent_lock)
 		mdt_set_disposition(info, dlmrep, DISP_OPEN_CREATE);
 

@@ -25398,6 +25398,7 @@ test_230c() {
 	#OBD_FAIL_MIGRATE_ENTRIES	0x1801
 	do_facet mds1 lctl set_param fail_loc=0x1801
 	local t=$(ls $migrate_dir | wc -l)
+
 	$LFS migrate --mdt-index $MDTIDX $migrate_dir &&
 		error "migrate should fail"
 	local u=$(ls $migrate_dir | wc -l)
@@ -25451,7 +25452,7 @@ test_230c() {
 
 	if (($MDS1_VERSION >= $(version_code 2.16.50) )); then
 		echo "Migrate a dir with an open file"
-		touch $migrate_dir/foo
+		touch $migrate_dir/foo || error "failed to create file"
 		local foo_fid=$($LFS path2fid $migrate_dir/foo)
 		$MULTIOP $migrate_dir/foo o_c &
 		local bg_pid=$!
@@ -26327,6 +26328,36 @@ test_230A()
 	test_230A_check_lmm_oi $DIR/$tdir/file || error "Wrong lmm oi after migrate"
 }
 run_test 230A "dir migrate should update lmm_oi"
+
+test_230B() {
+	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.17.51) )) ||
+                skip "need MDS >= 2.17.51 for lmm_oi migrate update"
+
+	test_mkdir -i 0 -c 1 $DIR/$tdir
+	echo "create files"
+	createmany -d $DIR/$tdir/d 10
+	(
+		cd $DIR/$tdir
+		sleep 10
+		echo create the second "foo" file
+		mkdir foo
+	) &
+
+	do_facet mds2 lctl set_param fail_loc=0x1801
+	echo "attempt to migrate"
+	$LFS migrate -m 1 $DIR/$tdir
+	echo create the first "foo" file
+	touch $DIR/$tdir/foo
+	echo wait ...
+	wait
+	num=$(ls -l $DIR/$tdir | grep -c foo)
+	do_facet mds2 lctl set_param fail_loc=0
+	$LFS getdirstripe $DIR/$tdir
+	$LFS path2fid $DIR/$tdir
+	(( num == 1 )) || error "duplicated files creation during migration"
+}
+run_test 230B "create duplicated entries in a migrating dir"
 
 test_231a()
 {

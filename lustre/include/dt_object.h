@@ -1054,6 +1054,19 @@ struct dt_object_operations {
 	bool (*do_check_stale)(struct dt_object *dt);
 
 	/**
+	 * do_change_stale() - Change object stale state.
+	 *
+	 * @dt: object
+	 *
+	 * OSP/OSD only.
+	 *
+	 * Return: previous value, true for stale object, false for not
+	 * stale object
+	 */
+	 bool (*do_change_stale)(struct dt_object *dt, bool val);
+
+
+	/**
 	 * do_declare_layout_change() - Declare intention to instantiate
 	 *                              extended layout component.
 	 *
@@ -2493,6 +2506,17 @@ static inline bool dt_object_stale(struct dt_object *dt)
 		return false;
 
 	return dt->do_ops->do_check_stale(dt);
+}
+
+static inline bool dt_change_stale(struct dt_object *dt, bool val)
+{
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+
+	if (!dt->do_ops->do_change_stale)
+		return false;
+
+	return dt->do_ops->do_change_stale(dt, val);
 }
 
 static inline int dt_declare_attr_get(const struct lu_env *env,

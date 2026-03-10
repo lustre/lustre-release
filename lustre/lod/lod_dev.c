@@ -207,6 +207,7 @@ static struct lu_object *lod_object_alloc(const struct lu_env *env,
 	dt_object_init(&lod_obj->ldo_obj, NULL, dev);
 	lod_obj->ldo_obj.do_ops = &lod_obj_ops;
 	lu_obj->lo_ops = &lod_lu_obj_ops;
+	lod_obj->ldo_dir_layout_version = 1;
 
 	RETURN(lu_obj);
 }

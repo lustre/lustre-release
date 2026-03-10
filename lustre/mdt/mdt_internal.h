@@ -440,6 +440,7 @@ struct mdt_reint_record {
 	int				 rr_eadatalen;
 	__u32				 rr_flags;
 	__u16				 rr_mirror_id;
+	__u32				 rr_layout_ver;
 };
 
 enum mdt_reint_flag {
@@ -1016,6 +1017,8 @@ int mdt_intent_lock_replace(struct mdt_thread_info *info,
 			    struct ldlm_lock **lockp,
 			    struct mdt_lock_handle *lh,
 			    __u64 flags, int result);
+bool mdt_layout_version_check(struct mdt_thread_info *info,
+			      struct mdt_object *parent, __u32 version);
 
 int hsm_init_ucred(struct lu_ucred *uc);
 int mdt_hsm_attr_set(struct mdt_thread_info *info, struct mdt_object *obj,

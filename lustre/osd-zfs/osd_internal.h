@@ -472,7 +472,8 @@ struct osd_object {
 				 oo_with_projid:1,
 #endif
 				 oo_late_attr_set:1,
-				 oo_pfid_in_lma:1;
+				 oo_pfid_in_lma:1,
+				 oo_lmv_updated:1;
 
 	/* the i_flags in LMA */
 	__u32			 oo_lma_flags;

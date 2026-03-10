@@ -158,6 +158,7 @@ enum md_layout_opc {
 	MD_LAYOUT_DETACH,	/* detach stripes */
 	MD_LAYOUT_SHRINK,	/* shrink striped directory (destroy stripes) */
 	MD_LAYOUT_SPLIT,	/* split directory (allocate new stripes) */
+	MD_LAYOUT_VERSION,	/* check layout version */
 	MD_LAYOUT_MAX,
 };
 
@@ -166,7 +167,10 @@ enum md_layout_opc {
  */
 struct md_layout_change {
 	enum md_layout_opc			 mlc_opc;
-	struct lu_buf				 mlc_buf;
+	union {
+		struct lu_buf			 mlc_buf;
+		__u32				 mlc_layout_ver;
+	};
 	union {
 		struct {
 			__u16			 mlc_mirror_id;

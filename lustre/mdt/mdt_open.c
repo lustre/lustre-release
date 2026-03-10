@@ -1635,6 +1635,10 @@ again_pw:
 	tgt_open_obj_set(info->mti_env, mdt_obj2dt(child));
 
 	if (result == -ENOENT) {
+
+		if (!mdt_layout_version_check(info, parent, rr->rr_layout_ver))
+			GOTO(out_child, rc = -ESTALE);
+
 		/* Create under OBF and .lustre is not permitted */
 		if (!fid_is_md_operative(rr->rr_fid1) &&
 		    (open_flags & MDS_OPEN_VOLATILE) == 0)

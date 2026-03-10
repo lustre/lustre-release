@@ -367,10 +367,18 @@ retry:
 			RETURN(rc);
 	}
 
+	if (lmv_dir_striped(op_data->op_lso1))
+		op_data->op_layout_version =
+			op_data->op_lso1->lso_lsm.lsm_md_layout_version;
+	else
+		op_data->op_layout_version = 1;
+
+
 	CDEBUG(D_INODE, "OPEN_INTENT with fid1="DFID", fid2="DFID","
-	       " name='"DNAME"' -> mds #%u\n", PFID(&op_data->op_fid1),
-	       PFID(&op_data->op_fid2), encode_fn_opdata(op_data),
-	       tgt->ltd_index);
+	       " name='"DNAME"' -> mds #%u layout version %u\n",
+	       PFID(&op_data->op_fid1), PFID(&op_data->op_fid2),
+	       encode_fn_opdata(op_data), tgt->ltd_index,
+	       op_data->op_layout_version);
 
 	rc = md_intent_lock(tgt->ltd_exp, op_data, it, reqp, cb_blocking,
 			    extra_lock_flags);

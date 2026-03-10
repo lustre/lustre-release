@@ -1120,6 +1120,9 @@ int out_handle(struct tgt_session_info *tsi)
 				conf.loc_flags = LOC_F_NEW;
 			else
 				conf.loc_flags = 0;
+			CDEBUG(D_INFO, "%s: opc: 0x%x "DFID"\n",
+			       tgt_name(tsi->tsi_tgt), update->ou_type,
+			       PFID(&update->ou_fid));
 
 			dt_obj = dt_locate_at(env, dt, &update->ou_fid,
 				dt->dd_lu_dev.ld_site->ls_top_dev, &conf);

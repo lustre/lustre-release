@@ -905,6 +905,7 @@ int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	down_write(&obj->oo_guard);
 	CDEBUG(D_INODE, "Setting xattr %s with size %d\n",
 		name, (int)buf->lb_len);
+
 	/* For the OST migrated from ldiskfs, the PFID EA may
 	 * be stored in LMA because of ldiskfs inode size.
 	 */
@@ -918,8 +919,11 @@ int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 		rc = osd_xattr_handle_linkea(env, osd, obj, buf, oh);
 	}
 
-	if (!rc)
+	if (!rc) {
 		rc = osd_xattr_set_internal(env, obj, buf, name, fl, oh);
+		if (unlikely(!strcmp(name, XATTR_NAME_LMV)) && !rc)
+			obj->oo_lmv_updated = 1;
+	}
 	up_write(&obj->oo_guard);
 
 	RETURN(rc);

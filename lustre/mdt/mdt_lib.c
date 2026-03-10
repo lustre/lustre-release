@@ -1534,6 +1534,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 
 	rr->rr_fid1 = &rec->cr_fid1;
 	rr->rr_fid2 = &rec->cr_fid2;
+	rr->rr_layout_ver = rec->cr_layout_ver;
 	attr->la_mode = rec->cr_mode;
 	attr->la_rdev  = rec->cr_rdev;
 	attr->la_uid   = rec->cr_fsuid;
@@ -1918,6 +1919,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 
 	rr->rr_fid1   = &rec->cr_fid1;
 	rr->rr_fid2   = &rec->cr_fid2;
+	rr->rr_layout_ver = rec->cr_layout_ver;
 	rr->rr_open_handle = &rec->cr_open_handle_old;
 	attr->la_mode = rec->cr_mode;
 	attr->la_rdev  = rec->cr_rdev;
@@ -2348,4 +2350,27 @@ int mdt_pack_encctx_in_reply(struct mdt_thread_info *info,
 		}
 	}
 	return rc;
+}
+
+/*
+ * return true for a same version and false instead
+ */
+bool mdt_layout_version_check(struct mdt_thread_info *info,
+			      struct mdt_object *parent, __u32 version)
+{
+	struct md_layout_change mlc;
+
+	/* Interoperability check: skip for old clients as they don't
+	 * provide a layout version (it is 0). Act like before.
+	 */
+	if (version == 0)
+		return true;
+
+	mlc.mlc_opc = MD_LAYOUT_VERSION;
+	mlc.mlc_layout_ver = version;
+
+	if (mo_layout_check(info->mti_env, mdt_object_child(parent), &mlc))
+		return false;
+
+	return true;
 }

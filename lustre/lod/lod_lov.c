@@ -1563,16 +1563,20 @@ out:
  */
 static bool lod_striping_loaded(struct lod_object *lo)
 {
+	struct lod_device	*lod	= lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct dt_object	*obj	= dt_object_child(&lo->ldo_obj);
+
+	CDEBUG(D_INFO, "%s: "DFID" cashed %d stripe %d slave %d\n",
+	       lod2obd(lod)->obd_name, PFID(lu_object_fid(&obj->do_lu)),
+	       lo->ldo_comp_cached, lo->ldo_dir_stripe_loaded,
+	       lo->ldo_dir_slave_stripe);
+
 	if (S_ISREG(lod2lu_obj(lo)->lo_header->loh_attr) &&
 	    lo->ldo_comp_cached)
 		return true;
 
 	if (S_ISDIR(lod2lu_obj(lo)->lo_header->loh_attr)) {
 		if (lo->ldo_dir_stripe_loaded)
-			return true;
-
-		/* Never load LMV stripe for slaves of striped dir */
-		if (lo->ldo_dir_slave_stripe)
 			return true;
 	}
 
@@ -1671,8 +1675,10 @@ int lod_striping_load(const struct lu_env *env, struct lod_object *lo)
 		 * let's parse it and create in-core objects for the stripes
 		 */
 		rc = lod_parse_dir_striping(env, lo, buf);
-		if (rc == 0)
+		if (rc == 0) {
 			lo->ldo_dir_stripe_loaded = 1;
+			dt_change_stale(next, 0);
+		}
 	}
 	EXIT;
 unlock:

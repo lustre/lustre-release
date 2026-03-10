@@ -1726,6 +1726,8 @@ int lod_parse_dir_striping(const struct lu_env *env, struct lod_object *lo,
 		RETURN(0);
 
 	if (le32_to_cpu(lmv1->lmv_magic) == LMV_MAGIC_STRIPE) {
+		lo->ldo_dir_layout_version =
+					le32_to_cpu(lmv1->lmv_layout_version);
 		lo->ldo_dir_slave_stripe = 1;
 		RETURN(0);
 	}
@@ -8031,6 +8033,19 @@ static int lod_layout_pccro_check(const struct lu_env *env,
 	return lo->ldo_flr_state & LCM_FL_PCC_RDONLY ? -EALREADY : 0;
 }
 
+static int lod_dir_layout_version_check(const struct lu_env *env,
+					struct dt_object *dt,
+					struct md_layout_change *mlc)
+{
+	if (mlc->mlc_layout_ver != lod_dt_obj(dt)->ldo_dir_layout_version) {
+		CDEBUG(D_LAYOUT, "Stale version from a client %d != %d\n",
+		       mlc->mlc_layout_ver,
+		       lod_dt_obj(dt)->ldo_dir_layout_version);
+		return -ESTALE;
+	}
+	return 0;
+}
+
 /* Check if the dir layout conforms the requested one */
 static int lod_dir_layout_check(const struct lu_env *env,
 				struct dt_object *dt,
@@ -8045,9 +8060,27 @@ static int lod_dir_layout_check(const struct lu_env *env,
 	int i;
 	ENTRY;
 
+
+	if (mlc->mlc_opc == MD_LAYOUT_VERSION && dt_object_exists(dt)) {
+		struct dt_object *child = dt_object_child(dt);
+
+		if (dt_object_exists(child) && dt_object_stale(child))
+			lod_striping_free(env, lo);
+	}
+
 	rc = lod_striping_load(env, lo);
 	if (rc)
 		RETURN(rc);
+
+	if (mlc->mlc_opc == MD_LAYOUT_VERSION) {
+		CDEBUG(D_LAYOUT, "%s: Checking layout version for "DFID
+		       " %u vs %u, striped:slave %u:%u\n",
+		       dt->do_lu.lo_dev->ld_obd->obd_name,
+		       PFID(lu_object_fid(&dt->do_lu)), mlc->mlc_layout_ver,
+		       lo->ldo_dir_layout_version, lo->ldo_dir_striped,
+		       lo->ldo_dir_slave_stripe);
+		RETURN(lod_dir_layout_version_check(env, dt, mlc));
+	}
 
 	lum_stripe_count = le32_to_cpu(lum->lum_stripe_count);
 	lum_num_objs = lmv_foreign_to_md_stripes(lum_len);
@@ -8970,13 +9003,18 @@ static int lod_dir_declare_layout_detach(const struct lu_env *env,
 	struct dt_object *dto;
 	int i;
 	int rc = 0;
+	ENTRY;
 
 	if (!dt_try_as_dir(env, dt, true))
 		return -ENOTDIR;
 
+	lo->ldo_dir_layout_version++;
+	CDEBUG(D_LAYOUT, "%s: Layout version change fir "DFID" %d\n",
+	       dt->do_lu.lo_dev->ld_obd->obd_name,
+	       PFID(lu_object_fid(&dt->do_lu)), lo->ldo_dir_layout_version);
 	if (!lo->ldo_dir_stripe_count)
-		return lod_sub_declare_delete(env, next,
-					(const struct dt_key *)dotdot, th);
+		RETURN(lod_sub_declare_delete(env, next,
+					(const struct dt_key *)dotdot, th));
 
 	for (i = 0; i < lo->ldo_dir_stripe_count; i++) {
 		dto = lo->ldo_stripe[i];
@@ -8984,12 +9022,12 @@ static int lod_dir_declare_layout_detach(const struct lu_env *env,
 			continue;
 
 		if (!dt_try_as_dir(env, dto, true))
-			return -ENOTDIR;
+			RETURN(-ENOTDIR);
 
 		rc = lod_sub_declare_delete(env, dto,
 					(const struct dt_key *)dotdot, th);
 		if (rc)
-			return rc;
+			RETURN(rc);
 
 		snprintf(stripe_name, sizeof(info->lti_key), DFID":%d",
 			 PFID(lu_object_fid(&dto->do_lu)), i);
@@ -8997,14 +9035,14 @@ static int lod_dir_declare_layout_detach(const struct lu_env *env,
 		rc = lod_sub_declare_delete(env, next,
 					(const struct dt_key *)stripe_name, th);
 		if (rc)
-			return rc;
+			RETURN(rc);
 
 		rc = lod_sub_declare_ref_del(env, next, th);
 		if (rc)
-			return rc;
+			RETURN(rc);
 	}
 
-	return 0;
+	RETURN(0);
 }
 
 static int dt_dir_is_empty(const struct lu_env *env,
@@ -9723,6 +9761,7 @@ void lod_striping_free_nolock(const struct lu_env *env, struct lod_object *lo)
 	struct lod_layout_component *lod_comp;
 	__u32 obj_attr = lo->ldo_obj.do_lu.lo_header->loh_attr;
 	int i, j;
+	ENTRY;
 
 	if (unlikely(lo->ldo_is_foreign)) {
 		if (S_ISREG(obj_attr)) {
@@ -9774,7 +9813,11 @@ void lod_striping_free_nolock(const struct lu_env *env, struct lod_object *lo)
 		}
 		lod_free_comp_entries(lo);
 		lo->ldo_comp_cached = 0;
+	} else if (S_ISDIR(obj_attr)) {
+		lo->ldo_dir_stripe_loaded = 0;
 	}
+
+	EXIT;
 }
 
 void lod_striping_free(const struct lu_env *env, struct lod_object *lo)
