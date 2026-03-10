@@ -9,7 +9,7 @@ ONLY=${ONLY:-"$*"}
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
-init_test_env $@
+init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$SANITY_QUOTA_EXCEPT "
@@ -2194,7 +2194,7 @@ run_test 5 "Chown & chgrp successfully even out of block/file quota"
 
 # test dropping acquire request on master
 test_6() {
-	local LIMIT=3 # MB
+	local limit=3 # MB
 
 	# Clear dmesg so watchdog is not triggered by previous
 	# test output
@@ -2203,30 +2203,31 @@ test_6() {
 	setup_quota_test || error "setup quota failed with $?"
 
 	# make sure the system is clean
-	local USED=$(getquota -u $TSTUSR global curspace)
-	[ $USED -ne 0 ] && error "Used space($USED) for user $TSTUSR isn't 0."
+	local used=$(getquota -u $TSTUSR global curspace)
+	(( $used == 0 )) || error "Used space($used) for user $TSTUSR isn't 0."
 
 	# make sure no granted quota on ost
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
 	resetquota -u $TSTUSR
 
 	# create file for $TSTUSR
-	local TESTFILE=$DIR/$tdir/$tfile-$TSTUSR
-	$LFS setstripe $TESTFILE -c 1 -i 0 || error "setstripe $TESTFILE failed"
-	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
+	local testfile=$DIR/$tdir/$tfile-$TSTUSR
+	$LFS setstripe $testfile -c 1 -i 0 || error "setstripe $testfile failed"
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
 
 	# create file for $TSTUSR2
-	local TESTFILE2=$DIR/$tdir/$tfile-$TSTUSR2
-	$LFS setstripe $TESTFILE2 -c 1 -i 0 || error "setstripe $TESTFILE2 failed"
-	chown $TSTUSR2.$TSTUSR2 $TESTFILE2 || error "chown $TESTFILE2 failed"
+	local testfile2=$DIR/$tdir/$tfile-$TSTUSR2
+	$LFS setstripe $testfile2 -c 1 -i 0 ||
+		error "setstripe $testfile2 failed"
+	chown $TSTUSR2.$TSTUSR2 $testfile2 || error "chown $testfile2 failed"
 
 	# cache per-ID lock for $TSTUSR on slave
-	$LFS setquota -u $TSTUSR -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR ||
+	$LFS setquota -u $TSTUSR -b 0 -B ${limit}M -i 0 -I 0 $DIR ||
 		error "set quota failed"
-	$RUNAS $DD of=$TESTFILE count=1 ||
-		error "write $TESTFILE failure, expect success"
-	$RUNAS2 $DD of=$TESTFILE2 count=1 ||
-		error "write $TESTFILE2 failure, expect success"
+	$RUNAS $DD of=$testfile count=1 ||
+		error "write $testfile failure, expect success"
+	$RUNAS2 $DD of=$testfile2 count=1 ||
+		error "write $testfile2 failure, expect success"
 
 	if at_is_enabled; then
 		at_max_saved=$(at_max_get ost1)
@@ -2235,14 +2236,14 @@ test_6() {
 
 		# write to enforced ID ($TSTUSR) to exceed limit to make sure
 		# DQACQ is sent, which makes at_max to take effect
-		$RUNAS $DD of=$TESTFILE count=$LIMIT seek=1 oflag=sync \
+		$RUNAS $DD of=$testfile count=$limit seek=1 oflag=sync \
 								conv=notrunc
-		rm -f $TESTFILE
+		rm -f $testfile
 		wait_delete_completed
-		$LFS setstripe $TESTFILE -c 1 -i 0 ||
-			error "setstripe $TESTFILE failed"
-		chown $TSTUSR.$TSTUSR $TESTFILE ||
-			error "chown $TESTFILE failed"
+		$LFS setstripe $testfile -c 1 -i 0 ||
+			error "setstripe $testfile failed"
+		chown $TSTUSR.$TSTUSR $testfile ||
+			error "chown $testfile failed"
 	fi
 
 	sync; sync
@@ -2261,19 +2262,19 @@ test_6() {
 			osd-*.$FSNAME-OST*.quota_slave.timeout=$qs_timeout"
 
 	# write to un-enforced ID ($TSTUSR2) should succeed
-	$RUNAS2 $DD of=$TESTFILE2 count=$LIMIT seek=1 oflag=sync conv=notrunc ||
+	$RUNAS2 $DD of=$testfile2 count=$limit seek=1 oflag=sync conv=notrunc ||
 		error "write failure, expect success"
 
 	# write to enforced ID ($TSTUSR) in background, exceeding limit
 	# to make sure DQACQ is sent
-	$RUNAS $DD of=$TESTFILE count=$LIMIT seek=1 oflag=sync conv=notrunc &
+	$RUNAS $DD of=$testfile count=$limit seek=1 oflag=sync conv=notrunc &
 	DDPID=$!
 
 	# watchdog timer uses a factor of 2
 	echo "Sleep for $((TIMEOUT * 2 + 1)) seconds ..."
 	sleep $((TIMEOUT * 2 + 1))
 
-	[ $at_max_saved -ne 0 ] && at_max_set $at_max_saved ost1
+	(( $at_max_saved == 0 )) || at_max_set $at_max_saved ost1
 
 	# write should be blocked and never finished
 	if ! ps -p $DDPID  > /dev/null 2>&1; then
@@ -2287,22 +2288,20 @@ test_6() {
 	do_facet ost1 dmesg > $TMP/lustre-log-${TESTNAME}.log
 	watchdog=$(awk '/[Ss]ervice thread pid/ && /was inactive/ \
 			{ print; }' $TMP/lustre-log-${TESTNAME}.log)
-	[ -z "$watchdog" ] || error "$watchdog"
+	[[ -z "$watchdog" ]] || error "$watchdog"
 
 	rm -f $TMP/lustre-log-${TESTNAME}.log
 
 	# write should continue then fail with EDQUOT
 	local count=0
-	local c_size
-	while [ true ]; do
-		if ! ps -p ${DDPID} > /dev/null 2>&1; then break; fi
-		if [ $count -ge 240 ]; then
+	while true; do
+		ps -p ${DDPID} > /dev/null 2>&1 || break
+		((count++ < 240 )) ||
 			quota_error u $TSTUSR "dd not finished in $count secs"
-		fi
-		count=$((count + 1))
-		if [ $((count % 30)) -eq 0 ]; then
-			c_size=$(stat -c %s $TESTFILE)
-			echo "Waiting $count secs. $c_size"
+		if ((count % 30 == 0)); then
+			local c_size=$(stat -c %s $testfile)
+
+			echo "Waiting $count secs. size=$c_size"
 			$SHOW_QUOTA_USER
 		fi
 		sleep 1
@@ -2312,37 +2311,37 @@ run_test 6 "Test dropping acquire request on master"
 
 # quota reintegration (global index)
 test_7a() {
-	local TESTFILE=$DIR/$tdir/$tfile
-	local LIMIT=20 # MB
+	local testfile=$DIR/$tdir/$tfile
+	local limit=20 # MB
 
-	[ "$SLOW" = "no" ] && LIMIT=5
+	[[ "$SLOW" == "yes" ]] || limit=5
 
 	setup_quota_test || error "setup quota failed with $?"
 
 	# make sure the system is clean
-	local USED=$(getquota -u $TSTUSR global curspace)
-	[ $USED -ne 0 ] && error "Used space($USED) for user $TSTUSR isn't 0."
+	local used=$(getquota -u $TSTUSR global curspace)
+	(( $used == 0 )) || error "Used space($used) for user $TSTUSR isn't 0"
 
 	# make sure no granted quota on ost1
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
 	resetquota -u $TSTUSR
 	set_ost_qtype "none" || error "disable ost quota failed"
 
-	local OSTUUID=$(ostname_from_index 0)
-	USED=$(getquota -u $TSTUSR $OSTUUID bhardlimit)
-	[ $USED -ne 0 ] &&
-		error "limit($USED) on $OSTUUID for user $TSTUSR isn't 0"
+	local ostname=$(ostname_from_index 0)
+	used=$(getquota -u $TSTUSR $ostname bhardlimit)
+	(( $used == 0 )) ||
+		error "limit($used) on $ostname for user $TSTUSR isn't 0"
 
 	# create test file
-	$LFS setstripe $TESTFILE -c 1 -i 0 || error "setstripe $TESTFILE failed"
-	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
+	$LFS setstripe $testfile -c 1 -i 0 || error "setstripe $testfile failed"
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
 
 	echo "Stop ost1..."
 	stop ost1
 
 	echo "Enable quota & set quota limit for $TSTUSR"
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
-	$LFS setquota -u $TSTUSR -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR ||
+	$LFS setquota -u $TSTUSR -b 0 -B ${limit}M -i 0 -I 0 $DIR ||
 		error "set quota failed"
 
 	echo "Start ost1..."
@@ -2353,10 +2352,10 @@ test_7a() {
 
 	# hardlimit should have been fetched by slave during global
 	# reintegration, write will exceed quota
-	$RUNAS $DD of=$TESTFILE count=$((LIMIT + 1)) oflag=sync &&
+	$RUNAS $DD of=$testfile count=$((limit + 1)) oflag=sync &&
 		quota_error u $TSTUSR "write success, but expect EDQUOT"
 
-	rm -f $TESTFILE
+	rm -f $testfile
 	wait_delete_completed
 	sync_all_data || true
 	sleep 3
@@ -2374,7 +2373,7 @@ test_7a() {
 	wait_ost_reint $QTYPE || error "reintegration failed"
 
 	# hardlimit should be cleared on slave during reintegration
-	$RUNAS $DD of=$TESTFILE count=$((LIMIT + 1)) oflag=sync ||
+	$RUNAS $DD of=$testfile count=$((limit + 1)) oflag=sync ||
 		quota_error u $TSTUSR "write error, but expect success"
 }
 run_test 7a "Quota reintegration (global index)"
@@ -2382,31 +2381,31 @@ run_test 7a "Quota reintegration (global index)"
 # quota reintegration (slave index)
 test_7b() {
 	local limit=100000 # MB
-	local TESTFILE=$DIR/$tdir/$tfile
+	local testfile=$DIR/$tdir/$tfile
 
 	setup_quota_test || error "setup quota failed with $?"
 
 	# make sure the system is clean
-	local USED=$(getquota -u $TSTUSR global curspace)
-	[ $USED -ne 0 ] && error "Used space($USED) for user $TSTUSR isn't 0."
+	local used=$(getquota -u $TSTUSR global curspace)
+	(( $used == 0 )) || error "Used space($used) for user $TSTUSR isn't 0"
 
 	# make sure no granted quota on ost1
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
 	resetquota -u $TSTUSR
 	set_ost_qtype "none" || error "disable ost quota failed"
 
-	local OSTUUID=$(ostname_from_index 0)
-	USED=$(getquota -u $TSTUSR $OSTUUID bhardlimit)
-	[ $USED -ne 0 ] &&
-		error "limit($USED) on $OSTUUID for user $TSTUSR isn't 0"
+	local ostname=$(ostname_from_index 0)
+	used=$(getquota -u $TSTUSR $ostname bhardlimit)
+	(( $used == 0 )) ||
+		error "limit($used) on $ostname for user $TSTUSR isn't 0"
 
 	# create test file
-	$LFS setstripe $TESTFILE -c 1 -i 0 || error "setstripe $TESTFILE failed"
-	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
+	$LFS setstripe $testfile -c 1 -i 0 || error "setstripe $testfile failed"
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
 
 	# consume some space to make sure the granted space will not
 	# be released during reconciliation
-	$RUNAS $DD of=$TESTFILE count=1 oflag=sync ||
+	$RUNAS $DD of=$testfile count=1 oflag=sync ||
 		error "consume space failure, expect success"
 
 	# define OBD_FAIL_QUOTA_EDQUOT 0xa02
@@ -2417,9 +2416,9 @@ test_7b() {
 		error "set quota failed"
 
 	# ignore the write error
-	$RUNAS $DD of=$TESTFILE count=1 seek=1 oflag=sync conv=notrunc
+	$RUNAS $DD of=$testfile count=1 seek=1 oflag=sync conv=notrunc
 
-	local old_used=$(getquota -u $TSTUSR $OSTUUID bhardlimit)
+	local old_used=$(getquota -u $TSTUSR $ostname bhardlimit)
 
 	lustre_fail mds 0
 
@@ -2430,8 +2429,8 @@ test_7b() {
 
 	wait_ost_reint $QTYPE || error "reintegration failed"
 
-	USED=$(getquota -u $TSTUSR $OSTUUID bhardlimit)
-	[ $USED -gt $old_used ] || error "limit on $OSTUUID $USED <= $old_used"
+	used=$(getquota -u $TSTUSR $ostname bhardlimit)
+	(( $used > $old_used )) || error "limit on $ostname $used <= $old_used"
 
 	cleanup_quota_test
 	$SHOW_QUOTA_USER
@@ -2440,19 +2439,19 @@ run_test 7b "Quota reintegration (slave index)"
 
 # quota reintegration (restart mds during reintegration)
 test_7c() {
-	local LIMIT=20 # MB
-	local TESTFILE=$DIR/$tdir/$tfile
-
-	[ "$SLOW" = "no" ] && LIMIT=5
+	local limit=20 # MB
+	local testfile=$DIR/$tdir/$tfile
+ 
+	[[ "$SLOW" == "yes" ]] || limit=5
 
 	setup_quota_test || error "setup quota failed with $?"
 
 	# make sure the system is clean
-	local USED=$(getquota -u $TSTUSR global curspace)
-	[ $USED -ne 0 ] && error "Used space($USED) for user $TSTUSR isn't 0."
+	local used=$(getquota -u $TSTUSR global curspace)
+	(( $used == 0 )) || error "Used space($used) for user $TSTUSR isn't 0"
 
 	set_ost_qtype "none" || error "disable ost quota failed"
-	$LFS setquota -u $TSTUSR -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR ||
+	$LFS setquota -u $TSTUSR -b 0 -B ${limit}M -i 0 -I 0 $DIR ||
 		error "set quota failed"
 
 	# define OBD_FAIL_QUOTA_DELAY_REINT 0xa03
@@ -2481,7 +2480,7 @@ test_7c() {
 
 	# hardlimit should have been fetched by slave during global
 	# reintegration, write will exceed quota
-	$RUNAS $DD of=$TESTFILE count=$((LIMIT + 1)) oflag=sync &&
+	$RUNAS $DD of=$testfile count=$((limit + 1)) oflag=sync &&
 		quota_error u $TSTUSR "write success, but expect EDQUOT"
 	return 0
 }
@@ -2489,8 +2488,8 @@ run_test 7c "Quota reintegration (restart mds during reintegration)"
 
 # Quota reintegration (Transfer index in multiple bulks)
 test_7d(){
-	local TESTFILE=$DIR/$tdir/$tfile
-	local TESTFILE1="$DIR/$tdir/$tfile"-1
+	local testfile=$DIR/$tdir/$tfile
+	local testfile1="$DIR/$tdir/$tfile"-1
 	local limit=20 # MB
 
 	setup_quota_test || error "setup quota failed with $?"
@@ -2512,10 +2511,10 @@ test_7d(){
 
 	# hardlimit should have been fetched by slave during global
 	# reintegration, write will exceed quota
-	$RUNAS $DD of=$TESTFILE count=$((limit + 1)) oflag=sync &&
+	$RUNAS $DD of=$testfile count=$((limit + 1)) oflag=sync &&
 		quota_error u $TSTUSR "$TSTUSR write success, expect EDQUOT"
 
-	$RUNAS2 $DD of=$TESTFILE1 count=$((limit + 1)) oflag=sync &&
+	$RUNAS2 $DD of=$testfile1 count=$((limit + 1)) oflag=sync &&
 		quota_error u $TSTUSR2 "$TSTUSR2 write success, expect EDQUOT"
 	return 0
 }
@@ -2523,48 +2522,50 @@ run_test 7d "Quota reintegration (Transfer index in multiple bulks)"
 
 # quota reintegration (inode limits)
 test_7e() {
-	[ "$MDSCOUNT" -lt "2" ] && skip "needs >= 2 MDTs"
+	(( "$MDSCOUNT" >= "2" )) || skip "needs >= 2 MDTs"
 
 	# LU-2435: skip this quota test if underlying zfs version has not
 	# supported native dnode accounting
-	[ "$mds1_FSTYPE" == zfs ] && {
+	[[ "$mds1_FSTYPE" == zfs ]] && {
 		local F="feature@userobj_accounting"
 		local pool=$(zpool_name mds1)
 		local feature=$(do_facet mds1 $ZPOOL get -H $F $pool)
 
-		[[ "$feature" != *" active "* ]] &&
+		[[ "$feature" =~ " active " ]] ||
 			skip "requires zpool with active userobj_accounting"
 	}
 
 	local ilimit=$((1024 * 2)) # inodes
-	local TESTFILE=$DIR/${tdir}-1/$tfile
+	local testfile=$DIR/${tdir}-1/$tfile
 
 	setup_quota_test || error "setup quota failed with $?"
 
 	# make sure the system is clean
-	local USED=$(getquota -u $TSTUSR global curinodes)
-	[ $USED -ne 0 ] && error "Used inode($USED) for user $TSTUSR isn't 0."
+	local used=$(getquota -u $TSTUSR global curinodes)
+	(( $used == 0 )) || error "Used inode($used) for user $TSTUSR isn't 0"
 
 	# make sure no granted quota on mdt1
 	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
 	resetquota -u $TSTUSR
 	set_mdt_qtype "none" || error "disable mdt quota failed"
 
-	local MDTUUID=$(mdtuuid_from_index $((MDSCOUNT - 1)))
-	USED=$(getquota -u $TSTUSR $MDTUUID ihardlimit)
-	[ $USED -ne 0 ] && error "limit($USED) on $MDTUUID for user" \
-		"$TSTUSR isn't 0."
+	local mdtname=$(mdtname_from_index $((MDSCOUNT - 1)))
 
-	echo "Stop mds${MDSCOUNT}..."
-	stop mds${MDSCOUNT}
+	used=$(getquota -u $TSTUSR $mdtname ihardlimit)
+	(( $used == 0 )) ||
+		error "limit($used) on $mdtname for user $TSTUSR isn't 0"
+
+	local facet=mds${MDSCOUNT}
+	echo "Stop $facet..."
+	stop $facet
 
 	echo "Enable quota & set quota limit for $TSTUSR"
 	set_mdt_qtype $QTYPE || error "enable mdt quota failed"
 	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I $ilimit $DIR ||
 		error "set quota failed"
 
-	echo "Start mds${MDSCOUNT}..."
-	start mds${MDSCOUNT} $(mdsdevname $MDSCOUNT) $MDS_MOUNT_OPTS
+	echo "Start $facet..."
+	start $facet $(mdsdevname $MDSCOUNT) $MDS_MOUNT_OPTS
 	quota_init
 
 	wait_mdt_reint $QTYPE || error "reintegration failed"
@@ -2576,38 +2577,38 @@ test_7e() {
 
 	# hardlimit should have been fetched by slave during global
 	# reintegration, create will exceed quota
-	$RUNAS createmany -m $TESTFILE $((ilimit + 1)) &&
+	$RUNAS createmany -m $testfile $((ilimit + 1)) &&
 		quota_error u $TSTUSR "create succeeded, expect EDQUOT"
 
-	$RUNAS unlinkmany $TESTFILE $ilimit || error "unlink files failed"
+	$RUNAS unlinkmany $testfile $ilimit || error "unlink files failed"
 	wait_delete_completed
 	sync_all_data || true
 
-	echo "Stop mds${MDSCOUNT}..."
-	stop mds${MDSCOUNT}
+	echo "Stop $facet..."
+	stop $facet
 
 	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR ||
 		error "clear quota failed"
 
-	echo "Start mds${MDSCOUNT}..."
-	start mds${MDSCOUNT} $(mdsdevname $MDSCOUNT) $MDS_MOUNT_OPTS
+	echo "Start $facet..."
+	start $facet $(mdsdevname $MDSCOUNT) $MDS_MOUNT_OPTS
 	quota_init
 
 	wait_mdt_reint $QTYPE || error "reintegration failed"
 
 	# hardlimit should be cleared on slave during reintegration
-	$RUNAS createmany -m $TESTFILE $((ilimit + 1)) ||
+	$RUNAS createmany -m $testfile $((ilimit + 1)) ||
 		quota_error u $TSTUSR "create failed, expect success"
 
-	$RUNAS unlinkmany $TESTFILE $((ilimit + 1)) || error "unlink failed"
+	$RUNAS unlinkmany $testfile $((ilimit + 1)) || error "unlink failed"
 	rmdir $DIR/${tdir}-1 || error "unlink remote dir failed"
 }
 run_test 7e "Quota reintegration (inode limits)"
 
 # quota reintegration automatically
 test_7f() {
-	(( $OST1_VERSION >= $(version_code 2.16.58) )) ||
-		skip "need OST >= 2.16.58 for quota reint timeout"
+	(( $OST1_VERSION >= $(version_code v2_17_50-30-gf33ac875ca) )) ||
+		skip "need OST >= 2.17.50.39 for quota reint timeout"
 
 	local blk_limit=1048576
 	local testfile="$DIR/$tdir/$tfile-0"
