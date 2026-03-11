@@ -853,10 +853,6 @@ for fname in $(find lnet/include -type f -name \*.h); do
 	target=$(echo ${fname} | sed 's:^lnet/include/::g')
 	%{__install} -D -m 0644 ${fname} %{buildroot}/%{_usrsrc}/lustre-%{version}/${target}
 done
-for fname in $(find libcfs/include/libcfs -type f -name \*.h); do
-	target=$(echo ${fname} | sed -e 's:^libcfs/include/::g')
-	%{__install} -D -m 0644 ${fname} %{buildroot}/%{_usrsrc}/lustre-%{version}/${target}
-done
 %endif
 %if %{with ldiskfs}
 mkdir -p $basemodpath-osd-ldiskfs/fs
