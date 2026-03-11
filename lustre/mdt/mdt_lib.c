@@ -183,6 +183,7 @@ static void ucred_set_rbac_roles(struct mdt_thread_info *info,
 	uc->uc_rbac_quota_ops = !!(rbac & NODEMAP_RBAC_QUOTA_OPS);
 	uc->uc_rbac_pool_quota_ops = !!(rbac & NODEMAP_RBAC_POOL_QUOTA_OPS);
 	uc->uc_rbac_lqa_quota_ops = !!(rbac & NODEMAP_RBAC_LQA_QUOTA_OPS);
+	uc->uc_rbac_projid_set = !!(rbac & NODEMAP_RBAC_PROJID_SET);
 	uc->uc_rbac_byfid_ops = !!(rbac & NODEMAP_RBAC_BYFID_OPS);
 	uc->uc_rbac_chlg_ops = !!(rbac & NODEMAP_RBAC_CHLG_OPS);
 	uc->uc_rbac_fscrypt_admin = !!(rbac & NODEMAP_RBAC_FSCRYPT_ADMIN);

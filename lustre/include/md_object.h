@@ -693,6 +693,7 @@ struct lu_ucred {
 	unsigned int		 uc_rbac_local_admin:1;
 	unsigned int		 uc_rbac_pool_quota_ops:1;
 	unsigned int		 uc_rbac_lqa_quota_ops:1;
+	unsigned int		 uc_rbac_projid_set:1;
 };
 
 struct lu_ucred *lu_ucred(const struct lu_env *env);

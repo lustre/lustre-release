@@ -1075,6 +1075,7 @@ int hsm_init_ucred(struct lu_ucred *uc)
 	uc->uc_rbac_local_admin = 1;
 	uc->uc_rbac_pool_quota_ops = 1;
 	uc->uc_rbac_lqa_quota_ops = 1;
+	uc->uc_rbac_projid_set = 1;
 
 	RETURN(0);
 }

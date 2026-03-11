@@ -7346,6 +7346,10 @@ test_64a() {
 	(( MDS1_VERSION >= $(version_code 2.17.50) )) &&
 		lqa_quota="lqa_quota_ops"
 
+	local projid_set=""
+	(( MDS1_VERSION >= $(version_code 2.17.50) )) &&
+		projid_set="projid_set"
+
 	stack_trap cleanup_local_client_nodemap EXIT
 	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
 	setup_local_client_nodemap "c0" 1 1
@@ -7362,13 +7366,15 @@ test_64a() {
 		    $local_admin \
 		    $pool_quota \
 		    $lqa_quota \
+		    $projid_set \
 		    ;
 	do
 		[[ "$rbac" =~ "$role" ]] ||
 			error "role '$role' not in default '$rbac'"
 	done
 
-	rbac="file_perms"
+	# projid_set is required for 'lfs project'
+	rbac="projid_set,file_perms"
 	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	do_facet mgs $LCTL nodemap_modify --name c0 \
 		 --property rbac --value $rbac ||
@@ -7383,12 +7389,8 @@ test_64a() {
 	$LFS project -p 1000 $testfile || error "setting project failed"
 	set +vx
 	rm -f $testfile
-	rbac="none"
-	if [ -z "$srv_uc" ]; then
-		rbac="none"
-	else
-		rbac="$srv_uc"
-	fi
+	rbac="projid_set"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
 		--value $rbac ||
 		error "setting rbac $rbac failed (2)"
@@ -7990,7 +7992,8 @@ test_64h() {
 		--offset $offset_start --limit $offset_limit ||
 			error "cannot set offset for c0"
 
-	rbac="file_perms,quota_ops"
+	# projid_set is required for 'lfs project'
+	rbac="projid_set,file_perms,quota_ops"
 	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
 		--value $rbac ||
@@ -8007,7 +8010,7 @@ test_64h() {
 	$LFS project -p $((projid+1)) -s $DIR/$tdir &&
 		error "setting projid should fail (1)"
 
-	rbac="file_perms,quota_ops,local_admin"
+	rbac="projid_set,file_perms,quota_ops,local_admin"
 	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	do_facet mgs $LCTL nodemap_modify --name c0 \
 		 --property rbac --value $rbac ||
@@ -8041,7 +8044,7 @@ test_64h() {
 	# on client is root on file system side
 	do_facet mgs $LCTL nodemap_del_offset --name c0 ||
 		error "cannot del offset for c0"
-	rbac="file_perms,quota_ops"
+	rbac="projid_set,file_perms,quota_ops"
 	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
 		--value $rbac ||
@@ -8245,6 +8248,90 @@ test_64i() {
 		error "expected DOM 'Disk quota exceeded' but got: $stat"
 }
 run_test 64i "Nodemap quota enforcement with local_admin RBAC and offsets"
+
+test_64j() {
+	local testfile=$DIR/$tdir/$tfile
+	local testdir=$DIR/$tdir/${tfile}.d
+	local projid=1001
+	local srv_uc=""
+	local rbac
+
+	(( MDS1_VERSION >= $(version_code 2.17.50) )) ||
+		skip "Need MDS >= 2.17.50 for this test"
+
+	(( MDS1_VERSION >= $(version_code v2_16_50-98-g3b04d6ac1d) )) &&
+		srv_uc="server_upcall"
+
+	stack_trap cleanup_local_client_nodemap EXIT
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	setup_local_client_nodemap "c0" 1 1
+
+	# projid_set role present - should allow project ID changes
+	rbac="file_perms,projid_set"
+	[[ -z "$srv_uc" ]] || rbac+=",$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac=$rbac ||
+		error "setting rbac $rbac failed (1)"
+	wait_nm_sync c0 rbac
+
+	touch $testfile || error "failed to touch $testfile"
+	mkdir $testdir || error "failed to mkdir $testdir"
+
+	$LFS project -p $projid $testfile ||
+		error "lfs project failed with projid_set role"
+	$LFS project -p $projid -s $testdir ||
+		error "lfs project -s failed with projid_set role"
+
+	local file_projid=$($LFS project $testfile | awk '{print $1}')
+	local dir_projid=$($LFS project -d $testdir | awk '{print $1}')
+	(( file_projid == projid )) ||
+		error "expected file projid $projid, got $file_projid (1)"
+	(( dir_projid == projid )) ||
+		error "expected dir projid $projid, got $dir_projid (1)"
+
+	# projid_set role absent - should deny project ID changes
+	rbac="file_perms"
+	[[ -z "$srv_uc" ]] || rbac+=",$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac=$rbac ||
+		error "setting rbac $rbac failed (2)"
+	wait_nm_sync c0 rbac
+
+	$LFS project -p $((projid+1)) $testfile &&
+		error "lfs project should fail without projid_set role"
+	$LFS project -p $((projid+1)) -s $testdir &&
+		error "lfs project -s should fail without projid_set role"
+
+	file_projid=$($LFS project $testfile | awk '{print $1}')
+	dir_projid=$($LFS project -d $testdir | awk '{print $1}')
+	(( file_projid == projid )) ||
+		error "expected file projid $projid, got $file_projid (2)"
+	(( dir_projid == projid )) ||
+		error "expected dir projid $projid, got $dir_projid (2)"
+
+	$LFS project -C $testfile &&
+		error "lfs project -C $testfile should fail without projid_set role"
+	$LFS project -C $testdir &&
+		error "lfs project -C $testdir should fail without projid_set role"
+
+	# Restore projid_set role and clear project ID - should succeed
+	rbac="file_perms,projid_set"
+	[[ -z "$srv_uc" ]] || rbac+=",$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac=$rbac ||
+		error "setting rbac $rbac failed (3)"
+	wait_nm_sync c0 rbac
+
+	$LFS project -C $testfile ||
+		error "lfs project -C $testfile failed with projid_set role"
+	$LFS project -C $testdir ||
+		error "lfs project -C $testdir failed with projid_set role"
+
+	file_projid=$($LFS project $testfile | awk '{print $1}')
+	dir_projid=$($LFS project -d $testdir | awk '{print $1}')
+	(( file_projid == 0 )) ||
+		error "expected file projid 0, got $file_projid (3)"
+	(( dir_projid == 0 )) ||
+		error "expected dir projid 0, got $dir_projid (3)"
+}
+run_test 64j "Nodemap enforces projid_set RBAC role"
 
 look_for_files() {
 	local pattern=$1

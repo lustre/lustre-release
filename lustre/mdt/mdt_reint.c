@@ -866,8 +866,12 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 	/* Clear xattr cache on clients, so the virtual project ID xattr
 	 * can get the new project ID
 	 */
-	if (ma->ma_attr.la_valid & LA_PROJID)
+	if (ma->ma_attr.la_valid & LA_PROJID) {
+		/* Check projid_set RBAC role for project ID changes */
+		if (!mdt_ucred(info)->uc_rbac_projid_set)
+			RETURN(-EACCES);
 		lockpart |= MDS_INODELOCK_XATTR;
+	}
 
 	lh = &info->mti_lh[MDT_LH_PARENT];
 	rc = mdt_object_stripes_lock(info, NULL, mo, lh, einfo, lockpart,

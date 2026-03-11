@@ -45,6 +45,7 @@ static const struct nodemap_rbac_name {
 	{ NODEMAP_RBAC_LOCAL_ADMIN,	"local_admin"	},
 	{ NODEMAP_RBAC_POOL_QUOTA_OPS,	"pool_quota_ops"	},
 	{ NODEMAP_RBAC_LQA_QUOTA_OPS,	"lqa_quota_ops"	},
+	{ NODEMAP_RBAC_PROJID_SET,	"projid_set"	},
 };
 
 static const struct nodemap_captype_name {
