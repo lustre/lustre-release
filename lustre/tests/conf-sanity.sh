@@ -9262,23 +9262,24 @@ test_106() {
 	local repeat=5
 	local creates=64768	# one full plain llog
 
-	# ensure there are enough inodes in the filesystem
-	(( OSTSIZE < (creates + 1024) * 16)) && OSTSIZE=$(((creates + 1024) * 16))
-	reformat
-	setup_noconfig
+	setup
 	lfs df -i
-	mkdir -p $DIR/$tdir || error "create $tdir failed"
 	do_nodes $(osts_nodes) \
 		$LCTL set_param seq.*OST*-super.width=$DATA_SEQ_MAX_WIDTH
-	lfs setstripe -c 1 -i 0 $DIR/$tdir
 #define OBD_FAIL_CAT_RECORDS                        0x1312
 	do_facet mds1 $LCTL set_param fail_loc=0x1312 fail_val=$repeat
 
+	# create files in separate directories in parallel, but on same MDT
+	# delete files immediately, because test only cares about llog records
 	for ((i = 1; i <= $repeat; i++)); do
-		createmany -o $DIR/$tdir/f- $creates || lfs df -i
-		createmany -u $DIR/$tdir/f- $creates
-		wait_delete_completed $((TIMEOUT * 7))
+		(
+		mkdir_on_mdt0 $DIR/$tdir.$i || error "create $tdir failed"
+		lfs setstripe -c 1 -i 0 $DIR/$tdir.$i
+		createmany -o -u $DIR/$tdir.$i/f$i- $creates || lfs df -i
+		) &
 	done
+	wait
+	wait_delete_completed $((TIMEOUT * 7))
 #ASSERTION osp_sync_thread() ( thread->t_flags != SVC_RUNNING ) failed
 #shows that osp code is buggy
 	do_facet mds1 $LCTL set_param fail_loc=0 fail_val=0
