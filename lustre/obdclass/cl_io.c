@@ -1478,12 +1478,8 @@ int ll_allocate_dio_buffer(struct cl_dio_pages *cdp, size_t io_size)
 	/* calculate pages for the rest of the buffer */
 	cdp->cdp_page_count += (io_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
 
-#ifdef HAVE_DIO_ITER
 	cdp->cdp_pages = kvzalloc(cdp->cdp_page_count * sizeof(struct page *),
 				  GFP_NOFS);
-#else
-	OBD_ALLOC_PTR_ARRAY_LARGE(cdp->cdp_pages, cdp->cdp_page_count);
-#endif
 	if (cdp->cdp_pages == NULL)
 		GOTO(out, result = -ENOMEM);
 
@@ -1508,11 +1504,7 @@ void ll_free_dio_buffer(struct cl_dio_pages *cdp)
 {
 	obd_pool_put_pages_array(cdp->cdp_pages, cdp->cdp_page_count);
 
-#ifdef HAVE_DIO_ITER
 	kvfree(cdp->cdp_pages);
-#else
-	OBD_FREE_PTR_ARRAY_LARGE(cdp->cdp_pages, cdp->cdp_page_count);
-#endif
 }
 EXPORT_SYMBOL(ll_free_dio_buffer);
 
@@ -1535,11 +1527,7 @@ void ll_release_user_pages(struct page **pages, int npages)
 		put_page(pages[i]);
 	}
 
-#if defined(HAVE_DIO_ITER)
 	kvfree(pages);
-#else
-	OBD_FREE_PTR_ARRAY_LARGE(pages, npages);
-#endif
 }
 EXPORT_SYMBOL(ll_release_user_pages);
 

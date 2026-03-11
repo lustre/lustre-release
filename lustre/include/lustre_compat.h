@@ -85,13 +85,6 @@ static inline struct bio *cfs_bio_alloc(struct block_device *bdev,
 	return bio;
 }
 
-#ifndef HAVE_D_IN_LOOKUP
-static inline int d_in_lookup(struct dentry *dentry)
-{
-	return false;
-}
-#endif
-
 #ifdef HAVE_DENTRY_D_CHILDREN
 #define d_no_children(dentry)	(hlist_empty(&(dentry)->d_children))
 #define d_for_each_child(child, dentry) \
@@ -100,10 +93,6 @@ static inline int d_in_lookup(struct dentry *dentry)
 #define d_no_children(dentry)	(list_empty(&(dentry)->d_subdirs))
 #define d_for_each_child(child, dentry) \
 	list_for_each_entry((child), &(dentry)->d_subdirs, d_child)
-#endif
-
-#ifndef HAVE_FOP_ITERATE_SHARED
-#define iterate_shared iterate
 #endif
 
 #ifdef HAVE_USER_NAMESPACE_ARG
@@ -144,30 +133,6 @@ static inline int ll_vfs_getattr(struct path *path, struct kstat *st,
 	((kcap)->cap[0] = val32)
 #endif
 
-#ifdef HAVE_FULL_NAME_HASH_3ARGS
-# define ll_full_name_hash(salt, name, len) full_name_hash(salt, name, len)
-#else
-# define ll_full_name_hash(salt, name, len) full_name_hash(name, len)
-#endif
-
-#ifdef HAVE_STRUCT_POSIX_ACL_XATTR
-# define posix_acl_xattr_header struct posix_acl_xattr_header
-# define posix_acl_xattr_entry  struct posix_acl_xattr_entry
-# define GET_POSIX_ACL_XATTR_ENTRY(head) ((void *)((head) + 1))
-#else
-# define GET_POSIX_ACL_XATTR_ENTRY(head) ((head)->a_entries)
-#endif
-
-#ifdef HAVE_IOP_XATTR
-#define ll_setxattr     generic_setxattr
-#define ll_getxattr     generic_getxattr
-#define ll_removexattr  generic_removexattr
-#endif /* HAVE_IOP_XATTR */
-
-#ifndef HAVE_POSIX_ACL_VALID_USER_NS
-#define posix_acl_valid(a, b)		posix_acl_valid(b)
-#endif
-
 /*
  * mount MS_* flags split from superblock SB_* flags
  * if the SB_* flags are not available use the MS_* flags
@@ -200,21 +165,6 @@ static inline struct iovec iov_iter_iovec(const struct iov_iter *iter)
 			       iter->__iov->iov_len - iter->iov_offset),
 	};
 }
-#endif
-
-/* kernel version less than 4.2, smp_store_mb is not defined, use set_mb */
-#ifndef smp_store_mb
-#define smp_store_mb(var, value) set_mb(var, value) /* set full mem barrier */
-#endif
-
-#ifndef HAVE_IN_COMPAT_SYSCALL
-#define in_compat_syscall	is_compat_task
-#endif
-
-#ifndef KMEM_CACHE_USERCOPY
-#define kmem_cache_create_usercopy(name, size, align, flags, useroffset, \
-				   usersize, ctor)			 \
-	kmem_cache_create(name, size, align, flags, ctor)
 #endif
 
 static inline bool ll_security_xattr_wanted(struct inode *in)
@@ -282,12 +232,7 @@ static inline int ll_vfs_removexattr(struct dentry *dentry, struct inode *inode,
 #define raw_cpu_ptr(p) __this_cpu_ptr(p)
 #endif
 
-#if defined(HAVE_DIRECTIO_ITER) || defined(HAVE_DIRECTIO_2ARGS) || \
-    defined(HAVE_IOV_ITER_GET_PAGES_ALLOC2)
-#define HAVE_DIO_ITER 1
-#endif
-
-#if !defined HAVE_IOV_ITER_GET_PAGES_ALLOC2 && defined HAVE_DIO_ITER
+#ifndef HAVE_IOV_ITER_GET_PAGES_ALLOC2
 static inline ssize_t iov_iter_get_pages_alloc2(struct iov_iter *i,
 						   struct page ***pages,
 						   size_t maxsize,

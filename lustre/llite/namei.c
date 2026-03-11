@@ -1405,11 +1405,7 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	/* Only negative dentries enter here */
 	LASSERT(dentry->d_inode == NULL);
 
-#ifndef HAVE_D_IN_LOOKUP
-	if (!d_unhashed(dentry)) {
-#else
 	if (!d_in_lookup(dentry)) {
-#endif
 		/* A valid negative dentry that just passed revalidation,
 		 * there's little point to try and open it server-side,
 		 * even though there's a minuscule chance it might succeed.
@@ -2560,11 +2556,6 @@ const struct inode_operations ll_dir_inode_operations = {
 	.setattr	= ll_setattr,
 	.getattr	= ll_getattr,
 	.permission	= ll_inode_permission,
-#ifdef HAVE_IOP_XATTR
-	.setxattr	= ll_setxattr,
-	.getxattr	= ll_getxattr,
-	.removexattr	= ll_removexattr,
-#endif
 	.listxattr	= ll_listxattr,
 #ifdef HAVE_IOP_GET_INODE_ACL
 	.get_inode_acl	= ll_get_inode_acl,
@@ -2581,11 +2572,6 @@ const struct inode_operations ll_special_inode_operations = {
 	.setattr        = ll_setattr,
 	.getattr        = ll_getattr,
 	.permission     = ll_inode_permission,
-#ifdef HAVE_IOP_XATTR
-	.setxattr	= ll_setxattr,
-	.getxattr	= ll_getxattr,
-	.removexattr    = ll_removexattr,
-#endif
 	.listxattr      = ll_listxattr,
 #ifdef HAVE_IOP_GET_INODE_ACL
 	.get_inode_acl	= ll_get_inode_acl,

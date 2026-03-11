@@ -2404,7 +2404,6 @@ static ssize_t do_loop_readv_writev(struct kiocb *iocb, const struct iovec *iov,
 /*
  * Check if we need loop over the iovec and submit each segment in a loop.
  * This is needed when:
- *   - Prior to the introduction of HAVE_DIO_ITER
  *   - unaligned direct i/o
  * Returns true for the above cases and false otherwise.
  *
@@ -2414,7 +2413,6 @@ static ssize_t do_loop_readv_writev(struct kiocb *iocb, const struct iovec *iov,
 static bool is_unaligned_directio(struct kiocb *iocb, struct iov_iter *iter,
 				 enum cl_io_type io_type)
 {
-#ifdef HAVE_DIO_ITER
 	struct file *file = iocb->ki_filp;
 	int iocb_flags = iocb_ki_flags_get(file, iocb);
 	bool direct_io = iocb_ki_flags_check(iocb_flags, DIRECT);
@@ -2434,9 +2432,6 @@ static bool is_unaligned_directio(struct kiocb *iocb, struct iov_iter *iter,
 			unaligned = ll_iov_iter_is_unaligned(iter);
 	}
 	return unaligned;
-#else
-	return true;
-#endif /* HAVE_DIO_ITER */
 }
 
 /* Read from a file (through the page cache) */
@@ -5838,7 +5833,7 @@ int ll_migrate(struct inode *parent, struct file *file, struct lmv_user_md *lum,
 	}
 
 	/* Get child FID first */
-	qstr.hash = ll_full_name_hash(file_dentry(file), name, namelen);
+	qstr.hash = full_name_hash(file_dentry(file), name, namelen);
 	qstr.name = name;
 	qstr.len = namelen;
 	dchild = d_lookup(file_dentry(file), &qstr);
@@ -6699,11 +6694,6 @@ const struct inode_operations ll_file_inode_operations = {
 	.setattr	= ll_setattr,
 	.getattr	= ll_getattr,
 	.permission	= ll_inode_permission,
-#ifdef HAVE_IOP_XATTR
-	.setxattr	= ll_setxattr,
-	.getxattr	= ll_getxattr,
-	.removexattr	= ll_removexattr,
-#endif
 	.listxattr	= ll_listxattr,
 	.fiemap		= ll_fiemap,
 #ifdef HAVE_IOP_GET_INODE_ACL

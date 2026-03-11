@@ -135,7 +135,6 @@ static ssize_t ll_get_iov_memory(int rw, struct iov_iter *iter,
 				struct cl_dio_pages *cdp,
 				size_t maxsize)
 {
-#if defined(HAVE_DIO_ITER)
 	ssize_t bytes;
 	size_t start;
 
@@ -147,47 +146,6 @@ static ssize_t ll_get_iov_memory(int rw, struct iov_iter *iter,
 			iov_iter_revert(iter, bytes);
 	}
 	return bytes;
-#else
-	unsigned int page_count;
-	unsigned long addr;
-	size_t size;
-	long result;
-
-	if (!maxsize)
-		return 0;
-
-	if (!iter->nr_segs)
-		return 0;
-
-	addr = (unsigned long)iter->iov->iov_base + iter->iov_offset;
-	if (addr & ~PAGE_MASK)
-		return -EINVAL;
-
-	size = min_t(size_t, maxsize, iter->iov->iov_len);
-	page_count = (size + PAGE_SIZE - 1) >> PAGE_SHIFT;
-	OBD_ALLOC_PTR_ARRAY_LARGE(cdp->cdp_pages, page_count);
-	if (cdp->cdp_pages == NULL)
-		return -ENOMEM;
-
-	mmap_read_lock(current->mm);
-	result = get_user_pages(current, current->mm, addr, page_count,
-				rw == READ, 0, cdp->cdp_pages, NULL);
-	mmap_read_unlock(current->mm);
-
-	if (unlikely(result != page_count)) {
-		ll_release_user_pages(cdp->cdp_pages, page_count);
-		cdp->cdp_pages = NULL;
-
-		if (result >= 0)
-			return -EFAULT;
-
-		/* if result < 0, return the error */
-		return result;
-	}
-	cdp->cdp_page_count = page_count;
-
-	return size;
-#endif
 }
 
 ssize_t cl_dio_pages_init(const struct lu_env *env, struct cl_object *obj,

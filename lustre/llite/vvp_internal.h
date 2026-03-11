@@ -261,12 +261,9 @@ void vvp_global_fini(void);
 #ifdef HAVE_FOLIO_MEMCG_LOCK
 #define folio_memcg_lock_page(page)	folio_memcg_lock(page_folio((page)))
 #define folio_memcg_unlock_page(page)	folio_memcg_unlock(page_folio((page)))
-#elif defined HAVE_LOCK_PAGE_MEMCG
+#else
 #define folio_memcg_lock_page(page)	lock_page_memcg((page))
 #define folio_memcg_unlock_page(page)	unlock_page_memcg((page))
-#else
-#define folio_memcg_lock_page(page)
-#define folio_memcg_unlock_page(page)
 #endif
 
 extern const struct file_operations vvp_dump_pgcache_file_ops;

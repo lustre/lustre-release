@@ -215,7 +215,7 @@ sa_alloc(struct dentry *parent, struct ll_statahead_info *sai, __u64 index,
 	dname = (char *)entry + sizeof(struct sa_entry);
 	memcpy(dname, name, len);
 	dname[len] = 0;
-	entry->se_qstr.hash = ll_full_name_hash(parent, name, len);
+	entry->se_qstr.hash = full_name_hash(parent, name, len);
 	entry->se_qstr.len = len;
 	entry->se_qstr.name = dname;
 

@@ -20,11 +20,7 @@
 #include <linux/lustre/lustre_lfsck_user.h>
 #include <linux/lustre/lustre_disk.h>
 #ifdef CONFIG_FS_POSIX_ACL
-#include <linux/posix_acl_xattr.h>
-#ifdef HAVE_STRUCT_POSIX_ACL_XATTR
-# define posix_acl_xattr_header struct posix_acl_xattr_header
-# define posix_acl_xattr_entry  struct posix_acl_xattr_entry
-#endif /* HAVE_STRUCT_POSIX_ACL_XATTR */
+#include <linux/struct posix_acl_xattr.h>
 #endif /* CONFIG_FS_POSIX_ACL */
 #endif /* HAVE_SERVER_SUPPORT */
 #include <linux/lustre/lustre_cfg.h>
@@ -5096,37 +5092,31 @@ void lustre_assert_wire_constants(void)
 	BUILD_BUG_ON(FIEMAP_EXTENT_NET != 0x80000000);
 
 #ifdef CONFIG_FS_POSIX_ACL
-	/* Checks for type posix_acl_xattr_entry */
-	LASSERTF((int)sizeof(posix_acl_xattr_entry) == 8, "found %lld\n",
-		 (long long)(int)sizeof(posix_acl_xattr_entry));
-	LASSERTF((int)offsetof(posix_acl_xattr_entry, e_tag) == 0, "found %lld\n",
-		 (long long)(int)offsetof(posix_acl_xattr_entry, e_tag));
-	LASSERTF((int)sizeof(((posix_acl_xattr_entry *)0)->e_tag) == 2, "found %lld\n",
-		 (long long)(int)sizeof(((posix_acl_xattr_entry *)0)->e_tag));
-	LASSERTF((int)offsetof(posix_acl_xattr_entry, e_perm) == 2, "found %lld\n",
-		 (long long)(int)offsetof(posix_acl_xattr_entry, e_perm));
-	LASSERTF((int)sizeof(((posix_acl_xattr_entry *)0)->e_perm) == 2, "found %lld\n",
-		 (long long)(int)sizeof(((posix_acl_xattr_entry *)0)->e_perm));
-	LASSERTF((int)offsetof(posix_acl_xattr_entry, e_id) == 4, "found %lld\n",
-		 (long long)(int)offsetof(posix_acl_xattr_entry, e_id));
-	LASSERTF((int)sizeof(((posix_acl_xattr_entry *)0)->e_id) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((posix_acl_xattr_entry *)0)->e_id));
+	/* Checks for type struct posix_acl_xattr_entry */
+	LASSERTF((int)sizeof(struct posix_acl_xattr_entry) == 8, "found %lld\n",
+		 (long long)(int)sizeof(struct posix_acl_xattr_entry));
+	LASSERTF((int)offsetof(struct posix_acl_xattr_entry, e_tag) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct posix_acl_xattr_entry, e_tag));
+	LASSERTF((int)sizeof(((struct posix_acl_xattr_entry *)0)->e_tag) == 2, "found %lld\n",
+		 (long long)(int)sizeof(((struct posix_acl_xattr_entry *)0)->e_tag));
+	LASSERTF((int)offsetof(struct posix_acl_xattr_entry, e_perm) == 2, "found %lld\n",
+		 (long long)(int)offsetof(struct posix_acl_xattr_entry, e_perm));
+	LASSERTF((int)sizeof(((struct posix_acl_xattr_entry *)0)->e_perm) == 2, "found %lld\n",
+		 (long long)(int)sizeof(((struct posix_acl_xattr_entry *)0)->e_perm));
+	LASSERTF((int)offsetof(struct posix_acl_xattr_entry, e_id) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct posix_acl_xattr_entry, e_id));
+	LASSERTF((int)sizeof(((struct posix_acl_xattr_entry *)0)->e_id) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct posix_acl_xattr_entry *)0)->e_id));
 #endif /* CONFIG_FS_POSIX_ACL */
 
 #ifdef CONFIG_FS_POSIX_ACL
-	/* Checks for type posix_acl_xattr_header */
-	LASSERTF((int)sizeof(posix_acl_xattr_header) == 4, "found %lld\n",
-		 (long long)(int)sizeof(posix_acl_xattr_header));
-	LASSERTF((int)offsetof(posix_acl_xattr_header, a_version) == 0, "found %lld\n",
-		 (long long)(int)offsetof(posix_acl_xattr_header, a_version));
-	LASSERTF((int)sizeof(((posix_acl_xattr_header *)0)->a_version) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((posix_acl_xattr_header *)0)->a_version));
-#ifndef HAVE_STRUCT_POSIX_ACL_XATTR
-	LASSERTF((int)offsetof(posix_acl_xattr_header, a_entries) == 4, "found %lld\n",
-		 (long long)(int)offsetof(posix_acl_xattr_header, a_entries));
-	LASSERTF((int)sizeof(((posix_acl_xattr_header *)0)->a_entries) == 0, "found %lld\n",
-		 (long long)(int)sizeof(((posix_acl_xattr_header *)0)->a_entries));
-#endif /* HAVE_STRUCT_POSIX_ACL_XATTR */
+	/* Checks for type struct posix_acl_xattr_header */
+	LASSERTF((int)sizeof(struct posix_acl_xattr_header) == 4, "found %lld\n",
+		 (long long)(int)sizeof(struct posix_acl_xattr_header));
+	LASSERTF((int)offsetof(struct posix_acl_xattr_header, a_version) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct posix_acl_xattr_header, a_version));
+	LASSERTF((int)sizeof(((struct posix_acl_xattr_header *)0)->a_version) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct posix_acl_xattr_header *)0)->a_version));
 #endif /* CONFIG_FS_POSIX_ACL */
 
 	/* Checks for struct link_ea_header */

@@ -37,9 +37,7 @@
 
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_ioctl_old.h>
-#ifdef HAVE_UAPI_LINUX_MOUNT_H
 #include <uapi/linux/mount.h>
-#endif
 
 #include <lustre_ha.h>
 #include <lustre_dlm.h>

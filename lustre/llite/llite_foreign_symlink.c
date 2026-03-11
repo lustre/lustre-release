@@ -734,27 +734,14 @@ struct inode_operations ll_foreign_file_symlink_inode_operations = {
 	.get_link	= ll_foreign_get_link,
 	.getattr	= ll_foreign_symlink_getattr,
 	.permission	= ll_inode_permission,
-#ifdef HAVE_IOP_XATTR
-	.setxattr	= ll_setxattr,
-	.getxattr	= ll_getxattr,
-	.removexattr	= ll_removexattr,
-#endif
 	.listxattr	= ll_listxattr,
 };
 
 struct inode_operations ll_foreign_dir_symlink_inode_operations = {
 	.lookup		= ll_foreign_dir_lookup,
-#ifdef HAVE_IOP_GENERIC_READLINK
-	.readlink	= generic_readlink,
-#endif
 	.setattr	= ll_setattr,
 	.get_link	= ll_foreign_get_link,
 	.getattr	= ll_foreign_symlink_getattr,
 	.permission	= ll_inode_permission,
-#ifdef HAVE_IOP_XATTR
-	.setxattr	= ll_setxattr,
-	.getxattr	= ll_getxattr,
-	.removexattr	= ll_removexattr,
-#endif
 	.listxattr	= ll_listxattr,
 };

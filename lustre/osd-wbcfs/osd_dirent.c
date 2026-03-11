@@ -43,7 +43,7 @@ static int osd_index_dir_lookup(const struct lu_env *env, struct dt_object *dt,
 
 	qstr.name = name;
 	qstr.len = strlen(name);
-	qstr.hash = ll_full_name_hash(parent, qstr.name, qstr.len);
+	qstr.hash = full_name_hash(parent, qstr.name, qstr.len);
 	dchild = d_lookup(parent, &qstr);
 	if (dchild) {
 		*fid = MEMFS_I(d_inode(dchild))->mei_fid;
@@ -125,7 +125,7 @@ static int osd_index_dir_insert(const struct lu_env *env, struct dt_object *dt,
 
 	dname.name = name;
 	dname.len = strlen(name);
-	dname.hash = ll_full_name_hash(parent, dname.name, dname.len);
+	dname.hash = full_name_hash(parent, dname.name, dname.len);
 
 	dentry = d_alloc(parent, &dname);
 	if (!dentry)
@@ -225,7 +225,7 @@ static int osd_index_dir_delete(const struct lu_env *env, struct dt_object *dt,
 
 	qstr.name = name;
 	qstr.len = strlen(name);
-	qstr.hash = ll_full_name_hash(parent, qstr.name, qstr.len);
+	qstr.hash = full_name_hash(parent, qstr.name, qstr.len);
 	dentry = d_lookup(parent, &qstr);
 	if (dentry == NULL) {
 		CDEBUG(D_CACHE, "%s: cannot find %s from parent@%pK %pd\n",
@@ -543,11 +543,7 @@ static int osd_memfs_it_fill(const struct lu_env *env, const struct dt_it *di)
 	it->oit_dirent = it->oit_buf;
 	it->oit_rd_dirent = 0;
 
-#ifdef HAVE_FOP_ITERATE_SHARED
 	inode_lock_shared(dir);
-#else
-	inode_lock(dir);
-#endif
 	if (!IS_DEADDIR(dir)) {
 		if (filp->f_op->iterate_shared) {
 			mctx.super.pos = filp->f_pos;
@@ -557,11 +553,7 @@ static int osd_memfs_it_fill(const struct lu_env *env, const struct dt_it *di)
 			rc = -ENOTDIR;
 		}
 	}
-#ifdef HAVE_FOP_ITERATE_SHARED
 	inode_unlock_shared(dir);
-#else
-	inode_unlock(dir);
-#endif
 	if (rc)
 		RETURN(rc);
 

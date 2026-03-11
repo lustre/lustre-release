@@ -2282,22 +2282,6 @@ static int server_getattr(struct mnt_idmap *idmap,
 	return 0;
 }
 
-#ifdef HAVE_IOP_XATTR
-static ssize_t server_getxattr(struct dentry *dentry, const char *name,
-				void *buffer, size_t size)
-{
-	if (!selinux_is_enabled())
-		return -EOPNOTSUPP;
-	return -ENODATA;
-}
-
-static int server_setxattr(struct dentry *dentry, const char *name,
-			    const void *value, size_t size, int flags)
-{
-	return -EOPNOTSUPP;
-}
-#endif
-
 static ssize_t server_listxattr(struct dentry *d_entry, char *name,
 				size_t size)
 {
@@ -2390,10 +2374,6 @@ out:
 
 static const struct inode_operations server_inode_operations = {
 	.getattr	= server_getattr,
-#ifdef HAVE_IOP_XATTR
-	.setxattr       = server_setxattr,
-	.getxattr       = server_getxattr,
-#endif
 	.listxattr      = server_listxattr,
 };
 

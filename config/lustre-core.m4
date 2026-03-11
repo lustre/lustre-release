@@ -546,293 +546,6 @@ AC_DEFUN([LC_HAVE_LIBAIO], [
 ]) # LC_HAVE_LIBAIO
 
 #
-# LC_HAVE_IN_COMPAT_SYSCALL
-#
-# 4.6 renamed is_compat_task to in_compat_syscall
-#
-AC_DEFUN([LC_SRC_HAVE_IN_COMPAT_SYSCALL], [
-	LB2_LINUX_TEST_SRC([in_compat_syscall], [
-		#include <linux/compat.h>
-	],[
-		in_compat_syscall();
-	])
-])
-AC_DEFUN([LC_HAVE_IN_COMPAT_SYSCALL], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'in_compat_syscall' is defined],
-	[in_compat_syscall], [
-		AC_DEFINE(HAVE_IN_COMPAT_SYSCALL, 1, [have in_compat_syscall])
-	])
-]) # LC_HAVE_IN_COMPAT_SYSCALL
-
-#
-# LC_HAVE_XATTR_HANDLER_INODE_PARAM
-#
-# Kernel version 4.6 commit b296821a7c42fa58baa17513b2b7b30ae66f3336
-# and commit 5930122683dff58f0846b0f0405b4bd598a3ba6a added inode parameter
-# to xattr_handler functions
-#
-AC_DEFUN([LC_SRC_HAVE_XATTR_HANDLER_INODE_PARAM], [
-	LB2_LINUX_TEST_SRC([xattr_handler_inode_param], [
-		#include <linux/xattr.h>
-	],[
-		const struct xattr_handler handler;
-
-		((struct xattr_handler *)0)->get(&handler, NULL, NULL, NULL, NULL, 0);
-		((struct xattr_handler *)0)->set(&handler, NULL, NULL, NULL, NULL, 0, 0);
-	],[-Werror])
-])
-AC_DEFUN([LC_HAVE_XATTR_HANDLER_INODE_PARAM], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'struct xattr_handler' functions have inode parameter],
-	[xattr_handler_inode_param], [
-		AC_DEFINE(HAVE_XATTR_HANDLER_INODE_PARAM, 1, [needs inode parameter])
-	])
-]) # LC_HAVE_XATTR_HANDLER_INODE_PARAM
-
-#
-# LC_D_IN_LOOKUP
-#
-# Kernel version 4.6 commit 85c7f81041d57cfe9dc97f4680d5586b54534a39
-# introduced parallel lookups in the VFS layer. The inline function
-# d_in_lookup was added to notify when the same item was being queried
-# at the same time.
-#
-AC_DEFUN([LC_SRC_D_IN_LOOKUP], [
-	LB2_LINUX_TEST_SRC([d_in_lookup], [
-		#include <linux/dcache.h>
-	],[
-		d_in_lookup(NULL);
-	],[-Werror])
-])
-AC_DEFUN([LC_D_IN_LOOKUP], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'd_in_lookup' is defined],
-	[d_in_lookup], [
-		AC_DEFINE(HAVE_D_IN_LOOKUP, 1, [d_in_lookup is defined])
-	])
-]) # LC_D_IN_LOOKUP
-
-#
-# LC_LOCK_PAGE_MEMCG
-#
-# Kernel version 4.6 adds lock_page_memcg(page)
-# Linux commit v5.15-12273-gab2f9d2d3626
-#   mm: unexport {,un}lock_page_memcg
-# and removed in v6.4-rc4-327-g6c77b607ee26
-#   mm: kill lock|unlock_page_memcg()
-#
-AC_DEFUN([LC_SRC_LOCK_PAGE_MEMCG], [
-	LB2_LINUX_TEST_SRC([lock_page_memcg], [
-		#include <linux/memcontrol.h>
-	],[
-		lock_page_memcg(NULL);
-	],[-Werror])
-])
-AC_DEFUN([LC_LOCK_PAGE_MEMCG], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'lock_page_memcg' is defined],
-	[lock_page_memcg], [
-		AC_DEFINE(HAVE_LOCK_PAGE_MEMCG, 1, [lock_page_memcg is defined])
-	])
-]) # LC_LOCK_PAGE_MEMCG
-
-#
-# LC_HAVE_DOWN_WRITE_KILLABLE
-#
-# Kernel version v4.6-rc3-28-g916633a40370
-#
-AC_DEFUN([LC_SRC_HAVE_DOWN_WRITE_KILLABLE], [
-	LB2_LINUX_TEST_SRC([down_write_killable], [
-		#include <linux/rwsem.h>
-
-		struct rw_semaphore sem;
-	],[
-		int rc;
-
-		rc = down_write_killable(&sem);
-		(void)rc;
-	])
-])
-AC_DEFUN([LC_HAVE_DOWN_WRITE_KILLABLE], [
-	LB2_MSG_LINUX_TEST_RESULT([if down_write_killable exists],
-	[down_write_killable], [
-		AC_DEFINE(HAVE_DOWN_WRITE_KILLABLE, 1,
-			[down_write_killable function exists])
-	])
-]) # LC_HAVE_DOWN_WRITE_KILLABLE
-
-#
-# LC_DIRECTIO_2ARGS
-#
-# Kernel version 4.7 commit c8b8e32d700fe943a935e435ae251364d016c497
-# direct-io: eliminate the offset argument to ->direct_IO
-#
-AC_DEFUN([LC_SRC_DIRECTIO_2ARGS], [
-	LB2_LINUX_TEST_SRC([direct_io_2args], [
-		#include <linux/fs.h>
-	],[
-		struct address_space_operations ops = { };
-		struct iov_iter *iter = NULL;
-		struct kiocb *iocb = NULL;
-		int rc;
-
-		rc = ops.direct_IO(iocb, iter);
-	])
-])
-AC_DEFUN([LC_DIRECTIO_2ARGS], [
-	LB2_MSG_LINUX_TEST_RESULT([if '->direct_IO()' takes 2 arguments],
-	[direct_io_2args], [
-		AC_DEFINE(HAVE_DIRECTIO_2ARGS, 1, [direct_IO has 2 arguments])
-	])
-]) # LC_DIRECTIO_2ARGS
-
-#
-# LC_GENERIC_WRITE_SYNC_2ARGS
-#
-# Kernel version 4.7 commit dde0c2e79848298cc25621ad080d47f94dbd7cce
-# fs: add IOCB_SYNC and IOCB_DSYNC
-#
-AC_DEFUN([LC_SRC_GENERIC_WRITE_SYNC_2ARGS], [
-	LB2_LINUX_TEST_SRC([generic_write_sync_2args], [
-		#include <linux/fs.h>
-	],[
-		struct kiocb *iocb = NULL;
-		ssize_t rc;
-
-		rc = generic_write_sync(iocb, 0);
-	])
-])
-AC_DEFUN([LC_GENERIC_WRITE_SYNC_2ARGS], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'generic_write_sync()' takes 2 arguments],
-	[generic_write_sync_2args], [
-		AC_DEFINE(HAVE_GENERIC_WRITE_SYNC_2ARGS, 1,
-			[generic_write_sync has 2 arguments])
-	])
-]) # LC_GENERIC_WRITE_SYNC_2ARGS
-
-#
-# LC_FOP_ITERATE_SHARED
-#
-# Kernel v4.6-rc3-29-g6192269 adds iterate_shared method to file_operations
-#
-AC_DEFUN([LC_SRC_FOP_ITERATE_SHARED], [
-	LB2_LINUX_TEST_SRC([fop_iterate_shared], [
-		#include <linux/fs.h>
-	],[
-		struct file_operations fop;
-		fop.iterate_shared = NULL;
-	])
-])
-AC_DEFUN([LC_FOP_ITERATE_SHARED], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'file_operations' has 'iterate_shared'],
-	[fop_iterate_shared], [
-		AC_DEFINE(HAVE_FOP_ITERATE_SHARED, 1,
-			[file_operations has iterate_shared])
-	])
-]) # LC_FOP_ITERATE_SHARED
-
-#
-# LC_EXPORT_DEFAULT_FILE_SPLICE_READ
-#
-# 4.8-rc8 commit 82c156f853840645604acd7c2cebcb75ed1b6652 switched
-# generic_file_splice_read() to using ->read_iter. We can test this
-# change since default_file_splice_read() is no longer exported.
-#
-AC_DEFUN([LC_EXPORT_DEFAULT_FILE_SPLICE_READ], [
-LB_CHECK_EXPORT([default_file_splice_read], [fs/splice.c],
-	[AC_DEFINE(HAVE_DEFAULT_FILE_SPLICE_READ_EXPORT, 1,
-			[default_file_splice_read is exported])])
-]) # LC_EXPORT_DEFAULT_FILE_SPLCE_READ
-
-#
-# LC_HAVE_POSIX_ACL_VALID_USER_NS
-#
-# 4.8 posix_acl_valid takes struct user_namespace
-#
-AC_DEFUN([LC_SRC_HAVE_POSIX_ACL_VALID_USER_NS], [
-	LB2_LINUX_TEST_SRC([posix_acl_valid], [
-		#include <linux/fs.h>
-		#include <linux/posix_acl.h>
-	],[
-		posix_acl_valid((struct user_namespace*)NULL, (const struct posix_acl*)NULL);
-	])
-])
-AC_DEFUN([LC_HAVE_POSIX_ACL_VALID_USER_NS], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'posix_acl_valid' takes 'struct user_namespace'],
-	[posix_acl_valid], [
-		AC_DEFINE(HAVE_POSIX_ACL_VALID_USER_NS, 1,
-			[posix_acl_valid takes struct user_namespace])
-	])
-]) # LC_HAVE_POSIX_ACL_VALID_USER_NS
-
-#
-# LC_FULL_NAME_HASH_3ARGS
-#
-# Kernel version 4.8 commit 8387ff2577eb9ed245df9a39947f66976c6bcd02
-# vfs: make the string hashes salt the hash
-#
-AC_DEFUN([LC_SRC_FULL_NAME_HASH_3ARGS], [
-	LB2_LINUX_TEST_SRC([full_name_hash_3args], [
-		#include <linux/stringhash.h>
-	],[
-		unsigned int hash;
-		hash = full_name_hash(NULL,NULL,0);
-	])
-])
-AC_DEFUN([LC_FULL_NAME_HASH_3ARGS], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'full_name_hash' taken 3 arguments],
-	[full_name_hash_3args], [
-		AC_DEFINE(HAVE_FULL_NAME_HASH_3ARGS, 1,
-			[full_name_hash need 3 arguments])
-	])
-]) # LC_FULL_NAME_HASH_3ARGS
-
-#
-# LC_STRUCT_POSIX_ACL_XATTR
-#
-# Kernel version 4.8 commit 2211d5ba5c6c4e972ba6dbc912b2897425ea6621
-# posix_acl: xattr representation cleanups
-#
-AC_DEFUN([LC_SRC_STRUCT_POSIX_ACL_XATTR], [
-	LB2_LINUX_TEST_SRC([struct_posix_acl_xattr], [
-		#include <linux/fs.h>
-		#include <linux/posix_acl_xattr.h>
-	],[
-		struct posix_acl_xattr_header *h = NULL;
-		struct posix_acl_xattr_entry  *e;
-		e = (void *)(h + 1);
-	])
-])
-AC_DEFUN([LC_STRUCT_POSIX_ACL_XATTR], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'struct posix_acl_xattr_{header,entry}' defined],
-	[struct_posix_acl_xattr], [
-		AC_DEFINE(HAVE_STRUCT_POSIX_ACL_XATTR, 1,
-			[struct posix_acl_xattr_{header,entry} defined])
-	])
-]) # LC_STRUCT_POSIX_ACL_XATTR
-
-#
-# LC_IOP_XATTR
-#
-# Kernel version 4.8 commit fd50ecaddf8372a1d96e0daeaac0f93cf04e4d42
-# removed {get,set,remove}xattr inode operations
-#
-AC_DEFUN([LC_SRC_IOP_XATTR], [
-	LB2_LINUX_TEST_SRC([inode_ops_xattr], [
-		#include <linux/fs.h>
-	],[
-		struct inode_operations iop;
-		iop.setxattr = NULL;
-		iop.getxattr = NULL;
-		iop.removexattr = NULL;
-	])
-])
-AC_DEFUN([LC_IOP_XATTR], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'inode_operations' has {get,set,remove}xattr members],
-	[inode_ops_xattr], [
-		AC_DEFINE(HAVE_IOP_XATTR, 1,
-			[inode_operations has {get,set,remove}xattr members])
-	])
-]) # LC_IOP_XATTR
-
-#
 # LC_GENL_FAMILY_HAS_RESV_START_OP
 #
 # Linux v5.0-11693-g3b0f31f2b8c9
@@ -855,22 +568,6 @@ AC_DEFUN([LC_GENL_FAMILY_HAS_RESV_START_OP], [
 			[struct genl_family has resv_start_op member])
 	])
 ]) # LC_GENL_FAMILY_HAS_RESV_START_OP
-
-#
-# LC_HAVE_FS_CONTEXT_HEADER
-#
-# Kernel version 5.0-rc2 commit 9bc61ab18b1d41f26dc06b9e6d3c203e65f83fe6
-# vfs: Introduce fs_context, switch vfs_kern_mount() to it.
-#
-AC_DEFUN([LC_SRC_HAVE_FS_CONTEXT_HEADER], [
-	LB2_CHECK_LINUX_HEADER_SRC([linux/fs_context.h], [-Werror])
-])
-AC_DEFUN([LC_HAVE_FS_CONTEXT_HEADER], [
-	LB2_CHECK_LINUX_HEADER_RESULT([linux/fs_context.h], [
-		AC_DEFINE(HAVE_FS_CONTEXT_H, 1,
-			[fs_context.h is present])
-	])
-]) # LC_HAVE_FS_CONTEXT_HEADER
 
 #
 # LC_HAVE_BVEC_ITER_ALL
@@ -3497,27 +3194,8 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_POSIX_ACL_CONFIG
 	LC_SRC_CONFIG_XARRAY_MULTI
 
-	#4.6
-	LC_SRC_HAVE_IN_COMPAT_SYSCALL
-	LC_SRC_HAVE_XATTR_HANDLER_INODE_PARAM
-	LC_SRC_LOCK_PAGE_MEMCG
-	LC_SRC_HAVE_DOWN_WRITE_KILLABLE
-
-	# 4.7
-	LC_SRC_D_IN_LOOKUP
-	LC_SRC_DIRECTIO_2ARGS
-	LC_SRC_GENERIC_WRITE_SYNC_2ARGS
-	LC_SRC_FOP_ITERATE_SHARED
-
-	# 4.8
-	LC_SRC_HAVE_POSIX_ACL_VALID_USER_NS
-	LC_SRC_FULL_NAME_HASH_3ARGS
-	LC_SRC_STRUCT_POSIX_ACL_XATTR
-	LC_SRC_IOP_XATTR
-
 	# 5.0
 	LC_SRC_GENL_FAMILY_HAS_RESV_START_OP
-	LC_SRC_HAVE_FS_CONTEXT_HEADER
 
 	# 5.1
 	LC_SRC_HAVE_BVEC_ITER_ALL
@@ -3706,27 +3384,8 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_POSIX_ACL_CONFIG
 	LC_CONFIG_XARRAY_MULTI
 
-	# 4.6
-	LC_HAVE_IN_COMPAT_SYSCALL
-	LC_HAVE_XATTR_HANDLER_INODE_PARAM
-	LC_LOCK_PAGE_MEMCG
-	LC_HAVE_DOWN_WRITE_KILLABLE
-
-	# 4.7
-	LC_D_IN_LOOKUP
-	LC_DIRECTIO_2ARGS
-	LC_GENERIC_WRITE_SYNC_2ARGS
-	LC_FOP_ITERATE_SHARED
-
-	# 4.8
-	LC_HAVE_POSIX_ACL_VALID_USER_NS
-	LC_FULL_NAME_HASH_3ARGS
-	LC_STRUCT_POSIX_ACL_XATTR
-	LC_IOP_XATTR
-
 	# 5.0
 	LC_GENL_FAMILY_HAS_RESV_START_OP
-	LC_HAVE_FS_CONTEXT_HEADER
 
 	# 5.1
 	LC_HAVE_BVEC_ITER_ALL
@@ -3918,9 +3577,6 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_GLIBC_SUPPORT_COPY_FILE_RANGE
 	LC_OPENSSL_SSK
 	LC_OPENSSL_GETSEPOL
-
-	# 4.8 - Check export
-	LC_EXPORT_DEFAULT_FILE_SPLICE_READ
 
 	# 5.2 - Check export
 	LC_ACCOUNT_PAGE_DIRTIED

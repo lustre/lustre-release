@@ -1336,18 +1336,7 @@ static int vvp_io_write_start(const struct lu_env *env,
 
 		written = result;
 		if (result > 0)
-#ifdef HAVE_GENERIC_WRITE_SYNC_2ARGS
 			result = generic_write_sync(vio->vui_iocb, result);
-#else
-		{
-			ssize_t err;
-
-			err = generic_write_sync(vio->vui_iocb->ki_filp, pos,
-						 result);
-			if (err < 0 && result > 0)
-				result = err;
-		}
-#endif
 	}
 
 	if (result > 0) {

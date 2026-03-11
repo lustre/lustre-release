@@ -221,40 +221,6 @@ static int ll_releasepage(struct page *vmpage, RELEASEPAGE_ARG_TYPE gfp_mask)
 }
 #endif /* HAVE_AOPS_RELEASE_FOLIO */
 
-/* iov_iter_alignment() is introduced in 3.16 similar to HAVE_DIO_ITER */
-#if defined(HAVE_DIO_ITER)
-static unsigned long iov_iter_alignment_vfs(const struct iov_iter *i)
-{
-	return iov_iter_alignment(i);
-}
-#else /* copied from alignment_iovec() */
-static unsigned long iov_iter_alignment_vfs(const struct iov_iter *i)
-{
-	const struct iovec *iov = i->iov;
-	unsigned long res;
-	size_t size = i->count;
-	size_t n;
-
-	if (!size)
-		return 0;
-
-	res = (unsigned long)iov->iov_base + i->iov_offset;
-	n = iov->iov_len - i->iov_offset;
-	if (n >= size)
-		return res | size;
-
-	size -= n;
-	res |= n;
-	while (size > (++iov)->iov_len) {
-		res |= (unsigned long)iov->iov_base | iov->iov_len;
-		size -= iov->iov_len;
-	}
-	res |= (unsigned long)iov->iov_base | size;
-
-	return res;
-}
-#endif
-
 /*
  * Lustre could relax a bit for alignment, io count is not
  * necessary page alignment.
@@ -272,17 +238,17 @@ bool ll_iov_iter_is_unaligned(struct iov_iter *i)
 		return true;
 
 	if (!count)
-		return iov_iter_alignment_vfs(i) & ~PAGE_MASK;
+		return iov_iter_alignment(i) & ~PAGE_MASK;
 
 	if (orig_size > PAGE_SIZE) {
 		iov_iter_truncate(i, orig_size - count);
-		res = iov_iter_alignment_vfs(i);
+		res = iov_iter_alignment(i);
 		iov_iter_reexpand(i, orig_size);
 
 		return res & ~PAGE_MASK;
 	}
 
-	res = iov_iter_alignment_vfs(i);
+	res = iov_iter_alignment(i);
 	/* start address is page aligned */
 	if ((res & ~PAGE_MASK) == orig_size)
 		return false;
@@ -383,8 +349,7 @@ out:
 #define MAX_DIO_SIZE ((MAX_MALLOC / sizeof(struct brw_page) * PAGE_SIZE) & \
 		      ~((size_t)DT_MAX_BRW_SIZE - 1))
 
-static ssize_t
-ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
+static ssize_t ll_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 {
 	struct ll_cl_context *lcc;
 	const struct lu_env *env;
@@ -396,13 +361,13 @@ ll_direct_IO_impl(struct kiocb *iocb, struct iov_iter *iter, int rw)
 	size_t bytes = iov_iter_count(iter);
 	ssize_t tot_bytes = 0, result = 0;
 	loff_t file_offset = iocb->ki_pos;
+	int rw = iov_iter_rw(iter);
 	bool sync_submit = false;
 	bool unaligned;
 	struct vvp_io *vio;
 	ssize_t rc2;
 
 	ENTRY;
-
 	if (file_offset & ~PAGE_MASK)
 		unaligned = true;
 	else
@@ -580,34 +545,6 @@ out:
 
 	RETURN(result);
 }
-
-#ifdef HAVE_DIO_ITER
-static ssize_t ll_direct_IO(struct kiocb *iocb, struct iov_iter *iter
-#ifndef HAVE_DIRECTIO_2ARGS
-	     , loff_t file_offset
-#endif
-	     )
-{
-	int nrw;
-
-	nrw = iov_iter_rw(iter);
-
-	return ll_direct_IO_impl(iocb, iter, nrw);
-}
-
-#else /* !defined(HAVE_DIO_ITER) */
-
-static ssize_t
-ll_direct_IO(int rw, struct kiocb *iocb, const struct iovec *iov,
-	     loff_t file_offset, unsigned long nr_segs)
-{
-	struct iov_iter iter;
-
-	iov_iter_init(&iter, iov, nr_segs, iov_length(iov, nr_segs), 0);
-	return ll_direct_IO_impl(iocb, &iter, rw);
-}
-
-#endif /* !defined(HAVE_DIO_ITER) */
 
 /**
  * ll_prepare_partial_page() - Prepare partially written-to page for a write.

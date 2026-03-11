@@ -24,35 +24,25 @@
 #include "mdd_internal.h"
 
 #ifdef CONFIG_LUSTRE_FS_POSIX_ACL
-
-static inline void lustre_posix_acl_le_to_cpu(posix_acl_xattr_entry *d,
-					      posix_acl_xattr_entry *s)
+static inline void lustre_posix_acl_le_to_cpu(struct posix_acl_xattr_entry *d,
+					      struct posix_acl_xattr_entry *s)
 {
 	d->e_tag = le16_to_cpu(s->e_tag);
 	d->e_perm = le16_to_cpu(s->e_perm);
 	d->e_id = le32_to_cpu(s->e_id);
 }
 
-#if 0
-static inline void lustre_posix_acl_cpu_to_le(posix_acl_xattr_entry *d,
-					      posix_acl_xattr_entry *s)
-{
-	d->e_tag = cpu_to_le16(s->e_tag);
-	d->e_perm = cpu_to_le16(s->e_perm);
-	d->e_id = cpu_to_le32(s->e_id);
-}
-#endif
-
 /*
  * Check permission based on POSIX ACL.
  */
 int lustre_posix_acl_permission(struct lu_ucred *mu, const struct lu_attr *la,
 				unsigned int may_mask,
-				posix_acl_xattr_entry *entry, int count)
+				struct posix_acl_xattr_entry *entry,
+				int count)
 {
-	posix_acl_xattr_entry *pa, *pe, *mask_obj;
-	posix_acl_xattr_entry ae, me;
-	__u16 acl_want;
+	struct posix_acl_xattr_entry *pa, *pe, *mask_obj;
+	struct posix_acl_xattr_entry ae, me;
+	u16 acl_want;
 	int found = 0;
 
 	if (count <= 0)
@@ -132,10 +122,11 @@ check_perm:
 /*
  * Modify the ACL for the chmod.
  */
-int lustre_posix_acl_chmod_masq(posix_acl_xattr_entry *entry, u32 mode,
+int lustre_posix_acl_chmod_masq(struct posix_acl_xattr_entry *entry, u32 mode,
 				int count)
 {
-	posix_acl_xattr_entry *group_obj = NULL, *mask_obj = NULL, *pa, *pe;
+	struct posix_acl_xattr_entry *group_obj = NULL, *mask_obj = NULL;
+	struct posix_acl_xattr_entry *pa, *pe;
 
 	/* There is implicit conversion between S_IRWX modes and ACL_* modes.
 	 * Don't bother explicitly converting them unless they actually change.
@@ -181,11 +172,10 @@ int lustre_posix_acl_chmod_masq(posix_acl_xattr_entry *entry, u32 mode,
  * Returns 0 if the acl can be exactly represented in the traditional
  * file mode permission bits, or else 1. Returns -E... on error.
  */
-int
-lustre_posix_acl_equiv_mode(posix_acl_xattr_entry *entry, mode_t *mode_p,
-			    int count)
+int lustre_posix_acl_equiv_mode(struct posix_acl_xattr_entry *entry,
+				mode_t *mode_p, int count)
 {
-	posix_acl_xattr_entry *pa, *pe;
+	struct posix_acl_xattr_entry *pa, *pe;
 	mode_t mode = 0;
 	int not_equiv = 0;
 
@@ -222,11 +212,11 @@ lustre_posix_acl_equiv_mode(posix_acl_xattr_entry *entry, mode_t *mode_p,
 /*
  * Modify acl when creating a new object.
  */
-int lustre_posix_acl_create_masq(posix_acl_xattr_entry *entry, u32 *pmode,
-				 int count)
+int lustre_posix_acl_create_masq(struct posix_acl_xattr_entry *entry,
+				 u32 *pmode, int count)
 {
-	posix_acl_xattr_entry *group_obj = NULL, *mask_obj = NULL, *pa, *pe;
-	posix_acl_xattr_entry ae;
+	struct posix_acl_xattr_entry *group_obj = NULL, *mask_obj = NULL;
+	struct posix_acl_xattr_entry *pa, *pe, ae;
 	u32 mode = *pmode;
 	int not_equiv = 0;
 

@@ -17,15 +17,15 @@
 #include <linux/fs.h>
 #include <linux/dcache.h>
 #ifdef CONFIG_LUSTRE_FS_POSIX_ACL
-# include <linux/posix_acl_xattr.h>
-# define LUSTRE_POSIX_ACL_MAX_ENTRIES 32
-# define LUSTRE_POSIX_ACL_MAX_SIZE_OLD					\
-	(sizeof(posix_acl_xattr_header) +				\
-	 LUSTRE_POSIX_ACL_MAX_ENTRIES * sizeof(posix_acl_xattr_entry))
-#endif /* CONFIG_LUSTRE_FS_POSIX_ACL */
+#include <linux/posix_acl_xattr.h>
 
-#ifndef LUSTRE_POSIX_ACL_MAX_SIZE_OLD
-# define LUSTRE_POSIX_ACL_MAX_SIZE_OLD 0
-#endif /* LUSTRE_POSIX_ACL_MAX_SIZE */
+#define LUSTRE_POSIX_ACL_MAX_ENTRIES	32
+#define LUSTRE_POSIX_ACL_MAX_SIZE_OLD					\
+	(sizeof(struct posix_acl_xattr_header) +			\
+	 LUSTRE_POSIX_ACL_MAX_ENTRIES * sizeof(struct posix_acl_xattr_entry))
+
+#else /* ! CONFIG_LUSTRE_FS_POSIX_ACL */
+#define LUSTRE_POSIX_ACL_MAX_SIZE_OLD 0
+#endif /* CONFIG_LUSTRE_FS_POSIX_ACL */
 
 #endif

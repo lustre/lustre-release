@@ -4835,9 +4835,6 @@ static int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERT(!dt_object_remote(dt));
 	LASSERT(inode->i_op != NULL);
-#ifdef HAVE_IOP_XATTR
-	LASSERT(inode->i_op->getxattr != NULL);
-#endif
 
 	if (strcmp(name, XATTR_NAME_LOV) == 0 ||
 	    strcmp(name, XATTR_NAME_DEFAULT_LMV) == 0)
@@ -5395,9 +5392,6 @@ static int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(!dt_object_remote(dt));
 	LASSERT(inode->i_op != NULL);
 	LASSERT(handle != NULL);
-#ifdef HAVE_IOP_XATTR
-	LASSERT(inode->i_op->removexattr != NULL);
-#endif
 
 	osd_trans_exec_op(env, handle, OSD_OT_XATTR_SET);
 

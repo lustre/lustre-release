@@ -1401,7 +1401,6 @@ out:
 	RETURN(rc);
 }
 
-#ifdef HAVE_DOWN_WRITE_KILLABLE
 struct semaphore_timer {
 	struct timer_list timer;
 	struct task_struct *task;
@@ -1413,7 +1412,6 @@ static void process_semaphore_timer(struct timer_list *t)
 
 	send_sig(SIGKILL, timeout->task, 1);
 }
-#endif
 
 /* Whether QoS data in pool is up-to-date and balanced. */
 static bool pool_qos_is_usable(struct lod_pool_desc *pool)
@@ -1604,7 +1602,6 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		stripes_per_ost =
 			(lod_comp->llc_stripe_count - 1)/osts->op_count + 1;
 
-#ifdef HAVE_DOWN_WRITE_KILLABLE
 	if (!down_write_trylock(&lod->lod_ost_descs.ltd_qos.lq_rw_sem)) {
 		struct semaphore_timer timer;
 
@@ -1624,10 +1621,7 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			GOTO(out_nolock, rc = -EAGAIN);
 		}
 	}
-#else
-	/* Do actual allocation, use write lock here. */
-	down_write(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
-#endif
+
 	/*
 	 * Check again, while we were sleeping on @lq_rw_sem things could
 	 * change.

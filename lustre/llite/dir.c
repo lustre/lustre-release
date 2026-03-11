@@ -429,8 +429,8 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 		.d_name = {
 			.name = dirname,
 			.len = strlen(dirname),
-			.hash = ll_full_name_hash(dparent, dirname,
-						  strlen(dirname)),
+			.hash = full_name_hash(dparent, dirname,
+					       strlen(dirname)),
 		},
 		.d_sb = dparent->d_sb,
 	};
@@ -2823,7 +2823,7 @@ out_ladvise:
 		}
 
 		/* Get Child from dcache first. */
-		qstr.hash = ll_full_name_hash(parent, name, namelen);
+		qstr.hash = full_name_hash(parent, name, namelen);
 		qstr.name = name;
 		qstr.len = namelen;
 		dchild = d_lookup(parent, &qstr);

@@ -455,13 +455,13 @@ int mdd_compat_fixes(const struct lu_env *env, struct mdd_device *mdd);
 extern int lustre_posix_acl_permission(struct lu_ucred *mu,
 				       const struct lu_attr *la,
 				       unsigned int may_mask,
-				       posix_acl_xattr_entry *entry,
+				       struct posix_acl_xattr_entry *entry,
 				       int count);
-extern int lustre_posix_acl_chmod_masq(posix_acl_xattr_entry *entry,
-				       __u32 mode, int count);
-extern int lustre_posix_acl_create_masq(posix_acl_xattr_entry *entry,
-					__u32 *pmode, int count);
-extern int lustre_posix_acl_equiv_mode(posix_acl_xattr_entry *entry,
+extern int lustre_posix_acl_chmod_masq(struct posix_acl_xattr_entry *entry,
+				       u32 mode, int count);
+extern int lustre_posix_acl_create_masq(struct posix_acl_xattr_entry *entry,
+					u32 *pmode, int count);
+extern int lustre_posix_acl_equiv_mode(struct posix_acl_xattr_entry *entry,
 				       mode_t *mode_p, int count);
 
 /* mdd_mask.c */
