@@ -335,12 +335,12 @@ out:
  */
 int qsd_fetch_index(const struct lu_env *env, struct obd_export *exp,
 		    struct idx_info *ii, unsigned int npages,
-		    struct page **pages, bool *need_swab)
+		    struct folio **folios, bool *need_swab)
 {
-	struct ptlrpc_request	*req;
-	struct idx_info		*req_ii;
+	struct ptlrpc_request *req;
+	struct idx_info *req_ii;
 	struct ptlrpc_bulk_desc *desc;
-	int			 rc, i;
+	int rc, i;
 	ENTRY;
 
 	LASSERT(exp);
@@ -368,8 +368,8 @@ int qsd_fetch_index(const struct lu_env *env, struct obd_export *exp,
 
 	/* req now owns desc and will free it when it gets freed */
 	for (i = 0; i < npages; i++)
-		desc->bd_frag_ops->add_kiov_frag(desc, pages[i], 0,
-						 PAGE_SIZE);
+		desc->bd_frag_ops->add_kiov_frag(desc, folio_page(folios[i], 0),
+						 0, PAGE_SIZE);
 
 	/* pack index information in request */
 	req_ii = req_capsule_client_get(&req->rq_pill, &RMF_IDX_INFO);
