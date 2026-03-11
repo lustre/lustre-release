@@ -4330,7 +4330,7 @@ test_230() {
 		fi
 		$LNETCTL net show -v 1 | grep -q "conns_per_peer: $i" ||
 			error "failed to set conns-per-peer to $i"
-		lnid="$(lctl list_nids | head -n 1)"
+		lnid="$($LCTL list_nids | head -n 1)"
 		do_lnetctl ping "$lnid" ||
 			error "failed to ping myself"
 
