@@ -50,10 +50,6 @@
 #define bio_start_sector(bio) (bio->bi_sector)
 #endif
 
-#ifndef HAVE_BI_OPF
-#define bi_opf bi_rw
-#endif
-
 #ifndef SLAB_MEM_SPREAD
 #define SLAB_MEM_SPREAD		0
 #endif
@@ -135,12 +131,6 @@ static inline int ll_vfs_getattr(struct path *path, struct kstat *st,
 
 	return rc;
 }
-
-#ifndef HAVE_INODE_LOCK
-# define inode_lock(inode) mutex_lock(&(inode)->i_mutex)
-# define inode_unlock(inode) mutex_unlock(&(inode)->i_mutex)
-# define inode_trylock(inode) mutex_trylock(&(inode)->i_mutex)
-#endif
 
 #ifdef HAVE_U64_CAPABILITY
 #define ll_capability_u32(kcap) \

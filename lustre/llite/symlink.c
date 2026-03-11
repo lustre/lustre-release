@@ -20,18 +20,13 @@
 #include "llite_internal.h"
 
 /* Must be called with lli_size_mutex locked */
-/* HAVE_IOP_GET_LINK is defined from kernel 4.5, whereas
+/* iop->get_link is defined from kernel 4.5, whereas
  * IS_ENCRYPTED is brought by kernel 4.14.
  * So there is no need to handle encryption case otherwise.
  */
-#ifdef HAVE_IOP_GET_LINK
 static int ll_readlink_internal(struct inode *inode,
 				struct ptlrpc_request **request,
 				char **symname, struct delayed_call *done)
-#else
-static int ll_readlink_internal(struct inode *inode,
-				struct ptlrpc_request **request, char **symname)
-#endif
 {
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
@@ -40,7 +35,6 @@ static int ll_readlink_internal(struct inode *inode,
 	struct md_op_data *op_data;
 
 	ENTRY;
-
 	*request = NULL;
 
 	if (lli->lli_symlink_name) {
@@ -102,7 +96,6 @@ static int ll_readlink_internal(struct inode *inode,
 		GOTO(failed, rc = -EPROTO);
 	}
 
-#ifdef HAVE_IOP_GET_LINK
 	if (IS_ENCRYPTED(inode)) {
 		const char *target = ll_get_symlink(inode, *symname,
 						    symlen, done);
@@ -117,7 +110,6 @@ static int ll_readlink_internal(struct inode *inode,
 		if (!ll_has_encryption_key(inode))
 			RETURN(0);
 	}
-#endif
 
 	OBD_ALLOC(lli->lli_symlink_name, symlen);
 	/* do not return an error if we cannot cache the symlink locally */
@@ -131,60 +123,11 @@ failed:
 	RETURN(rc);
 }
 
-#ifdef HAVE_SYMLINK_OPS_USE_NAMEIDATA
-static void ll_put_link(struct dentry *dentry,
-			struct nameidata *nd, void *cookie)
-#else
-# ifdef HAVE_IOP_GET_LINK
 static void ll_put_link(void *cookie)
-# else
-static void ll_put_link(struct inode *unused, void *cookie)
-# endif
-#endif
 {
 	ptlrpc_req_put(cookie);
 }
 
-#ifdef HAVE_SYMLINK_OPS_USE_NAMEIDATA
-static void *ll_follow_link(struct dentry *dentry, struct nameidata *nd)
-{
-	struct inode *inode = dentry->d_inode;
-	struct ptlrpc_request *request = NULL;
-	int rc;
-	char *symname = NULL;
-
-	ENTRY;
-
-	CDEBUG(D_VFSTRACE, "VFS Op\n");
-	/*
-	 * Limit the recursive symlink depth to 5 instead of default
-	 * 8 links when kernel has 4k stack to prevent stack overflow.
-	 * For 8k stacks we need to limit it to 7 for local servers.
-	 */
-	if (THREAD_SIZE < 8192 && current->link_count >= 6) {
-		rc = -ELOOP;
-	} else if (THREAD_SIZE == 8192 && current->link_count >= 8) {
-		rc = -ELOOP;
-	} else {
-		ll_inode_size_lock(inode);
-		rc = ll_readlink_internal(inode, &request, &symname);
-		ll_inode_size_unlock(inode);
-	}
-	if (rc) {
-		ptlrpc_req_put(request);
-		request = NULL;
-		symname = ERR_PTR(rc);
-	}
-
-	nd_set_link(nd, symname);
-	/*
-	 * symname may contain a pointer to the request message buffer,
-	 * we delay request releasing until ll_put_link then.
-	 */
-	RETURN(request);
-}
-#else
-# ifdef HAVE_IOP_GET_LINK
 static const char *ll_get_link(struct dentry *dentry,
 			       struct inode *inode,
 			       struct delayed_call *done)
@@ -213,34 +156,6 @@ static const char *ll_get_link(struct dentry *dentry,
 	set_delayed_call(done, ll_put_link, request);
 	RETURN(symname);
 }
-# else
-static const char *ll_follow_link(struct dentry *dentry, void **cookie)
-{
-	struct inode *inode = d_inode(dentry);
-	struct ptlrpc_request *request;
-	char *symname = NULL;
-	int rc;
-
-	ENTRY;
-
-	CDEBUG(D_VFSTRACE, "VFS Op\n");
-	ll_inode_size_lock(inode);
-	rc = ll_readlink_internal(inode, &request, &symname);
-	ll_inode_size_unlock(inode);
-	if (rc < 0) {
-		ptlrpc_req_put(request);
-		return ERR_PTR(rc);
-	}
-
-	/*
-	 * symname may contain a pointer to the request message buffer,
-	 * we delay request releasing until ll_put_link then.
-	 */
-	*cookie = request;
-	RETURN(symname);
-}
-# endif /* HAVE_IOP_GET_LINK */
-#endif /* HAVE_SYMLINK_OPS_USE_NAMEIDATA */
 
 /**
  * ll_getattr_link() - link-specific getattr to set the correct st_size
@@ -305,12 +220,7 @@ static int ll_getattr_link(
 
 const struct inode_operations ll_fast_symlink_inode_operations = {
 	.setattr	= ll_setattr,
-#ifdef HAVE_IOP_GET_LINK
 	.get_link	= ll_get_link,
-#else
-	.follow_link	= ll_follow_link,
-	.put_link	= ll_put_link,
-#endif
 	.getattr	= ll_getattr_link,
 	.permission	= ll_inode_permission,
 #ifdef HAVE_IOP_XATTR

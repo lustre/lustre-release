@@ -582,11 +582,7 @@ out:
 }
 
 #ifdef HAVE_DIO_ITER
-static ssize_t ll_direct_IO(
-#ifndef HAVE_IOV_ITER_RW
-	     int rw,
-#endif
-	     struct kiocb *iocb, struct iov_iter *iter
+static ssize_t ll_direct_IO(struct kiocb *iocb, struct iov_iter *iter
 #ifndef HAVE_DIRECTIO_2ARGS
 	     , loff_t file_offset
 #endif
@@ -594,11 +590,7 @@ static ssize_t ll_direct_IO(
 {
 	int nrw;
 
-#ifndef HAVE_IOV_ITER_RW
-	nrw = rw;
-#else
 	nrw = iov_iter_rw(iter);
-#endif
 
 	return ll_direct_IO_impl(iocb, iter, nrw);
 }

@@ -3227,7 +3227,6 @@ static int osd_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 			if (rc)
 				RETURN(rc);
 		}
-#ifdef HAVE_PROJECT_QUOTA
 		if (attr->la_valid & LA_PROJID) {
 			projid = i_projid_read(obj->oo_inode);
 			rc = osd_declare_attr_qid(env, obj, oh, bspace, projid,
@@ -3237,7 +3236,7 @@ static int osd_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 			if (rc)
 				RETURN(rc);
 		}
-#endif
+
 		CDEBUG(D_QUOTA,
 		       "declare UID %u->%u GID %u->%u PROJID %u->%u bspace=%llu\n",
 		       uid, attr->la_uid, gid, attr->la_gid,
@@ -3321,7 +3320,6 @@ static int osd_inode_setattr(const struct lu_env *env,
 	return 0;
 }
 
-#ifdef HAVE_PROJECT_QUOTA
 static int osd_transfer_project(struct inode *inode, __u32 projid,
 				struct thandle *handle)
 {
@@ -3384,7 +3382,6 @@ static int osd_transfer_project(struct inode *inode, __u32 projid,
 
 	return err;
 }
-#endif
 
 static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr,
 			      struct thandle *handle)
@@ -3424,11 +3421,8 @@ static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr,
 	    attr->la_projid != i_projid_read(inode)) {
 		if (!projid_valid(make_kprojid(&init_user_ns, attr->la_projid)))
 			return -EINVAL;
-#ifdef HAVE_PROJECT_QUOTA
+
 		rc = osd_transfer_project(inode, attr->la_projid, handle);
-#else
-		rc = -ENOTSUPP;
-#endif
 		if (rc) {
 			CERROR("%s: quota transfer failed. Is project enforcement enabled on the ldiskfs filesystem? rc = %d\n",
 			       osd_ino2name(inode), rc);
@@ -4439,7 +4433,6 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 	unlock_new_inode(local);
 
 	/* Agent inode should not have project ID */
-#ifdef	HAVE_PROJECT_QUOTA
 	if (LDISKFS_I(pobj->oo_inode)->i_flags & LUSTRE_PROJINHERIT_FL &&
 	    i_projid_read(pobj->oo_inode) != 0) {
 		rc = osd_transfer_project(local, 0, th);
@@ -4449,7 +4442,7 @@ static struct inode *osd_create_local_agent_inode(const struct lu_env *env,
 			RETURN(ERR_PTR(rc));
 		}
 	}
-#endif
+
 	/* Set special LMA flag for local agent inode */
 	rc = osd_ea_fid_set(info, local, fid, 0, LMAI_AGENT);
 	if (rc != 0) {
@@ -6718,7 +6711,6 @@ static int osd_index_declare_ea_insert(const struct lu_env *env,
 		if (rc)
 			RETURN(rc);
 
-#ifdef HAVE_PROJECT_QUOTA
 		/*
 		 * Reserve credits for local agent inode to transfer
 		 * to 0, quota enforcement is ignored in this case.
@@ -6729,7 +6721,6 @@ static int osd_index_declare_ea_insert(const struct lu_env *env,
 			rc = osd_declare_attr_qid(env, osd_dt_obj(dt), oh,
 						  0, i_projid_read(inode),
 						  0, false, PRJQUOTA);
-#endif
 	}
 
 	RETURN(rc);

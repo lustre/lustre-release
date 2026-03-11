@@ -22,13 +22,6 @@
 #include <linux/backing-dev.h>
 #include <linux/pagemap.h>
 
-#ifndef HAVE_FILE_DENTRY
-static inline struct dentry *file_dentry(const struct file *file)
-{
-	return file->f_path.dentry;
-}
-#endif
-
 #ifndef S_DT_SHIFT
 #define S_DT_SHIFT		12
 #endif

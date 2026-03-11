@@ -289,15 +289,7 @@ static int ctx_unlist_kr(struct ptlrpc_cli_ctx *ctx, int locked)
 static void *
 key_get_payload(struct key *key, unsigned int index)
 {
-	void *key_ptr = NULL;
-
-#ifdef HAVE_KEY_PAYLOAD_DATA_ARRAY
-	key_ptr = key->payload.data[index];
-#else
-	if (!index)
-		key_ptr = key->payload.data;
-#endif
-	return key_ptr;
+	return key->payload.data[index];
 }
 
 /*
@@ -308,13 +300,8 @@ static int key_set_payload(struct key *key, unsigned int index,
 {
 	int rc = -EINVAL;
 
-#ifdef HAVE_KEY_PAYLOAD_DATA_ARRAY
 	if (index < 4) {
 		key->payload.data[index] = ctx;
-#else
-	if (!index) {
-		key->payload.data = ctx;
-#endif
 		rc = 0;
 	}
 	return rc;

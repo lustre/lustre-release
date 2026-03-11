@@ -93,11 +93,6 @@ extern struct kmem_cache *dynlock_cachep;
 /* Default extent bytes when declaring write commit */
 #define OSD_DEFAULT_EXTENT_BYTES	(1U << 20)
 
-/* check if ldiskfs support project quota */
-#if LDISKFS_MAXQUOTAS < 3
-#undef HAVE_PROJECT_QUOTA
-#endif
-
 #define OBD_BRW_MAPPED	OBD_BRW_LOCAL1
 
 struct osd_directory {
@@ -1070,28 +1065,17 @@ const struct dt_rec *osd_quota_pack(struct osd_object *obj,
 				    union lquota_rec *quota_rec);
 void osd_quota_unpack(struct osd_object *obj, const struct dt_rec *rec);
 
-#ifdef HAVE_PROJECT_QUOTA
-static inline __u32 i_projid_read(struct inode *inode)
+static inline u32 i_projid_read(struct inode *inode)
 {
-	return (__u32)from_kprojid(&init_user_ns, LDISKFS_I(inode)->i_projid);
+	return (u32)from_kprojid(&init_user_ns, LDISKFS_I(inode)->i_projid);
 }
 
-static inline void i_projid_write(struct inode *inode, __u32 projid)
+static inline void i_projid_write(struct inode *inode, u32 projid)
 {
 	kprojid_t kprojid;
 	kprojid = make_kprojid(&init_user_ns, (projid_t)projid);
 	LDISKFS_I(inode)->i_projid = kprojid;
 }
-#else
-static inline uid_t i_projid_read(struct inode *inode)
-{
-	return 0;
-}
-static inline void i_projid_write(struct inode *inode, __u32 projid)
-{
-	return;
-}
-#endif
 
 #ifdef HAVE_LDISKFS_IGET_WITH_FLAGS
 # define osd_ldiskfs_iget(sb, inum, flags)				\
@@ -1728,15 +1712,6 @@ void osd_trunc_unlock_all(const struct lu_env *env, struct list_head *list);
 int osd_process_truncates(const struct lu_env *env, struct list_head *list);
 void osd_execute_truncate(struct osd_object *obj);
 
-#ifndef HAVE___BI_CNT
-#define __bi_cnt bi_cnt
-#endif
-
-#ifndef HAVE_CLEAN_BDEV_ALIASES
-#define clean_bdev_aliases(bdev, block, len)	\
-	unmap_underlying_metadata((bdev), (block))
-#endif
-
 /*
  * Maximum size of xattr attributes for FEATURE_INCOMPAT_EA_INODE 1Mb
  * This limit is arbitrary, but is reasonable for the xattr API.
@@ -1767,23 +1742,15 @@ void osd_bio_integrity_verify_fn(struct work_struct *work);
 #if IS_ENABLED(CONFIG_BLK_DEV_INTEGRITY)
 static inline unsigned short blk_integrity_interval(struct blk_integrity *bi)
 {
-#ifdef HAVE_INTERVAL_EXP_BLK_INTEGRITY
 	return bi->interval_exp ? 1 << bi->interval_exp : 0;
-#elif defined(HAVE_INTERVAL_BLK_INTEGRITY)
-	return bi->interval;
-#else
-	return bi->sector_size;
-#endif /* !HAVE_INTERVAL_EXP_BLK_INTEGRITY */
 }
 
 static inline const char *blk_integrity_name(struct blk_integrity *bi)
 {
 #ifdef HAVE_BLK_INTEGRITY_NOVERIFY
 	return blk_integrity_profile_name(bi);
-#elif defined HAVE_INTERVAL_EXP_BLK_INTEGRITY
-	return bi->profile->name;
 #else
-	return bi->name;
+	return bi->profile->name;
 #endif
 }
 
@@ -1842,7 +1809,7 @@ static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
 	if (rw == 1 && INTEGRITY_WRITE(bi->flags))
 		return true;
 
-#elif defined HAVE_INTERVAL_EXP_BLK_INTEGRITY
+#else
 	if (rw == 0 && bi->profile->verify_fn != NULL &&
 	    INTEGRITY_READ(bi->flags))
 		return true;
@@ -1850,13 +1817,7 @@ static inline bool bdev_integrity_enabled(struct block_device *bdev, int rw)
 	if (rw == 1 && bi->profile->generate_fn != NULL &&
 	    INTEGRITY_WRITE(bi->flags))
 		return true;
-#else
-	if (rw == 0 && bi->verify_fn != NULL && INTEGRITY_READ(bi->flags))
-		return true;
-
-	if (rw == 1 && bi->generate_fn != NULL && INTEGRITY_WRITE(bi->flags))
-		return true;
-#endif /* !HAVE_INTERVAL_EXP_BLK_INTEGRITY */
+#endif /* !HAVE_BLK_INTEGRITY_NOVERIFY */
 #endif /* !CONFIG_BLK_DEV_INTEGRITY */
 
 	return false;

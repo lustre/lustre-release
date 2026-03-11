@@ -79,15 +79,14 @@ int osd_acct_obj_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			le32_to_cpu(LDISKFS_SB(sb)->s_es->s_grp_quota_inum);
 		break;
 	case PRJQUOTA:
-#ifdef HAVE_PROJECT_QUOTA
 		if (ldiskfs_has_feature_project(sb)) {
 			__le32 prj_quota;
 
 			prj_quota = LDISKFS_SB(sb)->s_es->s_prj_quota_inum;
 			id->oii_ino = le32_to_cpu(prj_quota);
-		} else
-#endif
+		} else {
 			RETURN(-ENOENT);
+		}
 		break;
 	}
 
@@ -676,7 +675,6 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 		/* as before, ignore EDQUOT & EINPROGRESS for root */
 		rcg = 0;
 
-#ifdef HAVE_PROJECT_QUOTA
 	if (rcg && (rcg != -EDQUOT || local_flags == NULL))
 		RETURN(rcg);
 
@@ -705,7 +703,6 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 		/* as before, ignore EDQUOT & EINPROGRESS for root */
 		rcp = 0;
 	}
-#endif
 
 	RETURN(rcu ? rcu : (rcg ? rcg : rcp));
 }

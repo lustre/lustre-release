@@ -43,11 +43,7 @@
 
 struct kmem_cache *biop_cachep;
 
-#ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
 static void dio_complete_routine(struct bio *bio);
-#else
-static void dio_complete_routine(struct bio *bio, int error);
-#endif
 
 static int osd_bio_init(struct bio *bio, struct osd_iobuf *iobuf,
 			int start_page_idx)
@@ -242,14 +238,9 @@ void osd_bio_fini(struct bio *bio)
 	osd_bio_uninit(bio);
 }
 
-#ifdef HAVE_BIO_ENDIO_USES_ONE_ARG
 static void dio_complete_routine(struct bio *bio)
 {
 	int error = blk_status_to_errno(bio->bi_status);
-#else
-static void dio_complete_routine(struct bio *bio, int error)
-{
-#endif
 	struct osd_bio_private *bio_private = bio->bi_private;
 	struct osd_iobuf *iobuf = bio_private->obp_iobuf;
 	struct bio_vec *bvl;
@@ -367,12 +358,8 @@ static int osd_submit_bio(struct osd_device *osd,
 
 	record_start_io(iobuf, bi_size);
 
-#ifdef HAVE_SUBMIT_BIO_2ARGS
-	submit_bio(iobuf->dr_rw ? WRITE : READ, bio);
-#else
 	bio->bi_opf |= iobuf->dr_rw;
 	submit_bio(bio);
-#endif
 out:
 	return rc;
 }

@@ -669,14 +669,13 @@ int krb5_encrypt_bulk(struct crypto_sync_skcipher *tfm,
 	skcipher_request_set_crypt(req, sg_src.sgl, sg_dst.sgl,
 				   blocksize, local_iv);
 
-	rc = crypto_skcipher_encrypt_iv(req, sg_dst.sgl, sg_src.sgl, blocksize);
+	rc = crypto_skcipher_encrypt(req);
 
 	gss_teardown_sgtable(&sg_dst);
 	gss_teardown_sgtable(&sg_src);
 
 	if (rc) {
 		CERROR("error to encrypt confounder: %d\n", rc);
-		skcipher_request_zero(req);
 		return rc;
 	}
 
@@ -699,34 +698,28 @@ int krb5_encrypt_bulk(struct crypto_sync_skcipher *tfm,
 
 		skcipher_request_set_crypt(req, &src, &dst,
 					  src.length, local_iv);
-		rc = crypto_skcipher_encrypt_iv(req, &dst, &src, src.length);
+		rc = crypto_skcipher_encrypt(req);
 		if (rc) {
 			CERROR("error to encrypt page: %d\n", rc);
-			skcipher_request_zero(req);
 			return rc;
 		}
 	}
 
 	/* encrypt krb5 header */
 	rc = gss_setup_sgtable(&sg_src, &src, khdr, sizeof(*khdr));
-	if (rc != 0) {
-		skcipher_request_zero(req);
+	if (rc != 0)
 		return rc;
-	}
 
 	rc = gss_setup_sgtable(&sg_dst, &dst, cipher->data + blocksize,
 			   sizeof(*khdr));
 	if (rc != 0) {
 		gss_teardown_sgtable(&sg_src);
-		skcipher_request_zero(req);
 		return rc;
 	}
 
 	skcipher_request_set_crypt(req, sg_src.sgl, sg_dst.sgl,
 				   sizeof(*khdr), local_iv);
-	rc = crypto_skcipher_encrypt_iv(req, sg_dst.sgl, sg_src.sgl,
-					sizeof(*khdr));
-	skcipher_request_zero(req);
+	rc = crypto_skcipher_encrypt(req);
 
 	gss_teardown_sgtable(&sg_dst);
 	gss_teardown_sgtable(&sg_src);
@@ -804,14 +797,13 @@ int krb5_decrypt_bulk(struct crypto_sync_skcipher *tfm,
 	skcipher_request_set_crypt(req, sg_src.sgl, sg_dst.sgl,
 				   blocksize, local_iv);
 
-	rc = crypto_skcipher_decrypt_iv(req, sg_dst.sgl, sg_src.sgl, blocksize);
+	rc = crypto_skcipher_decrypt(req);
 
 	gss_teardown_sgtable(&sg_dst);
 	gss_teardown_sgtable(&sg_src);
 
 	if (rc) {
 		CERROR("error to decrypt confounder: %d\n", rc);
-		skcipher_request_zero(req);
 		return rc;
 	}
 
@@ -823,7 +815,6 @@ int krb5_decrypt_bulk(struct crypto_sync_skcipher *tfm,
 			       i, desc->bd_enc_vec[i].bv_offset,
 			       desc->bd_enc_vec[i].bv_len,
 			       blocksize);
-			skcipher_request_zero(req);
 			return -EFAULT;
 		}
 
@@ -862,10 +853,9 @@ int krb5_decrypt_bulk(struct crypto_sync_skcipher *tfm,
 
 		skcipher_request_set_crypt(req, sg_src.sgl, sg_dst.sgl,
 					   src.length, local_iv);
-		rc = crypto_skcipher_decrypt_iv(req, &dst, &src, src.length);
+		rc = crypto_skcipher_decrypt(req);
 		if (rc) {
 			CERROR("error to decrypt page: %d\n", rc);
-			skcipher_request_zero(req);
 			return rc;
 		}
 
@@ -885,14 +875,12 @@ int krb5_decrypt_bulk(struct crypto_sync_skcipher *tfm,
 	if (unlikely(ct_nob != desc->bd_nob_transferred)) {
 		CERROR("%d cipher text transferred but only %d decrypted\n",
 		       desc->bd_nob_transferred, ct_nob);
-		skcipher_request_zero(req);
 		return -EFAULT;
 	}
 
 	if (unlikely(!adj_nob && pt_nob != desc->bd_nob)) {
 		CERROR("%d plain text expected but only %d received\n",
 		       desc->bd_nob, pt_nob);
-		skcipher_request_zero(req);
 		return -EFAULT;
 	}
 
@@ -916,12 +904,11 @@ int krb5_decrypt_bulk(struct crypto_sync_skcipher *tfm,
 
 	skcipher_request_set_crypt(req, sg_src.sgl, sg_dst.sgl,
 				  src.length, local_iv);
-	rc = crypto_skcipher_decrypt_iv(req, sg_dst.sgl, sg_src.sgl,
-					sizeof(*khdr));
+	rc = crypto_skcipher_decrypt(req);
+
 	gss_teardown_sgtable(&sg_src);
 	gss_teardown_sgtable(&sg_dst);
 
-	skcipher_request_zero(req);
 	if (rc) {
 		CERROR("error to decrypt tail: %d\n", rc);
 		return rc;

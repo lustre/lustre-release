@@ -16,9 +16,6 @@
 
 #include <linux/types.h>
 #include <linux/security.h>
-#ifdef HAVE_LINUX_SELINUX_IS_ENABLED
-#include <linux/selinux.h>
-#endif
 #include <linux/xattr.h>
 #include "llite_internal.h"
 

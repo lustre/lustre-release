@@ -642,14 +642,12 @@ static __u32 sk_encrypt_bulk(struct crypto_sync_skcipher *tfm, __u8 *iv,
 		desc->bd_enc_vec[i].bv_len = ctxt.length;
 
 		skcipher_request_set_crypt(req, &ptxt, &ctxt, ptxt.length, iv);
-		rc = crypto_skcipher_encrypt_iv(req, &ctxt, &ptxt, ptxt.length);
+		rc = crypto_skcipher_encrypt(req);
 		if (rc) {
 			CERROR("failed to encrypt page: %d\n", rc);
-			skcipher_request_zero(req);
 			return rc;
 		}
 	}
-	skcipher_request_zero(req);
 
 	if (adj_nob)
 		desc->bd_nob = nob;
@@ -691,7 +689,6 @@ static __u32 sk_decrypt_bulk(struct crypto_sync_skcipher *tfm, __u8 *iv,
 		if (ciov->bv_offset % blocksize != 0 ||
 		    ciov->bv_len % blocksize != 0) {
 			CERROR("Invalid bulk descriptor vector\n");
-			skcipher_request_zero(req);
 			return GSS_S_DEFECTIVE_TOKEN;
 		}
 
@@ -715,7 +712,6 @@ static __u32 sk_decrypt_bulk(struct crypto_sync_skcipher *tfm, __u8 *iv,
 			if (ciov->bv_len + cnob > desc->bd_nob_transferred ||
 			    piov->bv_len > ciov->bv_len) {
 				CERROR("Invalid decrypted length\n");
-				skcipher_request_zero(req);
 				return GSS_S_FAILURE;
 			}
 		}
@@ -735,10 +731,9 @@ static __u32 sk_decrypt_bulk(struct crypto_sync_skcipher *tfm, __u8 *iv,
 			sg_assign_page(&ptxt, piov->bv_page);
 
 		skcipher_request_set_crypt(req, &ctxt, &ptxt, ptxt.length, iv);
-		rc = crypto_skcipher_decrypt_iv(req, &ptxt, &ctxt, ptxt.length);
+		rc = crypto_skcipher_decrypt(req);
 		if (rc) {
 			CERROR("Decryption failed for page: %d\n", rc);
-			skcipher_request_zero(req);
 			return GSS_S_FAILURE;
 		}
 
@@ -753,7 +748,6 @@ static __u32 sk_decrypt_bulk(struct crypto_sync_skcipher *tfm, __u8 *iv,
 		cnob += ciov->bv_len;
 		pnob += piov->bv_len;
 	}
-	skcipher_request_zero(req);
 
 	/* if needed, clear up the rest unused iovs */
 	if (adj_nob)

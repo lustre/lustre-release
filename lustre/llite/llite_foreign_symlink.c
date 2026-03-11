@@ -300,16 +300,7 @@ failed:
 	RETURN(rc);
 }
 
-#ifdef HAVE_SYMLINK_OPS_USE_NAMEIDATA
-static void ll_foreign_put_link(struct dentry *dentry,
-			struct nameidata *nd, void *cookie)
-#else
-# ifdef HAVE_IOP_GET_LINK
 static void ll_foreign_put_link(void *cookie)
-# else
-static void ll_foreign_put_link(struct inode *unused, void *cookie)
-# endif
-#endif
 {
 	/* to avoid allocating an unnecessary big buffer, and since ways to
 	 * build the symlink path from foreign LOV/LMV can be multiple and
@@ -320,37 +311,6 @@ static void ll_foreign_put_link(struct inode *unused, void *cookie)
 	OBD_FREE_LARGE(cookie, strlen(cookie) + 1);
 }
 
-#ifdef HAVE_SYMLINK_OPS_USE_NAMEIDATA
-static void *ll_foreign_follow_link(struct dentry *dentry,
-				      struct nameidata *nd)
-{
-	struct inode *inode = dentry->d_inode;
-	int rc;
-	char *symname = NULL;
-
-	ENTRY;
-
-	CDEBUG(D_VFSTRACE, "VFS Op\n");
-	/*
-	 * Limit the recursive symlink depth to 5 instead of default
-	 * 8 links when kernel has 4k stack to prevent stack overflow.
-	 * For 8k stacks we need to limit it to 7 for local servers.
-	 */
-	if (THREAD_SIZE < 8192 && current->link_count >= 6)
-		rc = -ELOOP;
-	else if (THREAD_SIZE == 8192 && current->link_count >= 8)
-		rc = -ELOOP;
-	else
-		rc = ll_foreign_readlink_internal(inode, &symname);
-
-	if (rc)
-		symname = ERR_PTR(rc);
-
-	nd_set_link(nd, symname);
-	RETURN(symname);
-}
-
-#elif defined(HAVE_IOP_GET_LINK)
 static const char *ll_foreign_get_link(struct dentry *dentry,
 				       struct inode *inode,
 				       struct delayed_call *done)
@@ -374,30 +334,6 @@ static const char *ll_foreign_get_link(struct dentry *dentry,
 	set_delayed_call(done, ll_foreign_put_link, symname);
 	RETURN(rc ? ERR_PTR(rc) : symname);
 }
-
-# else /* !HAVE_IOP_GET_LINK */
-static const char *ll_foreign_follow_link(struct dentry *dentry,
-					    void **cookie)
-{
-	struct inode *inode = d_inode(dentry);
-	char *symname = NULL;
-	int rc;
-
-	ENTRY;
-
-	CDEBUG(D_VFSTRACE, "VFS Op\n");
-	rc = ll_foreign_readlink_internal(inode, &symname);
-	if (rc < 0)
-		return ERR_PTR(rc);
-
-	/* XXX need to also return symname in cookie in order to delay
-	 * its release ??
-	 */
-
-	RETURN(symname);
-}
-
-#endif /* HAVE_SYMLINK_OPS_USE_NAMEIDATA, HAVE_IOP_GET_LINK */
 
 /*
  * Should only be called for already in-use/cache foreign dir inode
@@ -795,13 +731,7 @@ static int ll_foreign_symlink_getattr(
 
 struct inode_operations ll_foreign_file_symlink_inode_operations = {
 	.setattr	= ll_setattr,
-#ifdef HAVE_IOP_GET_LINK
 	.get_link	= ll_foreign_get_link,
-#else
-	.follow_link	= ll_foreign_follow_link,
-	/* .put_link method required since need to release symlink copy buf */
-	.put_link	= ll_foreign_put_link,
-#endif
 	.getattr	= ll_foreign_symlink_getattr,
 	.permission	= ll_inode_permission,
 #ifdef HAVE_IOP_XATTR
@@ -818,12 +748,7 @@ struct inode_operations ll_foreign_dir_symlink_inode_operations = {
 	.readlink	= generic_readlink,
 #endif
 	.setattr	= ll_setattr,
-#ifdef HAVE_IOP_GET_LINK
 	.get_link	= ll_foreign_get_link,
-#else
-	.follow_link	= ll_foreign_follow_link,
-	.put_link	= ll_foreign_put_link,
-#endif
 	.getattr	= ll_foreign_symlink_getattr,
 	.permission	= ll_inode_permission,
 #ifdef HAVE_IOP_XATTR

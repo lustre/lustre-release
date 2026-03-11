@@ -235,11 +235,10 @@ int gss_crypt_generic(struct crypto_sync_skcipher *tfm, int decrypt,
 	skcipher_request_set_crypt(req, &sg, &sg, length, local_iv);
 
 	if (decrypt)
-		ret = crypto_skcipher_decrypt_iv(req, &sg, &sg, length);
+		ret = crypto_skcipher_decrypt(req);
 	else
-		ret = crypto_skcipher_encrypt_iv(req, &sg, &sg, length);
+		ret = crypto_skcipher_encrypt(req);
 
-	skcipher_request_zero(req);
 	gss_teardown_sgtable(&sg_out);
 out:
 	return ret;
@@ -406,30 +405,22 @@ int gss_crypt_rawobjs(struct crypto_sync_skcipher *tfm, __u8 *iv,
 		}
 
 		skcipher_request_set_crypt(req, &src, &dst, src.length, iv);
-		if (!iv) {
-			skcipher_request_set_crypt_iv(req);
-		}
-
 		if (enc)
-			rc = crypto_skcipher_encrypt_iv(req, &dst, &src,
-							src.length);
+			rc = crypto_skcipher_encrypt(req);
 		else
-			rc = crypto_skcipher_decrypt_iv(req, &dst, &src,
-							src.length);
+			rc = crypto_skcipher_decrypt(req);
 
 		gss_teardown_sgtable(&sg_src);
 		gss_teardown_sgtable(&sg_dst);
 
 		if (rc) {
 			CERROR("encrypt error %d\n", rc);
-			skcipher_request_zero(req);
 			RETURN(rc);
 		}
 
 		datalen += inobjs[i].len;
 		buf += inobjs[i].len;
 	}
-	skcipher_request_zero(req);
 
 	outobj->len = datalen;
 	RETURN(0);

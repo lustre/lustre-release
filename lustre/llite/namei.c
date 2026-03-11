@@ -633,11 +633,7 @@ struct dentry *ll_splice_alias(struct inode *inode, struct dentry *de)
 	 */
 	if (inode && S_ISDIR(inode->i_mode) &&
 	    ll_sbi_has_foreign_symlink(ll_i2sbi(inode)) &&
-#ifdef HAVE_IOP_GET_LINK
 	    inode->i_op->get_link) {
-#else
-	    inode->i_op->follow_link) {
-#endif
 		CDEBUG(D_INFO,
 		       "%s: inode "DFID": faking foreign dir as a symlink\n",
 		       ll_i2sbi(inode)->ll_fsname, PFID(ll_inode2fid(inode)));
