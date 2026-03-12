@@ -154,7 +154,7 @@ static void usage_query(void)
 		"usage:\n"
 		"lfsck_query [-M | --device MDT_device] [-h | --help]\n"
 		"            [-t | --type check_type[,check_type...]]\n"
-		"            [-t | --wait]\n"
+		"            [-w | --wait]\n"
 		"options:\n"
 		"-M: device to query LFSCK on\n"
 		"-t: LFSCK type(s) to be queried (default is all)\n"
