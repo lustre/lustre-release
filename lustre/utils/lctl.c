@@ -73,14 +73,11 @@ command_t changelog_cmdlist[] = {
 	{.pc_name = "register", .pc_func = jt_changelog_register,
 	 .pc_help = "register a new persistent changelog user, returns id\n"
 	 "usage: {--device MDTNAME} changelog register [--help|-h]\n"
-	 "					       [--mask|-m MASK]\n"
-	 "					       [--nameonly|-n]\n"
-	 "					       [--user|-u USERNAME]"},
+	 "       [--mask|-m MASK] [--nameonly|-n] [--user|-u USERNAME]"},
 	{.pc_name = "deregister", .pc_func = jt_changelog_deregister,
 	 .pc_help = "deregister an existing changelog user\n"
 	 "usage: {--device MDTNAME} changelog deregister [ID|clID]\n"
-	 "						 [--help|-h]\n"
-	 "						 [--user|-u USERNAME]"},
+	 "       [--help|-h] [--user|-u USERNAME]"},
 	{.pc_help = NULL }
 };
 JT_SUBCMD(changelog);
@@ -702,15 +699,12 @@ command_t cmdlist[] = {
 	{"===  Changelogs ==", NULL, 0, "changelog user management"},
 	{"changelog_register", jt_changelog_register, 0,
 	 "register a new persistent changelog user, returns id\n"
-	 "usage: {--device MDTNAME} changelog_register [--help|-h]\n"
-	 "					       [--mask|-m MASK]\n"
-	 "					       [--nameonly|-n]\n"
-	 "					       [--user|-u USERNAME]"},
+	 "usage: {--device MDTNAME} changelog_register [--help|-h] [--mask|-m MASK]\n"
+	 "       [--nameonly|-n] [--user|-u USERNAME]"},
 	{"changelog_deregister", jt_changelog_deregister, 0,
 	 "deregister an existing changelog user\n"
-	 "usage: {--device MDTNAME} changelog_deregister [ID|clID]\n"
-	 "						 [--help|-h]\n"
-	 "						 [--user|-u USERNAME]"},
+	 "usage: {--device MDTNAME} changelog_deregister [ID|clID] [--help|-h]\n"
+	 "       [--user|-u USERNAME]"},
 	{"changelog", jt_changelog, changelog_cmdlist, ""},
 
 	/* Persistent Client Cache (PCC) commands */
