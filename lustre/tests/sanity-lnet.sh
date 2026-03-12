@@ -4042,42 +4042,56 @@ check_route_aliveness() {
 	timeout=$(cat /sys/module/lnet/parameters/router_ping_timeout)
 
 	# Router may delay start for chk_intvl + timeout, so wait for 2x this
-	# amount of time
+	local lctl_cmd="do_node $node $LCTL show_route"
+	local lnetctl_cmd="do_node $node $LNETCTL route show -v"
+	local debugfs_cmd="do_node $node $LCTL get_param -n routes"
 	local max_wait=$((2 * (chk_intvl + timeout)))
 	local waited=0
 	local begin=$SECONDS
+	local got_expected=false
 
+	echo "waiting up to $max_wait seconds for route status agreement"
 	while ((waited <= max_wait)); do
-		lctl_status=$(do_node $node $LCTL show_route |
-			      awk '{print $7}' | sort -u | xargs)
-		lnetctl_status=$(do_node $node $LNETCTL route show -v |
-				 awk '/state/{print $NF}' | sort -u | xargs)
-		debugfs_status=$(do_node $node $LCTL get_param -n routes |
-				 awk '/'${NETTYPE}'/{print $4}' | sort -u |
-				 xargs)
+		lctl_status=$($lctl_cmd | awk '{print $7}' | sort -u | xargs)
+		lnetctl_status=$($lnetctl_cmd | awk '/state/{print $NF}' |
+				 sort -u | xargs)
+		debugfs_status=$($debugfs_cmd | awk '/'${NETTYPE}'/{print $4}' |
+				 sort -u | xargs)
 
-		if ${VERBOSE} || ((waited % 5 == 0)); then
-			echo "Waiting $((max_wait - waited))s for route '$expect'"
-		fi
 
 		if [[ $lctl_status == $expect ]] &&
 		   [[ $lnetctl_status == $expect ]] &&
 		   [[ $debugfs_status == $expect ]]; then
+		   	got_expected=true
 			break
+		fi
+		if ${VERBOSE}; then
+			echo "Wait $((max_wait - waited))s for route '$expect'"
+			echo "    lctl:'$lctl_status' lnetctl:'$lnetctl_status'"
+			echo "    debugfs:'$debugfs_status'"
 		fi
 
 		sleep 1
 		waited=$((SECONDS - begin))
 	done
 
-	[[ $lctl_status == $expect ]] ||
-		error "Wanted \"$expect\" lctl found \"$lctl_status\""
+	if ! got_expected; then
+		echo "lctl shows:"
+		$lctl_cmd
+		echo "lnetctl shows:"
+		$lnetctl_cmd
+		echo "debugfs shows:"
+		$debugfs_cmd
 
-	[[ $lnetctl_status == $expect ]] ||
-		error "Wanted \"$expect\" lnetctl found \"$lnetctl_status\""
+		[[ $lctl_status == $expect ]] ||
+			error "Wanted '$expect' lctl found '$lctl_status'"
 
-	[[ $debugfs_status == $expect ]] ||
-		error "Wanted \"$expect\" debugfs found \"$debugfs_status\""
+		[[ $lnetctl_status == $expect ]] ||
+			error "Wanted '$expect' lnetctl found '$lnetctl_status'"
+
+		[[ $debugfs_status == $expect ]] ||
+			error "Wanted '$expect' debugfs found '$debugfs_status'"
+	fi
 
 	echo "Got '$expect' after ${waited}s"
 
@@ -4375,9 +4389,8 @@ test_225() {
 run_test 225 "Check avoid_asym_router_failure=0 w/DD disabled"
 
 test_226() {
-
-	(( $MDS1_VERSION >= $(version_code v2_15_62-31-g2b210f3905) )) ||
-		skip "need MDS >= 2.15.62.31 for refcnt fix LU-17440"
+	(( $MDS1_VERSION >= $(version_code v2_16_57-110-ged70ccb471) )) ||
+		skip "need MDS >= 2.16.57.110 for refcnt fix LU-17440"
 
 	setup_router_test -r 2 || return $?
 
