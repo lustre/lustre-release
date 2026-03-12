@@ -25,6 +25,7 @@
 #include <linux/uidgid.h>
 #include <linux/falloc.h>
 #include <linux/ktime.h>
+#include <linux/prefetch.h>
 #ifdef HAVE_LINUX_FILELOCK_HEADER
 #include <linux/filelock.h>
 #endif
