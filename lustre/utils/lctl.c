@@ -244,39 +244,31 @@ JT_SUBCMD(barrier);
 command_t snapshot_cmdlist[] = {
 	{ .pc_name = "create", .pc_func = jt_snapshot_create,
 	  .pc_help = "create the snapshot\n"
-	 "usage: snapshot create [-b | --barrier [on | off]]\n"
-	 "			 [-c | --comment COMMENT]\n"
-	 "			 {-F | --fsname FSNAME}\n"
-	 "			 [-h | --help] {-n | --name SSNAME}\n"
-	 "			 [-r | --rsh REMOTE_SHELL]\n"
-	 "			 [-t | --timeout TIMEOUT]"},
+	 "usage: snapshot create {-F | --fsname FSNAME}  {-n | --name SSNAME}\n"
+	 "                       [-b | --barrier [on | off]] [-c | --comment COMMENT]\n"
+	 "                       [-h | --help] [-r | --rsh REMOTE_SHELL]\n"
+	 "                       [-t | --timeout TIMEOUT]"},
 	{.pc_name = "destroy", .pc_func = jt_snapshot_destroy,
 	 .pc_help = "destroy the snapshot\n"
-	 "usage: snapshot destroy [-f | --force]\n"
-	 "			  {-F | --fsname FSNAME} [-h | --help]\n"
-	 "			  {-n | --name SSNAME}\n"
-	 "			  [-r | --rsh REMOTE_SHELL]"},
+	 "usage: snapshot destroy {-F | --fsname FSNAME}  {-n | --name SSNAME}\n"
+	 "                        [-f | --force] [-h | --help] [-r | --rsh REMOTE_SHELL]"},
 	{.pc_name = "modify", .pc_func = jt_snapshot_modify,
 	 .pc_help = "modify the snapshot\n"
-	 "usage: snapshot modify [-c | --comment COMMENT]\n"
-	 "			 {-F | --fsname FSNAME} [-h | --help]\n"
-	 "			 {-n | --name SSNAME} [-N | --new NEW_SSNAME]\n"
-	 "			 [-r | --rsh REMOTE_SHELL]"},
+	 "usage: snapshot modify {-F | --fsname FSNAME}  {-n | --name SSNAME}\n"
+	 "                       [-c | --comment COMMENT] [-h | --help]\n"
+	 "                       [-N | --new NEW_SSNAME] [-r | --rsh REMOTE_SHELL]"},
 	{.pc_name = "list", .pc_func = jt_snapshot_list,
 	 .pc_help = "query the snapshot(s)\n"
-	 "usage: snapshot list [-d | --detail]\n"
-	 "		       {-F | --fsname FSNAME} [-h | --help]\n"
-	 "		       [-n | --name SSNAME] [-r | --rsh REMOTE_SHELL]"},
+	 "usage: snapshot list {-F | --fsname FSNAME} [-d | --detail] [-h | --help]\n"
+	 "                     [-n | --name SSNAME] [-r | --rsh REMOTE_SHELL]"},
 	{.pc_name = "mount", .pc_func = jt_snapshot_mount,
 	 .pc_help = "mount the snapshot\n"
-	 "usage: snapshot mount {-F | --fsname FSNAME} [-h | --help]\n"
-	 "			{-n | --name SSNAME}\n"
-	 "			[-r | --rsh REMOTE_SHELL]"},
+	 "usage: snapshot mount {-F | --fsname FSNAME} {-n | --name SSNAME}\n"
+	 "                      [-h | --help] [-r | --rsh REMOTE_SHELL]"},
 	{.pc_name = "umount", .pc_func = jt_snapshot_umount,
 	 .pc_help = "umount the snapshot\n"
-	 "usage: snapshot umount {-F | --fsname FSNAME} [-h | --help]\n"
-	 "			 {-n | --name SSNAME}\n"
-	 "			 [-r | --rsh REMOTE_SHELL]"},
+	 "usage: snapshot umount {-F | --fsname FSNAME} {-n | --name SSNAME}\n"
+	 "                       [-h | --help] [-r | --rsh REMOTE_SHELL]"},
 	{.pc_help = NULL }
 };
 JT_SUBCMD(snapshot);
@@ -601,38 +593,38 @@ command_t cmdlist[] = {
 	{"snapshot_create", jt_snapshot_create, 0,
 	 "create the snapshot\n"
 	 "usage: snapshot_create [-b | --barrier [on | off]]\n"
-	 "			 [-c | --comment COMMENT]\n"
-	 "			 {-F | --fsname FSNAME}\n"
-	 "			 [-h | --help] {-n | --name SSNAME}\n"
-	 "			 [-r | --rsh REMOTE_SHELL]\n"
-	 "			 [-t | --timeout TIMEOUT]"},
+	 "                       [-c | --comment COMMENT]\n"
+	 "                       {-F | --fsname FSNAME}\n"
+	 "                       [-h | --help] {-n | --name SSNAME}\n"
+	 "                       [-r | --rsh REMOTE_SHELL]\n"
+	 "                       [-t | --timeout TIMEOUT]"},
 	{"snapshot_destroy", jt_snapshot_destroy, 0,
 	 "destroy the snapshot\n"
 	 "usage: snapshot_destroy [-f | --force]\n"
-	 "			  {-F | --fsname FSNAME} [-h | --help]\n"
-	 "			  {-n | --name SSNAME}\n"
-	 "			  [-r | --rsh REMOTE_SHELL]"},
+	 "                        {-F | --fsname FSNAME} [-h | --help]\n"
+	 "                        {-n | --name SSNAME}\n"
+	 "                        [-r | --rsh REMOTE_SHELL]"},
 	{"snapshot_modify", jt_snapshot_modify, 0,
 	 "modify the snapshot\n"
 	 "usage: snapshot_modify [-c | --comment COMMENT]\n"
-	 "			 {-F | --fsname FSNAME} [-h | --help]\n"
-	 "			 {-n | --name SSNAME} [-N | --new NEW_SSNAME]\n"
-	 "			 [-r | --rsh REMOTE_SHELL]"},
+	 "                       {-F | --fsname FSNAME} [-h | --help]\n"
+	 "                       {-n | --name SSNAME} [-N | --new NEW_SSNAME]\n"
+	 "                       [-r | --rsh REMOTE_SHELL]"},
 	{"snapshot_list", jt_snapshot_list, 0,
 	 "query the snapshot(s)\n"
 	 "usage: snapshot_list [-d | --detail]\n"
-	 "		       {-F | --fsname FSNAME} [-h | --help]\n"
-	 "		       [-n | --name SSNAME] [-r | --rsh REMOTE_SHELL]"},
+	 "                     {-F | --fsname FSNAME} [-h | --help]\n"
+	 "                     [-n | --name SSNAME] [-r | --rsh REMOTE_SHELL]"},
 	{"snapshot_mount", jt_snapshot_mount, 0,
 	 "mount the snapshot\n"
 	 "usage: snapshot_mount {-F | --fsname FSNAME} [-h | --help]\n"
-	 "			{-n | --name SSNAME}\n"
-	 "			[-r | --rsh REMOTE_SHELL]"},
+	 "                      {-n | --name SSNAME}\n"
+	 "                      [-r | --rsh REMOTE_SHELL]"},
 	{"snapshot_umount", jt_snapshot_umount, 0,
 	 "umount the snapshot\n"
 	 "usage: snapshot_umount {-F | --fsname FSNAME} [-h | --help]\n"
-	 "			 {-n | --name SSNAME}\n"
-	 "			 [-r | --rsh REMOTE_SHELL]"},
+	 "                       {-n | --name SSNAME}\n"
+	 "                       [-r | --rsh REMOTE_SHELL]"},
 	{"snapshot", jt_snapshot, snapshot_cmdlist, ""},
 #endif /* HAVE_SERVER_SUPPORT */
 	/* Nodemap commands */
