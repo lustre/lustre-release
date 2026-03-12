@@ -1928,8 +1928,10 @@ calculate:
 		 * level.
 		 */
 		depth = inode != NULL ? ext_depth(inode) : 0;
-		depth = min(max(depth, 1) + 3, LDISKFS_MAX_EXTENT_DEPTH);
-		credits = depth;
+		depth = min(max(depth, 1) + 1, LDISKFS_MAX_EXTENT_DEPTH);
+		/* may need to allocate few extent tree index blocks:
+		 * gdb+bitmap+block itself except inode level */
+		credits = (depth - 1) * 3;
 		/* if not append, then split may need to modify
 		 * existing blocks moving entries into the new ones
 		 */
@@ -1937,8 +1939,15 @@ calculate:
 			credits += depth;
 		/* blocks to store data: bitmap,gd,itself */
 		credits += blocks * 3;
-		if (obj->oo_prealloc_writes)
-			credits += OSD_BRM_ALLOC_SIZE - 1;
+		if (obj->oo_prealloc_writes) {
+			/* in case of preallocation we do a single allocation
+			 * always, so 1 * 3 (gd, bitmap, block). this is taken
+			 * into account a line above, then in the allocation
+			 * we could get upto OSD_BRM_ALLOC_SIZE blocks, so add
+			 * credits for these blocks as well, plus we may need
+			 * to put the inode onto superblock's orphan list */
+			credits += OSD_BRM_ALLOC_SIZE;
+		}
 	} else {
 		credits = osd_calc_bkmap_credits(sb, inode, size, _pos, blocks);
 	}
