@@ -88,16 +88,15 @@ JT_SUBCMD(changelog);
 command_t net_drop_cmdlist[] = {
 	{.pc_name = "add", .pc_func = jt_ptl_drop_add,
 	 .pc_help = "Add LNet drop rule\n"
-	 "usage: net_drop add {-s | --source NID}\n"
-	 "		      {-d | --dest NID}\n"
-	 "		      {{-r | --rate DROP_RATE} | {-i | --interval SECONDS}}\n"
-	 "		      [-p | --portal PORTAL...]\n"
-	 "		      [-m | --message {PUT|ACK|GET|REPLY...}]\n"
-	 "		      [-e | --health_error]"},
+	 "usage: net_drop add {-s | --source NID} {-d | --dest NID}\n"
+	 "                    {{-r | --rate DROP_RATE} | {-i | --interval SECONDS}}\n"
+	 "                    [-e | --health_error]\n"
+	 "                    [-m | --message {PUT|ACK|GET|REPLY...}]\n"
+	 "                    [-p | --portal PORTAL...]"},
 	{.pc_name = "del", .pc_func = jt_ptl_drop_del,
 	 .pc_help = "remove LNet drop rule\n"
 	 "usage: net_drop del {-a | --all} |\n"
-	 "		      {{-s | --source NID} {-d | --dest NID}}"},
+	 "                    {{-s | --source NID} {-d | --dest NID}}"},
 	{.pc_name = "reset", .pc_func = jt_ptl_drop_reset,
 	 .pc_help = "reset drop rule stats\n"
 	 "usage: net_drop reset"},
@@ -114,16 +113,15 @@ JT_SUBCMD(net_drop);
 command_t net_delay_cmdlist[] = {
 	{.pc_name = "add", .pc_func = jt_ptl_delay_add,
 	 .pc_help = "Add LNet delay rule\n"
-	 "usage: net_delay add {-s | --source NID}\n"
-	 "		       {-d | --dest NID}\n"
-	 "		       {{-r | --rate DELAY_RATE} | {-i | --interval SECONDS}}\n"
-	 "		       {-l | --latency SECONDS>\n"
-	 "		       [-p | --portal PORTAL...]\n"
-	 "		       [-m | --message {PUT|ACK|GET|REPLY...}]"},
+	 "usage: net_delay add {-s | --source NID} {-d | --dest NID}\n"
+	 "                     {{-r | --rate DELAY_RATE} | {-i | --interval SECONDS}}\n"
+	 "                     {-l | --latency SECONDS>\n"
+	 "                     [-m | --message {PUT|ACK|GET|REPLY...}]\n"
+	 "                     [-p | --portal PORTAL...]"},
 	{.pc_name = "del", .pc_func = jt_ptl_delay_del,
 	 .pc_help = "remove LNet delay rule\n"
 	 "usage: net_delay del {-a | --all} |\n"
-	 "		       {{-s | --source NID} {-d | --dest NID}}"},
+	 "                     {{-s | --source NID} {-d | --dest NID}}"},
 	{.pc_name = "reset", .pc_func = jt_ptl_delay_reset,
 	 .pc_help = "reset delay rule stats\n"
 	 "usage: net_delay reset"},
@@ -399,14 +397,14 @@ command_t cmdlist[] = {
 
 	{"net_drop_add", jt_ptl_drop_add, 0, "Add LNet drop rule\n"
 	 "usage: net_drop_add {-s | --source NID}\n"
-	 "		      {-d | --dest NID}\n"
-	 "		      {{-r | --rate DROP_RATE} | {-i | --interval SECONDS}}\n"
-	 "		      [-p | --portal PORTAL...]\n"
-	 "		      [-m | --message {PUT|ACK|GET|REPLY...}]\n"
-	 "		      [-e | --health_error]"},
+	 "                    {-d | --dest NID}\n"
+	 "                    {{-r | --rate DROP_RATE} | {-i | --interval SECONDS}}\n"
+	 "                    [-p | --portal PORTAL...]\n"
+	 "                    [-m | --message {PUT|ACK|GET|REPLY...}]\n"
+	 "                    [-e | --health_error]"},
 	{"net_drop_del", jt_ptl_drop_del, 0, "remove LNet drop rule\n"
 	 "usage: net_drop_del {-a | --all} |\n"
-	 "		      {{-s | --source NID} {-d | --dest NID}}"},
+	 "                    {{-s | --source NID} {-d | --dest NID}}"},
 	{"net_drop_reset", jt_ptl_drop_reset, 0, "reset drop rule stats\n"
 	 "usage: net_drop_reset"},
 	{"net_drop_list", jt_ptl_drop_list, 0, "list LNet drop rules\n"
@@ -415,14 +413,14 @@ command_t cmdlist[] = {
 
 	{"net_delay_add", jt_ptl_delay_add, 0, "Add LNet delay rule\n"
 	 "usage: net_delay_add {-s | --source NID}\n"
-	 "		       {-d | --dest NID}\n"
-	 "		       {{-r | --rate DELAY_RATE} | {-i | --interval SECONDS}}\n"
-	 "		       {-l | --latency SECONDS>\n"
-	 "		       [-p | --portal PORTAL...]\n"
-	 "		       [-m | --message {PUT|ACK|GET|REPLY...}]"},
+	 "                     {-d | --dest NID}\n"
+	 "                     {{-r | --rate DELAY_RATE} | {-i | --interval SECONDS}}\n"
+	 "                     {-l | --latency SECONDS>\n"
+	 "                     [-p | --portal PORTAL...]\n"
+	 "                     [-m | --message {PUT|ACK|GET|REPLY...}]"},
 	{"net_delay_del", jt_ptl_delay_del, 0, "remove LNet delay rule\n"
 	 "usage: net_delay_del {-a | --all} |\n"
-	 "		       {{-s | --source NID} {-d | --dest NID}}"},
+	 "                     {{-s | --source NID} {-d | --dest NID}}"},
 	{"net_delay_reset", jt_ptl_delay_reset, 0, "reset delay rule stats\n"
 	 "usage: net_delay_reset"},
 	{"net_delay_list", jt_ptl_delay_list, 0, "list LNet delay rules\n"
