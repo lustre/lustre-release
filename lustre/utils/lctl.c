@@ -171,23 +171,21 @@ command_t nodemap_cmdlist[] = {
 	 "usage: nodemap fileset_modifiy --name NODEMAP_NAME --fileset SUBDIRECTORY [--rename SUBDIRECTORY] [--ro|--rw] [--alt|--primary]"},
 	{.pc_name = "modify", .pc_func = jt_nodemap_modify,
 	 .pc_help = "modify a nodemap parameters\n"
-	 "usage: nodemap modify --name NODEMAP_NAME --property PROPERTY\n"
-	 "			--value VALUE"},
+	 "usage: nodemap modify --name NODEMAP_NAME --property PROPERTY --value VALUE"},
 	{.pc_name = "add_offset", .pc_func = jt_nodemap_add_offset,
 	 .pc_help = "add an offset for UID/GID/PROJID mappings\n"
-	 "usage: nodemap_add_offset --name NODEMAP_NAME --offset OFFSET\n"
-	 "			    --limit LIMIT"},
+	 "usage: nodemap_add_offset --name NODEMAP_NAME --offset OFFSET --limit LIMIT"},
 	{.pc_name = "del_offset", .pc_func = jt_nodemap_del_offset,
 	 .pc_help = "delete an offset for UID/GID/PROJID mappings\n"
 	 "usage: nodemap_del_offset --name NODEMAP_NAME"},
 	{.pc_name = "add_idmap", .pc_func = jt_nodemap_add_idmap,
 	 .pc_help = "add a UID or GID mapping to a nodemap\n"
 	 "usage: nodemap add_idmap --name NAME --idtype {uid|gid|projid}\n"
-	 "			   --idmap CLIENTID:FSID"},
+	 "                         --idmap CLIENTID:FSID"},
 	{.pc_name = "del_idmap", .pc_func = jt_nodemap_del_idmap,
 	 .pc_help = "delete a UID or GID mapping from a nodemap\n"
 	 "usage: nodemap del_idmap --name NAME --idtype {uid|gid|projid}\n"
-	 "			   --idmap CLIENTID:FSID"},
+	 "                         --idmap CLIENTID:FSID"},
 	{.pc_name = "set_cap", .pc_func = jt_nodemap_set_cap,
 	 .pc_help = "define capabilities for regular users on a nodemap\n"
 	 "usage: nodemap set_cap --name NODEMAP_NAME --caps CAPABILITIES --type {mask|set|off}"},
