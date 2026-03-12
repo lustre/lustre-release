@@ -847,9 +847,17 @@ static int nodemap_rbac_seq_show(struct seq_file *m, void *data)
 	}
 
 	if (nodemap->nmf_rbac == NODEMAP_RBAC_ALL) {
-		for (i = 0; i < ARRAY_SIZE(nodemap_rbac_names); i++)
+		for (i = 0; i < ARRAY_SIZE(nodemap_rbac_names); i++) {
+			/* local_admin only makes sense on non default nodemap
+			 * where root can be mapped or offset
+			 */
+			if (nodemap_rbac_names[i].nrn_mode ==
+			      NODEMAP_RBAC_LOCAL_ADMIN &&
+			    is_default_nodemap(nodemap))
+				continue;
 			seq_printf(m, "%s%s", i == 0 ? "" : ",",
 				   nodemap_rbac_names[i].nrn_name);
+		}
 		seq_puts(m, "\n");
 	} else if (nodemap->nmf_rbac == NODEMAP_RBAC_NONE) {
 		seq_puts(m, "none\n");
@@ -1350,6 +1358,10 @@ static struct ldebugfs_vars lprocfs_default_nodemap_vars[] = {
 	{
 		.name		= "banlist",
 		.fops		= &nodemap_ban_ranges_fops,
+	},
+	{
+		.name		= "rbac",
+		.fops		= &nodemap_rbac_fops,
 	},
 	{
 		.name		= "readonly_mount",

@@ -6593,7 +6593,7 @@ setup_local_client_nodemap() {
 cleanup_local_client_nodemap() {
 	local nm_name=${1:-"c0"}
 
-	do_facet mgs $LCTL nodemap_del $nm_name
+	do_facet mgs $LCTL nodemap_del $nm_name || true
 	do_facet mgs $LCTL nodemap_modify --name default \
 		--property admin --value 0
 	do_facet mgs $LCTL nodemap_modify --name default \
@@ -7323,6 +7323,22 @@ test_63() {
 }
 run_test 63 "fid2path with encrypted files"
 
+setup_defaultnm_for_64() {
+	cleanup_local_client_nodemap
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value 1
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value 1
+	do_facet mgs $LCTL nodemap_activate 1
+	wait_nm_sync active
+}
+
+cleanup_defaultnm_for_64() {
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property rbac --value all
+	wait_nm_sync default rbac
+}
+
 test_64a() {
 	local testfile=$DIR/$tdir/$tfile
 	local srv_uc=""
@@ -7401,6 +7417,66 @@ test_64a() {
 	chown $TSTUSR:$TSTUSR $testfile && error "chown should fail"
 	chgrp $TSTUSR $testfile && error "chgrp should fail"
 	$LFS project -p 1000 $testfile && error "setting project should fail"
+	set +vx
+
+	do_facet mgs $LCTL get_param -n nodemap.default.rbac ||
+		skip "server does not support rbac on default nodemap"
+
+	# Now test rbac on default nodemap
+	setup_defaultnm_for_64
+
+	# Check default value for rbac is all on default nodemap
+	rbac=$(do_facet mds $LCTL get_param -n nodemap.default.rbac)
+	for role in file_perms \
+		    dne_ops \
+		    quota_ops \
+		    byfid_ops \
+		    chlg_ops \
+		    fscrypt_admin \
+		    $srv_uc \
+		    $pool_quota \
+		    $lqa_quota \
+		    $projid_set \
+		    ;
+	do
+		[[ "$rbac" =~ "$role" ]] ||
+			error "role '$role' not in '$rbac' on default nodemap"
+	done
+
+	stack_trap cleanup_defaultnm_for_64
+
+	rbac="projid_set,file_perms"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name default \
+		 --property rbac=$rbac ||
+		error "setting rbac $rbac on default nodemap failed (1)"
+	wait_nm_sync default rbac
+	touch $testfile
+	set -vx
+	chmod 777 $testfile || error "chmod failed on default nodemap"
+	chown $TSTUSR:$TSTUSR $testfile ||
+		error "chown failed on default nodemap"
+	chgrp $TSTUSR $testfile || error "chgrp failed on default nodemap"
+	$LFS project -p 1000 $testfile ||
+		error "setting project failed on default nodemap"
+	set +vx
+	rm -f $testfile
+
+	rbac="projid_set"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=$rbac ||
+		error "setting rbac $rbac on default nodemap failed (2)"
+	wait_nm_sync default rbac
+	touch $testfile
+	set -vx
+	chmod 777 $testfile && error "chmod should fail on default nodemap"
+	chown $TSTUSR:$TSTUSR $testfile &&
+		error "chown should fail on default nodemap"
+	chgrp $TSTUSR $testfile &&
+		error "chgrp should fail on default nodemap"
+	$LFS project -p 1000 $testfile &&
+		error "setting project should fail on default nodemap"
 	set +vx
 }
 run_test 64a "Nodemap enforces file_perms RBAC roles"
@@ -7487,6 +7563,55 @@ test_64b() {
 		error "$LFS migrate should fail"
 	touch ${testdir}_mdt0/fileA || error "touch fileA failed (2)"
 	mv ${testdir}_mdt0/fileA ${testdir}_mdt1/ || error "mv failed (2)"
+	set +vx
+
+	do_facet mgs $LCTL get_param -n nodemap.default.rbac ||
+		skip "server does not support rbac on default nodemap"
+
+	# Now test rbac on default nodemap
+	setup_defaultnm_for_64
+	stack_trap cleanup_defaultnm_for_64
+
+	rbac="dne_ops"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name default \
+		 --property rbac=$rbac ||
+		error "setting rbac $rbac on default nodemap failed (1)"
+	wait_nm_sync default rbac
+	set -vx
+	$LFS mkdir -i 1 $testdir ||
+		error "$LFS mkdir should succeed on default nodemap (1)"
+	rmdir $testdir
+	$LFS mkdir -c 2 $testdir ||
+		error "$LFS mkdir should succeed on default nodemap (2)"
+	rmdir $testdir
+	mkdir $testdir
+	$LFS setdirstripe -c 2 $testdir ||
+		error "$LFS setdirstripe should succeed on default nodemap"
+	rmdir $testdir
+	$LFS migrate -m 1 ${testdir}_for_migr ||
+		error "$LFS migrate should succeed on default nodemap"
+	$LFS migrate -m 0 ${testdir}_for_migr ||
+		error "$LFS migrate back should succeed on default nodemap"
+	set +vx
+
+	rbac="none"
+	[ -z "$srv_uc" ] || rbac="$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=$rbac ||
+		error "setting rbac $rbac on default nodemap failed (2)"
+	wait_nm_sync default rbac
+	set -vx
+	$LFS mkdir -i 1 $testdir &&
+		error "$LFS mkdir should fail on default nodemap (1)"
+	$LFS mkdir -c 2 $testdir &&
+		error "$LFS mkdir should fail on default nodemap (2)"
+	mkdir $testdir
+	$LFS setdirstripe -c 2 $testdir &&
+		error "$LFS setdirstripe should fail on default nodemap"
+	rmdir $testdir
+	$LFS migrate -m 1 ${testdir}_for_migr &&
+		error "$LFS migrate should fail on default nodemap"
 	set +vx
 }
 run_test 64b "Nodemap enforces dne_ops RBAC roles"
@@ -7678,6 +7803,48 @@ test_64c() {
 			error "lfs setquota -P --lqa should fail"
 	fi
 	set +vx
+
+	do_facet mgs $LCTL get_param -n nodemap.default.rbac ||
+		skip "server does not support rbac on default nodemap"
+
+	# Now test rbac on default nodemap
+	setup_defaultnm_for_64
+	stack_trap cleanup_defaultnm_for_64
+
+	rbac="quota_ops"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
+	[ -z "$pool_quota" ] || rbac="$rbac,$pool_quota"
+	[ -z "$lqa_quota" ] || rbac="$rbac,$lqa_quota"
+	do_facet mgs $LCTL nodemap_modify --name default \
+		 --property rbac=$rbac ||
+		error "setting rbac $rbac on default nodemap failed (1)"
+	wait_nm_sync default rbac
+	set -vx
+	$LFS setquota -u $USER0 -b 307200 -B 309200 -i 10000 -I 11000 $MOUNT ||
+		error "lfs setquota -u failed on default nodemap"
+	$LFS setquota -u $USER0 --delete $MOUNT
+	$LFS setquota -g $USER0 -b 307200 -B 309200 -i 10000 -I 11000 $MOUNT ||
+		error "lfs setquota -g failed on default nodemap"
+	$LFS setquota -g $USER0 --delete $MOUNT
+	$LFS setquota -p 1000 -b 307200 -B 309200 -i 10000 -I 11000 $MOUNT ||
+		error "lfs setquota -p failed on default nodemap"
+	$LFS setquota -p 1000 --delete $MOUNT
+	set +vx
+
+	rbac="none"
+	[ -z "$srv_uc" ] || rbac="$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=$rbac ||
+		error "setting rbac $rbac on default nodemap failed (2)"
+	wait_nm_sync default rbac
+	set -vx
+	$LFS setquota -u $USER0 -b 307200 -B 309200 -i 10000 -I 11000 $MOUNT &&
+		error "lfs setquota -u should fail on default nodemap"
+	$LFS setquota -g $USER0 -b 307200 -B 309200 -i 10000 -I 11000 $MOUNT &&
+		error "lfs setquota -g should fail on default nodemap"
+	$LFS setquota -p 1000 -b 307200 -B 309200 -i 10000 -I 11000 $MOUNT &&
+		error "lfs setquota -p should fail on default nodemap"
+	set +vx
 }
 run_test 64c "Nodemap enforces quota related RBAC roles"
 
@@ -7704,8 +7871,9 @@ test_64d() {
 		error "setting rbac $rbac failed (1)"
 	wait_nm_sync c0 rbac
 
-	touch $testfile
+	touch $testfile || error "touch $testfile failed (1)"
 	fid=$(lfs path2fid $testfile)
+	[[ -n "$fid" ]] || error "cannot get FID for $testfile (1)"
 	set -vx
 	$LFS fid2path $MOUNT $fid || error "fid2path $fid failed (1)"
 	cat $MOUNT/.lustre/fid/$fid || error "cat by fid failed"
@@ -7723,14 +7891,60 @@ test_64d() {
 		error "setting rbac $rbac failed (2)"
 	wait_nm_sync c0 rbac
 
-	touch $testfile
+	touch $testfile || error "touch $testfile failed (2)"
 	fid=$(lfs path2fid $testfile)
+	[[ -n "$fid" ]] || error "cannot get FID for $testfile (1)"
 	set -vx
 	$LFS fid2path $MOUNT $fid || error "fid2path $fid failed (2)"
 	cat $MOUNT/.lustre/fid/$fid && error "cat by fid should fail"
 	lfs rmfid $MOUNT $fid && error "lfs rmfid should fail"
 	set +vx
 	rm -f $testfile
+
+	do_facet mgs $LCTL get_param -n nodemap.default.rbac ||
+		skip "server does not support rbac on default nodemap"
+
+	# Now test rbac on default nodemap
+	setup_defaultnm_for_64
+
+	touch $testfile || error "touch $testfile failed (3)"
+	fid=$(lfs path2fid $testfile)
+	[[ -n "$fid" ]] || error "cannot get FID for $testfile (2)"
+
+	stack_trap cleanup_defaultnm_for_64
+
+	rbac="byfid_ops"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name default \
+		 --property rbac=$rbac ||
+		error "setting rbac $rbac on default nodemap failed (1)"
+	wait_nm_sync default rbac
+	set -vx
+	$LFS fid2path $MOUNT $fid ||
+		error "fid2path $fid failed on default nodemap (1)"
+	cat $MOUNT/.lustre/fid/$fid ||
+		error "cat by fid failed on default nodemap"
+	lfs rmfid $MOUNT $fid || error "lfs rmfid failed on default nodemap"
+	set +vx
+
+	touch $testfile || error "touch $testfile failed (4)"
+	fid=$(lfs path2fid $testfile)
+	[[ -n "$fid" ]] || error "cannot get FID for $testfile (3)"
+
+	rbac="none"
+	[ -z "$srv_uc" ] || rbac="$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=$rbac ||
+		error "setting rbac $rbac on default nodemap failed (2)"
+	wait_nm_sync default rbac
+	set -vx
+	$LFS fid2path $MOUNT $fid ||
+		error "fid2path $fid failed on default nodemap (2)"
+	cat $MOUNT/.lustre/fid/$fid &&
+		error "cat by fid should fail on default nodemap"
+	lfs rmfid $MOUNT $fid &&
+		error "lfs rmfid should fail on default nodemap"
+	set +vx
 }
 run_test 64d "Nodemap enforces byfid_ops RBAC roles"
 
@@ -7802,6 +8016,55 @@ test_64e() {
 		--property rbac --value all ||
 		error "setting rbac all failed (3)"
 	wait_nm_sync c0 rbac
+
+	do_facet mgs $LCTL get_param -n nodemap.default.rbac ||
+		skip "server does not support rbac on default nodemap"
+
+	# Now test rbac on default nodemap
+	setup_defaultnm_for_64
+	stack_trap cleanup_defaultnm_for_64
+
+	rbac="chlg_ops"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name default \
+		 --property rbac=$rbac ||
+		error "setting rbac $rbac on default nodemap failed (1)"
+	wait_nm_sync default rbac
+
+	# do some IOs
+	mkdir $testdir || error "failed to mkdir $testdir on default nodemap"
+	touch $testfile || error "failed to touch $testfile on default nodemap"
+
+	# access changelogs
+	echo "changelogs dump on default nodemap"
+	changelog_dump || error "dump changelogs failed on default nodemap"
+	echo "changelogs clear on default nodemap"
+	changelog_clear 0 || error "clear changelogs failed on default nodemap"
+	rm -rf $testdir $testfile
+
+	rbac="none"
+	[ -z "$srv_uc" ] || rbac="$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=$rbac ||
+		error "setting rbac $rbac on default nodemap failed (2)"
+	wait_nm_sync default rbac
+
+	# do some IOs
+	mkdir $testdir || error "failed to mkdir $testdir on default nodemap"
+	touch $testfile || error "failed to touch $testfile on default nodemap"
+
+	# access changelogs
+	echo "changelogs dump on default nodemap"
+	changelog_dump && error "dump changelogs should fail on default nodemap"
+	echo "changelogs clear on default nodemap"
+	changelog_clear 0 &&
+		error "clear changelogs should fail on default nodemap"
+	rm -rf $testdir $testfile
+
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property rbac=all ||
+		error "setting rbac all on default failed (3)"
+	wait_nm_sync default rbac
 }
 run_test 64e "Nodemap enforces chlg_ops RBAC roles"
 
@@ -7899,6 +8162,75 @@ test_64f() {
 	set +vx
 
 	rm -rf ${vaultdir}*
+
+	do_facet mgs $LCTL get_param -n nodemap.default.rbac ||
+		skip "server does not support rbac on default nodemap"
+
+	# Now test rbac on default nodemap
+	setup_defaultnm_for_64
+	stack_trap cleanup_defaultnm_for_64
+
+	rbac="fscrypt_admin,file_perms"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name default \
+		 --property rbac=$rbac ||
+		error "setting rbac $rbac on default nodemap failed (1)"
+	wait_nm_sync default rbac
+
+	mkdir -p $vaultdir || error "mkdir $vaultdir failed on default nodemap"
+	set -vx
+	echo -e 'mypass\nmypass' | fscrypt encrypt --source=custom_passphrase \
+		--name=protector64f $vaultdir ||
+		error "encrypt $vaultdir failed on default nodemap"
+	fscrypt lock $vaultdir ||
+		error "fscrypt lock $vaultdir on default failed (1)"
+	policy=$(fscrypt status $vaultdir | awk '$1 == "Policy:"{print $2}')
+	echo "$vaultdir is locked away with encryption"
+	[ -n "$policy" ] || error "could not get enc policy"
+	echo "fscrypt policy $policy is ready"
+	protector=$(fscrypt status $vaultdir |
+		  awk 'BEGIN {found=0} { if (found == 1) { print $1 }} \
+			$1 == "PROTECTOR" {found=1}')
+	[ -n "$protector" ] || error "could not get enc protector"
+	set +vx
+
+	cancel_lru_locks
+	rbac="file_perms"
+	[ -z "$srv_uc" ] || rbac="$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=$rbac ||
+		error "setting rbac $rbac on default nodemap failed (2)"
+	wait_nm_sync default rbac
+
+	set -vx
+	echo mypass | fscrypt unlock $vaultdir ||
+		error "unlock $vaultdir failed on default nodemap"
+	fscrypt lock $vaultdir ||
+		error "fscrypt lock $vaultdir failed on default (2)"
+	fscrypt metadata destroy --protector=$MOUNT:$protector --force &&
+		error "destroy protector should fail on default"
+	fscrypt metadata destroy --policy=$MOUNT:$policy --force &&
+		error "destroy policy should fail on default"
+	mkdir -p ${vaultdir}2
+	echo -e 'mypass\nmypass' | fscrypt encrypt --verbose \
+		--source=custom_passphrase \
+		--name=protector_64fbis ${vaultdir}2 &&
+			error "fscrypt encrypt ${vaultdir}2 should fail on def"
+	set +vx
+
+	cancel_lru_locks
+	do_facet mgs $LCTL nodemap_modify --name default --property rbac=all ||
+		error "setting rbac $rbac on default nodemap failed (3)"
+	wait_nm_sync default rbac
+
+	set -vx
+	fscrypt metadata destroy --protector=$MOUNT:$protector --force ||
+		error "destroy protector failed"
+	fscrypt metadata destroy --policy=$MOUNT:$policy --force ||
+		error "destroy policy failed"
+	set +vx
+
+	rm -rf ${vaultdir}*
 }
 run_test 64f "Nodemap enforces fscrypt_admin RBAC roles"
 
@@ -7951,6 +8283,35 @@ test_64g() {
 	do_nodes $mdts "$LCTL set_param mdt.*.identity_int_flush=$RUNAS_ID"
 	$RUNAS -G 5000,5001 cat $DIR/$tdir/fileA ||
 		error "cat $DIR/$tdir/fileA failed"
+
+	do_facet mgs $LCTL get_param -n nodemap.default.rbac ||
+		skip "server does not support rbac on default nodemap"
+
+	# Now test rbac on default nodemap
+	setup_defaultnm_for_64
+	stack_trap cleanup_defaultnm_for_64
+
+	# remove server_upcall from rbac roles,
+	# to make this client use INTERNAL upcall
+	do_facet mgs $LCTL nodemap_modify --name default \
+		 --property rbac=file_perms ||
+		error "setting rbac file_perms failed"
+	wait_nm_sync default rbac
+
+	$RUNAS touch $DIR/$tdir/fileB &&
+		error "touch $DIR/$tdir/fileB should fail on default"
+	do_nodes $mdts "$LCTL set_param mdt.*.identity_int_flush=$RUNAS_ID"
+	$RUNAS -G 5001 touch $DIR/$tdir/fileB ||
+		error "touch $DIR/$tdir/fileB failed on default"
+	do_nodes $mdts "$LCTL set_param mdt.*.identity_int_flush=$RUNAS_ID"
+	$RUNAS -G 5000,5001 touch $DIR/$tdir/fileC ||
+		error "touch $DIR/$tdir/fileC failed on default"
+	do_nodes $mdts "$LCTL set_param mdt.*.identity_int_flush=$RUNAS_ID"
+	$RUNAS cat $DIR/$tdir/fileA &&
+		error "cat $DIR/$tdir/fileA should fail on default"
+	do_nodes $mdts "$LCTL set_param mdt.*.identity_int_flush=$RUNAS_ID"
+	$RUNAS -G 5000,5001 cat $DIR/$tdir/fileA ||
+		error "cat $DIR/$tdir/fileA failed on default"
 }
 run_test 64g "Nodemap enforces server_upcall RBAC role"
 
@@ -8032,7 +8393,7 @@ test_64h() {
 		 --property admin --value 1
 	wait_nm_sync c0 admin_nodemap
 
-	#  with local_admin and admin=1, capabilities are kept
+	# with local_admin and admin=1, capabilities are kept
 	chmod o+x $testfile || error "root chmod failed (1)"
 	# and setquota/lfs project is permitted
 	$LFS setquota -p $projid -b 4G -B 4G $DIR/$tdir ||
@@ -8330,6 +8691,82 @@ test_64j() {
 		error "expected file projid 0, got $file_projid (3)"
 	(( dir_projid == 0 )) ||
 		error "expected dir projid 0, got $dir_projid (3)"
+
+	do_facet mgs $LCTL get_param -n nodemap.default.rbac ||
+		skip "server does not support rbac on default nodemap"
+
+	# Now test rbac on default nodemap
+	setup_defaultnm_for_64
+
+	touch $testfile
+	mkdir $testdir
+
+	stack_trap cleanup_defaultnm_for_64
+
+	# projid_set role present - should allow project ID changes
+	rbac="file_perms,projid_set"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name default \
+		 --property rbac=$rbac ||
+		error "setting rbac $rbac on default nodemap failed (1)"
+	wait_nm_sync default rbac
+
+	$LFS project -p $projid $testfile ||
+		error "setting file projid failed on default nodemap (1)"
+	$LFS project -p $projid -s $testdir ||
+		error "setting dir projid failed on default nodemap (1)"
+
+	file_projid=$($LFS project $testfile | awk '{print $1}')
+	dir_projid=$($LFS project -d $testdir | awk '{print $1}')
+	[ "$file_projid" = "$projid" ] ||
+		error "expect file projid $projid, got $file_projid on def (1)"
+	[ "$dir_projid" = "$projid" ] ||
+		error "expect dir projid $projid, got $dir_projid on def (1)"
+
+	# projid_set role absent - should deny project ID changes
+	rbac="file_perms"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=$rbac ||
+		error "setting rbac $rbac on default nodemap failed (2)"
+	wait_nm_sync default rbac
+
+	$LFS project -p $((projid+1)) $testfile &&
+		error "setting file projid should fail on default nodemap"
+	$LFS project -p $((projid+1)) -s $testdir &&
+		error "setting dir projid should fail on default nodemap"
+
+	file_projid=$($LFS project $testfile | awk '{print $1}')
+	dir_projid=$($LFS project -d $testdir | awk '{print $1}')
+	[ "$file_projid" = "$projid" ] ||
+		error "expect file projid $projid, got $file_projid on def (2)"
+	[ "$dir_projid" = "$projid" ] ||
+		error "expect dir projid $projid, got $dir_projid on def (2)"
+
+	$LFS project -C $testfile &&
+		error "clearing projid should fail without projid_set role (1)"
+	$LFS project -C $testdir &&
+		error "clearing projid should fail without projid_set role (2)"
+
+	# Restore projid_set role and clear project ID - should succeed
+	rbac="file_perms,projid_set"
+	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
+	do_facet mgs $LCTL nodemap_modify --name default \
+		 --property rbac=$rbac ||
+		error "setting rbac $rbac failed on default (3)"
+	wait_nm_sync default rbac
+
+	$LFS project -C $testfile ||
+		error "clearing projid failed with projid_set role (1)"
+	$LFS project -C $testdir ||
+		error "clearing projid failed with projid_set role (2)"
+
+	file_projid=$($LFS project $testfile | awk '{print $1}')
+	dir_projid=$($LFS project -d $testdir | awk '{print $1}')
+	[ "$file_projid" = "0" ] ||
+		error "expected file projid $projid, got $file_projid (3)"
+	[ "$dir_projid" = "0" ] ||
+		error "expected dir projid $projid, got $dir_projid (3)"
 }
 run_test 64j "Nodemap enforces projid_set RBAC role"
 

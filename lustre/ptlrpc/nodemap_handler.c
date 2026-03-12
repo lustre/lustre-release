@@ -524,14 +524,6 @@ out:
 	RETURN(nodemap);
 }
 
-/*
- * simple check for default nodemap
- */
-static bool is_default_nodemap(const struct lu_nodemap *nodemap)
-{
-	return nodemap->nm_id == 0;
-}
-
 /**
  * nodemap_parse_range() - parse a nodemap range string into two nids
  * @range_str: string to parse
@@ -3794,13 +3786,17 @@ int nodemap_set_rbac(const char *name, enum nodemap_rbac_roles rbac)
 	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_RBAC, rbac))
 		GOTO(put, rc = -EPERM);
 
-	if (is_default_nodemap(nodemap))
-		GOTO(put, rc = -EINVAL);
-
 	old_rbac = nodemap->nmf_rbac;
 	/* if value does not change, do nothing */
 	if (rbac == old_rbac)
 		GOTO(put, rc = 0);
+
+	/* local_admin only makes sense on non default nodemap
+	 * where root can be mapped or offset
+	 */
+	if (rbac != NODEMAP_RBAC_ALL &&
+	    is_default_nodemap(nodemap) && (rbac & NODEMAP_RBAC_LOCAL_ADMIN))
+		GOTO(put, rc = -EINVAL);
 
 	nodemap->nmf_rbac = rbac;
 	rc = nodemap_idx_cluster_roles_modify(nodemap, old_rbac,

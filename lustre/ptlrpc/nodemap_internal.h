@@ -224,6 +224,14 @@ void nm_member_revoke_locks(struct lu_nodemap *nodemap);
 void nm_member_revoke_locks_always(struct lu_nodemap *nodemap);
 void nm_member_revoke_all(void);
 
+/*
+ * simple check for default nodemap
+ */
+static inline bool is_default_nodemap(const struct lu_nodemap *nodemap)
+{
+	return nodemap->nm_id == 0;
+}
+
 int nodemap_add_idmap_helper(struct lu_nodemap *nodemap,
 			     enum nodemap_id_type id_type,
 			     const __u32 map[2]);

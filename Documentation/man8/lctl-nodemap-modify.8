@@ -136,6 +136,7 @@ set to 1, nodes assigned to the nodemap can no longer mount new Lustre clients.
 Existing clients remain operational until a remount is attempted.
 .TP
 .B rbac
+Property available on regular nodemaps but also on the default nodemap.
 Defaults to all, which means all roles are allowed. Other possible values
 (multiple can be specified, comma separated) are:
 .EX
@@ -154,7 +155,8 @@ as these operations only need read access to fscrypt metadata.
 - ignore_root_prjquota, so that project quota is not enforced for the root user.
 .br
 - local_admin, to allow mapped root to perform admin operations on files, unless
-it is squashed.
+it is squashed. This role is not available on the default nodemap, as there are
+no possible id mappings or offsets on the default nodemap.
 .br
 - projid_set, to allow setting project ID on files and directories.
 .br
