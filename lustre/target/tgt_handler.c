@@ -544,6 +544,8 @@ static int tgt_filter_recovery_request(struct ptlrpc_request *req,
  */
 static int tgt_handle_recovery(struct ptlrpc_request *req, int reply_fail_id)
 {
+	int rc;
+
 	ENTRY;
 
 	switch (lustre_msg_get_opc(req->rq_reqmsg)) {
@@ -561,7 +563,8 @@ static int tgt_handle_recovery(struct ptlrpc_request *req, int reply_fail_id)
 
 	/* sanity check: if the xid matches, the request must be marked as a
 	 * resent or replayed */
-	if (req_can_reconstruct(req, NULL) == 1) {
+	rc = req_can_reconstruct(req, NULL);
+	if (rc == 1) {
 		if (!(lustre_msg_get_flags(req->rq_reqmsg) &
 		      (MSG_RESENT | MSG_REPLAY))) {
 			DEBUG_REQ(D_WARNING, req,
@@ -571,7 +574,14 @@ static int tgt_handle_recovery(struct ptlrpc_request *req, int reply_fail_id)
 			req->rq_status = -ENOTCONN;
 			RETURN(-ENOTCONN);
 		}
+	} else if (rc) {
+		DEBUG_REQ(D_WARNING, req,
+			  "obsoleted, rq_xid=%llu, exp_last_xid=%llu",
+			  req->rq_xid, req->rq_export->exp_last_xid);
+		req->rq_status = rc;
+		RETURN(rc);
 	}
+
 	/* else: note the opposite is not always true; a RESENT req after a
 	 * failover will usually not match the last_xid, since it was likely
 	 * never committed. A REPLAYed request will almost never match the
@@ -580,7 +590,6 @@ static int tgt_handle_recovery(struct ptlrpc_request *req, int reply_fail_id)
 
 	/* Check for aborted recovery... */
 	if (unlikely(test_bit(OBDF_RECOVERING, req->rq_export->exp_obd->obd_flags))) {
-		int rc;
 		int should_process;
 
 		DEBUG_REQ(D_INFO, req, "Got new replay");
@@ -3136,7 +3145,7 @@ bool tgt_check_resent(struct ptlrpc_request *req, struct tg_reply_data *trd)
 	if (likely(!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT)))
 		return false;
 
-	if (req_can_reconstruct(req, trd)) {
+	if (req_can_reconstruct(req, trd) == 1) {
 		lrd = &trd->trd_reply;
 		req->rq_transno = lrd->lrd_transno;
 		req->rq_status = lrd->lrd_result;

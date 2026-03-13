@@ -1029,8 +1029,13 @@ static void ptlrpc_add_exp_list_nolock(struct ptlrpc_request *req,
 		list_add(&req->rq_exp_list, &export->exp_hp_rpcs);
 	else
 		list_add(&req->rq_exp_list, &export->exp_reg_rpcs);
-	if (tag && export->exp_used_slots)
+	if (tag && export->exp_used_slots) {
+		if (test_bit(tag - 1, export->exp_used_slots) &&
+		    !(lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT)) {
+			DEBUG_REQ(D_ERROR, req, "export slot is used already");
+		}
 		set_bit(tag - 1, export->exp_used_slots);
+	}
 }
 
 void ptlrpc_del_exp_list(struct ptlrpc_request *req)
@@ -1874,15 +1879,27 @@ ptlrpc_server_mark_in_progress_obsolete(struct ptlrpc_request *req)
 	 * Also we only hit this codepath in case of a resent
 	 * request which makes it even more rarely hit */
 	list_for_each_entry(tmp, &req->rq_export->exp_reg_rpcs, rq_exp_list) {
-		if (tag == lustre_msg_get_tag(tmp->rq_reqmsg) &&
-		    req->rq_xid > tmp->rq_xid)
+		if (tag != lustre_msg_get_tag(tmp->rq_reqmsg))
+			continue;
+		if (req->rq_xid > tmp->rq_xid)
 			ptlrpc_server_mark_obsolete(tmp);
+		else if (req->rq_xid < tmp->rq_xid && !req_is_replay(req)) {
+			DEBUG_REQ(D_RPCTRACE, req, "stale request tag %u", tag);
+			DEBUG_REQ(D_RPCTRACE, tmp, "on the same slot");
+			ptlrpc_server_mark_obsolete(req);
+		}
 
 	}
 	list_for_each_entry(tmp, &req->rq_export->exp_hp_rpcs, rq_exp_list) {
-		if (tag == lustre_msg_get_tag(tmp->rq_reqmsg) &&
-		    req->rq_xid > tmp->rq_xid)
+		if (tag != lustre_msg_get_tag(tmp->rq_reqmsg))
+			continue;
+		if (req->rq_xid > tmp->rq_xid)
 			ptlrpc_server_mark_obsolete(tmp);
+		else if (req->rq_xid < tmp->rq_xid && !req_is_replay(req)) {
+			DEBUG_REQ(D_RPCTRACE, req, "stale request tag %u", tag);
+			DEBUG_REQ(D_RPCTRACE, tmp, "on the same slot");
+			ptlrpc_server_mark_obsolete(req);
+		}
 	}
 }
 #endif
@@ -2015,6 +2032,11 @@ static int ptlrpc_server_request_add(struct ptlrpc_service_part *svcpt,
 		if (opc != LDLM_CANCEL) {
 #ifdef CONFIG_LUSTRE_FS_SERVER
 			ptlrpc_server_mark_in_progress_obsolete(req);
+			if (req->rq_obsolete) {
+				spin_unlock_bh(&exp->exp_rpc_lock);
+				ptlrpc_nrs_req_finalize(req);
+				RETURN(-EPROTO);
+			}
 #endif
 			orig = ptlrpc_server_check_resend_in_progress(req);
 			if (orig && CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_RESEND_RACE)) {
