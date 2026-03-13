@@ -296,7 +296,7 @@ sysctl_vfs_cache_pressure||vfs_pressure_ratio
 tempnam||mkstemp
 time_t||timeout_t
 timer_setup||cfs_timer_setup
-version_code.*2.1[7-9]||version 2.16.x should be used
+version_code.*2.1[8-9]||version 2.17.x should be used
 vui_tot_count||vui_tot_bytes
 wait_queue_t||wait_queue_entry_t
 xa_insert||ll_xa_insert
