@@ -225,7 +225,7 @@ static struct ll_sb_info *ll_init_sbi(struct lustre_sb_info *lsi)
 		SBI_DEFAULT_HYBRID_IO_READ_THRESHOLD;
 
 	/* setstripe is allowed for all groups by default */
-	sbi->ll_enable_setstripe_gid = -1;
+	sbi->ll_enable_setstripe_gid = MDT_INVALID_GID;
 
 	/* erasure coding is disabled by default */
 	sbi->ll_enable_erasure_coding = 0;

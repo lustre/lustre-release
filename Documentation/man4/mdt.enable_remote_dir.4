@@ -1,0 +1,133 @@
+.TH ENABLE_REMOTE_DIR 4 "2026-03-10" "Lustre" "Lustre Kernel Parameters"
+.SH NAME
+enable_remote_dir, enable_remote_dir_gid \- control remote directory creation
+.SH SYNOPSIS
+.SY
+lctl set_param mdt.\fIFSNAME\fR*.enable_remote_dir=\fIENABLE
+.SY
+lctl set_param mdt.\fIFSNAME\fR*.enable_remote_dir_gid=\fIGID
+.SY
+lctl set_param mdt.\fIFSNAME\fR*.enable_striped_dir=\fIENABLE
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.BR 644 | -rw-r--r--
+.TP
+.B Scope
+.br
+Per-MDT device.
+.TP
+.B Config
+.br
+.BR enable_remote_dir ,
+.BR enable_remote_dir_gid ,
+and
+.B enable_striped_dir
+are always present for MDT devices.
+.TP
+.B Default
+.RB enable_remote_dir= 1
+.br
+.RB enable_remote_dir_gid= 0
+.br
+.RB enable_striped_dir= 1
+.SH DESCRIPTION
+The boolean
+.B enable_remote_dir
+parameter controls whether clients can create remote directories that
+reference other MDTs within the filesystem.
+Explicitly specifying the MDT index for a directory by default also
+constrains all subdirectories for that tree to remain on the given MDT,
+which can negatively impact MDT space balance if used incorrectly.
+If
+.I ENABLE
+is
+.B 1
+(or aliases
+.BR on " or " true ),
+then this functionality is globally enabled. If it is
+.B 0
+or
+.B off
+then this functionality is globally disabled.
+The boolean
+.B enable_striped_dir
+parameter controls whether clients can create striped directories that
+span multiple MDTs within the filesystem.
+DNE striped directories should only be used for large directories that
+will directly contain 100k or more files, and can otherwise have a negative
+performance impact.
+If
+.I ENABLE
+is
+.B 1
+(or aliases
+.BR on " or " true ),
+then this functionality is globally enabled. If it is
+.B 0
+or
+.B off
+then this functionality is globally disabled.
+The
+.B enable_remote_dir_gid
+parameter controls which user or group can create both remote and striped
+directories.
+.PP
+The default
+.I GID
+value of
+.B 0
+indicates that only the root user is allowed to create these directories,
+while
+.B \-1
+indicates that any user is allowed to create them
+If
+.I GID
+is another value, it means users with the numeric Group ID that can do so.
+For example, this could be used to allow an
+.I admin
+group for administrators, or a
+.I dne_dir
+group for power users, using the numeric values of those groups.
+.PP
+The creation of remote directories may optionally be restricted on
+specific client nodes by a per-nodemap
+.RB ' dne_ops '
+RBAC, see
+.BR lctl-nodemap-modify (8)
+for details.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B mdt.*.enable_remote_dir
+.B mdt.*.enable_remote_dir_gid
+.B mdt.*.enable_striped_dir
+.EE
+.SH EXAMPLES
+.TP
+Enable remote directory creation for all users on the \fBtestfs\fR filesystem:
+.EX
+mgs# lctl set_param -P mdt.testfs-*.enable_remote_dir_gid=-1
+.EE
+.SH AVAILABILITY
+The
+.B enable_remote_dir
+and
+.B enable_remote_dir_gid
+parameters are part of the
+.BR lustre (7)
+filesystem package since release 2.4.0.
+.\" Added in commit v2_3_60-28-gbc962bde3b
+The
+.B enable_remote_dir
+parameter is part of the
+.BR lustre (7)
+filesystem package since release 2.12.0.
+.\" Added in commit v2_11_56_0-156-g2dae2b8ffb
+.SH SEE ALSO
+.BR lfs-setdirstripe (1),
+.BR mdt.enable_foreign_dir (4),
+.BR nodemap.rbac (4),
+.BR lctl-nodemap-modify (8),
+.BR lctl-set_param (8)

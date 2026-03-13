@@ -1765,7 +1765,10 @@ static ssize_t enable_setstripe_gid_show(struct kobject *kobj,
 	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
 					      ll_kset.kobj);
 
-	return scnprintf(buf, PAGE_SIZE, "%d\n", sbi->ll_enable_setstripe_gid);
+	if (sbi->ll_enable_setstripe_gid == MDT_INVALID_GID)
+		return scnprintf(buf, PAGE_SIZE, "-1\n");
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", sbi->ll_enable_setstripe_gid);
 }
 
 static ssize_t enable_setstripe_gid_store(struct kobject *kobj,

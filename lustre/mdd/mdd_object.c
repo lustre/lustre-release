@@ -697,7 +697,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		if (!uc->uc_rbac_file_perms ||
 		    (!cap_raised(uc->uc_cap, CAP_SYS_RESOURCE) &&
 		     !lustre_in_group_p(uc, ma->ma_enable_chprojid_gid) &&
-		     !(ma->ma_enable_chprojid_gid == -1 &&
+		     !(ma->ma_enable_chprojid_gid == MDT_INVALID_GID &&
 		       mdd_permission_internal(env, obj, oattr, MAY_WRITE))))
 			RETURN(-EPERM);
 	}

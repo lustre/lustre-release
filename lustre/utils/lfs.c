@@ -8776,20 +8776,26 @@ static int lfs_setdirstripe(int argc, char **argv)
 
 	dname = argv[optind];
 	do {
+		int rc;
+
 		if (default_stripe) {
-			result = llapi_dir_set_default_lmv(dname, param);
-			if (result)
+			rc = llapi_dir_set_default_lmv(dname, param);
+			if (rc)
 				fprintf(stderr,
 					"%s setdirstripe: cannot set default stripe on dir '%s': %s\n",
-					progname, dname, strerror(-result));
+					progname, dname, strerror(-rc));
+			if (!result)
+				result = rc; /* save first error for return */
 			continue;
 		}
 
-		result = llapi_dir_create(dname, mode, param);
-		if (result)
+		rc = llapi_dir_create(dname, mode, param);
+		if (rc)
 			fprintf(stderr,
 				"%s setdirstripe: cannot create dir '%s': %s\n",
-				progname, dname, strerror(-result));
+				progname, dname, strerror(-rc));
+		if (!result)
+			result = rc;	     /* save first error for return */
 	} while ((dname = argv[++optind]));
 
 	if (mode_opt)

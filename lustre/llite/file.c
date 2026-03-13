@@ -4646,7 +4646,7 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	}
 	case LL_IOC_LOV_SETSTRIPE:
 	case LL_IOC_LOV_SETSTRIPE_NEW:
-		if (sbi->ll_enable_setstripe_gid != -1 &&
+		if (sbi->ll_enable_setstripe_gid != MDT_INVALID_GID &&
 		    !capable(CAP_SYS_RESOURCE) &&
 		    /* in_group_p always returns true for gid == 0, so we check
 		     * for this case directly

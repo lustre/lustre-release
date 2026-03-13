@@ -757,6 +757,40 @@ int mdt_init_ucred_reint(struct mdt_thread_info *info)
 }
 
 /**
+ * mdt_enable_gid_deny - check if operation allowed by enable_XXX_gid
+ *
+ * @uc:		process credentials
+ * @cap:	capability required to override permission checks
+ * @ena_gid:	enable_foo_gid value that specifies required GID
+ *
+ * Returns false if request allowed to perform action, true if request is denied
+ */
+bool mdt_enable_gid_deny(struct lu_ucred *uc, unsigned int cap, gid_t ena_gid)
+{
+	if (unlikely(!uc))			/* cannot check permissions */
+		RETURN(false);
+
+	CDEBUG(D_INFO,
+	       "cap=%x raised=%u ena_gid=%u gid=%u fsgid=%u ingrp=%u\n", cap,
+	       cap_raised(uc->uc_cap, cap), ena_gid, uc->uc_gid, uc->uc_fsgid,
+	       lustre_in_group_p(uc, ena_gid));
+
+	if (ena_gid == MDT_INVALID_GID)		/* any GID is allowed */
+		GOTO(out_allow, false);
+
+	if (cap_raised(uc->uc_cap, cap))	/* process has capability set */
+		GOTO(out_allow, false);
+
+	if (lustre_in_group_p(uc, ena_gid))	/* process has required GID */
+		GOTO(out_allow, false);
+
+	lustre_print_ucred(uc);
+	RETURN(true);				/* process missing needed GID */
+out_allow:
+	return false;
+}
+
+/**
  * mdt_check_resource_ids() - check client access to resource via nodemap
  *
  * @info: mdt thread environment

@@ -41,6 +41,8 @@ void lustre_groups_sort(struct group_info *group_info);
 int lustre_groups_search(struct group_info *group_info, gid_t grp);
 int lustre_in_group_p(struct lu_ucred *mu, gid_t grp);
 int has_proper_groups(struct lu_ucred *ucred);
+int lustre_print_groups(struct group_info *group_info);
+int lustre_print_ucred(struct lu_ucred *ucred);
 
 /** @} idmap */
 

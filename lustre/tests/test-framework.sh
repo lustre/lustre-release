@@ -10398,6 +10398,7 @@ test_mkdir() {
 	local hash_name=("all_char" "fnv_1a_64" "crush")
 	local dirstripe_count=${DIRSTRIPE_COUNT:-"2"}
 	local dirstripe_index=${DIRSTRIPE_INDEX:-$((base % $MDSCOUNT))}
+	local mode
 	local OPTIND=1
 	local overstripe_count
 	local stripe_command="-c"
@@ -10405,12 +10406,13 @@ test_mkdir() {
 	(( $MDS1_VERSION > $(version_code v2_15_50-185-g1ac4b9598a) )) &&
 		hash_name+=("crush2")
 
-	while getopts "c:C:H:i:p" opt; do
+	while getopts "c:C:H:i:o:p" opt; do
 		case $opt in
 			c) dirstripe_count=$OPTARG;;
 			C) overstripe_count=$OPTARG;;
 			H) hash_type=$OPTARG;;
 			i) dirstripe_index=$OPTARG;;
+			o) mode="--mode $OPTARG";;
 			p) p_option="-p";;
 			\?) error "only support -c -H -i -p";;
 		esac
@@ -10457,9 +10459,10 @@ test_mkdir() {
 			dirstripe_count=1
 		fi
 
-		echo "striped dir -i$mdt_index $stripe_command$dirstripe_count -H $hash_type $path"
-		$LFS mkdir -i$mdt_index $stripe_command$dirstripe_count -H $hash_type $path ||
-			error "mkdir -i $mdt_index $stripe_command$dirstripe_count -H $hash_type $path failed"
+		local args="-i$mdt_index $stripe_command$dirstripe_count "
+		     args+="-H $hash_type $mode $path"
+		echo "striped dir $args"
+		$LFS mkdir $args || error "'mkdir $args' failed"
 	fi
 }
 
@@ -12452,17 +12455,19 @@ function restore_opencache()
 # explicitly, and set default LMV to create subdirs on the same MDT too.
 mkdir_on_mdt() {
 	local mdt
+	local mode
 	local OPTIND=1
 
-	while getopts "i:" opt $*; do
+	while getopts "i:o:" opt $*; do
 		case $opt in
-			i) mdt=$OPTARG;;
+			i) mdt="-i $OPTARG";;
+			o) mode="--mode $OPTARG";;
 		esac
 	done
 
 	shift $((OPTIND - 1))
 
-	$LFS mkdir -i $mdt -c 1 $*
+	$LFS mkdir $mdt $mode -c 1 $*
 }
 
 mkdir_on_mdt0() {

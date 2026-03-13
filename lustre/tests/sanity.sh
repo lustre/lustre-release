@@ -29429,55 +29429,96 @@ test_300m() {
 }
 run_test 300m "setstriped directory on single MDT FS"
 
-cleanup_300n() {
-	local mdts=$(mdts_nodes)
-
-	trap 0
-	do_nodes $mdts $LCTL set_param -n mdt.*.enable_remote_dir_gid=0
-}
-
 test_300n() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	[ $MDSCOUNT -lt 2 ] && skip_env "needs >= 2 MDTs"
-	[ $MDS1_VERSION -lt $(version_code 2.7.55) ] &&
-		skip "Need MDS version at least 2.7.55"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	(( $MDSCOUNT >= 2 )) || skip_env "needs >= 2 MDTs"
+	(( $MDS1_VERSION >= $(version_code 2.7.55) )) ||
+		skip "Need MDS >= 2.7.55 for enable_remote_dir_gid"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local stripe_index
 	local mdts=$(mdts_nodes)
+	local param_gid="mdt.*.enable_remote_dir_gid"
+	local old_gid=($(do_facet mds1 $LCTL get_param -n $param_gid))
 
-	trap cleanup_300n RETURN EXIT
-	mkdir -p $DIR/$tdir
-	chmod 777 $DIR/$tdir
+	mkdir --mode=0777 $DIR/$tdir
+
+	stack_trap "do_nodes $mdts '$LCTL set_param $param_gid=$old_gid'"
+	# mkdir _gid=0 with explicit setstripe, should not work for regular user
+	do_nodes $mdts $LCTL set_param $param_gid=0 ||
+		error "set $param_gid=0 failed"
 	$RUNAS $LFS setdirstripe -i0 -c$MDSCOUNT \
 				$DIR/$tdir/striped_dir > /dev/null 2>&1 &&
-		error "create striped dir succeeds with gid=0"
+		error "create striped dir succeeds with remote_gid=0"
+	$RUNAS $LFS setdirstripe -D -i 1 -c$MDSCOUNT $DIR/$tdir/striped_dir &&
+		error "set default dir layout succeeds with remote_gid=0"
+	[[ ! -e $DIR/$tdir/striped_dir ]] || error "striped_dir was created"
 
-	do_nodes $mdts $LCTL set_param -n mdt.*.enable_remote_dir_gid=-1
+	# mkdir _gid=-1 with explicit setstripe, should work for any user
+	do_nodes $mdts $LCTL set_param $param_gid=-1
 	$RUNAS $LFS setdirstripe -i0 -c$MDSCOUNT $DIR/$tdir/striped_dir ||
-		error "create striped dir fails with gid=-1"
+		error "create striped dir fails with remote_gid=-1"
+	$RUNAS $LFS setdirstripe -D -i 1 -c$MDSCOUNT $DIR/$tdir/striped_dir ||
+		error "set default dir layout fails with remote_gid=-1"
 
-	do_nodes $mdts $LCTL set_param -n mdt.*.enable_remote_dir_gid=0
-	$RUNAS $LFS setdirstripe -i 1 -c$MDSCOUNT -D \
-				$DIR/$tdir/striped_dir > /dev/null 2>&1 &&
-		error "set default striped dir succeeds with gid=0"
-
-
-	do_nodes $mdts $LCTL set_param -n mdt.*.enable_remote_dir_gid=-1
-	$RUNAS $LFS setdirstripe -i 1 -c$MDSCOUNT -D $DIR/$tdir/striped_dir ||
-		error "set default striped dir fails with gid=-1"
-
-
-	do_nodes $mdts $LCTL set_param -n mdt.*.enable_remote_dir_gid=0
-	$RUNAS mkdir $DIR/$tdir/striped_dir/test_dir ||
-					error "create test_dir fails"
-	$RUNAS mkdir $DIR/$tdir/striped_dir/test_dir1 ||
-					error "create test_dir1 fails"
-	$RUNAS mkdir $DIR/$tdir/striped_dir/test_dir2 ||
-					error "create test_dir2 fails"
-	cleanup_300n
+	# mkdir _gid=0 with default setstripe, should work for any user
+	do_nodes $mdts $LCTL set_param $param_gid=0
+	$RUNAS mkdir $DIR/$tdir/striped_dir/test_dir.{1,2,3} ||
+		error "mkdir in default test_dir with remote_gid=0 fails"
+	[[ -d $DIR/$tdir/striped_dir/test_dir.1 ]] ||
+		error "striped_dir/test_dir.1 not created"
 }
 run_test 300n "non-root user to create dir under striped dir with default EA"
+
+test_300ne()
+{
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	(( $MDSCOUNT >= 2 )) || skip_env "needs >= 2 MDTs"
+	(( $MDS1_VERSION >= $(version_code 2.17.51) )) ||
+		skip "Need MDS >= 2.17.51 for supp remote_dir_gid"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
+	local param_gid="mdt.*.enable_remote_dir_gid"
+	local old_gid=($(do_facet mds1 $LCTL get_param -n $param_gid))
+	local mdts=$(mdts_nodes)
+
+	echo "using primary group $RUNAS_GID"
+	do_nodes $mdts "grep '$RUNAS_GID:' /etc/group"
+	do_nodes $mdts "id $RUNAS_ID"
+	do_nodes $mdts "$LCTL get_param mdt.*.identity_upcall"
+	do_nodes $mdts "$L_GETIDENTITY -d $RUNAS_ID"
+	start_full_debug_logging
+	stack_trap stop_full_debug_logging
+
+	mkdir_on_mdt0 -o 0777 $DIR/$tdir
+
+	stack_trap "do_nodes $mdts '$LCTL set_param $param_gid=$old_gid'"
+	# mkdir _gid=N with explicit setstripe, should work for primary group
+	do_nodes $mdts $LCTL set_param $param_gid=$RUNAS_GID
+	$RUNAS $LFS mkdir -i 1 $DIR/$tdir/group_dir ||
+		error "create remote dir fails with remote_gid=$RUNAS_ID"
+	[[ -d $DIR/$tdir/group_dir ]] || error "$tdir/group_dir not created"
+
+	echo "using $TSTUSR with secondary groups $new_gids"
+	local tst_gids=$(do_facet mds1 id -G $TSTUSR | tr ' ' ',')
+	local new_gids="$tst_gids,$RUNAS_ID"
+	local runas="$RUNAS -u $TSTUSR -g $TSTUSR -G$new_gids"
+
+	# add $RUNAS_ID as a secondary group to $TSTUSR
+	stack_trap "do_nodes $mdts usermod -G $tst_gids $TSTUSR"
+	do_nodes $mdts usermod -a -G $RUNAS_ID $TSTUSR ||
+		error "can't add $TSTUSR to group $RUNAS_ID"
+
+	do_nodes $mdts "grep ':$RUNAS_ID:' /etc/group"
+	do_nodes $mdts "id $TSTUSR"
+	do_nodes $mdts "$L_GETIDENTITY -d $TSTUSR"
+
+	# mkdir _gid=N with explicit setstripe, should work for secondary group
+	$runas $LFS mkdir -i 1 $DIR/$tdir/secondary_dir ||
+		error "create remote dir fails with secondary gids=$new_gids"
+	[[ -d $DIR/$tdir/secondary_dir ]] || error "secondary_dir not created"
+}
+run_test 300ne "create remote dir with various mdt.enable_remote_gid"
 
 test_300o() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

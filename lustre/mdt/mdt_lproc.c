@@ -681,65 +681,44 @@ static ssize_t enable_cap_mask_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(enable_cap_mask);
 
-static ssize_t enable_remote_dir_gid_show(struct kobject *kobj,
-					  struct attribute *attr, char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+#define MDT_ENABLE_GID_LUSTRE_RW_ATTR(name)				\
+static ssize_t name##_show(struct kobject *kobj, struct attribute *attr,\
+			   char *buf)					\
+{									\
+	struct obd_device *obd = container_of(kobj, struct obd_device,	\
+					      obd_kset.kobj);		\
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);		\
+									\
+	if (IS_ERR_OR_NULL(mdt))					\
+		return -ENOENT;						\
+	if (mdt->mdt_##name == MDT_INVALID_GID)				\
+		return scnprintf(buf, PAGE_SIZE, "-1\n");		\
+									\
+	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_##name);	\
+}									\
+static ssize_t name##_store(struct kobject *kobj, struct attribute *attr,\
+			    const char *buffer, size_t count)		\
+{									\
+	struct obd_device *obd = container_of(kobj, struct obd_device,	\
+					      obd_kset.kobj);		\
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);		\
+	int val;							\
+	int rc;								\
+									\
+	if (IS_ERR_OR_NULL(mdt))					\
+		return -ENOENT;						\
+	rc = kstrtoint(buffer, 0, &val);				\
+	if (rc)								\
+		return rc;						\
+									\
+	mdt->mdt_##name = val;						\
+	return count;							\
+}									\
+LUSTRE_RW_ATTR(name)
 
-	return scnprintf(buf, PAGE_SIZE, "%d\n",
-			 (int)mdt->mdt_enable_remote_dir_gid);
-}
-
-static ssize_t enable_remote_dir_gid_store(struct kobject *kobj,
-					   struct attribute *attr,
-					   const char *buffer, size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	int val;
-	int rc;
-
-	rc = kstrtoint(buffer, 0, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_enable_remote_dir_gid = val;
-	return count;
-}
-LUSTRE_RW_ATTR(enable_remote_dir_gid);
-
-static ssize_t enable_chprojid_gid_show(struct kobject *kobj,
-					struct attribute *attr, char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	return scnprintf(buf, PAGE_SIZE, "%d\n",
-			 (int)mdt->mdt_enable_chprojid_gid);
-}
-
-static ssize_t enable_chprojid_gid_store(struct kobject *kobj,
-					 struct attribute *attr,
-					 const char *buffer, size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	int val;
-	int rc;
-
-	rc = kstrtoint(buffer, 0, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_enable_chprojid_gid = val;
-	return count;
-}
-LUSTRE_RW_ATTR(enable_chprojid_gid);
+MDT_ENABLE_GID_LUSTRE_RW_ATTR(enable_chprojid_gid);
+MDT_ENABLE_GID_LUSTRE_RW_ATTR(enable_pin_gid);
+MDT_ENABLE_GID_LUSTRE_RW_ATTR(enable_remote_dir_gid);
 
 #define MDT_BOOL_RW_ATTR(name)						\
 static ssize_t name##_show(struct kobject *kobj, struct attribute *attr,\
@@ -850,37 +829,6 @@ static ssize_t enable_resource_id_check_store(struct kobject *kobj,
 	return count;
 }
 LUSTRE_RW_ATTR(enable_resource_id_check);
-
-static ssize_t enable_pin_gid_show(struct kobject *kobj,
-				   struct attribute *attr, char *buf)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-
-	if (mdt->mdt_enable_pin_gid == ~0U)
-		return scnprintf(buf, PAGE_SIZE, "-1\n");
-	return scnprintf(buf, PAGE_SIZE, "%u\n", mdt->mdt_enable_pin_gid);
-}
-
-static ssize_t enable_pin_gid_store(struct kobject *kobj,
-				    struct attribute *attr,
-				    const char *buffer, size_t count)
-{
-	struct obd_device *obd = container_of(kobj, struct obd_device,
-					      obd_kset.kobj);
-	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-	int val;
-	int rc;
-
-	rc = kstrtoint(buffer, 0, &val);
-	if (rc)
-		return rc;
-
-	mdt->mdt_enable_pin_gid = val;
-	return count;
-}
-LUSTRE_RW_ATTR(enable_pin_gid);
 
 /**
  * Show if the MDT is in no create mode.
@@ -1445,20 +1393,12 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_ir_factor.attr,
 	&lustre_attr_num_exports.attr,
 	&lustre_attr_grant_check_threshold.attr,
+	&lustre_attr_commit_on_sharing.attr,
 	&lustre_attr_evict_client.attr,
 	&lustre_attr_eviction_count.attr,
-	&lustre_attr_identity_expire.attr,
-	&lustre_attr_identity_acquire_expire.attr,
-	&lustre_attr_identity_upcall.attr,
-	&lustre_attr_identity_flush.attr,
-	&lustre_attr_identity_info.attr,
-	&lustre_attr_identity_int_expire.attr,
-	&lustre_attr_identity_int_acquire_expire.attr,
-	&lustre_attr_identity_int_flush.attr,
 	&lustre_attr_evict_tgt_nids.attr,
 	&lustre_attr_enable_cap_mask.attr,
 	&lustre_attr_enable_chprojid_gid.attr,
-	&lustre_attr_enable_pin_gid.attr,
 	&lustre_attr_enable_dir_migration.attr,
 	&lustre_attr_enable_dir_restripe.attr,
 	&lustre_attr_enable_dir_auto_split.attr,
@@ -1467,6 +1407,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_enable_parallel_rename_dir.attr,
 	&lustre_attr_enable_parallel_rename_file.attr,
 	&lustre_attr_enable_parallel_rename_crossdir.attr,
+	&lustre_attr_enable_pin_gid.attr,
 	&lustre_attr_enable_remote_dir.attr,
 	&lustre_attr_enable_remote_dir_gid.attr,
 	&lustre_attr_enable_remote_rename.attr,
@@ -1475,7 +1416,14 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_enable_resource_id_check.attr,
 	&lustre_attr_enable_strict_som.attr,
 	&lustre_attr_enable_striped_dir.attr,
-	&lustre_attr_commit_on_sharing.attr,
+	&lustre_attr_identity_expire.attr,
+	&lustre_attr_identity_acquire_expire.attr,
+	&lustre_attr_identity_upcall.attr,
+	&lustre_attr_identity_flush.attr,
+	&lustre_attr_identity_info.attr,
+	&lustre_attr_identity_int_expire.attr,
+	&lustre_attr_identity_int_acquire_expire.attr,
+	&lustre_attr_identity_int_flush.attr,
 	&lustre_attr_local_recovery.attr,
 	&lustre_attr_no_create.attr,
 	&lustre_attr_async_commit_count.attr,

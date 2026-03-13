@@ -155,6 +155,7 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
 
 		lustre_groups_from_list(ginfo, data->idd_groups);
 		lustre_groups_sort(ginfo);
+		lustre_print_groups(ginfo);
 	}
 
 	if (data->idd_nperms) {

@@ -576,9 +576,8 @@ static int mdt_create(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		 * permission or capability checks
 		 */
 		if (!uc->uc_rbac_dne_ops ||
-		    (!cap_raised(uc->uc_cap, CAP_SYS_ADMIN) &&
-		     uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
-		     mdt->mdt_enable_remote_dir_gid != -1))
+		    mdt_enable_gid_deny(uc, CAP_SYS_ADMIN,
+					mdt->mdt_enable_remote_dir_gid))
 			RETURN(-EPERM);
 
 		/* restripe if later found dir exists, MDS_OPEN_CREAT means
@@ -1090,9 +1089,8 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 			 * permission or capability checks
 			 */
 			if (!uc->uc_rbac_dne_ops ||
-			    (!cap_raised(uc->uc_cap, CAP_SYS_ADMIN) &&
-			     uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
-			     mdt->mdt_enable_remote_dir_gid != -1))
+			    mdt_enable_gid_deny(uc, CAP_SYS_ADMIN,
+						mdt->mdt_enable_remote_dir_gid))
 				GOTO(out_put, rc = -EPERM);
 		}
 
@@ -2326,9 +2324,8 @@ int mdt_reint_migrate(struct mdt_thread_info *info,
 	 * permission or capability checks
 	 */
 	if (uc && (!uc->uc_rbac_dne_ops ||
-		   (!cap_raised(uc->uc_cap, CAP_SYS_ADMIN) &&
-		    uc->uc_gid != mdt->mdt_enable_remote_dir_gid &&
-		    mdt->mdt_enable_remote_dir_gid != -1)))
+		   mdt_enable_gid_deny(uc, CAP_SYS_ADMIN,
+				       mdt->mdt_enable_remote_dir_gid)))
 		RETURN(-EPERM);
 
 	/*

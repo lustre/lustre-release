@@ -143,3 +143,40 @@ int has_proper_groups(struct lu_ucred *ucred)
 	return rc;
 }
 EXPORT_SYMBOL(has_proper_groups);
+
+int lustre_print_groups(struct group_info *group_info)
+{
+	int g;
+
+	if (!group_info)
+		RETURN(-ENOENT);
+
+	get_group_info(group_info);
+	CDEBUG(D_INFO, "ngroups=%u\n", group_info->ngroups);
+	for (g = 0; g < group_info->ngroups; g++)
+		CDEBUG(D_INFO, "group[%u] = %u\n", g,
+		       from_kgid(&init_user_ns, group_info->gid[g]));
+	put_group_info(group_info);
+
+	RETURN(0);
+}
+EXPORT_SYMBOL(lustre_print_groups);
+
+int lustre_print_ucred(struct lu_ucred *ucred)
+{
+	struct group_info *group_info;
+
+	if (unlikely(!ucred))
+		return -EINVAL;
+
+	group_info = ucred->uc_ginfo;
+	if (!group_info && ucred->uc_identity)
+		group_info = ucred->uc_identity->mi_ginfo;
+
+	CDEBUG(D_INFO, "uid=%u gid=%u fsuid=%u fsgid=%u supp=%u/%u ginfo=%px\n",
+	       ucred->uc_uid, ucred->uc_gid, ucred->uc_fsuid, ucred->uc_fsgid,
+	       ucred->uc_suppgids[0], ucred->uc_suppgids[1], group_info);
+
+	return lustre_print_groups(group_info);
+}
+EXPORT_SYMBOL(lustre_print_ucred);
