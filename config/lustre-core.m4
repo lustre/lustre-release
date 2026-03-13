@@ -669,9 +669,14 @@ LB_CHECK_EXPORT([flush_delayed_fput], [fs/file_table.c],
 AC_DEFUN([LC_SRC_LM_COMPARE_OWNER_EXISTS], [
 	LB2_LINUX_TEST_SRC([lock_manager_ops_lm_compare_owner], [
 		#include <linux/fs.h>
+		#ifdef HAVE_LINUX_FILELOCK_HEADER
+		#include <linux/filelock.h>
+		#endif
 	],[
-		struct lock_manager_operations lm_ops;
+		struct lock_manager_operations lm_ops = {};
+
 		lm_ops.lm_compare_owner = NULL;
+		(void)lm_ops;
 	],[-Werror])
 ])
 AC_DEFUN([LC_LM_COMPARE_OWNER_EXISTS], [
@@ -2165,6 +2170,9 @@ AC_DEFUN([LC_HAVE_MNT_IDMAP_ARG], [
 #
 # LC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK
 #
+# This test is run early so HAVE_LINUX_FILELOCK_HEADER can be used
+# in other configure tests
+#
 # Linux commit v6.2-rc3-9-g5970e15dbcfe
 #   filelock: move file locking definitions to separate header file
 #
@@ -3506,7 +3514,6 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 
 	# 6.3
 	LC_SRC_HAVE_MNT_IDMAP_ARG
-	LC_SRC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK
 	LC_SRC_HAVE_U64_CAPABILITY
 	LC_SRC_HAVE_FOLIO_BATCH_REINIT
 
@@ -3711,7 +3718,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 6.3
 	LC_HAVE_MNT_IDMAP_ARG
-	LC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK
 	LC_HAVE_U64_CAPABILITY
 	LC_HAVE_FOLIO_BATCH_REINIT
 
