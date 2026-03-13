@@ -831,7 +831,7 @@ out_disconnect:
 }
 EXPORT_SYMBOL(client_disconnect_export);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 int server_disconnect_export(struct obd_export *exp)
 {
 	int rc;
@@ -3285,7 +3285,7 @@ void target_committed_to_req(struct ptlrpc_request *req)
 	       exp->exp_last_committed, req->rq_transno, req->rq_xid);
 }
 
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 /**
  * Packs current SLV and Limit into \a req.
@@ -3514,7 +3514,7 @@ void ldlm_dump_export_locks(struct obd_export *exp)
 }
 #endif
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 static inline const char *bulk2type(struct ptlrpc_request *req)
 {
 	if (req->rq_bulk_read)
@@ -3627,4 +3627,4 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc)
 }
 EXPORT_SYMBOL(target_bulk_io);
 
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */

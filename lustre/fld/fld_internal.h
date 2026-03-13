@@ -102,7 +102,7 @@ enum {
 
 extern struct lu_fld_hash fld_hash[];
 
-# ifdef HAVE_SERVER_SUPPORT
+# ifdef CONFIG_LUSTRE_FS_SERVER
 struct fld_thread_info {
 	struct lu_seq_range fti_rec;
 	struct lu_seq_range fti_lrange;
@@ -139,7 +139,7 @@ int fld_server_read(const struct lu_env *env, struct lu_server_fld *fld,
 extern const struct file_operations fld_debugfs_seq_fops;
 extern struct dentry *fld_debugfs_dir;
 
-# endif /* HAVE_SERVER_SUPPORT */
+# endif /* CONFIG_LUSTRE_FS_SERVER */
 
 int fld_client_rpc(struct obd_export *exp, struct lu_seq_range *range,
 		   __u32 fld_op, struct ptlrpc_request **reqp);
@@ -169,7 +169,7 @@ int fld_cache_lookup(struct fld_cache *cache,
 static inline const char *
 fld_target_name(const struct lu_fld_target *tar)
 {
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	if (tar->ft_srv != NULL)
 		return tar->ft_srv->lsf_name;
 #endif

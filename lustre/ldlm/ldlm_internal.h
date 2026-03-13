@@ -124,7 +124,7 @@ void ldlm_lock_decref_internal_nolock(struct ldlm_lock *l,
 				      enum ldlm_mode mode);
 void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
 			    struct list_head *work_list);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 int ldlm_reprocess_queue(struct ldlm_resource *res, struct list_head *queue,
 			 struct list_head *work_list,
 			 enum ldlm_process_intention intention,
@@ -166,7 +166,7 @@ void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
 			     struct ldlm_lock_desc *ld, struct ldlm_lock *lock);
 void ldlm_bl_desc2lock(const struct ldlm_lock_desc *ld, struct ldlm_lock *lock);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 /* ldlm_plain.c */
 int ldlm_process_plain_lock(struct ldlm_lock *lock, __u64 *flags,
 			    enum ldlm_process_intention intention,
@@ -381,7 +381,7 @@ void ldlm_flock_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
 				     union ldlm_wire_policy_data *wpolicy);
 
 /* ldlm_reclaim.c */
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 extern u64 ldlm_reclaim_threshold;
 extern u64 ldlm_lock_limit;
 extern u64 ldlm_reclaim_threshold_mb;

@@ -17,7 +17,7 @@
 #include <linux/module.h>
 #include <obd_class.h>
 #include <obd.h>
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 #include <lustre_update.h>
 #else
 

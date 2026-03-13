@@ -119,7 +119,7 @@ static void mdunlink_iterate_helper(struct lnet_handle_md *bd_mds, int count)
 		LNetMDUnlink(bd_mds[i]);
 }
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 /**
  * ptlrpc_prep_bulk_exp() - Prepare bulk descriptor for specified incoming @req
  * @req: PTLRPC request linked to bulk buffer
@@ -324,7 +324,7 @@ void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
 		CWARN("Unexpectedly long timeout: desc %p\n", desc);
 	}
 }
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 /**
  * ptlrpc_register_bulk() - Register bulk at the sender for later transfer.

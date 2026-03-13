@@ -31,7 +31,7 @@
 #include <lustre_crypto.h>
 #endif
 #include <uapi/linux/lustre/lustre_idl.h>
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 #include <uapi/linux/lustre/lustre_disk.h>
 #define IS_MDT(data)		((data)->lsi_flags & LDD_F_SV_TYPE_MDT)
 #define IS_OST(data)		((data)->lsi_flags & LDD_F_SV_TYPE_OST)
@@ -178,7 +178,7 @@ static inline bool target_supports_large_nid(struct mgs_target_info *mti)
 	return mti->mti_flags & LDD_F_LARGE_NID;
 }
 
-# ifdef HAVE_SERVER_SUPPORT
+# ifdef CONFIG_LUSTRE_FS_SERVER
 /* opc for target register */
 #define LDD_F_OPC_REG   0x10000000	/* bit 28 */
 #define LDD_F_OPC_UNREG 0x20000000	/* bit 29 */
@@ -377,7 +377,7 @@ int lustre_start_simple(char *obdname, char *type,
 			char *uuid, char *s1, char *s2,
 			char *s3, char *s4);
 int lustre_stop_mgc(struct super_block *sb);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 int lustre_start_mgc(struct super_block *sb);
 int lustre_common_put_super(struct super_block *sb);

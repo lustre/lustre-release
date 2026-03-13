@@ -166,7 +166,7 @@ static inline void req_capsule_set_rep_swabbed(struct req_capsule *pill,
 
 int  req_layout_init(void);
 void req_layout_fini(void);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 int req_check_sepol(struct req_capsule *pill);
 #else
 static inline int req_check_sepol(struct req_capsule *pill)

@@ -569,7 +569,7 @@ static ssize_t lock_cache_policy_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(lock_cache_policy);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 static ssize_t ctime_age_limit_show(struct kobject *kobj,
 				    struct attribute *attr, char *buf)
 {
@@ -716,7 +716,7 @@ static ssize_t max_parallel_ast_store(struct kobject *kobj,
 }
 LUSTRE_RW_ATTR(max_parallel_ast);
 
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 /* These are for namespaces in /sys/fs/lustre/ldlm/namespaces/ */
 static struct attribute *ldlm_ns_attrs[] = {
@@ -736,7 +736,7 @@ static struct attribute *ldlm_ns_attrs[] = {
 	&lustre_attr_lru_priv_score_threshold.attr,
 	&lustre_attr_lru_priv_ratio_limit.attr,
 	&lustre_attr_lock_cache_policy.attr,
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	&lustre_attr_ctime_age_limit.attr,
 	&lustre_attr_lock_timeouts.attr,
 	&lustre_attr_max_nolock_bytes.attr,

@@ -124,7 +124,7 @@ static inline void extent_replace(struct ldlm_lock *in_tree,
 		tree->rb_leftmost = &new->l_rb;
 }
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 # define LDLM_MAX_GROWN_EXTENT (32 * 1024 * 1024 - 1)
 
 /**
@@ -896,7 +896,7 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 out:
 	return rc;
 }
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 /* When a lock is cancelled by a client, the KMS may undergo change if this
  * is the "highest lock".  This function returns the new KMS value, updating

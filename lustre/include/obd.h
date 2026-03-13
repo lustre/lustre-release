@@ -81,7 +81,7 @@ struct obd_type {
 	const struct md_ops	*typ_md_ops;
 	struct proc_dir_entry	*typ_procroot;
 	struct dentry		*typ_debugfs_entry;
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	bool			 typ_sym_filter;
 #endif
 	atomic_t		 typ_refcnt;
@@ -671,7 +671,7 @@ struct obd_device {
 		obd_dynamic_nids:1,	/* Allow dynamic NIDs on device */
 		obd_read_only:1,	/* device is read-only */
 		obd_need_scrub:1;	/* device need scrub */
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	/* no committed-transno notification */
 	unsigned long			obd_no_transno:1;
 #endif
@@ -829,7 +829,7 @@ extern unsigned int ldlm_enqueue_min;
 
 int obd_uuid_add(struct obd_device *obd, struct obd_export *export);
 void obd_uuid_del(struct obd_device *obd, struct obd_export *export);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 struct obd_export *obd_uuid_lookup(struct obd_device *obd,
 				   struct obd_uuid *uuid);
 

@@ -1842,7 +1842,7 @@ found:
 	return tmp;
 }
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 static void ptlrpc_server_mark_obsolete(struct ptlrpc_request *req)
 {
 	spin_lock(&req->rq_lock);
@@ -2011,7 +2011,7 @@ static int ptlrpc_server_request_add(struct ptlrpc_service_part *svcpt,
 		 * make this code a bit more generic, but this should plug
 		 * the most obious hole for now */
 		if (opc != LDLM_CANCEL) {
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 			ptlrpc_server_mark_in_progress_obsolete(req);
 #endif
 			orig = ptlrpc_server_check_resend_in_progress(req);

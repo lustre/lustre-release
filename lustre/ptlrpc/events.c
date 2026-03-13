@@ -433,7 +433,7 @@ void reply_out_callback(struct lnet_event *ev)
 	EXIT;
 }
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 /*
  * Server's bulk completion callback
  */
@@ -498,11 +498,10 @@ static void ptlrpc_master_callback(struct lnet_event *ev)
 		callback == reply_in_callback ||
 		callback == client_bulk_callback ||
 		callback == request_in_callback ||
-		callback == reply_out_callback
-#ifdef HAVE_SERVER_SUPPORT
-		|| callback == server_bulk_callback
+#ifdef CONFIG_LUSTRE_FS_SERVER
+		callback == server_bulk_callback ||
 #endif
-		);
+		callback == reply_out_callback);
 
 	callback(ev);
 	if (ev->unlinked)

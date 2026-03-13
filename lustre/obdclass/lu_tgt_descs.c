@@ -135,7 +135,7 @@ int lu_qos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *tgt)
 	list_add_tail(&svr->lsq_svr_list, &tempsvr->lsq_svr_list);
 
 	set_bit(LQ_DIRTY, &qos->lq_flags);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	set_bit(LQ_DIRTY, &qos->lq_rr.lqr_flags);
 #endif
 out:
@@ -178,7 +178,7 @@ int lu_qos_del_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd)
 	}
 
 	set_bit(LQ_DIRTY, &qos->lq_flags);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	set_bit(LQ_DIRTY, &qos->lq_rr.lqr_flags);
 #endif
 out:

@@ -1253,7 +1253,7 @@ static void ldlm_pools_recalc_task(struct work_struct *ws)
 {
 	/* seconds of sleep if no active namespaces */
 	time64_t delay;
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	struct ldlm_namespace *ns;
 	unsigned long nr_l = 0, nr_p = 0, l;
 	int equal = 0;
@@ -1318,9 +1318,9 @@ static void ldlm_pools_recalc_task(struct work_struct *ws)
 
 	delay = min(ldlm_pools_recalc_delay(LDLM_NAMESPACE_SERVER),
 		    ldlm_pools_recalc_delay(LDLM_NAMESPACE_CLIENT));
-#else  /* !HAVE_SERVER_SUPPORT */
+#else  /* !CONFIG_LUSTRE_FS_SERVER */
 	delay = ldlm_pools_recalc_delay(LDLM_NAMESPACE_CLIENT);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 	/* Wake up the blocking threads from time to time. */
 	ldlm_bl_thread_wakeup();
@@ -1347,7 +1347,7 @@ int ldlm_pools_init(void)
 
 	ENTRY;
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	delay = min(LDLM_POOL_SRV_DEF_RECALC_PERIOD,
 		    LDLM_POOL_CLI_DEF_RECALC_PERIOD);
 #else

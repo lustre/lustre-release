@@ -74,7 +74,7 @@ ldebugfs_fid_write_common(const char __user *buffer, size_t count,
 	RETURN(0);
 }
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 /*
  * Server side debugfs stuff.
  */
@@ -478,7 +478,7 @@ const struct file_operations seq_fld_debugfs_seq_fops = {
 	.release = fldb_seq_release,
 };
 
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 /* Client side debugfs stuff */
 static ssize_t
@@ -586,10 +586,10 @@ ldebugfs_client_fid_server_seq_show(struct seq_file *m, void *unused)
 	if (seq->lcs_exp) {
 		cli = &seq->lcs_exp->exp_obd->u.cli;
 		seq_printf(m, "%s\n", cli->cl_target_uuid.uuid);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	} else {
 		seq_printf(m, "%s\n", seq->lcs_srv->lss_name);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 	}
 
 	RETURN(0);

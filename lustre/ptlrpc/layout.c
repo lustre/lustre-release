@@ -852,7 +852,7 @@ static struct req_format *req_formats[] = {
 	&RQF_MDS_HSM_DATA_VERSION,
 	&RQF_MDS_SWAP_LAYOUTS,
 	&RQF_MDS_RMFID,
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	&RQF_OUT_UPDATE,
 #endif
 	&RQF_OST_CONNECT,
@@ -2945,7 +2945,7 @@ int req_capsule_server_grow(struct req_capsule *pill,
 }
 EXPORT_SYMBOL(req_capsule_server_grow);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 static const struct req_msg_field *mds_update_client[] = {
 	&RMF_PTLRPC_BODY,
 	&RMF_OUT_UPDATE_HEADER,

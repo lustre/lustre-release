@@ -45,7 +45,7 @@ struct l_wait_info;
 #endif
 #define LP_POISON ((void *)LL_POISON)
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 int rev_import_init(struct obd_export *exp);
 int target_handle_connect(struct ptlrpc_request *req);
 int target_handle_disconnect(struct ptlrpc_request *req);

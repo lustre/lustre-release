@@ -88,7 +88,7 @@ SERVER_ONLY struct obd_type *class_get_type(const char *name)
 	if (!type) {
 		const char *modname = name;
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 		if (strcmp(modname, "obdfilter") == 0 ||
 		    strcmp(modname, LUSTRE_OSS_NAME) == 0)
 			modname = "ofd";
@@ -98,7 +98,7 @@ SERVER_ONLY struct obd_type *class_get_type(const char *name)
 
 		if (!strncmp(modname, LUSTRE_MDS_NAME, strlen(LUSTRE_MDS_NAME)))
 			modname = LUSTRE_MDT_NAME;
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 		rcu_read_unlock();
 		if (!request_module("%s", modname)) {
@@ -165,7 +165,7 @@ static struct kobj_type class_ktype = {
 	.release        = class_sysfs_release,
 };
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 struct obd_type *class_add_symlinks(const char *name, bool enable_proc)
 {
 	struct dentry *symlink;
@@ -205,7 +205,7 @@ struct obd_type *class_add_symlinks(const char *name, bool enable_proc)
 	return type;
 }
 EXPORT_SYMBOL(class_add_symlinks);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 #define CLASS_MAX_NAME 1024
 
@@ -223,10 +223,10 @@ int class_register_type(const struct obd_ops *dt_ops,
 
 	type = class_search_type(name);
 	if (type) {
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 		if (type->typ_sym_filter)
 			goto dir_exist;
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 		kobject_put(&type->typ_kobj);
 		CDEBUG(D_IOCTL, "Type %s already registered\n", name);
 		RETURN(-EEXIST);
@@ -239,14 +239,14 @@ int class_register_type(const struct obd_ops *dt_ops,
 	type->typ_lu = ldt ? OBD_LU_TYPE_SETUP : NULL;
 	type->typ_kobj.kset = lustre_kset;
 	kobject_init(&type->typ_kobj, &class_ktype);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 dir_exist:
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 	type->typ_dt_ops = dt_ops;
 	type->typ_md_ops = md_ops;
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	if (type->typ_sym_filter) {
 		type->typ_sym_filter = false;
 		kobject_put(&type->typ_kobj);
@@ -270,7 +270,7 @@ dir_exist:
 	rc = kobject_add(&type->typ_kobj, &lustre_kset->kobj, "%s", name);
 	if (rc)
 		GOTO(failed, rc);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 setup_ldt:
 #endif
 	if (ldt) {
@@ -1166,7 +1166,7 @@ void class_unlink_export(struct obd_export *exp)
 	if (exp != exp->exp_obd->obd_self_export)
 		obd_uuid_del(exp->exp_obd, exp);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	if (!hlist_unhashed(&exp->exp_gen_hash)) {
 		struct tg_export_data	*ted = &exp->exp_target_data;
 		struct cfs_hash		*hash;
@@ -1180,7 +1180,7 @@ void class_unlink_export(struct obd_export *exp)
 			     &exp->exp_gen_hash);
 		cfs_hash_putref(hash);
 	}
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 	list_move(&exp->exp_obd_chain, &exp->exp_obd->obd_unlinked_exports);
 	obd_export_timed_del(exp);
@@ -1469,12 +1469,12 @@ int class_disconnect(struct obd_export *export)
 	spin_lock(&export->exp_lock);
 	already_disconnected = export->exp_disconnected;
 	export->exp_disconnected = 1;
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	/*  We hold references of export for uuid hash and nid_hash and export
 	 *  link at least. So it is safe to call rh*table_remove_fast in there.
 	 */
 	obd_nid_del(export->exp_obd, export);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 	spin_unlock(&export->exp_lock);
 
 	/* class_cleanup(), abort_recovery(), and class_fail_export() all end up
@@ -1672,7 +1672,7 @@ void class_fail_export(struct obd_export *exp)
 }
 EXPORT_SYMBOL(class_fail_export);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 
 static int take_first(struct obd_export *exp, void *data)
 {
@@ -1803,7 +1803,7 @@ out_fini:
 
 	return rc;
 }
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
 void (*class_export_dump_hook)(struct obd_export *) = NULL;

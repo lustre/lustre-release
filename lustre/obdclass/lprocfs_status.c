@@ -1366,7 +1366,7 @@ int lprocfs_obd_cleanup(struct obd_device *obd)
 
 	debugfs_remove_recursive(obd->obd_debugfs_gss_dir);
 	obd->obd_debugfs_gss_dir = NULL;
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	/* Should be no exports left */
 	debugfs_remove_recursive(obd->obd_debugfs_exports);
 	obd->obd_debugfs_exports = NULL;

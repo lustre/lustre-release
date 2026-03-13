@@ -26,10 +26,10 @@
 #include <lustre_kernelcomm.h>
 #include <lprocfs_status.h>
 #include <cl_object.h>
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 # include <dt_object.h>
 # include <md_object.h>
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include "llog_internal.h"
 #include <lustre_ioctl_old.h>
@@ -853,7 +853,7 @@ static int __init obdclass_init(void)
 	err = cfs_hash_init();
 	if (err)
 		goto cleanup_obd_pool;
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	err = dt_global_init();
 	if (err != 0)
 		goto cleanup_cfs_hash;
@@ -861,7 +861,7 @@ static int __init obdclass_init(void)
 	err = lu_ucred_global_init();
 	if (err != 0)
 		goto cleanup_dt_global;
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 	/* simulate a late OOM situation now to require all
 	 * alloc'ed/initialized resources to be freed
@@ -874,14 +874,14 @@ static int __init obdclass_init(void)
 	return 0;
 
 cleanup_all:
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	lu_ucred_global_fini();
 
 cleanup_dt_global:
 	dt_global_fini();
 
 cleanup_cfs_hash:
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 	cfs_hash_fini();
 cleanup_obd_pool:
 	obd_pool_fini();
@@ -953,10 +953,10 @@ static void __exit obdclass_exit(void)
 	ENTRY;
 
 	misc_deregister(&obd_psdev);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	lu_ucred_global_fini();
 	dt_global_fini();
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 	cfs_hash_fini();
 	obd_pool_fini();
 	llog_info_fini();

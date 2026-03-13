@@ -445,12 +445,12 @@ again:
 	res->lsr_start = seq;
 	fld_range_set_type(res, flags);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	if (target->ft_srv) {
 		LASSERT(env != NULL);
 		rc = fld_server_lookup(env, target->ft_srv, seq, res);
 	} else
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 	{
 		rc = fld_client_rpc(target->ft_exp, res, FLD_QUERY, NULL);
 	}
@@ -499,11 +499,11 @@ static int __init fld_init(void)
 	if (rc)
 		return rc;
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	rc = fld_server_mod_init();
 	if (rc)
 		return rc;
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 	fld_debugfs_dir = debugfs_create_dir(LUSTRE_FLD_NAME,
 					     debugfs_lustre_root);
@@ -512,10 +512,9 @@ static int __init fld_init(void)
 
 static void __exit fld_exit(void)
 {
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	fld_server_mod_exit();
-#endif /* HAVE_SERVER_SUPPORT */
-
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 	debugfs_remove_recursive(fld_debugfs_dir);
 }
 

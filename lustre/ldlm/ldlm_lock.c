@@ -114,7 +114,7 @@ const char *ldlm_it2str(enum ldlm_intent_flags it)
 }
 EXPORT_SYMBOL(ldlm_it2str);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 static ldlm_processing_policy ldlm_processing_policy_table[] = {
 	[LDLM_PLAIN]	= ldlm_process_plain_lock,
 	[LDLM_EXTENT]	= ldlm_process_extent_lock,
@@ -140,7 +140,7 @@ ldlm_reprocessing_policy ldlm_get_reprocessing_policy(struct ldlm_resource *res)
 	return ldlm_reprocessing_policy_table[res->lr_type];
 }
 
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 void ldlm_register_intent(struct ldlm_namespace *ns, ldlm_res_policy arg)
 {
@@ -1746,7 +1746,7 @@ out:
 	RETURN(ERR_PTR(rc));
 }
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 static enum ldlm_error ldlm_lock_enqueue_helper(struct ldlm_lock *lock,
 					     __u64 *flags)
 {
@@ -1789,7 +1789,7 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 	struct ldlm_resource *res;
 	int local = ns_is_client(ns);
 	enum ldlm_error rc = ELDLM_OK;
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	bool reconstruct = false;
 #endif
 	ENTRY;
@@ -1843,7 +1843,7 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 		RETURN(ELDLM_OK);
 	}
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	reconstruct = !local && lock->l_resource->lr_type == LDLM_FLOCK &&
 		      !(*flags & LDLM_FL_TEST_LOCK);
 	if (reconstruct) {
@@ -1913,7 +1913,7 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 		else
 			ldlm_grant_lock(lock, NULL);
 		GOTO(out, rc = ELDLM_OK);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	} else if (*flags & LDLM_FL_REPLAY) {
 		if (*flags & LDLM_FL_BLOCK_WAIT) {
 			ldlm_resource_add_lock(res, &res->lr_waiting, lock);
@@ -1937,7 +1937,7 @@ enum ldlm_error ldlm_lock_enqueue(const struct lu_env *env,
 out:
 	unlock_res_and_lock(lock);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	if (reconstruct) {
 		struct ptlrpc_request *req = cookie;
 
@@ -1949,7 +1949,7 @@ out:
 	return rc;
 }
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 /**
  * Iterate through all waiting locks on a given resource queue and attempt to
  * grant them.
@@ -2335,7 +2335,7 @@ int ldlm_run_ast_work(struct ldlm_namespace *ns, struct list_head *rpc_list,
 		arg->type = LDLM_CP_CALLBACK;
 		work_ast_lock = ldlm_work_cp_ast_lock;
 		break;
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	case LDLM_WORK_BL_AST:
 		arg->type = LDLM_BL_CALLBACK;
 		work_ast_lock = ldlm_work_bl_ast_lock;
@@ -2386,7 +2386,7 @@ static void __ldlm_reprocess_all(struct ldlm_resource *res,
 				 enum mds_ibits_locks hint)
 {
 	LIST_HEAD(rpc_list);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	ldlm_reprocessing_policy reprocess;
 	struct obd_device *obd;
 	int rc;
@@ -2711,7 +2711,7 @@ int ldlm_export_cancel_locks(struct obd_export *exp)
  */
 void ldlm_lock_mode_downgrade(struct ldlm_lock *lock, enum ldlm_mode new_mode)
 {
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	ENTRY;
 
 	LASSERT(new_mode == LCK_COS || new_mode == LCK_TXN ||

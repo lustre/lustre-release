@@ -269,7 +269,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)SEQ_FIRST_OPC);
 	LASSERTF(SEQ_LAST_OPC == 701, "found %lld\n",
 		 (long long)SEQ_LAST_OPC);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	LASSERTF(LFSCK_NOTIFY == 1101, "found %lld\n",
 		 (long long)LFSCK_NOTIFY);
 	LASSERTF(LFSCK_QUERY == 1102, "found %lld\n",
@@ -278,7 +278,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)LFSCK_FIRST_OPC);
 	LASSERTF(LFSCK_LAST_OPC == 1103, "found %lld\n",
 		 (long long)LFSCK_LAST_OPC);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 	LASSERTF(SEQ_ALLOC_SUPER == 0, "found %lld\n",
 		 (long long)SEQ_ALLOC_SUPER);
 	LASSERTF(SEQ_ALLOC_META == 1, "found %lld\n",
@@ -333,7 +333,7 @@ void lustre_assert_wire_constants(void)
 	BUILD_BUG_ON(LUSTRE_RES_ID_QUOTA_SEQ_OFF != 2);
 	BUILD_BUG_ON(LUSTRE_RES_ID_QUOTA_VER_OID_OFF != 3);
 	BUILD_BUG_ON(LUSTRE_RES_ID_HSH_OFF != 3);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	LASSERTF(OUT_UPDATE == 1000, "found %lld\n",
 		 (long long)OUT_UPDATE);
 	LASSERTF(OUT_UPDATE_LAST_OPC == 1001, "found %lld\n",
@@ -342,7 +342,7 @@ void lustre_assert_wire_constants(void)
 	BUILD_BUG_ON(LQUOTA_TYPE_GRP != 1);
 	BUILD_BUG_ON(LQUOTA_RES_MD != 1);
 	BUILD_BUG_ON(LQUOTA_RES_DT != 2);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 	LASSERTF(OBD_PING == 400, "found %lld\n",
 		 (long long)OBD_PING);
 	LASSERTF(OBD_IDX_READ == 403, "found %lld\n",
@@ -429,7 +429,7 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct lustre_som_attrs *)0)->lsa_blocks) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct lustre_som_attrs *)0)->lsa_blocks));
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_LUSTRE_SERVER
 	/* Checks for struct lustre_mdt_attrs */
 	LASSERTF((int)sizeof(struct lustre_mdt_attrs) == 24, "found %lld\n",
 		 (long long)(int)sizeof(struct lustre_mdt_attrs));
@@ -581,7 +581,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct hsm_attrs, hsm_arch_ver));
 	LASSERTF((int)sizeof(((struct hsm_attrs *)0)->hsm_arch_ver) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct hsm_attrs *)0)->hsm_arch_ver));
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_LUSTRE_SERVER */
 
 	/* Checks for struct ost_id */
 	LASSERTF((int)sizeof(struct ost_id) == 16, "found %lld\n",
@@ -630,14 +630,14 @@ void lustre_assert_wire_constants(void)
 			(long long)FID_SEQ_QUOTA_GLB);
 	LASSERTF(FID_SEQ_ROOT == 0x0000000200000007ULL, "found 0x%.16llxULL\n",
 			(long long)FID_SEQ_ROOT);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_LUSTRE_SERVER
 	LASSERTF(FID_SEQ_LAYOUT_RBTREE == 0x0000000200000008ULL, "found 0x%.16llxULL\n",
 			(long long)FID_SEQ_LAYOUT_RBTREE);
 	LASSERTF(FID_SEQ_UPDATE_LOG == 0x0000000200000009ULL, "found 0x%.16llxULL\n",
 			(long long)FID_SEQ_UPDATE_LOG);
 	LASSERTF(FID_SEQ_UPDATE_LOG_DIR == 0x000000020000000aULL, "found 0x%.16llxULL\n",
 			(long long)FID_SEQ_UPDATE_LOG_DIR);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_LUSTRE_SERVER */
 	LASSERTF(FID_SEQ_NORMAL == 0x0000000200000400ULL, "found 0x%.16llxULL\n",
 			(long long)FID_SEQ_NORMAL);
 	LASSERTF(FID_SEQ_LOV_DEFAULT == 0xffffffffffffffffULL, "found 0x%.16llxULL\n",
@@ -722,11 +722,11 @@ void lustre_assert_wire_constants(void)
 		 (long long)LDF_COLLIDE);
 	LASSERTF(LU_PAGE_SIZE == 4096, "found %lld\n",
 		 (long long)LU_PAGE_SIZE);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_LUSTRE_SERVER
 	/* Checks for union lu_page */
 	LASSERTF((int)sizeof(union lu_page) == 4096, "found %lld\n",
 		 (long long)(int)sizeof(union lu_page));
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_LUSTRE_SERVER */
 
 	/* Checks for struct lu_ladvise */
 	LASSERTF((int)sizeof(struct lu_ladvise) == 32, "found %lld\n",
@@ -1679,10 +1679,10 @@ void lustre_assert_wire_constants(void)
 		 OBD_MD_FLCROSSREF);
 	LASSERTF(OBD_MD_FLGETATTRLOCK == (0x0000200000000000ULL), "found 0x%.16llxULL\n",
 		 OBD_MD_FLGETATTRLOCK);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_LUSTRE_SERVER
 	LASSERTF(OBD_MD_FLOBJCOUNT == (0x0000400000000000ULL), "found 0x%.16llxULL\n",
 		 OBD_MD_FLOBJCOUNT);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_LUSTRE_SERVER */
 	LASSERTF(OBD_MD_FLDATAVERSION == (0x0010000000000000ULL), "found 0x%.16llxULL\n",
 		 OBD_MD_FLDATAVERSION);
 	LASSERTF(OBD_MD_CLOSE_INTENT_EXECED == (0x0020000000000000ULL), "found 0x%.16llxULL\n",
@@ -2321,7 +2321,7 @@ void lustre_assert_wire_constants(void)
 	LASSERTF(Q_FINVALIDATE == 0x800104, "found 0x%.8x\n",
 		Q_FINVALIDATE);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_LUSTRE_SERVER
 	/* Checks for struct lquota_acct_rec */
 	LASSERTF((int)sizeof(struct lquota_acct_rec) == 16, "found %lld\n",
 		 (long long)(int)sizeof(struct lquota_acct_rec));
@@ -2449,7 +2449,7 @@ void lustre_assert_wire_constants(void)
 	BUILD_BUG_ON(II_FL_VARREC != 0x00000004);
 	BUILD_BUG_ON(II_FL_NONUNQ != 0x00000008);
 	BUILD_BUG_ON(II_FL_NOKEY != 0x00000010);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_LUSTRE_SERVER */
 
 	/* Checks for struct niobuf_remote */
 	LASSERTF((int)sizeof(struct niobuf_remote) == 16, "found %lld\n",
@@ -2775,20 +2775,20 @@ void lustre_assert_wire_constants(void)
 		(unsigned)LUSTRE_NOATIME_FL);
 	LASSERTF(LUSTRE_INDEX_FL == 0x00001000UL, "found 0x%.8xUL\n",
 		(unsigned)LUSTRE_INDEX_FL);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_LUSTRE_SERVER
 	LASSERTF(LUSTRE_ORPHAN_FL == 0x00002000UL, "found 0x%.8xUL\n",
 		(unsigned)LUSTRE_ORPHAN_FL);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_LUSTRE_SERVER */
 	LASSERTF(LUSTRE_DIRSYNC_FL == 0x00010000UL, "found 0x%.8xUL\n",
 		(unsigned)LUSTRE_DIRSYNC_FL);
 	LASSERTF(LUSTRE_TOPDIR_FL == 0x00020000UL, "found 0x%.8xUL\n",
 		(unsigned)LUSTRE_TOPDIR_FL);
 	LASSERTF(LUSTRE_INLINE_DATA_FL == 0x10000000UL, "found 0x%.8xUL\n",
 		(unsigned)LUSTRE_INLINE_DATA_FL);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_LUSTRE_SERVER
 	LASSERTF(LUSTRE_SET_SYNC_FL == 0x00040000UL, "found 0x%.8xUL\n",
 		(unsigned)LUSTRE_SET_SYNC_FL);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_LUSTRE_SERVER */
 	LASSERTF(LUSTRE_ENCRYPT_FL == 0x00800000UL, "found 0x%.8xUL\n",
 		(unsigned)LUSTRE_ENCRYPT_FL);
 	LASSERTF(MDS_INODELOCK_LOOKUP == 0x00000001UL, "found 0x%.8xUL\n",
@@ -3747,7 +3747,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct ldlm_inodebits, bits));
 	LASSERTF((int)sizeof(((struct ldlm_inodebits *)0)->bits) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct ldlm_inodebits *)0)->bits));
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_LUSTRE_SERVER
 	LASSERTF((int)offsetof(struct ldlm_inodebits, try_bits) == 8, "found %lld\n",
 		 (long long)(int)offsetof(struct ldlm_inodebits, try_bits));
 	LASSERTF((int)sizeof(((struct ldlm_inodebits *)0)->try_bits) == 8, "found %lld\n",
@@ -3757,7 +3757,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct ldlm_inodebits, cancel_bits));
 	LASSERTF((int)sizeof(((struct ldlm_inodebits *)0)->cancel_bits) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct ldlm_inodebits *)0)->cancel_bits));
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_LUSTRE_SERVER */
 	LASSERTF((int)offsetof(struct ldlm_inodebits, li_gid) == 16, "found %lld\n",
 		 (long long)(int)offsetof(struct ldlm_inodebits, li_gid));
 	LASSERTF((int)sizeof(((struct ldlm_inodebits *)0)->li_gid) == 8, "found %lld\n",
@@ -4021,7 +4021,7 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct ldlm_gl_lquota_desc *)0)->gl_pad2) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct ldlm_gl_lquota_desc *)0)->gl_pad2));
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_LUSTRE_SERVER
 	/* Checks for struct ldlm_gl_barrier_desc */
 	LASSERTF((int)sizeof(struct ldlm_gl_barrier_desc) == 16, "found %lld\n",
 		 (long long)(int)sizeof(struct ldlm_gl_barrier_desc));
@@ -4053,7 +4053,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct barrier_lvb, lvb_padding));
 	LASSERTF((int)sizeof(((struct barrier_lvb *)0)->lvb_padding) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct barrier_lvb *)0)->lvb_padding));
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_LUSTRE_SERVER */
 
 	/* Checks for struct mgs_send_param */
 	LASSERTF((int)sizeof(struct mgs_send_param) == 1024, "found %lld\n",
@@ -4260,7 +4260,7 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct llog_unlink64_rec *)0)->lur_padding3) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct llog_unlink64_rec *)0)->lur_padding3));
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_LUSTRE_SERVER
 	/* Checks for struct llog_setattr64_rec */
 	LASSERTF((int)sizeof(struct llog_setattr64_rec) == 64, "found %lld\n",
 		 (long long)(int)sizeof(struct llog_setattr64_rec));
@@ -4344,7 +4344,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct llog_setattr64_rec_v2, lsr_tail));
 	LASSERTF((int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_tail) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct llog_setattr64_rec_v2 *)0)->lsr_tail));
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_LUSTRE_SERVER */
 
 	/* Checks for struct llog_size_change_rec */
 	LASSERTF((int)sizeof(struct llog_size_change_rec) == 64, "found %lld\n",
@@ -4426,7 +4426,7 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct changelog_ext_rename *)0)->cr_spfid) == 16, "found %lld\n",
 		 (long long)(int)sizeof(((struct changelog_ext_rename *)0)->cr_spfid));
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_LUSTRE_SERVER
 	/* Checks for struct changelog_ext_jobid */
 	LASSERTF((int)sizeof(struct changelog_ext_jobid) == 32, "found %lld\n",
 		 (long long)(int)sizeof(struct changelog_ext_jobid));
@@ -4435,7 +4435,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct changelog_ext_jobid, cr_jobid));
 	LASSERTF((int)sizeof(((struct changelog_ext_jobid *)0)->cr_jobid) == 32, "found %lld\n",
 		 (long long)(int)sizeof(((struct changelog_ext_jobid *)0)->cr_jobid));
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_LUSTRE_SERVER */
 
 	/* Checks for struct changelog_setinfo */
 	LASSERTF((int)sizeof(struct changelog_setinfo) == 12, "found %lld\n",
@@ -4464,7 +4464,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct llog_changelog_rec, cr_do_not_use));
 	LASSERTF((int)sizeof(((struct llog_changelog_rec *)0)->cr_do_not_use) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct llog_changelog_rec *)0)->cr_do_not_use));
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_LUSTRE_SERVER
 
 	/* Checks for struct llog_changelog_user_rec */
 	LASSERTF((int)sizeof(struct llog_changelog_user_rec) == 40, "found %lld\n",
@@ -4489,7 +4489,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct llog_changelog_user_rec, cur_tail));
 	LASSERTF((int)sizeof(((struct llog_changelog_user_rec *)0)->cur_tail) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct llog_changelog_user_rec *)0)->cur_tail));
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_LUSTRE_SERVER */
 
 	/* Checks for struct rsi_downcall_data */
 	LASSERTF((int)sizeof(struct rsi_downcall_data) == 40, "found %lld\n",
@@ -4750,7 +4750,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct ll_fiemap_info_key, lfik_fiemap));
 	LASSERTF((int)sizeof(((struct ll_fiemap_info_key *)0)->lfik_fiemap) == 32, "found %lld\n",
 		 (long long)(int)sizeof(((struct ll_fiemap_info_key *)0)->lfik_fiemap));
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_LUSTRE_SERVER
 
 	/* Checks for struct quota_body */
 	LASSERTF((int)sizeof(struct quota_body) == 112, "found %lld\n",
@@ -4799,7 +4799,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct quota_body, qb_padding1[3]));
 	LASSERTF((int)sizeof(((struct quota_body *)0)->qb_padding1[3]) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct quota_body *)0)->qb_padding1[3]));
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_LUSTRE_SERVER */
 
 	/* Checks for struct mgs_target_info */
 	LASSERTF((int)sizeof(struct mgs_target_info) == 4544, "found %lld\n",
@@ -4951,10 +4951,10 @@ void lustre_assert_wire_constants(void)
 	BUILD_BUG_ON(MGS_CFG_T_SPTLRPC != 1);
 	BUILD_BUG_ON(MGS_CFG_T_RECOVER != 2);
 	BUILD_BUG_ON(MGS_CFG_T_PARAMS != 3);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_LUSTRE_SERVER
 	BUILD_BUG_ON(MGS_CFG_T_NODEMAP != 4);
 	BUILD_BUG_ON(MGS_CFG_T_BARRIER != 5);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_LUSTRE_SERVER */
 
 	/* Checks for struct mgs_config_res */
 	LASSERTF((int)sizeof(struct mgs_config_res) == 16, "found %lld\n",
@@ -5754,7 +5754,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)sizeof(((struct gss_wire_ctx *)0)->gw_handle));
 #endif /* HAVE_NATIVE_LINUX_CLIENT */
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 
 	/* Checks for struct object_update_param */
 	LASSERTF((int)sizeof(struct object_update_param) == 8, "found %lld\n",
@@ -7111,7 +7111,7 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct llog_update_record, lur_update_rec));
 	LASSERTF((int)sizeof(((struct llog_update_record *)0)->lur_update_rec) == 32, "found %lld\n",
 		 (long long)(int)sizeof(((struct llog_update_record *)0)->lur_update_rec));
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 	/* Checks for struct lustre_cfg */
 	LASSERTF((int)sizeof(struct lustre_cfg) == 32, "found %lld\n",
@@ -7206,7 +7206,7 @@ void lustre_assert_wire_constants(void)
 		(unsigned)LCFG_PRE_CLEANUP);
 	LASSERTF(LCFG_SET_PARAM == 0x000ce032UL, "found 0x%.8xUL\n",
 		(unsigned)LCFG_SET_PARAM);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	LASSERTF(LCFG_NODEMAP_ADD == 0x000ce040UL, "found 0x%.8xUL\n",
 		(unsigned)LCFG_NODEMAP_ADD);
 	LASSERTF(LCFG_NODEMAP_DEL == 0x000ce041UL, "found 0x%.8xUL\n",
@@ -7287,7 +7287,7 @@ void lustre_assert_wire_constants(void)
 		 (unsigned)LCFG_NODEMAP_BANLIST_ADD);
 	LASSERTF(LCFG_NODEMAP_BANLIST_DEL == 0x000ce069UL, "found 0x%.8xUL\n",
 		 (unsigned)LCFG_NODEMAP_BANLIST_DEL);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 	LASSERTF(PORTALS_CFG_TYPE == 1, "found %lld\n",
 		 (long long)PORTALS_CFG_TYPE);
 	LASSERTF(LUSTRE_CFG_TYPE == 123, "found %lld\n",

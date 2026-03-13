@@ -1188,7 +1188,7 @@ int sptlrpc_cli_unwrap_bulk_read(struct ptlrpc_request *req,
 				 struct ptlrpc_bulk_desc *desc, int nob);
 int sptlrpc_cli_unwrap_bulk_write(struct ptlrpc_request *req,
 				  struct ptlrpc_bulk_desc *desc);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 int sptlrpc_svc_prep_bulk(struct ptlrpc_request *req,
 			  struct ptlrpc_bulk_desc *desc);
 int sptlrpc_svc_wrap_bulk(struct ptlrpc_request *req,

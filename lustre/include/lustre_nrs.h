@@ -682,11 +682,11 @@ struct binheap_node {
 	/** Index into the binary tree */
 	unsigned int	chn_index;
 };
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 #include <lustre_nrs_tbf.h>
 #include <lustre_nrs_crr.h>
 #include <lustre_nrs_orr.h>
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 #include <lustre_nrs_delay.h>
 
 /**
@@ -724,7 +724,7 @@ struct ptlrpc_nrs_request {
 		 * Fields for the FIFO policy
 		 */
 		struct nrs_fifo_req	fifo;
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 		/**
 		 * CRR-N request defintion
 		 */
@@ -735,7 +735,7 @@ struct ptlrpc_nrs_request {
 		 * TBF request definition
 		 */
 		struct nrs_tbf_req	tbf;
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 		/**
 		 * Fields for the delay policy
 		 */

@@ -479,7 +479,7 @@ static int __init fid_init(void)
 	rc = libcfs_setup();
 	if (rc)
 		return rc;
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	rc = fid_server_mod_init();
 
 	if (rc)
@@ -494,7 +494,7 @@ static int __init fid_init(void)
 
 static void __exit fid_exit(void)
 {
-# ifdef HAVE_SERVER_SUPPORT
+# ifdef CONFIG_LUSTRE_FS_SERVER
 	fid_server_mod_exit();
 # endif
 	debugfs_remove_recursive(seq_debugfs_dir);

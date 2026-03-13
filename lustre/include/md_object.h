@@ -16,9 +16,9 @@
 #ifndef _LUSTRE_MD_OBJECT_H
 #define _LUSTRE_MD_OBJECT_H
 
-#ifndef HAVE_SERVER_SUPPORT
+#ifndef CONFIG_LUSTRE_FS_SERVER
 # error "client code should not depend on md_object.h"
-#endif /* !HAVE_SERVER_SUPPORT */
+#endif /* !CONFIG_LUSTRE_FS_SERVER */
 
 /* md Sub-class of lu_object with methods common for "meta-data" objects in MDT
  * stack.

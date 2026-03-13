@@ -54,7 +54,7 @@ static int mgc_name2resid(char *name, int len, struct ldlm_res_id *res_id,
 		break;
 	case MGS_CFG_T_RECOVER:
 	case MGS_CFG_T_PARAMS:
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	case MGS_CFG_T_NODEMAP:
 	case MGS_CFG_T_BARRIER:
 #endif
@@ -128,7 +128,7 @@ static void config_log_put(struct config_llog_data *cld)
 		spin_unlock(&config_list_lock);
 
 		CDEBUG(D_MGC, "dropping config log %s\n", cld->cld_logname);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 		config_log_put(cld->cld_barrier);
 		config_log_put(cld->cld_nodemap);
 #endif
@@ -246,7 +246,7 @@ config_recover_log_add(struct obd_device *obd, char *fsname,
 	bool is_server = IS_SERVER(s2lsi(sb));
 	char logname[32];
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	if (IS_OST(s2lsi(sb)))
 		return NULL;
 
@@ -288,7 +288,7 @@ config_log_find_or_add(struct obd_device *obd, char *logname,
 
 	cld = config_log_find(logname, &lcfg);
 	if (unlikely(cld)) {
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 		/* If a target finds existing sptlrpc config
 		 * then create its local copy explicitly
 		 */
@@ -314,7 +314,7 @@ config_log_add(struct obd_device *obd, char *logname,
 	struct config_llog_data *cld = NULL;
 	struct config_llog_data *sptlrpc_cld = NULL;
 	struct config_llog_data *params_cld = NULL;
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	struct config_llog_data *nodemap_cld = NULL;
 	struct config_llog_data *barrier_cld = NULL;
 #endif
@@ -363,7 +363,7 @@ config_log_add(struct obd_device *obd, char *logname,
 		}
 	}
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	if (!IS_MGS(lsi) && cfg->cfg_sub_clds & CONFIG_SUB_NODEMAP) {
 		nodemap_cld = config_log_find_or_add(obd, LUSTRE_NODEMAP_NAME,
 						     NULL, MGS_CFG_T_NODEMAP,
@@ -394,7 +394,7 @@ config_log_add(struct obd_device *obd, char *logname,
 		rc = PTR_ERR(cld);
 		CERROR("%s: can't create log: rc = %d\n",
 		       obd->obd_name, rc);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 		GOTO(out_barrier, rc);
 #else
 		GOTO(out_params, rc);
@@ -430,7 +430,7 @@ config_log_add(struct obd_device *obd, char *logname,
 
 	if (!locked)
 		mutex_lock(&cld->cld_lock);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	cld->cld_barrier = barrier_cld;
 	cld->cld_nodemap = nodemap_cld;
 #endif
@@ -442,7 +442,7 @@ config_log_add(struct obd_device *obd, char *logname,
 
 out_cld:
 	config_log_put(cld);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 out_barrier:
 	config_log_put(barrier_cld);
 out_nodemap:
@@ -1132,7 +1132,7 @@ static int mgc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 		RETURN(0);
 	}
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	rc = mgc_set_info_async_server(env, exp, keylen, key, vallen, val, set);
 #endif
 	RETURN(rc);
@@ -1319,7 +1319,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 		pos = snprintf(inst, sizeof(inst), "%016lx", cfg->cfg_instance);
 		if (pos >= sizeof(inst))
 			return -E2BIG;
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	} else {
 		struct lustre_sb_info *lsi = s2lsi(cfg->cfg_sb);
 
@@ -1328,7 +1328,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 					sizeof(inst));
 		if (rc)
 			RETURN(-EINVAL);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 	}
 
 	OBD_ALLOC_PTR_ARRAY(nidlist, MTI_NIDS_MAX);
@@ -1687,7 +1687,7 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 	LASSERT(cld);
 	LASSERT(mutex_is_locked(&cld->cld_lock));
 
-#ifndef HAVE_SERVER_SUPPORT
+#ifndef CONFIG_LUSTRE_FS_SERVER
 	if (local_only)
 		RETURN(orig_rc);
 #endif
@@ -1708,7 +1708,7 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 	ctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
 	LASSERT(ctxt);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	/* IS_SERVER(lsi) doesn't work if MGC is shared between client/server
 	 * distinguish server mount by local storage set by server_mgc_set_fs()
 	 */
@@ -1881,7 +1881,7 @@ restart:
 
 	if (cld_is_recover(cld) && !rcl)
 		rc = mgc_process_recover_log(mgc, cld);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	else if (cld_is_nodemap(cld)) {
 		if (rcl)
 			rc = rcl;
@@ -1938,7 +1938,7 @@ static int mgc_process_config(const struct lu_env *env, struct lu_device *lu,
 	int rc;
 
 	ENTRY;
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	rc = mgc_process_config_server(env, lu, lcfg);
 	if (rc != -ENOENT)
 		RETURN(rc);

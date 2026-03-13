@@ -24,13 +24,13 @@
 #include <lustre_lib.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lprocfs_status.h>
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 #include <lu_target.h>
 #include <obd_target.h>
 #include <dt_object.h>
 #endif
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 #define SERVER_ONLY_EXPORT_SYMBOL(symbol)	EXPORT_SYMBOL(symbol)
 #define SERVER_ONLY
 #else
@@ -90,7 +90,7 @@ struct lu_device_type;
 /* genops.c */
 extern struct xarray obd_devs;
 struct obd_export *class_conn2export(struct lustre_handle *);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 struct obd_type *class_add_symlinks(const char *name, bool enable_proc);
 int class_expected_clients_update(unsigned int max_clients);
 unsigned int class_expected_clients_get(void);
@@ -198,7 +198,7 @@ struct cfg_interop_param {
 	char *new_param;
 };
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 void lustre_register_quota_process_config(int (*qpc)(struct lustre_cfg *lcfg));
 #endif
 
@@ -422,7 +422,7 @@ void obd_export_timed_del(struct obd_export *exp);
 struct obd_export *obd_export_timed_get(struct obd_device *obd, bool last);
 
 struct obd_type *class_search_type(const char *name);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 struct obd_type *class_get_type(const char *name);
 #endif
 void class_put_type(struct obd_type *type);
@@ -444,7 +444,7 @@ static inline enum obd_option exp_flags_from_obd(struct obd_device *obd)
 		0);
 }
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 static inline struct lu_target *class_exp2tgt(struct obd_export *exp)
 {
 	struct obd_device_target *obt;
@@ -584,7 +584,7 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 			dev->ld_obd = obd;
 			dev->ld_type = ldt;
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 			if (lu_device_is_dt(dev) &&
 			    lu2dt_dev(dev)->dd_rdonly)
 				obd->obd_read_only = 1;
@@ -2019,14 +2019,14 @@ struct lwp_register_item {
 };
 
 /* obd_mount.c */
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 int lustre_register_lwp_item(const char *lwpname, struct obd_export **exp,
 			     register_lwp_cb cb_func, void *cb_data);
 void lustre_deregister_lwp_item(struct obd_export **exp);
 struct obd_export *lustre_find_lwp_by_index(const char *dev, __u32 idx);
 void lustre_notify_lwp_list(struct obd_export *exp);
 int tgt_name2lwp_name(const char *tgt_name, char *lwp_name, int len, __u32 idx);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 int lustre_check_exclusion(struct super_block *sb, char *svname);
 
 /* lustre_peer.c    */

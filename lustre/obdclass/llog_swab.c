@@ -21,14 +21,6 @@
 #include <lustre_update.h>
 #include <llog_swab.h>
 
-#ifdef HAVE_SERVER_SUPPORT
-#define SERVER_ONLY_EXPORT_SYMBOL(symbol)	EXPORT_SYMBOL(symbol)
-#define SERVER_ONLY
-#else
-#define SERVER_ONLY static
-#define SERVER_ONLY_EXPORT_SYMBOL(symbol)
-#endif
-
 static void print_llogd_body(struct llogd_body *d)
 {
 	CDEBUG(D_OTHER, "llogd body: %p\n", d);

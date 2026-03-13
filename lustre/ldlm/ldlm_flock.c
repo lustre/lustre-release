@@ -151,7 +151,7 @@ ldlm_flock_destroy(struct ldlm_lock *lock, enum ldlm_mode mode, __u64 flags)
 	EXIT;
 }
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 /**
  * POSIX locks deadlock detection code.
  *
@@ -270,7 +270,7 @@ static void ldlm_flock_cancel_on_deadlock(struct ldlm_lock *lock,
 		ldlm_add_ast_work_item(lock, NULL, work_list);
 	}
 }
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 /* Add newly granted lock into interval tree for the resource */
 void ldlm_flock_add_lock(struct ldlm_resource *res,
@@ -323,7 +323,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags,
 	int splitted = 0;
 	__u64 start = START(req), end = LAST(req);
 	const struct ldlm_callback_suite null_cbs = { NULL };
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	struct list_head *grant_work = (intention == LDLM_PROCESS_ENQUEUE ?
 					NULL : work_list);
 #endif
@@ -363,7 +363,7 @@ reprocess:
 		/* This loop determines where this processes locks start
 		 * in the resource lr_granted list.
 		 */
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 		list_for_each_entry(lock, &res->lr_waiting, l_res_link) {
 			LASSERT(lock->l_req_mode != LCK_NL);
 
@@ -389,14 +389,14 @@ reprocess:
 				break;
 			}
 		}
-#else /* !HAVE_SERVER_SUPPORT */
+#else /* !CONFIG_LUSTRE_FS_SERVER */
 		/* The only one possible case for client-side calls flock
 		 * policy function is ldlm_flock_completion_ast inside which
 		 * carries LDLM_FL_WAIT_NOREPROC flag.
 		 */
 		CERROR("Illegal parameter for client-side-only module.\n");
 		LBUG();
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 	}
 	if ((*flags == LDLM_FL_WAIT_NOREPROC) || (mode == LCK_NL)) {
 		/* This loop collects all overlapping locks with the
@@ -412,7 +412,7 @@ reprocess:
 				ownlocks_end = &lock->l_same_owner;
 			}
 	}
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	else {
 		lockmode_verify(mode);
 
@@ -498,7 +498,7 @@ reprocess:
 	 * deadlock detection hash list.
 	 */
 	ldlm_flock_blocking_unlink(req);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 	/* Scan the locks owned by this process to handle overlaps.
 	 * We may have to merge or split existing locks.
@@ -631,7 +631,7 @@ reprocess:
 	}
 
 	if (*flags != LDLM_FL_WAIT_NOREPROC) {
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 		if (intention == LDLM_PROCESS_ENQUEUE) {
 			/* If this is an unlock, reprocess the waitq and
 			 * send completions ASTs for locks that can now be
@@ -667,14 +667,14 @@ restart:
 			LASSERT(req->l_completion_ast);
 			ldlm_add_ast_work_item(req, NULL, grant_work);
 		}
-#else /* !HAVE_SERVER_SUPPORT */
+#else /* !CONFIG_LUSTRE_FS_SERVER */
 		/* The only one possible case for client-side calls flock
 		 * policy function is ldlm_flock_completion_ast inside which
 		 * carries LDLM_FL_WAIT_NOREPROC flag.
 		 */
 		CERROR("Illegal parameter for client-side-only module.\n");
 		LBUG();
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 	}
 
 	/* In case we're reprocessing the requested lock we can't destroy

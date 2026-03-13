@@ -35,7 +35,7 @@
 
 #include "ldlm_internal.h"
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 
 /**
  * It should iterate through all waiting locks on a given resource queue and
@@ -440,7 +440,7 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *ldlm_flags,
 out:
 	return rc;
 }
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 void ldlm_ibits_policy_wire_to_local(const union ldlm_wire_policy_data *wpolicy,
 				     union ldlm_policy_data *lpolicy)

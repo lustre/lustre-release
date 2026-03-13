@@ -2769,7 +2769,7 @@ int sptlrpc_cli_unwrap_bulk_write(struct ptlrpc_request *req,
 }
 EXPORT_SYMBOL(sptlrpc_cli_unwrap_bulk_write);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 /**
  * sptlrpc_svc_wrap_bulk() - Performe transformation upon outgoing bulk read
  * @req: pointer to struct ptlrpc_request
@@ -2873,7 +2873,7 @@ int sptlrpc_svc_prep_bulk(struct ptlrpc_request *req,
 }
 EXPORT_SYMBOL(sptlrpc_svc_prep_bulk);
 
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 /*
  * user descriptor helpers

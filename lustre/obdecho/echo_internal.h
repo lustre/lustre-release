@@ -21,12 +21,12 @@
 /* block size to use for data verification */
 #define OBD_ECHO_BLOCK_SIZE	(4<<10)
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 extern const struct obd_ops echo_obd_ops;
 extern struct lu_device_type echo_srv_type;
 int echo_persistent_pages_init(void);
 void echo_persistent_pages_fini(void);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 /* mapping value to tell page is not encrypted */
 #define ECHO_MAPPING_UNENCRYPTED ((void *)1)

@@ -20,7 +20,7 @@
 
 #include <linux/module.h>
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 #include <dt_object.h>
 #endif
 #include <obd_support.h>
@@ -124,7 +124,7 @@ struct ldebugfs_vars fld_client_debugfs_list[] = {
 	{ NULL }
 };
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 struct fld_seq_param {
 	struct lu_env		fsp_env;
 	struct dt_it		*fsp_it;
@@ -333,4 +333,4 @@ const struct file_operations fld_debugfs_seq_fops = {
 	.release = fldb_seq_release,
 };
 
-# endif /* HAVE_SERVER_SUPPORT */
+# endif /* CONFIG_LUSTRE_FS_SERVER */

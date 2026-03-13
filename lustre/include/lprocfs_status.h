@@ -280,7 +280,7 @@ static inline int opcode_offset(__u32 opc)
 			OPC_RANGE(LDLM) +
 			OPC_RANGE(MDS) +
 			OPC_RANGE(OST));
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	} else if (opc < OUT_UPDATE_LAST_OPC) {
 		/* update opcode */
 		return (opc - OUT_UPDATE_FIRST_OPC +
@@ -308,7 +308,7 @@ static inline int opcode_offset(__u32 opc)
 			OPC_RANGE(LDLM) +
 			OPC_RANGE(MDS) +
 			OPC_RANGE(OST));
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 	} else {
 		/* Unknown Opcode */
 		return -1;
@@ -326,7 +326,7 @@ static inline int opcode_offset(__u32 opc)
 				   OPC_RANGE(SEC)  + \
 				   OPC_RANGE(FLD))
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 #define LUSTRE_MAX_OPCODES (LUSTRE_MAX_OPCODES_CLIENT + \
 			    OPC_RANGE(OUT_UPDATE) + \
 			    OPC_RANGE(LFSCK))
@@ -367,7 +367,7 @@ enum lprocfs_extra_opc {
 	EXTRA_LAST_OPC
 };
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 enum brw_rw_stats {
 	BRW_R_PAGES = 0,
 	BRW_W_PAGES,
@@ -418,7 +418,7 @@ void ldebugfs_register_brw_stats(struct dentry *parent,
 				 struct brw_stats *brw_stats);
 void ldebugfs_register_io_latency_stats(struct dentry *parent,
 					struct brw_stats *brw_stats);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 #define EXTRA_FIRST_OPC LDLM_GLIMPSE_ENQUEUE
 /* class_obd.c */
@@ -554,7 +554,7 @@ struct obd_export;
 struct nid_stat;
 extern int lprocfs_add_clear_entry(struct obd_device *obd,
 				   struct proc_dir_entry *entry);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 extern int lprocfs_exp_setup(struct obd_export *exp, struct lnet_nid *peer_nid);
 extern int lprocfs_exp_cleanup(struct obd_export *exp);
 #else
@@ -570,7 +570,7 @@ lprocfs_add_symlink(const char *name, struct proc_dir_entry *parent,
 struct dentry *ldebugfs_add_symlink(const char *name, const char *target,
 				    const char *format, ...);
 extern void lprocfs_free_per_client_stats(struct obd_device *obd);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 extern ssize_t
 ldebugfs_nid_stats_clear_seq_write(struct file *file, const char __user *buffer,
 				   size_t count, loff_t *off);
@@ -617,7 +617,7 @@ ssize_t conn_uuid_show(struct kobject *kobj, struct attribute *attr, char *buf);
 extern int lprocfs_import_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_state_seq_show(struct seq_file *m, void *data);
 extern int lprocfs_connect_flags_seq_show(struct seq_file *m, void *data);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 ssize_t num_exports_show(struct kobject *kobj, struct attribute *attr,
 			 char *buf);
 ssize_t grant_check_threshold_show(struct kobject *kobj,
@@ -635,7 +635,7 @@ extern int lprocfs_timeouts_seq_show(struct seq_file *m, void *data);
 extern ssize_t
 lprocfs_timeouts_seq_write(struct file *file, const char __user *buffer,
 			   size_t count, loff_t *off);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 ssize_t evict_client_store(struct kobject *kobj, struct attribute *attr,
 			   const char *buffer, size_t count);
 #endif
@@ -687,7 +687,7 @@ ssize_t checksum_type_show(struct kobject *kobj, struct attribute *attr,
 			   char *buf);
 ssize_t checksum_type_store(struct kobject *kobj, struct attribute *attr,
 			    const char *buffer, size_t count);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 ssize_t dt_checksum_type_show(struct kobject *kobj, struct attribute *attr,
 			      char *buf);
 ssize_t dt_checksum_dump_show(struct kobject *kobj, struct attribute *attr,
@@ -952,7 +952,7 @@ LUSTRE_RW_ATTR(name)
 struct ptlrpc_request;
 extern void target_print_req(void *seq_file, struct ptlrpc_request *req);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 /* lprocfs_jobstats.c */
 int lprocfs_job_stats_log(struct obd_device *obd, char *jobid,
 			  int event, long amount);
@@ -1081,7 +1081,7 @@ static inline void lprocfs_free_per_client_stats(struct obd_device *obd)
 {
 }
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 static inline int lprocfs_exp_setup(struct obd_export *exp,
 				    struct lnet_nid *peer_nid)
 {
@@ -1158,7 +1158,7 @@ static inline int lprocfs_connect_flags_seq_show(struct seq_file *m, void *data)
 {
 	return 0;
 }
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 static inline int lprocfs_num_exports_seq_show(struct seq_file *m, void *data)
 {
 	return 0;

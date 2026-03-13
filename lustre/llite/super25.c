@@ -146,7 +146,7 @@ static int lustre_fill_super(struct super_block *sb, struct fs_context *fc)
 	obd_zombie_barrier();
 
 	if (!lmd_is_client(lmd)) {
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 		static bool printed;
 
 		if (!printed) {

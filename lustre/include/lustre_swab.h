@@ -36,7 +36,7 @@
 
 #include <uapi/linux/lustre/lustre_idl.h>
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 void lustre_swab_orphan_ent(struct lu_orphan_ent *ent);
 void lustre_swab_orphan_ent_v2(struct lu_orphan_ent_v2 *ent);
 void lustre_swab_orphan_ent_v3(struct lu_orphan_ent_v3 *ent);
@@ -49,7 +49,7 @@ void lustre_swab_out_update_header(struct out_update_header *ouh);
 void lustre_swab_out_update_buffer(struct out_update_buffer *oub);
 void lustre_swab_object_update_result(struct object_update_result *our);
 int lustre_swab_object_update_reply(struct object_update_reply *our, __u32 len);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 void lustre_swab_connect(struct obd_connect_data *ocd);
 void lustre_swab_hsm_user_state(struct hsm_user_state *hus);

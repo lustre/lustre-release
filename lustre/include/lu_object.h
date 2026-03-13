@@ -1549,7 +1549,7 @@ enum lq_flag {
 	LQ_SF_PROGRESS,      /* statfs op in progress */
 };
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 /* round-robin QoS data for LOD/LMV */
 struct lu_qos_rr {
 	spinlock_t		 lqr_alloc;	/* protect allocation index */
@@ -1566,7 +1566,7 @@ static inline void lu_qos_rr_init(struct lu_qos_rr *lqr)
 	set_bit(LQ_DIRTY, &lqr->lqr_flags);
 }
 
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 /* QoS data per MDS/OSS */
 struct lu_svr_qos {
@@ -1651,7 +1651,7 @@ struct lu_qos {
 	__u32			 lq_active_svr_count;
 	unsigned int		 lq_prio_free;   /* priority for free space */
 	unsigned int		 lq_threshold_rr;/* priority for rr */
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	struct lu_qos_rr	 lq_rr;          /* round robin qos data */
 #endif
 	unsigned long		 lq_flags;

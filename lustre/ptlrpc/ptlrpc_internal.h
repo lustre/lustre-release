@@ -32,12 +32,12 @@ extern struct mutex ptlrpc_all_services_mutex;
 extern struct ptlrpc_nrs_pol_conf nrs_conf_fifo;
 extern struct ptlrpc_nrs_pol_conf nrs_conf_delay;
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 extern struct ptlrpc_nrs_pol_conf nrs_conf_crrn;
 extern struct ptlrpc_nrs_pol_conf nrs_conf_orr;
 extern struct ptlrpc_nrs_pol_conf nrs_conf_trr;
 extern struct ptlrpc_nrs_pol_conf nrs_conf_tbf;
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 /**
  * \addtogoup nrs
@@ -305,12 +305,12 @@ static inline bool ptlrpc_recoverable_error(int rc)
 	return (rc == -ENOTCONN || rc == -ENODEV);
 }
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 int tgt_mod_init(void);
 void tgt_mod_exit(void);
 int nodemap_mod_init(void);
 void nodemap_mod_exit(void);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 /** initialise ptlrpc common fields */
 static inline void ptlrpc_req_comm_init(struct ptlrpc_request *req)

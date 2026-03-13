@@ -1960,7 +1960,7 @@ void lustre_swab_generic_32s(__u32 *val)
 	__swab32s(val);
 }
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 void lustre_swab_gl_lquota_desc(struct ldlm_gl_lquota_desc *desc)
 {
 	lustre_swab_lu_fid(&desc->gl_id.qid_fid);
@@ -1980,7 +1980,7 @@ void lustre_swab_gl_barrier_desc(struct ldlm_gl_barrier_desc *desc)
 	BUILD_BUG_ON(offsetof(typeof(*desc), lgbd_padding) == 0);
 }
 EXPORT_SYMBOL(lustre_swab_gl_barrier_desc);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 void lustre_swab_ost_lvb_v1(struct ost_lvb_v1 *lvb)
 {
@@ -3139,7 +3139,7 @@ void lustre_swab_lfsck_reply(struct lfsck_reply *lr)
 	__swab64s(&lr->lr_repaired);
 }
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 static void lustre_swab_orphan_rec(struct lu_orphan_rec *rec)
 {
 	lustre_swab_lu_fid(&rec->lor_fid);
@@ -3174,7 +3174,7 @@ void lustre_swab_orphan_ent_v3(struct lu_orphan_ent_v3 *ent)
 	BUILD_BUG_ON(offsetof(typeof(ent->loe_rec), lor_padding_2) == 0);
 }
 EXPORT_SYMBOL(lustre_swab_orphan_ent_v3);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 void lustre_swab_ladvise(struct lu_ladvise *ladvise)
 {

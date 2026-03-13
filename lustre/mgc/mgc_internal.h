@@ -18,7 +18,7 @@
 #include <lustre_dlm.h>
 #include <lustre_log.h>
 #include <lustre_export.h>
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 #include <lustre_nodemap.h>
 #endif
 
@@ -52,7 +52,7 @@ static inline bool cld_is_recover(struct config_llog_data *cld)
 
 static inline bool cld_is_nodemap(struct config_llog_data *cld)
 {
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	return cld->cld_type == MGS_CFG_T_NODEMAP;
 #else
 	return false;
@@ -61,14 +61,14 @@ static inline bool cld_is_nodemap(struct config_llog_data *cld)
 
 static inline bool cld_is_barrier(struct config_llog_data *cld)
 {
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	return cld->cld_type == MGS_CFG_T_BARRIER;
 #else
 	return false;
 #endif
 }
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 int mgc_set_info_async_server(const struct lu_env *env,
 			      struct obd_export *exp,
 			      u32 keylen, void *key,
@@ -86,9 +86,9 @@ int mgc_process_config_server(const struct lu_env *env, struct lu_device *lu,
 int mgc_barrier_glimpse_ast(struct ldlm_lock *lock, void *data);
 int mgc_get_local_copy(struct obd_device *mgc, struct super_block *sb,
 		       struct config_llog_data *cld);
-#else /* HAVE_SERVER_SUPPORT */
+#else /* CONFIG_LUSTRE_FS_SERVER */
 #define mgc_barrier_glimpse_ast NULL
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 /* Not sure where this should go... */
 /* This is the timeout value for MGS_CONNECT request plus a ping interval, such

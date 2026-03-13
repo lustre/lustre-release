@@ -1941,7 +1941,7 @@ extern void reply_in_callback(struct lnet_event *ev);
 extern void client_bulk_callback(struct lnet_event *ev);
 extern void request_in_callback(struct lnet_event *ev);
 extern void reply_out_callback(struct lnet_event *ev);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 extern void server_bulk_callback(struct lnet_event *ev);
 #endif
 /** @} */
@@ -1991,7 +1991,7 @@ extern lnet_pid_t ptl_get_pid(void);
  * Actual interfacing with LNet to put/get/register/unregister stuff
  * @{
  */
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_exp(struct ptlrpc_request *req,
 					      unsigned int nfrags,
 					      unsigned int max_brw,
@@ -2566,7 +2566,7 @@ int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid);
 void client_destroy_import(struct obd_import *imp);
 /** @} */
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 int server_disconnect_export(struct obd_export *exp);
 #endif
 

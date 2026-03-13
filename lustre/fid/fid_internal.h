@@ -16,7 +16,7 @@
 #ifndef __FID_INTERNAL_H
 #define __FID_INTERNAL_H
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 # define HAVE_SEQ_SERVER
 
 struct req_capsule;
@@ -59,7 +59,7 @@ int fid_server_mod_init(void);
 
 void fid_server_mod_exit(void);
 
-# endif /* HAVE_SERVER_SUPPORT */
+# endif /* CONFIG_LUSTRE_FS_SERVER */
 
 /* Functions used internally in module. */
 int seq_client_alloc_super(struct lu_client_seq *seq,

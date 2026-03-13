@@ -285,7 +285,7 @@ static inline int fid_is_fs_root(const struct lu_fid *fid)
 			 fid_oid(fid) == OSD_FS_ROOT_OID));
 }
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 static inline int fid_is_namespace_visible(const struct lu_fid *fid)
 {
 	const __u64 seq = fid_seq(fid);
@@ -349,7 +349,7 @@ static inline void filter_fid_le_to_cpu(struct filter_fid *dst,
 
 	/* XXX: Add more if filter_fid is enlarged in the future. */
 }
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 static inline void lu_last_id_fid(struct lu_fid *fid, __u64 seq, __u32 ost_idx)
 {

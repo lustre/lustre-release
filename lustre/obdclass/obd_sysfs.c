@@ -108,7 +108,7 @@ LUSTRE_STATIC_UINT_ATTR(at_unhealthy_factor, &at_unhealthy_factor);
 LUSTRE_STATIC_UINT_ATTR(enable_stats_header, &obd_enable_stats_header);
 LUSTRE_STATIC_UINT_ATTR(ping_interval, &ping_interval);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 LUSTRE_STATIC_UINT_ATTR(ldlm_timeout, &ldlm_timeout);
 LUSTRE_STATIC_UINT_ATTR(bulk_timeout, &bulk_timeout);
 
@@ -191,7 +191,7 @@ static ssize_t max_dirty_mb_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(max_dirty_mb);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 static ssize_t no_transno_store(struct kobject *kobj,
 				struct attribute *attr,
 				const char *buffer, size_t count)
@@ -217,7 +217,7 @@ static ssize_t no_transno_store(struct kobject *kobj,
 	return count;
 }
 LUSTRE_WO_ATTR(no_transno);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 static ssize_t version_show(struct kobject *kobj, struct attribute *attr,
 			    char *buf)
@@ -285,7 +285,7 @@ health_check_show(struct kobject *kobj, struct attribute *attr, char *buf)
 	return len;
 }
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 static ssize_t enable_health_write_show(struct kobject *kobj,
 					struct attribute *attr,
 					char *buf)
@@ -307,7 +307,7 @@ static ssize_t enable_health_write_store(struct kobject *kobj,
 	return count;
 }
 LUSTRE_RW_ATTR(enable_health_write);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 static ssize_t enable_fname_encoding_show(struct kobject *kobj,
 					struct attribute *attr,
@@ -612,7 +612,7 @@ static struct attribute *lustre_attrs[] = {
 	&lustre_sattr_at_unhealthy_factor.u.attr,
 	&lustre_attr_memused_max.attr,
 	&lustre_attr_memused.attr,
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	&lustre_sattr_bulk_timeout.u.attr,
 	&lustre_attr_enable_health_write.attr,
 	&lustre_attr_expected_clients.attr,

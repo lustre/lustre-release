@@ -81,7 +81,7 @@ static __init int ptlrpc_init(void)
 	if (rc)
 		GOTO(err_sptlrpc, rc);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	rc = tgt_mod_init();
 	if (rc)
 		GOTO(err_nrs, rc);
@@ -91,7 +91,7 @@ static __init int ptlrpc_init(void)
 		GOTO(err_tgt, rc);
 #endif
 	RETURN(0);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 err_tgt:
 	tgt_mod_exit();
 err_nrs:
@@ -120,7 +120,7 @@ err_layout:
 
 static void __exit ptlrpc_exit(void)
 {
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	nodemap_mod_exit();
 	tgt_mod_exit();
 #endif

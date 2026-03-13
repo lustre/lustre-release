@@ -1748,7 +1748,7 @@ int ptlrpc_nrs_init(void)
 	if (rc != 0)
 		GOTO(fail, rc);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	rc = ptlrpc_nrs_policy_register(&nrs_conf_crrn);
 	if (rc != 0)
 		GOTO(fail, rc);
@@ -1763,7 +1763,7 @@ int ptlrpc_nrs_init(void)
 	rc = ptlrpc_nrs_policy_register(&nrs_conf_tbf);
 	if (rc != 0)
 		GOTO(fail, rc);
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 	rc = ptlrpc_nrs_policy_register(&nrs_conf_delay);
 	if (rc != 0)

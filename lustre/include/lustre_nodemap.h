@@ -276,7 +276,7 @@ bool nodemap_id_is_squashed(struct lu_nodemap *nodemap, __u32 id,
 			    enum nodemap_tree_type tree_type);
 int nodemap_check_resource_ids(struct obd_export *exp, __u32 fs_uid,
 			       __u32 fs_gid);
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 void nodemap_test_nid(struct lnet_nid *nid, char *name_buf, size_t name_len);
 #else
 #define nodemap_test_nid(nid, name_buf, name_len) do {} while (0)
@@ -302,7 +302,7 @@ void nm_config_file_deregister_tgt(const struct lu_env *env,
 struct lu_nodemap *nodemap_get_from_exp(struct obd_export *exp);
 void nodemap_putref(struct lu_nodemap *nodemap);
 
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 
 struct nodemap_range_tree {
 	struct rb_root_cached	nmrt_range_interval_root;
@@ -363,7 +363,7 @@ static inline int nodemap_process_idx_pages(void *config,
 					    union lu_page *lip,
 					    struct lu_nodemap **recent_nodemap)
 { return 0; }
-#endif /* HAVE_SERVER_SUPPORT */
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 int nodemap_get_config_req(struct obd_device *mgs_obd,
 			   struct ptlrpc_request *req);
