@@ -613,7 +613,8 @@ AC_DEFUN([LC_SRC_KEYRING_SEARCH_4ARGS], [
 	LB2_LINUX_TEST_SRC([keyring_search_4args], [
 		#include <linux/key.h>
 	],[
-		key_ref_t keyring;
+		key_ref_t keyring = make_key_ref(NULL, 0);
+
 		keyring_search(keyring, NULL, NULL, false);
 	])
 ])
