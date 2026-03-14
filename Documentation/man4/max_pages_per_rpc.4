@@ -1,0 +1,109 @@
+.TH MAX_PAGES_PER_RPC 4 2026-03-13 "Lustre" "Lustre Kernel Interfaces"
+.SH NAME
+max_pages_per_rpc, max_mb_per_rpc_read, max_mb_per_rpc_write \- configure RPC size limits for Lustre clients
+.SH SYNOPSIS
+.nf
+lctl set_param \fIobd_type\fR.\fIobd_name\fR.max_pages_per_rpc=\fIPAGE_COUNT\fR
+lctl set_param \fIobd_type\fR.\fIobd_name\fR.max_mb_per_rpc_read=\fIREAD_SIZE\fR
+lctl set_param \fIobd_type\fR.\fIobd_name\fR.max_mb_per_rpc_write=\fIWRITE_SIZE\fR
+.sp
+lctl get_param \fIobd_type\fR.\fIobd_name\fR.max_pages_per_rpc
+lctl get_param \fIobd_type\fR.\fIobd_name\fR.max_mb_per_rpc_read
+lctl get_param \fIobd_type\fR.\fIobd_name\fR.max_mb_per_rpc_write
+.fi
+.SH DESCRIPTION
+The
+.BR max_pages_per_rpc ,
+.BR max_mb_per_rpc_read ,
+and
+.BR max_mb_per_rpc_write
+parameters configure the maximum RPC size used by Lustre clients when
+performing bulk data transfers to OST and MDT targets.
+.sp
+Lustre performs file I/O by issuing RPC requests from the client to
+metadata and object storage targets. Each RPC may transfer multiple
+memory pages of data. These parameters limit the size of those RPC
+requests and therefore influence the amount of data transmitted in a
+single network operation.
+.sp
+The
+.B max_pages_per_rpc
+parameter defines the maximum number of memory pages,
+.IR PAGE_COUNT ,
+that may be included in a single RPC. The effective RPC size is
+determined by multiplying the system page size by this value. Setting
+this parameter is equivalent to setting both
+.B max_mb_per_rpc_read
+and
+.B max_mb_per_rpc_write
+to the same RPC size.
+.sp
+The page size depends on the system architecture. The commonly-used x86
+(Intel/AMD) client CPUs use only a page size of 4 KiB, but aarch64 (ARM)
+and other CPUs may use 4KiB, 16KiB, 64KiB or other page sizes. As a
+result, the effective RPC size configured via
+.B max_pages_per_rpc
+may differ across platforms. For this reason, the
+.B max_mb_per_rpc_read
+and
+.B max_mb_per_rpc_write
+parameters are generally preferred over
+.BR max_pages_per_rpc .
+.sp
+The
+.B max_mb_per_rpc_read
+and
+.B max_mb_per_rpc_write
+parameters specify limits,
+.I READ_SIZE
+and
+.IR WRITE_SIZE ,
+for read and write RPC requests issued by the client. These values may
+be specified as sizes using whole or fractional numbers with
+.BR K ,
+.BR M ,
+or
+.BR G
+suffixes.
+.sp
+When queried using
+.BR lctl (8),
+the
+.B max_pages_per_rpc
+parameter reports the value in pages, while
+.B max_mb_per_rpc_read
+and
+.B max_mb_per_rpc_write
+report the RPC size in megabytes.
+.SH EXAMPLES
+Display the current value:
+.EX
+.B # lctl get_param mdc.lustre-MDT0000-mdc-ffffa010de31f000.max_pages_per_rpc
+.B # lctl get_param osc.lustre-OST0001-osc-ffffa010de31f000.max_mb_per_rpc_read
+.B # lctl get_param osc.lustre-OST0000-osc-ffffa010de31f000.max_mb_per_rpc_write
+.B # lctl get_param osc.*.max_pages_per_rpc
+.B # lctl get_param *.*.max_mb_per_rpc_write
+.EE
+.sp
+Set the parameter:
+.EX
+.B # lctl set_param osc.lustre-OST0000-osc-ffffa010de31f000.max_pages_per_rpc=512
+.B # lctl set_param osc.lustre-OST0001-osc-ffffa010de31f000.max_mb_per_rpc_read=2M
+.B # lctl set_param osc.lustre-OST0001-osc-ffffa010de31f000.max_mb_per_rpc_write=512K
+.EE
+.SH AVAILABILITY
+.B max_pages_per_rpc
+is part of the
+.BR lustre (7)
+filesystem package since release 1.0.0
+.\" Added in commit 0.0.0-3210-gc5050e4125
+.br
+.B max_mb_per_rpc_read and max_mb_per_rpc_write
+are part of the
+.BR lustre (7)
+filesystem package since release 2.18.0
+.\" Added in commit v2_17_50
+.SH SEE ALSO
+.BR lctl (8),
+.BR lctl-get_param (8),
+.BR lctl-set_param (8)
