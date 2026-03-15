@@ -223,23 +223,39 @@ One or more invalid arguments are given.
 .SM -EIO
 Failed to read the changelog record on the MDT.
 .SH EXAMPLE
-An example can be found for in lfs.c source file.
-.B lfs_changelog()
-implements the following command:
+To process a sequence of changelog records:
 .EX
-.BI "lfs changelog [--follow] " MDTNAME " [" STARTREC " [" ENDREC "]]"
+        void *changelog_priv;
+        struct changelog_rec *rec;
+        char *mdtname = "testfs-MDT0000";
+        char *consumer = "dirwatch";
+        __u64 mask = 0; /* use mask registered for this user */
+        long long startrec = 12345678;
+\&
+        rc = llapi_changelog_start_user(&changelog_priv,
+                        CHANGELOG_FLAG_BLOCK | CHANGELOG_FLAG_EXTRA_FLAGS |
+                        CHANGELOG_FLAG_NID_BE | CHANGELOG_FLAG_JOBID |
+                        CHANGELOG_FLAG_FOLLOW,
+                        mdtname, consumer, mask, startrec);
+\&
+        while ((rc = llapi_changelog_recv(changelog_priv, &rec)) == 0) {
+                /* process 'rec' */
+                llapi_changelog_free(&rec);
+        }
 .EE
 .SH AVAILABILITY
 .B llapi_changelog_recv()
-is part of the
+and
+.B llapi_changelog_free()
+are part of the
 .BR lustre (7)
-user application interface library since release 2.4.0.
-.\# Added in commit 2.3.53-7-gf715e4e298
-.br
+user application interface library since release 2.0.0.
+\# Added in commit 1.6.0-3165-g8901d15087b2
 .SH SEE ALSO
 .BR lfs-changelog (1),
 .BR llapi_changelog_clear (3),
 .BR llapi_changelog_get_fd (3),
 .BR llapi_changelog_in_buf (3),
 .BR llapi_changelog_start (3),
+.BR llapi_changelog_start_user (3),
 .BR lustreapi (7)

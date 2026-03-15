@@ -1,9 +1,13 @@
-.TH LFS-CHANGELOG 1 2024-08-15 Lustre "Lustre User Utilities"
+.TH LFS-CHANGELOG 1 2025-11-25 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-changelog, lfs-changelog_clear \- client utility to read and clear Lustre changelogs
 .SH SYNOPSIS
 .SY "lfs changelog"
 .RB [ --follow ]
+.RB [ --user
+.IR USERNAME ]
+.RB [ --mask
+.IR MASK ]
 .I MDTNAME
 .RI [ STARTREC
 .RI [ ENDREC ]]
@@ -23,6 +27,23 @@ points are optional.
 The
 .B --follow
 option will block waiting for new changes.
+The
+.B --user
+option specifies a registered changelog username for filtering. The format of
+.I USERNAME
+can be username or ID, e.g. "cl1", "cl1-user", "1", or "user".
+The
+.B --mask
+option specifies a filtering mask in the same format as
+.BR lctl-changelog_register (8)
+, e.g. "creat,unlnk,+open,-hsm".
+If
+.I MASK
+is not specified, the user's
+.I MASK
+specified to
+.BR lctl-changelog_register (8)
+will be used.
 .TP
 .B lfs changelog_clear
 Indicate that changelog records previous to
@@ -67,8 +88,8 @@ Register 2 changelog consumers on the MDT0000:
 .EX
 .B [root@mds]# lctl --device lustrefs-MDT0000 changelog_register
 lustrefs-MDT0000: Registered changelog userid 'cl1'
-.B [root@mds]# lctl --device lustrefs-MDT0000 changelog_register
-lustrefs-MDT0000: Registered changelog userid 'cl2'
+.B [root@mds]# lctl --device lustrefs-MDT0000 changelog_register --user dirwatch -m mkdir+rmdir
+lustrefs-MDT0000: Registered changelog userid 'cl2-dirwatch'
 .RE
 .PP
 Set changelog mask to generate changelogs for file creations:
@@ -86,6 +107,18 @@ Read changelog from number 0 to 99 on MDT0000:
 0 01CREAT 11:03:54.129724442 2022.11.22 ... p=[0x200000007:0x1:0x0] test1
  ....
 99 01CREAT 11:03:54.129724465 2022.11.22 ... p=[0x200000007:0x1:0x0] test100
+.RE
+.PP
+Read changelog using registered user cl1:
+.RS
+.B [root@client]# lfs changelog --user cl1 lustrefs-MDT0000
+100 01CREAT 11:03:54.129724492 2022.11.22 ... p=[0x200000007:0x1:0x0] test101
+.RE
+.PP
+Read changelog using registered user cl2 with additional mask filtering:
+.RS
+.B [root@client]# lfs changelog --user cl2 --mask unlnk lustrefs-MDT0000
+No record found.
 .RE
 .PP
 Indicate to MDT0000 that the changelogs lower than 100 are not needed for cl1:
@@ -110,12 +143,13 @@ and
 .B lfs changelog_clear
 are part of the
 .BR lustre (7)
-filesystem package since release 2.0.0
-.\" Added in commit 1.6.0-2259-g0e660eab78
+filesystem package since release 2.0.0.
+\" Added in commit 1.6.0-2259-g0e660eab78
 .SH SEE ALSO
 .BR lfs (1),
 .BR llapi_changelog_clear (3),
 .BR llapi_changelog_recv (3),
 .BR llapi_changelog_start (3),
+.BR llapi_changelog_start_user (3),
 .BR lctl-changelog_deregister (8),
 .BR lctl-changelog_register (8)

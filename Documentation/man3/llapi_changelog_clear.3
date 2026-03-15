@@ -17,7 +17,8 @@ are no longer of interest to a particular consumer
 .I idstr
 , potentially allowing the MDT
 .I mdtname
-(e.g: "lustrefs-MDT0000") to free up disk space.
+(e.g: "lustrefs-MDT0000") to free up disk space by freeing old records
+if no other changelog consumers still need to process them.
 .PP
 An
 .I endrec
@@ -38,26 +39,29 @@ One or more invalid arguments are given.
 MDT's changelog char device or changelog user not found.
 .TP
 .SM -ENOPERM
-Not enough permissions to open the changelog char device. By default, the device
-is only accessible to the root user.
+Not enough permissions to open the changelog char device.
+By default, the device is only accessible to the root user.
 .SH EXAMPLE
-An example can be found in lfs.c source file.
-.B lfs_changelog_clear
-implements the following command:
+To clear the changelog for a specific consumer ID:
 .EX
-.BI "lfs changelog_clear " MDTNAME " " ID " " ENDREC ""
+        char *mdtname = "testfs-MDT0000";
+        char *idstr = "cl2-dirwatch";
+        long long end_record = 12345678;
+\&
+        rc = llapi_changelog_clear(mdtname, idstr, end_record);
 .EE
 .SH AVAILABILITY
 .B llapi_changelog_clear()
 is part of the
 .BR lustre (7)
-user application interface library since before release 2.4.0
-.\" Added in commit 2.3.53-7-gf715e4e298
+user application interface library since release 2.0.0.
+\" Added in commit 1.6.0-3165-g8901d15087b2
 .SH SEE ALSO
 .BR lfs-changelog_clear (1),
 .BR llapi_changelog_get_fd (3),
 .BR llapi_changelog_in_buf (3),
 .BR llapi_changelog_recv (3),
 .BR llapi_changelog_start (3),
+.BR llapi_changelog_start_user (3),
 .BR lustreapi (7),
 .BR lctl-changelog_register (8)

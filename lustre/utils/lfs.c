@@ -566,8 +566,9 @@ command_t cmdlist[] = {
 	 "Flush security context for current user.\n"
 	 "usage: flushctx [-k] [-r] [mountpoint...]"},
 	{"changelog", lfs_changelog, 0,
-	 "Show the metadata changes on an MDT."
-	 "\nusage: changelog <mdtname> [startrec [endrec]]"},
+	 "Show the metadata changes on an MDT.\n"
+	 "usage: changelog [--follow] [--user USERNAME] [--mask MASK] "
+	 "<mdtname> [startrec [endrec]]"},
 	{"changelog_clear", lfs_changelog_clear, 0,
 	 "Indicate that old changelog records up to <endrec> are no longer of "
 	 "interest to consumer <id>, allowing the system to free up space.\n"
@@ -12338,11 +12339,16 @@ static int lfs_changelog(int argc, char **argv)
 	void *changelog_priv;
 	struct changelog_rec *rec;
 	long long startrec = 0, endrec = 0;
+	char *clid = NULL;
+	char *mask_str = NULL;
+	__u64 mask = 0;
 	char *mdd;
 	struct option long_opts[] = {
 		{ .val = 'f', .name = "follow", .has_arg = no_argument },
+		{ .val = 'm', .name = "mask", .has_arg = required_argument },
+		{ .val = 'u', .name = "user", .has_arg = required_argument },
 		{ .name = NULL } };
-	char short_opts[] = "f";
+	char short_opts[] = "fm:u:";
 	int rc, follow = 0;
 
 	while ((rc = getopt_long(argc, argv, short_opts,
@@ -12350,6 +12356,25 @@ static int lfs_changelog(int argc, char **argv)
 		switch (rc) {
 		case 'f':
 			follow++;
+			break;
+		case 'm':
+			mask_str = optarg;
+			/* convert mask string to numeric value */
+			mask = CHANGELOG_DEFMASK;
+			rc = llapi_convert_str2mask(mask_str,
+						    changelog_type2str,
+						    &mask, CHANGELOG_MINMASK,
+						    CHANGELOG_ALLMASK,
+						    CHANGELOG_DEFMASK);
+			if (rc != 0) {
+				llapi_error(LLAPI_MSG_ERROR, rc,
+					    "invalid changelog mask '%s'\n",
+					    mask_str);
+				return CMD_HELP;
+			}
+			break;
+		case 'u':
+			clid = optarg;
 			break;
 		default:
 			fprintf(stderr,
@@ -12387,13 +12412,23 @@ static int lfs_changelog(int argc, char **argv)
 		}
 	}
 
-	rc = llapi_changelog_start(&changelog_priv,
-				   CHANGELOG_FLAG_BLOCK |
-				   CHANGELOG_FLAG_JOBID |
-				   CHANGELOG_FLAG_NID_BE |
-				   CHANGELOG_FLAG_EXTRA_FLAGS |
-				   (follow ? CHANGELOG_FLAG_FOLLOW : 0),
-				   mdd, startrec);
+	if (clid)
+		rc = llapi_changelog_start_user(&changelog_priv,
+						CHANGELOG_FLAG_BLOCK |
+						CHANGELOG_FLAG_JOBID |
+						CHANGELOG_FLAG_NID_BE |
+						CHANGELOG_FLAG_EXTRA_FLAGS |
+						(follow ?
+						 CHANGELOG_FLAG_FOLLOW : 0),
+						mdd, clid, mask, startrec);
+	else
+		rc = llapi_changelog_start(&changelog_priv,
+					   CHANGELOG_FLAG_BLOCK |
+					   CHANGELOG_FLAG_JOBID |
+					   CHANGELOG_FLAG_NID_BE |
+					   CHANGELOG_FLAG_EXTRA_FLAGS |
+					   (follow ? CHANGELOG_FLAG_FOLLOW : 0),
+					   mdd, startrec);
 	if (rc < 0) {
 		fprintf(stderr, "%s changelog: cannot start changelog: %s\n",
 			progname, strerror(errno = -rc));

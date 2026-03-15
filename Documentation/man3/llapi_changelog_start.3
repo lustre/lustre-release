@@ -1,12 +1,16 @@
-.TH LLAPI_CHANGELOG_START 3 2024-08-22 "Lustre User API" "Lustre Library Functions"
+.TH LLAPI_CHANGELOG_START 3 2025-11-25 "Lustre User API" "Lustre Library Functions"
 .SH NAME
-llapi_changelog_start, llapi_changelog_set_xflags, llapi_changelog_fini \- Initialize and clean a read instance for MDT changelogs
+llapi_changelog_start, llapi_changelog_start_user, llapi_changelog_set_xflags, llapi_changelog_fini \- Initialize and clean a read instance for MDT changelogs
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
 .PP
 .BI "int llapi_changelog_start(void **" priv ", enum changelog_send_flag " flags ,
 .BI "                          const char *" device ", long long " startrec ");"
+.PP
+.BI "int llapi_changelog_start_user(void **" priv ", enum changelog_send_flag " flags ,
+.BI "                               const char *" device ", const char *" username ,
+.BI "                               __u64 " mask ", long long " startrec ");"
 .PP
 .BI "int llapi_changelog_set_xflags(void *" priv,
 .BI "                               enum changelog_send_extra_flag " extra_flags ");"
@@ -63,6 +67,31 @@ CHANGELOG_FLAG_EXTRA_FLAG
 Pack additional flag bits into the changelog record.
 .PP
 The function
+.B llapi_changelog_start_user()
+, similar to the function
+.B llapi_changelog_start()
+, initializes a new instance
+.I priv
+to read MDT changelogs, but with user-specific filtering, including
+username and mask.
+.P
+The
+.I username
+parameter specifies the changelog username or ID, e.g. "cl1", "cl1-user", "1",
+or "user".
+.P
+The
+.I mask
+parameter specifies the filtering mask in numeric form.
+If
+.I mask
+is 0, the user's registered
+.I MASK
+specified to
+.BR lctl-changelog_register (8)
+will be used.
+.PP
+The function
 .B llapi_changelog_set_xflags()
 specifies additional changelog flags with
 .I extra_flags
@@ -117,23 +146,61 @@ MDT's changelog char device not found. Is the Lustre FS mounted?
 Not enough permissions to open the changelog char device. By default, the device
 is only accessible to the root user.
 .SH EXAMPLE
-An example can be found for in lfs.c source file.
-.B lfs_changelog()
-implements the following command:
+To register a user to watch file and directory creation and removal:
 .EX
-.BI "lfs changelog [--follow] " MDTNAME " [" STARTREC " [" ENDREC "]]"
+\&
+        char *mdd = "testfs-MDT0000";
+        long long startrec = 0;
+        char *name = "dirwatch";
+        char *mask_str = "rmdir,mkdir,creat,unlnk";
+        __u64 mask = CHANGELOG_DEFMASK;
+        void *changelog_priv;
+        struct changelog_rec *rec;
+\&
+        /* convert mask string to numeric value */
+        rc = llapi_convert_str2mask(mask_str, changelog_type2str, &mask,
+                                CHANGELOG_MINMASK, CHANGELOG_ALLMASK,
+                                CHANGELOG_DEFMASK);
+\&
+        /* register a new Changelog consumer with a name and mask */
+        rc = llapi_changelog_start_user(&changelog_priv,
+                                CHANGELOG_FLAG_BLOCK | CHANGELOG_FLAG_EXTRA_FLAGS |
+                                CHANGELOG_FLAG_NID_BE | CHANGELOG_FLAG_JOBID,
+                                mdd, name, mask, startrec);
+        rc = llapi_changelog_set_xflags(changelog_priv,
+                                        CHANGELOG_EXTRA_FLAG_UIDGID |
+                                        CHANGELOG_EXTRA_FLAG_NID |
+                                        CHANGELOG_EXTRA_FLAG_OMODE |
+                                        CHANGELOG_EXTRA_FLAG_XATTR);
+\&
+        while ((rc = llapi_changelog_recv(changelog_priv, &rec)) == 0) {
+                /* process changelog records */
+                llapi_changelog_free(&rec);
+        }
+\&
+        llapi_changelog_fini(&changelog_priv);
 .EE
 .SH AVAILABILITY
 .B llapi_changelog_start()
-is part of the
+and
+.B llapi_changelog_fini()
+are part of the
 .BR lustre (7)
-user application interface library since release 2.4.0.
-.\# Added in commit 2.3.53-7-gf715e4e298
-.br
+user application interface library since release 2.0.0,
+\# Added in commit 1.6.0-3165-g8901d15087b2
+.B llapi_changelog_set_xflags()
+since release 2.11.0,
+\# Added in commit v2_10_55_0-122-g361edea47072
+and
+.B llapi_changelog_start_user()
+since release 2.18.0.
 .SH SEE ALSO
 .BR lfs-changelog (1),
 .BR llapi_changelog_clear (3),
 .BR llapi_changelog_get_fd (3),
 .BR llapi_changelog_in_buf (3),
 .BR llapi_changelog_recv (3),
-.BR lustreapi (7)
+.BR llapi_changelog_start_user (3),
+.BR llapi_convert_str2mask (3),
+.BR lustreapi (7),
+.BR lctl-changelog_register (8)

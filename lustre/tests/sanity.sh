@@ -21788,6 +21788,97 @@ test_160v() {
 }
 run_test 160v "setattr preserves mtime update despite inter-client clock skew"
 
+test_160w() {
+	[[ $PARALLEL == "yes" ]] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
+	(( $MDS1_VERSION >= $(version_code 2.17.50) )) ||
+		skip "Need MDS >= 2.17.50 for changelog filtering"
+
+	local mdt="$(facet_svc $SINGLEMDS)"
+	local u1="u1"_$testnum
+	local u2="u2"_$testnum
+	local u1_id u2_id
+	local count
+	local logs
+
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
+
+	# Register two users with different masks
+	changelog_register --user $u1 -m creat+unlnk ||
+		error "changelog_register u1 failed"
+	u1_id="${CL_USERS[$SINGLEMDS]%% *}"
+
+	changelog_register --user $u2 -m mkdir+rmdir ||
+		error "changelog_register u2 failed"
+	u2_id="$(awk '{print $NF}' <<<"${CL_USERS[$SINGLEMDS]}")"
+
+	changelog_users $SINGLEMDS
+	changelog_clear $u1_id 0 || error "changelog_clear $u1 failed"
+	changelog_clear $u2_id 0 || error "changelog_clear $u2 failed"
+
+	# CREAT
+	touch $DIR/$tdir/f1 || error "touch f1 failed"
+	touch $DIR/$tdir/f2 || error "touch f2 failed"
+	# MKDIR
+	mkdir $DIR/$tdir/d1 || error "mkdir d1 failed"
+	mkdir $DIR/$tdir/d2 || error "mkdir d2 failed"
+	# UNLINK
+	rm $DIR/$tdir/f1 || error "rm f1 failed"
+	# RMDIR
+	rmdir $DIR/$tdir/d1 || error "rmdir d1 failed"
+
+	echo "lfs changelog --user (with different user formats)"
+	logs=$($LFS changelog --user $u1 $mdt | head -10)
+	[[ -n "$logs" ]] || error "$u1 should see changelog records"
+	logs=$($LFS changelog --user $u2_id $mdt 0 | head -5)
+	[[ -n "$logs" ]] || error "Startrec should work"
+
+	echo "lfs changelog --user (should show all registered records)"
+	# Show all records u1 registered
+	logs=$($LFS changelog --user $u1 $mdt | tee >(cat >&2))
+	count=$(grep -c -o -E "CREAT|UNLNK|MKDIR|RMDIR" <<< $logs)
+	(( $count == 3 )) ||
+		error "$u1 should see 3 total records, but got $count"
+	# No MKDIR|RMDIR for u1
+	count=$(echo $logs | grep -c -E "RMDIR|MKDIR")
+	(( $count == 0 )) ||
+		error "$u1 should see 0 MKDIR|RMDIR record, but got $count"
+
+	echo "lfs changelog --user --mask (with registered mask)"
+	logs=$($LFS changelog --user $u2_id --mask "mkdir+rmdir" $mdt |
+		tee >(cat >&2))
+	# MKDIR
+	count=$(grep -c -o "MKDIR" <<< $logs)
+	(( $count == 2 )) ||
+		error "$u2_id should see 2 MKDIR records, but got $count"
+	# RMDIR
+	count=$(grep -c -o "RMDIR" <<< $logs)
+	(( $count == 1 )) ||
+		error "$u2_id should see 1 RMDIR record, bug got $count"
+	# No CREAT|UNLNK for u2
+	count=$(grep -c -E "CREAT|UNLNK" <<< $logs)
+	(( $count == 0 )) ||
+		error "$u2_id should see 0 CREAT|UNLNK record, but got $count"
+
+	echo "lfs changelog --user --mask (including unregistered mask)"
+	logs=$($LFS changelog --user $u1 --mask creat+rmdir $mdt |
+		tee >(cat >&2))
+	# CREAT
+	count=$(grep -c -o "CREAT" <<< $logs)
+	(( $count == 2 )) ||
+		error "$u1 should see 2 CREAT records, but got $count"
+	# No RMDIR for u1
+	count=$(grep -c -o "RMDIR" <<< $logs)
+	(( $count == 0 )) ||
+		error "$u1 should see 0 RMDIR record, but got $count"
+
+	rm -rf $DIR/$tdir
+	changelog_deregister $u1 || error "cannot deregister $u1"
+	changelog_deregister $u2 || error "cannot deregister $u2"
+}
+run_test 160w "lfs changelog --user --mask"
+
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 

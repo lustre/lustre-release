@@ -20,6 +20,7 @@
 
 #include <stddef.h>
 #include <stdarg.h>
+#include <string.h>
 
 #include <linux/types.h>
 #include <linux/lnet/lnet-types.h>

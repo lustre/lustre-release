@@ -1,0 +1,80 @@
+.TH LLAPI_CHANGELOG_START 3 2025-12-19 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_convert_str2mask \- convert named flags into numeric bitmask
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_convert_str2mask(const char " *str ,
+.BI "                           const char *(*" bit2str ")(int bit ),"
+.BI "                           __u64 *" oldmask ", __u64 " minmask ,
+.BI "                           __u64 " allmask ", __u64 " defmask );
+.SH DESCRIPTION
+The function
+.BR llapi_convert_str2mask ()
+converts a list of flag names specified in
+.B str
+to numeric values.  The initial mask value is specified in
+.I oldmask
+(may be 0) and is also the returned value.
+The
+.I bit2str
+function is called repeatedly to convert the named flags in
+.Ir str
+to a numeric bitmask.
+.PP
+If the named flags in
+.B str
+start with a leading
+.B \+
+then that flag will be added to those in
+.IR oldmask ,
+or if the flags start with a leading
+.B \-
+then that flag will be removed from those in
+.IR oldmask ,
+otherwise the initial flags are reset to 0.
+Named flags may be separated by a space, comma, or plus to indicate the
+flag should be set, or minus to indicate the flag should be cleared.
+.PP
+If the reserved flag name
+.RB ' all '
+is specified, then all of the flags in
+.I allmask
+will be set or cleared, respectively.  If the reserved flag name
+.RB ' default '
+is specified, then the flags listed in
+.I defmask
+will be set or cleared.
+The flags specified in
+.I minmask
+are mandatory and will always be set, regardless of other flags listed.
+.SH RETURN VALUES
+.PP
+Return 0 on success, or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM -EINVAL
+The specified
+.B str
+contains an invalid flag name, or none at all.
+.SH EXAMPLE
+To convert changelog flag names to a numeric mask:
+.EX
+        char *mask_str = "rmdir,mkdir,creat,unlnk";
+        __u64 mask = CHANGELOG_DEFMASK;
+\&
+        /* convert mask string to numeric value */
+        rc = llapi_convert_str2mask(mask_str, changelog_type2str, &mask,
+                                CHANGELOG_MINMASK, CHANGELOG_ALLMASK,
+                                CHANGELOG_DEFMASK);
+.EE
+.SH AVAILABILITY
+.B llapi_convert_str2mask()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.17.0.
+\# Added in commit v2_16_59-5-g43ec76a4a9
+.SH SEE ALSO
+.BR llapi_changelog_start_user (3),
+.BR lustreapi (7).
