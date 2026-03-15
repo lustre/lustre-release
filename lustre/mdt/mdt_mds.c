@@ -96,10 +96,10 @@ module_param(mds_rdpg_num_cpts, charp, 0444);
 MODULE_PARM_DESC(mds_rdpg_num_cpts,
 		 "CPU partitions MDS readpage threads should run on");
 
-unsigned int mdt_enable_flr_ec = 1;
+unsigned int mdt_enable_flr_ec;
 module_param(mdt_enable_flr_ec, uint, 0644);
 MODULE_PARM_DESC(mdt_enable_flr_ec,
-		 "enable FLR EC connect flag, on by default");
+		 "enable FLR EC connect flag, off by default");
 
 /* device init/fini methods */
 static void mds_stop_ptlrpc_service(struct mds_device *m)
