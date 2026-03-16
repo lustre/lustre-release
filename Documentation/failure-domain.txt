@@ -1,0 +1,225 @@
+			**************************************
+			* Overview of Failure Domain support *
+			**************************************
+
+Contents
+1. Introduction
+	1.1 Definitions
+	1.2 Data path
+2. Command interface
+	2.1 lctl set_param / get_param
+	2.2 lfs df
+3. Stripe allocation
+	3.1 Erasure coding
+	3.2 FLR mirroring
+4. Examples
+
+
+1. Introduction
+===============
+Failure domain support allows the administrator to label OSTs according to
+shared external resources, such as a storage enclosure, network switch,
+power domain, rack or similar.
+
+When a non-zero failure domain is configured on OSTs, the stripe allocators
+in LOD will try to place redundant objects on OSTs from different failure
+domains. This reduces the chance that a single external failure will take
+out more than one replica or more than one member of an erasure-coded
+raid set.
+
+A failure domain value of 0 means that no failure domain is configured for
+that OST. OSTs with domain 0 are ignored by the failure-domain checks in
+the allocator.
+
+No specific meaning is attributed to the numerical value of a domain other
+than whether two OSTs share the same value or not. Typically many OSTs will
+share one domain number when they sit behind the same piece of hardware.
+
+When used, it is recommended that a failure domain is configured for all
+OSTs in the filesystem.
+
+
+1.1 Definitions
+---------------
+Failure domain:
+    An integer label on an OST. Value 0 means "not configured".
+Domain uniqueness:
+    For a set of OST objects, every object is placed on an OST whose
+    failure domain is different from every other object in that set
+    (ignoring OSTs whose domain is 0).
+
+
+1.2 Data path
+-------------
+Configuration (OSS; greppable as obdfilter.*.failure_domain):
+
+  obdfilter.<fsname>-OST<xxxx>.failure_domain
+
+Reported to peers in OST statfs as os_failure_domain.
+
+Cached on the MDS per OST target as ltq_failure_domain
+(struct lu_tgt_qos), updated from os_failure_domain when LOD
+refreshes target statfs. The RR and QoS allocators consult
+ltq_failure_domain when placing EC and FLR layouts.
+
+
+2. Command interface
+====================
+Failure domains are configured per OST on the OSS and are visible to clients
+through the normal statfs path. They are then used by the MDS when it
+allocates stripes for new layouts.
+
+
+2.1 lctl set_param / get_param
+-----------------------------
+Set the failure domain of a single OST:
+
+  $ lctl set_param obdfilter.lustre-OST0000.failure_domain=1
+
+Get the failure domain of a single OST:
+
+  $ lctl get_param obdfilter.lustre-OST0000.failure_domain
+  obdfilter.lustre-OST0000.failure_domain=1
+
+Set a round-robin domain mapping across all OSTs on a node, for example
+four domains:
+
+  $ i=0
+  $ for p in $(lctl list_param obdfilter.*OST*.failure_domain); do
+	lctl set_param -n $p=$((i % 4 + 1))
+	i=$((i + 1))
+    done
+
+Clear failure domains (disable the feature for those OSTs):
+
+  $ lctl set_param obdfilter.*OST*.failure_domain=0
+
+
+2.2 lfs df
+----------
+Clients can view the failure domain of every target with lfs df.
+The domain is reported from os_failure_domain in the OST statfs reply.
+
+Show domain together with the usual size columns:
+
+  $ lfs df --output=source,size,domain,target /mnt/lustre
+  UUID                   1K-blocks        Domain  Mounted on
+  lustre-MDT0000_UUID     12582912             0  /mnt/lustre[MDT:0]
+  lustre-OST0000_UUID     20971520             1  /mnt/lustre[OST:0]
+  lustre-OST0001_UUID     20971520             2  /mnt/lustre[OST:1]
+  lustre-OST0002_UUID     20971520             3  /mnt/lustre[OST:2]
+  lustre-OST0003_UUID     20971520             4  /mnt/lustre[OST:3]
+  ...
+
+Show only OSTs and their domains:
+
+  $ lfs df -u target,domain /mnt/lustre | grep OST
+
+
+3. Stripe allocation
+====================
+Once OSTs report a non-zero failure domain (ltq_failure_domain != 0),
+LOD uses that value in the round-robin and QoS allocators when placing
+stripes for layouts that need redundancy (default placement with no
+explicit OST start index or OST list).
+
+Explicit placement paths do not consult ltq_failure_domain:
+
+  - lfs setstripe -o LIST  (lod_alloc_ost_list)
+  - lfs setstripe -i INDEX (lod_ost_alloc_specific)
+
+Those commands are intended for deliberate, surgical layout control, not
+routine allocation. The OST list or start index is taken as authoritative
+and domain uniqueness is left to the caller's judgment. Domain-aware
+allocation for -i/-o can be revisited later if needed; until then, use
+default QoS/RR placement when failure-domain separation must be enforced
+by Lustre itself.
+
+
+3.1 Erasure coding
+------------------
+For files created with lfs setstripe --ec the coverage of failure-domain
+uniqueness differs between normal allocation (-c) and overstriping (-C).
+
+When normal allocation (-c) is used, all stripes in the data component and
+its corresponding EC (parity) component must be placed on different failure
+domains.
+
+When overstriping (-C) is used, it is enough that all data and EC stripes
+within each raid set come from different failure domains. The same failure
+domain may be reused across different raid sets (data vs data, and parity
+vs data of another raid set).
+
+For EC protected files it is recommended to use overstriping (-C), since
+each raid set is protected individually and overstriping makes it easier to
+satisfy the per-raid-set domain constraint when the number of distinct
+domains is smaller than the full stripe count.
+
+On short allocation, plain (non-EC) components may accept fewer stripes
+than requested. EC layouts keep the full requested stripe count so the
+raid-set geometry stays consistent until EC-specific fallback (reuse of
+OSTs across raid sets for overstriping, or shrinking the geometry) runs.
+
+
+3.2 FLR mirroring
+-----------------
+For plain FLR mirrored files, failure domains are also honored.
+
+Within a single component, if overstriping is not requested, stripes of that
+component must come from different failure domains. If overstriping is
+requested, the same failure domain may be reused within that component.
+
+Across mirrors, the same failure domain must not be reused for overlapping
+components. That is the main goal for FLR: two mirrors of the same file
+extent should not both sit behind the same external point of failure.
+
+
+4. Examples
+===========
+Assume eight OSTs configured with four failure domains in round robin,
+so OST index i has domain (i % 4) + 1:
+
+  OST0000 domain 1
+  OST0001 domain 2
+  OST0002 domain 3
+  OST0003 domain 4
+  OST0004 domain 1
+  OST0005 domain 2
+  OST0006 domain 3
+  OST0007 domain 4
+
+
+EC layout with one raid set
+---------------------------
+Create a 2+2 EC file. With four distinct domains available, every data and
+parity stripe is forced onto a different domain:
+
+  $ lfs setstripe -E -1 -c 2 --ec 2+2 /mnt/lustre/ec_file
+  $ lfs getstripe /mnt/lustre/ec_file
+
+
+EC layout with overstriping
+---------------------------
+Create a wider data component using overstriping. Domain uniqueness is
+only required inside each raid set:
+
+  $ lfs setstripe -E -1 -C 8 --ec 2+2 /mnt/lustre/ec_over
+  $ lfs getstripe /mnt/lustre/ec_over
+
+
+FLR mirrored file
+-----------------
+Create a two-mirror file with two stripes per mirror. The four objects are
+taken from four different domains:
+
+  $ lfs mirror create -N2 -E -1 -S 1M -c 2 /mnt/lustre/flr_file
+  $ lfs getstripe /mnt/lustre/flr_file
+
+
+See also
+--------
+lfs-df(1)
+obdfilter.failure_domain(4)
+  (param: obdfilter.*.failure_domain)
+Documentation/ec.txt
+Kernel symbols: os_failure_domain, ltq_failure_domain

@@ -1,4 +1,4 @@
-.TH OBDFILTER...FAILURE_DOMAIN 4 2026-04-07 Lustre "Lustre Kernel Interfaces"
+.TH OBDFILTER...FAILURE_DOMAIN 4 2026-09-07 Lustre "Lustre Kernel Interfaces"
 .SH NAME
 obdfilter.failure_domain \- control the failure_domain for OSTs
 .SH SYNOPSIS
@@ -69,7 +69,14 @@ When used it is recommended that failure-domain is configured for all OSTs.
 For EC protected files it is recommended to use overstriping (-C) as all
 raid sets are protected individually.
 
-Currently this is only available for EC protected files.
+Failure-domain constraints are applied only by the default round-robin
+and QoS allocators.
+.BR lfs-setstripe (1)
+.B \-i
+and
+.B \-o
+use explicit OST placement and do not consult failure domains; domain
+uniqueness is left to the caller for those paths.
 .SH MODULES
 This parameter is in the following modules:
 .EX
@@ -103,6 +110,8 @@ is part of the
 filesystem package since release 2.18.0.
 .\" Added in 2.17.51.xxx
 .SH SEE ALSO
+.BR lfs-df (1),
+.BR lfs-setstripe (1),
 .BR lctl-get_param (8),
 .BR lctl-set_param (8)
 

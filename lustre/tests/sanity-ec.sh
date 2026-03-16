@@ -271,6 +271,50 @@ verify_ec_stripe_size() {
 	}
 }
 
+# Assign failure domain values to the OSTs
+# This will assign failure domain values 1..$1 in round robin fashion to
+# all OSTs
+#
+assign_failure_domain() {
+	local maxfd=$1
+	local ostnum ost ostname domain
+
+	for ostnum in $(seq $OSTCOUNT); do
+		ost=$((ostnum - 1))
+		ostname=$(ostname_from_index $ost)
+		domain=$((ost % maxfd + 1))
+		do_facet ost$ostnum $LCTL set_param -n \
+			obdfilter.$ostname.failure_domain=$domain
+		# Wait until the domain is visible via statfs (MDS cache)
+		wait_update_facet client \
+			"$LFS df --ost=$ost --output=domain $MOUNT" \
+			"$domain" ||
+			error "OST$ost failure_domain not $domain"
+	done
+}
+
+#
+# Clear the failure domain for all OSTs
+#
+clear_failure_domain() {
+	local ostnum ost ostname
+
+	for ostnum in $(seq $OSTCOUNT); do
+		ost=$((ostnum - 1))
+		ostname=$(ostname_from_index $ost)
+		do_facet ost$ostnum $LCTL set_param -n \
+			obdfilter.$ostname.failure_domain=0
+		wait_update_facet client \
+			"$LFS df --ost=$ost --output=domain $MOUNT" "0" ||
+			error "OST$ost failure_domain not cleared"
+	done
+	# Give the MDS-side LOD QOS statfs cache (refreshed at most every
+	# 2 * ld_qos_maxage seconds, independent from the client-visible
+	# $LFS df value checked above) time to pick up the cleared failure
+	# domains before a subsequent test relies on them being gone.
+	sleep 10
+}
+
 #
 # Read from parity mirror and check for zeros.
 # Usage: check_parity_read <file> <mirror_id> <offset> <expect_zeros>
@@ -4772,6 +4816,97 @@ test_34c() {
 	done
 }
 run_test 34c "test that reading past parity data returns zeros"
+
+test_35a() {
+	(( $OSTCOUNT >= 8 )) || skip "needs >= 8 OSTs"
+	enable_ec
+
+	local td=$DIR/$tdir
+	stack_trap "rm -rf $td"
+
+	test_mkdir $td
+
+	stack_trap "clear_failure_domain"
+	#
+	# Assign failure domains 1,2,3,4 to the OSTs in round robin fashion
+	#
+	assign_failure_domain 4
+	sleep 10
+
+	local domains=$($LFS df -u target,domain | grep OST)
+	local FIDX tf count
+	for FIDX in $(seq 10); do
+		tf=$td/$FIDX
+		$LFS setstripe -E -1 -c 2 --ec 2+2 $tf ||
+			error "setstripe failed"
+		#
+		# If each OST is from a unique failure domain we would now have
+		# four different OSTs with 4 different values for "ost_index % 4"
+		count=$($LFS getstripe $tf | grep l_ost_idx |
+			sed -e "s/.*idx: *//" -e "s/,.*//" | while read IDX; do
+				echo $((IDX % 4))
+			done | sort | uniq | wc -l)
+
+		echo === failure domains picked ===
+		$LFS getstripe $tf | grep l_ost_idx |
+			sed -e "s/.*idx: *//" -e "s/,.*//" | while read IDX; do
+				echo $((IDX % 4 + 1))
+			done
+		echo Count $count
+		(( count == 4 )) || {
+			echo "Domains" $domains
+			$LFS getstripe $tf
+			error "Failure domain was re-used"
+		}
+	done
+}
+run_test 35a "test raidset OSTs allocations using failure domains"
+
+
+test_35b() {
+	(( $OSTCOUNT >= 8 )) || skip "needs >= 8 OSTs"
+	enable_ec
+
+	local td=$DIR/$tdir
+	stack_trap "rm -rf $td"
+
+	test_mkdir $td
+
+	stack_trap "clear_failure_domain"
+	#
+	# Assign failure domains 1,2,3,4 to the OSTs in round robin fashion
+	#
+	assign_failure_domain 4
+	sleep 10
+
+	local domains=$($LFS df -u target,domain | grep OST)
+	local FIDX tf count
+	for FIDX in $(seq 10); do
+		tf=$td/$FIDX
+		$LFS mirror create -N2 -E -1 -S 1M -c 2 $tf ||
+			error "mirror create failed"
+		#
+		# If each OST is from a unique failure domain we would now have
+		# four different OSTs with 4 different values for "ost_index % 4"
+		count=$($LFS getstripe $tf | grep l_ost_idx |
+			sed -e "s/.*idx: *//" -e "s/,.*//" | while read IDX; do
+				echo $((IDX % 4))
+			done | sort | uniq | wc -l)
+
+		echo === failure domains picked ===
+		$LFS getstripe $tf | grep l_ost_idx |
+			sed -e "s/.*idx: *//" -e "s/,.*//" | while read IDX; do
+				echo $((IDX % 4 + 1))
+			done
+		echo Count $count
+		(( count == 4 )) || {
+			echo "Domains" $domains
+			$LFS getstripe $tf
+			error "Failure domain was re-used"
+		}
+	done
+}
+run_test 35b "test FLR OSTs allocations using failure domains"
 
 test_40a() {
 	(( $OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs for EC rebuild"
