@@ -2736,6 +2736,7 @@ static const struct llite_file_opcode {
 	{ LPROC_LL_WRITE_BYTES,	LPROCFS_TYPE_BYTES_FULL, "write_bytes" },
 	{ LPROC_LL_HIO_READ,	LPROCFS_TYPE_BYTES_FULL, "hybrid_read_bytes" },
 	{ LPROC_LL_HIO_WRITE,	LPROCFS_TYPE_BYTES_FULL, "hybrid_write_bytes" },
+	{ LPROC_LL_CACHED_READ,	LPROCFS_TYPE_BYTES_FULL, "cached_read_bytes" },
 	{ LPROC_LL_READ,	LPROCFS_TYPE_LATENCY,	"read" },
 	{ LPROC_LL_WRITE,	LPROCFS_TYPE_LATENCY,	"write" },
 	{ LPROC_LL_IOCTL,	LPROCFS_TYPE_REQS,	"ioctl" },

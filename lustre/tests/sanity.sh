@@ -17915,6 +17915,144 @@ test_127f() {
 }
 run_test 127f "OST IO latency histograms by size"
 
+test_127g() { # LU-20002
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+
+	local fast_read_sav=$($LCTL get_param -n llite.*.fast_read 2>/dev/null)
+
+	[ -z "$fast_read_sav" ] && skip "no fast read support"
+	stack_trap "$LCTL set_param -n llite.*.fast_read=$fast_read_sav"
+	$LCTL set_param -n llite.*.fast_read=1
+
+	# sub-test (a): single-page cold read should have
+	# zero cached_read_bytes. Use one page to avoid
+	# readahead populating cache for subsequent pages.
+	dd if=/dev/zero of=$DIR/$tfile bs=$PAGE_SIZE \
+		count=4 2>/dev/null ||
+		error "(0) dd write failed"
+	stack_trap "rm -f $DIR/$tfile"
+
+	# Flush dirty pages, drop locks, drop page cache
+	sync
+	cancel_lru_locks osc
+	echo 3 > /proc/sys/vm/drop_caches
+
+	$LCTL set_param llite.*.stats=0
+
+	dd if=$DIR/$tfile of=/dev/null bs=$PAGE_SIZE \
+		count=1 2>/dev/null ||
+		error "(1) dd cold read failed"
+
+	local cached=$($LCTL get_param -n llite.*.stats |
+		awk '/cached_read_bytes/ { print $7 }')
+	local total=$($LCTL get_param -n llite.*.stats |
+		awk '/^read_bytes/ { print $7 }')
+
+	echo "(a) cold: cached=$cached total=$total"
+
+	# Single-page cold read must go through the slow
+	# path entirely.
+	(( ${cached:-0} == 0 )) ||
+		error "(2) expected 0 cached_read_bytes," \
+			"got $cached"
+	(( ${total:-0} > 0 )) ||
+		error "(3) expected non-zero read_bytes," \
+			"got $total"
+
+	# sub-test (b): warm cache read should show
+	# cached_read_bytes
+	cancel_lru_locks osc
+	echo 3 > /proc/sys/vm/drop_caches
+
+	# Warm cache with a full read (slow path)
+	dd if=$DIR/$tfile of=/dev/null bs=$PAGE_SIZE \
+		count=4 2>/dev/null ||
+		error "(4) dd warmup read failed"
+
+	# Now read again from warm cache
+	$LCTL set_param llite.*.stats=0
+	dd if=$DIR/$tfile of=/dev/null bs=$PAGE_SIZE \
+		count=4 2>/dev/null ||
+		error "(5) dd warm read failed"
+
+	cached=$($LCTL get_param -n llite.*.stats |
+		awk '/cached_read_bytes/ { print $7 }')
+	total=$($LCTL get_param -n llite.*.stats |
+		awk '/^read_bytes/ { print $7 }')
+	local cached_cnt=$($LCTL get_param -n llite.*.stats |
+		awk '/cached_read_bytes/ { print $1 }')
+
+	echo "(b) warm read: cached=$cached total=$total count=$cached_cnt"
+
+	(( ${cached:-0} > 0 )) ||
+		error "(6) expected non-zero cached_read_bytes"
+	(( cached == total )) ||
+		error "(7) cached $cached != total $total"
+
+	# sub-test (c): fast_read disabled bypasses the cache
+	# path, so cached_read_bytes should be zero
+	$LCTL set_param -n llite.*.fast_read=0
+	$LCTL set_param llite.*.stats=0
+
+	dd if=$DIR/$tfile of=/dev/null bs=$PAGE_SIZE \
+		count=4 2>/dev/null ||
+		error "(8) dd read with fast_read=0 failed"
+
+	cached=$($LCTL get_param -n llite.*.stats |
+		awk '/cached_read_bytes/ { print $7 }')
+
+	echo "(c) fast_read=0: cached=$cached"
+
+	(( ${cached:-0} == 0 )) ||
+		error "(9) expected 0 cached_read_bytes" \
+			"with fast_read=0, got $cached"
+
+	# sub-test (d): multi-page cold read shows readahead
+	# feeding the fast read path.  dd with bs=PAGE_SIZE
+	# issues one read(2) per page.  The first page goes
+	# through the slow path which triggers readahead;
+	# subsequent pages are served from cache via fast
+	# read.  At most 2 pages should miss.
+	$LCTL set_param -n llite.*.fast_read=1
+	local npages=16
+
+	rm -f $DIR/$tfile
+	dd if=/dev/zero of=$DIR/$tfile \
+		bs=$PAGE_SIZE count=$npages 2>/dev/null ||
+		error "(10) dd write $npages pages failed"
+
+	sync
+	cancel_lru_locks osc
+	echo 3 > /proc/sys/vm/drop_caches
+
+	$LCTL set_param llite.*.stats=0
+
+	dd if=$DIR/$tfile of=/dev/null \
+		bs=$PAGE_SIZE count=$npages 2>/dev/null ||
+		error "(11) dd cold read failed"
+
+	cached=$($LCTL get_param -n llite.*.stats |
+		awk '/cached_read_bytes/ { print $7 }')
+	total=$($LCTL get_param -n llite.*.stats |
+		awk '/^read_bytes/ { print $7 }')
+	local slow=$((${total:-0} - ${cached:-0}))
+	local miss=$((slow / PAGE_SIZE))
+
+	echo "(d) readahead: cached=$cached total=$total" \
+		"miss=$miss/$npages"
+
+	# Readahead doesn't trigger until after the second
+	# page (which is not ideal, but is the current
+	# behavior), so allow up to 2 misses.
+	(( ${cached:-0} > 0 )) ||
+		error "(12) no cached_read_bytes on" \
+			"cold multi-page read"
+	(( miss <= 2 )) ||
+		error "(13) too many misses: $miss/$npages" \
+			"(cached=$cached total=$total)"
+}
+run_test 127g "cached_read_bytes tracks page cache hits"
+
 test_128() { # bug 15212
 	touch $DIR/$tfile
 	$LFS 2>&1 <<-EOF | tee $TMP/$tfile.log

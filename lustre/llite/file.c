@@ -2329,42 +2329,41 @@ out:
 }
 
 /**
- * ll_do_fast_read() - read data directly from the page cache
+ * ll_read_from_cache() - serve a read from the page cache
  * @iocb: kiocb from kernel
  * @iter: user space buffers where the data will be copied
  *
- * The purpose of fast read is to overcome per I/O overhead and improve IOPS
- * especially for small I/O.
+ * This is the path for all cached reads.  It serves reads
+ * directly from the page cache without the full Lustre I/O
+ * stack — no cl_io creation, no DLM lock request.
  *
- * To serve a read request, CLIO has to create and initialize a cl_io and
- * then request DLM lock. This has turned out to have siginificant overhead
- * and affects the performance of small I/O dramatically.
+ * Under the help of read ahead, most of the pages being read are
+ * already in memory cache and we can read those pages directly
+ * because if the pages exist, the corresponding DLM lock must
+ * exist so that page content must be valid.
  *
- * It's not necessary to create a cl_io for each I/O. Under the help of read
- * ahead, most of the pages being read are already in memory cache and we can
- * read those pages directly because if the pages exist, the corresponding DLM
- * lock must exist so that page content must be valid.
+ * There are three scenarios:
+ *   - If the page exists and is uptodate, kernel VM will provide
+ *     the data and CLIO won't be intervened;
+ *   - If the page was brought into memory by read ahead, it will
+ *     be exported and read ahead parameters will be updated;
+ *   - Otherwise the page is not in memory, we can't serve from
+ *     cache. Therefore, it will go back and invoke the full read
+ *     path, i.e., a cl_io will be created and DLM lock will be
+ *     requested.
  *
- * In fast read implementation, the llite speculatively finds and reads pages
- * in memory cache. There are three scenarios for fast read:
- *   - If the page exists and is uptodate, kernel VM will provide the data and
- *     CLIO won't be intervened;
- *   - If the page was brought into memory by read ahead, it will be exported
- *     and read ahead parameters will be updated;
- *   - Otherwise the page is not in memory, we can't do fast read. Therefore,
- *     it will go back and invoke normal read, i.e., a cl_io will be created
- *     and DLM lock will be requested.
+ * POSIX compliance: posix standard states that read is intended
+ * to be atomic. Lustre read implementation is in line with Linux
+ * kernel read implementation and neither of them complies with
+ * POSIX standard in this matter. Reading from cache doesn't make
+ * the situation worse on single node but it may interleave write
+ * results from multiple nodes due to short read handling in
+ * ll_file_aio_read().
  *
- * POSIX compliance: posix standard states that read is intended to be atomic.
- * Lustre read implementation is in line with Linux kernel read implementation
- * and neither of them complies with POSIX standard in this matter. Fast read
- * doesn't make the situation worse on single node but it may interleave write
- * results from multiple nodes due to short read handling in ll_file_aio_read().
- *
- * Returns number of bytes have been read, or error code if error occurred.
+ * Returns number of bytes read, or error code if error occurred.
  */
 static ssize_t
-ll_do_fast_read(struct kiocb *iocb, struct iov_iter *iter)
+ll_read_from_cache(struct kiocb *iocb, struct iov_iter *iter)
 {
 	struct ll_inode_info *lli = ll_i2info(file_inode(iocb->ki_filp));
 	ssize_t result;
@@ -2398,6 +2397,8 @@ ll_do_fast_read(struct kiocb *iocb, struct iov_iter *iter)
 		ll_heat_add(file_inode(iocb->ki_filp), CIT_READ, result);
 		ll_stats_ops_tally(ll_i2sbi(file_inode(iocb->ki_filp)),
 				   LPROC_LL_READ_BYTES, result);
+		ll_stats_ops_tally(ll_i2sbi(file_inode(iocb->ki_filp)),
+				   LPROC_LL_CACHED_READ, result);
 	}
 
 	return result;
@@ -2504,7 +2505,7 @@ static ssize_t do_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	ll_ras_enter(file, iocb->ki_pos, iov_iter_count(to));
 
 	/* read from local cache first then any reamining from remote */
-	result = ll_do_fast_read(iocb, to);
+	result = ll_read_from_cache(iocb, to);
 	if (result < 0 || iov_iter_count(to) == 0)
 		GOTO(out, result);
 
@@ -2558,7 +2559,8 @@ static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
 }
 
 /*
- * Similar trick to ll_do_fast_read, this improves write speed for tiny writes.
+ * Similar trick to ll_read_from_cache(), this improves write
+ * speed for tiny writes.
  * If a page is already in the page cache and dirty (and some other things -
  * See ll_tiny_write_begin for the instantiation of these rules), then we can
  * write to it without doing a full I/O, because Lustre already knows about it
