@@ -297,6 +297,35 @@ test_4() {
 }
 run_test 4 "set supplementary group ==============="
 
+test_5() {
+	local num
+	local uid
+
+	remote_mds || skip_env "needs remote MDS"
+
+	for ((num = 1; num < 500; num++)); do
+		uid=$((RANDOM * RANDOM))
+		do_facet $SINGLEMDS "getent passwd $uid" || break
+	done
+
+	(( num == 500 )) &&
+		skip_env "cannot find a nonexistent user on $SINGLEMDS"
+
+	do_facet $SINGLEMDS "$LCTL set_param -n $IDENTITY_FLUSH=-1"
+	cancel_lru_locks
+
+	# This cmd should fail because $uid doesn't exist on MGS
+	$RUNAS_CMD -u $uid ls $DIR && error "ls should fail as $uid"
+
+	# Check log on the MDT
+	do_facet $SINGLEMDS "journalctl -t l_getidentity \
+		--since '1 minute ago' |
+		grep -A1 'no such user $uid' |
+		grep -B1 'write ret -1: Identifier removed'" ||
+		error "l_getidentity threw unexpected return value or errno"
+}
+run_test 5 "Test l_getidentity with a nonexistent user on the MDT"
+
 create_nodemaps() {
 	local csum
 	local i

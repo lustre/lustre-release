@@ -97,6 +97,7 @@ static struct nss_module g_nss_modules[NSS_MODULES_MAX_NR];
 
 static char *progname;
 static char *mdtname;
+static int stderr_valid;
 
 static void usage(void)
 {
@@ -113,7 +114,7 @@ static void errlog(const char *fmt, ...)
 {
 	va_list args;
 
-	openlog(progname, LOG_PERROR | LOG_PID, LOG_AUTHPRIV);
+	openlog(progname, LOG_PID | stderr_valid, LOG_AUTHPRIV);
 
 	va_start(args, fmt);
 	vsyslog(LOG_WARNING, fmt, args);
@@ -420,6 +421,7 @@ static int get_groups_nss(struct identity_downcall_data *data,
 	pw = getpwuid_nss(data->idd_uid);
 	if (pw == NULL) {
 		data->idd_err = errno ? -errno : -EIDRM;
+		/* This error is checked in sanity-sec test_5 */
 		errlog("%s: no such user %u\n", mdtname ?: "unknown",
 		       data->idd_uid);
 		return -1;
@@ -463,6 +465,7 @@ int get_groups_local(struct identity_downcall_data *data,
 
 	pw = getpwuid(data->idd_uid);
 	if (!pw) {
+		/* This error is checked in sanity-sec test_5 */
 		errlog("%s: no such user %u\n", mdtname ?: "unknown",
 		       data->idd_uid);
 		data->idd_err = errno ? -errno : -EIDRM;
@@ -912,6 +915,10 @@ int main(int argc, char **argv)
 	int fd, rc = -EINVAL, size, maxgroups;
 	bool alreadyfailed = false;
 
+	/* Cleanup errno after calling isatty() */
+	stderr_valid = isatty(STDERR_FILENO) ? LOG_PERROR : 0;
+	errno = 0;
+
 	progname = basename(argv[0]);
 	if (argc != 3) {
 		usage();
@@ -921,7 +928,6 @@ int main(int argc, char **argv)
 	if (strcmp(argv[1], "-d") != 0 && !getenv("L_GETIDENTITY_TEST"))
 		mdtname = argv[1];
 
-	errno = 0;
 	uid = strtoul(argv[2], &end, 0);
 	if (*end != '\0' || end == argv[2] || errno != 0) {
 		errlog("%s: invalid uid '%s'\n", progname, argv[2]);
