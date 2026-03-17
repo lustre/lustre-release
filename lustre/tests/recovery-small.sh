@@ -2800,16 +2800,16 @@ test_131() {
 
 	# another IO under the same lock
 	#define OBD_FAIL_OSC_DELAY_IO            0x414
-	$LCTL set_param fail_loc=0x80000414
-	$LCTL set_param fail_val=4 fail_loc=0x80000414
+	$LCTL set_param fail_loc=0x80000414 fail_val=10
 	dd if=/dev/zero of=$DIR/$tfile count=1 conv=notrunc oflag=dsync &
 	local pid=$!
-	sleep 1
+	sleep 0.2
 
 	#define OBD_FAIL_LDLM_BL_EVICT           0x31e
 	set_nodes_failloc "$(osts_nodes)" 0x8000031e
 	ost_evict_client
 	client_reconnect
+	$LCTL set_param fail_loc=0
 
 	wait $pid && error "dd succeeded"
 	return 0
