@@ -439,7 +439,7 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 			lprocfs_lod_spill_vars, new_pool);
 	if (IS_ERR(new_pool->pool_spill_proc_entry)) {
 		rc = PTR_ERR(new_pool->pool_spill_proc_entry);
-		new_pool->pool_proc_entry = NULL;
+		new_pool->pool_spill_proc_entry = NULL;
 		lod_pool_putref(new_pool);
 	}
 
