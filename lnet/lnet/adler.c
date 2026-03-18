@@ -55,7 +55,11 @@ static int adler32_update(struct shash_desc *desc, const u8 *data,
 static int __adler32_finup(u32 *cksump, const u8 *data, unsigned int len,
 			   u8 *out)
 {
-	*(u32 *)out = zlib_adler32(*cksump, data, len);
+	if (data == NULL)
+		*(u32 *)out = *cksump;
+	else
+		*(u32 *)out = zlib_adler32(*cksump, data, len);
+
 	return 0;
 }
 
