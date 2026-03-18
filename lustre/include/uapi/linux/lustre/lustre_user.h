@@ -1626,7 +1626,7 @@ struct perm_downcall_data {
 
 struct identity_downcall_data {
 	__u32				idd_magic;
-	__u32				idd_err;
+	__s32				idd_err;	/* negative errno */
 	__u32				idd_uid;
 	__u32				idd_gid;
 	__u32				idd_nperms;

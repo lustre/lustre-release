@@ -96,6 +96,7 @@ static struct nss_module g_nss_modules[NSS_MODULES_MAX_NR];
  */
 
 static char *progname;
+static char *mdtname;
 
 static void usage(void)
 {
@@ -418,8 +419,9 @@ static int get_groups_nss(struct identity_downcall_data *data,
 
 	pw = getpwuid_nss(data->idd_uid);
 	if (pw == NULL) {
-		data->idd_err = errno ? errno : EIDRM;
-		errlog("no such user %u\n", data->idd_uid);
+		data->idd_err = errno ? -errno : -EIDRM;
+		errlog("%s: no such user %u\n", mdtname ?: "unknown",
+		       data->idd_uid);
 		return -1;
 	}
 
@@ -461,8 +463,9 @@ int get_groups_local(struct identity_downcall_data *data,
 
 	pw = getpwuid(data->idd_uid);
 	if (!pw) {
-		errlog("no such user %u\n", data->idd_uid);
-		data->idd_err = errno ? errno : EIDRM;
+		errlog("%s: no such user %u\n", mdtname ?: "unknown",
+		       data->idd_uid);
+		data->idd_err = errno ? -errno : -EIDRM;
 		return -1;
 	}
 
@@ -476,8 +479,8 @@ int get_groups_local(struct identity_downcall_data *data,
 	 */
 	groups_tmp = malloc(maxgroups * sizeof(gid_t));
 	if (!groups_tmp) {
-		data->idd_err = errno ? errno : ENOMEM;
-		errlog("malloc error=%u\n", data->idd_err);
+		data->idd_err = errno ? -errno : -ENOMEM;
+		errlog("malloc error=%u\n", -data->idd_err);
 		return -1;
 	}
 
@@ -485,9 +488,9 @@ int get_groups_local(struct identity_downcall_data *data,
 	if (getgrouplist(pw->pw_name, pw->pw_gid, groups_tmp, &ngroups_tmp) <
 	    0) {
 		free(groups_tmp);
-		data->idd_err = errno ? errno : EIDRM;
+		data->idd_err = errno ? -errno : -EIDRM;
 		errlog("getgrouplist() error for uid %u: error=%u\n",
-		       data->idd_uid, data->idd_err);
+		       data->idd_uid, -data->idd_err);
 		return -1;
 	}
 
@@ -846,7 +849,7 @@ int get_perms(struct identity_downcall_data *data, struct timeval *start)
 			return 0;
 		errlog("open %s failed: %s\n",
 		       PERM_PATHNAME, strerror(errno));
-		data->idd_err = errno;
+		data->idd_err = -errno;
 		return -1;
 	}
 
@@ -858,7 +861,7 @@ int get_perms(struct identity_downcall_data *data, struct timeval *start)
 			continue;
 		if (parse_perm_line(data, line, sizeof(line))) {
 			errlog("parse line %s failed!\n", line);
-			data->idd_err = EINVAL;
+			data->idd_err = -EINVAL;
 			fclose(fp);
 			return -1;
 		}
@@ -874,7 +877,7 @@ static void show_result(struct identity_downcall_data *data)
 
 	if (data->idd_err) {
 		errlog("failed to get identity for uid %d: %s\n",
-		       data->idd_uid, strerror(data->idd_err));
+		       data->idd_uid, strerror(-data->idd_err));
 		return;
 	}
 
@@ -914,6 +917,9 @@ int main(int argc, char **argv)
 		usage();
 		goto out_no_nss;
 	}
+
+	if (strcmp(argv[1], "-d") != 0 && !getenv("L_GETIDENTITY_TEST"))
+		mdtname = argv[1];
 
 	errno = 0;
 	uid = strtoul(argv[2], &end, 0);
@@ -968,13 +974,13 @@ retry:
 
 	gettimeofday(&idgot, NULL);
 downcall:
-	if (strcmp(argv[1], "-d") == 0 || getenv("L_GETIDENTITY_TEST")) {
+	if (!mdtname) {
 		show_result(data);
 		rc = 0;
 		goto out;
 	}
 
-	rc = cfs_get_param_paths(&path, "mdt/%s/identity_info", argv[1]);
+	rc = cfs_get_param_paths(&path, "mdt/%s/identity_info", mdtname);
 	if (rc != 0) {
 		rc = -errno;
 		goto out;

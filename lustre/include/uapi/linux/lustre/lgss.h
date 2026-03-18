@@ -68,7 +68,7 @@ struct lgssd_ioctl_param {
 
 struct rsi_downcall_data {
 	__u32	  sid_magic;
-	__u32	  sid_err;
+	__s32	  sid_err;	/* negative errno */
 	__u32	  sid_unused;
 	__u32	  sid_maj_stat;
 	__u32	  sid_min_stat;
@@ -95,7 +95,7 @@ enum scd_flag_bits {
 
 struct rsc_downcall_data {
 	__u32		scd_magic;
-	__u32		scd_err;
+	__s32		scd_err;	/* negative errno */
 	__u32		scd_flags;
 	__u32		scd_mapped_uid;
 	__u32		scd_uid;

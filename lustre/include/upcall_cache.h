@@ -153,7 +153,7 @@ void upcall_cache_update_entry(struct upcall_cache *cache,
 			       time64_t expire, int state);
 void upcall_cache_put_entry(struct upcall_cache *cache,
 			    struct upcall_cache_entry *entry);
-int upcall_cache_downcall(struct upcall_cache *cache, __u32 err, __u64 key,
+int upcall_cache_downcall(struct upcall_cache *cache, __s32 err, __u64 key,
 			  void *args);
 void upcall_cache_flush(struct upcall_cache *cache, int force);
 

@@ -426,7 +426,7 @@ void upcall_cache_put_entry(struct upcall_cache *cache,
 }
 EXPORT_SYMBOL(upcall_cache_put_entry);
 
-int upcall_cache_downcall(struct upcall_cache *cache, __u32 err, __u64 key,
+int upcall_cache_downcall(struct upcall_cache *cache, __s32 err, __u64 key,
 			  void *args)
 {
 	struct upcall_cache_entry *entry = NULL;
