@@ -1212,6 +1212,7 @@ static int osd_mount(const struct lu_env *env,
 	spa_get_min_alloc_range(o->od_os->os_spa, &min_alloc, &max_alloc);
 	o->od_min_blksz = max_alloc;
 	o->od_readcache_max_filesize = OSD_MAX_CACHE_SIZE;
+	o->od_fzap_blockshift = OSD_FZAP_BLOCKSHIFT_DEFAULT;
 
 	rc = __osd_obj2dnode(o->od_os, o->od_rootid, &rootdn);
 	if (rc)

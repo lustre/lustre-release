@@ -1,0 +1,93 @@
+.TH FZAP_BLOCKSHIFT 4 2026-03-20 "Lustre" "Lustre Tunable"
+.SH NAME
+fzap_blockshift \- control ZFS FatZAP leaf block size for ZFS OSDs.
+.SH SYNOPSIS
+.SY "lctl set_param"
+.BI osd-zfs. FSNAME -*.fzap_blockshift= SHIFT_BITS
+.YS
+.SY "lctl get_param"
+.BI osd-zfs. FSNAME -*.fzap_blockshift
+.YS
+.SH DESCRIPTION
+.B fzap_blockshift
+controls the leaf block size used when creating ZFS FatZAP objects
+(directories, OI tables, and indexes) on a per-OSD basis.
+.PP
+.I SHIFT_BITS
+is the number of bits to shift, not the block size in bytes.
+For example, to use 8KiB blocks, set
+.I SHIFT_BITS
+to 13 (2^13 = 8192), not 8192 or 8K.
+.PP
+The value of 13 or 14 (8K or 16K blocks) provides a reasonable middle ground
+for most pool layouts. Smaller values can reduce per-directory overhead
+but may increase parity overhead depending on the pool topology.
+.SH POOL TOPOLOGY CONSIDERATIONS
+The optimal value for
+.B fzap_blockshift
+depends heavily on the pool layout or geometry:
+.TP
+.B Mirror (RAID10) pool:
+For pools configured as collections of mirrors (RAID10), smaller
+blockshift values are generally better. Smaller blocks reduce
+per-directory space overhead without significant parity penalties
+since mirrors do not have parity overhead per block.
+.TP
+.B Pool with Special Devices:
+For pools with a special device configured as a mirror, smaller
+blockshift values are generally better. The special device absorbs
+small random metadata writes efficiently, eliminating the dRAID
+stripe padding penalty.
+.TP
+.B RAIDZ or dRAID pool:
+For pools using RAIDZ or dRAID VDEVs, the optimal blockshift should be
+chosen to match or exceed the effective stripe width of the VDEV to
+avoid partial stripe writes.
+.PP
+To determine the ashift and VDEV layout of your pool:
+.PP
+.B   zdb -C <poolname> | grep -E 'ashift|type|nparity|ndata'
+.PP
+or:
+.PP
+.B   zpool status -v <poolname>
+.TP
+.B Other pool layouts:
+The default value (13) is suitable for most pool layouts.
+.SH NOTES
+This tunable affects all newly created ZAP objects on the OSD instance.
+Existing ZAP objects are not affected.
+.PP
+Valid values range from
+.B SPA_MINBLOCKSHIFT (9 = 512B)
+to
+.B SPA_MAXBLOCKSHIFT (24 = 16MiB).
+The actual value depends on the pool's ashift setting, which can be verified with:
+.PP
+.B zdb -e -C <poolname> | grep -i ashift
+.SH DEFAULT
+.B 13
+(8KiB leaf blocks)
+.SH EXAMPLES
+.TP
+Set fzap_blockshift to 14 (16KiB) for all ZFS OSDs:
+.B lctl set_param osd-zfs.*.fzap_blockshift=14
+.TP
+Set fzap_blockshift to 13 (8KiB) for a specific OST:
+.B lctl set_param osd-zfs.testfs-OST0000.fzap_blockshift=13
+.TP
+Set fzap_blockshift to 15 (32KiB) for all MDTs in a filesystem:
+.B lctl set_param osd-zfs.testfs-MDT*.fzap_blockshift=15
+.TP
+Persist the setting across reboots for all ZFS OSDs:
+.B lctl set_param -P osd-zfs.*.fzap_blockshift=13
+.TP
+Read the current value of all ZFS OSDs:
+.B lctl get_param osd-zfs.*.fzap_blockshift
+.SH SEE ALSO
+.BR lustre (7),
+.BR zfs (4),
+.BR lctl (8),
+.BR lctl-get_param (8),
+.BR lctl-set_param (8),
+.BR zpool (8)

@@ -175,7 +175,9 @@ static int osd_obj_create(const struct lu_env *env, struct osd_device *o,
 	if (isdir)
 		oid = osd_zap_create_flags(o->od_os, 0, ZAP_FLAG_HASH64,
 					   DMU_OT_DIRECTORY_CONTENTS,
-					   14, DN_MAX_INDBLKSHIFT, 0, tx);
+					   o->od_fzap_blockshift,
+					   DN_MAX_INDBLKSHIFT,
+					   0, tx);
 	else
 		oid = osd_dmu_object_alloc(o->od_os, DMU_OTN_UINT8_METADATA,
 					   0, 0, tx);

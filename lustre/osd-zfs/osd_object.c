@@ -1747,7 +1747,7 @@ int __osd_zap_create(const struct lu_env *env, struct osd_device *osd,
 
 	oid = osd_zap_create_flags(osd->od_os, 0, flags | ZAP_FLAG_HASH64,
 				   DMU_OT_DIRECTORY_CONTENTS,
-				   14, /* == ZFS fzap_default_blockshift */
+				   osd->od_fzap_blockshift,
 				   DN_MAX_INDBLKSHIFT, /* indirect blockshift */
 				   dnsize, tx);
 

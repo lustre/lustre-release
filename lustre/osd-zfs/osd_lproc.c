@@ -256,6 +256,54 @@ static ssize_t sync_on_lseek_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(sync_on_lseek);
 
+static ssize_t fzap_blockshift_show(struct kobject *kobj,
+				    struct attribute *attr, char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
+
+	LASSERT(osd);
+	if (!osd->od_os)
+		return -EINPROGRESS;
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", osd->od_fzap_blockshift);
+}
+
+static ssize_t fzap_blockshift_store(struct kobject *kobj,
+				     struct attribute *attr,
+				     const char *buffer, size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
+	int val;
+	int rc;
+
+	LASSERT(osd);
+	if (!osd->od_os)
+		return -EINPROGRESS;
+
+	rc = kstrtoint(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val < SPA_MINBLOCKSHIFT) {
+		CERROR("%s: fzap_blockshift %d smaller than minimum %d\n",
+		       osd->od_svname, val, SPA_MINBLOCKSHIFT);
+		return -EINVAL;
+	}
+	if (val > SPA_MAXBLOCKSHIFT) {
+		CERROR("%s: fzap_blockshift %d larger than maximum %d\n",
+		       osd->od_svname, val, SPA_MAXBLOCKSHIFT);
+		return -EINVAL;
+	}
+
+	osd->od_fzap_blockshift = val;
+	return count;
+}
+LUSTRE_RW_ATTR(fzap_blockshift);
+
 static ssize_t nonrotational_show(struct kobject *kobj, struct attribute *attr,
 				  char *buf)
 {
@@ -378,6 +426,7 @@ static struct attribute *zfs_attrs[] = {
 	&lustre_attr_auto_scrub.attr,
 	&lustre_attr_sync_on_lseek.attr,
 	&lustre_attr_readcache_max_filesize.attr,
+	&lustre_attr_fzap_blockshift.attr,
 	NULL,
 };
 

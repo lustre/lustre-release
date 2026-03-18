@@ -83,6 +83,9 @@
 
 #define OSD_MAX_CACHE_SIZE OBD_OBJECT_EOF
 
+/* Default FatZAP leaf block shift: 2^13 = 8K */
+#define OSD_FZAP_BLOCKSHIFT_DEFAULT	13
+
 #ifndef HAVE_ZFS_REFCOUNT_HEADER
 #ifndef HAVE_ZFS_REFCOUNT_ADD
 #define zfs_refcount_add	refcount_add
@@ -359,6 +362,10 @@ struct osd_device {
 				 od_nonrotational:1,
 				 od_sync_on_lseek:1;
 	unsigned int		 od_dnsize;
+	/* blockshift controls ZFS FatZAP leaf block size.
+	 * Actual block size = 2^N bytes.
+	 */
+	int			 od_fzap_blockshift;
 	int			 od_index_backup_stop;
 
 	enum lustre_index_backup_policy od_index_backup_policy;
