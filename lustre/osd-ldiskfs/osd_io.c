@@ -1861,14 +1861,12 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 				 const struct lu_buf *buf, loff_t _pos,
 				 struct thandle *handle)
 {
-	struct osd_object  *obj  = osd_dt_obj(dt);
-	struct inode	   *inode = obj->oo_inode;
+	int rc = 0, bits, bs, depth, size, credits, blocks;
+	struct osd_object *obj  = osd_dt_obj(dt);
 	struct super_block *sb = osd_sb(osd_obj2dev(obj));
+	struct inode *inode = obj->oo_inode;
 	struct osd_thandle *oh;
-	int		    rc = 0, est = 0, credits, blocks, allocated = 0;
-	int		    bits, bs;
-	int		    depth, size;
-	loff_t		    pos;
+	loff_t pos;
 	ENTRY;
 
 	LASSERT(buf != NULL);
@@ -1904,18 +1902,22 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 	blocks = ((pos + size + bs - 1) >> bits) - (pos >> bits);
 	LASSERT(blocks > 0);
 
-	if (inode != NULL && _pos != -1) {
-		/* object size in blocks */
-		est = (i_size_read(inode) + bs - 1) >> bits;
-		allocated = inode->i_blocks >> (bits - 9);
-		if (pos + size <= i_size_read(inode) && est <= allocated) {
-			/* looks like an overwrite, no need to modify tree */
-			credits = blocks;
-			/* no need to modify i_size */
-			goto out;
+	if (obj->oo_brm && _pos != -1) {
+		unsigned long i;
+		credits = 0;
+		for (i = (pos >> bits); i < (pos >> bits) + blocks; i++) {
+			/* check if block has been allocated already, then
+			 * just count it. but if we meet blocks we're not
+			 * sure about - go and calculate the worst case */
+			if (!osd_brm_lookup(obj->oo_brm, i))
+				goto calculate;
+			credits++;
 		}
+		goto out;
 	}
 
+calculate:
+	credits = 0;
 	if (osd_extents_enabled(sb, inode)) {
 		/*
 		 * many concurrent threads may grow tree by the time
