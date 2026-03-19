@@ -3369,9 +3369,18 @@ static int lnet_peer_merge_data(struct lnet_peer *lp,
 			flags |= LNET_PEER_RTR_NI_FORCE_DEL;
 		rc = lnet_peer_del_nid(lp, &delnis[i], flags);
 		if (rc) {
-			CERROR("Error deleting NID %s from peer %s: %d\n",
-			       libcfs_nidstr(&delnis[i]),
-			       libcfs_nidstr(&lp->lp_primary_nid), rc);
+			if (rc == -EPERM) {
+				lpni = lnet_peer_ni_find_locked(&delnis[i]);
+				if (lpni) {
+					handle_disc_lpni_health(lpni,
+								LNET_NI_STATUS_DOWN);
+					lnet_peer_ni_decref_locked(lpni);
+				}
+			} else {
+				CERROR("Error deleting NID %s from peer %s: %d\n",
+				       libcfs_nidstr(&delnis[i]),
+				       libcfs_nidstr(&lp->lp_primary_nid), rc);
+			}
 			if (rc == -ENOMEM)
 				goto out;
 		}
