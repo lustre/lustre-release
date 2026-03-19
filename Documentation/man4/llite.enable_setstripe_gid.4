@@ -1,0 +1,98 @@
+.TH LLITE.ENABLE_SETSTRIPE_GID 4 2026-03-13 "Lustre" "Lustre Kernel Interfaces"
+.SH NAME
+llite.enable_setstripe_gid \- control user file layout specification
+.SH SYNOPSIS
+.SY
+.RI "lctl get_param llite." FSNAME *.enable_setstripe_gid
+.SY
+.RI "lctl set_param llite." FSNAME *.enable_setstripe_gid= GID
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.br
+.BR 644 " | " -rw-r--r--
+.TP
+.B Scope
+.br
+Per local filesystem mountpoint.
+.TP
+.B Config
+.br
+.B enable_setstripe_gid
+is always present for client mountpoints.
+.TP
+.B Default
+.br
+.RB enable_setstripe_gid= -1
+.TP
+.B Valid Range
+.br
+.RB enable_setstripe_gid= -1
+.br
+.RB enable_setstripe_gid= 4294967294
+.SH DESCRIPTION
+The default
+.I GID
+value of
+.B -1
+indicates that any user is allowed to create files with specific layouts
+using the
+.BR lfs-setstripe (1)
+command.  The value of
+.B 0
+indicates that only the root user is allowed to create files with specific
+layouts on that client.
+If
+.I GID
+is another value, it means users with the numeric Group ID that can do so.
+For example, this could be used to allow an
+.I admin
+group for administrators, or a
+.I setstripe_gid
+group for power users, using the numeric values of those groups.
+.PP
+This parameter only controls the creation of files with specific layouts
+on the specific client nodes where it is set, and only for the
+.B lfs setstripe
+command.  Applications or libraries using lower-level interfaces like
+.BR llapi_file_create (3)
+or
+.BR llapi_layout_file_create (3)
+are not restricted by this parameter.
+It is intended as a convenience measure for administrators to avoid errors
+by inexperienced users, allowing well-behaved applications to work properly.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B llite.*.enable_setstripe_gid
+.EE
+.SH EXAMPLES
+Disable
+.B lfs setstripe
+for all users on the
+.B testfs
+filesystem:
+.EX
+.RB "mgs# " "lctl set_param -P llite.testfs-*.enable_setstripe_gid=0"
+.EE
+.PP
+Allow only users in the
+.B setstripe_grp
+group to use this command:
+.EX
+.RB "client# " "getent group setstripe_grp"
+setstripe_grp:942:jsmith,rread
+.RB "mgs# " "lctl set_param -P llite.*.enable_setstripe_gid=942"
+.EE
+.SH AVAILABILITY
+The
+.B llite.enable_setstripe_gid
+parameter is part of the
+.BR lustre (7)
+filesystem package since release 2.16.0.
+.\" Added in commit v2_15_64-103-g5b99b881c4
+.SH SEE ALSO
+.BR lfs-setstripe (1),
+.BR lctl-get_param (8),
+.BR lctl-set_param (8)

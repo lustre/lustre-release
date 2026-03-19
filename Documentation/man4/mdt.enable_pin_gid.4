@@ -1,0 +1,78 @@
+.TH MDT.ENABLE_PIN_GID 4 2026-03-18 "Lustre" "Lustre Kernel Interfaces"
+.SH NAME
+mdt.enable_pin_gid \- control pinning of files to storage pools
+.SH SYNOPSIS
+.SY
+.RI "lctl get_param mdt." FSNAME *.enable_pin_gid
+.SY
+.RI "lctl set_param mdt." FSNAME *.enable_pin_gid= GID
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.br
+.BR 644 " | " -rw-r--r--
+.TP
+.B Scope
+.br
+Per-MDT device.
+.TP
+.B Config
+.br
+.B enable_pin_gid
+is always present for MDT devices.
+.TP
+.B Default
+.br
+.RB enable_pin_gid= 0
+.TP
+.B Valid Range
+.br
+.RB enable_pin_gid= -1
+.br
+.RB enable_pin_gid= 4294967294
+.SH DESCRIPTION
+The integer argument
+.I GID
+controls which users with the given numeric group ID can pin and unpin
+files to a specific storage pool.
+This affects whether files can be automatically migrated to other storage
+pools within the filesystem.
+The value
+.B 0
+indicates that only the root user is allowed to pin files to a storage pool,
+while
+.B \-1
+indicates that any user is allowed to create them.  If
+.I GID
+is another value, it means users with that numeric Group ID that can do so.
+For example, this could be used to allow an
+.I admin
+group for administrators, or a
+.I pin_pool
+group for power users, using the numeric values of those groups.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B mdt.*.enable_pin_gid
+.EE
+.SH EXAMPLES
+Enable file pinning for all users on the
+.B testfs
+filesystem:
+.EX
+.RB "mgs# " "lctl set_param -P mdt.testfs-*.enable_pin_gid=-1"
+.EE
+.SH AVAILABILITY
+The
+.B enable_pin_gid
+parameter is part of the
+.BR lustre (7)
+filesystem package since release 2.17.0.
+.\" Added in commit v2_16_51-30-g84100d7f7d
+.SH SEE ALSO
+.BR lfs-pcc-pin (1),
+.BR mdt.enable_chprojid_gid (4),
+.BR mdt.enable_remote_dir_gid (4),
+.BR lctl-get_param (8)
+.BR lctl-set_param (8)

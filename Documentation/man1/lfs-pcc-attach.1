@@ -1,4 +1,4 @@
-.TH LFS-PCC-ATTACH 1 2025-01-24 "Lustre" "Lustre User Utilities"
+.TH LFS-PCC-ATTACH 1 2026-03-19 "Lustre" "Lustre User Utilities"
 .SH NAME
 lfs-pcc-attach \- attach file to local cache filesystem
 .SH SYNOPSIS
@@ -20,7 +20,7 @@ to remove the cached files from PCC either manually, or through automatic
 mechanisms for the purpose of the cache space management.
 .SH OPTIONS
 .TP
-.BR --id ", " -i
+.BR -i ", " --id
 The ARCHIVE
 .I ID
 to choose which backend for the cached
@@ -30,19 +30,19 @@ If
 is not specified, use the first archive attached to the mounted
 filesystem by default.
 .TP
-.BR --mnt ", " -m
+.BR -m ", " --mnt
 Specify the Lustre client mountpoint for the file
 .IR FID
 to be attached.
 .TP
-.BR --readonly ", " -r
+.BR -r ", " --readonly
 Attach the file in read-only mode.  This is the default.
 .TP
-.BR --write ", " -w
+.BR -w ", " --write
 Attach the file in read-write mode.
 .SH EXAMPLES
 Attach an existing file into PCC with archive ID 1 and copy data from Lustre
-to cache device. Reads from the Lustre file will direct to the PCC-RO copy.
+to cache device. Reads from the Lustre file will direct to the PCC-RO copy:
 .EX
 .RS
 .B $ lfs pcc attach -i 1 /mnt/lustre/file
@@ -51,16 +51,24 @@ to cache device. Reads from the Lustre file will direct to the PCC-RO copy.
 .PP
 Read-only attach file referenced by FID "0x200000401:0x1:0x0" in filesystem
 .B /mnt/lustre
-using the first/only cache ID for that mountpoint.
+using the first/only cache ID for that mountpoint:
 .EX
 .RS
 .B $ lfs pcc attach_fid -r -m /mnt/lustre 0x200000401:0x1:0x0
 .RE
 .EE
+.SH AVAILABILITY
+The
+.B lfs pcc attach
+command is part of the
+.BR lustre (7)
+filesystem package since release 2.13.0.
+.\" Added in commit v2_12_53-113-gf172b11688
 .SH SEE ALSO
 .BR lfs (1),
 .BR lfs-pcc (1),
 .BR lfs-pcc-detach (1),
+.BR lfs-pcc-pin (1),
 .BR lfs-pcc-state (1),
 .BR llapi_pcc_attach (3),
 .BR lctl-pcc (8)

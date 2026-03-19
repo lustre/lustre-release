@@ -1,0 +1,88 @@
+.TH MDT.ENABLE_CHPROJID_GID 4 2026-03-18 "Lustre" "Lustre Kernel Interfaces"
+.SH NAME
+mdt.enable_chprojid_gid \- control changing project ID of files
+.SH SYNOPSIS
+.SY
+.RI "lctl get_param mdt." FSNAME *.enable_chprojid_gid= GID
+.SY
+.RI "lctl set_param mdt." FSNAME *.enable_chprojid_gid
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.br
+.BR 644 " | " -rw-r--r--
+.TP
+.B Scope
+.br
+Per-MDT device.
+.TP
+.B Config
+.br
+.B mdt.enable_chprojid_gid
+is always present for MDT devices.
+.TP
+.B Default
+.br
+.RB enable_chprojid_gid= 0
+.TP
+.B Valid Range
+.br
+.RB enable_chprojid_gid= -1
+.br
+.RB enable_chprojid_gid= 4294967294
+.SH DESCRIPTION
+The integer argument
+.I GID
+controls which users in the given numeric group can change a file's project ID,
+using commands such as
+.BR lfs-project (1),
+or
+.BR chattr (1).
+The project ID affects which quota limits apply to a given file or directory,
+so allowing users to change this value may allow them to bypass quota limits.
+The value
+.B 0
+indicates that only the root user is allowed to change the project ID of a
+file or directory, while
+.B \-1
+means a user can change the projid on a file with suitable write permissions.
+If
+.I GID
+is another value, it means users with that numeric Group ID that can change it.
+For example, this could be used to allow an
+.I admin
+group for administrators, or a
+.I chprojid
+group for trusted users, using the numeric values of those groups.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B mdt.*.enable_chprojid_gid
+.EE
+.SH EXAMPLES
+To enable trusted users on the
+.B testfs
+filesystem to change projid:
+.EX
+.RB "mgs# " "getent group chprojid"
+chprojid:x:509:adilger,rread,green
+.RB "mgs# " "lctl set_param -P mdt.testfs-*.enable_chprojid_gid=509"
+.EE
+.SH AVAILABILITY
+The
+.B enable_chprojid_gid
+parameter is part of the
+.BR lustre (7)
+filesystem package since release 2.14.0.
+.\" Added in commit v2_13_50-95-g8fad70c087
+.SH SEE ALSO
+.BR chattr (1),
+.BR lfs-project (1),
+.BR lfs-quota (1),
+.BR lfs-setquota (1),
+.BR mdt.enable_pin_gid (4),
+.BR mdt.enable_remote_dir_gid (4),
+.BR projid (5),
+.BR lctl-get_param (8)
+.BR lctl-set_param (8)

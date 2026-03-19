@@ -1,4 +1,4 @@
-.TH LFS-PROJECT 1 2025-04-23 "Lustre" "Lustre User Utilities"
+.TH LFS-PROJECT 1 2026-03-19 "Lustre" "Lustre User Utilities"
 .SH NAME
 lfs-project \- Change or list project attribute for specified file or directory.
 .SH SYNOPSIS
@@ -26,8 +26,17 @@ lfs-project \- Change or list project attribute for specified file or directory.
 .YS
 .SH DESCRIPTION
 .B lfs project
-lists the project ID and flags on
+can list or change the numeric project ID and flags stored on individual
 .IR FILE "(s) or " DIRECTORIES .
+Only one numeric project ID can be stored on each file,
+similar to the numeric User ID (UID) or Group ID (GID),
+but the ProjID does not affect Unix file access permissions as they do.
+The Project ID interface is compatible with existing tools like
+.BR chattr (1)
+and
+.BR lsattr (1)
+from
+.BR e2fsprogs .
 .SH OPTIONS
 .TP
 .BR -0 ", " --print0
@@ -74,7 +83,7 @@ Set project ID with given value for the specified
 Recursively apply lfs project on all descendants of the
 .IR DIRECTORY .
 .TP
-.BI -p ", " --proj-inherit \fI" ID"
+.BR -p ", " --proj-inherit \fI" ID"
 Set project
 .I ID
 with given value for the specified file or directory.
@@ -120,6 +129,10 @@ is part of the
 filesystem package since release 2.11.0.
 .\" Added in commit v2_10_56_0-77-g022c5a9a77
 .SH SEE ALSO
+.BR chattr (1),
 .BR lfs (1),
+.BR lfs-quota (1),
+.BR lsattr (1),
 .BR xargs (1),
+.BR mdt.enable_chprojid_gid (4),
 .BR projid (5)

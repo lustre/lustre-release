@@ -76,7 +76,7 @@ case $SECTION in
 	DESC="Lustre Library Functions"
 	;;
 	4)
-	DESC="Lustre Parameter Files"
+	DESC="Lustre Kernel Interfaces"
 	;;
 	5)
 	DESC="Lustre File Formats"

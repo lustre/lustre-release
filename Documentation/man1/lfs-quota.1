@@ -1,4 +1,4 @@
-.TH LFS-QUOTA 1 2025-07-11 "Lustre" "Lustre User Utilities"
+.TH LFS-QUOTA 1 2026-03-19 "Lustre" "Lustre User Utilities"
 .SH NAME
 lfs-quota \- display quota limits and status for users, groups, or projects.
 .SH SYNOPSIS
@@ -248,7 +248,7 @@ or
 as listed in
 .BR /etc/projid (5).
 .TP
-.BR -U | --default-usr " {" \fIUSER | UID }
+.BR -U ", " --default-usr " {" \fIUSER | UID }
 Display default quota limits for username
 .I USER
 or numeric
@@ -323,5 +323,6 @@ filesystem package since release 1.7.0
 .\" Added in commit 1.6.0-2132-gcefa8cda2b
 .SH SEE ALSO
 .BR lfs (1),
-.BR lfs-setquota(1),
+.BR lfs-project (1),
+.BR lfs-setquota (1),
 .BR projid (5)

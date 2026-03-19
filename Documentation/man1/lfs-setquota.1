@@ -1,11 +1,12 @@
-.TH LFS-SETQUOTA 1 2026-01-09 "Lustre" "Lustre User Utilities"
+.TH LFS-SETQUOTA 1 2026-03-19 "Lustre" "Lustre User Utilities"
 .SH NAME
 lfs-setquota \- set quota limits or grace time for users, groups or projects.
 .SH SYNOPSIS
-.TP
-.BR "lfs setquota " { -u | --user | -g | --group | -p | --projid "} " \fI ID
-.RB [ "--pool " \c
+.SY
+.RB "lfs setquota  {" -u | --user | -g | --group | -p | --projid "} " \fI ID
+.RB [ --pool
 .IR POOL_NAME ]
+.RS 1.2i
 .RB [ -b | "--block-softlimit \fIBLOCK_SOFTLIMIT" [ KMGTPE ]]
 .br
 .RB [ -B | "--block-hardlimit \fIBLOCK_HARDLIMIT" [ KMGTPE ]]
@@ -13,9 +14,12 @@ lfs-setquota \- set quota limits or grace time for users, groups or projects.
 .RB [ -i | "--inode-softlimit \fIINODE_SOFTLIMIT" [ KMGTPE ]]
 .br
 .RB [ -I | "--inode-hardlimit \fIINODE_HARDLIMIT" [ KMGTPE "]] " \fIMOUNT_POINT
-.TP
-.BR "lfs setquota " { -U | --default-usr " | " -G | --default-grp " | " -P | --default-prj }
-.RB [ "--pool " \c
+.RE
+.SY
+.BR "lfs setquota " { -U | --default-usr " | "
+.BR -G | --default-grp " | " -P | --default-prj }
+.RS 1.2i
+.RB [ --pool
 .IR POOL_NAME ]
 .RB [ -b | "--block-softlimit \fIBLOCK_SOFTLIMIT" [ KMGTPE ]]
 .br
@@ -24,29 +28,29 @@ lfs-setquota \- set quota limits or grace time for users, groups or projects.
 .RB [ -i | "--inode-softlimit \fIINODE_SOFTLIMIT" [ KMGTPE ]]
 .br
 .RB [ -I | "--inode-hardlimit \fIINODE_HARDLIMIT" [ KMGTPE ]] " \fIMOUNT_POINT
-.TP
+.RE
+.SY
 .BR "lfs setquota " { -D | --default "} " \c
 .RB { -u | --user " | " -g | --group " | " -p | --projid "} " \c
-.RB [ "--pool " \c
+.RB [ --pool
 .IR POOL_NAME ]
 .I ID MOUNT_POINT
-.TP
+.SY
 .BR "lfs setquota --delete " \c
 .RB { -u | --user " | " -g | --group " | " -p | --projid "} " \c
 .I ID MOUNT_POINT
-.TP
+.SY
 .BR "lfs setquota " { -t | --times "} {" -u | -g | -p "} [" "--pool " \c
 .IR POOL_NAME ]
+.RS 1.2i
 .RB [ -b | "--block-grace \fIBLOCK_GRACE_TIME" ]
 .br
 .RB [ -i | "--inode-grace \fIINODE_GRACE_TIME" "] " \fIMOUNT_POINT
-.TP
+.RE
+.SY
 .BR "lfs setquota --reset " { -u | --user | -g | --group | -p | --projid "} " \c
 .I ID MOUNT_POINT
-.PP
-.B Note:
-Quota enforcement is not strict, especially with cached writes.
-Set limits accordingly.
+.YS
 .SH DESCRIPTION
 .TP
 .BR "lfs setquota " { -u | -g | -p "} ..."
@@ -93,7 +97,7 @@ This is intended to allow users to exceed the quota limit for a short time to
 complete their work without having to grant each user a larger quota limit.
 .SH OPTIONS
 .TP
-.BR -b | --block-softlimit " " \fIBLOCK_SOFTLIMIT
+.BR -b ", " --block-softlimit " " \fIBLOCK_SOFTLIMIT
 Specify block softlimit, zero means unlimited.
 Block limits unit is kilobyte (1024) by default, and block limits are always
 kilobyte-granular (even if specified in bytes). Block limits can be specified
@@ -102,11 +106,11 @@ with a
 suffix to specify units of 2^10, 2^20, 2^30, 2^40, 2^50 and 2^60 bytes
 respectively.
 .TP
-.BR -B | --block-hardlimit " " \fIBLOCK_HARDLIMIT
+.BR -B ", " --block-hardlimit " " \fIBLOCK_HARDLIMIT
 Specify block hardlimit, zero means unlimited. The block hardlimit should be
 greater than the block softlimit if it is being specified.
 .TP
-.BR -b | --block-grace " {" notify | \fIBLOCK_GRACE_TIME }
+.BR -b ", " --block-grace " {" notify | \fIBLOCK_GRACE_TIME }
 Specify grace time for block quota in seconds, when used with
 .B --times
 option.  The
@@ -136,32 +140,32 @@ Delete the unused user, group, or project
 .I ID
 limit from the quota database.
 .TP
-.BR -D | --default
+.BR -D ", " --default
 Set the specified user/group/project
 .I ID
 to use the default quota limits.
 .TP
-.BR -g | --group " " \fIGROUPNAME | \fIGID
+.BR -g ", " --group " " \fIGROUPNAME | \fIGID
 Set group quota for name
 .I GROUPNAME
 or numeric
 .IR GID .
 .TP
-.BR -G | --default-grp
+.BR -G ", " --default-grp
 Set default group quota limit.
 .TP
-.BR -h | --help
+.BR -h ", " --help
 Print usage message.
 .TP
-.BR -i | --inode-softlimit " " \fIINODE_SOFTLIMIT
+.BR -i ", " --inode-softlimit " " \fIINODE_SOFTLIMIT
 Specify inode softlimit, zero means unlimited.
 It is recommended to specify inode limits in multiples of 1024.
 .TP
-.BR -I | --inode-hardlimit " " \fIINODE_HARDLIMIT
+.BR -I ", " --inode-hardlimit " " \fIINODE_HARDLIMIT
 Specify inode hardlimit, zero means unlimited. The inode hardlimit should be
 greater than inode softlimit when it's being specified.
 .TP
-.BR -i | --inode-grace " {" notify | \fIINODE_GRACE_TIME }
+.BR -i ", " --inode-grace " {" notify | \fIINODE_GRACE_TIME }
 Specify grace time for inode quota in seconds, when used with
 .B --times
 option.  See the
@@ -170,7 +174,7 @@ option for a detailed description of the
 .I INODE_GRACE_TIME
 argument.
 .TP
-.BR -p | --projid " " \fIPROJECT_NAME | \fIPROJID
+.BR -p ", " --projid " " \fIPROJECT_NAME | \fIPROJID
 Set project quota for
 .I PROJECT_NAME
 (from the
@@ -178,55 +182,78 @@ Set project quota for
 file) or the numeric
 .IR PROJID .
 .TP
-.BR -P | --default-prj
+.BR -P ", " --default-prj
 Set default project quota limit.
 .TP
 .BR --pool " " \fIPOOL_NAME
 Set quota per OST pool
 .IR POOL_NAME .
 .TP
-.BR -r | --reset
+.BR -r ", " --reset
 Reset the internal quota data of the user|group|project quota.
 It can be used to fix quota in an inconsistent database (such as quota grant).
 .TP
-.BR -t | --times
+.BR -t ", " --times
 Set quota grace times.
 .TP
-.BR -u | --user " " \fIUSERNAME | \fIUID
+.BR -u ", " --user " " \fIUSERNAME | \fIUID
 Set user quota for
 .I USERNAME
 or numeric
 .IR UID .
-.PP
 .TP
-.BR -U | --default-usr
+.BR -U ", " --default-usr
 Set default user quota limit.
 .SH EXAMPLES
-.TP
-.B $ lfs setquota -u bob --block-softlimit 6T --block-hardlimit 8T /mnt/lustre
-Set quotas of user `bob': 8 TiB block hardlimit and 6 TiB block softlimit
-.TP
-.B $ lfs setquota -u bob --default /mnt/lustre
-Set quotas of user `bob' to use default quota setting
-.TP
-.B $ lfs setquota -U --block-softlimit 64G --block-hardlimit 80G /mnt/lustre
-Set system default user quota: 64 GiB block softlimit and 80 GiB block hardlimit
-.TP
-.B $ lfs setquota -t -u --block-grace 36000 --inode-grace 1w4d /mnt/lustre
+Set quotas of user `bob': 8 TiB block hardlimit and 6 TiB block softlimit:
+.EX
+.B # lfs setquota -u bob --block-softlimit 6T --block-hardlimit 8T /mnt/lustre
+.EE
+.PP
+Set quotas of user `bob' to use default quota setting:
+.EX
+.B # lfs setquota -u bob --default /mnt/lustre
+.EE
+.PP
+Set system default user quota 64 GiB block softlimit and 80 GiB block hardlimit:
+.EX
+.B # lfs setquota -U --block-softlimit 64G --block-hardlimit 80G /mnt/lustre
+.EE
+.PP
 Set grace times for user quotas: 36000 seconds for block quotas, 1 week and 4
-days for inode quotas
-.TP
-.B $ lfs setquota -u ivan --pool flash_pool -B 1T /mnt/lustre
-Set hard block limit 1 TiB for user 'ivan' per pool 'flash_pool'
-.TP
-.B $ lfs setquota -t -u --block-grace 10000 --pool flash_pool /mnt/lustre
-Set grace time 10000 seconds for block quotas per pool 'flash_pool'
-.TP
-.B $ lfs setquota -u jack --delete /mnt/lustre
-Delete unused user 'jack'.
-.TP
-.B $ lfs setquota -u chad -r /mnt/lustre
-Reset the quota usage for user 'chad' that is having problems.
+days for inode quotas:
+.EX
+.B # lfs setquota -t -u --block-grace 36000 --inode-grace 1w4d /mnt/lustre
+.EE
+.PP
+Set hard block limit 1 TiB for user 'ivan' per pool 'flash_pool':
+.EX
+.B # lfs setquota -u ivan --pool flash_pool -B 1T /mnt/lustre
+.EE
+.PP
+Set grace time 10000 seconds for block quotas per pool 'flash_pool':
+.EX
+.B # lfs setquota -t -u --block-grace 10000 --pool flash_pool /mnt/lustre
+.EE
+.PP
+Delete unused user 'jack':
+.EX
+.B # lfs setquota -u jack --delete /mnt/lustre
+.EE
+.PP
+Reset the quota usage for user 'chad' that is having problems:
+.EX
+.B # lfs setquota -u chad -r /mnt/lustre
+.EE
+.SH AVAILABILITY
+The
+.B lfs setquota
+command is part of the
+.BR lustre (7)
+filesystem package since release 1.5.0.
+.\" predates Git history, added in jumbo b1_5 merge.
 .SH SEE ALSO
 .BR lfs (1),
-.BR lfs-quota(1)
+.BR lfs-project (1),
+.BR lfs-quota (1),
+.BR mdt.enable_chprojid_gid (4)

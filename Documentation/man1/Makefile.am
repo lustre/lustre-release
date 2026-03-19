@@ -37,9 +37,12 @@ MANFILES =					\
 	lfs-mirror-write.1			\
 	lfs-mkdir.1				\
 	lfs-path2fid.1				\
-	lfs-pcc-detach.1			\
-	lfs-pcc-state.1				\
 	lfs-pcc.1				\
+	lfs-pcc-attach.1			\
+	lfs-pcc-detach.1			\
+	lfs-pcc-pin.1				\
+	lfs-pcc-state.1				\
+	lfs-pcc-unpin.1				\
 	lfs-project.1				\
 	lfs-quota.1				\
 	lfs-rmfid.1				\
