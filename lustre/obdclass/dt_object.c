@@ -810,9 +810,9 @@ void *rdpg_page_get(const struct lu_rdpg *rdpg, unsigned int index)
 {
 	if (rdpg->rp_npages) {
 		LASSERT(index < rdpg->rp_npages);
-		return kmap(rdpg->rp_pages[index]);
+		return ll_kmap_local_folio(rdpg->rp_folios[index], 0);
 	}
-	LASSERT(index << PAGE_SHIFT < rdpg->rp_count);
+	LASSERT((index << PAGE_SHIFT) < rdpg->rp_count);
 
 	return rdpg->rp_data + (index << PAGE_SHIFT);
 }
@@ -821,7 +821,7 @@ EXPORT_SYMBOL(rdpg_page_get);
 void rdpg_page_put(const struct lu_rdpg *rdpg, unsigned int index, void *kaddr)
 {
 	if (rdpg->rp_npages)
-		kunmap(kmap_to_page(kaddr));
+		ll_kunmap_local(kaddr);
 }
 EXPORT_SYMBOL(rdpg_page_put);
 
@@ -849,7 +849,7 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 	int rc;
 	ENTRY;
 
-	LASSERT(rdpg->rp_pages != NULL);
+	LASSERT(rdpg->rp_folios != NULL);
 	LASSERT(obj->do_index_ops != NULL);
 
 	if (filler == NULL)
@@ -1019,7 +1019,8 @@ int dt_index_read(const struct lu_env *env, struct dt_device *dev,
 	 * init the header of the remain lu_idxpages.
 	 */
 	if (rc > 0)
-		dt_index_page_adjust(rdpg->rp_pages, rdpg->rp_npages,
+		dt_index_page_adjust(rdpg->rp_folios,
+				     rdpg->rp_npages,
 				     ii->ii_count);
 
 	GOTO(out, rc);
@@ -1036,7 +1037,7 @@ EXPORT_SYMBOL(dt_index_read);
  * Current lu_idxpage read clients are osp_it_next_page(),
  * nodemap_process_idx_pages() and qsd_reint_entries().
  */
-void dt_index_page_adjust(struct page **pages, const u32 npages,
+void dt_index_page_adjust(struct folio **folios, const u32 npages,
 			  const size_t nlupgs)
 {
 	u32 nlupgs_mod = nlupgs % LU_PAGE_COUNT;
@@ -1066,7 +1067,7 @@ void dt_index_page_adjust(struct page **pages, const u32 npages,
 	}
 }
 #else
-void dt_index_page_adjust(struct page **pages, const u32 npages,
+void dt_index_page_adjust(struct folio **folios, const u32 npages,
 			  const size_t nlupgs)
 {
 }

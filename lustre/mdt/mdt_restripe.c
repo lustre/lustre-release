@@ -591,12 +591,12 @@ static int mdt_restripe_migrate(struct mdt_thread_info *info)
 	rdpg->rp_count = PAGE_SIZE;
 	rdpg->rp_npages = 1;
 	rdpg->rp_attrs = LUDA_64BITHASH | LUDA_FID | LUDA_TYPE;
-	rdpg->rp_pages = &restriper->mdr_page;
+	rdpg->rp_folios = &restriper->mdr_folio;
 	rc = mo_readpage(env, mdt_object_child(stripe), rdpg);
 	if (rc < 0)
 		GOTO(out, rc);
 
-	kaddr = kmap(restriper->mdr_page);
+	kaddr = ll_kmap_local_folio(restriper->mdr_folio, 0);
 	dp = kaddr;
 	for (ent = lu_dirent_start(dp); ent; ent = lu_dirent_next(ent)) {
 		LASSERT(le64_to_cpu(ent->lde_hash) >= rdpg->rp_hash);
@@ -669,14 +669,14 @@ static int mdt_restripe_migrate(struct mdt_thread_info *info)
 		stripe->mot_restripe_offset = le64_to_cpu(dp->ldp_hash_end);
 
 	if (kaddr) {
-		kunmap(kmap_to_page(kaddr));
+		ll_kunmap_local(kaddr);
 		kaddr = NULL;
 	}
 
 	EXIT;
 out:
 	if (kaddr) {
-		kunmap(kmap_to_page(kaddr));
+		ll_kunmap_local(kaddr);
 		kaddr = NULL;
 	}
 	if (rc) {
@@ -874,9 +874,11 @@ int mdt_restriper_start(struct mdt_device *mdt)
 	restriper->mdr_dir_split_count = DIR_SPLIT_COUNT_DEFAULT;
 	restriper->mdr_dir_split_delta = DIR_SPLIT_DELTA_DEFAULT;
 
-	restriper->mdr_page = alloc_page(GFP_KERNEL);
-	if (!restriper->mdr_page)
+	restriper->mdr_folio = folio_alloc(GFP_KERNEL, 0);
+	if (IS_ERR_OR_NULL(restriper->mdr_folio)) {
+		restriper->mdr_folio = NULL;
 		RETURN(-ENOMEM);
+	}
 
 	rc = lu_env_init(&restriper->mdr_env, LCT_MD_THREAD);
 	if (rc)
@@ -946,7 +948,7 @@ out_ses:
 out_env:
 	lu_env_fini(&restriper->mdr_env);
 out_page:
-	__free_page(restriper->mdr_page);
+	folio_put(restriper->mdr_folio);
 
 	return rc;
 }
@@ -981,7 +983,7 @@ void mdt_restriper_stop(struct mdt_device *mdt)
 		mdt_object_put(env, mo);
 	}
 
-	__free_page(restriper->mdr_page);
+	folio_put(restriper->mdr_folio);
 
 	lu_context_exit(env->le_ses);
 	lu_context_fini(env->le_ses);

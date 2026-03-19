@@ -22,6 +22,7 @@
 #include <linux/percpu_counter.h>
 #include <linux/rhashtable.h>
 #include <linux/ctype.h>
+#include <lustre_compat.h>
 
 #include <obd_support.h>
 #include <uapi/linux/lustre/lustre_idl.h>
@@ -886,7 +887,7 @@ struct lu_rdpg {
 	__u32                   rp_attrs;
 	/** pointers to pages */
 	union {
-		struct page	**rp_pages;
+		struct folio   **rp_folios;
 		void		*rp_data;
 	};
 };

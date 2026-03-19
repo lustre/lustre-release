@@ -1243,7 +1243,8 @@ int tgt_sendpage(struct tgt_session_info *tsi, struct lu_rdpg *rdpg, int nob)
 	for (i = 0, tmpcount = nob; i < rdpg->rp_npages && tmpcount > 0;
 	     i++, tmpcount -= tmpsize) {
 		tmpsize = min_t(int, tmpcount, PAGE_SIZE);
-		desc->bd_frag_ops->add_kiov_frag(desc, rdpg->rp_pages[i], 0,
+		desc->bd_frag_ops->add_kiov_frag(desc,
+					 folio_page(rdpg->rp_folios[i], 0), 0,
 						 tmpsize);
 	}
 
@@ -1306,13 +1307,15 @@ static int tgt_obd_idx_read(struct tgt_session_info *tsi)
 	rdpg->rp_npages = (rdpg->rp_count + PAGE_SIZE - 1) >> PAGE_SHIFT;
 
 	/* allocate pages to store the containers */
-	OBD_ALLOC_PTR_ARRAY(rdpg->rp_pages, rdpg->rp_npages);
-	if (rdpg->rp_pages == NULL)
+	OBD_ALLOC_PTR_ARRAY(rdpg->rp_folios, rdpg->rp_npages);
+	if (rdpg->rp_folios == NULL)
 		GOTO(out, rc = -ENOMEM);
 	for (i = 0; i < rdpg->rp_npages; i++) {
-		rdpg->rp_pages[i] = alloc_page(GFP_NOFS);
-		if (rdpg->rp_pages[i] == NULL)
+		rdpg->rp_folios[i] = folio_alloc(GFP_NOFS, 0);
+		if (IS_ERR_OR_NULL(rdpg->rp_folios[i])) {
+			rdpg->rp_folios[i] = NULL;
 			GOTO(out, rc = -ENOMEM);
+		}
 	}
 
 	/* populate pages with key/record pairs */
@@ -1329,11 +1332,11 @@ static int tgt_obd_idx_read(struct tgt_session_info *tsi)
 		GOTO(out, rc);
 	EXIT;
 out:
-	if (rdpg->rp_pages) {
+	if (rdpg->rp_folios) {
 		for (i = 0; i < rdpg->rp_npages; i++)
-			if (rdpg->rp_pages[i])
-				__free_page(rdpg->rp_pages[i]);
-		OBD_FREE_PTR_ARRAY(rdpg->rp_pages, rdpg->rp_npages);
+			if (rdpg->rp_folios[i])
+				folio_put(rdpg->rp_folios[i]);
+		OBD_FREE_PTR_ARRAY(rdpg->rp_folios, rdpg->rp_npages);
 	}
 	return rc;
 }
@@ -1912,11 +1915,11 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 		    CFS_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_RECEIVE)) {
 			int off = local_nb[i].lnb_page_offset & ~PAGE_MASK;
 			int len = local_nb[i].lnb_len;
-			struct page *np = tgt_page_to_corrupt;
+			struct folio *np = tgt_page_to_corrupt;
 
 			if (np) {
 				char *ptr = kmap_local_page(local_nb[i].lnb_page);
-				char *ptr2 = kmap_local_page(np);
+				char *ptr2 = kmap_local_folio(np, 0);
 
 				memcpy(ptr2 + off, ptr + off, len);
 				memcpy(ptr2 + off, "bad3", min(4, len));
@@ -1925,10 +1928,10 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 
 				/* LU-8376 to preserve original index for
 				 * display in dump_all_bulk_pages() */
-				page_folio(np)->index = i;
+				np->index = i;
 
-				cfs_crypto_hash_update_page(req, np, off,
-							    len);
+				cfs_crypto_hash_update_page(req, fpgptr(np),
+							    off, len);
 				continue;
 			} else {
 				CERROR("%s: can't alloc page for corruption\n",
@@ -1945,11 +1948,11 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 		    CFS_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_SEND)) {
 			int off = local_nb[i].lnb_page_offset & ~PAGE_MASK;
 			int len = local_nb[i].lnb_len;
-			struct page *np = tgt_page_to_corrupt;
+			struct folio *np = tgt_page_to_corrupt;
 
 			if (np) {
 				char *ptr = kmap_local_page(local_nb[i].lnb_page);
-				char *ptr2 = kmap_local_page(np);
+				char *ptr2 = kmap_local_folio(np, 0);
 
 				memcpy(ptr2 + off, ptr + off, len);
 				memcpy(ptr2 + off, "bad4", min(4, len));
@@ -1958,10 +1961,10 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 
 				/* LU-8376 to preserve original index for
 				 * display in dump_all_bulk_pages() */
-				page_folio(np)->index = i;
+				np->index = i;
 
-				cfs_crypto_hash_update_page(req, np, off,
-							    len);
+				cfs_crypto_hash_update_page(req, fpgptr(np),
+							    off, len);
 				continue;
 			} else {
 				CERROR("%s: can't alloc page for corruption\n",
@@ -2131,7 +2134,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 	const char *obd_name = tgt->lut_obd->obd_name;
 	struct ahash_request *req;
 	unsigned char *buffer;
-	struct page *__page;
+	struct folio *__folio;
 	__be16 *guard_start;
 	int guard_number;
 	int used_number = 0;
@@ -2141,8 +2144,8 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 	int used;
 	int i;
 
-	__page = alloc_page(GFP_NOFS);
-	if (__page == NULL)
+	__folio = folio_alloc(GFP_KERNEL, 0);
+	if (IS_ERR_OR_NULL(__folio))
 		return -ENOMEM;
 
 	req = cfs_crypto_hash_init(cfs_alg, NULL, 0);
@@ -2153,7 +2156,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 		goto out;
 	}
 
-	buffer = kmap(__page);
+	buffer = ll_kmap_local_folio(__folio, 0);
 	guard_start = (__be16 *)buffer;
 	guard_number = PAGE_SIZE / sizeof(*guard_start);
 	if (unlikely(resend))
@@ -2166,7 +2169,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 					(off / sector_size);
 
 		if (guards_needed > guard_number - used_number) {
-			cfs_crypto_hash_update_page(req, __page, 0,
+			cfs_crypto_hash_update_page(req, fpgptr(__folio), 0,
 				used_number * sizeof(*guard_start));
 			used_number = 0;
 		}
@@ -2175,11 +2178,11 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 		 * simulate a client->OST data error */
 		if (i == 0 && opc == OST_WRITE &&
 		    CFS_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_RECEIVE)) {
-			struct page *np = tgt_page_to_corrupt;
+			struct folio *np = tgt_page_to_corrupt;
 
 			if (np) {
 				char *ptr = kmap_local_page(local_nb[i].lnb_page);
-				char *ptr2 = kmap_local_page(np);
+				char *ptr2 = kmap_local_folio(np, 0);
 
 				memcpy(ptr2 + off, ptr + off, len);
 				memcpy(ptr2 + off, "bad3", min(4, len));
@@ -2188,10 +2191,10 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 
 				/* LU-8376 to preserve original index for
 				 * display in dump_all_bulk_pages() */
-				page_folio(np)->index = i;
+				np->index = i;
 
-				cfs_crypto_hash_update_page(req, np, off,
-							    len);
+				cfs_crypto_hash_update_page(req, fpgptr(np),
+							    off, len);
 				continue;
 			} else {
 				CERROR("%s: can't alloc page for corruption\n",
@@ -2300,11 +2303,11 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 		 * simulate an OST->client data error */
 		if (unlikely(i == 0 && opc == OST_READ &&
 			     CFS_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_SEND))) {
-			struct page *np = tgt_page_to_corrupt;
+			struct folio *np = tgt_page_to_corrupt;
 
 			if (np) {
 				char *ptr = kmap_local_page(local_nb[i].lnb_page);
-				char *ptr2 = kmap_local_page(np);
+				char *ptr2 = kmap_local_folio(np, 0);
 
 				memcpy(ptr2 + off, ptr + off, len);
 				memcpy(ptr2 + off, "bad4", min(4, len));
@@ -2313,10 +2316,10 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 
 				/* LU-8376 to preserve original index for
 				 * display in dump_all_bulk_pages() */
-				page_folio(np)->index = i;
+				np->index = i;
 
-				cfs_crypto_hash_update_page(req, np, off,
-							    len);
+				cfs_crypto_hash_update_page(req, fpgptr(np),
+							    off, len);
 				continue;
 			} else {
 				CERROR("%s: can't alloc page for corruption\n",
@@ -2324,12 +2327,12 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 			}
 		}
 	}
-	kunmap(kmap_to_page(buffer));
+	ll_kunmap_local(buffer);
 	if (rc)
 		GOTO(out_hash, rc);
 
 	if (used_number != 0)
-		cfs_crypto_hash_update_page(req, __page, 0,
+		cfs_crypto_hash_update_page(req, fpgptr(__folio), 0,
 					    used_number * sizeof(*guard_start));
 out_hash:
 	rc2 = cfs_crypto_hash_final(req, (unsigned char *)&cksum, &bufsize);
@@ -2338,7 +2341,7 @@ out_hash:
 	if (rc == 0)
 		*check_sum = cksum;
 out:
-	__free_page(__page);
+	folio_put(__folio);
 	return rc;
 }
 

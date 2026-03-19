@@ -494,7 +494,7 @@ int mgc_process_nodemap_log(struct obd_device *obd,
 	struct nodemap_config *new_config = NULL;
 	struct lu_nodemap *recent_nodemap = NULL;
 	struct ptlrpc_bulk_desc *desc;
-	struct page **pages = NULL;
+	struct folio **folios = NULL;
 	u64 config_read_offset = 0;
 	u8 nodemap_cur_pass = 0;
 	int nrpages = 0;
@@ -518,14 +518,16 @@ int mgc_process_nodemap_log(struct obd_device *obd,
 	 */
 	nrpages = CONFIG_READ_NRPAGES_INIT;
 
-	OBD_ALLOC_PTR_ARRAY(pages, nrpages);
-	if (!pages)
+	OBD_ALLOC_PTR_ARRAY(folios, nrpages);
+	if (!folios)
 		GOTO(out, rc = -ENOMEM);
 
 	for (i = 0; i < nrpages; i++) {
-		pages[i] = alloc_page(GFP_KERNEL);
-		if (!pages[i])
+		folios[i] = folio_alloc(GFP_KERNEL, 0);
+		if (IS_ERR_OR_NULL(folios[i])) {
+			folios[i] = NULL;
 			GOTO(out, rc = -ENOMEM);
+		}
 	}
 
 again:
@@ -569,8 +571,8 @@ again:
 		GOTO(out, rc = -ENOMEM);
 
 	for (i = 0; i < nrpages; i++)
-		desc->bd_frag_ops->add_kiov_frag(desc, pages[i], 0,
-						 PAGE_SIZE);
+		desc->bd_frag_ops->add_kiov_frag(desc, folio_page(folios[i], 0),
+						 0, PAGE_SIZE);
 
 	ptlrpc_request_set_replen(req);
 	rc = ptlrpc_queue_wait(req);
@@ -618,10 +620,10 @@ again:
 		union lu_page *ptr;
 		int rc2;
 
-		ptr = kmap(pages[i]);
+		ptr = ll_kmap_local_folio(folios[i], 0);
 		rc2 = nodemap_process_idx_pages(new_config, ptr,
 						&recent_nodemap);
-		kunmap(kmap_to_page(ptr));
+		ll_kunmap_local(ptr);
 		if (rc2 < 0) {
 			CWARN("%s: error processing %s log nodemap: rc = %d\n",
 			      obd->obd_name,
@@ -653,13 +655,13 @@ out:
 			nodemap_config_dealloc(new_config);
 	}
 
-	if (pages) {
+	if (folios) {
 		for (i = 0; i < nrpages; i++) {
-			if (!pages[i])
+			if (!folios[i])
 				break;
-			__free_page(pages[i]);
+			folio_put(folios[i]);
 		}
-		OBD_FREE_PTR_ARRAY(pages, nrpages);
+		OBD_FREE_PTR_ARRAY(folios, nrpages);
 	}
 	return rc;
 }

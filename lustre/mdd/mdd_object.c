@@ -4206,7 +4206,7 @@ int mdd_readpage(const struct lu_env *env, struct md_object *obj,
 
 		if (rdpg->rp_count <= 0)
 			GOTO(out_unlock, rc = -EFAULT);
-		LASSERT(rdpg->rp_pages != NULL);
+		LASSERT(rdpg->rp_folios != NULL);
 
 		dp = (struct lu_dirpage *)rdpg_page_get(rdpg, 0);
 		memset(dp, 0, sizeof(struct lu_dirpage));

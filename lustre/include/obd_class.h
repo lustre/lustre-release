@@ -1633,7 +1633,7 @@ static inline int md_file_resync(struct obd_export *exp,
 static inline int md_read_page(struct obd_export *exp,
 			       struct md_op_data *op_data,
 			       struct md_readdir_info *mrinfo,
-			       __u64  hash_offset, struct page **ppage)
+			       __u64  hash_offset, struct folio **pfolio)
 {
 	int rc;
 
@@ -1647,7 +1647,7 @@ static inline int md_read_page(struct obd_export *exp,
 	return exp->exp_obd->obd_type->typ_md_ops->m_read_page(exp, op_data,
 							       mrinfo,
 							       hash_offset,
-							       ppage);
+							       pfolio);
 }
 
 static inline int md_unlink(struct obd_export *exp, struct md_op_data *op_data,
@@ -1986,7 +1986,7 @@ static inline int md_batch_add(struct obd_export *exp, struct lu_batch *bh,
 
 static inline int md_dirpage_add(struct obd_export *exp,
 				 struct inode *inode,
-				 struct page **pool,
+				 struct folio **pool,
 				 unsigned int cfs_pgs,
 				 unsigned int lu_pgs, int is_hash64)
 {

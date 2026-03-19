@@ -168,7 +168,7 @@ static int nidtbl_fill_entry(struct mgs_nidtbl_target *tgt,
  */
 static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 			   struct mgs_config_res *res, u8 nid_size,
-			   struct page **pages, int nrpages,
+			   struct folio **folios, int nrpages,
 			   int units_total, int unit_size)
 {
 	struct mgs_nidtbl_target *tgt;
@@ -253,14 +253,16 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 					kaddr = NULL;
 				}
 				/* allocate a new page */
-				pages[index] = alloc_page(GFP_KERNEL);
-				if (!pages[index]) {
+				folios[index] = folio_alloc(GFP_KERNEL, 0);
+				if (IS_ERR_OR_NULL(folios[index])) {
+					folios[index] = NULL;
 					rc = -ENOMEM;
 					break;
 				}
 
 				/* reassign buffer */
-				buf = kaddr = kmap_local_page(pages[index]);
+				buf = kaddr = kmap_local_folio(folios[index],
+							       0);
 				++index;
 
 				units_in_page = PAGE_SIZE / unit_size;
@@ -882,7 +884,7 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 	int bytes;
 	int page_count;
 	int nrpages;
-	struct page **pages = NULL;
+	struct folio **folios = NULL;
 
 	ENTRY;
 
@@ -911,8 +913,8 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 	CDEBUG(D_MGS, "Reading IR log %s bufsize %ld.\n",
 	       body->mcb_name, bufsize);
 
-	OBD_ALLOC_PTR_ARRAY_LARGE(pages, nrpages);
-	if (!pages)
+	OBD_ALLOC_PTR_ARRAY_LARGE(folios, nrpages);
+	if (!folios)
 		GOTO(out, rc = -ENOMEM);
 
 	res = req_capsule_server_get(&req->rq_pill, &RMF_MGS_CONFIG_RES);
@@ -922,7 +924,7 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 	res->mcr_offset = body->mcb_offset;
 	unit_size = min_t(int, 1 << body->mcb_bits, PAGE_SIZE);
 	bytes = mgs_nidtbl_read(req->rq_export, &fsdb->fsdb_nidtbl, res,
-				body->mcb_rec_nid_size, pages, nrpages,
+				body->mcb_rec_nid_size, folios, nrpages,
 				bufsize / unit_size, unit_size);
 	if (bytes < 0)
 		GOTO(out, rc = bytes);
@@ -938,9 +940,9 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 		GOTO(out, rc = -ENOMEM);
 
 	for (i = 0; i < page_count && bytes > 0; i++) {
-		desc->bd_frag_ops->add_kiov_frag(desc, pages[i], 0,
-						 min_t(int, bytes,
-						      PAGE_SIZE));
+		desc->bd_frag_ops->add_kiov_frag(desc, folio_page(folios[i], 0),
+						 0,
+						 min_t(int, bytes, PAGE_SIZE));
 		bytes -= PAGE_SIZE;
 	}
 
@@ -950,15 +952,15 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 	GOTO(out, rc);
 
 out:
-	if (pages) {
+	if (folios) {
 		for (i = 0; i < nrpages; i++) {
-			if (!pages[i])
+			if (!folios[i])
 				break;
 
-			__free_page(pages[i]);
+			folio_put(folios[i]);
 		}
 
-		OBD_FREE_PTR_ARRAY_LARGE(pages, nrpages);
+		OBD_FREE_PTR_ARRAY_LARGE(folios, nrpages);
 	}
 
 	if (fsdb)

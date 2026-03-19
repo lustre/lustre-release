@@ -2990,14 +2990,16 @@ static int mdt_readpage(struct tgt_session_info *tsi)
 				exp_max_brw_size(tsi->tsi_exp));
 	rdpg->rp_npages = (rdpg->rp_count + PAGE_SIZE - 1) >>
 			  PAGE_SHIFT;
-	OBD_ALLOC_PTR_ARRAY_LARGE(rdpg->rp_pages, rdpg->rp_npages);
-	if (rdpg->rp_pages == NULL)
+	OBD_ALLOC_PTR_ARRAY_LARGE(rdpg->rp_folios, rdpg->rp_npages);
+	if (rdpg->rp_folios == NULL)
 		RETURN(-ENOMEM);
 
 	for (i = 0; i < rdpg->rp_npages; ++i) {
-		rdpg->rp_pages[i] = alloc_page(GFP_NOFS);
-		if (rdpg->rp_pages[i] == NULL)
+		rdpg->rp_folios[i] = folio_alloc(GFP_NOFS, 0);
+		if (IS_ERR_OR_NULL(rdpg->rp_folios[i])) {
+			rdpg->rp_folios[i] = NULL;
 			GOTO(free_rdpg, rc = -ENOMEM);
+		}
 	}
 
 	/* call lower layers to fill allocated pages with directory data */
@@ -3012,9 +3014,9 @@ static int mdt_readpage(struct tgt_session_info *tsi)
 free_rdpg:
 
 	for (i = 0; i < rdpg->rp_npages; i++)
-		if (rdpg->rp_pages[i] != NULL)
-			__free_page(rdpg->rp_pages[i]);
-	OBD_FREE_PTR_ARRAY_LARGE(rdpg->rp_pages, rdpg->rp_npages);
+		if (rdpg->rp_folios[i])
+			folio_put(rdpg->rp_folios[i]);
+	OBD_FREE_PTR_ARRAY_LARGE(rdpg->rp_folios, rdpg->rp_npages);
 
 	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
 		RETURN(0);

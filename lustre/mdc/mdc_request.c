@@ -1024,7 +1024,7 @@ out:
 }
 
 static int mdc_getpage(struct obd_export *exp, const struct lu_fid *fid,
-		       u64 offset, struct page **pages, int npages,
+		       u64 offset, struct folio **folios, int nfolios,
 		       __u32 projid, struct ptlrpc_request **request)
 {
 	struct ptlrpc_request   *req;
@@ -1050,7 +1050,7 @@ restart_bulk:
 	ptlrpc_at_set_req_timeout(req);
 	lustre_msg_set_projid(req->rq_reqmsg, projid);
 
-	desc = ptlrpc_prep_bulk_imp(req, npages, 1,
+	desc = ptlrpc_prep_bulk_imp(req, nfolios, 1,
 				    PTLRPC_BULK_PUT_SINK,
 				    MDS_BULK_PORTAL,
 				    &ptlrpc_bulk_kiov_pin_ops);
@@ -1060,11 +1060,11 @@ restart_bulk:
 	}
 
 	/* NB req now owns desc and will free it when it gets freed */
-	for (i = 0; i < npages; i++)
-		desc->bd_frag_ops->add_kiov_frag(desc, pages[i], 0,
-						 PAGE_SIZE);
+	for (i = 0; i < nfolios; i++)
+		desc->bd_frag_ops->add_kiov_frag(desc,
+			folio_page(folios[i], 0), 0, PAGE_SIZE);
 
-	mdc_readdir_pack(&req->rq_pill, offset, PAGE_SIZE * npages, fid);
+	mdc_readdir_pack(&req->rq_pill, offset, PAGE_SIZE * nfolios, fid);
 
 	ptlrpc_request_set_replen(req);
 	rc = ptlrpc_queue_wait(req);
@@ -1099,7 +1099,7 @@ restart_bulk:
 	if (req->rq_bulk->bd_nob_transferred & ~LU_PAGE_MASK) {
 		CERROR("%s: unexpected bytes transferred: %d (%ld expected)\n",
 		       exp->exp_obd->obd_name, req->rq_bulk->bd_nob_transferred,
-		       PAGE_SIZE * npages);
+		       PAGE_SIZE * nfolios);
 		ptlrpc_req_put(req);
 		RETURN(-EPROTO);
 	}
@@ -1108,37 +1108,37 @@ restart_bulk:
 	RETURN(0);
 }
 
-static void mdc_release_page(struct page *page, int remove)
+static void mdc_release_page(struct folio *folio, int remove)
 {
 	if (remove) {
-		lock_page(page);
-		if (likely(page->mapping != NULL))
-			cfs_delete_from_page_cache(page);
-		unlock_page(page);
+		folio_lock(folio);
+		if (likely(folio->mapping != NULL))
+			cfs_folio_delete_from_cache(folio);
+		folio_unlock(folio);
 	}
-	put_page(page);
+	folio_put(folio);
 }
 
-static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
-				    __u64 *start, __u64 *end, int hash64)
+static struct folio *mdc_page_locate(struct address_space *mapping, __u64 *hash,
+				     __u64 *start, __u64 *end, int hash64)
 {
 	/*
 	 * Complement of hash is used as an index so that
-	 * radix_tree_gang_lookup() can be used to find a page with starting
+	 * radix_tree_gang_lookup() can be used to find a folio with starting
 	 * hash _smaller_ than one we are looking for.
 	 */
 	unsigned long offset = hash_x_index(*hash, hash64);
-	struct page *page;
+	struct folio *folio;
 	unsigned long flags;
 	int found;
 
 	xa_lock_irqsave(&mapping->i_pages, flags);
 	found = radix_tree_gang_lookup(&mapping->i_pages,
-				       (void **)&page, offset, 1);
-	if (found > 0 && !xa_is_value(page)) {
+				       (void **)&folio, offset, 1);
+	if (found > 0 && !xa_is_value(folio)) {
 		struct lu_dirpage *dp;
 
-		get_page(page);
+		folio_get(folio);
 		xa_unlock_irqrestore(&mapping->i_pages, flags);
 		/*
 		 * In contrast to find_lock_page() we are sure that directory
@@ -1148,11 +1148,11 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 		 * In fact, page cannot be locked here at all, because
 		 * mdc_read_page_remote does synchronous io.
 		 */
-		wait_on_page_locked(page);
-		if (PageUptodate(page)) {
+		folio_wait_locked(folio);
+		if (folio_test_uptodate(folio)) {
 			u32 dflags;
 
-			dp = kmap_local_page(page);
+			dp = kmap_local_folio(folio, 0);
 			if (BITS_PER_LONG == 32 && hash64) {
 				*start = le64_to_cpu(dp->ldp_hash_start) >> 32;
 				*end   = le64_to_cpu(dp->ldp_hash_end) >> 32;
@@ -1173,8 +1173,8 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 			       "offset %lx [%#llx %#llx], hash %#llx\n", offset,
 			       *start, *end, *hash);
 			if (*hash > *end) {
-				mdc_release_page(page, 0);
-				page = NULL;
+				mdc_release_page(folio, 0);
+				folio = NULL;
 			} else if (*end != *start && *hash == *end) {
 				/*
 				 * upon hash collision, remove this page,
@@ -1182,18 +1182,18 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 				 * mdc_read_page_remote() will issue RPC to
 				 * fetch the page we want.
 				 */
-				mdc_release_page(page, dflags & LDF_COLLIDE);
-				page = NULL;
+				mdc_release_page(folio, dflags & LDF_COLLIDE);
+				folio = NULL;
 			}
 		} else {
-			put_page(page);
-			page = ERR_PTR(-EIO);
+			folio_put(folio);
+			folio = ERR_PTR(-EIO);
 		}
 	} else {
 		xa_unlock_irqrestore(&mapping->i_pages, flags);
-		page = NULL;
+		folio = NULL;
 	}
-	return page;
+	return folio;
 }
 
 /*
@@ -1241,19 +1241,19 @@ static struct page *mdc_page_locate(struct address_space *mapping, __u64 *hash,
  *   labeled 'next PAGE'.
  *
  * - Copy the LDF_COLLIDE flag from f' to f0 to correctly reflect whether
- *   a hash collision with the next page exists.
+ *   a hash collision with the next folio exists.
  *
  * - Adjust the lde_reclen of the ending entry of each lu_dirpage to span
  *   to the first entry of the next lu_dirpage.
  */
 #if PAGE_SIZE > LU_PAGE_SIZE
-static void mdc_adjust_dirpages(struct page **pages, int cfs_pgs, int lu_pgs)
+static void mdc_adjust_dirpages(struct folio **folios, int cfs_pgs, int lu_pgs)
 {
 	int i;
 	ENTRY;
 
 	for (i = 0; i < cfs_pgs; i++) {
-		void *addr = kmap_local_page(pages[i]);
+		void *addr = kmap_local_folio(folios[i], 0);
 		struct lu_dirpage *dp = addr;
 		struct lu_dirpage *first = dp;
 		struct lu_dirent *end_dirent = NULL;
@@ -1300,22 +1300,22 @@ static void mdc_adjust_dirpages(struct page **pages, int cfs_pgs, int lu_pgs)
 	LASSERTF(lu_pgs == 0, "left = %d\n", lu_pgs);
 }
 #else
-#define mdc_adjust_dirpages(pages, cfs_pgs, lu_pgs) do {} while (0)
+#define mdc_adjust_dirpages(folios, cfs_pgs, lu_pgs) do {} while (0)
 #endif	/* PAGE_SIZE > LU_PAGE_SIZE */
 
 static int mdc_dirpage_add(struct obd_export *exp,
 			   struct inode *inode,
-			   struct page **page_pool,
+			   struct folio **folio_pool,
 			   unsigned int rd_pgs,
 			   unsigned int lu_pgs, int is_hash64)
 {
 	int i;
 	ENTRY;
 
-	mdc_adjust_dirpages(page_pool, rd_pgs, lu_pgs);
+	mdc_adjust_dirpages(folio_pool, rd_pgs, lu_pgs);
 
-	SetPageUptodate(page_pool[0]);
-	unlock_page(page_pool[0]);
+	folio_mark_uptodate(folio_pool[0]);
+	folio_unlock(folio_pool[0]);
 
 	CDEBUG(D_CACHE, "read %u/%u\n", rd_pgs, lu_pgs);
 
@@ -1324,34 +1324,34 @@ static int mdc_dirpage_add(struct obd_export *exp,
 		__u64		hash;
 		int ret;
 		struct lu_dirpage *dp;
-		struct page *page;
+		struct folio *folio;
 
-		page = page_pool[i];
+		folio = folio_pool[i];
 
-		SetPageUptodate(page);
+		folio_mark_uptodate(folio);
 
-		dp = kmap_local_page(page);
+		dp = kmap_local_folio(folio, 0);
 		hash = le64_to_cpu(dp->ldp_hash_start);
 		kunmap_local(dp);
 
 		offset = hash_x_index(hash, is_hash64);
 
-		prefetchw(&page->flags);
-		ret = add_to_page_cache_lru(page, inode->i_mapping, offset,
-					    GFP_KERNEL);
+		prefetchw(&folio->flags);
+		ret = filemap_add_folio(inode->i_mapping, folio, offset,
+					GFP_KERNEL);
 		if (ret == 0)
-			unlock_page(page);
+			folio_unlock(folio);
 		else
 			CDEBUG(D_VFSTRACE,
-			       "page %lu add to page cache failed: rc = %d\n",
+			       "folio %lu add to page cache failed: rc = %d\n",
 			       offset, ret);
-		put_page(page);
+		folio_put(folio);
 	}
 
 	return 0;
 }
 
-/* parameters for readdir page */
+/* parameters for readdir folio */
 struct readpage_param {
 	struct md_op_data	*rp_mod;
 	__u64			rp_off;
@@ -1362,18 +1362,18 @@ struct readpage_param {
 /**
  * Read pages from server.
  *
- * Page in MDS_READPAGE RPC is packed in LU_PAGE_SIZE, and each page contains
- * a header lu_dirpage which describes the start/end hash, and whether this
- * page is empty (contains no dir entry) or hash collide with next page.
+ * folio_test_ in MDS_READPAGE RPC is packed in LU_PAGE_SIZE, and each folio
+ * contains a header lu_dirpage which describes the start/end hash, and whether
+ * this folio is empty (contains no dir entry) or hash collide with next page.
  * After client receives reply, several pages will be integrated into dir page
  * in PAGE_SIZE (if PAGE_SIZE greater than LU_PAGE_SIZE), and the
- * lu_dirpage for this integrated page will be adjusted.
+ * lu_dirpage for this integrated folio will be adjusted.
  **/
-static int ll_mdc_read_page_remote(void *data, struct page *page0)
+static int do_mdc_read_folio_remote(void *data, struct folio *folio0)
 {
 	struct readpage_param *rp = data;
-	struct page **page_pool;
-	struct page *page;
+	struct folio **folio_pool;
+	struct folio *folio;
 	struct md_op_data *op_data = rp->rp_mod;
 	struct ptlrpc_request *req;
 	int max_pages;
@@ -1381,7 +1381,7 @@ static int ll_mdc_read_page_remote(void *data, struct page *page0)
 	struct lu_fid *fid;
 	int rd_pgs = 0; /* number of pages actually read */
 	int lu_pgs = 0;
-	int npages;
+	int nfolios;
 	int i;
 	int rc;
 	gfp_t gfp;
@@ -1393,27 +1393,29 @@ static int ll_mdc_read_page_remote(void *data, struct page *page0)
 	LASSERT(inode != NULL);
 	gfp = mapping_gfp_mask(inode->i_mapping);
 
-	OBD_ALLOC_PTR_ARRAY(page_pool, max_pages);
-	if (page_pool != NULL) {
-		page_pool[0] = page0;
+	OBD_ALLOC_PTR_ARRAY_LARGE(folio_pool, max_pages);
+	if (folio_pool != NULL) {
+		folio_pool[0] = folio0;
 	} else {
-		page_pool = &page0;
+		folio_pool = &folio0;
 		max_pages = 1;
 	}
 
-	for (npages = 1; npages < max_pages; npages++) {
-		page = __page_cache_alloc(gfp);
-		if (page == NULL)
+	for (nfolios = 1; nfolios < max_pages; nfolios++) {
+
+		folio = filemap_alloc_folio(gfp, 0, NULL);
+
+		if (IS_ERR_OR_NULL(folio))
 			break;
-		page_pool[npages] = page;
+		folio_pool[nfolios] = folio;
 	}
 
-	rc = mdc_getpage(rp->rp_exp, fid, rp->rp_off, page_pool, npages,
+	rc = mdc_getpage(rp->rp_exp, fid, rp->rp_off, folio_pool, nfolios,
 			 op_data->op_projid, &req);
 	if (rc < 0) {
-		/* page0 is special, which was added into page cache early */
-		cfs_delete_from_page_cache(page0);
-		unlock_page(page0);
+		/* folio0 is special, which was added into page cache early */
+		cfs_folio_delete_from_cache(folio0);
+		folio_unlock(folio0);
 		goto exit;
 	}
 
@@ -1422,20 +1424,20 @@ static int ll_mdc_read_page_remote(void *data, struct page *page0)
 	LASSERT(!(req->rq_bulk->bd_nob_transferred & ~LU_PAGE_MASK));
 	ptlrpc_req_put(req);
 
-	mdc_dirpage_add(NULL, inode, page_pool, rd_pgs, lu_pgs, rp->rp_hash64);
+	mdc_dirpage_add(NULL, inode, folio_pool, rd_pgs, lu_pgs, rp->rp_hash64);
 exit:
 	/* release extra pages */
-	for (i = 1; i < npages; i++) {
-		page = page_pool[i];
+	for (i = 1; i < nfolios; i++) {
+		folio = folio_pool[i];
 
 		if (rc < 0 || i >= rd_pgs) {
-			put_page(page);
+			folio_put(folio);
 			continue;
 		}
 	}
 
-	if (page_pool != &page0)
-		OBD_FREE_PTR_ARRAY(page_pool, max_pages);
+	if (folio_pool != &folio0)
+		OBD_FREE_PTR_ARRAY(folio_pool, max_pages);
 
 	RETURN(rc);
 }
@@ -1443,11 +1445,15 @@ exit:
 #ifdef HAVE_READ_CACHE_FOLIO_WANTS_FILE
 static inline int mdc_read_folio_remote(struct file *file, struct folio *folio)
 {
-	return ll_mdc_read_page_remote(file->private_data,
-				       folio_page(folio, 0));
+	return do_mdc_read_folio_remote(file->private_data, folio);
+}
+#elif defined(HAVE___FILEMAP_GET_FOLIO)
+static inline int mdc_read_folio_remote(void *data, struct page *page0)
+{
+	return do_mdc_read_folio_remote(data, page_folio(page0));
 }
 #else
-#define mdc_read_folio_remote	ll_mdc_read_page_remote
+#define mdc_read_folio_remote	do_mdc_read_folio_remote
 #endif
 
 /**
@@ -1467,10 +1473,10 @@ static inline int mdc_read_folio_remote(struct file *file, struct folio *folio)
  */
 static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 			 struct md_readdir_info *mrinfo, __u64 hash_offset,
-			 struct page **ppage)
+			 struct folio **pfolio)
 {
 	struct lookup_intent	it = { .it_op = IT_READDIR };
-	struct page		*page;
+	struct folio		*folio;
 	struct inode		*dir = op_data->op_data;
 	struct address_space	*mapping;
 	struct lu_dirpage	*dp;
@@ -1483,7 +1489,8 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 	int rc;
 
 	ENTRY;
-	*ppage = NULL;
+
+	*pfolio = NULL;
 
 	LASSERT(dir != NULL);
 	mapping = dir->i_mapping;
@@ -1505,14 +1512,14 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 
 	rp_param.rp_off = hash_offset;
 	rp_param.rp_hash64 = op_data->op_cli_flags & CLI_HASH64;
-	page = mdc_page_locate(mapping, &rp_param.rp_off, &start, &end,
-			       rp_param.rp_hash64);
-	if (IS_ERR(page)) {
+	folio = mdc_page_locate(mapping, &rp_param.rp_off, &start, &end,
+				rp_param.rp_hash64);
+	if (IS_ERR(folio)) {
 		CERROR("%s: dir page locate: "DFID" at %llu: rc %ld\n",
 		       exp->exp_obd->obd_name, PFID(&op_data->op_fid1),
-		       rp_param.rp_off, PTR_ERR(page));
-		GOTO(out_unlock, rc = PTR_ERR(page));
-	} else if (page != NULL) {
+		       rp_param.rp_off, PTR_ERR(folio));
+		GOTO(out_unlock, rc = PTR_ERR(folio));
+	} else if (folio) {
 		/*
 		 * XXX nikita: not entirely correct handling of a corner case:
 		 * suppose hash chain of entries with hash value HASH crosses
@@ -1527,38 +1534,38 @@ static int mdc_read_page(struct obd_export *exp, struct md_op_data *op_data,
 		 * it as an "overflow" page. 1. invalidate all pages at
 		 * once. 2. use HASH|1 as an index for P1.
 		 */
-		GOTO(hash_collision, page);
+		GOTO(hash_collision, folio);
 	}
 
 	rp_param.rp_exp = exp;
 	rp_param.rp_mod = op_data;
-	page = ll_read_cache_page(mapping,
-				  hash_x_index(rp_param.rp_off,
-					       rp_param.rp_hash64),
-				  mdc_read_folio_remote, &rp_param);
-	if (IS_ERR(page)) {
-		CDEBUG(D_INFO, "%s: read cache page: "DFID" at %llu: %ld\n",
+	folio = ll_read_cache_folio(mapping,
+				    hash_x_index(rp_param.rp_off,
+						 rp_param.rp_hash64),
+				    mdc_read_folio_remote, &rp_param);
+	if (IS_ERR(folio)) {
+		CDEBUG(D_INFO, "%s: read cache folio: "DFID" at %llu: %ld\n",
 		       exp->exp_obd->obd_name, PFID(&op_data->op_fid1),
-		       rp_param.rp_off, PTR_ERR(page));
-		GOTO(out_unlock, rc = PTR_ERR(page));
+		       rp_param.rp_off, PTR_ERR(folio));
+		GOTO(out_unlock, rc = PTR_ERR(folio));
 	}
 
-	wait_on_page_locked(page);
-	if (!PageUptodate(page)) {
-		CERROR("%s: page not updated: "DFID" at %llu: rc %d\n",
+	folio_wait_locked(folio);
+	if (!folio_test_uptodate(folio)) {
+		CERROR("%s: folio not updated: "DFID" at %llu: rc %d\n",
 		       exp->exp_obd->obd_name, PFID(&op_data->op_fid1),
 		       rp_param.rp_off, -5);
 		goto fail;
 	}
-	if (PageError(page)) {
-		CERROR("%s: page error: "DFID" at %llu: rc %d\n",
+	if (PageError(folio_page(folio, 0))) {
+		CERROR("%s: folio error: "DFID" at %llu: rc %d\n",
 		       exp->exp_obd->obd_name, PFID(&op_data->op_fid1),
 		       rp_param.rp_off, -5);
 		goto fail;
 	}
 
 hash_collision:
-	addr = kmap_local_page(page);
+	addr = kmap_local_folio(folio, 0);
 	dp = addr;
 	if (BITS_PER_LONG == 32 && rp_param.rp_hash64) {
 		start = le64_to_cpu(dp->ldp_hash_start) >> 32;
@@ -1587,12 +1594,12 @@ hash_collision:
 		goto fail;
 	}
 	kunmap_local(addr);
-	*ppage = page;
+	*pfolio = folio;
 out_unlock:
 	ldlm_lock_decref(&lockh, it.it_lock_mode);
 	return rc;
 fail:
-	mdc_release_page(page, 1);
+	mdc_release_page(folio, 1);
 	rc = -EIO;
 	goto out_unlock;
 }

@@ -679,11 +679,11 @@ void ll_dir_finish_open(struct inode *inode, struct ptlrpc_request *req)
 {
 	struct obd_export *exp = ll_i2mdexp(inode);
 	char *data;
-	struct page **page_pool;
-	struct page *page;
+	struct folio **folio_pool;
+	struct folio *folio;
 	unsigned int i;
 	unsigned int rep_size;
-	unsigned int npages;
+	unsigned int nfolios;
 	unsigned int rd_pgs;
 	unsigned int lu_pgs;
 	int 		is_hash64;
@@ -711,24 +711,25 @@ void ll_dir_finish_open(struct inode *inode, struct ptlrpc_request *req)
 	if (rep_size < sizeof(struct lu_dirpage))
 		RETURN_EXIT;
 
-	npages = (rep_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
+	nfolios = (rep_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
 	lu_pgs = rep_size >> LU_PAGE_SHIFT;
 
 	is_hash64 = test_bit(LL_SBI_64BIT_HASH, ll_i2sbi(inode)->ll_flags);
 	gfp = mapping_gfp_mask(inode->i_mapping);
 
-	OBD_ALLOC_PTR_ARRAY(page_pool, npages);
-	if (page_pool == NULL)
+	OBD_ALLOC_PTR_ARRAY(folio_pool, nfolios);
+	if (folio_pool == NULL)
 		RETURN_EXIT;
 
-	for (rd_pgs = 0; rd_pgs < npages; rd_pgs++) {
-		page = __page_cache_alloc(gfp);
-		if (page == NULL)
+	for (rd_pgs = 0; rd_pgs < nfolios; rd_pgs++) {
+		folio = filemap_alloc_folio(gfp, 0, NULL);
+		if (IS_ERR_OR_NULL(folio))
 			break;
-		page_pool[rd_pgs] = page;
+		folio_pool[rd_pgs] = folio;
 
-		dp = kmap_local_page(page);
-		CDEBUG(D_INFO, "page %p - %p - %p -> %llu %llu\n", page, dp, data, dp->ldp_hash_start, dp->ldp_hash_end);
+		dp = kmap_local_folio(folio, 0);
+		CDEBUG(D_INFO, "folio %p - %p - %p -> %llu %llu\n", folio, dp,
+		       data, dp->ldp_hash_start, dp->ldp_hash_end);
 		memcpy(dp, data, PAGE_SIZE);
 		kunmap_local(dp);
 
@@ -737,24 +738,24 @@ void ll_dir_finish_open(struct inode *inode, struct ptlrpc_request *req)
 	if (rd_pgs == 0)
 		goto exit;
 
-	page = page_pool[0];
-	dp = kmap_local_page(page);
+	folio = folio_pool[0];
+	dp = kmap_local_folio(folio, 0);
 	hash = le64_to_cpu(dp->ldp_hash_start);
 	kunmap_local(dp);
 
 	offset = hash_x_index(hash, is_hash64);
 
-	prefetchw(&page->flags);
-	rc = add_to_page_cache_lru(page, inode->i_mapping, offset, GFP_KERNEL);
+	prefetchw(&folio->flags);
+	rc = filemap_add_folio(inode->i_mapping, folio, offset, GFP_KERNEL);
 	if (rc == 0)
-		md_dirpage_add(exp, inode, page_pool, rd_pgs, lu_pgs, is_hash64);
+		md_dirpage_add(exp, inode, folio_pool, rd_pgs, lu_pgs, is_hash64);
 exit:
 	if (rc < 0) {
 		/* release extra pages */
 		for (i = 0; i < rd_pgs; i++)
-			put_page(page_pool[i]);
+			folio_put(folio_pool[i]);
 	}
-	OBD_FREE_PTR_ARRAY(page_pool, npages);
+	OBD_FREE_PTR_ARRAY(folio_pool, nfolios);
 
 	EXIT;
 }

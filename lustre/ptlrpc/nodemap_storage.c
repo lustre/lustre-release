@@ -2852,7 +2852,8 @@ int nodemap_index_read(struct lu_env *env, struct nm_config_file *ncf,
 	 * init the header of the remain lu_idxpages.
 	 */
 	if (rc > 0)
-		dt_index_page_adjust(rdpg->rp_pages, rdpg->rp_npages,
+		dt_index_page_adjust(rdpg->rp_folios,
+				     rdpg->rp_npages,
 				     ii->ii_count);
 
 	dt_read_unlock(env, nodemap_idx);
@@ -2905,13 +2906,15 @@ int nodemap_get_config_req(struct obd_device *mgs_obd,
 	       body->mcb_name, rdpg.rp_count);
 
 	/* allocate pages to store the containers */
-	OBD_ALLOC_PTR_ARRAY(rdpg.rp_pages, rdpg.rp_npages);
-	if (rdpg.rp_pages == NULL)
+	OBD_ALLOC_PTR_ARRAY(rdpg.rp_folios, rdpg.rp_npages);
+	if (rdpg.rp_folios == NULL)
 		RETURN(-ENOMEM);
 	for (i = 0; i < rdpg.rp_npages; i++) {
-		rdpg.rp_pages[i] = alloc_page(GFP_NOFS);
-		if (rdpg.rp_pages[i] == NULL)
+		rdpg.rp_folios[i] = folio_alloc(GFP_NOFS, 0);
+		if (IS_ERR_OR_NULL(rdpg.rp_folios[i])) {
+			rdpg.rp_folios[i] = NULL;
 			GOTO(out, rc = -ENOMEM);
+		}
 	}
 
 	rdpg.rp_hash = body->mcb_offset;
@@ -2944,7 +2947,8 @@ int nodemap_get_config_req(struct obd_device *mgs_obd,
 		GOTO(out, rc = -ENOMEM);
 
 	for (i = 0; i < page_count && bytes > 0; i++) {
-		frag_ops->add_kiov_frag(desc, rdpg.rp_pages[i], 0,
+		frag_ops->add_kiov_frag(desc,
+					folio_page(rdpg.rp_folios[i], 0), 0,
 					min_t(int, bytes, PAGE_SIZE));
 		bytes -= PAGE_SIZE;
 	}
@@ -2953,11 +2957,11 @@ int nodemap_get_config_req(struct obd_device *mgs_obd,
 	ptlrpc_free_bulk(desc);
 
 out:
-	if (rdpg.rp_pages != NULL) {
+	if (rdpg.rp_folios != NULL) {
 		for (i = 0; i < rdpg.rp_npages; i++)
-			if (rdpg.rp_pages[i] != NULL)
-				__free_page(rdpg.rp_pages[i]);
-		OBD_FREE_PTR_ARRAY(rdpg.rp_pages, rdpg.rp_npages);
+			if (rdpg.rp_folios[i])
+				folio_put(rdpg.rp_folios[i]);
+		OBD_FREE_PTR_ARRAY(rdpg.rp_folios, rdpg.rp_npages);
 	}
 	return rc;
 }

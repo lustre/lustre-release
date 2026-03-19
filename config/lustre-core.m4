@@ -3609,6 +3609,29 @@ AC_DEFUN([LC_HAVE_ILOOKUP5_NOWAIT_ISNEW],[
 ]) # LC_HAVE_ILOOKUP5_NOWAIT_ISNEW
 
 #
+## LC_HAVE_FILEMAP_ALLOC_FOLIO_NUMA
+#
+# Linux commit v6.18-rc2-1-g7f3779a3ac3e4
+#   mm/filemap: Add NUMA mempolicy support to filemap_alloc_folio()
+#
+AC_DEFUN([LC_SRC_HAVE_FILEMAP_ALLOC_FOLIO_NUMA],[
+	LB2_LINUX_TEST_SRC([filemap_alloc_folio_numa], [
+		#include <linux/pagemap.h>
+	],[
+		struct folio *folio __maybe_unused;
+
+		folio = filemap_alloc_folio_noprof(GFP_KERNEL, 0, NULL);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_FILEMAP_ALLOC_FOLIO_NUMA],[
+	LB2_MSG_LINUX_TEST_RESULT([if filemap_alloc_folio() takes NUMA mempolicy],
+	[filemap_alloc_folio_numa], [
+		AC_DEFINE(HAVE_FILEMAP_ALLOC_FOLIO_NUMA, 1,
+			  [filemap_alloc_folio() takes NUMA mempolicy])
+	])
+]) # LC_HAVE_FILEMAP_ALLOC_FOLIO_NUMA
+
+#
 # LC_HAVE_POSIX_ACL_TO_XATTR_ALLOC_BUFFER
 #
 # Linux commit v6.19-rc1-31-g6cbfdf89470ef
@@ -3843,6 +3866,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_INODE_STATE_READ
 	LC_SRC_HAVE_VFS_CREATE_DELEGATE
 	LC_SRC_HAVE_ILOOKUP5_NOWAIT_ISNEW
+	LC_SRC_HAVE_FILEMAP_ALLOC_FOLIO_NUMA
 
 	# 7.0
 	LC_SRC_HAVE_POSIX_ACL_TO_XATTR_ALLOC_BUFFER
@@ -4063,6 +4087,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_INODE_STATE_READ
 	LC_HAVE_VFS_CREATE_DELEGATE
 	LC_HAVE_ILOOKUP5_NOWAIT_ISNEW
+	LC_HAVE_FILEMAP_ALLOC_FOLIO_NUMA
 
 	# 7.0
 	LC_HAVE_POSIX_ACL_TO_XATTR_ALLOC_BUFFER

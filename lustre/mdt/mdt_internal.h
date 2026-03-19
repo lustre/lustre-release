@@ -219,7 +219,7 @@ struct mdt_dir_restriper {
 	/* lum used in split/migrate/layout_change */
 	union lmv_mds_md	mdr_lmv;
 	/* page used in readdir */
-	struct page	       *mdr_page;
+	struct folio	       *mdr_folio;
 };
 
 struct mdt_device {

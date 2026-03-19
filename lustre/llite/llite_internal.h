@@ -1306,10 +1306,11 @@ int ll_dir_read(struct inode *inode, __u64 *pos, struct md_op_data *op_data,
 		struct dir_context *ctx, int *partial_readdir_rc);
 int ll_get_mdt_idx(struct inode *inode);
 int ll_get_mdt_idx_by_fid(struct ll_sb_info *sbi, const struct lu_fid *fid);
-struct page *ll_get_dir_page(struct inode *dir, struct md_op_data *op_data,
-			      __u64 offset, bool is64bit,
-			      int *partial_readdir_rc);
-void ll_release_page(struct inode *inode, struct page *page, bool remove);
+struct folio *ll_get_dir_folio(struct inode *dir, struct md_op_data *op_data,
+			       __u64 offset, bool is64bit,
+			       int *partial_readdir_rc);
+void ll_release_dir_folio(struct inode *inode, struct folio *folio,
+			  bool remove);
 int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl);
 void ll_quota_iter_check_and_cleanup(struct ll_sb_info *sbi, bool check);
 

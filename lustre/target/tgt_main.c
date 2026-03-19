@@ -806,7 +806,7 @@ LU_KEY_INIT_GENERIC(tgt_ses);
  * can be remain in the internal cache, we do not want to modify
  * them.
  */
-struct page *tgt_page_to_corrupt;
+struct folio *tgt_page_to_corrupt;
 
 int tgt_mod_init(void)
 {
@@ -823,7 +823,9 @@ int tgt_mod_init(void)
 		RETURN(result);
 	}
 
-	tgt_page_to_corrupt = alloc_page(GFP_KERNEL);
+	tgt_page_to_corrupt = folio_alloc(GFP_KERNEL, 0);
+	if (IS_ERR_OR_NULL(tgt_page_to_corrupt))
+		tgt_page_to_corrupt = NULL;
 
 	tgt_key_init_generic(&tgt_thread_key, NULL);
 	lu_context_key_register_many(&tgt_thread_key, NULL);
@@ -841,7 +843,7 @@ void tgt_mod_exit(void)
 {
 	barrier_fini();
 	if (tgt_page_to_corrupt != NULL)
-		put_page(tgt_page_to_corrupt);
+		folio_put(tgt_page_to_corrupt);
 
 	lu_context_key_degister(&tgt_thread_key);
 	lu_context_key_degister(&tgt_session_key);

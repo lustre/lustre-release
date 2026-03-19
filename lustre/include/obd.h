@@ -1338,7 +1338,7 @@ struct md_ops {
 
 	int (*m_read_page)(struct obd_export *exp, struct md_op_data *op_data,
 			   struct md_readdir_info *mrinfo, __u64 hash_offset,
-			   struct page **ppage);
+			   struct folio **pfolio);
 
 	int (*m_unlink)(struct obd_export *exp, struct md_op_data *op_data,
 			struct ptlrpc_request **req);
@@ -1427,7 +1427,7 @@ struct md_ops {
 	int (*m_batch_add)(struct obd_export *exp, struct lu_batch *bh,
 			   struct md_op_item *item);
 	int (*m_dirpage_add)(struct obd_export *exp, struct inode *inode,
-			     struct page **pool,
+			     struct folio **pool,
 			     unsigned int cfs_pgs, unsigned int lu_pgs,
 			     int is_hash64);
 };

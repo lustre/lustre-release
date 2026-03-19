@@ -1503,14 +1503,14 @@ free_nids:
  * nodemap logs.
  */
 static int mgc_process_recover_log(struct obd_device *obd,
-					   struct config_llog_data *cld)
+				   struct config_llog_data *cld)
 {
 	struct ptlrpc_request *req = NULL;
 	struct config_llog_instance *cfg = &cld->cld_cfg;
 	struct mgs_config_body *body;
 	struct mgs_config_res *res;
 	struct ptlrpc_bulk_desc *desc;
-	struct page **pages = NULL;
+	struct folio **folios = NULL;
 	int nrpages = 0;
 	bool eof = true;
 	bool mne_swab = false;
@@ -1530,14 +1530,16 @@ static int mgc_process_recover_log(struct obd_device *obd,
 	if (cfg->cfg_last_idx == 0)
 		nrpages = CONFIG_READ_NRPAGES_INIT;
 
-	OBD_ALLOC_PTR_ARRAY_LARGE(pages, nrpages);
-	if (pages == NULL)
+	OBD_ALLOC_PTR_ARRAY_LARGE(folios, nrpages);
+	if (folios == NULL)
 		GOTO(out, rc = -ENOMEM);
 
 	for (i = 0; i < nrpages; i++) {
-		pages[i] = alloc_page(GFP_KERNEL);
-		if (pages[i] == NULL)
+		folios[i] = folio_alloc(GFP_KERNEL, 0);
+		if (IS_ERR_OR_NULL(folios[i])) {
+			folios[i] = NULL;
 			GOTO(out, rc = -ENOMEM);
+		}
 	}
 
 again:
@@ -1574,8 +1576,8 @@ again:
 		GOTO(out, rc = -ENOMEM);
 
 	for (i = 0; i < nrpages; i++)
-		desc->bd_frag_ops->add_kiov_frag(desc, pages[i], 0,
-						 PAGE_SIZE);
+		desc->bd_frag_ops->add_kiov_frag(desc, folio_page(folios[i], 0),
+						 0, PAGE_SIZE);
 
 	ptlrpc_request_set_replen(req);
 	rc = ptlrpc_queue_wait(req);
@@ -1617,11 +1619,11 @@ again:
 		int rc2;
 		union lu_page *ptr;
 
-		ptr = kmap(pages[i]);
+		ptr = ll_kmap_local_folio(folios[i], 0);
 		rc2 = mgc_apply_recover_logs(obd, cld, res->mcr_offset, ptr,
 					     min_t(int, ealen, PAGE_SIZE),
 					     mne_swab);
-		kunmap(kmap_to_page(ptr));
+		ll_kunmap_local(ptr);
 		if (rc2 < 0) {
 			CWARN("%s: error processing %s log recovery: rc = %d\n",
 			      obd->obd_name,
@@ -1642,13 +1644,13 @@ out:
 	if (rc == 0 && !eof)
 		goto again;
 
-	if (pages) {
+	if (folios) {
 		for (i = 0; i < nrpages; i++) {
-			if (pages[i] == NULL)
+			if (folios[i] == NULL)
 				break;
-			__free_page(pages[i]);
+			folio_put(folios[i]);
 		}
-		OBD_FREE_PTR_ARRAY_LARGE(pages, nrpages);
+		OBD_FREE_PTR_ARRAY_LARGE(folios, nrpages);
 	}
 	return rc;
 }

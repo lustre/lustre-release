@@ -210,7 +210,7 @@ int out_handle(struct tgt_session_info *tsi);
 
 const char *update_op_str(__u16 opcode);
 
-extern struct page *tgt_page_to_corrupt;
+extern struct folio *tgt_page_to_corrupt;
 
 int tgt_server_data_init(const struct lu_env *env, struct lu_target *tgt);
 int tgt_txn_start_cb(const struct lu_env *env, struct thandle *th,
