@@ -4810,11 +4810,33 @@ handle_lnd_tunable(__u32 net_id,
 		goto out_free_key;
 	}
 #endif
+	if (LNET_NETTYP(net_id) == O2IBLND && !strcmp(key, "map_on_demand")) {
+		valstr = (char *)event->data.scalar.value;
+		if (!strlen(valstr)) {
+			snprintf(errmsg, LNET_MAX_STR_LEN,
+				 "no value specified for key '%s'", key);
+			errno = rc = -EINVAL;
+			yaml_lnet_print_error(flags, "import", errmsg);
+			goto out_free_key;
+		}
 
-	rc = yaml_lnet_extract_long(setup, event, key, &value, flags);
-	if (rc)
-		goto out_free_key;
-
+		if (strcasecmp(valstr, "yes") == 0 ||
+		    strcasecmp(valstr, "true") == 0 ||
+		    strcasecmp(valstr, "on") == 0 ||
+		    strcasecmp(valstr, "y") == 0 ||
+		    strcmp(valstr, "1") == 0)
+			lnd_tun->lnd_tun_u.lnd_o2ib.lnd_map_on_demand = 1;
+		else if (strcasecmp(valstr, "no") == 0 ||
+			   strcasecmp(valstr, "false") == 0 ||
+			   strcasecmp(valstr, "off") == 0 ||
+			   strcasecmp(valstr, "n") == 0 ||
+			   strcasecmp(valstr, "0") == 0)
+			lnd_tun->lnd_tun_u.lnd_o2ib.lnd_map_on_demand = 0;
+	} else {
+		rc = yaml_lnet_extract_long(setup, event, key, &value, flags);
+		if (rc)
+			goto out_free_key;
+	}
 #ifdef HAVE_KFILND
 	if (!strcmp(key, "auth_key") && LNET_NETTYP(net_id) == KFILND) {
 		lnd_tun->lnd_tun_u.lnd_kfi.lnd_auth_key = value;
@@ -4832,6 +4854,21 @@ handle_lnd_tunable(__u32 net_id,
 			lnd_tun->lnd_tun_u.lnd_sock.lnd_tos = value;
 		else if (LNET_NETTYP(net_id) == O2IBLND)
 			lnd_tun->lnd_tun_u.lnd_o2ib.lnd_tos = value;
+	} else if (LNET_NETTYP(net_id) == O2IBLND) {
+		/* handle o2iblnd tunables */
+		if (!strcmp(key, "peercredits_hiw")) {
+			lnd_tun->lnd_tun_u.lnd_o2ib.lnd_peercredits_hiw = value;
+		} else if (!strcmp(key, "concurrent_sends")) {
+			lnd_tun->lnd_tun_u.lnd_o2ib.lnd_concurrent_sends = value;
+		} else if (!strcmp(key, "fmr_pool_size")) {
+			lnd_tun->lnd_tun_u.lnd_o2ib.lnd_fmr_pool_size = value;
+		} else if (!strcmp(key, "fmr_flush_trigger")) {
+			lnd_tun->lnd_tun_u.lnd_o2ib.lnd_fmr_flush_trigger = value;
+		} else if (!strcmp(key, "fmr_cache")) {
+			lnd_tun->lnd_tun_u.lnd_o2ib.lnd_fmr_cache = value;
+		} else if (!strcmp(key, "ntx")) {
+			lnd_tun->lnd_tun_u.lnd_o2ib.lnd_ntx = value;
+		}
 	} else {
 		fprintf(stderr,
 			"Ignoring unrecognized key '%s' for 'lnd tunables'\n",
