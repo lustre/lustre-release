@@ -321,7 +321,41 @@ void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
  * at any time.
  */
 
+/*
+ * osc_lru_waitq is woken when LRU pages are freed.
+ *
+ * All access must go through osc_lru_unreserve() and the
+ * l_wait_event_abortable() calls below.  Do not call wake_up()
+ * on this waitqueue directly.
+ *
+ * osc_lru_unreserve() uses waitqueue_active() to skip the
+ * wake_up spinlock when no threads are waiting.  This is safe
+ * because cl_lru_left is atomic_long_t and the atomic_long_add
+ * inside osc_lru_unreserve() (store barrier) always precedes
+ * the waitqueue_active() check.  If cl_lru_left is ever
+ * changed to a non-atomic type, an smp_mb() must be added
+ * between the update and the waitqueue_active() call.
+ */
 static DECLARE_WAIT_QUEUE_HEAD(osc_lru_waitq);
+
+/**
+ * Record that @npages LRU slots have been freed, schedule
+ * reclaim if the OSC cache is still over-full, and wake any
+ * threads waiting for LRU space.
+ */
+void osc_lru_unreserve(struct client_obd *cli, unsigned long npages)
+{
+	/* waitqueue_active() relies on the implicit barrier from
+	 * atomic_long_add().  If cl_lru_left ever stops being
+	 * atomic, add an smp_mb() before the waitqueue_active().
+	 */
+	BUILD_BUG_ON(!__same_type(*cli->cl_lru_left, atomic_long_t));
+	atomic_long_add(npages, cli->cl_lru_left);
+
+	/* safe without lock: atomic_long_add above is the barrier */
+	if (waitqueue_active(&osc_lru_waitq))
+		wake_up(&osc_lru_waitq);
+}
 
 /**
  * LRU pages are freed in batch mode. OSC should at least free this
@@ -486,16 +520,11 @@ static void osc_lru_del(struct client_obd *cli, struct osc_page *opg)
 		}
 		spin_unlock(&cli->cl_lru_list_lock);
 
-		if (!mlocked)
-			atomic_long_inc(cli->cl_lru_left);
-		/* this is a great place to release more LRU pages if
-		 * this osc occupies too many LRU pages and kernel is
-		 * stealing one of them. */
-		if (osc_cache_too_much(cli)) {
-			CDEBUG(D_CACHE, "%s: queue LRU work\n", cli_name(cli));
-			schedule_work(&cli->cl_lru_work);
+		if (!mlocked) {
+			osc_lru_unreserve(cli, 1);
+			if (osc_cache_too_much(cli))
+				schedule_work(&cli->cl_lru_work);
 		}
-		wake_up(&osc_lru_waitq);
 	} else {
 		LASSERT(list_empty(&opg->ops_lru));
 	}
@@ -910,7 +939,7 @@ out:
 		atomic_long_add(unevict_delta, &cache->ccc_unevict_lru_used);
 	}
 	if (shrank > 0) {
-		atomic_long_add(shrank, cli->cl_lru_left);
+		osc_lru_unreserve(cli, shrank);
 		CDEBUG(D_CACHE,
 		       "%s: LRU shrink %ld i%ld/u%ld/b%ld/l%ld\n",
 		       cli_name(cli), shrank,
@@ -918,7 +947,6 @@ out:
 		       atomic_long_read(&cli->cl_unevict_lru_in_list),
 		       atomic_long_read(&cli->cl_lru_busy),
 		       atomic_long_read(cli->cl_lru_left));
-		wake_up(&osc_lru_waitq);
 	}
 	if (scanned)
 		*scanned = local_scanned;
@@ -1135,19 +1163,6 @@ again:
 	}
 
 	return reserved;
-}
-
-/**
- * osc_lru_unreserve() is called to unreserve LRU slots.
- *
- * LRU slots reserved by osc_lru_reserve() may have entries left due to several
- * reasons such as page already existing or I/O error. Those reserved slots
- * should be freed by calling this function.
- */
-void osc_lru_unreserve(struct client_obd *cli, unsigned long npages)
-{
-	atomic_long_add(npages, cli->cl_lru_left);
-	wake_up(&osc_lru_waitq);
 }
 
 long osc_unevict_cache_shrink(const struct lu_env *env, struct client_obd *cli)
