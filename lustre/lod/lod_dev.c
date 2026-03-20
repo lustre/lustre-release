@@ -1305,6 +1305,10 @@ static int lod_update_log_gc(const struct lu_env *env, struct lod_device *lod,
 	if (rc)
 		GOTO(out_trans, rc);
 
+	rc = dt_declare_ref_del(env, dto, th);
+	if (rc)
+		GOTO(out_trans, rc);
+
 	rc = dt_declare_destroy(env, dto, th);
 	if (rc)
 		GOTO(out_trans, rc);
@@ -1317,7 +1321,11 @@ static int lod_update_log_gc(const struct lu_env *env, struct lod_device *lod,
 	if (rc)
 		GOTO(out_trans, rc);
 
-	rc = dt_destroy(env, dto, th);
+	dt_write_lock(env, dto, DT_TGT_CHILD);
+	rc = dt_ref_del(env, dto, th);
+	if (!rc)
+		rc = dt_destroy(env, dto, th);
+	dt_write_unlock(env, dto);
 	GOTO(out_trans, rc);
 out_trans:
 	dt_trans_stop(env, dt, th);
