@@ -276,8 +276,8 @@ test_0c() {
 run_test 0c "check import proc"
 
 test_0d() { # LU-3397
-	[ $MGS_VERSION -lt $(version_code 2.10.57) ] &&
-		skip "proc exports not supported before 2.10.57"
+	(( $MGS_VERSION >= $(version_code v2_10_57_0-64-gb4b773466a) )) ||
+		skip "need MGS >= 2.10.57 for proc exports supported"
 
 	local mgs_exp="mgs.MGS.exports"
 	local client_uuid=$($LCTL get_param -n mgc.*.uuid)
@@ -314,7 +314,7 @@ test_0d() { # LU-3397
 		error "exp version '$exp_client_version'($exp_val) != " \
 			"'$(lustre_build_version client)'($imp_val)"
 }
-run_test 0d "check export proc ============================="
+run_test 0d "check export proc"
 
 test_0e() { # LU-13417
 	(( $MDSCOUNT > 1 )) ||
@@ -8346,15 +8346,16 @@ test_56wa() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
 	local dir=$DIR/$tdir
+	local expected=$((OSTCOUNT - 1))
 
-	setup_56 $dir $NUMFILES $NUMDIRS "-c $OSTCOUNT" "-c1"
+	setup_56 $dir $NUMFILES $NUMDIRS "-c $expected" "-c1"
 	stack_trap "rm -rf $dir"
 
 	local stripe_size=$($LFS getstripe -S -d $dir) ||
 		error "$LFS getstripe -S -d $dir failed"
 	stripe_size=${stripe_size%% *}
 
-	local file_size=$((stripe_size * OSTCOUNT))
+	local file_size=$((stripe_size * expected))
 	local file_num=$((NUMDIRS * NUMFILES + NUMFILES))
 	local required_space=$((file_num * file_size))
 	local free_space=$($LCTL get_param -n lov.$FSNAME-clilov-*.kbytesavail |
@@ -8389,10 +8390,6 @@ test_56wa() {
 			error "creating links to $dir/dir1/file1 failed"
 	fi
 
-	local expected=-1
-
-	(( OSTCOUNT <= 1 )) || expected=$((OSTCOUNT - 1))
-
 	# lfs_migrate file
 	local cmd="$LFS migrate -v -c $expected $dir/file1"
 
@@ -8426,31 +8423,22 @@ test_56wa() {
 			error "md5sum differ: $oldmd5, $newmd5"
 	fi
 
-	# lfs_migrate dir
-	cmd="$LFS_MIGRATE -y -v -c $expected $dir/dir1"
-	echo "$cmd"
-	eval $cmd || error "$cmd failed"
-
-	for (( j = 1; j <= NUMFILES; j++ )); do
-		check_stripe_count $dir/dir1/file$j $expected
-	done
-
-	# lfs_migrate works with lfs find
-	cmd="$LFS find -stripe_count $OSTCOUNT -type f $dir |
-	     $LFS_MIGRATE -y -v -c $expected"
+	# lfs migrate works with lfs find
+	cmd="$LFS find -stripe_count $expected -type f $dir -print0 |
+	     $LFS migrate -0 -v -C $((expected * 2))"
 	echo "$cmd"
 	eval $cmd || error "$cmd failed"
 
 	for (( i = 2; i <= NUMFILES; i++ )); do
-		check_stripe_count $dir/file$i $expected
+		check_stripe_count $dir/file$i $((expected * 2))
 	done
 	for (( i = 2; i <= NUMDIRS; i++ )); do
 		for (( j = 1; j <= NUMFILES; j++ )); do
-			check_stripe_count $dir/dir$i/file$j $expected
+			check_stripe_count $dir/dir$i/file$j $((expected * 2))
 		done
 	done
 }
-run_test 56wa "check lfs_migrate -c stripe_count works"
+run_test 56wa "check 'lfs migrate -c stripe_count' works"
 
 test_56wb() {
 	local file1=$DIR/$tdir/file1
@@ -9138,11 +9126,11 @@ test_56xd() {
 run_test 56xd "check lfs migrate --yaml and --copy support"
 
 test_56xe() {
-	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
+	(( $OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
 
 	local dir=$DIR/$tdir
 	local f_comp=$dir/$tfile
-	local layout="-E 1M -S 512K -E 2M -c 2 -E 3M -c 2 -E eof -c $OSTCOUNT"
+	local layout="-E 1M -S 512K -E 2M -c 2 -E 3M -E eof -c $((OSTCOUNT-1))"
 	local layout_before=""
 	local layout_after=""
 
@@ -9153,26 +9141,24 @@ test_56xe() {
 	layout_before=$(SKIP_INDEX=yes get_layout_param $f_comp)
 	dd if=/dev/zero of=$f_comp bs=1M count=4
 
-	# 1. migrate a comp layout file by lfs_migrate
-	$LFS_MIGRATE -y $f_comp || error "cannot migrate $f_comp by lfs_migrate"
-	layout_after=$(SKIP_INDEX=yes get_layout_param $f_comp)
-	idx_before=$($LFS getstripe $f_comp | awk '$2 == "0:" { print $5 }' |
-		     tr '\n' ' ')
-	[ "$layout_before" == "$layout_after" ] ||
-		error "lfs_migrate: $layout_before != $layout_after"
+	# extract starting OST index of each component before migration
+	idxs_before=$($LFS getstripe $f_comp | awk '$2 == "0:" { print $5 }' |
+		      tr '\n' ' ')
 
-	# 2. migrate a comp layout file by lfs migrate
+	# migrate a comp layout file by lfs migrate
 	$LFS migrate $f_comp || error "cannot migrate $f_comp by lfs migrate"
 	layout_after=$(SKIP_INDEX=yes get_layout_param $f_comp)
-	idx_after=$($LFS getstripe $f_comp | awk '$2 == "0:" { print $5 }' |
+	# extract starting OST index of each component after migration
+	idxs_after=$($LFS getstripe $f_comp | awk '$2 == "0:" { print $5 }' |
 		     tr '\n' ' ')
 	[ "$layout_before" == "$layout_after" ] ||
-		error "lfs migrate: $layout_before != $layout_after"
+		error "lfs migrate: layout $layout_before != $layout_after"
 
+	# compare starting indexes of all components before/after migration.
 	# this may not fail every time with a broken lfs migrate, but will fail
 	# often enough to notice, and will not have false positives very often
-	[ "$idx_before" != "$idx_after" ] ||
-		error "lfs migrate: $idx_before == $idx_after"
+	[[ "$idxs_before" != "$idxs_after" ]] ||
+		error "lfs migrate: indexes $idxs_before == $idxs_after"
 }
 run_test 56xe "migrate a composite layout file"
 
