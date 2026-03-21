@@ -5088,7 +5088,7 @@ test_39a() { # was test_39
 #	ls -lc  $DIR/$tfile $DIR/${tfile}2
 	sleep 2
 	$OPENFILE -f O_CREAT:O_TRUNC:O_WRONLY $DIR/${tfile}2
-	if [ ! $DIR/${tfile}2 -nt $DIR/$tfile ]; then
+	if [[ ! $DIR/${tfile}2 -nt $DIR/$tfile ]]; then
 		echo "mtime"
 		ls -l --full-time $DIR/$tfile $DIR/${tfile}2
 		echo "atime"
@@ -5114,10 +5114,10 @@ test_39b() {
 	echo "aaaaaa" >> $DIR/$tdir/funlink
 	echo "aaaaaa" >> $DIR/$tdir/frename
 
-	local open_new=`stat -c %Y $DIR/$tdir/fopen`
-	local link_new=`stat -c %Y $DIR/$tdir/flink`
-	local unlink_new=`stat -c %Y $DIR/$tdir/funlink`
-	local rename_new=`stat -c %Y $DIR/$tdir/frename`
+	local open_new=$(stat -c %Y $DIR/$tdir/fopen)
+	local link_new=$(stat -c %Y $DIR/$tdir/flink)
+	local unlink_new=$(stat -c %Y $DIR/$tdir/funlink)
+	local rename_new=$(stat -c %Y $DIR/$tdir/frename)
 
 	cat $DIR/$tdir/fopen > /dev/null
 	ln $DIR/$tdir/flink $DIR/$tdir/flink2
@@ -5125,189 +5125,194 @@ test_39b() {
 	mv -f $DIR/$tdir/frename $DIR/$tdir/frename2
 
 	for (( i=0; i < 2; i++ )) ; do
-		local open_new2=`stat -c %Y $DIR/$tdir/fopen`
-		local link_new2=`stat -c %Y $DIR/$tdir/flink`
-		local unlink_new2=`stat -c %Y $DIR/$tdir/funlink`
-		local rename_new2=`stat -c %Y $DIR/$tdir/frename2`
+		local open_new2=$(stat -c %Y $DIR/$tdir/fopen)
+		local link_new2=$(stat -c %Y $DIR/$tdir/flink)
+		local unlink_new2=$(stat -c %Y $DIR/$tdir/funlink)
+		local rename_new2=$(stat -c %Y $DIR/$tdir/frename2)
 
-		[ $open_new2 -eq $open_new ] || error "open file reverses mtime"
-		[ $link_new2 -eq $link_new ] || error "link file reverses mtime"
-		[ $unlink_new2 -eq $unlink_new ] || error "unlink file reverses mtime"
-		[ $rename_new2 -eq $rename_new ] || error "rename file reverses mtime"
+		(( $open_new2 == $open_new )) ||
+			error "open file reverses mtime"
+		(( $link_new2 == $link_new )) ||
+			error "link file reverses mtime"
+		(( $unlink_new2 == $unlink_new )) ||
+			error "unlink file reverses mtime"
+		(( $rename_new2 == $rename_new )) ||
+			error "rename file reverses mtime"
 
 		cancel_lru_locks $OSC
-		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+		(( $i > 0 )) || echo "repeat after cancel_lru_locks"
 	done
 }
-run_test 39b "mtime change on open, link, unlink, rename  ======"
+run_test 39b "mtime change on open, link, unlink, rename"
 
 # this should be set to past
-TEST_39_MTIME=`date -d "1 year ago" +%s`
+TEST_39_MTIME=$(date -d "1 year ago" +%s)
 
 # bug 11063
 test_39c() {
 	touch $DIR1/$tfile
 	sleep 2
-	local mtime0=`stat -c %Y $DIR1/$tfile`
+	local mtime0=$(stat -c %Y $DIR1/$tfile)
 
 	touch -m -d @$TEST_39_MTIME $DIR1/$tfile
-	local mtime1=`stat -c %Y $DIR1/$tfile`
-	[ "$mtime1" = $TEST_39_MTIME ] || \
-		error "mtime is not set to past: $mtime1, should be $TEST_39_MTIME"
+	local mtime1=$(stat -c %Y $DIR1/$tfile)
+	(( $mtime1 == $TEST_39_MTIME )) ||
+		error "mtime not set to past: $mtime1, should be $TEST_39_MTIME"
 
-	local d1=`date +%s`
+	local d1=$(date +%s)
+	sleep 0.5
 	echo hello >> $DIR1/$tfile
-	local d2=`date +%s`
-	local mtime2=`stat -c %Y $DIR1/$tfile`
-	[ "$mtime2" -ge "$d1" ] && [ "$mtime2" -le "$d2" ] || \
+	sleep 0.5
+	local d2=$(date +%s)
+	local mtime2=$(stat -c %Y $DIR1/$tfile)
+	(( $d1 <= $mtime2 && $mtime2 <= $d2 )) ||
 		error "mtime is not updated on write: $d1 <= $mtime2 <= $d2"
 
 	mv $DIR1/$tfile $DIR1/$tfile-1
 
 	for (( i=0; i < 2; i++ )) ; do
-		local mtime3=`stat -c %Y $DIR1/$tfile-1`
-		[ "$mtime2" = "$mtime3" ] || \
+		local mtime3=$(stat -c %Y $DIR1/$tfile-1)
+		(( $mtime2 == $mtime3 )) ||
 			error "mtime ($mtime2) changed (to $mtime3) on rename"
 
 		cancel_lru_locks $OSC
-		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+		(( $i > 0 )) || echo "repeat after cancel_lru_locks"
 	done
 }
-run_test 39c "mtime change on rename ==========================="
+run_test 39c "mtime change on rename"
 
 # bug 21114
 test_39d() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
 
 	touch $DIR1/$tfile
 	touch -m -d @$TEST_39_MTIME $DIR1/$tfile
 
 	for (( i=0; i < 2; i++ )) ; do
-		local mtime=`stat -c %Y $DIR1/$tfile`
-		[ $mtime = $TEST_39_MTIME ] || \
+		local mtime=$(stat -c %Y $DIR1/$tfile)
+
+		(( $mtime == $TEST_39_MTIME )) ||
 			error "mtime($mtime) is not set to $TEST_39_MTIME"
 
 		cancel_lru_locks $OSC
-		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+		(( $i > 0 )) || echo "repeat after cancel_lru_locks"
 	done
 }
-run_test 39d "create, utime, stat =============================="
+run_test 39d "create, utime, stat"
 
 # bug 21114
 test_39e() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
 
 	touch $DIR1/$tfile
-	local mtime1=`stat -c %Y $DIR1/$tfile`
+	local mtime1=$(stat -c %Y $DIR1/$tfile)
 
 	touch -m -d @$TEST_39_MTIME $DIR1/$tfile
 
 	for (( i=0; i < 2; i++ )) ; do
-		local mtime2=`stat -c %Y $DIR1/$tfile`
-		[ $mtime2 = $TEST_39_MTIME ] || \
+		local mtime2=$(stat -c %Y $DIR1/$tfile)
+		(( $mtime2 == $TEST_39_MTIME )) ||
 			error "mtime($mtime2) is not set to $TEST_39_MTIME"
 
 		cancel_lru_locks $OSC
-		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+		(( $i > 0 )) || echo "repeat after cancel_lru_locks"
 	done
 }
-run_test 39e "create, stat, utime, stat ========================"
+run_test 39e "create, stat, utime, stat"
 
 # bug 21114
 test_39f() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
 
 	touch $DIR1/$tfile
-	mtime1=`stat -c %Y $DIR1/$tfile`
+	mtime1=$(stat -c %Y $DIR1/$tfile)
 
 	sleep 2
 	touch -m -d @$TEST_39_MTIME $DIR1/$tfile
 
 	for (( i=0; i < 2; i++ )) ; do
-		local mtime2=`stat -c %Y $DIR1/$tfile`
-		[ $mtime2 = $TEST_39_MTIME ] || \
+		local mtime2=$(stat -c %Y $DIR1/$tfile)
+		(( $mtime2 == $TEST_39_MTIME )) ||
 			error "mtime($mtime2) is not set to $TEST_39_MTIME"
 
 		cancel_lru_locks $OSC
-		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+		(( $i > 0 )) || echo "repeat after cancel_lru_locks"
 	done
 }
-run_test 39f "create, stat, sleep, utime, stat ================="
+run_test 39f "create, stat, sleep, utime, stat"
 
-# bug 11063
+# b=11063
 test_39g() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
 
 	echo hello >> $DIR1/$tfile
-	local mtime1=`stat -c %Y $DIR1/$tfile`
+	local mtime1=$(stat -c %Y $DIR1/$tfile)
 
 	sleep 2
 	chmod o+r $DIR1/$tfile
 
 	for (( i=0; i < 2; i++ )) ; do
-		local mtime2=`stat -c %Y $DIR1/$tfile`
-		[ "$mtime1" = "$mtime2" ] || \
+		local mtime2=$(stat -c %Y $DIR1/$tfile)
+		(( $mtime1 == $mtime2 )) || \
 			error "lost mtime: $mtime2, should be $mtime1"
 
 		cancel_lru_locks $OSC
-		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+		(( $i > 0 )) || echo "repeat after cancel_lru_locks"
 	done
 }
-run_test 39g "write, chmod, stat ==============================="
+run_test 39g "write, chmod, stat"
 
 # bug 11063
 test_39h() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
 
 	touch $DIR1/$tfile
 	sleep 1
 
-	local d1=`date`
+	local d1=$(date +%s)
 	echo hello >> $DIR1/$tfile
-	local mtime1=`stat -c %Y $DIR1/$tfile`
+	local mtime1=$(stat -c %Y $DIR1/$tfile)
 
 	touch -m -d @$TEST_39_MTIME $DIR1/$tfile
-	local d2=`date`
-	if [ "$d1" != "$d2" ]; then
+	local d2=$(date +%s)
+	if (( $d1 != $d2 )); then
 		echo "write and touch not within one second"
 	else
 		for (( i=0; i < 2; i++ )) ; do
-			local mtime2=`stat -c %Y $DIR1/$tfile`
-			[ "$mtime2" = $TEST_39_MTIME ] || \
+			local mtime2=$(stat -c %Y $DIR1/$tfile)
+			(( $mtime2 == $TEST_39_MTIME )) ||
 				error "lost mtime: $mtime2, should be $TEST_39_MTIME"
 
 			cancel_lru_locks $OSC
-			if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+			(( $i > 0 )) || echo "repeat after cancel_lru_locks"
 		done
 	fi
 }
-run_test 39h "write, utime within one second, stat ============="
+run_test 39h "write, utime within one second, stat"
 
 test_39i() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-
 	touch $DIR1/$tfile
 	sleep 1
 
 	echo hello >> $DIR1/$tfile
-	local mtime1=`stat -c %Y $DIR1/$tfile`
+	local mtime1=$(stat -c %Y $DIR1/$tfile)
 
 	mv $DIR1/$tfile $DIR1/$tfile-1
 
 	for (( i=0; i < 2; i++ )) ; do
-		local mtime2=`stat -c %Y $DIR1/$tfile-1`
+		local mtime2=$(stat -c %Y $DIR1/$tfile-1)
 
-		[ "$mtime1" = "$mtime2" ] || \
+		(( $mtime1 == $mtime2 )) ||
 			error "lost mtime: $mtime2, should be $mtime1"
 
 		cancel_lru_locks $OSC
-		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+		(( $i > 0 )) || echo "repeat after cancel_lru_locks"
 	done
 }
-run_test 39i "write, rename, stat =============================="
+run_test 39i "write, rename, stat"
 
 test_39j() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
 
 	start_full_debug_logging
 	touch $DIR1/$tfile
@@ -5319,7 +5324,7 @@ test_39j() {
 	multiop_bg_pause $DIR1/$tfile oO_RDWR:w2097152_c ||
 		error "multiop failed"
 	local multipid=$!
-	local mtime1=`stat -c %Y $DIR1/$tfile`
+	local mtime1=$(stat -c %Y $DIR1/$tfile)
 
 	mv $DIR1/$tfile $DIR1/$tfile-1
 
@@ -5327,21 +5332,20 @@ test_39j() {
 	wait $multipid || error "multiop close failed"
 
 	for (( i=0; i < 2; i++ )) ; do
-		local mtime2=`stat -c %Y $DIR1/$tfile-1`
-		[ "$mtime1" = "$mtime2" ] ||
-			error "mtime is lost on close: $mtime2, " \
-			      "should be $mtime1"
+		local mtime2=$(stat -c %Y $DIR1/$tfile-1)
+		(( $mtime1 == $mtime2 )) ||
+			error "mtime lost on close: $mtime2, should be $mtime1"
 
 		cancel_lru_locks
-		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+		(( $i > 0 )) || echo "repeat after cancel_lru_locks"
 	done
 	lctl set_param fail_loc=0
 	stop_full_debug_logging
 }
-run_test 39j "write, rename, close, stat ======================="
+run_test 39j "write, rename, close, stat"
 
 test_39k() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
 
 	touch $DIR1/$tfile
 	sleep 1
@@ -5349,7 +5353,7 @@ test_39k() {
 
 	multiop_bg_pause $DIR1/$tfile oO_RDWR:w2097152_c || error "multiop failed"
 	local multipid=$!
-	local mtime1=`stat -c %Y $DIR1/$tfile`
+	local mtime1=$(stat -c %Y $DIR1/$tfile)
 
 	touch -m -d @$TEST_39_MTIME $DIR1/$tfile
 
@@ -5357,33 +5361,33 @@ test_39k() {
 	wait $multipid || error "multiop close failed"
 
 	for (( i=0; i < 2; i++ )) ; do
-		local mtime2=`stat -c %Y $DIR1/$tfile`
+		local mtime2=$(stat -c %Y $DIR1/$tfile)
 
-		[ "$mtime2" = $TEST_39_MTIME ] || \
-			error "mtime is lost on close: $mtime2, should be $TEST_39_MTIME"
+		(( $mtime2 == $TEST_39_MTIME )) ||
+			error "mtime lost on close: $mtime2, should be $TEST_39_MTIME"
 
 		cancel_lru_locks
-		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+		(( $i > 0 )) || echo "repeat after cancel_lru_locks"
 	done
 }
-run_test 39k "write, utime, close, stat ========================"
+run_test 39k "write, utime, close, stat"
 
 # this should be set to future
-TEST_39_ATIME=`date -d "1 year" +%s`
+TEST_39_ATIME=$(date -d "1 year" +%s)
 
 test_39l() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local atime_diff=$(do_facet $SINGLEMDS \
-				lctl get_param -n mdd.*MDT0000*.atime_diff)
+			   $LCTL get_param -n mdd.*MDT0000*.atime_diff)
 	rm -rf $DIR/$tdir
 	mkdir_on_mdt0 $DIR/$tdir
 
 	# test setting directory atime to future
 	touch -a -d @$TEST_39_ATIME $DIR/$tdir
 	local atime=$(stat -c %X $DIR/$tdir)
-	[ "$atime" = $TEST_39_ATIME ] ||
+	(( $atime == $TEST_39_ATIME )) ||
 		error "atime is not set to future: $atime, $TEST_39_ATIME"
 
 	# test setting directory atime from future to now
@@ -5391,7 +5395,7 @@ test_39l() {
 	touch -a -d @$now $DIR/$tdir
 
 	atime=$(stat -c %X $DIR/$tdir)
-	[ "$atime" -eq "$now"  ] ||
+	(( $atime == $now  )) ||
 		error "atime is not updated from future: $atime, $now"
 
 	do_facet $SINGLEMDS lctl set_param -n mdd.*MDT0000*.atime_diff=2
@@ -5399,11 +5403,13 @@ test_39l() {
 
 	# test setting directory atime when now > dir atime + atime_diff
 	local d1=$(date +%s)
+	sleep 0.5
 	ls $DIR/$tdir
+	sleep 0.5
 	local d2=$(date +%s)
 	cancel_lru_locks mdc
 	atime=$(stat -c %X $DIR/$tdir)
-	[ "$atime" -ge "$d1" -a "$atime" -le "$d2" ] ||
+	(( $d1 <= $atime && $atime <= $d2 )) ||
 		error "atime is not updated  : $atime, should be $d2"
 
 	do_facet $SINGLEMDS lctl set_param -n mdd.*MDT0000*.atime_diff=60
@@ -5413,16 +5419,16 @@ test_39l() {
 	ls $DIR/$tdir
 	cancel_lru_locks mdc
 	atime=$(stat -c %X $DIR/$tdir)
-	[ "$atime" -ge "$d1" -a "$atime" -le "$d2" ] ||
+	(( $d1 <= $atime && $atime <= $d2 )) ||
 		error "atime is updated to $atime, should remain $d1<atime<$d2"
 
 	do_facet $SINGLEMDS \
-		lctl set_param -n mdd.*MDT0000*.atime_diff=$atime_diff
+		$LCTL set_param -n mdd.*MDT0000*.atime_diff=$atime_diff
 }
-run_test 39l "directory atime update ==========================="
+run_test 39l "directory atime update"
 
 test_39m() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
 
 	touch $DIR1/$tfile
 	sleep 2
@@ -5434,11 +5440,11 @@ test_39m() {
 
 	for (( i=0; i < 2; i++ )) ; do
 		local timestamps=$(stat -c "%X %Y" $DIR1/$tfile)
-		[ "$timestamps" = "$far_past_atime $far_past_mtime" ] || \
+		[[ "$timestamps" == "$far_past_atime $far_past_mtime" ]] ||
 			error "atime or mtime set incorrectly"
 
 		cancel_lru_locks $OSC
-		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
+		(( $i > 0 )) || echo "repeat after cancel_lru_locks"
 	done
 }
 run_test 39m "test atime and mtime before 1970"
@@ -5447,7 +5453,7 @@ test_39n() { # LU-3832
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 
 	local atime_diff=$(do_facet $SINGLEMDS \
-		lctl get_param -n mdd.*MDT0000*.atime_diff)
+		$LCTL get_param -n mdd.*MDT0000*.atime_diff)
 	local atime0
 	local atime1
 	local atime2
@@ -5471,8 +5477,8 @@ test_39n() { # LU-3832
 	do_facet $SINGLEMDS \
 		lctl set_param -n mdd.*MDT0000*.atime_diff=$atime_diff
 
-	[ "$atime0" -eq "$atime1" ] || error "atime0 $atime0 != atime1 $atime1"
-	[ "$atime1" -eq "$atime2" ] || error "atime0 $atime0 != atime1 $atime1"
+	(( "$atime0" == "$atime1" )) || error "atime0 $atime0 != atime1 $atime1"
+	(( "$atime1" == "$atime2" )) || error "atime0 $atime0 != atime1 $atime1"
 }
 run_test 39n "check that O_NOATIME is honored"
 
