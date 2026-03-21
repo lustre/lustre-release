@@ -2276,6 +2276,11 @@ static int mdc_ioc_swap_layouts(struct obd_export *exp,
 
 	payload = req_capsule_client_get(&req->rq_pill, &RMF_SWAP_LAYOUTS);
 	LASSERT(payload);
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 4, 53, 0)
+	/* allow client to set msl_dv1/msl_dv2 fields until compat not needed */
+	req_capsule_set_size(&req->rq_pill, &RMF_SWAP_LAYOUTS, RCL_CLIENT,
+			     sizeof(*msl));
+#endif
 
 	*payload = *msl;
 

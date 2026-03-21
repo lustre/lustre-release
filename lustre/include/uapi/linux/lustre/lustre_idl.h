@@ -3789,6 +3789,15 @@ struct mdc_swap_layouts {
 	__u64		msl_dv2; /* data version of file 2 */
 };
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 4, 53, 0)
+/* extra fields were added in commit v2_17_51-2-g63caacb042.
+ * struct mdc_swap_layouts_217 not needed after 3.4.53.
+ */
+struct mdc_swap_layouts_217 {
+	__u64           msl_flags;
+};
+#endif
+
 #define INLINE_RESYNC_ARRAY_SIZE	15
 struct close_data_resync_done {
 	__u32	resync_count;

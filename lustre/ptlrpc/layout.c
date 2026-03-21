@@ -940,6 +940,11 @@ enum rmf_flags {
 	 * @rmf_size worth of bytes.
 	 */
 	RMF_F_STRUCT_ARRAY	= BIT(2),
+	/*
+	 * The field's buffer size must be at least @rmf_size bytes,
+	 * and @rmf_swabber/@rmf_swab_len must handle the variable size.
+	 */
+	RMF_F_MINIMUM_SIZE	= BIT(3),
 };
 
 struct req_capsule;
@@ -1326,8 +1331,14 @@ struct req_msg_field RMF_MDS_HSM_REQUEST =
 EXPORT_SYMBOL(RMF_MDS_HSM_REQUEST);
 
 struct req_msg_field RMF_SWAP_LAYOUTS =
-	DEFINE_MSGF("swap_layouts", 0, sizeof(struct  mdc_swap_layouts),
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 4, 53, 0)
+	DEFINE_MSGFL("swap_layouts", RMF_F_MINIMUM_SIZE,
+		    sizeof(struct mdc_swap_layouts_217),
 		    lustre_swab_swap_layouts, NULL);
+#else
+	DEFINE_MSGFL("swap_layouts", 0, sizeof(struct mdc_swap_layouts),
+		    lustre_swab_swap_layouts, NULL);
+#endif
 EXPORT_SYMBOL(RMF_SWAP_LAYOUTS);
 
 struct req_msg_field RMF_LFSCK_REQUEST =
@@ -2349,15 +2360,19 @@ static void *__req_capsule_get(struct req_capsule *pill,
 	getter = (field->rmf_flags & RMF_F_STRING) ?
 		(typeof(getter))lustre_msg_string : lustre_msg_buf;
 
-	if (field->rmf_flags & (RMF_F_STRUCT_ARRAY|RMF_F_NO_SIZE_CHECK)) {
-		/*
-		 * We've already asserted that field->rmf_size > 0 in
-		 * req_layout_init().
-		 */
+	/* req_layout_init() already asserted that field->rmf_size > 0 */
+	if (field->rmf_flags &
+	    (RMF_F_STRUCT_ARRAY|RMF_F_NO_SIZE_CHECK|RMF_F_MINIMUM_SIZE)) {
 		len = lustre_msg_buflen(msg, offset);
-		if (!(field->rmf_flags & RMF_F_NO_SIZE_CHECK) &&
+		if (field->rmf_flags & RMF_F_STRUCT_ARRAY &&
 		    (len % field->rmf_size) != 0) {
 			CERROR("%s: array field size mismatch %d modulo %u != 0 (%d)\n",
+				field->rmf_name, len, field->rmf_size, loc);
+			return NULL;
+		}
+		if (field->rmf_flags & RMF_F_MINIMUM_SIZE &&
+		    len < field->rmf_size) {
+			CERROR("%s: array field size %d < minimum %u (%d)\n",
 				field->rmf_name, len, field->rmf_size, loc);
 			return NULL;
 		}
@@ -2544,24 +2559,24 @@ void req_capsule_set_size(struct req_capsule *pill,
 			  const struct req_msg_field *field,
 			  enum req_location loc, __u32 size)
 {
+	__u32 rmf_size = (__u32)field->rmf_size;
+
 	LASSERT(loc == RCL_SERVER || loc == RCL_CLIENT);
 
-	if ((size != (__u32)field->rmf_size) &&
-	    (field->rmf_size != -1) &&
-	    !(field->rmf_flags & RMF_F_NO_SIZE_CHECK) &&
-	    (size > 0)) {
-		__u32 rmf_size = (__u32)field->rmf_size;
+	if (size == rmf_size || size == 0 || field->rmf_size == -1)
+		goto out;
+	if (field->rmf_flags & RMF_F_NO_SIZE_CHECK)
+		goto out;
 
-		LASSERTF(!((field->rmf_flags & RMF_F_STRUCT_ARRAY) &&
-			   (size % rmf_size != 0)),
-			 "%s: array field size mismatch %u %% %u != 0 (%d)\n",
-			 field->rmf_name, size, rmf_size, loc);
-		LASSERTF(!(!(field->rmf_flags & RMF_F_STRUCT_ARRAY) &&
-			   size < rmf_size),
-			 "%s: field size mismatch %u != %u (%d)\n",
-			 field->rmf_name, size, rmf_size, loc);
-	}
+	LASSERTF(!(field->rmf_flags & RMF_F_STRUCT_ARRAY) ||
+		  (size % rmf_size) == 0,
+		 "%s: array field size mismatch %u %% %u != 0 (%d)\n",
+		 field->rmf_name, size, rmf_size, loc);
+	LASSERTF((field->rmf_flags & RMF_F_STRUCT_ARRAY) || size >= rmf_size,
+		 "%s: field size mismatch %u != %u (%d)\n",
+		 field->rmf_name, size, rmf_size, loc);
 
+out:
 	pill->rc_area[loc][__req_capsule_offset(pill, field, loc)] = size;
 }
 EXPORT_SYMBOL(req_capsule_set_size);
@@ -2691,8 +2706,10 @@ void req_capsule_extend(struct req_capsule *pill, const struct req_format *fmt)
 	for (i = 0; i < RCL_NR; ++i) {
 		LASSERT(fmt->rf_fields[i].nr >= old->rf_fields[i].nr);
 		for (j = 0; j < old->rf_fields[i].nr - 1; ++j) {
-			const struct req_msg_field *ofield = FMT_FIELD(old, i,
-								       j);
+			const struct req_msg_field *ofield =
+				FMT_FIELD(old, i, j);
+			const struct req_msg_field *nfield =
+				FMT_FIELD(fmt, i, j);
 
 			/* "opaque" fields can be transmogrified */
 			if (ofield->rmf_swabber == NULL &&
@@ -2700,11 +2717,9 @@ void req_capsule_extend(struct req_capsule *pill, const struct req_format *fmt)
 			    (ofield->rmf_size == -1 ||
 			     ofield->rmf_flags == RMF_F_NO_SIZE_CHECK))
 				continue;
-			LASSERT(FMT_FIELD(fmt, i, j) == FMT_FIELD(old, i, j));
+			LASSERT(ofield == nfield);
 		}
-		/*
-		 * Last field in old format can be shorter than in new.
-		 */
+		/* Last field in new format can be larger than in old. */
 		LASSERT(FMT_FIELD(fmt, i, j)->rmf_size >=
 			FMT_FIELD(old, i, j)->rmf_size);
 	}
