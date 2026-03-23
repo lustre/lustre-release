@@ -171,7 +171,9 @@ else
               grep -E '/ofa_kernel|/ofa_kernel/default|/openib' |
               grep -v /ofed_scripts/ | head -n1)
       if [[ -n "$paths" ]]; then
-          epaths=$(find $paths -name rdma_cm.h |
+          [[ ! -d $paths/$(uname -m)/$(uname -r) ]] ||
+              paths=$paths/$(uname -m)/$(uname -r)
+          epaths=$(find -H $paths -name rdma_cm.h |
                    grep -F -e "$(uname -r)" -e default |
                    sed -e 's:/include/rdma/rdma_cm.h::')
           if [ $(echo $epaths | wc -w) -eq 1 ]; then
