@@ -6818,8 +6818,9 @@ run_test 108a "lseek: parallel updates"
 
 # LU-14110
 test_109() {
-	local i
 	local pid1 pid2
+	local duration=${SANITYN_109_DURATION:-30}
+	local i=0
 
 	! local_mode ||
 		skip "Clients need to be on different nodes than the servers"
@@ -6827,9 +6828,11 @@ test_109() {
 	umount_client $MOUNT
 	umount_client $MOUNT2
 
-	echo "Starting race between client mount instances (50 iterations):"
-	for i in {1..50}; do
-		log "Iteration $i"
+	[[ "$SLOW" == "no" ]] || ((duration*=10))
+	echo "Starting race between client mounts (duration ${duration})"
+	start=$SECONDS
+	while (( $SECONDS - start < $duration )); do
+		log "Iteration $((i++))"
 
 #define CFS_FAIL_ONCE|OBD_FAIL_LLITE_RACE_MOUNT        0x80001417
 		$LCTL set_param -n fail_loc=0x80001417
