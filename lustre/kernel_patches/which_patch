@@ -28,6 +28,6 @@ PATCH SERIES FOR SERVER KERNELS:
 5.14-rhel9.6.series     5.14.0-570.62.1.el9  (RHEL 9.6)
 5.14-rhel9.7.series     5.14.0-611.42.1.el9  (RHEL 9.7)
 6.12-rhel10.0.series    6.12.0-55.43.1.el10  (RHEL 10.0)
-6.12-rhel10.1.series    6.12.0-124.40.1.el10 (RHEL 10.1)
+6.12-rhel10.1.series    6.12.0-124.45.1.el10 (RHEL 10.1)
 
 See lustre/ChangeLog for supported client kernel versions.
