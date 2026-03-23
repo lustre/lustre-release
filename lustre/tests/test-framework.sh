@@ -11172,9 +11172,15 @@ pool_add_targets() {
 
 	local list=$(seq $first $step $last)
 
-	local t=$(for i in $list; do printf "$FSNAME-OST%04x_UUID " $i; done)
-	local tg=$(for i in $list;
-		do printf -- "-e $FSNAME-OST%04x_UUID " $i; done)
+	local t
+	local tg
+	local i
+	for i in $list; do
+		local uuid=$(ostname_from_index $i $FSNAME)_UUID
+
+		t+="$uuid "
+		tg+="-e $uuid "
+	done
 	local filter="grep $tg | sort -u | tr '\n' ' '"
 	local firstx=$(printf "%04x" $first)
 	local lastx=$(printf "%04x" $last)
@@ -11336,7 +11342,7 @@ pool_remove_target() {
 	if (( $index == -1 )); then
 		local t=$($LCTL get_param -n $lovname | head -1)
 	else
-		local t=$(printf "$FSNAME-OST%04x_UUID" $index)
+		local t=$(ostname_from_index $index $FSNAME)_UUID
 	fi
 
 	echo "Removing $t from $poolname"
@@ -13253,12 +13259,12 @@ wait_nm_sync() {
 consume_precreations() {
 	local dir=$1
 	local mfacet=$2
-	local OSTIDX=$3
+	local ostidx=$3
 	local extra=${4:-2}
-	local OST=$(ostname_from_index $OSTIDX $dir)
+	local OST=$(ostname_from_index $ostidx $dir)
 
 	mkdir_on_mdt -i $(facet_index $mfacet) $dir/${OST}
-	$LFS setstripe -i $OSTIDX -c 1 ${dir}/${OST}
+	$LFS setstripe -i $ostidx -c 1 ${dir}/${OST}
 
 	# on the mdt's osc
 	local mdtosc_proc=$(get_mdtosc_proc_path $mfacet $OST)
@@ -13271,26 +13277,26 @@ consume_precreations() {
 }
 
 __exhaust_precreations() {
-	local OSTIDX=$1
-	local FAILLOC=$2
-	local FAILIDX=${3:-$OSTIDX}
-	local ofacet=ost$((OSTIDX + 1))
+	local ostidx=$1
+	local failloc=$2
+	local failidx=${3:-$ostidx}
+	local ofacet=ost$((ostidx + 1))
 
 	mkdir_on_mdt0 $DIR/$tdir
 	local mdt_idx=$($LFS getstripe -m $DIR/$tdir)
 	local mfacet=mds$((mdt_idx + 1))
-	echo OSTIDX=$OSTIDX MDTIDX=$mdt_idx
+	echo ostidx=$ostidx mdt_idx=$mdt_idx
 
 	local mdtosc_proc=$(get_mdtosc_proc_path $mfacet)
 	do_facet $mfacet $LCTL get_param osp.$mdtosc_proc.prealloc*
 
 #define OBD_FAIL_OST_ENOSPC              0x215
-	do_facet $ofacet $LCTL set_param fail_val=$FAILIDX fail_loc=0x215
+	do_facet $ofacet $LCTL set_param fail_val=$failidx fail_loc=0x215
 
-	consume_precreations $DIR/$tdir $mfacet $OSTIDX
+	consume_precreations $DIR/$tdir $mfacet $ostidx
 
 	do_facet $mfacet $LCTL get_param osp.$mdtosc_proc.prealloc*
-	do_facet $ofacet $LCTL set_param fail_loc=$FAILLOC
+	do_facet $ofacet $LCTL set_param fail_loc=$failloc
 }
 
 exhaust_precreations() {

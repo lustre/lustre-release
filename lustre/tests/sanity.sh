@@ -57,6 +57,10 @@ if (( $MDSCOUNT > 4 )); then
 	fi
 fi
 
+if (( $OSTCOUNT > 12 )); then
+	always_except LU-8933  51d
+fi
+
 # skip nfs tests on kernels >= 4.12.0 until they are fixed
 if [ $LINUX_VERSION_CODE -ge $(version_code 4.12.0) ]; then
 	always_except LU-12661 817
@@ -9900,8 +9904,11 @@ test_56wc() {
 
 	# Ensure PFL arguments are passed through properly
 	echo -n "Verifying PFL options passed through..."
+	# LOD allows DIV_ROUND_UP(15M, 4M) = 4 stripes in [1M, 16M)
 	new_scount=$(((OSTCOUNT + 1) / 2))
-	$LFS migrate -E 1M -c 1 -E 16M -c $new_scount -E eof -c -1 "$file1" ||
+	(( new_scount <= 4 )) || new_scount=4
+	$LFS migrate -E 1M -c 1 -E 16M -S 4M -c $new_scount -E eof -c -1 \
+		"$file1" ||
 		error "migrate PFL arguments failed"
 	cur_comp=$($LFS getstripe --comp-count $file1)
 	(( cur_comp == 3 )) || error "component count '$cur_comp' != 3"
@@ -20063,7 +20070,7 @@ test_130a() {
 	local tot_len=0
 
 	while read line; do
-		local frag_lun=$(echo $line | cut -d: -f5)
+		local frag_lun=$((16#$(echo $line | cut -d: -f5 | tr -d ' ')))
 		local ext_len=$(echo $line | cut -d: -f4)
 
 		(( $frag_lun == $lun )) ||
@@ -20250,12 +20257,12 @@ test_130e() {
 	filefrag_op=$(filefrag -ve -k $fm_file |
 		      sed -n '/ext:/,/found/{/ext:/d; /found/d; p}')
 
-	local last_lun=$(echo $filefrag_op | cut -d: -f5)
+	local last_lun=$((16#$(echo $filefrag_op | cut -d: -f5 | tr -d ' ')))
 	local tot_len=0
 	local num_luns=1
 
 	while read line; do
-		local frag_lun=$(echo $line | cut -d: -f5)
+		local frag_lun=$((16#$(echo $line | cut -d: -f5 | tr -d ' ')))
 		local ext_len=$(echo $line | cut -d: -f4)
 		if (( $frag_lun != $last_lun )); then
 			(( tot_len == $expected_len )) ||
@@ -20307,6 +20314,7 @@ test_130g() {
 	local file=$DIR/$tfile
 	local nr=$((OSTCOUNT * 100))
 
+	(( nr <= LOV_MAX_STRIPE_COUNT )) || nr=$LOV_MAX_STRIPE_COUNT
 	$LFS setstripe -C $nr -S1M $file ||
 		error "failed to setstripe -C $nr $file"
 
@@ -20388,12 +20396,12 @@ test_130i() {
 	filefrag_op=$(filefrag -ve -k $dom_file |
 		      sed -n '/ext:/,/found/{/ext:/d; /found/d; p}')
 
-	local last_lun=$(echo $filefrag_op | cut -d: -f5)
+	local last_lun=$((16#$(echo $filefrag_op | cut -d: -f5 | tr -d ' ')))
 	local lun_len=0
 	local num_luns=1
 
 	while IFS=$'\n' read line; do
-		local frag_lun=$(echo $line | cut -d: -f5)
+		local frag_lun=$((16#$(echo $line | cut -d: -f5 | tr -d ' ')))
 		local ext_len=$(echo $line | cut -d: -f4)
 
 		if (( $frag_lun != $last_lun )); then
@@ -21779,29 +21787,31 @@ function roc_hit_init() {
 	local osts=${1:-$(osts_nodes)}
 	local dir=$DIR/$tdir-check
 	local file=$dir/$tfile
-	local BEFORE
-	local AFTER
+	local before
+	local after
 	local idx
 
 	test_mkdir $dir
 	#use setstripe to do a write to every ost
-	for ((i=0; i < OSTCOUNT; i++)); do
-		$LFS setstripe -c 1 -i $i $dir || error "$LFS setstripe $file failed"
+	for ((idx = 0; idx < OSTCOUNT; idx++)); do
+		local ost=$(ostname_from_index $idx)
+
+		$LFS setstripe -c 1 -i $idx $dir ||
+			error "$LFS setstripe -i $idx $dir failed"
 		dd if=/dev/urandom of=$file bs=4k count=4 2>&1 > /dev/null
-		idx=$(printf %04x $i)
-		BEFORE=$(get_osd_param $osts *OST$idx stats |
-			awk '$1 == "cache_access" {sum += $7}
+		before=$(get_osd_param $osts $ost stats |
+			 awk '$1 == "cache_access" {sum += $7}
 				END { printf("%0.0f", sum) }')
 
 		cancel_lru_locks osc
 		cat $file >/dev/null
 
-		AFTER=$(get_osd_param $osts *OST$idx stats |
+		after=$(get_osd_param $osts $ost stats |
 			awk '$1 == "cache_access" {sum += $7}
 				END { printf("%0.0f", sum) }')
 
-		echo BEFORE:$BEFORE AFTER:$AFTER
-		if ! let "AFTER - BEFORE == 4"; then
+		echo before:$before after:$after
+		if (( after - before != 4 )); then
 			rm -rf $dir
 			error "roc_hit is not safe to use"
 		fi

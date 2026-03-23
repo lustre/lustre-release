@@ -7760,14 +7760,14 @@ test_82b() { # LU-4665
 	local ost_idx_in_pool=$(exclude_items_from_list $ost_indices \
 				$ost_idx_in_list)
 
-	local ost_targets="$FSNAME-OST["
+	local ost_targets
 	for i in ${ost_idx_in_pool//,/ }; do
 		ost_targets=$ost_targets$(printf "%04x," $i)
 	done
-	ost_targets="${ost_targets%,}]"
+	ost_targets="$FSNAME-OST[${ost_targets%,}]"
 
 	local ost_targets_uuid=$(for i in ${ost_idx_in_pool//,/ }; \
-				 do printf "$FSNAME-OST%04x_UUID\n" $i; done |
+				 do ostuuid_from_index $i; done |
 				 sort -u | tr '\n' ' ')
 
 	local cmd="$LCTL pool_add $ost_pool $ost_targets"

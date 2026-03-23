@@ -845,10 +845,12 @@ test_0j() {
 	$LFS mirror resync $DIR/$tfile || error "resync $DIR/$tfile failed"
 	cmp /etc/hosts $DIR/$tfile || error "cmp with /etc/hosts failed"
 
-	$LFS mirror read -N2 -o $TMP/$tfile $DIR/$tfile || error "read mirror failed"
+	$LFS mirror read -N2 -o $TMP/$tfile $DIR/$tfile ||
+		error "read mirror failed"
 	stack_trap "rm -f $TMP/$tfile"
 	cmp $TMP/$tfile $DIR/$tfile || error "cmp with $TMP/$tfile failed"
-	$LFS mirror write -N2 -i /etc/passwd $DIR/$tfile || error "write failed"
+	$LFS mirror write -N2 -i /etc/passwd $DIR/$tfile ||
+		error "write failed"
 	$LFS setstripe --comp-set -I 65537 --comp-flags=stale $DIR/$tfile ||
 		error "set component 1 stale failed"
 	$LFS mirror resync $DIR/$tfile || error "resync $DIR/$tfile failed"
@@ -1220,12 +1222,12 @@ run_test 21 "glimpse should report accurate i_blocks"
 
 get_osc_lock_count() {
 	local lock_count=0
-	local idx
 	local count
 	local osc_name
+	local ostnum
 
-	for idx in "$@"; do
-		osc_name=${FSNAME}-OST$(printf "%04x" $((idx-1)))-osc-[-0-9a-f]
+	for ostnum in "$@"; do
+		osc_name=$(ostname_from_index $((ostnum - 1)))-osc-[-0-9a-f]
 		count=$(total_used_locks "$osc_name")
 		lock_count=$((lock_count + ${count:-0}))
 	done
@@ -2273,7 +2275,7 @@ run_test 42 "lfs mirror verify"
 write_file_43() {
 	local file=$1
 	local ost=$2
-	local PARAM="osp.${FSNAME}-OST000${ost}-osc-M*.active"
+	local PARAM="osp.$(ostname_from_index $ost)-osc-M*.active"
 	local wait
 
 	wait=$(do_facet $SINGLEMDS \
@@ -4772,10 +4774,10 @@ function check_ost_used() {
 	# check only specified OSTs got reads
 	for ((ost = 0; ost < $OSTCOUNT; ost++)); do
 		local nr=$($LCTL get_param -n \
-			osc.$FSNAME-OST000$ost-osc-[-0-9a-f]*.stats |
+			osc.$(ostname_from_index $ost)-osc-[-0-9a-f]*.stats |
 			awk "/ost_$io/{print \$2}")
 		nr=${nr:-0}
-		if [[ " $* " =~ $ost ]]; then
+		if [[ " $* " =~ " $ost " ]]; then
 			(( nr > 0 )) || error "expected reads on $ost"
 		else
 			(( nr == 0 )) || error "unexpected $nr reads on $ost"

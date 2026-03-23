@@ -48,8 +48,8 @@ TGT_LIST2=$(seq 0x$TGT_FIRST 2 0x$TGT_MAX)
 TGT_ALL="$FSNAME-OST[$TGT_FIRST-$TGT_MAX/1]"
 TGT_HALF="$FSNAME-OST[$TGT_FIRST-$TGT_MAX/2]"
 
-TGT_UUID=$(for i in $TGT_LIST; do printf "$FSNAME-OST%04x_UUID " $i; done)
-TGT_UUID2=$(for i in $TGT_LIST2; do printf "$FSNAME-OST%04x_UUID " $i; done)
+TGT_UUID=$(for i in $TGT_LIST; do printf "%s " $(ostuuid_from_index $i); done)
+TGT_UUID2=$(for i in $TGT_LIST2; do printf "%s " $(ostuuid_from_index $i); done)
 
 create_dir() {
 	local dir=$1
@@ -165,27 +165,31 @@ drain_pool() {
 
 add_pool() {
 	local pool=$1
-	local osts=$2
-	local tgt="${3}$(lctl get_param -n lov.$FSNAME-*.pools.$pool |
-		sort -u | tr '\n' ' ')"
+	local osts="$2"
+	local tgt="$({ $LCTL get_param -n lov.$FSNAME-*.pools.$pool;
+		      echo $3 | tr ' ' '\n'; } | sort -u | tr '\n' ' ')"
 
-	do_facet mgs lctl pool_add $FSNAME.$pool $osts
+	do_facet mgs $LCTL pool_add $FSNAME.$pool $osts
 	local RC=$?
 	[[ $RC -ne 0 ]] && return $RC
 
 	# wait for OSTs to be added to the pool
-	for mds_id in $(seq $MDSCOUNT); do
-		local mdt_id=$((mds_id-1))
-		local lodname=$FSNAME-MDT$(printf "%04x" $mdt_id)-mdtlov
+	local mdt_idx
+	for (( mdt_idx = 0; mdt_idx < MDSCOUNT; mdt_idx++ )); do
+		local mds_id=$((mdt_idx + 1))
+		local lodname=$(mdtname_from_index $mdt_idx)-mdtlov
+
 		wait_update_facet mds$mds_id \
-			"lctl get_param -n lod.$lodname.pools.$pool |
-				sort -u | tr '\n' ' ' " "$tgt" >/dev/null ||
-			error "mds$mds_id:pool add failed $1; $2"
+			"$LCTL get_param -n lod.$lodname.pools.$pool |
+				sort -u | tr '\n' ' '" "$tgt" >/dev/null || {
+			do_facet mds$mds_id \
+				$LCTL get_param -n lod.$lodname.pools.$pool
+			error "mds$mds_id: pool add failed $pool; $tgt"
+		}
 	done
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$pool |
-		sort -u | tr '\n' ' ' " "$tgt" >/dev/null ||
-		error "pool_add failed: $1; $2"
-	return $RC
+	wait_update $HOSTNAME "$LCTL get_param -n lov.$FSNAME-*.pools.$pool |
+		sort -u | tr '\n' ' '" "$tgt" >/dev/null ||
+		error "pool_add failed: $pool; $tgt"
 }
 
 create_pool_nofail() {
@@ -309,7 +313,7 @@ run_test 1m "pool_new did not fail even though $POOL2 existed"
 test_1n() {
 	create_pool_nofail ${POOL}1234567
 
-	add_pool ${POOL}1234567 "OST0000" "$FSNAME-OST0000_UUID "
+	add_pool ${POOL}1234567 "OST0000" "$(ostuuid_from_index 0)"
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 	create_dir $POOL_ROOT ${POOL}1234567
 	stack_trap "rm -f $POOL_ROOT/file"
@@ -372,11 +376,15 @@ test_2c() {
 	drain_pool $POOL
 
 	# 4. $FSNAME-OST[0,1,2,3,]
+	# lctl pool_add limits each argument to 80 chars, so use <= 8 OSTs
 	TGT="$FSNAME-OST["
-	for i in $TGT_LIST; do TGT=${TGT}$(printf "%04x," $i); done
+	for i in $(head -n 8 <<< "$TGT_LIST"); do
+		TGT=${TGT}$(printf "%04x," $i)
+	done
 	TGT="${TGT}]"
 	do_facet mgs lctl pool_add $FSNAME.$POOL $TGT
-	[[ $? -eq 0 ]] || error "pool_add failed. $FSNAME.$POOL $TGT. $RC"
+	RC=$?; [[ $RC -eq 0 ]] ||
+		error "pool_add failed. $FSNAME.$POOL $TGT. rc=$RC"
 	do_facet mgs lctl pool_remove $FSNAME.$POOL $TGT
 	drain_pool $POOL
 
@@ -385,7 +393,7 @@ test_2c() {
 	RC=$?; [[ $RC -eq 0 ]] ||
 		error "pool_add failed. $FSNAME $POOL" "$TGT_ALL $RC"
 	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$POOL |
-		sort -u | tr '\n' ' ' " "$TGT_UUID" ||
+		sort -u | tr '\n' ' '" "$TGT_UUID" ||
 			error "Add to pool failed"
 	do_facet mgs lctl pool_remove $FSNAME.$POOL $TGT_ALL
 	drain_pool $POOL
@@ -403,10 +411,10 @@ test_2d() {
 
 	create_pool_nofail $POOL
 
-	TGT=$(printf "$FSNAME-OST%04x_UUID " $OSTCOUNT)
+	TGT=$(ostname_from_index $OSTCOUNT)
 	do_facet mgs lctl pool_add $FSNAME.$POOL $TGT
 	RC=$?; [[ $RC -ne 0 ]] ||
-		error "pool_add succeeded for an OST ($TGT) that does not exist."
+		error "pool_add succeeded for $TGT that does not exist"
 
 	destroy_pool $POOL
 }
@@ -558,7 +566,7 @@ run_test 4b "pool_destroy: non-existant fs-name"
 
 test_4c() {
 	create_pool_nofail $POOL
-	add_pool $POOL "OST0000" "$FSNAME-OST0000_UUID "
+	add_pool $POOL "OST0000" "$(ostuuid_from_index 0)"
 
 	do_facet mgs lctl pool_destroy ${FSNAME}.$POOL
 	[[ $? -ne 0 ]] || error "pool_destroy succeeded with a non-empty pool."
@@ -657,7 +665,7 @@ test_6() {
 	# lfs setstripe should fail if a start index that is outside the
 	# pool is specified.
 	create_pool_nofail $POOL2
-	add_pool $POOL2 "OST0000" "$FSNAME-OST0000_UUID "
+	add_pool $POOL2 "OST0000" "$(ostuuid_from_index 0)"
 	$LFS setstripe -i 1 -p $POOL2 $ROOT_POOL/$tfile 2>/dev/null
 	[[ $? -ne 0 ]] ||
 	error "$LFS setstripe with start index outside the pool did not fail."
@@ -831,7 +839,7 @@ test_12() {
 	do_facet mgs lctl pool_remove $FSNAME.$POOL $FSNAME-OST[$TGT_FIRST]
 	do_facet mgs lctl pool_list $FSNAME.$POOL
 	FIRST_UUID=$(echo $TGT_UUID | awk '{print $1}')
-	add_pool $POOL2 $FSNAME-OST[$TGT_FIRST] "$FIRST_UUID "
+	add_pool $POOL2 $FSNAME-OST[$TGT_FIRST] "$FIRST_UUID"
 	do_facet mgs lctl pool_list $FSNAME.$POOL2
 
 	echo Checking the files again
@@ -926,20 +934,18 @@ test_14() {
 	create_pool_nofail $POOL2
 
 	add_pool $POOL $TGT_HALF "$TGT_UUID2"
-	add_pool $POOL2 "OST0000" "$FSNAME-OST0000_UUID "
+	add_pool $POOL2 "OST0000" "$(ostuuid_from_index 0)"
 
 	create_dir $POOL_ROOT/dir1 $POOL 1
 	create_file $POOL_ROOT/dir1/file $POOL 1
 	local ost=$($LFS getstripe -i $POOL_ROOT/dir1/file)
-	i=0
-	while [[ $i -lt $numfiles ]]; do
+	for (( i = 0; i < numfiles; i++ )); do
 		ost=$((ost + 2))
 		[[ $ost -gt $((16#$TGT_MAX)) ]] && ost=$TGT_FIRST
 
 		# echo "Iteration: $i OST: $ost"
 		create_file $POOL_ROOT/dir1/file${i} $POOL 1
 		check_file_in_pool $POOL_ROOT/dir1/file${i} $POOL
-		i=$((i + 1))
 	done
 
 	# Fill up OST0 until it is nearly full.
@@ -973,13 +979,14 @@ run_test 14 "Round robin and QOS striping within a pool"
 test_15() {
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
 	local numfiles=100
-	local i=0
+	local i
 
-	while [[ $i -lt $OSTCOUNT ]]; do
+	stack_trap "rm -rf $POOL_ROOT"
+	for (( i = 0; i < OSTCOUNT; i++ )); do
 		create_pool_nofail $POOL${i}
 
-		local tgt=$(printf "$FSNAME-OST%04x_UUID " $i)
-		add_pool $POOL${i} "$FSNAME-OST[$(printf %04x $i)]" "$tgt"
+		add_pool $POOL${i} $(ostname_from_index $i) \
+			$(ostuuid_from_index $i)
 		create_dir $POOL_ROOT/dir${i} $POOL${i}
 		createmany -o $POOL_ROOT/dir$i/$tfile $numfiles ||
 			error "createmany $POOL_ROOT/dir$i/$tfile failed!"
@@ -987,8 +994,6 @@ test_15() {
 		for file in $POOL_ROOT/dir$i/*; do
 			check_file_in_osts $file $i
 		done
-
-		i=$((i + 1))
 	done
 
 	return 0
@@ -1179,7 +1184,7 @@ test_20() {
 
 	local start=$(printf %04x $((TGT_FIRST + 1)))
 	TGT=$(for i in $(seq 0x$start 2 0x$TGT_MAX); do \
-		printf "$FSNAME-OST%04x_UUID " $i; done)
+		ostuuid_from_index $i; done)
 	add_pool $POOL2 "$FSNAME-OST[$start-$TGT_MAX/2]" "$TGT"
 
 	create_dir $dir1 $POOL
@@ -1245,10 +1250,10 @@ add_loop() {
 		echo "Pool $pool, iteration $c"
 		do_facet mgs lctl pool_add $FSNAME.$pool \
 			OST[$TGT_FIRST-$TGT_MAX/$step] 2>/dev/null
-		local TGT_SECOND=$(printf %04x $((TGT_FIRST + $step)))
+		local TGT_SECOND=$(printf %04x $((TGT_FIRST + step)))
 		if [ $((16#$TGT_SECOND)) -le $((16#$TGT_MAX)) ]; then
-		do_facet mgs lctl pool_remove $FSNAME.$pool \
-			OST[$TGT_SECOND-$TGT_MAX/$step]
+			do_facet mgs lctl pool_remove $FSNAME.$pool \
+				OST[$TGT_SECOND-$TGT_MAX/$step]
 		fi
 	done
 	echo loop for $pool complete
@@ -1261,9 +1266,9 @@ test_22() {
 	local numfiles=100
 
 	create_pool_nofail $POOL
-	add_pool $POOL "OST0000" "$FSNAME-OST0000_UUID "
+	add_pool $POOL "OST0000" "$(ostuuid_from_index 0)"
 	create_pool_nofail $POOL2
-	add_pool $POOL2 "OST0000" "$FSNAME-OST0000_UUID "
+	add_pool $POOL2 "OST0000" "$(ostuuid_from_index 0)"
 
 	add_loop $POOL 1 &
 	add_loop $POOL2 2 &
@@ -1295,7 +1300,7 @@ test_23a() {
 	create_pool_nofail $POOL
 
 	local TGT=$(for i in $(seq 0x$TGT_FIRST 3 0x$TGT_MAX); do \
-		printf "$FSNAME-OST%04x_UUID " $i; done)
+		    ostuuid_from_index $i; done)
 	add_pool $POOL "$FSNAME-OST[$TGT_FIRST-$TGT_MAX/3]" "$TGT"
 	create_dir $dir $POOL
 
@@ -1361,7 +1366,7 @@ test_23b() {
 	create_pool_nofail $POOL
 
 	local tgt=$(for ((i = 0x$TGT_FIRST; i <= 0x$TGT_MAX; i += 3)); do
-		printf "$FSNAME-OST%04x_UUID " $i; done)
+		    ostuuid_from_index $i; done)
 	add_pool $POOL "$FSNAME-OST[$TGT_FIRST-$TGT_MAX/3]" "$tgt"
 	create_dir $dir $POOL
 	stack_trap "rm -rf $POOL_ROOT; wait_delete_completed"
@@ -1513,7 +1518,7 @@ test_25() {
 		do_facet mgs "lctl pool_add $FSNAME.$POOL$i OST0000; sync"
 		wait_update $HOSTNAME "lctl get_param -n \
 			lov.$FSNAME-*.pools.$POOL$i | sort -u |
-			tr '\n' ' ' " "$FSNAME-OST0000_UUID " >/dev/null ||
+			tr '\n' ' ' " "$(ostuuid_from_index 0) " >/dev/null ||
 				error "pool_add failed: $1; $2"
 
 		facet_failover $SINGLEMDS ||
@@ -1554,13 +1559,13 @@ test_26() {
 	do_facet mgs "lctl pool_add $FSNAME.$POOL2 OST0000; sync"
 	wait_update $HOSTNAME "lctl get_param -n \
 		lov.$FSNAME-*.pools.$POOL2 | sort -u |
-		grep $FSNAME-OST0000_UUID " "$FSNAME-OST0000_UUID" ||
+		grep $(ostuuid_from_index 0)" "$(ostuuid_from_index 0)" ||
 			error "pool_add failed: $1; $2"
 
 	do_facet mgs "lctl pool_add $FSNAME.$POOL2 OST0002; sync"
 	wait_update $HOSTNAME "lctl get_param -n \
 		lov.$FSNAME-*.pools.$POOL2 | sort -u |
-		grep $FSNAME-OST0002_UUID" "$FSNAME-OST0002_UUID" ||
+		grep $(ostuuid_from_index 2)" "$(ostuuid_from_index 2)" ||
 			error "pool_add failed: $1; $2"
 
 	# Veriy that the pool got created and is usable
