@@ -752,7 +752,7 @@ migrate_open_files(const char *name, enum llapi_migration_flags migration_flags,
 	 * Ensure param and layout are mutually exclusive.
 	 * If both are set, it indicates a programming error in the caller.
 	 */
-	if (param != NULL && layout != NULL) {
+	if (param && layout) {
 		*err_str = "both param and layout specified";
 		return -EINVAL;
 	}

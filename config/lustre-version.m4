@@ -27,4 +27,13 @@ AC_DEFINE_UNQUOTED([LUSTRE_FIX], [$LUSTRE_FIX], [Fourth number in the Lustre ver
 # divergence from the Lustre client code in the upstream Linux kernel code.
 AC_DEFINE_UNQUOTED([LUSTRE_VERSION_STRING], ["$PACKAGE_VERSION"], [A copy of PACKAGE_VERSION])
 
+# Enable only for version before 2.20.53
+AS_IF([test "$LUSTRE_MAJOR" -lt 2 ||
+       (test "$LUSTRE_MAJOR" -eq 2 && test "$LUSTRE_MINOR" -lt 20) ||
+       (test "$LUSTRE_MAJOR" -eq 2 && test "$LUSTRE_MINOR" -eq 20 &&
+        test "$LUSTRE_PATCH" -lt 53)],
+      [ENABLE_LFS_MIGRATE=yes])
+
+AM_CONDITIONAL([ENABLE_LFS_MIGRATE], [test "x$ENABLE_LFS_MIGRATE" = "xyes"])
+
 ]) # LUSTRE_VERSION_CPP_MACROS

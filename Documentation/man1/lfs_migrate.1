@@ -33,6 +33,12 @@ lfs_migrate \- migrate files between Lustre OSTs
 .RI [ FILE | FID | DIR ] ...
 .YS
 .SH DESCRIPTION
+.B WARNING:
+.B lfs_migrate
+is scheduled for removal after Lustre 2.20. Please use
+.BR lfs-migrate (1)
+instead.
+.PP
 .B lfs_migrate
 is a tool to assist migration of files between Lustre OSTs, possibly also
 restriping the files as it goes. It copies each specified file to a new file,

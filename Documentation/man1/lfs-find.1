@@ -869,11 +869,11 @@ Recursively list all regular files in given directory more than 30 days old:
 Recursively find all files in
 .B test
 that have objects on OST0002 or OST0003 and migrate them to other OSTs. See
-.BR lfs migrate (1)
+.BR lfs-migrate (1)
 for more details:
 .EX
 .RS
-.B # lfs find /mnt/lustrefs --ost 2,3 -type f -print0 | lfs migrate -0
+.B # lfs find /mnt/lustre/test -o OST0002,OST0003 -print0 | lfs migrate -0
 .RE
 .EE
 .PP

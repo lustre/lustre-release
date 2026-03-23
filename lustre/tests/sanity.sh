@@ -8533,7 +8533,7 @@ test_56wa() {
 			error "creating links to $dir/dir1/file1 failed"
 	fi
 
-	# lfs_migrate file
+	# lfs migrate file
 	local cmd="$LFS migrate -v -c $expected $dir/file1"
 
 	echo "$cmd"
@@ -8542,7 +8542,7 @@ test_56wa() {
 	check_stripe_count $dir/file1 $expected
 
 	if (( $MDS1_VERSION >= $(version_code 2.6.90) )); then
-		# lfs_migrate file onto OST 0 if it is on OST 1, or onto
+		# lfs migrate file onto OST 0 if it is on OST 1, or onto
 		# OST 1 if it is on OST 0. This file is small enough to
 		# be on only one stripe.
 		file=$dir/migr_1_ost
@@ -8585,7 +8585,6 @@ run_test 56wa "check 'lfs migrate -c stripe_count' works"
 
 test_56wb() {
 	local file1=$DIR/$tdir/file1
-	local create_pool=false
 	local initial_pool=$($LFS getstripe -p $DIR)
 	local pool_list=()
 	local pool=""
@@ -8618,9 +8617,8 @@ test_56wb() {
 		pool=${POOL:-testpool}
 		[ "$initial_pool" = "$pool" ] && pool="testpool2"
 		echo -n "Creating pool '$pool'..."
-		create_pool=true
-		pool_add $pool &> /dev/null ||
-			error "pool_add failed"
+		create_pool $FSNAME.$pool ||
+			error "create OST pool $pool failed"
 		echo "done."
 
 		echo -n "Adding target to pool..."
@@ -8630,7 +8628,7 @@ test_56wb() {
 	fi
 
 	echo -n "Setting pool using -p option..."
-	$LFS_MIGRATE -y -q --no-rsync -p $pool $file1 &> /dev/null ||
+	$LFS migrate -p $pool $file1 ||
 		error "migrate failed rc = $?"
 	echo "done."
 
@@ -8644,23 +8642,19 @@ test_56wb() {
 	# until some striping information is changed.
 	$LFS migrate -c 1 $file1 &> /dev/null ||
 		error "cannot remove from pool"
-	[ "$($LFS getstripe -p $file1)" ] &&
+	[[ -z "$($LFS getstripe --pool $file1)" ]] ||
 		error "pool still set"
 	echo "done."
 
 	echo -n "Setting pool using --pool option..."
-	$LFS_MIGRATE -y -q --no-rsync --pool $pool $file1 &> /dev/null ||
+	$LFS migrate --pool $pool $file1 ||
 		error "migrate failed rc = $?"
 	echo "done."
 
 	# Clean up
 	rm -f $file1
-	if $create_pool; then
-		destroy_test_pools 2> /dev/null ||
-			error "destroy test pools failed"
-	fi
 }
-run_test 56wb "check lfs_migrate pool support"
+run_test 56wb "check 'lfs migrate' pool support"
 
 test_56wc() {
 	local file1="$DIR/$tdir/$tfile"
@@ -8805,6 +8799,9 @@ test_56wc() {
 run_test 56wc "check unrecognized options for lfs migrate are passed through"
 
 test_56wd() {
+	(( $CLIENT_VERSION < $(version_code 2.20.53) )) ||
+		skip "lfs_migrate is not supported starting with Lustre 2.20.53"
+
 	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
 
 	local file1=$DIR/$tdir/$tfile
@@ -8975,7 +8972,7 @@ test_56xD() {
 
 	echo "without --lustre-dir option"
 	$LFS migrate -o 1 -S 2M --fid $fids||
-		error "failed to run lfs_migrate with --fid argument"
+		error "failed to run lfs migrate with --fid argument"
 
 	$LFS getstripe $tf3
 	stripe_count=$($LFS getstripe --stripe-count $tf3)
@@ -9124,6 +9121,9 @@ check_migrate_links() {
 }
 
 test_56xb() {
+	(( $CLIENT_VERSION < $(version_code 2.20.53) )) ||
+		skip "lfs_migrate is not supported starting with Lustre 2.20.53"
+
 	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
 		skip "Need MDS version at least 2.10.55"
 

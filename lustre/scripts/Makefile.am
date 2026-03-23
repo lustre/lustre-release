@@ -37,7 +37,14 @@ endif
 if UTILS
 sbin_SCRIPTS += ldev lustre_routes_config lustre_routes_conversion \
 		lnet_legacy2yaml
-bin_SCRIPTS   = lfs_migrate
+
+bin_SCRIPTS =
+
+# lfs_migrate is deprecated and scheduled for removal after Lustre 2.20
+# Enable installation for versions before 2.20.53
+if ENABLE_LFS_MIGRATE
+bin_SCRIPTS  += lfs_migrate
+endif
 
 if SERVER
 sbin_SCRIPTS += $(genscripts) lc_mon lhbadm lc_servip

@@ -24,7 +24,6 @@ MANFILES =					\
 	lfs-hsm_set.1				\
 	lfs-hsm_state.1				\
 	lfs-ladvise.1				\
-	lfs_migrate.1				\
 	lfs-migrate.1				\
 	lfs-mirror-copy.1			\
 	lfs-mirror-create.1			\
@@ -49,6 +48,12 @@ MANFILES =					\
 	lfs-setdirstripe.1			\
 	lfs-setquota.1				\
 	lfs-setstripe.1
+
+# lfs_migrate.1 is deprecated and scheduled for removal after Lustre 2.20
+# Enable only for version before 2.20.53
+if ENABLE_LFS_MIGRATE
+MANFILES += lfs_migrate.1
+endif
 
 if MANPAGES
 if UTILS

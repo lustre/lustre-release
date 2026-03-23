@@ -11,6 +11,9 @@
 # This is not a protection against the file being open by another
 # process, but it would catch the worst cases of in-use files, but
 # to be 100% safe the administrator needs to ensure this is safe.
+#
+# WARNING: lfs_migrate is scheduled for removal after Lustre 2.20, please
+# use 'lfs migrate' instead.
 
 RSYNC=${RSYNC:-"rsync"}
 RSYNC_OPTS=${RSYNC_OPTS:-"-a --inplace"}
@@ -120,6 +123,9 @@ cleanup() {
 }
 
 trap cleanup EXIT
+
+# Print deprecation warning to stderr
+echo "WARNING: lfs_migrate is scheduled for removal after Lustre 2.20, please use 'lfs migrate' instead." 1>&2
 
 OPT_AUTOSTRIPE=false
 OPT_CAP=100

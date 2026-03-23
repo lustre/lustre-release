@@ -24,8 +24,6 @@ remove OSTs on a live filesystem without the use of --writeconf with
 Before using this command, you probably want to migrate
 file objects still on the OST by using
 .BR lfs-migrate (1)
-or
-.BR lfs_migrate (1)
 and make sure that there are no remaining file objects on the
 OST by using
 .BR lfs-find (1)
@@ -66,7 +64,6 @@ filesystem package since release 2.11.0
 .SH SEE ALSO
 .BR lfs-find (1),
 .BR lfs-migrate (1),
-.BR lfs_migrate (1),
 .BR lustre (7),
 .BR lctl (8),
 .BR lctl-llog_cancel (8),
