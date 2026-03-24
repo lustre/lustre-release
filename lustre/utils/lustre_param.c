@@ -852,6 +852,23 @@ paths_loop:
 		if (oper == SET_PARAM)
 			goto op_switch;
 
+		/* Skip non-matching params early so we don't read values
+		 * from params that won't be printed (e.g. find_param).
+		 * Only skip regular files; directories must still be
+		 * recursed into since their children may match.
+		 */
+		if (popt->po_find_pattern && S_ISREG(st.st_mode)) {
+			const char *match_name = popt->po_only_pathname ?
+				paths.gl_pathv[i] : param_name;
+
+			if (regexec(popt->po_find_pattern, match_name,
+				    0, NULL, 0) != 0) {
+				free(param_name);
+				param_name = NULL;
+				continue;
+			}
+		}
+
 		lpf = calloc(1, sizeof(*lpf));
 		lpf->lpf_mode = st.st_mode;
 		lpf->lpf_is_symlink = S_ISLNK(lst.st_mode);

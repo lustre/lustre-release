@@ -31619,6 +31619,35 @@ test_401gc() {
 }
 run_test 401gc "check 'lctl find_param' can find params using regex"
 
+test_401gd() {
+	# Verify find_param only reads matching params (LU-20038)
+	local strace_log=$TMP/$tfile.strace
+
+	# find_param for 'memused' should not open brw_stats
+	strace -e trace=openat -o $strace_log \
+		$LCTL find_param memused > /dev/null
+
+	# Should have found at least one match
+	local count=$($LCTL find_param -N memused | wc -l)
+	(( count >= 1 )) ||
+		error "(0) find_param memused found no results"
+
+	# brw_stats should NOT have been opened for reading
+	grep -q "brw_stats.*O_RDONLY" $strace_log &&
+		error "(1) brw_stats was opened, but should not be"
+
+	# job_stats should NOT have been opened for reading
+	grep -q "job_stats.*O_RDONLY" $strace_log &&
+		error "(2) job_stats was opened, but should not be"
+
+	# memused SHOULD have been opened
+	grep -q "memused.*O_RDONLY" $strace_log ||
+		error "(3) memused was not opened, but should be"
+
+	rm -f $strace_log
+}
+run_test 401gd "check 'lctl find_param' does not read non-matching params"
+
 test_402() {
 	[[ $MDS1_VERSION -ge $(version_code 2.7.66) ]] ||
 	[[ $MDS1_VERSION -ge $(version_code 2.7.18.4) &&
