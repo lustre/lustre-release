@@ -729,6 +729,19 @@ out_ldlm:
 		cli->cl_conn_count--;
 		class_disconnect(*exp);
 		*exp = NULL;
+		/*
+		 * Connect failed before obd_disconnect() could be called, so
+		 * client_disconnect_export() was never called and
+		 * ldlm_namespace_free_prior() was skipped.  Call it now so
+		 * that LDLM_NS_STOPPING is set before
+		 * ldlm_namespace_free_post() runs in client_obd_cleanup(),
+		 * preventing a kobject leak and the pool recalc race on the
+		 * namespace.
+		 */
+		if (obd->obd_namespace)
+			ldlm_namespace_free_prior(obd->obd_namespace, imp,
+						  test_bit(OBDF_FORCE,
+							   obd->obd_flags));
 	}
 out_sem:
 	up_write(&cli->cl_sem);
