@@ -2006,31 +2006,31 @@ enum {
 };
 
 struct mdt_rec_setattr {
-	__u32           sa_opcode;
-	__u32           sa_cap;
-	__u32           sa_fsuid;
-	__u32           sa_fsuid_h;
-	__u32           sa_fsgid;
-	__u32           sa_fsgid_h;
-	__u32           sa_suppgid;
-	__u32           sa_suppgid_h;
-	__u32           sa_padding_1;
-	__u32           sa_padding_1_h;
-	struct lu_fid   sa_fid;
-	__u64           sa_valid;
-	__u32           sa_uid;
-	__u32           sa_gid;
-	__u64           sa_size;
-	__u64           sa_blocks;
+	__u32		sa_opcode;
+	__u32		sa_cap;
+	__u32		sa_fsuid;
+	__u32		sa_padding_1_h;
+	__u32		sa_fsgid;
+	__u32		sa_padding_2_h;
+	__u32		sa_suppgid;
+	__u32		sa_padding_3_h;
+	__u32		sa_padding_1;
+	__u32		sa_padding_2;
+	struct lu_fid	sa_fid;
+	__u64		sa_valid;
+	__u32		sa_uid;
+	__u32		sa_gid;
+	__u64		sa_size;
+	__u64		sa_blocks;
 	__s64		sa_mtime;
 	__s64		sa_atime;
 	__s64		sa_ctime;
-	__u32           sa_attr_flags;
-	__u32           sa_mode;
-	__u32           sa_bias;      /* some operation flags */
+	__u32		sa_attr_flags;
+	__u32		sa_mode;
+	__u32		sa_bias;      /* some operation flags */
 	__u32		sa_projid;
-	__u32           sa_padding_4;
-	__u32           sa_padding_5;
+	__u32		sa_padding_4;
+	__u32		sa_padding_5;
 };
 
 /*
@@ -2115,13 +2115,13 @@ struct mdt_rec_create {
 	__u32		cr_opcode;
 	__u32		cr_cap;
 	__u32		cr_fsuid;
-	__u32		cr_fsuid_h;
+	__u32		cr_padding_1_h;
 	__u32		cr_fsgid;
-	__u32		cr_fsgid_h;
+	__u32		cr_padding_2_h;
 	__u32		cr_suppgid1;
-	__u32		cr_suppgid1_h;
+	__u32		cr_padding_3_h;
 	__u32		cr_suppgid2;
-	__u32		cr_suppgid2_h;
+	__u32		cr_padding_4_h;
 	struct lu_fid	cr_fid1;
 	struct lu_fid	cr_fid2;
 	struct lustre_handle cr_open_handle_old; /* in case of open replay */
@@ -2145,137 +2145,137 @@ struct mdt_rec_create {
 
 /* instance of mdt_reint_rec */
 struct mdt_rec_link {
-	__u32           lk_opcode;
-	__u32           lk_cap;
-	__u32           lk_fsuid;
-	__u32           lk_fsuid_h;
-	__u32           lk_fsgid;
-	__u32           lk_fsgid_h;
-	__u32           lk_suppgid1;
-	__u32           lk_suppgid1_h;
-	__u32           lk_suppgid2;
-	__u32           lk_suppgid2_h;
-	struct lu_fid   lk_fid1;
-	struct lu_fid   lk_fid2;
+	__u32		lk_opcode;
+	__u32		lk_cap;
+	__u32		lk_fsuid;
+	__u32		lk_padding_1_h;
+	__u32		lk_fsgid;
+	__u32		lk_padding_2_h;
+	__u32		lk_suppgid1;
+	__u32		lk_padding_3_h;
+	__u32		lk_suppgid2;
+	__u32		lk_padding_4_h;
+	struct lu_fid	lk_fid1;
+	struct lu_fid	lk_fid2;
 	__s64		lk_time;
-	__u64           lk_padding_1;   /* rr_atime */
-	__u64           lk_padding_2;   /* rr_ctime */
-	__u64           lk_padding_3;   /* rr_size */
-	__u64           lk_padding_4;   /* rr_blocks */
-	__u32           lk_bias;
-	__u32           lk_padding_5;   /* rr_mode */
-	__u32           lk_padding_6;   /* rr_flags */
-	__u32           lk_padding_7;   /* rr_padding_2 */
-	__u32           lk_padding_8;   /* rr_padding_3 */
-	__u32           lk_padding_9;   /* rr_padding_4 */
+	__u64		lk_padding_1;   /* rr_atime */
+	__u64		lk_padding_2;   /* rr_ctime */
+	__u64		lk_padding_3;   /* rr_size */
+	__u64		lk_padding_4;   /* rr_blocks */
+	__u32		lk_bias;
+	__u32		lk_padding_5;   /* rr_mode */
+	__u32		lk_padding_6;   /* rr_flags */
+	__u32		lk_padding_7;   /* rr_padding_2 */
+	__u32		lk_padding_8;   /* rr_padding_3 */
+	__u32		lk_padding_9;   /* rr_padding_4 */
 };
 
 /* instance of mdt_reint_rec */
 struct mdt_rec_unlink {
-	__u32           ul_opcode;
-	__u32           ul_cap;
-	__u32           ul_fsuid;
-	__u32           ul_fsuid_h;
-	__u32           ul_fsgid;
-	__u32           ul_fsgid_h;
-	__u32           ul_suppgid1;
-	__u32           ul_suppgid1_h;
-	__u32           ul_suppgid2;
-	__u32           ul_suppgid2_h;
-	struct lu_fid   ul_fid1;
-	struct lu_fid   ul_fid2;
+	__u32		ul_opcode;
+	__u32		ul_cap;
+	__u32		ul_fsuid;
+	__u32		ul_padding_1_h;
+	__u32		ul_fsgid;
+	__u32		ul_padding_2_h;
+	__u32		ul_suppgid1;
+	__u32		ul_padding_3_h;
+	__u32		ul_suppgid2;
+	__u32		ul_padding_4_h;
+	struct lu_fid	ul_fid1;
+	struct lu_fid	ul_fid2;
 	__s64		ul_time;
-	__u64           ul_padding_2;   /* rr_atime */
-	__u64           ul_padding_3;   /* rr_ctime */
-	__u64           ul_padding_4;   /* rr_size */
-	__u64           ul_padding_5;   /* rr_blocks */
-	__u32           ul_bias;
-	__u32           ul_mode;
-	__u32           ul_padding_6;   /* rr_flags */
-	__u32           ul_padding_7;   /* rr_padding_2 */
-	__u32           ul_padding_8;   /* rr_padding_3 */
-	__u32           ul_padding_9;   /* rr_padding_4 */
+	__u64		ul_padding_2;   /* rr_atime */
+	__u64		ul_padding_3;   /* rr_ctime */
+	__u64		ul_padding_4;   /* rr_size */
+	__u64		ul_padding_5;   /* rr_blocks */
+	__u32		ul_bias;
+	__u32		ul_mode;
+	__u32		ul_padding_6;   /* rr_flags */
+	__u32		ul_padding_7;   /* rr_padding_2 */
+	__u32		ul_padding_8;   /* rr_padding_3 */
+	__u32		ul_padding_9;   /* rr_padding_4 */
 };
 
 /* instance of mdt_reint_rec */
 struct mdt_rec_rename {
-	__u32           rn_opcode;
-	__u32           rn_cap;
-	__u32           rn_fsuid;
-	__u32           rn_fsuid_h;
-	__u32           rn_fsgid;
-	__u32           rn_fsgid_h;
-	__u32           rn_suppgid1;
-	__u32           rn_suppgid1_h;
-	__u32           rn_suppgid2;
-	__u32           rn_suppgid2_h;
-	struct lu_fid   rn_fid1;
-	struct lu_fid   rn_fid2;
+	__u32		rn_opcode;
+	__u32		rn_cap;
+	__u32		rn_fsuid;
+	__u32		rn_padding_1_h;
+	__u32		rn_fsgid;
+	__u32		rn_padding_2_h;
+	__u32		rn_suppgid1;
+	__u32		rn_padding_3_h;
+	__u32		rn_suppgid2;
+	__u32		rn_padding_4_h;
+	struct lu_fid	rn_fid1;
+	struct lu_fid	rn_fid2;
 	__s64		rn_time;
-	__u64           rn_padding_1;   /* rr_atime */
-	__u64           rn_padding_2;   /* rr_ctime */
-	__u64           rn_padding_3;   /* rr_size */
-	__u64           rn_padding_4;   /* rr_blocks */
-	__u32           rn_bias;        /* some operation flags */
-	__u32           rn_mode;        /* cross-ref rename has mode */
-	__u32           rn_padding_5;   /* rr_flags */
-	__u32           rn_padding_6;   /* rr_padding_2 */
-	__u32           rn_padding_7;   /* rr_padding_3 */
-	__u32           rn_padding_8;   /* rr_padding_4 */
+	__u64		rn_padding_1;   /* rr_atime */
+	__u64		rn_padding_2;   /* rr_ctime */
+	__u64		rn_padding_3;   /* rr_size */
+	__u64		rn_padding_4;   /* rr_blocks */
+	__u32		rn_bias;        /* some operation flags */
+	__u32		rn_mode;        /* cross-ref rename has mode */
+	__u32		rn_padding_5;   /* rr_flags */
+	__u32		rn_padding_6;   /* rr_padding_2 */
+	__u32		rn_padding_7;   /* rr_padding_3 */
+	__u32		rn_padding_8;   /* rr_padding_4 */
 };
 
 /* instance of mdt_reint_rec */
 struct mdt_rec_setxattr {
-	__u32           sx_opcode;
-	__u32           sx_cap;
-	__u32           sx_fsuid;
-	__u32           sx_fsuid_h;
-	__u32           sx_fsgid;
-	__u32           sx_fsgid_h;
-	__u32           sx_suppgid1;
-	__u32           sx_suppgid1_h;
-	__u32           sx_suppgid2;
-	__u32           sx_suppgid2_h;
-	struct lu_fid   sx_fid;
-	__u64           sx_padding_1;   /* These three are rr_fid2 */
-	__u32           sx_padding_2;
-	__u32           sx_padding_3;
-	__u64           sx_valid;
+	__u32		sx_opcode;
+	__u32		sx_cap;
+	__u32		sx_fsuid;
+	__u32		sx_padding_1_h;
+	__u32		sx_fsgid;
+	__u32		sx_padding_2_h;
+	__u32		sx_suppgid1;
+	__u32		sx_padding_3_h;
+	__u32		sx_suppgid2;
+	__u32		sx_padding_4_h;
+	struct lu_fid	sx_fid;
+	__u64		sx_padding_1;   /* These three are rr_fid2 */
+	__u32		sx_padding_2;
+	__u32		sx_padding_3;
+	__u64		sx_valid;
 	__s64		sx_time;
-	__u64           sx_padding_5;   /* rr_ctime */
-	__u64           sx_padding_6;   /* rr_size */
-	__u64           sx_padding_7;   /* rr_blocks */
-	__u32           sx_size;
-	__u32           sx_flags;
-	__u32           sx_padding_8;   /* rr_flags */
-	__u32           sx_padding_9;   /* rr_padding_2 */
-	__u32           sx_padding_10;  /* rr_padding_3 */
-	__u32           sx_padding_11;  /* rr_padding_4 */
+	__u64		sx_padding_5;   /* rr_ctime */
+	__u64		sx_padding_6;   /* rr_size */
+	__u64		sx_padding_7;   /* rr_blocks */
+	__u32		sx_size;
+	__u32		sx_flags;
+	__u32		sx_padding_8;   /* rr_flags */
+	__u32		sx_padding_9;   /* rr_padding_2 */
+	__u32		sx_padding_10;  /* rr_padding_3 */
+	__u32		sx_padding_11;  /* rr_padding_4 */
 };
 
 /* instance of mdt_reint_rec. FLR: for file resync MDS_REINT_RESYNC RPC. */
 struct mdt_rec_resync {
-	__u32           rs_opcode;
-	__u32           rs_cap;
-	__u32           rs_fsuid;
-	__u32           rs_fsuid_h;
-	__u32           rs_fsgid;
-	__u32           rs_fsgid_h;
-	__u32           rs_suppgid1;
-	__u32           rs_suppgid1_h;
-	__u32           rs_suppgid2;
-	__u32           rs_suppgid2_h;
-	struct lu_fid   rs_fid;
+	__u32		rs_opcode;
+	__u32		rs_cap;
+	__u32		rs_fsuid;
+	__u32		rs_padding_1_h;
+	__u32		rs_fsgid;
+	__u32		rs_padding_2_h;
+	__u32		rs_suppgid1;
+	__u32		rs_padding_3_h;
+	__u32		rs_suppgid2;
+	__u32		rs_padding_4_h;
+	struct lu_fid	rs_fid;
 	__u8		rs_padding0[sizeof(struct lu_fid)];
 	struct lustre_handle rs_lease_handle;	/* rr_mtime */
 	__s64		rs_padding1;	/* rr_atime */
 	__s64		rs_padding2;	/* rr_ctime */
-	__u64           rs_padding3;	/* rr_size */
-	__u64           rs_padding4;	/* rr_blocks */
-	__u32           rs_bias;
-	__u32           rs_padding5;	/* rr_mode */
-	__u32           rs_padding6;	/* rr_flags */
-	__u32           rs_padding7;	/* rr_flags_h */
+	__u64		rs_padding3;	/* rr_size */
+	__u64		rs_padding4;	/* rr_blocks */
+	__u32		rs_bias;
+	__u32		rs_padding5;	/* rr_mode */
+	__u32		rs_padding6;	/* rr_flags */
+	__u32		rs_padding7;	/* rr_flags_h */
 	/* The rr_mirror_id_old field used the last reserved field
 	 * in mdt_rec_reint but is not used for any other reint type.
 	 * There are lots of unused fields in this strict that could be
@@ -2284,9 +2284,9 @@ struct mdt_rec_resync {
 	 * need it.  The other unused fields could potentially be needed
 	 * eventually (timestamps or size/blocks) so they were not used.
 	 */
-	__u32           rs_mirror_id_new; /* rr_umask */
-	__u16           rs_mirror_id_old; /* deprecated 2.16.0 */
-	__u16           rs_padding9;	/* rr_padding_4 */
+	__u32		rs_mirror_id_new; /* rr_umask */
+	__u16		rs_mirror_id_old; /* deprecated 2.16.0 */
+	__u16		rs_padding9;	/* rr_padding_4 */
 };
 
 /*
@@ -2298,30 +2298,30 @@ struct mdt_rec_resync {
  * rr_padding_x fields, then update lustre_swab_mdt_rec_reint() also.
  */
 struct mdt_rec_reint {
-	__u32           rr_opcode;
-	__u32           rr_cap;
-	__u32           rr_fsuid;
-	__u32           rr_fsuid_h;
-	__u32           rr_fsgid;
-	__u32           rr_fsgid_h;
-	__u32           rr_suppgid1;
-	__u32           rr_suppgid1_h;
-	__u32           rr_suppgid2;
-	__u32           rr_suppgid2_h;
-	struct lu_fid   rr_fid1;
-	struct lu_fid   rr_fid2;
+	__u32		rr_opcode;
+	__u32		rr_cap;
+	__u32		rr_fsuid;
+	__u32		rr_padding_1_h;
+	__u32		rr_fsgid;
+	__u32		rr_padding_2_h;
+	__u32		rr_suppgid1;
+	__u32		rr_padding_3_h;
+	__u32		rr_suppgid2;
+	__u32		rr_padding_4_h;
+	struct lu_fid	rr_fid1;
+	struct lu_fid	rr_fid2;
 	__s64		rr_mtime;
 	__s64		rr_atime;
 	__s64		rr_ctime;
-	__u64           rr_size;
-	__u64           rr_blocks;
-	__u32           rr_bias;
-	__u32           rr_mode;
-	__u32           rr_flags;
-	__u32           rr_flags_h;
-	__u32           rr_umask;
+	__u64		rr_size;
+	__u64		rr_blocks;
+	__u32		rr_bias;
+	__u32		rr_mode;
+	__u32		rr_flags;
+	__u32		rr_flags_h;
+	__u32		rr_umask;
 	__u16		rr_mirror_id_old; /* deprecated 2.16.0 */
-	__u16           rr_padding_4; /* also fix lustre_swab_mdt_rec_reint */
+	__u16		rr_padding_4; /* also fix lustre_swab_mdt_rec_reint */
 };
 #define rr_mirror_id_new rr_umask
 
