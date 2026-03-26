@@ -42,6 +42,11 @@ MANFILES =					\
 	lfs-pcc-pin.1				\
 	lfs-pcc-state.1				\
 	lfs-pcc-unpin.1				\
+	lfs-pool.1				\
+	lfs-pool-list.1				\
+	lfs-pool-pin.1				\
+	lfs-pool-pin_info.1			\
+	lfs-pool-unpin.1			\
 	lfs-project.1				\
 	lfs-quota.1				\
 	lfs-rmfid.1				\

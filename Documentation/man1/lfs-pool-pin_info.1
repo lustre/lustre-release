@@ -1,0 +1,131 @@
+.TH LFS-POOL-PIN_INFO 1 2026-09-14 "Lustre" "Lustre User Utilities"
+.SH NAME
+lfs-pool-pin_info \- report OST pool pinning status
+.SH SYNOPSIS
+.SY "lfs pool pin_info"
+.B --pool
+.IR POOL
+.RB [ --quiet ]
+.RB [ --file ]
+.IR FILE " | " DIRECTORY " ..."
+.SY "lfs pool pin_info"
+.B --pool
+.IR POOL
+.RB [ --quiet ]
+.B --fid
+.IR MOUNT
+.IR FID " ..."
+.YS
+.SH DESCRIPTION
+The
+.B lfs pool pin_info
+subcommand queries the
+.B lustre.pin
+extended attribute of Lustre files and directories in order to report whether
+they are pinned to a particular OST pool.  Pool pins are stored as YAML entries
+of the form
+.B pool:
+.IR POOL
+inside the
+.B lustre.pin
+attribute, alongside any other keys that may be present.
+.PP
+For each target specified on the command line,
+.B lfs pool pin_info
+checks whether its
+.B lustre.pin
+attribute currently contains a
+.B pool
+entry for the requested
+.IR POOL .
+The output consists of one line per argument in the form
+.I "TARGET:POOL: pinned"
+or
+.I "TARGET:POOL: UNPINNED".
+.PP
+The
+.B --fid
+form of the command operates on files referenced by Lustre FIDs beneath the
+filesystem mounted at
+.IR MOUNT ,
+while the default and
+.B --file
+forms operate on filesystem paths.
+.SH OPTIONS
+.TP
+.BR --pool " " POOL
+Name of the OST pool whose pin status should be queried.  The name must
+consist of only alphanumeric characters, underscores and hyphens, and may
+optionally be qualified with an
+.IR fsname
+prefix (e.g.
+.IR fsname . POOL ),
+which is discarded before the pool name is used.
+.TP
+.BR -f ", " --file
+Interpret remaining arguments as filesystem paths (this is the default if
+neither
+.B --file
+nor
+.B --fid
+is given).
+.TP
+.BR -F ", " --fid " " MOUNT
+Interpret remaining arguments as Lustre FIDs within the filesystem mounted at
+.IR MOUNT .
+This option is mutually exclusive with
+.BR --file .
+.TP
+.BR -q ", " --quiet
+Suppress both the per-target error messages (such as a target that cannot be
+opened or an unrecognized FID) and the per-target
+.IR "TARGET:POOL: pinned" " / " "TARGET:POOL: UNPINNED"
+status lines; the exit status still reflects the pinning state and any errors
+encountered.
+.TP
+.BR -h ", " --help
+Display brief usage information for the
+.B lfs pool pin_info
+subcommand.
+.SH EXIT STATUS
+The
+.B lfs pool pin_info
+command returns a status that reflects both the success of the query and the
+pinning state of the targets:
+.TP
+.B 0
+All specified targets were successfully queried and are pinned to the requested
+.IR POOL .
+.TP
+.B 1
+All specified targets were successfully queried but at least one target is not
+pinned to the requested
+.IR POOL .
+.TP
+.B > 1
+An argument or lookup error occurred, such as an invalid pool name, an
+unreachable filesystem, or a missing file or FID.  In these cases the exit
+status is a positive errno value corresponding to the first error encountered.
+.SH EXAMPLES
+Check whether a file is pinned to pool scratch:
+.EX
+.B $ lfs pool pin_info --pool scratch /mnt/testfs/file
+.EE
+.PP
+Check whether a file referenced by FID is pinned to pool scratch:
+.EX
+.B $ lfs pool pin_info --pool scratch --fid /mnt/testfs 0x200000401:0x1:0x0
+.EE
+.SH AVAILABILITY
+The
+.B lfs pool pin_info
+command is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-pool (1),
+.BR lfs-pool-pin (1),
+.BR lfs-pool-unpin (1),
+.BR llapi_pool_is_pinned_file (3),
+.BR lustre (7)

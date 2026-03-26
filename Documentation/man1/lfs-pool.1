@@ -1,0 +1,84 @@
+.TH LFS-POOL 1 2026-08-07 "Lustre" "Lustre User Utilities"
+.SH NAME
+lfs-pool \- commands used to manage OST pools and pool pinning via lustre.pin
+.SH SYNOPSIS
+.B lfs pool
+.RB [ list | pin | unpin | pin_info ]
+.RI [ options ]
+.RI [ arguments ]
+.SH DESCRIPTION
+The
+.B lfs pool
+subcommands list OST pools, and manipulate the
+.B lustre.pin
+extended attribute of Lustre files and directories in order to record whether they are
+pinned to a particular OST pool.  Pool pins are stored as YAML entries of the form
+.B pool:
+.IR POOL
+inside the
+.B lustre.pin
+attribute, alongside any other keys that may be present.
+.PP
+The following subcommands are available:
+.TP
+.B lfs pool list \fR\fIFSNAME\fR[.\fIPOOLNAME\fR] | \fIPATHNAME\fR
+List the pools on
+.IR FSNAME ,
+or the OSTs in
+.IR FSNAME . POOLNAME ,
+or the pool associated with
+.IR PATHNAME .
+This subcommand is also available as the top-level
+.B lfs pool_list
+command, kept for backward compatibility.
+.TP
+.B lfs pool pin
+Ensure that a
+.B pool
+entry for the specified
+.IR POOL
+exists in the
+.B lustre.pin
+attribute of each target.
+See
+.BR lfs-pool-pin (1)
+for full details.
+.TP
+.B lfs pool unpin
+Remove the
+.B pool
+entry for
+.IR POOL
+from the
+.B lustre.pin
+attribute of each target.
+See
+.BR lfs-pool-unpin (1)
+for full details.
+.TP
+.B lfs pool pin_info
+Report whether the
+.B lustre.pin
+attribute of each target contains a
+.B pool
+entry for the requested
+.IR POOL .
+See
+.BR lfs-pool-pin_info (1)
+for full details.
+.SH AVAILABILITY
+The
+.BR "lfs pool pin" ", " unpin " and " pin_info
+subcommands are part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-getstripe (1),
+.BR lfs-pool-pin (1),
+.BR lfs-pool-pin_info (1),
+.BR lfs-pool-unpin (1),
+.BR llapi_pool_pin_file (3),
+.BR llapi_pool_unpin_file (3),
+.BR llapi_pool_is_pinned_file (3),
+.BR lustre (7)

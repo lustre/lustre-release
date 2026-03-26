@@ -1,0 +1,144 @@
+.TH LFS-POOL-UNPIN 1 2026-09-14 "Lustre" "Lustre User Utilities"
+.SH NAME
+lfs-pool-unpin \- unpin files, directories or FIDs from an OST pool
+.SH SYNOPSIS
+.SY "lfs pool unpin"
+.RB [ --pool
+.IR POOL ]
+.RB [ --quiet ]
+.RB [ --file ]
+.IR FILE " | " DIRECTORY " ..."
+.SY "lfs pool unpin"
+.RB [ --pool
+.IR POOL ]
+.RB [ --quiet ]
+.B --fid
+.IR MOUNT
+.IR FID " ..."
+.YS
+.SH DESCRIPTION
+The
+.B lfs pool unpin
+subcommand removes the restriction on the named
+.IR FILE (s),
+and/or files in the named
+.IR DIRECTORY (/ies),
+so that there are no longer restrictions on migrating the file from the named
+.IR POOL .
+.PP
+.B lfs pool unpin
+removes a
+.B pool
+entry for the selected
+.IR POOL
+from the
+.B lustre.pin
+attribute.  If no matching entry is present, the command succeeds without
+modifying the attribute.  When the last entry is removed, the
+.B lustre.pin
+attribute itself may be deleted.
+.PP
+When the
+.B --pool
+option is omitted,
+.IR POOL
+is inferred from the primary mirror layout of each file or directory.  If the
+layout does not have an associated pool, the operation fails for that target
+and an error message is printed.
+.PP
+The
+.B --fid
+form of the command operates on files referenced by Lustre FIDs beneath the
+filesystem mounted at
+.IR MOUNT ,
+while the default and
+.B --file
+forms operate on filesystem paths.
+.PP
+Updating the
+.B lustre.pin
+attribute requires both appropriate write permissions on the target and
+sufficient privileges on the MDT.  If these checks fail the operation will
+return
+.BR EPERM ,
+typically due to the
+.B mdt.enable_pin_gid
+policy; see
+.BR mdt.enable_pin_gid (4)
+for details.
+.SH OPTIONS
+.TP
+.BR --pool " " POOL
+Name of the OST pool that should be unpinned from the specified files.  The
+name must consist of only alphanumeric characters, underscores and hyphens,
+and may optionally be qualified with an
+.IR fsname
+prefix (e.g.
+.IR fsname . POOL ),
+which is discarded before the pool name is used.
+.TP
+.BR -f ", " --file
+Interpret remaining arguments as filesystem paths (this is the default if
+neither
+.B --file
+nor
+.B --fid
+is given).
+.TP
+.BR -F ", " --fid " " MOUNT
+Interpret remaining arguments as Lustre FIDs within the filesystem mounted at
+.IR MOUNT .
+This option is mutually exclusive with
+.BR --file .
+.TP
+.BR -q ", " --quiet
+Suppress per-target error messages (such as a target that cannot be opened or
+an unrecognized FID); the exit status still reflects any errors encountered.
+.TP
+.BR -h ", " --help
+Display brief usage information for the
+.B lfs pool unpin
+subcommand.
+.SH EXIT STATUS
+The
+.B lfs pool unpin
+command returns 0 if every target was pinned to the requested (or inferred)
+pool and is now unpinned, or 1 if one or more targets were not pinned there to
+begin with, could not be unpinned (for example due to insufficient
+privileges; see
+.BR mdt.enable_pin_gid (4)
+for the MDT-side policy controlling which users may pin or unpin files), or
+otherwise did not end up unpinned; unpinning a target that had nothing to
+unpin is not treated as an error and does not modify
+.BR lustre.pin .
+A non-zero exit status other than 1 is returned if any argument is invalid,
+a pool cannot be inferred when required, or a target could not be opened.
+.SH EXAMPLES
+Unpin a directory tree and a single file from the pool scratch:
+.EX
+.B $ lfs pool unpin --pool scratch /mnt/testfs/proj /mnt/testfs/file
+.EE
+.PP
+Unpin a file from the pool inferred from its primary mirror layout:
+.EX
+.B $ lfs pool unpin /mnt/testfs/file
+.EE
+.PP
+Unpin a file referenced by FID from the pool scratch:
+.EX
+.B $ lfs pool unpin --pool scratch --fid /mnt/testfs 0x200000401:0x1:0x0
+.EE
+.SH AVAILABILITY
+The
+.B lfs pool unpin
+command is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.SH SEE ALSO
+.BR lfs (1),
+.BR lfs-pool (1),
+.BR lfs-pool-pin (1),
+.BR lfs-pool-pin_info (1),
+.BR llapi_pool_unpin_file (3),
+.BR mdt.enable_pin_gid (4),
+.BR lustre (7)

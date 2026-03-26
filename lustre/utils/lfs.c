@@ -138,6 +138,10 @@ static int lfs_pcc_unpin(int argc, char **argv);
 static int lfs_pcc_state(int argc, char **argv);
 static int lfs_pcc_delete(int argc, char **argv);
 static int lfs_pcc(int argc, char **argv);
+static int lfs_pool_pin(int argc, char **argv);
+static int lfs_pool_pin_info(int argc, char **argv);
+static int lfs_pool_unpin(int argc, char **argv);
+static int lfs_pool(int argc, char **argv);
 
 static int lfs_migrate_to_dom(int fd_src, int fd_dst, char *name,
 			      enum llapi_migration_flags migration_flags,
@@ -371,7 +375,30 @@ command_t pcc_cmdlist[] = {
 };
 LFS_SUBCMD(pcc);
 
-/*
+/**
+ * command_t pool_cmdlist - lfs pool commands.
+ */
+command_t pool_cmdlist[] = {
+	{ .pc_name = "list", .pc_func = lfs_poollist,
+	  .pc_help = "List pools or pool OSTs.\n"
+		"usage: lfs pool list <fsname>[.<pool>] | <pathname>\n" },
+	{ .pc_name = "pin", .pc_func = lfs_pool_pin,
+	  .pc_help = "Pin files or directories to an OST pool.\n"
+		"usage: lfs pool pin [--pool POOL] [-q] [--file] FILE...\n"
+		"\tlfs pool pin [--pool POOL] [-q] --fid MOUNT FID...\n" },
+	{ .pc_name = "unpin", .pc_func = lfs_pool_unpin,
+	  .pc_help = "Remove an OST pool pin from files or directories.\n"
+		"usage: lfs pool unpin [--pool POOL] [-q] [--file] FILE...\n"
+		"\tlfs pool unpin [--pool POOL] [-q] --fid MOUNT FID...\n" },
+	{ .pc_name = "pin_info", .pc_func = lfs_pool_pin_info,
+	  .pc_help = "Report whether files, directories or FIDs are pinned to an OST pool.\n"
+		"usage: lfs pool pin_info --pool POOL [-q] [--file] FILE...\n"
+		"\tlfs pool pin_info --pool POOL [-q] --fid MOUNT FID...\n" },
+	{ .pc_help = NULL }
+};
+LFS_SUBCMD(pool);
+
+/**
  * command_t hsm_cmdlist - lfs hsm commands.
  */
 command_t hsm_cmdlist[] = {
@@ -688,6 +715,12 @@ command_t cmdlist[] = {
 	 "lfs pcc delete - delete the PCC layout componenet for given files\n"
 	 "lfs pcc pin - pin give files for PCC\n"
 	 "lfs pcc unpin - unpin given files for PCC\n"},
+	{"pool", lfs_pool, pool_cmdlist,
+	 "lfs commands used to manage OST pools and pool pinning.\n"
+	 "lfs pool list  - list pools or pool OSTs\n"
+	 "lfs pool pin   - pin files/directories or FIDs to an OST pool\n"
+	 "lfs pool unpin - unpin files/directories or FIDs from an OST pool\n"
+	 "lfs pool pin_info - report whether files/directories or FIDs are pinned to an OST pool\n"},
 	{ 0, 0, 0, NULL }
 };
 
@@ -11541,6 +11574,19 @@ static inline int has_lqa_option(int argc, char **argv)
 	return 0;
 }
 
+/*
+ * Strip a leading "fsname." qualifier from a --pool/--not-pool argument,
+ * matching llapi_pool_name_validate()'s handling of the same "fsname.pool"
+ * notation elsewhere, so lfs pool pin/unpin/pin_info accept it too instead
+ * of rejecting it as an illegal character.
+ */
+static inline char *lfs_poolarg_strip_fsname(char *pool)
+{
+	char *dot = strchr(pool, '.');
+
+	return dot ? dot + 1 : pool;
+}
+
 /* special grace time, only notify the user when its quota is over soft limit
  * but doesn't block new writes until the hard limit is reached.
  */
@@ -12189,6 +12235,605 @@ out:
 
 	free(qctl);
 	return rc;
+}
+
+/*
+ * llapi_layout_get_by_fd()/llapi_layout_get_by_xattr() leave the layout
+ * cursor on the *last* component parsed, not the first one, so a bare
+ * llapi_layout_pool_name_get() call after them reports the last component's
+ * pool. Reset to the first component first so callers doing pin/unpin pool
+ * inference get the pool of the first component instead.
+ *
+ * For a mirrored file this is the first component of the first (primary)
+ * mirror, which is the intent. For a plain PFL/composite file with no
+ * mirroring, it is simply the first component's pool: if later components
+ * name a different pool, that difference is silently ignored here.
+ */
+static int layout_primary_pool_name_get(struct llapi_layout *layout,
+					char *pool_buf, size_t buf_len)
+{
+	int rc;
+
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	if (rc < 0)
+		return rc;
+
+	return llapi_layout_pool_name_get(layout, pool_buf, buf_len);
+}
+
+/**
+ * lfs_pool_pin_open_target() - Open one pin/unpin target and resolve its pool.
+ * @prefix: Message prefix (argv[0]).
+ * @target: Path or FID string as given on the command line.
+ * @desc: Pre-formatted, already-quoted description of @target for messages,
+ *        e.g. "'/path/to/file'" or "FID '0x...' on '/mnt/lustre'".
+ * @by_fid: Whether @target is a FID (opened via @rootfd) or a path.
+ * @rootfd: Open fd for the Lustre mount @target's FID is resolved against;
+ *          unused unless @by_fid.
+ * @quiet: Suppress the diagnostic output on failure.
+ * @pool: Pool given via --pool, or NULL to infer one from @target's primary
+ *        mirror layout.
+ * @pool_buf: Scratch buffer to receive the inferred pool name; unused if
+ *            @pool is non-NULL.
+ * @pool_buf_len: Size of @pool_buf.
+ * @pool_for_target: Set to @pool, or to @pool_buf once it holds the inferred
+ *                    pool name.
+ *
+ * Shared by lfs_pool_pin() and lfs_pool_unpin(), which otherwise differ only
+ * in what they do with the resulting fd and pool name.
+ *
+ * Return: an open fd (the caller must close it) on success, or a negative
+ *	errno on failure; unless @quiet, a message has already been printed
+ *	for the failure.
+ */
+static int lfs_pool_pin_open_target(const char *prefix, const char *target,
+				    const char *desc, bool by_fid, int rootfd,
+				    bool quiet, const char *pool,
+				    char *pool_buf, size_t pool_buf_len,
+				    const char **pool_for_target)
+{
+	struct llapi_layout *layout;
+	int fd;
+	int rc2;
+	int err;
+
+	*pool_for_target = pool;
+
+	if (by_fid) {
+		struct lu_fid fid;
+
+		rc2 = llapi_fid_parse(target, &fid, NULL);
+		if (rc2 < 0) {
+			if (!quiet)
+				fprintf(stderr, "%s: unrecognized FID: %s\n",
+					prefix, target);
+			return rc2;
+		}
+
+		fd = llapi_open_by_fid_at(rootfd, &fid, O_RDONLY | O_NONBLOCK);
+		if (fd < 0) {
+			if (!quiet)
+				fprintf(stderr, "%s: cannot open %s: %s\n",
+					prefix, desc, strerror(-fd));
+			return fd;
+		}
+	} else {
+		fd = open(target, O_RDONLY | O_NONBLOCK);
+		if (fd < 0) {
+			err = errno;
+			if (!quiet)
+				fprintf(stderr, "%s: cannot open %s: %s\n",
+					prefix, desc, strerror(err));
+			return -err;
+		}
+	}
+
+	if (pool)
+		return fd;
+
+	layout = llapi_layout_get_by_fd(fd, 0);
+	if (layout == NULL) {
+		err = errno ? errno : EINVAL;
+		if (!quiet)
+			fprintf(stderr, "%s: cannot get layout for %s: %s\n",
+				prefix, desc, strerror(err));
+		close(fd);
+		return -err;
+	}
+
+	rc2 = layout_primary_pool_name_get(layout, pool_buf, pool_buf_len);
+	if (rc2 < 0) {
+		err = errno ? errno : EINVAL;
+		if (!quiet)
+			fprintf(stderr,
+				"%s: cannot get pool name from layout for %s: %s\n",
+				prefix, desc, strerror(err));
+		llapi_layout_free(layout);
+		close(fd);
+		return -err;
+	}
+
+	llapi_layout_free(layout);
+
+	if (pool_buf[0] == '\0') {
+		if (!quiet)
+			fprintf(stderr,
+				"%s: layout for %s has no associated pool; please specify --pool\n",
+				prefix, desc);
+		close(fd);
+		return -ENOENT;
+	}
+
+	*pool_for_target = pool_buf;
+
+	return fd;
+}
+
+/**
+ * lfs_pool_pin() - Parse and execute the "lfs pool pin" subcommand.
+ * @argc: The count of lfs pool pin command line arguments.
+ * @argv: Array of strings for lfs pool pin command line arguments.
+ *
+ * This function parses the "lfs pool pin" options and pins each specified
+ * file, directory or FID to an OST pool by updating its lustre.pin extended
+ * attribute. When --pool is omitted, the pool name is inferred from the
+ * primary mirror layout of each target.
+ *
+ * Return: 0 if all specified targets are successfully pinned, 1 if one
+ *	or more targets could not be pinned to the requested pool, a
+ *	negative error code if a target could not be opened, its FID could
+ *	not be parsed, or (when --pool is omitted) its pool could not be
+ *	inferred from its layout, or CMD_HELP if arguments are invalid.
+ */
+static int lfs_pool_pin(int argc, char **argv)
+{
+	int c;
+	int rc = 0;
+	int rc2;
+	const char *pool = NULL;
+	const char *pool_for_target;
+	char pool_buf[LOV_MAXPOOLNAME + 1];
+	bool by_fid = false;
+	bool mode_set = false;
+	bool quiet = false;
+	bool any_not_pinned = false;
+	const char *client_mount = NULL;
+	int rootfd = -1;
+	struct option long_opts[] = {
+	{ .val = 'f', .name = "file", .has_arg = no_argument },
+	{ .val = 'F', .name = "fid", .has_arg = required_argument },
+	{ .val = 'h', .name = "help", .has_arg = no_argument },
+	{ .val = LFS_POOL_OPT, .name = "pool", .has_arg = required_argument },
+	{ .val = 'q', .name = "quiet", .has_arg = no_argument },
+	{ .name = NULL }
+	};
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, "fF:hq", long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'f':
+			if (mode_set && by_fid) {
+				fprintf(stderr, "%s: cannot mix --file and --fid\n",
+					argv[0]);
+				return CMD_HELP;
+			}
+			mode_set = true;
+			break;
+		case 'F':
+			if (mode_set && !by_fid) {
+				fprintf(stderr, "%s: cannot mix --file and --fid\n",
+					argv[0]);
+				return CMD_HELP;
+			}
+			mode_set = true;
+			client_mount = optarg;
+			by_fid = true;
+			break;
+		case 'h':
+			return CMD_HELP;
+		case LFS_POOL_OPT:
+			optarg = lfs_poolarg_strip_fsname(optarg);
+			if (llint_pool_name_verify(optarg))
+				return CMD_HELP;
+			pool = optarg;
+			break;
+		case 'q':
+			quiet = true;
+			break;
+		case '?':
+		default:
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				argv[0], argv[optind - 1]);
+			return CMD_HELP;
+		}
+	}
+
+	if (argc <= optind) {
+		fprintf(stderr, "%s: must specify one or more %s\n",
+			argv[0], by_fid ? "FIDs" : "file names");
+		return CMD_HELP;
+	}
+	if (by_fid) {
+		/* Resolve and open the Lustre mount once for all FIDs. */
+		rc = llapi_root_path_open(client_mount, &rootfd);
+		if (rc < 0) {
+			fprintf(stderr,
+				"%s: error opening device/fsname '%s': %s\n",
+				argv[0], client_mount, strerror(-rc));
+			return rc;
+		}
+	}
+
+	rc = 0;
+	while (optind < argc) {
+		const char *target = argv[optind++];
+		char desc[PATH_MAX + 32];
+		int fd;
+
+		if (by_fid)
+			snprintf(desc, sizeof(desc), "FID '%s' on '%s'",
+				 target, client_mount);
+		else
+			snprintf(desc, sizeof(desc), "'%s'", target);
+
+		fd = lfs_pool_pin_open_target(argv[0], target, desc, by_fid,
+					      rootfd, quiet, pool, pool_buf,
+					      sizeof(pool_buf),
+					      &pool_for_target);
+		if (fd < 0) {
+			if (rc == 0)
+				rc = fd;
+			continue;
+		}
+
+		rc2 = llapi_pool_pin_fd(fd, pool_for_target);
+		if (rc2 < 0) {
+			int saved_errno = errno;
+
+			any_not_pinned = true;
+			if (rc == 0)
+				rc = -saved_errno;
+			if (!quiet) {
+				fprintf(stderr,
+					"%s: cannot pin %s to pool '%s': %s\n",
+					argv[0], desc, pool_for_target,
+					strerror(saved_errno));
+				if (saved_errno == EPERM)
+					fprintf(stderr,
+						"%s: permission denied while updating lustre.pin; see mdt.enable_pin_gid(4).\n",
+						argv[0]);
+			}
+		}
+
+		close(fd);
+	}
+
+	if (by_fid && rootfd >= 0)
+		close(rootfd);
+
+	if (rc < 0)
+		return rc;
+
+	return any_not_pinned ? 1 : 0;
+}
+
+/**
+ * lfs_pool_unpin() - Parse and execute the "lfs pool unpin" subcommand.
+ * @argc: The count of lfs pool unpin command line arguments.
+ * @argv: Array of strings for lfs pool unpin command line arguments.
+ *
+ * This function parses the "lfs pool unpin" options and removes an OST pool
+ * pin from each specified file, directory or FID by updating its lustre.pin
+ * extended attribute. When --pool is omitted, the pool name is inferred from
+ * the primary mirror layout of each target.
+ *
+ * Unpinning a target that has no matching pin entry does not fail the
+ * operation (lustre.pin is left untouched), but the target still counts
+ * as "not unpinned" in the exit status below, the same as a target that
+ * was pinned to a different pool.
+ *
+ * Like lfs_pool_pin(), a failed unpin operation on an opened target (e.g.
+ * EPERM from llapi_pool_unpin_fd()) is folded into the same "1" outcome as
+ * a target that had nothing to unpin, rather than propagating its errno as
+ * the exit status; errno itself is still left set to the real failure for
+ * the diagnostic message.
+ *
+ * Return: 0 if all specified targets were pinned to the requested/
+ *	inferred pool and are now unpinned, 1 if one or more targets were
+ *	not pinned there to begin with or could not be unpinned, a negative
+ *	error code if a target could not be opened, its FID could not be
+ *	parsed, or (when --pool is omitted) its pool could not be inferred
+ *	from its layout, or CMD_HELP if arguments are invalid.
+ */
+static int lfs_pool_unpin(int argc, char **argv)
+{
+	int c;
+	int rc = 0;
+	int rc2;
+	const char *pool = NULL;
+	const char *pool_for_target;
+	char pool_buf[LOV_MAXPOOLNAME + 1];
+	bool by_fid = false;
+	bool mode_set = false;
+	bool quiet = false;
+	bool any_not_pinned = false;
+	const char *client_mount = NULL;
+	int rootfd = -1;
+	struct option long_opts[] = {
+	{ .val = 'f', .name = "file", .has_arg = no_argument },
+	{ .val = 'F', .name = "fid", .has_arg = required_argument },
+	{ .val = 'h', .name = "help", .has_arg = no_argument },
+	{ .val = LFS_POOL_OPT, .name = "pool", .has_arg = required_argument },
+	{ .val = 'q', .name = "quiet", .has_arg = no_argument },
+	{ .name = NULL }
+	};
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, "fF:hq", long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'f':
+			if (mode_set && by_fid) {
+				fprintf(stderr, "%s: cannot mix --file and --fid\n",
+					argv[0]);
+				return CMD_HELP;
+			}
+			mode_set = true;
+			break;
+		case 'F':
+			if (mode_set && !by_fid) {
+				fprintf(stderr, "%s: cannot mix --file and --fid\n",
+					argv[0]);
+				return CMD_HELP;
+			}
+			mode_set = true;
+			client_mount = optarg;
+			by_fid = true;
+			break;
+		case 'h':
+			return CMD_HELP;
+		case LFS_POOL_OPT:
+			optarg = lfs_poolarg_strip_fsname(optarg);
+			if (llint_pool_name_verify(optarg))
+				return CMD_HELP;
+			pool = optarg;
+			break;
+		case 'q':
+			quiet = true;
+			break;
+		case '?':
+		default:
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				argv[0], argv[optind - 1]);
+			return CMD_HELP;
+		}
+	}
+
+	if (argc <= optind) {
+		fprintf(stderr, "%s: must specify one or more %s\n",
+			argv[0], by_fid ? "FIDs" : "file names");
+		return CMD_HELP;
+	}
+	if (by_fid) {
+		/* Resolve and open the Lustre mount once for all FIDs. */
+		rc = llapi_root_path_open(client_mount, &rootfd);
+		if (rc < 0) {
+			fprintf(stderr,
+				"%s: error opening device/fsname '%s': %s\n",
+				argv[0], client_mount, strerror(-rc));
+			return rc;
+		}
+	}
+
+	rc = 0;
+	while (optind < argc) {
+		const char *target = argv[optind++];
+		char desc[PATH_MAX + 32];
+		int fd;
+
+		if (by_fid)
+			snprintf(desc, sizeof(desc), "FID '%s' on '%s'",
+				 target, client_mount);
+		else
+			snprintf(desc, sizeof(desc), "'%s'", target);
+
+		fd = lfs_pool_pin_open_target(argv[0], target, desc, by_fid,
+					      rootfd, quiet, pool, pool_buf,
+					      sizeof(pool_buf),
+					      &pool_for_target);
+		if (fd < 0) {
+			if (rc == 0)
+				rc = fd;
+			continue;
+		}
+
+		rc2 = llapi_pool_unpin_fd(fd, pool_for_target);
+		if (rc2 < 0) {
+			int saved_errno = errno;
+
+			any_not_pinned = true;
+			if (saved_errno == ENOENT) {
+				/*
+				 * Not currently pinned to pool_for_target:
+				 * not an error, lustre.pin is left untouched.
+				 * No message is printed here, matching the
+				 * documented idempotent behavior; the target
+				 * still counts against the exit status below.
+				 */
+			} else if (!quiet) {
+				fprintf(stderr,
+					"%s: cannot unpin %s from pool '%s': %s\n",
+					argv[0], desc, pool_for_target,
+					strerror(saved_errno));
+				if (saved_errno == EPERM)
+					fprintf(stderr,
+						"%s: permission denied while updating lustre.pin; see mdt.enable_pin_gid(4).\n",
+						argv[0]);
+			}
+		}
+
+		close(fd);
+	}
+
+	if (by_fid && rootfd >= 0)
+		close(rootfd);
+
+	if (rc < 0)
+		return rc;
+
+	return any_not_pinned ? 1 : 0;
+}
+
+/**
+ * lfs_pool_pin_info() - Parse and execute the "lfs pool pin_info" subcommand.
+ * @argc: The count of lfs pool pin_info command line arguments.
+ * @argv: Array of strings for lfs pool pin_info command line arguments.
+ *
+ * This function parses the "lfs pool pin_info" options and, for each
+ * specified file, directory or FID, reports whether its lustre.pin extended
+ * attribute currently contains a pool entry for the requested pool.
+ *
+ * Return semantics are chosen to make it easy to test pin state from
+ * scripts:
+ *   - 0 if all specified targets are pinned to @pool;
+ *   - 1 if at least one specified target is not pinned to @pool and no
+ *     errors were encountered;
+ *   - a negative error code on failure, or CMD_HELP if arguments are
+ *     invalid.
+ */
+static int lfs_pool_pin_info(int argc, char **argv)
+{
+	int c;
+	int rc = 0;
+	const char *pool = NULL;
+	bool any_not_pinned = false;
+	bool by_fid = false;
+	bool mode_set = false;
+	bool quiet = false;
+	const char *client_mount = NULL;
+	int rootfd = -1;
+	struct option long_opts[] = {
+	{ .val = 'f', .name = "file", .has_arg = no_argument },
+	{ .val = 'F', .name = "fid", .has_arg = required_argument },
+	{ .val = 'h', .name = "help", .has_arg = no_argument },
+	{ .val = LFS_POOL_OPT, .name = "pool", .has_arg = required_argument },
+	{ .val = 'q', .name = "quiet", .has_arg = no_argument },
+	{ .name = NULL }
+	};
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, "fF:hq", long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'f':
+			if (mode_set && by_fid) {
+				fprintf(stderr, "%s: cannot mix --file and --fid\n",
+					argv[0]);
+				return CMD_HELP;
+			}
+			mode_set = true;
+			break;
+		case 'F':
+			if (mode_set && !by_fid) {
+				fprintf(stderr, "%s: cannot mix --file and --fid\n",
+					argv[0]);
+				return CMD_HELP;
+			}
+			mode_set = true;
+			client_mount = optarg;
+			by_fid = true;
+			break;
+		case 'h':
+			return CMD_HELP;
+		case LFS_POOL_OPT:
+			optarg = lfs_poolarg_strip_fsname(optarg);
+			if (llint_pool_name_verify(optarg))
+				return CMD_HELP;
+			pool = optarg;
+			break;
+		case 'q':
+			quiet = true;
+			break;
+		case '?':
+		default:
+			fprintf(stderr, "%s: unrecognized option '%s'\n",
+				argv[0], argv[optind - 1]);
+			return CMD_HELP;
+		}
+	}
+
+	if (!pool) {
+		fprintf(stderr, "%s: --pool is required\n", argv[0]);
+		return CMD_HELP;
+	}
+
+	if (argc <= optind) {
+		fprintf(stderr, "%s: must specify one or more %s\n",
+			argv[0], by_fid ? "FIDs" : "file names");
+		return CMD_HELP;
+	}
+	if (by_fid) {
+		/* Resolve and open the Lustre mount once for all FIDs. */
+		rc = llapi_root_path_open(client_mount, &rootfd);
+		if (rc < 0) {
+			fprintf(stderr, "%s: error opening device/fsname '%s': %s\n",
+				argv[0], client_mount, strerror(-rc));
+			return rc;
+		}
+	}
+
+	rc = 0;
+	while (optind < argc) {
+		const char *target = argv[optind++];
+		const char *pool_for_target;
+		char desc[PATH_MAX + 32];
+		int fd;
+		int pinned;
+
+		if (by_fid)
+			snprintf(desc, sizeof(desc), "FID '%s' on '%s'",
+				 target, client_mount);
+		else
+			snprintf(desc, sizeof(desc), "'%s'", target);
+
+		fd = lfs_pool_pin_open_target(argv[0], target, desc, by_fid,
+					      rootfd, quiet, pool, NULL, 0,
+					      &pool_for_target);
+		if (fd < 0) {
+			if (rc == 0)
+				rc = fd;
+			continue;
+		}
+
+		pinned = llapi_pool_is_pinned_fd(fd, pool_for_target);
+		close(fd);
+		if (pinned < 0) {
+			int err = -pinned;
+
+			if (!quiet)
+				fprintf(stderr,
+					"%s: error checking pin state for %s: %s\n",
+					argv[0], desc, strerror(err));
+			if (rc == 0)
+				rc = -err;
+			continue;
+		}
+
+		if (pinned) {
+			if (!quiet)
+				printf("%s:%s: pinned\n", target, pool);
+		} else {
+			if (!quiet)
+				printf("%s:%s: UNPINNED\n", target, pool);
+			any_not_pinned = true;
+		}
+	}
+
+	if (by_fid && rootfd >= 0)
+		close(rootfd);
+
+	if (rc < 0)
+		return rc;
+
+	return any_not_pinned ? 1 : 0;
 }
 
 /* Converts seconds value into format string

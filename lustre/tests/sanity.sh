@@ -21568,12 +21568,9 @@ run_test 157a "llapi pool pinning API tests"
 test_157b()
 {
 	[ "$UID" != 0 ] && skip "must run as root"
-	[ -z "$(lctl get_param -n mdc.*-mdc-*.connect_flags | grep xattr)" ] &&
-		skip_env "must have user_xattr"
 	[ -z "$(which setfattr 2>/dev/null)" ] &&
 		skip_env "could not find setfattr"
-	[ -z "$(which getfattr 2>/dev/null)" ] &&
-		skip_env "could not find getfattr"
+	which getfattr > /dev/null || skip_env "could not find getfattr"
 
 	(( $MDS1_VERSION >= $(version_code v2_17_53-1-g1bf8713c57) )) ||
 		skip "Need MDS >= 2.17.53 for lustre.pin support"
@@ -21610,6 +21607,185 @@ test_157b()
 		error "noxatrr_file lustre.pin '$noxatrr_file_val' != ''"
 }
 run_test 157b "lustre.pin inheritance on create"
+
+test_157c()
+{
+	(( UID != 0 )) && skip "must run as root"
+	which getfattr > /dev/null || skip_env "could not find getfattr"
+
+	(( $MDS1_VERSION >= $(version_code v2_17_53-1-g1bf8713c57) )) ||
+		skip "Need MDS >= 2.17.53 for lustre.pin support"
+
+	local dir=$DIR/$tdir
+	local file=$dir/$tfile
+	local infer_file=$dir/${tfile}.infer
+	local pool
+	local val
+	local layout_pool
+	local out
+	local rc
+
+	test_mkdir $dir
+
+	if [[ -n "$FS_POOL" ]]; then
+		pool=${FS_POOL%% *}
+	else
+		pool="poolpin_test"
+		pool_add $pool || error "pool_add $pool failed"
+		pool_add_targets $pool 0 || error "pool_add_targets $pool failed"
+	fi
+	touch $file || error "touch $file failed"
+
+	$LFS pool pin --pool $pool --file $dir $file ||
+		error "lfs pool pin failed"
+
+	val=$(getfattr --only-values -n lustre.pin $file 2>/dev/null) ||
+		error "getfattr lustre.pin on $file failed"
+	echo "$val" | grep -q "pool: $pool" ||
+		error "lustre.pin value '$val' is missing '$pool'"
+
+	val=$(getfattr --only-values -n lustre.pin $dir 2>/dev/null) ||
+		error "getfattr lustre.pin on $dir failed"
+	echo "$val" | grep -q "pool: $pool" ||
+		error "directory lustre.pin '$val' is missing pool '$pool'"
+
+	out=$($LFS pool pin_info --pool $pool --file $dir $file)
+	rc=$?
+	(( rc == 0 )) ||
+		error "lfs pool pin_info (explicit path) failed with rc=$rc"
+	echo "$out" | grep -F -q "$dir:$pool: pinned" ||
+		error "pin_info did not report $dir pinned to $pool"
+	echo "$out" | grep -F -q "$file:$pool: pinned" ||
+		error "pin_info did not report $file pinned to $pool"
+
+	$LFS pool unpin --pool $pool --file $dir $file ||
+		error "lfs pool unpin failed"
+
+	val=$(getfattr --only-values -n lustre.pin $file 2>/dev/null)
+	[[ -z "$val" ]] ||
+		error "file lustre.pin still present after pool_unpin: '$val'"
+
+	val=$(getfattr --only-values -n lustre.pin $dir 2>/dev/null)
+	[[ -z "$val" ]] ||
+		error "directory lustre.pin is found after pool_unpin: '$val'"
+
+	out=$($LFS pool pin_info --pool $pool --file $dir $file)
+	rc=$?
+	(( rc == 1 )) ||
+		error "fail 'lfs pool pin_info' after unpin (set path) rc=$rc"
+	echo "$out" | grep -F -q "$dir:$pool: UNPINNED" ||
+		error "pin_info did not report $dir unpinned from $pool"
+	echo "$out" | grep -F -q "$file:$pool: UNPINNED" ||
+		error "pin_info did not report $file unpinned from $pool"
+
+	local fid
+	fid=$($LFS path2fid $file) ||
+		error "path2fid $file failed"
+	[[ -n "$fid" ]] || error "empty FID for $file"
+
+	$LFS pool pin --pool $pool --fid $MOUNT "$fid" ||
+		error "lfs pool pin --fid (explicit pool) failed"
+	val=$(getfattr --only-values -n lustre.pin $file 2>/dev/null) ||
+		error "getfattr lustre.pin on $file (fid explicit) failed"
+	echo "$val" | grep -q "pool: $pool" ||
+		error "lustre.pin value '$val' with FID is missing pool '$pool'"
+
+	out=$($LFS pool pin_info --pool $pool --fid $MOUNT "$fid")
+	rc=$?
+	(( rc == 0 )) ||
+		error "fail 'lfs pool pin_info --fid' (set pool): rc=$rc"
+	echo "$out" | grep -F -q "$fid:$pool: pinned" ||
+		error "pin_info did not report FID $fid pinned to $pool"
+
+	$LFS pool unpin --pool $pool --fid $MOUNT "$fid" ||
+		error "lfs pool unpin --fid (explicit pool) failed"
+	val=$(getfattr --only-values -n lustre.pin $file 2>/dev/null)
+	[[ -z "$val" ]] ||
+		error "lustre.pin is found on $file after unpin with FID:'$val'"
+
+	out=$($LFS pool pin_info --pool $pool --fid $MOUNT "$fid")
+	rc=$?
+	(( rc == 1 )) ||
+		error "fail 'lfs pool pin_info --fid' after unpin (set pool): rc=$rc"
+	echo "$out" | grep -F -q "$fid:$pool: UNPINNED" ||
+		error "pin_info did not report FID $fid unpinned from $pool"
+
+	# Test inferred-pool behaviour: create a file whose primary mirror
+	# layout is in $pool, then call "lfs pool pin/unpin" without --pool and
+	# verify lustre.pin reflects that inferred pool. This requires an OST
+	# pool named $pool to exist; if we cannot create or verify such a layout
+	# we skip the inferred-pool subtest but still consider test_157c passed.
+	rm -f $infer_file
+	$LFS setstripe -p $pool $infer_file 2>/dev/null ||
+		skip "$pool does not exist"
+
+	layout_pool=$($LFS getstripe --pool $infer_file 2>/dev/null)
+	if [ "$layout_pool" != "$pool" ]; then
+		skip "$pool does not exist in $infer_file layout ($layout_pool)"
+	fi
+
+	$LFS pool pin $infer_file ||
+		error "lfs pool pin (inferred) failed"
+
+	val=$(getfattr --only-values -n lustre.pin $infer_file 2>/dev/null) ||
+		error "getfattr lustre.pin on $infer_file failed"
+	[[ "$val" =~ "pool: $pool" ]] ||
+		error "lustre.pin value '$val' missing inferred pool '$pool'"
+
+	out=$($LFS pool pin_info --pool $pool $infer_file)
+	rc=$?
+	(( rc == 0 )) ||
+		error "fail: 'lfs pool pin_info' (inferred path): rc=$rc"
+	echo "$out" | grep -F -q "$infer_file:$pool: pinned" ||
+		error "pin_info did not report $infer_file pinned to $pool"
+
+	$LFS pool unpin $infer_file ||
+		error "lfs pool unpin (inferred) failed"
+
+	val=$(getfattr --only-values -n lustre.pin $infer_file 2>/dev/null)
+	[[ -z "$val" ]] ||
+		error "lustre.pin is present after inferred pool_unpin: '$val'"
+
+	out=$($LFS pool pin_info --pool $pool $infer_file)
+	rc=$?
+	(( rc == 1 )) ||
+		error "fail 'lfs pool pin_info' after unpin (inferred path): rc=$rc"
+	echo "$out" | grep -F -q "$infer_file:$pool: UNPINNED" ||
+		error "pin_info did not report $infer_file unpinned from $pool"
+
+	fid=$($LFS path2fid $infer_file) ||
+		error "path2fid $infer_file failed"
+	[ -n "$fid" ] ||
+		error "empty FID for $infer_file"
+
+	$LFS pool pin --fid $MOUNT "$fid" ||
+		error "lfs pool pin --fid (inferred pool) failed"
+	val=$(getfattr --only-values -n lustre.pin $infer_file 2>/dev/null) ||
+		error "getfattr lustre.pin on $infer_file (fid inferred) failed"
+	echo "$val" | grep -q "pool: $pool" ||
+		error "lustre.pin value '$val' with FID is missing pool '$pool'"
+
+	out=$($LFS pool pin_info --pool $pool --fid $MOUNT "$fid")
+	rc=$?
+	(( rc == 0 )) ||
+		error "lfs pool pin_info --fid (inferred pool) failed with rc=$rc"
+	echo "$out" | grep -F -q "$fid:$pool: pinned" ||
+		error "pin_info did not report inferred FID $fid pinned to $pool"
+
+	$LFS pool unpin --fid $MOUNT "$fid" ||
+		error "lfs pool unpin --fid (inferred pool) failed"
+	val=$(getfattr --only-values -n lustre.pin $infer_file 2>/dev/null)
+	[ -z "$val" ] ||
+		error "lustre.pin is found on $infer_file after unpin with FID: '$val'"
+
+	out=$($LFS pool pin_info --pool $pool --fid $MOUNT "$fid")
+	rc=$?
+	(( rc == 1 )) ||
+		error "fail 'lfs pool pin_info --fid' after unpin (inferred pool): rc=$rc"
+	echo "$out" | grep -F -q "$fid:$pool: UNPINNED" ||
+		error "pin_info did not report inferred FID $fid unpinned from $pool"
+}
+run_test 157c "lfs pool pin/unpin commands"
 
 test_160a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
