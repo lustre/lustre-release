@@ -358,6 +358,9 @@ static int parse_opts_early(int argc, char *const argv[], struct mkfs_opts *mop)
 			erase_all++;
 			break;
 #endif
+		case 'h':
+			usage(stdout);
+			return 1;
 		case 'V':
 			version++;
 			fprintf(stdout, "%s %s\n", progname,
@@ -442,8 +445,8 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			ldd->ldd_flags |= LDD_F_SV_TYPE_MGS;
 			break;
 		case 'h':
-			usage(stdout);
-			return 1;
+			/* Already handled in parse_opts_early() */
+			break;
 		case 'i': {
 			char *endptr = NULL;
 			int base;
