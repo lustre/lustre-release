@@ -52,6 +52,60 @@ int replace = 0;
 int verbose = 1;
 int version;
 static int print_only;
+#ifdef TUNEFS
+static int erase_all;
+#endif
+
+static struct option long_opts[] = {
+	{.val = 'B', .name = "backfs-mount-opts",
+	 .has_arg = required_argument},
+	{.val = 'f', .name = "failnode", .has_arg = required_argument},
+	{.val = 'f', .name = "failover", .has_arg = required_argument},
+	{.val = 'G', .name = "mgs", .has_arg = no_argument},
+	{.val = 'h', .name = "help", .has_arg = no_argument},
+	{.val = 'i', .name = "index", .has_arg = required_argument},
+	{.val = 'L', .name = "fsname", .has_arg = required_argument},
+	{.val = 'm', .name = "mgsnode", .has_arg = required_argument},
+	{.val = 'm', .name = "mgsnid", .has_arg = required_argument},
+	{.val = 'n', .name = "dryrun", .has_arg = no_argument},
+	{.val = 'N', .name = "nomgs", .has_arg = no_argument},
+	{.val = 'o', .name = "mountfsoptions", .has_arg = required_argument},
+	{.val = 'p', .name = "param", .has_arg = required_argument},
+	{.val = 'q', .name = "quiet", .has_arg = no_argument},
+	{.val = 'R', .name = "replace", .has_arg = no_argument},
+	{.val = 's', .name = "servicenode", .has_arg = required_argument},
+	{.val = 't', .name = "network", .has_arg = required_argument},
+	{.val = 'u', .name = "comment", .has_arg = required_argument},
+	{.val = 'U', .name = "force-nohostid", .has_arg = no_argument},
+	{.val = 'v', .name = "verbose",	.has_arg = no_argument},
+	{.val = 'V', .name = "version",	.has_arg = no_argument},
+#ifndef TUNEFS
+	{.val = 'b', .name = "backfstype", .has_arg = required_argument},
+	{.val = 'c', .name = "stripe-count-hint",
+	 .has_arg = required_argument},
+	{.val = 'd', .name = "device-size", .has_arg = required_argument},
+	{.val = 'k', .name = "mkfsoptions", .has_arg = required_argument},
+	{.val = 'M', .name = "mdt", .has_arg = no_argument},
+	{.val = 'O', .name = "ost", .has_arg = no_argument},
+	{.val = 'r', .name = "reformat", .has_arg = no_argument},
+#else
+	{.val = 'E', .name = "erase-param", .has_arg = required_argument},
+	{.val = 'e', .name = "erase-params", .has_arg = no_argument},
+	{.val = 'l', .name = "nolocallogs", .has_arg = no_argument},
+	{.val = 'M', .name = "mountdata-reset-from",
+	 .has_arg = required_argument},
+	{.val = 'Q', .name = "quota", .has_arg = no_argument},
+	{.val = 'r', .name = "rename", .has_arg = optional_argument},
+	{.val = 'w', .name = "writeconf", .has_arg = no_argument},
+#endif
+	{}
+};
+static char *short_opts = "B:f:Ghi:L:m:nNo:p:qRs:t:u:UvV"
+#ifndef TUNEFS
+			  "b:c:d:k:MOr";
+#else
+			  "E:elM:Qr::w";
+#endif
 
 static void usage(FILE *out)
 {
@@ -286,61 +340,44 @@ static int erase_param(const char *const buf, const char *const param,
 }
 #endif
 
+static int parse_opts_early(int argc, char *const argv[], struct mkfs_opts *mop)
+{
+	int opt;
+
+	while ((opt = getopt_long(argc, argv, short_opts, long_opts,
+				  NULL)) != EOF) {
+		switch (opt) {
+#ifdef TUNEFS
+		case 'e':
+			erase_all++;
+			break;
+#endif
+		default:
+			break;
+		}
+	}
+
+	if (optind == argc) {
+		/* The user didn't specify device name */
+		fatal();
+		fprintf(stderr,
+			"Not enough arguments - device name or pool/dataset name not specified.\n");
+		return EINVAL;
+	}
+
+	/* The device or pool/filesystem name */
+	strscpy(mop->mo_device, argv[optind], sizeof(mop->mo_device));
+
+	/* Followed by optional vdevs */
+	if (optind < argc - 1)
+		mop->mo_pool_vdevs = (char **)&argv[optind + 1];
+
+	return 0;
+}
+
 static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 		      char **mountopts, char *old_fsname, char *mountdata_arg)
 {
-	static struct option long_opts[] = {
-	{ .val = 'B',	.name =  "backfs-mount-opts",
-						.has_arg = required_argument},
-	{ .val = 'f',	.name =  "failnode",	.has_arg = required_argument},
-	{ .val = 'f',	.name =  "failover",	.has_arg = required_argument},
-	{ .val = 'G',	.name =  "mgs",		.has_arg = no_argument},
-	{ .val = 'h',	.name =  "help",	.has_arg = no_argument},
-	{ .val = 'i',	.name =  "index",	.has_arg = required_argument},
-	{ .val = 'L',	.name =  "fsname",	.has_arg = required_argument},
-	{ .val = 'm',	.name =  "mgsnode",	.has_arg = required_argument},
-	{ .val = 'm',	.name =  "mgsnid",	.has_arg = required_argument},
-	{ .val = 'n',	.name =  "dryrun",	.has_arg = no_argument},
-	{ .val = 'N',	.name =  "nomgs",	.has_arg = no_argument},
-	{ .val = 'o',	.name =  "mountfsoptions",
-						.has_arg = required_argument},
-	{ .val = 'p',	.name =  "param",	.has_arg = required_argument},
-	{ .val = 'q',	.name =  "quiet",	.has_arg = no_argument},
-	{ .val = 'R',	.name =  "replace",	.has_arg = no_argument},
-	{ .val = 's',	.name =  "servicenode",	.has_arg = required_argument},
-	{ .val = 't',	.name =  "network",	.has_arg = required_argument},
-	{ .val = 'u',	.name =  "comment",	.has_arg = required_argument},
-	{ .val = 'U',	.name =  "force-nohostid",
-						.has_arg = no_argument},
-	{ .val = 'v',	.name =  "verbose",	.has_arg = no_argument},
-	{ .val = 'V',	.name =  "version",	.has_arg = no_argument},
-#ifndef TUNEFS
-	{ .val = 'b',	.name =  "backfstype",	.has_arg = required_argument},
-	{ .val = 'c',	.name =  "stripe-count-hint",
-						.has_arg = required_argument},
-	{ .val = 'd',	.name =  "device-size",	.has_arg = required_argument},
-	{ .val = 'k',	.name =  "mkfsoptions",	.has_arg = required_argument},
-	{ .val = 'M',	.name =  "mdt",		.has_arg = no_argument},
-	{ .val = 'O',	.name =  "ost",		.has_arg = no_argument},
-	{ .val = 'r',	.name =  "reformat",	.has_arg = no_argument},
-#else
-	{ .val = 'E',	.name =  "erase-param",	.has_arg = required_argument},
-	{ .val = 'e',	.name =  "erase-params",
-						.has_arg = no_argument},
-	{ .val = 'l',	.name =  "nolocallogs", .has_arg = no_argument},
-	{ .val = 'M',	.name =  "mountdata-reset-from",
-						.has_arg = required_argument},
-	{ .val = 'Q',	.name =  "quota",	.has_arg = no_argument},
-	{ .val = 'r',	.name =  "rename",	.has_arg = optional_argument},
-	{ .val = 'w',	.name =  "writeconf",	.has_arg = no_argument},
-#endif
-	{ .name = NULL } };
-	char *short_opts = "B:f:Ghi:L:m:nNo:p:qRs:t:u:UvV"
-#ifndef TUNEFS
-			  "b:c:d:k:MOr";
-#else
-			  "E:elM:Qr::w";
-#endif
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	char new_fsname[16] = { 0 };
 	int opt;
@@ -348,28 +385,7 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 	int failnode_set = 0, servicenode_set = 0;
 	bool index_option = false;
 
-#ifdef TUNEFS
-	/*
-	 * For the right semantics, if '-e'/'--erase-params' is specified,
-	 * it must be picked out and all old parameters should be erased
-	 * before any other changes are done.
-	 */
-	while ((opt = getopt_long(argc, argv, short_opts, long_opts,
-				  &longidx)) != EOF) {
-		switch (opt) {
-		case 'e':
-			ldd->ldd_params[0] = '\0';
-			mop->mo_flags |= MO_ERASE_ALL;
-			ldd->ldd_flags |= LDD_F_UPDATE;
-			break;
-		default:
-			break;
-		}
-		if (mop->mo_flags & MO_ERASE_ALL)
-			break;
-	}
 	optind = 0;
-#endif
 	while ((opt = getopt_long(argc, argv, short_opts, long_opts,
 				  &longidx)) != EOF) {
 		switch (opt) {
@@ -618,7 +634,7 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			ldd->ldd_flags |= LDD_F_UPDATE;
 			break;
 		case 'e':
-			/* Already done in the beginning */
+			/* Already handled in parse_opts_early() */
 			break;
 		case 'Q':
 			mop->mo_flags |= MO_QUOTA;
@@ -741,21 +757,6 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 	if (replace)
 		ldd->ldd_flags &= ~LDD_F_VIRGIN;
 
-	if (optind == argc) {
-		/* The user didn't specify device name */
-		fatal();
-		fprintf(stderr,
-			"Not enough arguments - device name or pool/dataset name not specified.\n");
-		return EINVAL;
-	}
-
-	/*  The device or pool/filesystem name */
-	strscpy(mop->mo_device, argv[optind], sizeof(mop->mo_device));
-
-	/* Followed by optional vdevs */
-	if (optind < argc - 1)
-		mop->mo_pool_vdevs = (char **)&argv[optind + 1];
-
 	return 0;
 }
 
@@ -827,8 +828,9 @@ int main(int argc, char *const argv[])
 	memset(&mop, 0, sizeof(mop));
 	set_defaults(&mop);
 
-	/* device is last arg */
-	strscpy(mop.mo_device, argv[argc - 1], sizeof(mop.mo_device));
+	ret = parse_opts_early(argc, argv, &mop);
+	if (ret != 0)
+		goto out;
 
 #ifdef TUNEFS
 	/*
@@ -872,6 +874,17 @@ int main(int argc, char *const argv[])
 
 	if (verbose > 0)
 		print_ldd("Read previous values", &mop);
+
+	/*
+	 * For the right semantics, if '-e'/'--erase-params' is specified,
+	 * it must be picked out and all old parameters should be erased
+	 * before any other changes are done.
+	 */
+	if (erase_all) {
+		ldd->ldd_params[0] = '\0';
+		mop.mo_flags |= MO_ERASE_ALL;
+		ldd->ldd_flags |= LDD_F_UPDATE;
+	}
 #endif /* TUNEFS */
 
 	ret = parse_opts(argc, argv, &mop, &mountopts, old_fsname,
