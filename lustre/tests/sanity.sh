@@ -20525,9 +20525,14 @@ test_160f() {
 			error "create dir $d on MDT$idx failed"
 	done
 
+	# sleep again to allow GC to trigger
+	local sleep3=4
+	echo "$(date +%s): sleep3 $sleep3/${idle_time}s"
+	sleep $sleep3
+
 	# ensure gc thread is done
 	for mds in ${mdts//,/ }; do
-		wait_update $mds "ps -e -o comm= | grep chlg_gc_thread" "" 20 ||
+		wait_update $mds "ps -e -o comm= | grep chlg_gc_thread" "" ||
 			error "$mds: GC-thread not done"
 	done
 
