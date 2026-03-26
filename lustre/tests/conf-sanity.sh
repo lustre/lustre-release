@@ -417,6 +417,24 @@ test_10a() {
 }
 run_test 10a "find lctl param broken symlinks"
 
+test_11() {
+	# set $version variable with tool build version
+	local version=$($LCTL --version | awk '{ print $2 }')
+
+	[[ -n "$version" ]] || error "'$LCTL --version' did not print version"
+
+	for cmd in $LFS $LNETCTL $LST $MKFS $MOUNT_LUSTRE $TUNEFS; do
+		local tool_ver0=$(do_facet mgs $cmd --version 2>&1)
+		local tool_ver1=$(do_facet mgs $cmd --version some_args 2>&1)
+
+		[[ "$tool_ver0" =~ $version ]] ||
+			error "'$cmd --version' has ' $tool_ver0', not '$version'"
+		[[ "$tool_ver1" =~ $version ]] ||
+			error "'$cmd --version some_args ' has '$tool_ver1', not '$version'"
+	done
+}
+run_test 11 "Verify tool --version option works properly"
+
 #
 # Test 16 was to "verify that lustre will correct the mode of OBJECTS".
 # But with new MDS stack we don't care about the mode of local objects

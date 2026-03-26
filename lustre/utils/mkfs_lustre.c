@@ -50,7 +50,7 @@
 char *progname;
 int replace = 0;
 int verbose = 1;
-int version;
+static int version;
 static int print_only;
 #ifdef TUNEFS
 static int erase_all;
@@ -344,6 +344,12 @@ static int parse_opts_early(int argc, char *const argv[], struct mkfs_opts *mop)
 {
 	int opt;
 
+	/* If no argument is given, bail out */
+	if (argc < 2) {
+		usage(stderr);
+		return EINVAL;
+	}
+
 	while ((opt = getopt_long(argc, argv, short_opts, long_opts,
 				  NULL)) != EOF) {
 		switch (opt) {
@@ -352,6 +358,11 @@ static int parse_opts_early(int argc, char *const argv[], struct mkfs_opts *mop)
 			erase_all++;
 			break;
 #endif
+		case 'V':
+			version++;
+			fprintf(stdout, "%s %s\n", progname,
+				LUSTRE_VERSION_STRING);
+			return 0;
 		default:
 			break;
 		}
@@ -561,10 +572,8 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			verbose++;
 			break;
 		case 'V':
-			++version;
-			fprintf(stdout, "%s %s\n", progname,
-				LUSTRE_VERSION_STRING);
-			return 0;
+			/* Already handled in parse_opts_early() */
+			break;
 #ifndef TUNEFS
 		case 'b': {
 			int i = 0;
@@ -760,41 +769,6 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 	return 0;
 }
 
-/*
- * This function checks args for sanity.
- *
- * Returns 0 if all is found good.
- * Returns 1 if invalid args is detected
- */
-static int chk_args(int argc, char *const argv[])
-{
-	/* If no argument is given to mkfs.lustre, bail out */
-	if (argc < 2)
-		return 1;
-
-	/* If argc is exactly 2, make sure the user wants "--version"
-	 * or "-V" and handle correctly if that is what the user wants
-	 * without bailing out with error.
-	 */
-	if (argc == 2) {
-		if (strncmp(argv[1], "--version", strlen(argv[1])) == 0 &&
-		    (strlen(argv[1]) == 9))
-			return 0;
-
-		if (strncmp(argv[1], "-V", strlen(argv[1])) == 0 &&
-		    (strlen(argv[1]) == 2))
-			return 0;
-	}
-
-	/* This check validates if the last argument is really a device name
-	 * and does not start with char '-'.
-	 */
-	if (argv[argc - 1][0] == '-')
-		return 1;
-	else
-		return 0;
-}
-
 int main(int argc, char *const argv[])
 {
 	struct mkfs_opts mop;
@@ -820,17 +794,14 @@ int main(int argc, char *const argv[])
 		return ret;
 	}
 
-	if (chk_args(argc, argv)) {
-		usage(stderr);
-		return EINVAL;
-	}
-
 	memset(&mop, 0, sizeof(mop));
 	set_defaults(&mop);
 
 	ret = parse_opts_early(argc, argv, &mop);
-	if (ret != 0)
-		goto out;
+	if (ret != 0 || version) {
+		osd_fini();
+		return ret;
+	}
 
 #ifdef TUNEFS
 	/*
@@ -889,7 +860,7 @@ int main(int argc, char *const argv[])
 
 	ret = parse_opts(argc, argv, &mop, &mountopts, old_fsname,
 			 mountdata_arg);
-	if (ret != 0 || version)
+	if (ret != 0)
 		goto out;
 
 #ifdef TUNEFS

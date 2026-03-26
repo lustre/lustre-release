@@ -578,6 +578,8 @@ init_test_env() {
 		export LL_DECODE_LINKEA="ll_decode_linkea"
 	export MKFS=${MKFS:-"$LUSTRE/utils/mkfs.lustre"}
 	[ ! -f "$MKFS" ] && export MKFS="mkfs.lustre"
+	export MOUNT_LUSTRE=${MOUNT_LUSTRE:-"$LUSTRE/utils/mount.lustre"}
+	[[ ! -f "$MOUNT_LUSTRE" ]] && export MOUNT_LUSTRE=$(which mount.lustre)
 	export TUNEFS=${TUNEFS:-"$LUSTRE/utils/tunefs.lustre"}
 	[ ! -f "$TUNEFS" ] && export TUNEFS="tunefs.lustre"
 	export CHECKSTAT="${CHECKSTAT:-"checkstat -v"} "
