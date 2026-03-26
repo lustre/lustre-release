@@ -726,7 +726,7 @@ static int construct_get_dest_keyring(struct key **_dest_keyring)
 			break;
 		fallthrough;
 	case KEY_REQKEY_DEFL_SESSION_KEYRING:
-		dest_keyring = get_session_keyring(cred);
+		dest_keyring = key_get(cred->session_keyring);
 		if (dest_keyring) {
 			if (!test_bit(KEY_FLAG_REVOKED, &dest_keyring->flags))
 				break;
