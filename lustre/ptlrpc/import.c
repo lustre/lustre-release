@@ -809,7 +809,10 @@ int ptlrpc_connect_import_locked(struct obd_import *imp)
 	/* get SELinux policy info if any */
 	sepol = sptlrpc_sepol_get(request);
 	if (IS_ERR(sepol)) {
-		ptlrpc_request_free(request);
+		/* Release the import ref acquired by ptlrpc_request_alloc()
+		 * so that client_obd_cleanup() is eventually called.
+		 */
+		ptlrpc_req_put(request);
 		GOTO(out, rc = PTR_ERR(sepol));
 	}
 
@@ -823,6 +826,9 @@ int ptlrpc_connect_import_locked(struct obd_import *imp)
 
 	sptlrpc_sepol_put(sepol);
 	if (rc) {
+		/* ptlrpc_request_bufs_pack() already released the import ref
+		 * and decremented imp_reqs on failure; only free the slab.
+		 */
 		ptlrpc_request_free(request);
 		GOTO(out, rc);
 	}
