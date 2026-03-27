@@ -1,16 +1,15 @@
-.TH LCTL-LCFG_FORK 8 2024-08-13 Lustre "Lustre Configuration Utilities"
+.TH LCTL-LCFG_FORK 8 2026-03-27 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-lcfg_fork \- duplicate and rename filesystem config llog
 .SH SYNOPSIS
 .SY "lctl lcfg_fork"
-.RI < FSNAME >
-.RI < NEWNAME >
+.I FSNAME NEWNAME
 .YS
 .SH DESCRIPTION
 .B lcfg_fork
 (alias
 .BR fork_lcfg )
-generates a new Lustre configuration llog for the filesystem named
+generates a new Lustre configuration llog for a filesystem named
 .I NEWNAME
 based on the existing Lustre filesystem configuration for
 .IR FSNAME .

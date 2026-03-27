@@ -1370,7 +1370,7 @@ static int __snapshot_destroy(struct snapshot_instance *si,
 
 static int snapshot_create(struct snapshot_instance *si)
 {
-	char *__argv[3];
+	char *__argv[4] = { NULL };
 	char buf[MAX_BUF_SIZE];
 	struct timeval tv;
 	char new_fsname[9];
@@ -1727,7 +1727,7 @@ static int snapshot_destroy(struct snapshot_instance *si)
 
 	/* 3. Erase config llog from MGS */
 	if ((!rc && !rc1 && !rc2) || si->si_force) {
-		char *__argv[3];
+		char *__argv[4] = { NULL };
 
 		__argv[0] = "lcfg_erase";
 		__argv[1] = fsname;

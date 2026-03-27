@@ -1,9 +1,9 @@
-.TH LCTL-LCFG_CLEAR 8 2024-08-13 Lustre "Lustre Configuration Utilities"
+.TH LCTL-LCFG_CLEAR 8 2026-03-27 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-lcfg_clear \- clear filesystem config llog
 .SH SYNOPSIS
 .SY "lctl lcfg_clear"
-.IR FSNAME | DEVNAME
+.IR FSNAME | TARGET
 .YS
 .SH DESCRIPTION
 .B lcfg_clear
@@ -15,14 +15,14 @@ flags. It cleans up any records marked
 .I SKIP
 from the configuration files stored in the
 .I CONFIGS/
-directory. If
-.I DEVNAME
-is given, then the specific logs for
-that filesystem (e.g.
+directory. If a specific
+.I TARGET
+name is given, then the logs for that target (e.g.
 .IR testfs-MDT0000 )
-are processed. Otherwise, if a filesystem name is given, then all
-configuration files are cleared. The previous configuration log is
-backed up on the MGS disk with the suffix
+are processed. Otherwise, if a filesystem
+.I FSNAME
+is given, then all configuration files for that are cleared.
+The previous configuration log is backed up on the MGS disk with the suffix
 .IR 'config.timestamp.bak' ,
 such as
 .IR 'testfs-MDT0000.1476454535.bak' .

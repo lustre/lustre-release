@@ -1,8 +1,9 @@
-.TH LCTL-LCFG_ERASE 8 2025-04-24 Lustre "Lustre Configuration Utilities"
+.TH LCTL-LCFG_ERASE 8 2026-03-27 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-lcfg_erase \- erase filesystem config llog
 .SH SYNOPSIS
-.SY "lctl [-h|\-\-help] [-q|\-\-quiet] lcfg_erase"
+.SY "lctl lcfg_erase"
+.RB [ -h | \-\-help "] [" -q | \-\-quiet ]
 .I FSNAME
 .YS
 .SH DESCRIPTION
@@ -22,19 +23,19 @@ configuration log.
 This command must be run on the MGS node with the MGS device mounted.
 .SH OPTIONS
 .TP
-.BR \-h ", " \-\-help
+.BR -h ", " --help
 Show a brief usage message.
 .TP
-.BR \-q ", " \-\-quiet
+.BR -q ", " --quiet
 Suppress informational messages about erased parameters.
 .SH EXAMPLES
 To erase all configuration logs and persistent params for filesystem
 .BR testfs ,
 including parameters like
-.BR mdt.testfs-MDT0000.hsm_control .
+.BR mdt.testfs-MDT0000.hsm_control :
 .RS
 .EX
-.B # lctl lcfg_erase testfs
+.B mgs# lctl lcfg_erase testfs
 .EE
 .RE
 .PP
@@ -42,9 +43,8 @@ To check the available configuration logs and configuration parameters that
 will be erased, run the following commands on the MGS node:
 .EX
 .RS
-.B # lctl llog_catlist | grep testfs
-.br
-.B # lctl llog_print params | grep testfs
+.B mgs# lctl llog_catlist | grep testfs
+.B mgs# lctl llog_print params | grep testfs
 .RE
 .EE
 .SH AVAILABILITY
