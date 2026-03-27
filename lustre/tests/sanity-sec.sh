@@ -1734,7 +1734,7 @@ nodemap_test_setup() {
 		--property admin --value 1
 	do_facet mgs $LCTL nodemap_modify --name default \
 		--property trusted --value 1
-	wait_nm_sync default trusted_nodemap
+	wait_nm_sync default trusted_nodemap '' inactive
 
 	do_facet mgs $LCTL nodemap_activate $active_nodemap
 	wait_nm_sync active

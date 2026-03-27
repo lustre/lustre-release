@@ -2239,20 +2239,21 @@ int sptlrpc_target_export_check(struct obd_export *exp,
 			rc = sptlrpc_import_sec_adapt(exp->exp_imp_reverse,
 						      req->rq_svc_ctx,
 						      &flavor);
-			GOTO(nm_switch, rc);
+			if (rc)
+				GOTO(nm_switch, rc);
 		} else {
-			CDEBUG(D_SEC,
-			       "exp %p (%x|%x|%x): is current flavor, install rvs ctx\n",
-			       exp, exp->exp_flvr.sf_rpc,
-			       exp->exp_flvr_old[0].sf_rpc,
-			       exp->exp_flvr_old[1].sf_rpc);
 			spin_unlock(&exp->exp_lock);
-
-			rc = sptlrpc_svc_install_rvs_ctx(exp->exp_imp_reverse,
-							 req->rq_svc_ctx);
-
-			GOTO(nm_switch, rc);
 		}
+
+		CDEBUG(D_SEC,
+		       "exp %p (%x|%x|%x): is current flavor, install rvs ctx\n",
+		       exp, exp->exp_flvr.sf_rpc,
+		       exp->exp_flvr_old[0].sf_rpc,
+		       exp->exp_flvr_old[1].sf_rpc);
+
+		rc = sptlrpc_svc_install_rvs_ctx(exp->exp_imp_reverse,
+						 req->rq_svc_ctx);
+		GOTO(nm_switch, rc);
 	}
 
 	if (exp->exp_flvr_expire[0]) {
