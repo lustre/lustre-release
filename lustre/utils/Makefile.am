@@ -116,6 +116,7 @@ liblustreapi_la_SOURCES = libhsm_scanner.c \
 			  liblustreapi_nodemap.c \
 			  liblustreapi_param.c \
 			  liblustreapi_pcc.c \
+			  liblustreapi_pool.c \
 			  liblustreapi_pfind.c \
 			  liblustreapi_project.c \
 			  liblustreapi_root.c \

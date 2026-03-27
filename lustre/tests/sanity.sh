@@ -20441,6 +20441,57 @@ test_156() {
 }
 run_test 156 "Verification of tunables"
 
+test_157()
+{
+	mkdir_on_mdt0 $DIR/$tdir
+	llapi_pool_test -d $DIR/$tdir ||
+		error "llapi_pool_test failed"
+}
+run_test 157 "llapi pool pinning API tests"
+
+test_157a()
+{
+	[ "$UID" != 0 ] && skip "must run as root"
+	[ -z "$(lctl get_param -n mdc.*-mdc-*.connect_flags | grep xattr)" ] &&
+		skip_env "must have user_xattr"
+	[ -z "$(which setfattr 2>/dev/null)" ] &&
+		skip_env "could not find setfattr"
+	[ -z "$(which getfattr 2>/dev/null)" ] &&
+		skip_env "could not find getfattr"
+
+	local dir=$DIR/$tdir
+	local file=$dir/$tfile
+	local subdir=$dir/subdir
+	local noxatrr_file=$dir/$tfile.noxattr
+	local pinval="[pool: pininherit]"
+	local parent_val file_val subdir_val noxatrr_file_val
+
+	test_mkdir $dir
+	touch $noxatrr_file || error "touch $noxatrr_file failed"
+
+	setfattr -n lustre.pin -v "$pinval" $dir ||
+		error "failed to set lustre.pin on $dir"
+
+	touch $file || error "touch $file failed"
+	mkdir $subdir || error "mkdir $subdir failed"
+
+	parent_val=$(getfattr --only-values -n lustre.pin $dir 2> /dev/null) ||
+		error "getfattr lustre.pin on parent failed"
+	file_val=$(getfattr --only-values -n lustre.pin $file 2> /dev/null) ||
+		error "getfattr lustre.pin on file failed"
+	subdir_val=$(getfattr --only-values -n lustre.pin $subdir 2> /dev/null) ||
+		error "getfattr lustre.pin on subdir failed"
+	noxatrr_file_val=$(getfattr --only-values -n lustre.pin $noxatrr_file 2>/dev/null)
+
+	[ "$file_val" = "$parent_val" ] ||
+		error "file lustre.pin '$file_val' != parent '$parent_val'"
+	[ "$subdir_val" = "$parent_val" ] ||
+		error "subdir lustre.pin '$subdir_val' != parent '$parent_val'"
+	[ -z "$noxatrr_file_val" ] ||
+		error "noxatrr_file lustre.pin '$noxatrr_file_val' != ''"
+}
+run_test 157a "lustre.pin inheritance on create"
+
 test_160a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"

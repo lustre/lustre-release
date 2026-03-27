@@ -856,6 +856,20 @@ int llapi_pcc_pin_file(const char *path, __u32 id);
 int llapi_pcc_unpin_file(const char *path, __u32 id);
 int llapi_pcc_backend_id_get(const char *path, enum lu_pcc_type type,
 			     __u32 *id);
+
+int llapi_pool_pin_fd(int fd, const char *pool_name);
+int llapi_pool_pin_file(const char *path, const char *pool_name);
+int llapi_pool_pin_fid(const char *lustre_dir, const struct lu_fid *fid,
+		       const char *pool_name);
+int llapi_pool_unpin_fd(int fd, const char *pool_name);
+int llapi_pool_unpin_file(const char *path, const char *pool_name);
+int llapi_pool_unpin_fid(const char *lustre_dir, const struct lu_fid *fid,
+		       const char *pool_name);
+int llapi_pool_is_pinned_fd(int fd, const char *pool_name);
+int llapi_pool_is_pinned_file(const char *path, const char *pool_name);
+int llapi_pool_is_pinned_fid(const char *lustre_dir,
+		      const struct lu_fid *fid, const char *pool_name);
+
 /** @} llapi */
 
 /* llapi_layout user interface */

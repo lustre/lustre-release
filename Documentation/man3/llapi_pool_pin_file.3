@@ -1,0 +1,118 @@
+.TH LLAPI_POOL_PIN_FILE 3 2026-03-19 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_pool_pin_fd, llapi_pool_pin_file, llapi_pool_pin_fid \- pin a Lustre file to an OST pool
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_pool_pin_fd(int " fd ", const char *" pool_name ");"
+.PP
+.BI "int llapi_pool_pin_file(const char *" path ", const char *" pool_name ");"
+.PP
+.BI "int llapi_pool_pin_fid(const char *" lustre_dir ", const struct lu_fid *" fid ","
+.BI "                       const char *" pool_name ");"
+.PP
+.fi
+.SH DESCRIPTION
+The
+.B llapi_pool_pin_*(3)
+functions manipulate the Lustre
+.B lustre.pin
+extended attribute of a file in order to record whether the file is
+pinned to a particular OST pool.
+.PP
+Pool pins are stored as YAML entries of the form
+.RS
+.nf
+pool: \fIpool_name\fP
+.fi
+.RE
+inside the
+.B lustre.pin
+attribute,
+which may also contain other entries such as
+.B hsm
+pins used by the PCC subsystem.
+Multiple pool pins and PCC pins can coexist in the same attribute.
+.PP
+The
+.BR llapi_pool_pin_fd() ,
+.BR llapi_pool_pin_file()
+and
+.BR llapi_pool_pin_fid()
+functions add a
+.B pool
+entry for the specified
+.I pool_name
+to the
+.B lustre.pin
+extended attribute of the referenced file if it is not already present,
+leaving the attribute unchanged when the entry already exists.
+.PP
+The
+.BR llapi_pool_unpin_fd() ,
+.BR llapi_pool_unpin_file()
+and
+.BR llapi_pool_unpin_fid()
+functions are documented in
+.BR llapi_pool_unpin_file (3).
+.PP
+The
+.BR llapi_pool_is_pinned_fd() ,
+.BR llapi_pool_is_pinned_file()
+and
+.BR llapi_pool_is_pinned_fid()
+functions are documented in
+.BR llapi_pool_is_pinned_file (3).
+.PP
+The
+.I pool_name
+parameter may optionally be qualified with a filesystem name using the
+"fsname.pool" notation commonly used by Lustre tools.
+In this case the "fsname." prefix is silently discarded before the pool name is
+stored or compared,
+and only the unqualified pool name is recorded in the
+.B lustre.pin
+attribute.
+.SH RETURN VALUES
+The
+.BR llapi_pool_pin_*()
+functions return 0 on success.
+On failure they return a negative errno value and set
+.B errno
+to the corresponding error code.
+.SH ERRORS
+.TP 15
+.B EINVAL
+An invalid argument was specified,
+such as a NULL or overly long
+.I pool_name
+string.
+.PP
+.in +8n
+.SH EXAMPLES
+.EX
+#include <lustre/lustreapi.h>
+
+if (llapi_pool_pin_file(path, pool_name) < 0) {
+	perror("llapi_pool_pin_file");
+	/* handle error based on errno */
+}
+.EE
+.in
+.PP
+.SH AVAILABILITY
+The
+.BR llapi_pool_pin_fd() ,
+.BR llapi_pool_pin_file() ,
+.BR llapi_pool_pin_fid()
+functions are part of the
+.BR lustre (7)
+user application interface library since release 2.18.0.
+.\" Added in commit v2_17-51-gxxx
+.SH SEE ALSO
+.BR llapi_pool_unpin_file (3),
+.BR llapi_pool_is_pinned_file (3),
+.BR lustre (7),
+.BR lustreapi (7)
+

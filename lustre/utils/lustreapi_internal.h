@@ -30,6 +30,13 @@
 
 #include <lustre/lustreapi.h>
 
+struct cYAML;
+
+int verify_pin_xattr_object(struct cYAML *yaml);
+int dump_pin_object(struct cYAML *yaml, char *buff, int buflen);
+struct cYAML *read_pin_xattr_object(const char *path);
+struct cYAML *read_pin_xattr_object_fd(int fd);
+
 #define MAX_IOC_BUFLEN	8192
 #define MAX_INSTANCE_LEN  32
 

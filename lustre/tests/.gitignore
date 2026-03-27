@@ -20,6 +20,7 @@
 /llapi_hsm_test
 /llapi_layout_test
 /llapi_root_test
+/llapi_pool_test
 /createdestroy
 /createmany
 /createtest

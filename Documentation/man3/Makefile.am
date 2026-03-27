@@ -108,6 +108,15 @@ LIBMAN = 					\
 	llapi_pcc_state_get_fd.3		\
 	llapi_pcc_clear.3			\
 	llapi_pcc_del.3				\
+	llapi_pool_pin_file.3			\
+	llapi_pool_pin_fd.3			\
+	llapi_pool_pin_fid.3			\
+	llapi_pool_unpin_file.3			\
+	llapi_pool_unpin_fd.3			\
+	llapi_pool_unpin_fid.3			\
+	llapi_pool_is_pinned_file.3		\
+	llapi_pool_is_pinned_fd.3		\
+	llapi_pool_is_pinned_fid.3		\
 	llapi_project_close.3			\
 	llapi_project_fgetnam.3			\
 	llapi_project_fgetprjid.3		\

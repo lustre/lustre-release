@@ -859,7 +859,7 @@ int llapi_pcc_backend_id_get(const char *path, enum lu_pcc_type type, __u32 *id)
 
 #define PIN_YAML_HSM_STR	"hsm"
 
-static int verify_pin_xattr_object(struct cYAML *yaml)
+int verify_pin_xattr_object(struct cYAML *yaml)
 {
 	struct cYAML *node = NULL;
 
@@ -867,14 +867,21 @@ static int verify_pin_xattr_object(struct cYAML *yaml)
 		return -EINVAL;
 
 	for (node = yaml->cy_child; node != NULL; node = node->cy_next) {
-		if (node->cy_type != CYAML_TYPE_NUMBER)
+		/*
+		 * Pin entries are stored as a flat mapping from key -> value,
+		 * where existing PCC/HSM pins use numeric values
+		 * (CYAML_TYPE_NUMBER) and pool pins use string values
+		 * (CYAML_TYPE_STRING).
+		 */
+		if (node->cy_type != CYAML_TYPE_NUMBER &&
+		    node->cy_type != CYAML_TYPE_STRING)
 			return -EINVAL;
 	}
 
 	return 0;
 }
 
-static int dump_pin_object(struct cYAML *yaml, char *buff, int buflen)
+int dump_pin_object(struct cYAML *yaml, char *buff, int buflen)
 {
 	int rc = 0, remained;
 	struct cYAML *node;
@@ -891,8 +898,17 @@ static int dump_pin_object(struct cYAML *yaml, char *buff, int buflen)
 			*p++ = ',';
 
 		remained = buff + buflen - p - 1;
-		rc = snprintf(p, remained, "%s: %ld",
-			      node->cy_string, node->cy_valueint);
+		if (node->cy_type == CYAML_TYPE_NUMBER) {
+			rc = snprintf(p, remained, "%s: %ld",
+				      node->cy_string, node->cy_valueint);
+		} else if (node->cy_type == CYAML_TYPE_STRING &&
+			   node->cy_valuestring != NULL) {
+			rc = snprintf(p, remained, "%s: %s",
+				      node->cy_string, node->cy_valuestring);
+		} else {
+			rc = -EINVAL;
+			goto out;
+		}
 		if (rc <= 0) {
 			rc = -errno;
 			goto out;
@@ -910,13 +926,55 @@ out:
 	return rc;
 }
 
-static struct cYAML *read_pin_xattr_object(const char *path)
+struct cYAML *read_pin_xattr_object(const char *path)
 {
 	int rc, i;
 	struct cYAML *yaml = NULL;
 	char buff[XATTR_SIZE_MAX];
 
 	rc = getxattr(path, XATTR_LUSTRE_PIN, buff, sizeof(buff));
+	if (rc < 0)
+		goto out;
+
+	if (buff[0] != '[' || buff[rc - 1] != ']') {
+		llapi_error(LLAPI_MSG_ERROR, EINVAL,
+			    "invalid pin string '%s'.", buff);
+		rc = -EINVAL;
+		goto out;
+	}
+
+	for (i = 0; i < rc; i++)
+		if (buff[i] == ',')
+			buff[i] = '\n';
+
+	yaml = cYAML_build_tree(NULL, buff + 1, rc - 2, NULL, false);
+	if (yaml == NULL) {
+		llapi_error(LLAPI_MSG_ERROR, EINVAL,
+			    "invalid pin string '%s'.", buff);
+		errno = -EINVAL;
+		goto out;
+	}
+
+	rc = verify_pin_xattr_object(yaml);
+	if (rc) {
+		llapi_error(LLAPI_MSG_ERROR, -rc, "Invalid pin object.");
+		cYAML_free_tree(yaml);
+		yaml = NULL;
+		errno = -rc;
+		goto out;
+	}
+
+out:
+	return yaml;
+}
+
+struct cYAML *read_pin_xattr_object_fd(int fd)
+{
+	int rc, i;
+	struct cYAML *yaml = NULL;
+	char buff[XATTR_SIZE_MAX];
+
+	rc = fgetxattr(fd, XATTR_LUSTRE_PIN, buff, sizeof(buff));
 	if (rc < 0)
 		goto out;
 

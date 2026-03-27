@@ -1,0 +1,136 @@
+.TH LLAPI_POOL_IS_PINNED_FILE 3 2026-03-19 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_pool_is_pinned_fd, llapi_pool_is_pinned_file, llapi_pool_is_pinned_fid \- test whether a Lustre file is pinned to an OST pool
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_pool_is_pinned_fd(int " fd ", const char *" pool_name ");"
+.PP
+.BI "int llapi_pool_is_pinned_file(const char *" path ", const char *" pool_name ");"
+.PP
+.BI "int llapi_pool_is_pinned_fid(const char *" lustre_dir ", const struct lu_fid *" fid ","
+.BI "                             const char *" pool_name ");"
+.fi
+.SH DESCRIPTION
+The
+.B llapi_pool_is_pinned_*(3)
+functions test whether a Lustre file currently has a
+.B pool
+entry for
+.I pool_name
+in its
+.B lustre.pin
+extended attribute.
+.PP
+Pool pins are stored as YAML entries of the form
+.RS
+.nf
+pool: \fIpool_name\fP
+.fi
+.RE
+inside the
+.B lustre.pin
+attribute,
+which may also contain other entries such as
+.B hsm
+pins used by the PCC subsystem.
+Multiple pool pins and PCC pins can coexist in the same attribute.
+.PP
+The
+.BR llapi_pool_is_pinned_fd() ,
+.BR llapi_pool_is_pinned_file()
+and
+.BR llapi_pool_is_pinned_fid()
+functions return
+.B 1
+only if a matching
+.B pool
+entry for
+.I pool_name
+is present in the
+.B lustre.pin
+attribute.
+They return
+.B 0
+when no such entry exists,
+including when the
+.B lustre.pin
+attribute is missing entirely.
+On error, such as an invalid
+.I pool_name
+argument, failures resolving a FID,
+or I/O or parse errors while reading
+the attribute,
+these functions return a negative error code
+.RI ( -errno ),
+for example
+.BR -EINVAL " or " -ENOENT .
+.PP
+The
+.I pool_name
+parameter may optionally be qualified with a filesystem name using the
+"fsname.pool" notation commonly used by Lustre tools.
+In this case the
+"fsname." prefix is silently discarded before the pool name is stored
+or compared,
+and only the unqualified pool name is recorded in the
+.B lustre.pin
+attribute.
+.SH RETURN VALUES
+The
+.B llapi_pool_is_pinned_*()
+functions return
+.B 1
+if a matching pool pin entry is present,
+.B 0
+if not, and a negative error code
+.RI ( -errno )
+on failure.
+.SH ERRORS
+.TP 15
+.B EINVAL
+An invalid argument was specified,
+such as a NULL or overly long
+.I pool_name
+string.
+.PP
+.in +8n
+.SH EXAMPLES
+.EX
+#include <lustre/lustreapi.h>
+
+int pinned;
+
+pinned = llapi_pool_is_pinned_file(path, pool_name);
+if (pinned < 0) {
+	/* error: report and abort */
+	fprintf(stderr, "llapi_pool_is_pinned_file failed: %s\n",
+		strerror(-pinned));
+	exit(EXIT_FAILURE);
+}
+
+if (pinned) {
+	/* file is pinned to this pool */
+} else {
+	/* file is not pinned to this pool */
+}
+.EE
+.in
+.PP
+.SH AVAILABILITY
+The
+.BR llapi_pool_is_pinned_fd() ,
+.BR llapi_pool_is_pinned_file() ,
+and
+.BR llapi_pool_is_pinned_fid()
+functions are part of the
+.BR lustre (7)
+user application interface library since release 2.18.0.
+.\" Added in commit v2_17-51-gxxx
+.SH SEE ALSO
+.BR llapi_pool_pin_file (3),
+.BR llapi_pool_unpin_file (3),
+.BR lustre (7),
+.BR lustreapi (7)
+
