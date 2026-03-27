@@ -2618,6 +2618,7 @@ static int mdd_declare_create_object(const struct lu_env *env,
 				     struct lu_buf *def_acl_buf,
 				     struct lu_buf *acl_buf,
 				     struct lu_buf *hsm_buf,
+				     struct lu_buf *pin_buf,
 				     struct dt_allocation_hint *hint)
 {
 	const struct lu_buf *buf;
@@ -2710,6 +2711,15 @@ static int mdd_declare_create_object(const struct lu_env *env,
 		if (rc < 0)
 			GOTO(out, rc);
 	}
+
+	/* Declare inheritance of parent's lustre.pin, if any. */
+	if (pin_buf && pin_buf->lb_len > 0 &&
+	    (S_ISREG(attr->la_mode) || S_ISDIR(attr->la_mode))) {
+		rc = mdo_declare_xattr_set(env, c, pin_buf,
+					   XATTR_NAME_PIN, 0, handle);
+		if (rc)
+			GOTO(out, rc);
+	}
 out:
 	return rc;
 }
@@ -2724,12 +2734,14 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 			      struct lu_buf *def_acl_buf,
 			      struct lu_buf *acl_buf,
 			      struct lu_buf *hsm_buf,
+			      struct lu_buf *pin_buf,
 			      struct dt_allocation_hint *hint)
 {
 	int rc;
 
 	rc = mdd_declare_create_object(env, mdd, p, c, attr, handle, spec,
-				       def_acl_buf, acl_buf, hsm_buf, hint);
+				       def_acl_buf, acl_buf, hsm_buf,
+				       pin_buf, hint);
 	if (rc)
 		GOTO(out, rc);
 
@@ -2823,6 +2835,73 @@ static int mdd_acl_init(const struct lu_env *env, struct mdd_object *pobj,
 	RETURN(rc);
 }
 
+#define XATTR_SIZE_MIN 256U
+
+/*
+ * Fetch parent directory lustre.pin (trusted.pin) value so it can be
+ * inherited by newly created children.
+ *
+ * If the parent has no pin xattr or the backend does not support it,
+ * this returns 0 and leaves @pin_buf empty. On other errors a negative
+ * errno is returned.
+ *
+ * When a pin xattr is present, this helper allocates memory for @pin_buf
+ * (via lu_buf_alloc()); it is the caller's responsibility to free that
+ * buffer with lu_buf_free().
+ */
+static int mdd_pin_init(const struct lu_env *env, struct mdd_object *pobj,
+			struct lu_buf *pin_buf)
+{
+	struct mdd_device *mdd = mdo2mdd(&pobj->mod_obj);
+	unsigned int buf_size;
+	int rc;
+
+	ENTRY;
+
+	LASSERT(pin_buf != NULL);
+
+	/* Only directories can carry a default pin for their children. */
+	if (!S_ISDIR(mdd_object_type(pobj)))
+		RETURN(0);
+
+	/*
+	 * Start with a fixed buffer size; if that is too small (-ERANGE),
+	 * grow to the maximum allowed EA size for this backend (capped by
+	 * XATTR_SIZE_MAX) and retry once.
+	 */
+	buf_size = XATTR_SIZE_MIN;
+
+retry:
+	lu_buf_alloc(pin_buf, buf_size);
+	if (pin_buf->lb_buf == NULL)
+		RETURN(-ENOMEM);
+
+	rc = mdo_xattr_get(env, pobj, pin_buf, XATTR_NAME_PIN);
+	if (rc == -ERANGE && buf_size < XATTR_SIZE_MAX) {
+		/* Buffer too small: enlarge it and retry. */
+		lu_buf_free(pin_buf);
+		pin_buf->lb_buf = NULL;
+		pin_buf->lb_len = 0;
+		buf_size =  min_t(unsigned int,
+				  mdd->mdd_dt_conf.ddp_max_ea_size,
+				  XATTR_SIZE_MAX);
+		goto retry;
+	}
+	if (rc < 0) {
+		/* Parent pin disappeared or backend stopped supporting it. */
+		lu_buf_free(pin_buf);
+		pin_buf->lb_buf = NULL;
+		pin_buf->lb_len = 0;
+		if (rc == -ENODATA || rc == -EOPNOTSUPP)
+			/* No parent pin to inherit. */
+			RETURN(0);
+		RETURN(rc);
+	}
+	pin_buf->lb_len = rc;
+
+	RETURN(0);
+}
+
 /*
  * Create a metadata object and initialize it, set acl, xattr.
  */
@@ -2831,6 +2910,7 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 			     struct md_op_spec *spec, struct lu_buf *acl_buf,
 			     struct lu_buf *def_acl_buf,
 			     struct lu_buf *hsm_buf,
+			     struct lu_buf *pin_buf,
 			     struct dt_allocation_hint *hint,
 			     struct thandle *handle, bool initial_create)
 {
@@ -2917,6 +2997,15 @@ static int mdd_create_object(const struct lu_env *env, struct mdd_object *pobj,
 			GOTO(err_destroy, rc);
 	}
 #endif
+
+	/* Inherit parent's lustre.pin (trusted.pin) if present. */
+	if (pin_buf && pin_buf->lb_len > 0 &&
+	    (S_ISREG(attr->la_mode) || S_ISDIR(attr->la_mode))) {
+		rc = mdo_xattr_set(env, son, pin_buf,
+				   XATTR_NAME_PIN, 0, handle);
+		if (rc)
+			GOTO(err_destroy, rc);
+	}
 
 	if (S_ISLNK(attr->la_mode)) {
 		struct dt_object *dt = mdd_object_child(son);
@@ -3103,6 +3192,7 @@ int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	struct lu_buf acl_buf;
 	struct lu_buf def_acl_buf;
 	struct lu_buf hsm_buf;
+	struct lu_buf pin_buf = { NULL, 0 };
 	struct linkea_data *ldata = &info->mdi_link_data;
 	const char *name = lname->ln_name;
 	struct dt_allocation_hint *hint = &mdd_env_info(env)->mdi_hint;
@@ -3155,6 +3245,13 @@ use_bigger_buffer:
 	if (rc < 0)
 		GOTO(out_stop, rc);
 
+	/* Prepare inheritance of parent's lustre.pin for new files/dirs. */
+	if (S_ISREG(attr->la_mode) || S_ISDIR(attr->la_mode)) {
+		rc = mdd_pin_init(env, mdd_pobj, &pin_buf);
+		if (rc < 0)
+			GOTO(out_stop, rc);
+	}
+
 	/* adjust stripe count to 0 for 'lfs mkdir -c 1 ...' to avoid creating
 	 * 1-stripe directory, MDS_OPEN_DEFAULT_LMV means ea is default LMV.
 	 */
@@ -3196,7 +3293,7 @@ use_bigger_buffer:
 
 	rc = mdd_declare_create(env, mdd, mdd_pobj, son, lname, attr,
 				handle, spec, ldata, &def_acl_buf, &acl_buf,
-				&hsm_buf, hint);
+				&hsm_buf, &pin_buf, hint);
 	if (rc)
 		GOTO(out_stop, rc);
 
@@ -3205,7 +3302,8 @@ use_bigger_buffer:
 		GOTO(out_stop, rc);
 
 	rc = mdd_create_object(env, mdd_pobj, son, attr, spec, &acl_buf,
-			       &def_acl_buf, &hsm_buf, hint, handle, true);
+			       &def_acl_buf, &hsm_buf, &pin_buf,
+			       hint, handle, true);
 	if (rc != 0)
 		GOTO(out_stop, rc);
 
@@ -3304,6 +3402,8 @@ out_free:
 
 	if (spec->sp_cr_flags & MDS_OPEN_PCC)
 		lu_buf_free(&hsm_buf);
+	if (pin_buf.lb_buf)
+		lu_buf_free(&pin_buf);
 
 	/* The child object shouldn't be cached anymore */
 	if (rc)
@@ -4434,7 +4534,7 @@ static int mdd_declare_migrate_create(const struct lu_env *env,
 
 	rc = mdd_declare_create(env, mdo2mdd(&tpobj->mod_obj), tpobj, tobj,
 				tname, attr, handle, spec, ldata, NULL, NULL,
-				NULL, hint);
+				NULL, NULL, hint);
 	if (rc)
 		return rc;
 
@@ -4656,7 +4756,7 @@ static int mdd_migrate_create(const struct lu_env *env,
 	attr->la_valid &= ~LA_NLINK;
 
 	rc = mdd_create_object(env, tpobj, tobj, attr, spec, NULL, NULL, NULL,
-			       hint, handle, false);
+			       NULL, hint, handle, false);
 	if (rc)
 		RETURN(rc);
 
@@ -5360,7 +5460,7 @@ static int mdd_dir_declare_split_plain(const struct lu_env *env,
 			     hint);
 	rc = mdd_declare_create(env, mdo2mdd(&pobj->mod_obj), pobj, tobj,
 				lname, mlc->mlc_attr, handle, mlc->mlc_spec,
-				ldata, NULL, NULL, NULL, hint);
+				ldata, NULL, NULL, NULL, NULL, hint);
 	if (rc)
 		return rc;
 
@@ -5466,7 +5566,7 @@ static int mdd_dir_split_plain(const struct lu_env *env,
 	mlc->mlc_attr->la_valid &= ~LA_NLINK;
 
 	rc = mdd_create_object(env, pobj, tobj, mlc->mlc_attr, mlc->mlc_spec,
-			       NULL, NULL, NULL, hint, handle, false);
+			       NULL, NULL, NULL, NULL, hint, handle, false);
 	if (rc)
 		RETURN(rc);
 
