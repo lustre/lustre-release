@@ -34,7 +34,7 @@
 #include "gss/gss_err.h"
 #include "gss/gss_internal.h"
 
-static int send_sepol;
+int send_sepol;
 module_param(send_sepol, int, 0644);
 MODULE_PARM_DESC(send_sepol, "Client sends SELinux policy status");
 

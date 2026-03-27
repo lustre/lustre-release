@@ -370,6 +370,40 @@ int sptlrpc_lprocfs_cliobd_attach(struct obd_device *obd)
 }
 EXPORT_SYMBOL(sptlrpc_lprocfs_cliobd_attach);
 
+static ssize_t
+send_sepol_show(struct kobject *kobj, struct attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", send_sepol);
+}
+
+static ssize_t
+send_sepol_store(struct kobject *kobj, struct attribute *attr,
+		 const char *buf, size_t count)
+{
+	int val;
+	int rc;
+
+	rc = kstrtoint(buf, 0, &val);
+	if (rc < 0)
+		return rc;
+
+	CDEBUG(D_INFO, "Setting 'send_sepol' to %d\n", val);
+	send_sepol = val;
+
+	return count;
+}
+
+LUSTRE_RW_ATTR(send_sepol);
+
+static struct attribute *sptlrpc_attrs[] = {
+	&lustre_attr_send_sepol.attr,
+	NULL,
+};
+
+static struct attribute_group sptlrpc_attr_group = {
+	.attrs = sptlrpc_attrs,
+};
+
 LDEBUGFS_SEQ_FOPS_RO(encrypt_page_pools);
 LDEBUGFS_SEQ_FOPS_RO(page_pools);
 
@@ -390,6 +424,8 @@ EXPORT_SYMBOL(sptlrpc_kobj);
 
 int sptlrpc_lproc_init(void)
 {
+	int rc;
+
 	LASSERT(!sptlrpc_debugfs_dir);
 
 	sptlrpc_debugfs_dir = debugfs_create_dir("sptlrpc",
@@ -398,15 +434,23 @@ int sptlrpc_lproc_init(void)
 
 	sptlrpc_kobj = kobject_create_and_add("sptlrpc", &lustre_kset->kobj);
 	if (!sptlrpc_kobj)
-		sptlrpc_lproc_fini();
+		GOTO(out_fini, rc = -ENOMEM);
 
-	return 0;
+	rc = sysfs_create_group(sptlrpc_kobj, &sptlrpc_attr_group);
+	if (rc) {
+out_fini:
+		sptlrpc_lproc_fini();
+	}
+
+	return rc;
 }
 
 void sptlrpc_lproc_fini(void)
 {
-	if (sptlrpc_kobj)
+	if (sptlrpc_kobj) {
+		sysfs_remove_group(sptlrpc_kobj, &sptlrpc_attr_group);
 		kobject_put(sptlrpc_kobj);
+	}
 
 	debugfs_remove_recursive(sptlrpc_debugfs_dir);
 	sptlrpc_debugfs_dir = NULL;

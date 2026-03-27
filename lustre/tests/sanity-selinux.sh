@@ -602,7 +602,7 @@ test_21a() {
 		error "client mount without sending sepol should be refused"
 
 	# mount client with sepol
-	echo -1 > /sys/module/ptlrpc/parameters/send_sepol
+	lctl set_param sptlrpc.send_sepol=-1
 	mount_client $MOUNT $MOUNT_OPTS ||
 		error "client mount with sepol failed"
 
@@ -626,7 +626,7 @@ test_21a() {
 	fi
 
 	# remount client normally
-	echo 0 > /sys/module/ptlrpc/parameters/send_sepol
+	lctl set_param sptlrpc.send_sepol=0
 	mountcli || error "normal client mount failed"
 }
 run_test 21a "Send sepol at connect"
@@ -643,7 +643,7 @@ cleanup_21b() {
 
 	# remove nodemap
 	remove_nodemap c0
-	echo 0 > /sys/module/ptlrpc/parameters/send_sepol
+	lctl set_param sptlrpc.send_sepol=0
 
 	if $GSS_SK; then
 		export SK_UNIQUE_NM=false
@@ -737,7 +737,7 @@ test_21b() {
 	ln $DIR/$tdir/toopen $DIR/$tdir/toopen_hl1 && error "hardlink (1)"
 
 	# metadata ops with sepol
-	echo -1 > /sys/module/ptlrpc/parameters/send_sepol
+	lctl set_param sptlrpc.send_sepol=-1
 	touch $DIR/$tdir/f2 || error "touch (2)"
 	lfs setstripe -c1 $DIR/$tdir/f3 || error "lfs setstripe (2)"
 	mkdir $DIR/$tdir/d2 || error "mkdir (2)"
@@ -789,7 +789,7 @@ test_21b() {
 	check_nodemap c0 sepol $sepol
 
 	# metadata ops with sepol every 1000 seconds only
-	echo 1000 > /sys/module/ptlrpc/parameters/send_sepol
+	lctl set_param sptlrpc.send_sepol=1000
 	local before=$(date +%s)
 	touch $DIR/$tdir/f6 || error "touch (4)"
 	lfs setstripe -c1 $DIR/$tdir/f7 || error "lfs setstripe (4)"
@@ -840,7 +840,7 @@ test_21b() {
 
 	local after=$(date +%s)
 	# change send_sepol to a smaller, already expired, value
-	echo $((after-before-1)) > /sys/module/ptlrpc/parameters/send_sepol
+	lctl set_param sptlrpc.send_sepol=$((after-before-1))
 	# metadata ops without matching sepol: should fail now
 	touch $DIR/$tdir/f10 && error "touch (6)"
 	lfs setstripe -c1 $DIR/$tdir/f11 && error "lfs setstripe (6)"
@@ -862,6 +862,28 @@ test_21b() {
 	echo "test_21b done"
 }
 run_test 21b "Send sepol for metadata ops"
+
+test_21c() {
+	local send_sepol
+
+	stack_trap "do_facet mgs $LCTL set_param -P sptlrpc.send_sepol=0;
+		    umount_client $MOUNT; mount_client $MOUNT $MOUNT_OPTS" EXIT
+
+	# persist send_sepol=-1 via MGS config log
+	do_facet mgs $LCTL set_param -P sptlrpc.send_sepol=-1 ||
+		error "failed to set send_sepol=-1 via -P"
+
+	# remount client to pick up the persistent setting
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	mount_client $MOUNT $MOUNT_OPTS ||
+		error "mount client failed after set_param -P"
+
+	# verify the persistent value was applied on the client
+	send_sepol=$(lctl get_param -n sptlrpc.send_sepol)
+	(( send_sepol == -1 )) ||
+		error "expected send_sepol=-1 after -P, got $send_sepol"
+}
+run_test 21c "Persist send_sepol via lctl set_param -P"
 
 complete_test $SECONDS
 check_and_cleanup_lustre

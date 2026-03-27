@@ -28,6 +28,7 @@ struct obd_import;
 struct ldlm_res_id;
 struct ptlrpc_request_set;
 extern int test_req_buffer_pressure;
+extern int send_sepol;
 extern struct list_head ptlrpc_all_services;
 extern struct mutex ptlrpc_all_services_mutex;
 extern struct ptlrpc_nrs_pol_conf nrs_conf_fifo;

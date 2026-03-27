@@ -1,0 +1,97 @@
+.TH SPTLRPC.SEND_SEPOL 4 2026-03-29 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+sptlrpc.send_sepol \- control whether clients send SELinux policy to servers
+.SH SYNOPSIS
+.SY "lctl get_param sptlrpc.send_sepol"
+.SY "lctl set_param sptlrpc.send_sepol="
+.I ENABLED
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.BR 644 " | " -rw-r--r--
+.TP
+.B Scope
+Client (per-node)
+.TP
+.B Config
+Always
+.TP
+.B Initial default
+.RB sptlrpc.send_sepol= 0
+.SH DESCRIPTION
+.B sptlrpc.send_sepol
+controls whether a Lustre client includes its local SELinux policy information
+in RPCs sent to servers.
+.PP
+When SELinux nodemap enforcement is active, the MDS uses the client's reported
+policy to decide whether to grant access. Setting
+.I ENABLED
+to
+.B \-1
+causes the client to always send its policy, which is required for nodemap-based
+SELinux enforcement to work correctly.
+.PP
+The parameter accepts the following values:
+.TP
+.B 0
+Never send SELinux policy information (default).
+.TP
+.B \-1
+Always send SELinux policy information with every RPC.
+.TP
+.IR ENABLED " > 0"
+Send SELinux policy information and cache it for
+.I ENABLED
+seconds. The cached value is reused for subsequent RPCs until the cache expires.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B ptlrpc
+.EE
+.SH EXAMPLES
+Read the current value:
+.EX
+.RS
+.B client# lctl get_param sptlrpc.send_sepol
+.RE
+.EE
+.PP
+Always send SELinux policy on this node:
+.EX
+.RS
+.B client# lctl set_param sptlrpc.send_sepol=-1
+.RE
+.EE
+.PP
+Persist the setting cluster-wide via the MGS config log. This only needs to be
+run once on the MGS; all clients will receive the setting on mount:
+.EX
+.RS
+.B mgs# lctl set_param -P sptlrpc.send_sepol=-1
+.RE
+.EE
+.PP
+Send and cache SELinux policy for 300 seconds:
+.EX
+.RS
+.B client# lctl set_param sptlrpc.send_sepol=300
+.RE
+.EE
+.PP
+Disable sending SELinux policy:
+.EX
+.RS
+.B client# lctl set_param sptlrpc.send_sepol=0
+.RE
+.EE
+.SH AVAILABILITY
+.B sptlrpc.send_sepol
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" Added in commit v2_17_54
+.SH SEE ALSO
+.BR lctl (8),
+.BR lctl-nodemap-set-sepol (8),
+.BR sestatus (8)
