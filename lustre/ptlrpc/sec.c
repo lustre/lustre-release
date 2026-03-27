@@ -2086,7 +2086,7 @@ struct sptlrpc_sepol *sptlrpc_sepol_get(struct ptlrpc_request *req)
 		RETURN(NULL);
 	}
 	if (unlikely(rc))
-		RETURN(ERR_PTR(rc));
+		RETURN(ERR_PTR(rc > 0 ? -rc : rc));
 
 	out = sptlrpc_sepol_get_cached(imp_sec);
 	if (!out)
