@@ -358,6 +358,30 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
 	}
 	mti_buflen = req_capsule_get_size(tsi->tsi_pill, &RMF_MGS_TARGET_INFO,
 					  RCL_CLIENT);
+	if (nidlist) {
+		req_capsule_extend(tsi->tsi_pill, &RQF_MGS_TARGET_REG_NIDLIST);
+		if (!req_capsule_field_present(tsi->tsi_pill,
+					       &RMF_MGS_TARGET_NIDLIST,
+					       RCL_CLIENT)) {
+			DEBUG_REQ(D_HA, tgt_ses_req(tsi),
+				  "no mgs_target_nidlist");
+			RETURN(err_serious(-EPROTO));
+		}
+
+		/* new protocol with nidlist */
+		mtn = req_capsule_client_get(tsi->tsi_pill,
+					     &RMF_MGS_TARGET_NIDLIST);
+
+		/* Initial request may be with NIDs in mti, in that case
+		 * NIDLIST buffer has just header without NIDs.
+		 * Check it to avoid mismatch with client and set nidlist
+		 * to false if so. Exception is a bulk request.
+		 */
+		if (req_capsule_get_size(tsi->tsi_pill,
+					 &RMF_MGS_TARGET_NIDLIST,
+					 RCL_CLIENT) <= sizeof(*mtn))
+			nidlist = !!(mtn->mtn_flags & NIDLIST_IN_BULK);
+	}
 
 	/* Compatibility code for older targets, process mti as is */
 	if (!nidlist || !target_supports_large_nid(request_mti)) {
@@ -378,15 +402,6 @@ static int mgs_target_reg(struct tgt_session_info *tsi)
 		goto process;
 	}
 
-	req_capsule_extend(tsi->tsi_pill, &RQF_MGS_TARGET_REG_NIDLIST);
-	if (!req_capsule_field_present(tsi->tsi_pill, &RMF_MGS_TARGET_NIDLIST,
-				       RCL_CLIENT)) {
-		DEBUG_REQ(D_HA, tgt_ses_req(tsi), "no mgs_target_nidlist");
-		RETURN(err_serious(-EPROTO));
-	}
-
-	/* new protocol with nidlist */
-	mtn = req_capsule_client_get(tsi->tsi_pill, &RMF_MGS_TARGET_NIDLIST);
 	mti_alloc = sizeof(*mti) + NIDLIST_SIZE(mtn->mtn_nids);
 	OBD_ALLOC_LARGE(mti, mti_alloc);
 	if (!mti)

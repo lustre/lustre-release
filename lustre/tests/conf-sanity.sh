@@ -6750,6 +6750,19 @@ test_73e() {
 }
 run_test 73e "Mount client with dynamic server NIDs"
 
+test_73f() {
+	(( $MDS1_VERSION >= $(version_code 2.17.51) )) ||
+		skip "Need server version at least 2.16.51 for LU-20054"
+
+	stack_trap "cleanup"
+	reformat
+	start_mgsmds || error "Failed to start MDT"
+#define OBD_FAIL_MGC_REG_BEFORE_CONN 0x90f
+	do_facet ost1 "$LCTL set_param fail_loc=0x8000090f"
+	start_ost || error "Failed to start ost1"
+}
+run_test 73f "mgc register before connect"
+
 # LU-15246
 test_74() {
 	(( $MDS1_VERSION >= $(version_code 2.15.57.16) )) ||

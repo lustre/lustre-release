@@ -189,7 +189,10 @@ static int mgc_target_register(struct obd_export *exp,
 	server_mti_print("mgc_target_register: req", mti);
 
 	nidlist = exp_connect_flags(exp) & OBD_CONNECT_MGS_NIDLIST;
-	large_nids = exp_connect_flags2(exp) & OBD_CONNECT2_LARGE_NID;
+	large_nids = target_supports_large_nid(mti);
+
+	if (CFS_FAIL_CHECK(OBD_FAIL_MGC_REG_BEFORE_CONN))
+		nidlist = false;
 
 	/* it is OK to use new protocol with an old MGS, mti buffer is the
 	 * same in both cases
@@ -248,12 +251,13 @@ static int mgc_target_register(struct obd_export *exp,
 		ptlrpc_req_put(req);
 		RETURN(-ENOMEM);
 	}
-	mtn->mtn_nids = mti->mti_nid_count;
+	mtn->mtn_nids = 0;
 	mtn->mtn_flags = 0;
 
 	if (pages) {
 		LASSERT(nidlist);
 		mtn->mtn_flags |= NIDLIST_IN_BULK;
+		mtn->mtn_nids = mti->mti_nid_count;
 		req->rq_bulk_write = 1;
 		desc = ptlrpc_prep_bulk_imp(req, pages,
 					    MD_MAX_BRW_SIZE >> LNET_MTU_BITS,
@@ -267,6 +271,7 @@ static int mgc_target_register(struct obd_export *exp,
 		desc->bd_frag_ops->add_iov_frag(desc, mti->mti_nidlist,
 						nidlist_size);
 	} else if (nidlist) {
+		mtn->mtn_nids = mti->mti_nid_count;
 		memcpy(mtn->mtn_inline_list, mti->mti_nidlist, nidlist_size);
 	} else if (large_nids) {
 		memcpy(request_mti, mti, sizeof(*mti) + nidlist_size);

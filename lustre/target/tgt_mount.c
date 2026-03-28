@@ -1196,6 +1196,8 @@ struct nid_fetch_data {
 	GENRADIX(struct lnet_nid) nfd_radix;
 	struct lustre_mount_data *nfd_lmd;
 	unsigned int nfd_pos;
+	bool nfd_skip_ipv6;
+	bool nfd_has_ipv6;
 };
 
 static int server_nid2radix(void *data, struct lnet_nid *nid)
@@ -1205,6 +1207,13 @@ static int server_nid2radix(void *data, struct lnet_nid *nid)
 
 	if (nid_is_lo0(nid))
 		return 0;
+
+	/* skip IPv6 NIDs for an old server */
+	if (!nid_is_nid4(nid)) {
+		if (nfd->nfd_skip_ipv6)
+			return 0;
+		nfd->nfd_has_ipv6 = true;
+	}
 
 	if (nfd->nfd_lmd &&
 	    test_bit(LMD_FLG_NO_PRIMNODE, nfd->nfd_lmd->lmd_flags) &&
@@ -1231,10 +1240,14 @@ static struct mgs_target_info *server_lsi2mti(struct lustre_sb_info *lsi,
 	__u32 refnet = LNET_NET_ANY;
 	char *buf;
 	int rc, i = 0, nid_count;
+	bool mgc_no_connect;
 
 	ENTRY;
 	if (!IS_SERVER(lsi))
 		RETURN(ERR_PTR(-EINVAL));
+
+	/* MGC has no flags if it was never connected to MGS yet */
+	mgc_no_connect = !exp_connect_flags(lsi->lsi_mgc->u.cli.cl_mgc_mgsexp);
 
 	if (exp_connect_flags2(lsi->lsi_mgc->u.cli.cl_mgc_mgsexp) &
 	    OBD_CONNECT2_LARGE_NID)
@@ -1267,6 +1280,9 @@ static struct mgs_target_info *server_lsi2mti(struct lustre_sb_info *lsi,
 	genradix_prealloc(&nfd.nfd_radix, MTI_NIDS_MAX, GFP_KERNEL);
 	nfd.nfd_lmd = registration ? lsi->lsi_lmd : NULL;
 	nfd.nfd_pos = 0;
+	/* skip IPv6 NIDs if MGS reports that explicitly by finished connect */
+	nfd.nfd_skip_ipv6 = !large_nid && !mgc_no_connect;
+	nfd.nfd_has_ipv6 = false;
 
 	LNetFetchNIDs(server_nid2radix, refnet, &nfd);
 	nid_count = nfd.nfd_pos;
@@ -1275,7 +1291,11 @@ static struct mgs_target_info *server_lsi2mti(struct lustre_sb_info *lsi,
 		       lsi->lsi_svname);
 		GOTO(free_radix, mti = ERR_PTR(-EINVAL));
 	}
-
+	/* at this point large_nid is either set already or MGC is not yet
+	 * connected, but LNet reports IPv6 NIDs, so assume MGS is not too
+	 * old and aware about large NIDs
+	 */
+	large_nid |= nfd.nfd_has_ipv6;
 	if (large_nid)
 		len += NIDLIST_SIZE(nid_count);
 	else if (nid_count > MTI_NIDS_MAX)
@@ -1354,8 +1374,7 @@ static int server_register_target(struct lustre_sb_info *lsi)
 	if (IS_ERR(mti))
 		GOTO(out, rc = PTR_ERR(mti));
 
-	if (exp_connect_flags2(lsi->lsi_mgc->u.cli.cl_mgc_mgsexp) &
-	    OBD_CONNECT2_LARGE_NID) {
+	if (target_supports_large_nid(mti)) {
 		nidstr = mti->mti_nidlist[0]; /* large_nid */
 	} else {
 		lnet_nid4_to_nid(mti->mti_nids[0], &nid);

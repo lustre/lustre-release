@@ -543,6 +543,7 @@ extern bool obd_enable_fname_encoding;
 #define OBD_FAIL_MGS_CONFIG_READ_NET	 0x90c
 #define OBD_FAIL_MGS_LDLM_REPLY_NET	 0x90d
 #define OBD_FAIL_MGS_WRITE_TARGET_DELAY	 0x90e
+#define OBD_FAIL_MGC_REG_BEFORE_CONN	 0x90f
 
 #define OBD_FAIL_QUOTA_DQACQ_NET         0xA01
 #define OBD_FAIL_QUOTA_EDQUOT            0xA02
