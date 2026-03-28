@@ -1,0 +1,22 @@
+Index: linux-stage/fs/ext4/xattr.c
+===================================================================
+--- linux-stage.orig/fs/ext4/xattr.c
++++ linux-stage/fs/ext4/xattr.c
+@@ -1241,7 +1241,7 @@
+ {
+ 	struct inode *ea_inode;
+ 	struct ext4_xattr_entry *entry;
+-	struct ext4_iloc iloc;
++	struct ext4_iloc iloc = { .bh = NULL };
+ 	bool dirty = false;
+ 	unsigned int ea_ino;
+ 	int err;
+@@ -1332,6 +1332,8 @@
+ 			ext4_warning_inode(parent,
+ 					   "handle dirty metadata err=%d", err);
+ 	}
++
++	brelse(iloc.bh);
+ }
+
+ /*

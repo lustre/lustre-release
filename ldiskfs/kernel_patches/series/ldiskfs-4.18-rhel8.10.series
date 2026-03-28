@@ -39,6 +39,7 @@ rhel8/ext4-add-periodic-superblock-update.patch
 rhel8.4/ext4-add-DISCARD-stats.patch
 rhel8.7/ext4-filename-encode.patch
 rhel8/ext4-old_ea_inodes_handling_fix.patch
+rhel8.10/ext4-xattr-inode-dec-ref-all-iloc-bh-leak.patch
 rhel8.4/ext4-optimize-find_delayed_extent.patch
 rhel8/ext4-encdata.patch
 rhel8/ext4-race-in-ext4-destroy-inode.patch

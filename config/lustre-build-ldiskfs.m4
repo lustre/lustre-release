@@ -39,6 +39,8 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	91)     LDISKFS_SERIES="5.14-rhel9.1.series"    ;;
 	90)     LDISKFS_SERIES="5.14-rhel9.series"      ;;
 	810)    LDISKFS_SERIES="4.18-rhel8.10.series"
+		AS_VERSION_COMPARE([$RHEL_RELEASE_STR],[553.61.1],
+			[LDISKFS_SERIES="4.18-rhel8.10-553.22.series"],[],[])
 		AS_VERSION_COMPARE([$RHEL_RELEASE_STR],[553.22.1],
 			[LDISKFS_SERIES="4.18-rhel8.10-553.series"],[],[])
 		;;
