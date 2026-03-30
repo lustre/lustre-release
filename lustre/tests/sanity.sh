@@ -33624,28 +33624,30 @@ test_425() {
 
 	sleep 5
 
-	for i in $(seq $((MDSCOUNT * 125))); do
-		local t=$DIR/$tdir/$tfile_$i
-
-		dd if=/dev/zero of=$t bs=4K count=1 > /dev/null 2>&1 ||
-			error_noexit "Create file $t"
-	done
-	stack_trap "rm -rf $DIR/$tdir" EXIT
+	stack_trap "unlinkmany $DIR/$tdir/$tfile $((MDSCOUNT * 125)) || true"
+	createmany -o -W 4096 $DIR/$tdir/$tfile $((MDSCOUNT * 125)) ||
+		error_noexit "Create files in $DIR/$tdir"
 
 	for oscparam in $($LCTL list_param ldlm.namespaces.*osc-[-0-9a-f]*); do
 		local lru_size=$($LCTL get_param -n $oscparam.lru_size)
 		local lock_count=$($LCTL get_param -n $oscparam.lock_count)
 
-		[ $lock_count -le $lru_size ] ||
+		# allow some margin for batched lock cancellation
+		(( $lock_count <= $lru_size * 11 / 10)) || {
+			$LCTL get_param $oscparam.lru_size $oscparam.lock_count
 			error "osc lock count $lock_count > lru size $lru_size"
+		}
 	done
 
 	for mdcparam in $($LCTL list_param ldlm.namespaces.*mdc-*); do
 		local lru_size=$($LCTL get_param -n $mdcparam.lru_size)
 		local lock_count=$($LCTL get_param -n $mdcparam.lock_count)
 
-		[ $lock_count -le $lru_size ] ||
+		# allow some margin for batched lock cancellation
+		(( $lock_count <= $lru_size * 11 / 10)) || {
+			$LCTL get_param $mdcparam.lru_size $mdcparam.lock_count
 			error "mdc lock count $lock_count > lru size $lru_size"
+		}
 	done
 }
 run_test 425 "lock count should not exceed lru size"
