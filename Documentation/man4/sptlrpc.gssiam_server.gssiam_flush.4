@@ -1,0 +1,80 @@
+.TH SPTLRPC.GSSIAM_SERVER.GSSIAM_FLUSH 4 2026-06-18 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+sptlrpc.gssiam_server.gssiam_flush, sptlrpc.gssiam.gssiam_flush \- flush entries
+in the GSS IAM upcall cache
+.SH SYNOPSIS
+.SY
+.BI "lctl set_param sptlrpc.gssiam.gssiam_flush=" KEY
+.SY
+.BI "lctl set_param sptlrpc.gssiam_server.gssiam_flush=-1"
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.br
+.BR 200 " | " --w-------
+.TP
+.B Scope
+.br
+Global security setting.
+.TP
+.B Config
+.br
+Present on server targets (gssiam_server) or if GSS is enabled (gssiam).
+.TP
+.B Default
+.br
+N/A (Write-only)
+.SH DESCRIPTION
+The
+.B sptlrpc.gssiam.gssiam_flush
+and
+.B sptlrpc.gssiam_server.gssiam_flush
+parameters allow userspace to flush entries in the GSS IAM
+(Identity and Access Management) upcall caches on clients and on servers
+(targets), respectively.
+.PP
+Writing
+.B -1
+to this parameter flushes all upcall cache entries on the client, and flushes
+idle cache entries while marking active cache entries as expired on the server/target.
+.PP
+For the client-side cache
+.RB ( sptlrpc.gssiam.gssiam_flush ),
+writing any other integer value
+.I KEY
+will invalidate the mount token cache entry.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B sptlrpc.gssiam.gssiam_flush
+.B sptlrpc.gssiam_server.gssiam_flush
+.EE
+.SH EXAMPLES
+Flush all idle GSS IAM cache entries on the server:
+.EX
+.RB "server# " "lctl set_param sptlrpc.gssiam_server.gssiam_flush=-1"
+sptlrpc.gssiam_server.gssiam_flush=-1
+.EE
+.PP
+Flush all GSS IAM cache entries on the client:
+.EX
+.RB "client# " "lctl set_param sptlrpc.gssiam.gssiam_flush=-1"
+sptlrpc.gssiam.gssiam_flush=-1
+.EE
+.SH AVAILABILITY
+The
+.B sptlrpc.gssiam.gssiam_flush
+and
+.B sptlrpc.gssiam_server.gssiam_flush
+parameters are part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" Added in commit v2_17_56
+.SH SEE ALSO
+.BR sptlrpc.gssiam_server.gssiam_auth_downcall (4),
+.BR sptlrpc.gssiam_server.gssiam_auth_upcall (4),
+.BR sptlrpc.gssiam_server.gssiam_refresh_interval (4),
+.BR l_gssiam_upcall (8),
+.BR lctl (8),
+.BR lctl-set_param (8)

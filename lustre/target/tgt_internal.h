@@ -264,8 +264,12 @@ void barrier_fini(void);
 
 extern struct file_system_type lustre_tgt_fstype;
 
+#define GSSIAM_TGT_CACHE_NAME "gssiam_server"
 int tgt_gssiam_init(void);
 void tgt_gssiam_fini(void);
+int tgt_gssiam_downcall(const char *buffer, size_t count);
+int tgt_gssiam_tunables_init(void);
+void tgt_gssiam_tunables_fini(void);
 
 /* FMD tracking data */
 struct tgt_fmd_data {

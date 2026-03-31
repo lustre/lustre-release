@@ -467,8 +467,51 @@ static struct upcall_cache_ops tgt_gssiam_upcall_cache_ops = {
 };
 
 #define GSSIAM_TGT_AUTH_PATH "/usr/sbin/l_gssiam_auth"
-#define GSSIAM_TGT_CACHE_NAME "gssiam_server"
 #define GSSIAM_TGT_UC_HASH_SIZE 128
+
+int tgt_gssiam_downcall(const char *buffer, size_t count)
+{
+	char *buf;
+	char *token_str;
+	unsigned long long key;
+	int rc = 0;
+
+	ENTRY;
+
+	/* Expect: <key> <mount_option>:<expire>:<principal> */
+	OBD_ALLOC(buf, count + 1);
+	if (!buf)
+		RETURN(-ENOMEM);
+
+	memcpy(buf, buffer, count);
+
+	/* Find space after key */
+	token_str = strchr(buf, ' ');
+	if (!token_str) {
+		rc = -EINVAL;
+		CERROR("%s: missing delimiter in gssiam downcall: rc = %d\n",
+		       GSSIAM_TGT_CACHE_NAME, rc);
+		GOTO(out, rc);
+	}
+	*token_str = '\0'; /* Null-terminate the key */
+	token_str++; /* Skip space */
+
+	if (kstrtoull(buf, 10, &key) != 0) {
+		rc = -EINVAL;
+		CERROR("%s: invalid key '%s' in gssiam downcall: rc = %d\n",
+		       GSSIAM_TGT_CACHE_NAME, buf, rc);
+		GOTO(out, rc);
+	}
+
+	rc = upcall_cache_downcall(tgt_gssiam_cache, 0, key, token_str);
+	if (!rc)
+		rc = count;
+
+out:
+	OBD_FREE(buf, count + 1);
+	RETURN(rc);
+}
+
 int tgt_gssiam_init(void)
 {
 	int rc = 0;
@@ -486,11 +529,20 @@ int tgt_gssiam_init(void)
 		return rc;
 	}
 
+	rc = tgt_gssiam_tunables_init();
+	if (rc) {
+		upcall_cache_cleanup(tgt_gssiam_cache);
+		tgt_gssiam_cache = NULL;
+		return rc;
+	}
+
 	return 0;
 }
 
 void tgt_gssiam_fini(void)
 {
+	tgt_gssiam_tunables_fini();
+
 	if (tgt_gssiam_cache) {
 		upcall_cache_cleanup(tgt_gssiam_cache);
 		tgt_gssiam_cache = NULL;

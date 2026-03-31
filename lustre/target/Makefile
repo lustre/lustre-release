@@ -11,4 +11,4 @@ target_objs += tgt_handler.o out_handler.o
 target_objs += out_lib.o update_trans.o
 target_objs += update_records.o update_recovery.o
 target_objs += tgt_grant.o tgt_fmd.o barrier.o
-target_objs += tgt_mount.o tgt_gssiam.o
+target_objs += tgt_mount.o tgt_gssiam.o tgt_lproc.o
