@@ -535,7 +535,12 @@ static const struct seq_operations vvp_pgcache_ops = {
 static int vvp_dump_pgcache_seq_open(struct inode *inode, struct file *filp)
 {
 	struct vvp_seq_private *priv;
+	struct ll_sb_info *sbi;
 	struct lu_site *s;
+
+	sbi = inode->i_private;
+	if (sbi->ll_client_common_fill_super_succeeded == 0)
+		return -ENODATA;
 
 	priv = __seq_open_private(filp, &vvp_pgcache_ops, sizeof(*priv));
 	if (!priv)
