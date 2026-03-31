@@ -38,14 +38,12 @@
 #include <linux/uio.h>
 #include <linux/unistd.h>
 #include <linux/hashtable.h>
-#include <linux/libcfs/libcfs.h>
-#include <net/sock.h>
-#include <net/tcp.h>
+#include <lustre_compat/net/sock.h>
+#include <lustre_compat/net/tcp.h>
 
+#include <linux/libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 #include <lnet/socklnd.h>
-
-#include <lustre_compat/net/linux-net.h>
 
 #ifndef NETIF_F_CSUM_MASK
 # define NETIF_F_CSUM_MASK NETIF_F_ALL_CSUM

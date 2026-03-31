@@ -2,8 +2,10 @@
 
 /* This file is part of Lustre, http://www.lustre.org/ */
 
-#ifndef __LNET_LNET_COMPAT_H__
-#define __LNET_LNET_COMPAT_H__
+#ifndef __LIBCFS_LINUX_SOCK_H__
+#define __LIBCFS_LINUX_SOCK_H__
+
+#include <net/sock.h>
 
 /* kernel v5.17-rc1: commit d477eb9004845cb2dc92ad5eed79a437738a868a
  * added static function sock_inuse_add() to the kernel headers, backport

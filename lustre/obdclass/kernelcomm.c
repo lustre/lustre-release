@@ -21,7 +21,7 @@
 #include <linux/file.h>
 #include <linux/glob.h>
 #include <linux/types.h>
-#include <lustre_compat/net/linux-net.h>
+#include <lustre_compat/net/genetlink.h>
 
 #include <obd_class.h>
 #include <obd_support.h>
@@ -636,10 +636,8 @@ static const struct ln_key_list stats_dataset_list = {
 	},
 };
 
-#ifndef HAVE_GENL_DUMPIT_INFO
-static struct cfs_genl_dumpit_info service_info = {
-	.family		= &lustre_family,
-};
+#ifdef HAVE_GENL_DUMPIT_INFO
+static struct compat_genl_info service_info;
 #endif
 
 static inline struct lustre_stats_list *
@@ -694,7 +692,7 @@ static int lustre_stats_start(struct netlink_callback *cb)
 	int msg_len = genlmsg_len(gnlh);
 	int rc = 0;
 
-#ifndef HAVE_GENL_DUMPIT_INFO
+#ifdef HAVE_GENL_DUMPIT_INFO
 	cb->args[1] = (unsigned long)&service_info;
 #endif
 	OBD_ALLOC(slist, sizeof(*slist));
@@ -789,7 +787,7 @@ report_err:
 
 int lustre_stats_dump(struct sk_buff *msg, struct netlink_callback *cb)
 {
-	const struct cfs_genl_dumpit_info *info = lnet_genl_dumpit_info(cb);
+	const struct compat_genl_info *info = compat_genl_info_dump(cb);
 	struct lustre_stats_list *slist = stats_dump_ctx(cb);
 	struct genlmsghdr *gnlh = nlmsg_data(cb->nlh);
 	struct netlink_ext_ack *extack = cb->extack;

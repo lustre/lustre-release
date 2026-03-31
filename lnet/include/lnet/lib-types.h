@@ -26,7 +26,7 @@
 #include <linux/semaphore.h>
 #include <linux/types.h>
 #include <linux/kref.h>
-#include <net/genetlink.h>
+#include <lustre_compat/net/genetlink.h>
 
 #include <uapi/linux/lnet/lnet-nl.h>
 #include <uapi/linux/lnet/lnet-dlc.h>

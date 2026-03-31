@@ -72,44 +72,8 @@ extern struct lnet the_lnet;			/* THE network */
 /* default number of connections per peer */
 #define DEFAULT_CONNS_PER_PEER  0
 
-#ifdef HAVE_KERN_SOCK_GETNAME_2ARGS
-#define lnet_kernel_getpeername(sock, addr, addrlen) \
-		kernel_getpeername(sock, addr)
-#define lnet_kernel_getsockname(sock, addr, addrlen) \
-		kernel_getsockname(sock, addr)
-#else
-#define lnet_kernel_getpeername(sock, addr, addrlen) \
-		kernel_getpeername(sock, addr, addrlen)
-#define lnet_kernel_getsockname(sock, addr, addrlen) \
-		kernel_getsockname(sock, addr, addrlen)
-#endif
-
-/*
- * kernel 5.3: commit ef11db3310e272d3d8dbe8739e0770820dd20e52
- * kernel 4.18.0-193.el8:
- * added in_dev_for_each_ifa_rtnl and in_dev_for_each_ifa_rcu
- * and removed for_ifa and endfor_ifa.
- * Use the _rntl variant as the current locking is rtnl.
- */
-#ifdef HAVE_IN_DEV_FOR_EACH_IFA_RTNL
-#define DECLARE_CONST_IN_IFADDR(ifa)		const struct in_ifaddr *ifa
-#define endfor_ifa(in_dev)
-#else
-#define DECLARE_CONST_IN_IFADDR(ifa)
-#define in_dev_for_each_ifa_rtnl(ifa, in_dev)	for_ifa((in_dev))
-#define in_dev_for_each_ifa_rcu(ifa, in_dev)	for_ifa((in_dev))
-#endif
-
-#ifndef fallthrough
-# if defined(__GNUC__) && __GNUC__ >= 7
-#  define fallthrough  __attribute__((fallthrough)) /* fallthrough */
-# else
-#  define fallthrough do {} while (0)  /* fallthrough */
-# endif
-#endif
-
-int choose_ipv4_src(__u32 *ret,
-		    int interface, __u32 dst_ipaddr, struct net *ns);
+int choose_ipv4_src(u32 *ret,
+		    int interface, u32 dst_ipaddr, struct net *ns);
 
 bool lnet_is_route_alive(struct lnet_route *route);
 bool lnet_is_gateway_alive(struct lnet_peer *gw);

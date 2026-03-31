@@ -15,7 +15,6 @@
  * Author: Liang Zhen <liangzhen@clusterfs.com>
  */
 
-#include <lustre_compat/net/linux-net.h>
 #include <linux/libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
 #include "console.h"

@@ -12,23 +12,21 @@
 
 #include <linux/if.h>
 #include <linux/in.h>
-#include <linux/net.h>
+#include <lustre_compat/linux/net.h>
 #include <net/addrconf.h>
 #include <net/ipv6.h>
 #include <linux/file.h>
+#include <linux/if_vlan.h>
 #include <linux/pagemap.h>
 /* For sys_open & sys_close */
 #include <linux/syscalls.h>
 #include <net/net_namespace.h>
-#include <net/sock.h>
-#include <linux/inetdevice.h>
+#include <lustre_compat/net/sock.h>
+#include <lustre_compat/net/tcp.h>
+#include <lustre_compat/linux/inetdevice.h>
 
-#include <lustre_compat/linux/linux-misc.h>
-#include <lustre_compat/net/linux-net.h>
 #include <linux/libcfs/libcfs.h>
 #include <lnet/lib-lnet.h>
-#include <lnet/lnet_compat.h>
-#include <linux/if_vlan.h>
 
 int
 lnet_sock_write(struct socket *sock, void *buffer, int nob, int timeout)

@@ -146,6 +146,12 @@ AC_DEFUN([LIBCFS_CACHE_DETAIL_WRITERS], [
 # kernel v5.4-rc1 commit bf813b0afeae2f012f0e527a526c1b78ca21ad82
 # expanded struct genl_dumpit_info to include struct genl_family.
 #
+# kernel v6.5-rc5 commit 5c670a010de46 moved genl_family from
+# struct genl_dumpit_info to struct genl_info.
+#
+# Note RHEL8 while earlier than 5.4 does have family info in
+# struct genl_dumpit_info
+#
 AC_DEFUN([LIBCFS_SRC_GENL_DUMPIT_INFO], [
 	LB2_LINUX_TEST_SRC([genl_dumpit_info], [
 		#include <net/genetlink.h>

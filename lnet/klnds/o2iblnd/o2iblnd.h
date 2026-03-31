@@ -47,7 +47,7 @@
 
 #include <rdma/rdma_cm.h>
 #include <rdma/ib_cm.h>
-#include <rdma/ib_verbs.h>
+#include <lustre_compat/rdma/ib_verbs.h>
 #ifdef HAVE_OFED_FMR_POOL_API
 #include <rdma/ib_fmr_pool.h>
 #endif
@@ -55,7 +55,6 @@
 #define DEBUG_SUBSYSTEM S_LND
 
 #include <linux/libcfs/libcfs.h>
-#include <lustre_compat/net/linux-net.h>
 
 #include <lnet/lib-lnet.h>
 #include <lnet/lnet_rdma.h>

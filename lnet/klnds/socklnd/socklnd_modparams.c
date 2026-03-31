@@ -12,15 +12,11 @@
 
 #include "socklnd.h"
 
-#include <linux/kvm_host.h>
-#if defined(__x86_64__) || defined(__i386__)
-#include <asm/hypervisor.h>
-#endif
 #ifdef HAVE_ETHTOOL_LINK_SETTINGS
-#include <linux/inetdevice.h>
+#include <lustre_compat/linux/inetdevice.h>
+#endif
 #include <linux/ethtool.h>
 #include <net/addrconf.h>
-#endif
 
 #define CURRENT_LND_VERSION 1
 

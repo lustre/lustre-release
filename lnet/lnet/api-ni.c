@@ -16,10 +16,8 @@
 #include <linux/moduleparam.h>
 #include <linux/uaccess.h>
 #include <linux/sched/signal.h>
-#include <net/genetlink.h>
 
 #include <linux/libcfs/libcfs.h>
-#include <lustre_compat/net/linux-net.h>
 #include <lnet/udsp.h>
 #include <lnet/lib-lnet.h>
 #include <uapi/linux/lustre/lustre_ver.h>

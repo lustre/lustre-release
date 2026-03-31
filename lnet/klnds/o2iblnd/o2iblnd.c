@@ -11,7 +11,7 @@
  * Author: Eric Barton <eric@bartonsoftware.com>
  */
 #include <linux/ethtool.h>
-#include <linux/inetdevice.h>
+#include <lustre_compat/linux/inetdevice.h>
 #include <linux/kernel.h>
 #include <linux/sunrpc/addr.h>
 #include <net/addrconf.h>
