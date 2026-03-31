@@ -1325,6 +1325,9 @@ static struct lu_device *lmv_device_free(const struct lu_env *env,
 
 	ENTRY;
 
+	lprocfs_obd_cleanup(obd);
+	fld_client_debugfs_fini(&lmv->lmv_fld);
+
 	spin_lock(&lmv->lmv_lock);
 	list_for_each_entry_safe(pat, ptmp,
 		&lmv->lmv_qos_exclude_list, qep_list) {
@@ -1333,9 +1336,7 @@ static struct lu_device *lmv_device_free(const struct lu_env *env,
 	}
 	spin_unlock(&lmv->lmv_lock);
 	fld_client_fini(&lmv->lmv_fld);
-	fld_client_debugfs_fini(&lmv->lmv_fld);
 
-	lprocfs_obd_cleanup(obd);
 	lprocfs_free_md_stats(obd);
 
 	lmv_foreach_tgt_safe(lmv, tgt, tmp)
