@@ -393,6 +393,8 @@ static int ll_site_stats_seq_show(struct seq_file *m, void *v)
 	 * See description of statistical counters in struct cl_site, and
 	 * struct lu_site.
 	 */
+	if (ll_s2sbi(sb)->ll_client_common_fill_super_succeeded == 0)
+		return 0;
 	return cl_site_stats_print(lu2cl_site(ll_s2sbi(sb)->ll_site), m);
 }
 
