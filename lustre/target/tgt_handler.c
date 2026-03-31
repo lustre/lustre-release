@@ -2404,20 +2404,14 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 	req->rq_bulk_read = 1;
 
 	if (CFS_FAIL_CHECK(OBD_FAIL_OST_BRW_READ_BULK)) {
-		/* optionally use cfs_fail_val - 1 to select a specific OST on
-		 * this server to fail requests.
-		 */
-		char fail_ost_name[MAX_OBD_NAME];
+		/* fail_val selects which OSTs to fail, see cfs_fail_index() */
+		char *ost_str = strstr(obd_name, "OST");
+		unsigned int ost_idx;
 
-		if (cfs_fail_val > 0) {
-			snprintf(fail_ost_name, MAX_OBD_NAME, "OST%04X",
-				 cfs_fail_val - 1);
-
-			if (strstr(obd_name, fail_ost_name))
-				RETURN(err_serious(-EIO));
-		} else {
+		if (cfs_fail_val == 0 ||
+		    (ost_str && sscanf(ost_str, "OST%04x", &ost_idx) == 1 &&
+		     cfs_fail_index(cfs_fail_val, ost_idx)))
 			RETURN(err_serious(-EIO));
-		}
 	}
 
 	CFS_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK, cfs_fail_val > 0 ?
