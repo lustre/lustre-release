@@ -5416,7 +5416,7 @@ yaml_extract_cmn_tunables(struct cYAML *tree,
 {
 	struct cYAML *tun, *item;
 
-	tun = cYAML_get_object_item(tree, "tunables");
+	tun = cYAML_get_object_child(tree, "tunables");
 	if (tun != NULL) {
 		item = cYAML_get_object_item(tun, "peer_timeout");
 		if (item != NULL)
@@ -5439,22 +5439,23 @@ yaml_extract_cmn_tunables(struct cYAML *tree,
 	return false;
 }
 
-static bool
+#define FOUND_CMN_TUNABLES 1
+#define FOUND_LND_TUNABLES 2
+static int
 yaml_extract_tunables(struct cYAML *tree,
 		      struct lnet_ioctl_config_lnd_tunables *tunables,
 		      __u32 net_type)
 {
-	bool rc;
+	int tunables_found_mask = 0;
 
-	rc = yaml_extract_cmn_tunables(tree, &tunables->lt_cmn);
+	if (yaml_extract_cmn_tunables(tree, &tunables->lt_cmn))
+		tunables_found_mask |= FOUND_CMN_TUNABLES;
 
-	if (!rc)
-		return rc;
+	if (lustre_yaml_extract_lnd_tunables(tree, net_type,
+					     &tunables->lt_tun))
+		tunables_found_mask |= FOUND_LND_TUNABLES;
 
-	lustre_yaml_extract_lnd_tunables(tree, net_type,
-					 &tunables->lt_tun);
-
-	return rc;
+	return tunables_found_mask;
 }
 
 static void
@@ -5464,7 +5465,7 @@ yaml_extract_cpt(struct cYAML *tree,
 	int rc;
 	struct cYAML *smp;
 
-	smp = cYAML_get_object_item(tree, "CPT");
+	smp = cYAML_get_object_child(tree, "CPT");
 	if (smp != NULL) {
 		rc = cfs_expr_list_parse(smp->cy_valuestring,
 					 strlen(smp->cy_valuestring),
@@ -5498,29 +5499,22 @@ static int handle_yaml_config_ni(struct cYAML *tree, struct cYAML **show_rc,
 				 struct cYAML **err_rc)
 {
 	struct cYAML *net, *intf, *seq_no, *ip2net = NULL, *local_nis = NULL,
-		     *item = NULL;
-	int num_entries = 0, rc;
+		     *local_ni = NULL;
+	int num_entries = 0, rc = 0;
 	struct lnet_dlc_network_descr nw_descr;
-	struct cfs_expr_list *global_cpts = NULL;
-	struct lnet_ioctl_config_lnd_tunables tunables;
-	bool found = false;
+	struct cfs_expr_list *intf_cpts = NULL;
+	struct lnet_ioctl_config_lnd_tunables tunables, net_tunables;
+	int tun_found_mask, net_tun_found_mask;
 
-	memset(&tunables, 0, sizeof(tunables));
+	memset(&net_tunables, 0, sizeof(net_tunables));
 	/* Use LND defaults */
-	tunables.lt_cmn.lct_peer_timeout = -1;
-	tunables.lt_cmn.lct_peer_tx_credits = -1;
-	tunables.lt_cmn.lct_peer_rtr_credits = -1;
-	tunables.lt_cmn.lct_max_tx_credits = -1;
-
-	INIT_LIST_HEAD(&nw_descr.network_on_rule);
-	INIT_LIST_HEAD(&nw_descr.nw_intflist);
+	net_tunables.lt_cmn.lct_peer_timeout = -1;
+	net_tunables.lt_cmn.lct_peer_tx_credits = -1;
+	net_tunables.lt_cmn.lct_peer_rtr_credits = -1;
+	net_tunables.lt_cmn.lct_max_tx_credits = -1;
 
 	ip2net = cYAML_get_object_item(tree, "ip2net");
 	net = cYAML_get_object_item(tree, "net type");
-	if (net)
-		nw_descr.nw_id = libcfs_str2net(net->cy_valuestring);
-	else
-		nw_descr.nw_id = LOLND;
 
 	/*
 	 * if neither net nor ip2nets are present, then we can not
@@ -5536,8 +5530,18 @@ static int handle_yaml_config_ni(struct cYAML *tree, struct cYAML **show_rc,
 	if (!cYAML_is_sequence(local_nis))
 		return LUSTRE_CFG_RC_BAD_PARAM;
 
-	while (cYAML_get_next_seq_item(local_nis, &item) != NULL) {
-		intf = cYAML_get_object_item(item, "interfaces");
+	if (net)
+		nw_descr.nw_id = libcfs_str2net(net->cy_valuestring);
+	else
+		nw_descr.nw_id = LOLND;
+
+	net_tun_found_mask = yaml_extract_tunables(tree, &net_tunables,
+						   LNET_NETTYP(nw_descr.nw_id));
+	seq_no = cYAML_get_object_item(tree, "seq_no");
+	while (cYAML_get_next_seq_item(local_nis, &local_ni) != NULL) {
+		INIT_LIST_HEAD(&nw_descr.network_on_rule);
+		INIT_LIST_HEAD(&nw_descr.nw_intflist);
+		intf = cYAML_get_object_item(local_ni, "interfaces");
 		if (intf == NULL)
 			continue;
 		num_entries = yaml_copy_intf_info(intf, &nw_descr);
@@ -5547,22 +5551,41 @@ static int handle_yaml_config_ni(struct cYAML *tree, struct cYAML **show_rc,
 					err_rc);
 			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
+
+		memset(&tunables, 0, sizeof(tunables));
+		/* Use LND defaults */
+		tunables.lt_cmn.lct_peer_timeout = -1;
+		tunables.lt_cmn.lct_peer_tx_credits = -1;
+		tunables.lt_cmn.lct_peer_rtr_credits = -1;
+		tunables.lt_cmn.lct_max_tx_credits = -1;
+		tun_found_mask = yaml_extract_tunables(local_ni, &tunables,
+						      LNET_NETTYP(nw_descr.nw_id));
+		if (!(tun_found_mask & FOUND_CMN_TUNABLES) &&
+				(net_tun_found_mask & FOUND_CMN_TUNABLES)) {
+			tunables.lt_cmn = net_tunables.lt_cmn;
+			tun_found_mask |= FOUND_CMN_TUNABLES;
+		}
+		if (!(tun_found_mask & FOUND_LND_TUNABLES) &&
+				(net_tun_found_mask & FOUND_LND_TUNABLES)) {
+			tunables.lt_tun = net_tunables.lt_tun;
+			tun_found_mask |= FOUND_LND_TUNABLES;
+		}
+
+		yaml_extract_cpt(local_ni, &intf_cpts);
+
+		rc = lustre_lnet_config_ni(&nw_descr, intf_cpts,
+					   (ip2net) ? ip2net->cy_valuestring : NULL,
+					   (tun_found_mask) ? &tunables : NULL,
+					   (seq_no) ? seq_no->cy_valueint : -1,
+					   err_rc);
+
+		if (intf_cpts != NULL) {
+			cfs_expr_list_free(intf_cpts);
+			intf_cpts = NULL;
+		}
+		if (rc != 0)
+			return rc;
 	}
-
-	found = yaml_extract_tunables(tree, &tunables,
-				      LNET_NETTYP(nw_descr.nw_id));
-	yaml_extract_cpt(tree, &global_cpts);
-	seq_no = cYAML_get_object_item(tree, "seq_no");
-
-	rc = lustre_lnet_config_ni(&nw_descr, global_cpts,
-				   (ip2net) ? ip2net->cy_valuestring : NULL,
-				   (found) ? &tunables : NULL,
-				   (seq_no) ? seq_no->cy_valueint : -1,
-				   err_rc);
-
-	if (global_cpts != NULL)
-		cfs_expr_list_free(global_cpts);
-
 	return rc;
 }
 

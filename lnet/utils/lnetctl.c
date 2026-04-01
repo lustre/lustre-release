@@ -5370,17 +5370,19 @@ static int jt_import(int argc, char **argv)
 	char *yaml_blk = NULL, *buf, cmd = 'a';
 	int flags = NLM_F_CREATE;
 	bool release = true;
+	bool oldapi = false;
 	char err_str[256];
 	struct stat st;
 	FILE *input;
 	size_t len;
-	const char *const short_options = "adseh";
+	const char *const short_options = "adseoh";
 	static const struct option long_options[] = {
-		{ .name = "add",  .has_arg = no_argument, .val = 'a' },
-		{ .name = "del",  .has_arg = no_argument, .val = 'd' },
-		{ .name = "show", .has_arg = no_argument, .val = 's' },
-		{ .name = "exec", .has_arg = no_argument, .val = 'e' },
-		{ .name = "help", .has_arg = no_argument, .val = 'h' },
+		{ .name = "add",     .has_arg = no_argument, .val = 'a' },
+		{ .name = "del",     .has_arg = no_argument, .val = 'd' },
+		{ .name = "show",    .has_arg = no_argument, .val = 's' },
+		{ .name = "exec",    .has_arg = no_argument, .val = 'e' },
+		{ .name = "old-api", .has_arg = no_argument, .val = 'o' },
+		{ .name = "help",    .has_arg = no_argument, .val = 'h' },
 		{ .name = NULL }
 	};
 	bool done = false, unspec = true;
@@ -5412,6 +5414,9 @@ static int jt_import(int argc, char **argv)
 			/* use NLM_F_CREATE for discover */
 			cmd = opt;
 			break;
+		case 'o':
+			oldapi = true;
+			break;
 		case 'h':
 			printf("import FILE\n"
 			       "import < FILE : import a file\n"
@@ -5419,6 +5424,7 @@ static int jt_import(int argc, char **argv)
 			       "\t--del: delete configuration\n"
 			       "\t--show: show configuration\n"
 			       "\t--exec: execute command\n"
+			       "\t--old-api: do not use netlink (for tests)\n"
 			       "\t--help: display this help\n"
 			       "If no command option is given then --add"
 			       " is assumed by default\n");
@@ -5451,6 +5457,9 @@ static int jt_import(int argc, char **argv)
 	} else {
 		input = stdin;
 	}
+
+	if (oldapi)
+		goto old_api;
 
 	/* Create Netlink emitter to send request to kernel */
 	sk = nl_socket_alloc();

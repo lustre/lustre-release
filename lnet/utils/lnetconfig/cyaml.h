@@ -116,14 +116,23 @@ void cYAML_free_tree(struct cYAML *node);
 
 /*
  * cYAML_get_object_item
- *   Returns the cYAML object which key correspods to the name passed in
+ *   Returns the cYAML object which key corresponds to the name passed in.
  *   This function searches only through the current level.
  *
  *   parent - is the parent object on which you want to conduct the search
  *   name - key name of the object you want to find.
  */
-struct cYAML *cYAML_get_object_item(struct cYAML *parent,
-				    const char *name);
+struct cYAML *cYAML_get_object_item(struct cYAML *parent, const char *name);
+
+/*
+ * cYAML_get_object_child
+ *   Returns the cYAML object which key corresponds to the name passed in.
+ *   This function searches only among the children of the given parent.
+ *
+ *   parent - is the parent object on which you want to conduct the search
+ *   name - key name of the object you want to find.
+ */
+struct cYAML *cYAML_get_object_child(struct cYAML *parent, const char *name);
 
 /*
  * cYAML_get_next_seq_item
@@ -152,8 +161,8 @@ bool cYAML_is_sequence(struct cYAML *node);
 
 /*
  * cYAML_find_object
- *   Returns the cYAML object which key correspods to the name passed in
- *   this function searches the entire tree.
+ *   Returns the cYAML object which key corresponds to the name passed in.
+ *   This function searches the entire tree.
  *
  *   root - is the root of the tree on which you want to conduct the search
  *   name - key name of the object you want to find.

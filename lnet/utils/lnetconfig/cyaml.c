@@ -734,6 +734,21 @@ struct cYAML *cYAML_get_object_item(struct cYAML *parent, const char *name)
 	return found;
 }
 
+struct cYAML *cYAML_get_object_child(struct cYAML *parent, const char *name)
+{
+	struct cYAML *node = parent;
+
+	if (!node || !name || node->cy_type != CYAML_TYPE_OBJECT)
+		return NULL;
+
+	for (node = node->cy_child; node != NULL; node = node->cy_next)
+		if (node->cy_string)
+			if (strcmp(node->cy_string, name) == 0)
+				return node;
+
+	return NULL;
+}
+
 struct cYAML *cYAML_get_next_seq_item(struct cYAML *seq, struct cYAML **itm)
 {
 	if (*itm != NULL && (*itm)->cy_next != NULL) {

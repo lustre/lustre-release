@@ -2860,10 +2860,12 @@ lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
 		 * TODO - note. currently the tunables can not be updated
 		 * once added
 		 */
+		if (memcmp(&net_l->net_tunables, &net->net_tunables, sizeof(net->net_tunables)))
+			CWARN("All tunables of NIs of a net should be the same\n");
 		lnet_net_free(net);
 	} else {
 		/*
-		 * restore tunables after it has been overwitten by the
+		 * restore tunables after it has been overwritten by the
 		 * lnd
 		 */
 		if (peer_timeout != -1)
