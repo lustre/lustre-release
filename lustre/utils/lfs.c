@@ -88,6 +88,7 @@ struct quota_param {
 	unsigned int	 qp_show_qid:1;
 	unsigned int	 qp_show_title:1;
 	unsigned int	 qp_show_qid_num:1;
+	unsigned int	 qp_show_root:1;
 	__u32		 qp_detail;
 };
 
@@ -541,7 +542,8 @@ command_t cmdlist[] = {
 	 "             [MOUNT_POINT ...]\n"
 	 "       quota -t {-u|-g|-p} [--pool OST_POOL_NAME] [MOUNT_POINT ...]\n"
 	 "       quota [-hqv] {-U|-G|-P} [--pool OST_POOL_NAME] [MOUNT_POINT ...]\n"
-	 "       quota -a {-u|-g|-p} [-n] [-s START_QID] [-e END_QID] [MOUNT_POINT ...]\n"},
+	 "       quota -a {-u|-g|-p} [-n] [-s START_QID] [-e END_QID]\n"
+	 "             [--show-root] [MOUNT_POINT ...]\n"},
 	{"project", lfs_project, 0,
 	 "Change or list project attribute for specified file or directory.\n"
 	 "usage: project [-d|--directory] [-r|--recursive] FILE|DIRECTORY...\n"
@@ -3882,6 +3884,7 @@ enum {
 	LFS_QUOTA_ISOFTLIMIT_OPT,
 	LFS_QUOTA_IHARDLIMIT_OPT,
 	LFS_QUOTA_IGRACE_OPT,
+	LFS_QUOTA_SHOW_ROOT_OPT,
 	LFS_FILES_FROM,
 	LFS_THREAD_OPT,
 	LFS_LUSTRE_DIR,
@@ -10801,6 +10804,10 @@ static int iter_all_quota(char *mnt, struct if_quotactl *qctl,
 		qctl_iter->qc_cmd = LUSTRE_Q_GETQUOTA;
 		cur += sizeof(struct if_quotactl);
 
+		/* Skip root quota entry unless --show-root is specified */
+		if (qctl_iter->qc_id == 0 && !param->qp_show_root)
+			continue;
+
 		/* Is no file created for this quota ID yet? */
 		if ((qctl_iter->qc_dqblk.dqb_valid & QIF_USAGE) != QIF_USAGE)
 			qctl_iter->qc_dqblk.dqb_valid |= QIF_USAGE;
@@ -11163,6 +11170,8 @@ static int lfs_quota(int argc, char **argv)
 			.name = "igrace",	.has_arg = no_argument },
 	{ .val = LFS_QUOTA_IGRACE_OPT,
 			.name = "itime",	.has_arg = no_argument },
+	{ .val = LFS_QUOTA_SHOW_ROOT_OPT,
+			.name = "show-root",	.has_arg = no_argument },
 	{ .name = NULL } };
 
 	qctl_len = sizeof(*qctl) + max(LOV_MAXPOOLNAME + 1, LQA_NAME_MAX + 1);
@@ -11380,6 +11389,9 @@ quota_type:
 		case LFS_QUOTA_IGRACE_OPT:
 			param.qp_detail |= QIF_ITIME;
 			break;
+		case LFS_QUOTA_SHOW_ROOT_OPT:
+			param.qp_show_root = 1;
+			break;
 		default:
 			fprintf(stderr, "%s quota: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
@@ -11390,6 +11402,13 @@ quota_type:
 
 	if (!param.qp_detail)
 		param.qp_detail = QIF_ALL_DETAIL;
+
+	if (param.qp_show_root && qctl->qc_cmd != LUSTRE_Q_ITERQUOTA) {
+		fprintf(stderr, "%s quota: --show-root must be used with -a\n",
+			progname);
+		rc = CMD_HELP;
+		goto out;
+	}
 
 	if (qctl->qc_cmd == LUSTRE_Q_ITERQUOTA) {
 		if (qctl->qc_type == ALLQUOTA) {

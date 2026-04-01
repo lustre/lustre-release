@@ -4637,7 +4637,8 @@ test_49b() {
 	(( MDS1_VERSION >= $(version_code v2_15_61-145-g3edc718) )) ||
 		skip "Need MDS version >= 2.15.61 for lfs quota all support"
 
-	root_name=$($LFS quota -a -u --busage $DIR | awk '/root/ {print $1}')
+	root_name=$($LFS quota -a -u --show-root --busage $DIR |
+			awk '/root/ {print $1}')
 	# check username is not merged with the usage
 	[[ $root_name == "root" ]] || error "root name is insane: $root_name"
 }
@@ -7371,7 +7372,7 @@ test_94()
 		--property trusted --value 1
 	wait_nm_sync $nm trusted_nodemap
 
-	$LFS quota -u -a -n $MOUNT | head -n 10
+	$LFS quota -u -a -n --show-root $MOUNT | head -n 10
 	while IFS= read -r line; do
 		(( lineno++ >= 2 )) || continue
 		read -r qid qval <<< "$line"
@@ -7385,9 +7386,9 @@ test_94()
 			((qval == exp)) ||
 				error "Quota uid $qid is $qval expect $exp"
 		fi
-	done < <($LFS quota -u -a --bhardlimit $MOUNT)
+	done < <($LFS quota -u -a --show-root --bhardlimit $MOUNT)
 
-	$LFS quota -g -a -n $MOUNT | head -n 10
+	$LFS quota -g -a -n --show-root $MOUNT | head -n 10
 	lineno=0
 	while IFS= read -r line; do
 		(( lineno++ >= 2 )) || continue
@@ -7399,10 +7400,10 @@ test_94()
 			((qval == exp)) ||
 				error "Quota gid $qid is $qval expect $exp"
 		fi
-	done < <($LFS quota -g -a --bhardlimit $MOUNT)
+	done < <($LFS quota -g -a --show-root --bhardlimit $MOUNT)
 
 	is_project_quota_supported && {
-		$LFS quota -p -a -n $MOUNT | head -n 10
+		$LFS quota -p -a -n --show-root $MOUNT | head -n 10
 		lineno=0
 		while IFS= read -r line; do
 			(( lineno++ >= 2 )) || continue
@@ -7414,7 +7415,7 @@ test_94()
 				((qval == exp)) ||
 					error "Quota prj $qid lim $qval != $exp"
 			fi
-		done < <($LFS quota -p -a --bhardlimit $MOUNT)
+		done < <($LFS quota -p -a --show-root --bhardlimit $MOUNT)
 	}
 
 	do_facet mgs $LCTL nodemap_modify --name $nm \
@@ -7423,7 +7424,7 @@ test_94()
 
 	# When trusted=0 it could return only ROOT and squash id records for
 	# user and group. And only squash id for project.
-	$LFS quota -u -a $MOUNT | head -n 10
+	$LFS quota -u -a --show-root $MOUNT | head -n 10
 	lineno=0
 	while IFS= read -r line; do
 		(( lineno++ >= 2 )) || continue
@@ -7435,9 +7436,9 @@ test_94()
 			error "Quota uid $qid is now $qval expect $((off))"
 		((lineno <= 4)) ||
 			error "Quota uid $qid val $qval not expected"
-	done < <($LFS quota -u -a --bhardlimit $MOUNT)
+	done < <($LFS quota -u -a --show-root --bhardlimit $MOUNT)
 
-	$LFS quota -g -a $MOUNT | head -n 10
+	$LFS quota -g -a --show-root $MOUNT | head -n 10
 	lineno=0
 	while IFS= read -r line; do
 		(( lineno++ >= 2 )) || continue
@@ -7449,10 +7450,10 @@ test_94()
 			error "Quota gid $qid is now $qval expect $((off))"
 		((lineno <= 4)) ||
 			error "Quota gid $qid val $qval not expected"
-	done < <($LFS quota -g -a --bhardlimit $MOUNT)
+	done < <($LFS quota -g -a --show-root --bhardlimit $MOUNT)
 
 	is_project_quota_supported && {
-		$LFS quota -p -a -n $MOUNT | head -n 10
+		$LFS quota -p -a -n --show-root $MOUNT | head -n 10
 		lineno=0
 		while IFS= read -r line; do
 			(( lineno++ >= 2 )) || continue
@@ -7463,7 +7464,7 @@ test_94()
 				error "Quota prj $qid lim is $qval expect $off"
 			((lineno <= 3)) ||
 				error "Quota prj $qid val $qval not expected"
-		done < <($LFS quota -p -a -n --bhardlimit $MOUNT)
+		done < <($LFS quota -p -a -n --show-root --bhardlimit $MOUNT)
 	}
 
 	return 0
