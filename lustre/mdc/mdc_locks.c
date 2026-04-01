@@ -330,7 +330,7 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
 			     sptlrpc_sepol_size(sepol));
 
-	rc = ldlm_prep_enqueue_req(exp, req, &cancels, count);
+	rc = mdc_prep_enqueue_req(exp, req, &cancels, &count);
 	if (rc < 0)
 		GOTO(err_put_sepol, rc);
 
@@ -432,7 +432,8 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 err_put_sepol:
 	sptlrpc_sepol_put(sepol);
 err_free_rq:
-	ptlrpc_request_free(req);
+	mdc_elc_req_put(req, &cancels, count);
+
 	return ERR_PTR(rc);
 }
 
@@ -478,14 +479,12 @@ mdc_intent_create_pack(struct obd_export *exp, struct lookup_intent *it,
 
 	/* get SELinux policy info if any */
 	sepol = sptlrpc_sepol_get(req);
-	if (IS_ERR(sepol)) {
-		ldlm_lock_list_put(&cancels, l_bl_ast, count);
+	if (IS_ERR(sepol))
 		GOTO(err_free_rq, rc = PTR_ERR(sepol));
-	}
 	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
 			     sptlrpc_sepol_size(sepol));
 
-	rc = ldlm_prep_enqueue_req(exp, req, &cancels, count);
+	rc = mdc_prep_enqueue_req(exp, req, &cancels, &count);
 	if (rc < 0)
 		GOTO(err_put_sepol, rc);
 
@@ -516,7 +515,8 @@ mdc_intent_create_pack(struct obd_export *exp, struct lookup_intent *it,
 err_put_sepol:
 	sptlrpc_sepol_put(sepol);
 err_free_rq:
-	ptlrpc_request_free(req);
+	mdc_elc_req_put(req, &cancels, count);
+
 	return ERR_PTR(rc);
 }
 
@@ -549,7 +549,7 @@ mdc_intent_getxattr_pack(struct obd_export *exp, struct lookup_intent *it,
 	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
 			     sptlrpc_sepol_size(sepol));
 
-	rc = ldlm_prep_enqueue_req(exp, req, &cancels, count);
+	rc = mdc_prep_enqueue_req(exp, req, &cancels, &count);
 	if (rc)
 		GOTO(err_put_sepol, rc);
 
@@ -602,7 +602,8 @@ mdc_intent_getxattr_pack(struct obd_export *exp, struct lookup_intent *it,
 err_put_sepol:
 	sptlrpc_sepol_put(sepol);
 err_free_rq:
-	ptlrpc_request_free(req);
+	mdc_elc_req_put(req, &cancels, count);
+
 	RETURN(ERR_PTR(rc));
 }
 
@@ -719,7 +720,7 @@ static struct ptlrpc_request *mdc_intent_layout_pack(struct obd_export *exp,
 	}
 
 	req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT, 0);
-	rc = ldlm_prep_enqueue_req(exp, req, &cancels, count);
+	rc = mdc_prep_enqueue_req(exp, req, &cancels, &count);
 	if (rc) {
 		ptlrpc_request_free(req);
 		RETURN(ERR_PTR(rc));

@@ -1945,7 +1945,7 @@ static int sepol_helper(struct obd_import *imp)
 		[1] = "PATH=/sbin:/usr/sbin",
 		[2] = NULL
 	};
-	signed short ret;
+	int ret;
 	int rc = 0;
 
 	if (imp == NULL || imp->imp_obd == NULL ||
@@ -1973,7 +1973,21 @@ static int sepol_helper(struct obd_import *imp)
 	rcu_read_unlock();
 
 	ret = call_usermodehelper(argv[0], argv, envp, UMH_WAIT_PROC);
-	rc = ret>>8;
+	/* A launch errno such as -ENOENT would be misread by the caller */
+	if (ret < 0) {
+		CDEBUG(D_SEC, "%s: cannot run sepol helper %s: rc = %d\n",
+		       imp->imp_obd->obd_name, argv[0], ret);
+		return -EPROTO;
+	}
+
+	/* l_getsepol exits with -errno; anything else is a broken helper */
+	rc = WIFEXITED(ret) ? WEXITSTATUS_SIGNED(ret) : -EPROTO;
+	if (rc > 0)
+		rc = -EPROTO;
+	if (rc)
+		CDEBUG(D_SEC,
+		       "%s: sepol helper %s failed, status %#x: rc = %d\n",
+		       imp->imp_obd->obd_name, argv[0], ret, rc);
 
 	return rc;
 }
@@ -2075,7 +2089,7 @@ struct sptlrpc_sepol *sptlrpc_sepol_get(struct ptlrpc_request *req)
 		RETURN(NULL);
 	}
 	if (unlikely(rc))
-		RETURN(ERR_PTR(rc > 0 ? -rc : rc));
+		RETURN(ERR_PTR(rc));
 
 	out = sptlrpc_sepol_get_cached(imp_sec);
 	if (!out)

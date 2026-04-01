@@ -390,7 +390,7 @@ int mdc_xattr_common(struct obd_export *exp, const struct req_format *fmt,
 						   &cancels, LCK_EX,
 						   MDS_INODELOCK_XATTR);
 
-		rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
+		rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, &count);
 		if (rc)
 			GOTO(err_put_sepol, rc);
 	} else {
@@ -461,9 +461,9 @@ int mdc_xattr_common(struct obd_export *exp, const struct req_format *fmt,
 err_put_sepol:
 	sptlrpc_sepol_put(sepol);
 err_free_rq:
-	ptlrpc_request_free(req);
-	RETURN(rc);
+	mdc_elc_req_put(req, NULL, 0);
 
+	RETURN(rc);
 }
 
 static int mdc_setxattr(struct obd_export *exp, const struct lu_fid *fid,
@@ -2280,7 +2280,7 @@ static int mdc_ioc_swap_layouts(struct obd_export *exp,
 	req_capsule_set_size(&req->rq_pill, &RMF_SWAP_LAYOUTS, RCL_CLIENT,
 			     sizeof(*msl));
 #endif
-	rc = mdc_prep_elc_req(exp, req, MDS_SWAP_LAYOUTS, &cancels, count);
+	rc = mdc_prep_elc_req(exp, req, MDS_SWAP_LAYOUTS, &cancels, &count);
 	if (rc) {
 		ptlrpc_request_free(req);
 		RETURN(rc);

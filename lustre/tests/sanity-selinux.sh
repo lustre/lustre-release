@@ -398,10 +398,10 @@ trace_cmd() {
 	[ -z "$xattr_name" ] && xattr_name="security.selinux"
 
 	# umount client
-	if [ "$MOUNT_2" ] && $(grep -q $MOUNT2' ' /proc/mounts); then
+	if [[ -n "$MOUNT_2" ]] && grep -qw "$MOUNT2" /proc/mounts; then
 		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
 	fi
-	if $(grep -q $MOUNT' ' /proc/mounts); then
+	if grep -qw "$MOUNT" /proc/mounts; then
 		umount_client $MOUNT || error "umount $MOUNT failed"
 	fi
 	lustre_rmmod
@@ -574,10 +574,10 @@ test_21a() {
 	local sepol
 
 	# umount client
-	if [ "$MOUNT_2" ] && $(grep -q $MOUNT2' ' /proc/mounts); then
+	if [[ -n "$MOUNT_2" ]] && grep -qw "$MOUNT2" /proc/mounts; then
 		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
 	fi
-	if $(grep -q $MOUNT' ' /proc/mounts); then
+	if grep -qw "$MOUNT" /proc/mounts; then
 		umount_client $MOUNT || error "umount $MOUNT failed"
 	fi
 
@@ -897,6 +897,102 @@ test_21c() {
 		error "expected send_sepol=-1 after -P, got $send_sepol"
 }
 run_test 21c "Persist send_sepol via lctl set_param -P"
+
+# Fixed path: sepol_helper() in the kernel always runs this binary
+SEPOL_HELPER=/usr/sbin/l_getsepol
+
+# Replace l_getsepol with a stub exiting with $1, keeping the original
+# inode so that its SELinux label is preserved.
+stub_sepol_helper() {
+	local code=$1
+
+	cat > $SEPOL_HELPER <<-EOF
+		#!/usr/bin/bash
+		exit $code
+	EOF
+	chmod 755 $SEPOL_HELPER
+}
+
+cleanup_21d() {
+	local saved=$1
+
+	# the helper may have been moved aside rather than overwritten
+	[[ -f $SEPOL_HELPER.bak ]] && mv -f $SEPOL_HELPER.bak $SEPOL_HELPER
+	[[ -f $saved ]] && cat $saved > $SEPOL_HELPER
+	chmod 755 $SEPOL_HELPER
+	rm -f $saved
+
+	$LCTL set_param sptlrpc.send_sepol=0
+
+	# the suite runs with MOUNT_2, so restore both mounts the way
+	# cleanup_20d and test_21a do, not just $MOUNT
+	mountcli || true
+}
+
+test_21d() {
+	local saved=$TMP/l_getsepol.$$
+	local send_sepol
+	local out
+
+	[[ -x $SEPOL_HELPER ]] || skip_env "$SEPOL_HELPER is not installed"
+
+	# cleanup_21d copes with the save below not having happened
+	stack_trap "cleanup_21d $saved" EXIT
+
+	# umount client
+	if [[ -n "$MOUNT_2" ]] && grep -qw "$MOUNT2" /proc/mounts; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+	fi
+	if grep -qw "$MOUNT" /proc/mounts; then
+		umount_client $MOUNT || error "umount $MOUNT failed"
+	fi
+
+	# No nodemap: req_check_sepol() would refuse the -ENODEV connect
+
+	cp -a $SEPOL_HELPER $saved || error "cannot save $SEPOL_HELPER"
+
+	# A stale persistent send_sepol would override the local value.
+	# Not checked: this fails when there is no entry, the normal case.
+	do_facet mgs $LCTL set_param -P -d sptlrpc.send_sepol
+	$LCTL set_param sptlrpc.send_sepol=-1
+
+	# SELinux disabled: the mount must succeed without policy info
+	stub_sepol_helper $((-19 + 256)) # -ENODEV
+	mount_client $MOUNT $MOUNT_OPTS ||
+		error "mount with sepol helper reporting -ENODEV failed"
+
+	# Otherwise the helper was never run
+	send_sepol=$($LCTL get_param -n sptlrpc.send_sepol)
+	(( send_sepol == -1 )) ||
+		error "send_sepol is $send_sepol after mount, expected -1"
+
+	umount_client $MOUNT || error "umount $MOUNT failed"
+
+	stub_sepol_helper $((-22 + 256)) # -EINVAL
+	out=$(mount_client $MOUNT $MOUNT_OPTS 2>&1) &&
+		error "mount with failing sepol helper should be refused"
+	grep -q "Invalid argument" <<< "$out" ||
+		error "exit 234 not decoded to -EINVAL: $out"
+
+	# A leaked import reference makes this mount fail with -EEXIST
+	cat $saved > $SEPOL_HELPER || error "cannot restore $SEPOL_HELPER"
+	mount_client $MOUNT $MOUNT_OPTS ||
+		error "mount after sepol helper failure failed (ref leak?)"
+	umount_client $MOUNT || error "umount $MOUNT failed"
+
+	# The helper cannot be launched at all
+	mv $SEPOL_HELPER $SEPOL_HELPER.bak || error "cannot move helper"
+	out=$(mount_client $MOUNT $MOUNT_OPTS 2>&1) &&
+		error "mount with missing sepol helper should be refused"
+	mv $SEPOL_HELPER.bak $SEPOL_HELPER || error "cannot restore helper"
+	grep -q "Protocol error" <<< "$out" ||
+		error "missing helper not reported as -EPROTO: $out"
+
+	# and the same mount has to work once the helper is back
+	mount_client $MOUNT $MOUNT_OPTS ||
+		error "mount after missing sepol helper failed (ref leak?)"
+}
+run_test 21d "Sepol helper failure at connect"
 
 test_22() {
 	local ctx="system_u:object_r:nfs_t:s0"

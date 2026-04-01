@@ -146,12 +146,35 @@ int mdc_changelog_cdev_init(struct obd_device *obd);
 
 void mdc_changelog_cdev_finish(struct obd_device *obd);
 
+/* The prep call owns @cancels from here on, even on failure. */
 static inline int mdc_prep_elc_req(struct obd_export *exp,
 				   struct ptlrpc_request *req, int opc,
+				   struct list_head *cancels, int *count)
+{
+	int rc = ldlm_prep_elc_req(exp, req, LUSTRE_MDS_VERSION, opc, 0,
+				   cancels, *count);
+
+	*count = 0;
+	return rc;
+}
+
+static inline int mdc_prep_enqueue_req(struct obd_export *exp,
+				       struct ptlrpc_request *req,
+				       struct list_head *cancels, int *count)
+{
+	int rc = ldlm_prep_enqueue_req(exp, req, cancels, *count);
+
+	*count = 0;
+	return rc;
+}
+
+/* Release a request that failed before it was sent, and any unowned locks. */
+static inline void mdc_elc_req_put(struct ptlrpc_request *req,
 				   struct list_head *cancels, int count)
 {
-	return ldlm_prep_elc_req(exp, req, LUSTRE_MDS_VERSION, opc, 0, cancels,
-				 count);
+	if (cancels)
+		ldlm_lock_list_put(cancels, l_bl_ast, count);
+	ptlrpc_req_put(req);
 }
 
 #ifdef CONFIG_LUSTRE_FS_POSIX_ACL

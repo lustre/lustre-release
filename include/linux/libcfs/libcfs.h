@@ -95,4 +95,13 @@ do {									\
 #define in_hardirq()	in_irq()
 #endif
 
+/* Decode a call_usermodehelper(UMH_WAIT_PROC) wait status; the kernel
+ * has no WIFEXITED()/WEXITSTATUS()
+ */
+#ifndef WIFEXITED
+#define WIFEXITED(status)		(((status) & 0x7f) == 0)
+#endif
+/* Exit byte, sign-extended, for helpers that exit with -errno */
+#define WEXITSTATUS_SIGNED(status)	((signed char)(((status) >> 8) & 0xff))
+
 #endif /* _LIBCFS_LIBCFS_H_ */

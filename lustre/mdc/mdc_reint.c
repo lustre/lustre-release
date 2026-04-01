@@ -112,7 +112,7 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
 	req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT, ealen);
 	req_capsule_set_size(&req->rq_pill, &RMF_LOGCOOKIES, RCL_CLIENT, 0);
 
-	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
+	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, &count);
 	if (rc) {
 		ptlrpc_request_free(req);
 		RETURN(rc);
@@ -201,7 +201,7 @@ rebuild:
 	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
 			     sptlrpc_sepol_size(sepol));
 
-	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
+	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, &count);
 	if (rc)
 		GOTO(err_put_sepol, rc);
 
@@ -298,7 +298,7 @@ rebuild:
 err_put_sepol:
 	sptlrpc_sepol_put(sepol);
 err_free_rq:
-	ptlrpc_request_free(req);
+	mdc_elc_req_put(req, &cancels, count);
 
 	RETURN(rc);
 }
@@ -347,7 +347,7 @@ int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
 	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
 			     sptlrpc_sepol_size(sepol));
 
-	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
+	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, &count);
 	if (rc)
 		GOTO(err_put_sepol, rc);
 
@@ -369,7 +369,7 @@ int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
 err_put_sepol:
 	sptlrpc_sepol_put(sepol);
 err_free_rq:
-	ptlrpc_request_free(req);
+	mdc_elc_req_put(req, &cancels, count);
 
 	RETURN(rc);
 }
@@ -411,7 +411,7 @@ int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
 	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
 			     sptlrpc_sepol_size(sepol));
 
-	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
+	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, &count);
 	if (rc)
 		GOTO(err_put_sepol, rc);
 
@@ -430,7 +430,7 @@ int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
 err_put_sepol:
 	sptlrpc_sepol_put(sepol);
 err_free_rq:
-	ptlrpc_request_free(req);
+	mdc_elc_req_put(req, &cancels, count);
 
 	RETURN(rc);
 }
@@ -489,7 +489,7 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 	req_capsule_set_size(&req->rq_pill, &RMF_SELINUX_POL, RCL_CLIENT,
 			     sptlrpc_sepol_size(sepol));
 
-	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
+	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, &count);
 	if (rc)
 		GOTO(err_put_sepol, rc);
 
@@ -523,7 +523,7 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
 err_put_sepol:
 	sptlrpc_sepol_put(sepol);
 err_free_rq:
-	ptlrpc_request_free(req);
+	mdc_elc_req_put(req, &cancels, count);
 
 	RETURN(rc);
 }
@@ -550,7 +550,7 @@ int mdc_file_resync(struct obd_export *exp, struct md_op_data *op_data)
 		RETURN(-ENOMEM);
 	}
 
-	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
+	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, &count);
 	if (rc) {
 		ptlrpc_request_free(req);
 		RETURN(rc);
