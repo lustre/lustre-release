@@ -1001,11 +1001,11 @@ lnet_counters_get_common_locked(struct lnet_counters_common *common)
 	struct lnet_counters *ctr;
 	int i;
 
-	/* FIXME !!! Their is no assert_lnet_net_locked() to ensure this
+	/* FIXME !!! There is no assert_lnet_net_locked() to ensure this
 	 * actually called under the protection of the lnet_net_lock.
+	 *
+	 * Callers are responsible for zeroing @common before calling.
 	 */
-	memset(common, 0, sizeof(*common));
-
 	cfs_percpt_for_each(ctr, i, the_lnet.ln_counters) {
 		common->lcc_msgs_max     += ctr->lct_common.lcc_msgs_max;
 		common->lcc_msgs_alloc   += ctr->lct_common.lcc_msgs_alloc;
@@ -1024,8 +1024,11 @@ lnet_counters_get_common_locked(struct lnet_counters_common *common)
 void
 lnet_counters_get_common(struct lnet_counters_common *common)
 {
+	memset(common, 0, sizeof(*common));
+
 	lnet_net_lock(LNET_LOCK_EX);
-	lnet_counters_get_common_locked(common);
+	if (the_lnet.ln_state == LNET_STATE_RUNNING)
+		lnet_counters_get_common_locked(common);
 	lnet_net_unlock(LNET_LOCK_EX);
 }
 EXPORT_SYMBOL(lnet_counters_get_common);
@@ -10291,6 +10294,229 @@ report_error:
 	RETURN(rc);
 }
 
+/* ---- LNET_CMD_STATS ---- */
+
+static const struct ln_key_list lnet_stats_list = {
+	.lkl_maxattr = LNET_STATS_ATTR_MAX,
+	.lkl_list = {
+		[LNET_STATS_ATTR_HDR]		= {
+			.lkp_value	= "statistics",
+			.lkp_key_format	= LNKF_MAPPING,
+			.lkp_data_type	= NLA_NUL_STRING,
+		},
+		[LNET_STATS_ATTR_MSGS_ALLOC]	= {
+			.lkp_value	= "msgs_alloc",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_MSGS_MAX]	= {
+			.lkp_value	= "msgs_max",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_RST_ALLOC]	= {
+			.lkp_value	= "rst_alloc",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_ERRORS]	= {
+			.lkp_value	= "errors",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_SEND_COUNT]	= {
+			.lkp_value	= "send_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_RESEND_COUNT]	= {
+			.lkp_value	= "resend_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_RESPONSE_TIMEOUT_COUNT] = {
+			.lkp_value	= "response_timeout_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_LOCAL_INTERRUPT_COUNT]	= {
+			.lkp_value	= "local_interrupt_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_LOCAL_DROPPED_COUNT]	= {
+			.lkp_value	= "local_dropped_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_LOCAL_ABORTED_COUNT]	= {
+			.lkp_value	= "local_aborted_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_LOCAL_NO_ROUTE_COUNT]	= {
+			.lkp_value	= "local_no_route_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_LOCAL_TIMEOUT_COUNT]	= {
+			.lkp_value	= "local_timeout_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_LOCAL_ERROR_COUNT]	= {
+			.lkp_value	= "local_error_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_REMOTE_DROPPED_COUNT]	= {
+			.lkp_value	= "remote_dropped_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_REMOTE_ERROR_COUNT]	= {
+			.lkp_value	= "remote_error_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_REMOTE_TIMEOUT_COUNT]	= {
+			.lkp_value	= "remote_timeout_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_NETWORK_TIMEOUT_COUNT]	= {
+			.lkp_value	= "network_timeout_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_FAILED_RESENDS]	= {
+			.lkp_value	= "failed_resends",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_SUCCESSFUL_RESENDS]	= {
+			.lkp_value	= "successful_resends",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_RECV_COUNT]	= {
+			.lkp_value	= "recv_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_ROUTE_COUNT]	= {
+			.lkp_value	= "route_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_DROP_COUNT]	= {
+			.lkp_value	= "drop_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_SEND_LENGTH]	= {
+			.lkp_value	= "send_length",
+			.lkp_data_type	= NLA_U64,
+		},
+		[LNET_STATS_ATTR_RECV_LENGTH]	= {
+			.lkp_value	= "recv_length",
+			.lkp_data_type	= NLA_U64,
+		},
+		[LNET_STATS_ATTR_ROUTE_LENGTH]	= {
+			.lkp_value	= "route_length",
+			.lkp_data_type	= NLA_U64,
+		},
+		[LNET_STATS_ATTR_DROP_LENGTH]	= {
+			.lkp_value	= "drop_length",
+			.lkp_data_type	= NLA_U64,
+		},
+	},
+};
+
+static int lnet_stats_show_dump(struct sk_buff *msg,
+				struct netlink_callback *cb)
+{
+	const struct ln_key_list *all[] = { &lnet_stats_list, NULL };
+	struct netlink_ext_ack *extack = cb->extack;
+	int portid = NETLINK_CB(cb->skb).portid;
+	int seq = cb->nlh->nlmsg_seq;
+	struct lnet_counters_common *common;
+	struct lnet_counters_health *health;
+	struct lnet_counters counters;
+	void *hdr;
+	int rc;
+
+	ENTRY;
+	/* The counters are a single record, so one message is all we send */
+	if (cb->args[0])
+		RETURN(0);
+
+	rc = lnet_counters_get(&counters);
+	if (rc < 0) {
+		NL_SET_ERR_MSG(extack, "failed to get LNet statistics");
+		RETURN(rc);
+	}
+	common = &counters.lct_common;
+	health = &counters.lct_health;
+
+	rc = lnet_genl_send_scalar_list(msg, portid, seq, &lnet_family,
+					NLM_F_CREATE | NLM_F_MULTI,
+					LNET_CMD_STATS, all);
+	if (rc < 0) {
+		NL_SET_ERR_MSG(extack, "failed to send key table");
+		RETURN(rc);
+	}
+
+	hdr = genlmsg_put(msg, portid, seq, &lnet_family, NLM_F_MULTI,
+			  LNET_CMD_STATS);
+	if (!hdr) {
+		NL_SET_ERR_MSG(extack, "failed to send statistics");
+		RETURN(-EMSGSIZE);
+	}
+
+	if (nla_put_string(msg, LNET_STATS_ATTR_HDR, "") ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_MSGS_ALLOC,
+			common->lcc_msgs_alloc) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_MSGS_MAX,
+			common->lcc_msgs_max) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_RST_ALLOC,
+			health->lch_rst_alloc) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_ERRORS,
+			common->lcc_errors) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_SEND_COUNT,
+			common->lcc_send_count) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_RESEND_COUNT,
+			health->lch_resend_count) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_RESPONSE_TIMEOUT_COUNT,
+			health->lch_response_timeout_count) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_LOCAL_INTERRUPT_COUNT,
+			health->lch_local_interrupt_count) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_LOCAL_DROPPED_COUNT,
+			health->lch_local_dropped_count) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_LOCAL_ABORTED_COUNT,
+			health->lch_local_aborted_count) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_LOCAL_NO_ROUTE_COUNT,
+			health->lch_local_no_route_count) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_LOCAL_TIMEOUT_COUNT,
+			health->lch_local_timeout_count) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_LOCAL_ERROR_COUNT,
+			health->lch_local_error_count) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_REMOTE_DROPPED_COUNT,
+			health->lch_remote_dropped_count) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_REMOTE_ERROR_COUNT,
+			health->lch_remote_error_count) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_REMOTE_TIMEOUT_COUNT,
+			health->lch_remote_timeout_count) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_NETWORK_TIMEOUT_COUNT,
+			health->lch_network_timeout_count) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_FAILED_RESENDS,
+			health->lch_failed_resends) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_SUCCESSFUL_RESENDS,
+			health->lch_successful_resends) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_RECV_COUNT,
+			common->lcc_recv_count) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_ROUTE_COUNT,
+			common->lcc_route_count) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_DROP_COUNT,
+			common->lcc_drop_count) ||
+	    nla_put_u64_64bit(msg, LNET_STATS_ATTR_SEND_LENGTH,
+			      common->lcc_send_length, LNET_STATS_ATTR_PAD) ||
+	    nla_put_u64_64bit(msg, LNET_STATS_ATTR_RECV_LENGTH,
+			      common->lcc_recv_length, LNET_STATS_ATTR_PAD) ||
+	    nla_put_u64_64bit(msg, LNET_STATS_ATTR_ROUTE_LENGTH,
+			      common->lcc_route_length, LNET_STATS_ATTR_PAD) ||
+	    nla_put_u64_64bit(msg, LNET_STATS_ATTR_DROP_LENGTH,
+			      common->lcc_drop_length, LNET_STATS_ATTR_PAD)) {
+		genlmsg_cancel(msg, hdr);
+		NL_SET_ERR_MSG(extack, "failed to send statistics");
+		RETURN(-EMSGSIZE);
+	}
+
+	genlmsg_end(msg, hdr);
+
+	cb->args[0] = 1;
+
+	RETURN(0);
+}
+
 static const struct genl_multicast_group lnet_mcast_grps[] = {
 	{ .name	=	"ip2net",	},
 	{ .name =	"net",		},
@@ -10303,7 +10529,8 @@ static const struct genl_multicast_group lnet_mcast_grps[] = {
 	{ .name =	"fault",	},
 	{ .name =	"routing",	},
 	{ .name =	"buffers",	},
-	{ .name =	"numa",	},
+	{ .name =	"numa",		},
+	{ .name =	"stats",	},
 };
 
 static const struct genl_ops lnet_genl_ops[] = {
@@ -10390,6 +10617,10 @@ static const struct genl_ops lnet_genl_ops[] = {
 		.cmd		= LNET_CMD_NUMA,
 		.flags		= GENL_ADMIN_PERM,
 		.doit		= lnet_numa_cmd,
+	},
+	{
+		.cmd		= LNET_CMD_STATS,
+		.dumpit		= lnet_stats_show_dump,
 	},
 };
 
