@@ -25,6 +25,7 @@
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/param.h>
 
+#include <linux/lustre/lustre_idl.h>
 #include <linux/lustre/lustre_kernelcomm.h>
 
 #include <lustre/lustreapi.h>
@@ -240,6 +241,40 @@ static inline bool is_oss(void)
 typedef int (semantic_func_t)(char *path, int p, int *d,
 			      void *data, struct dirent64 *de);
 
+static inline bool lmv_is_foreign(__u32 magic)
+{
+	return magic == LMV_MAGIC_FOREIGN;
+}
+
+static inline struct lov_user_md *
+lov_comp_entry(struct lov_comp_md_v1 *comp_v1, int ent_idx)
+{
+	return (struct lov_user_md *)((char *)comp_v1 +
+			comp_v1->lcm_entries[ent_idx].lcme_offset);
+}
+
+static inline struct lov_user_ost_data_v1 *
+lov_v1v3_objects(struct lov_user_md *v1)
+{
+	if (v1->lmm_magic == LOV_USER_MAGIC_V3)
+		return ((struct lov_user_md_v3 *)v1)->lmm_objects;
+	else
+		return v1->lmm_objects;
+}
+
+static inline void
+lov_v1v3_pool_name(struct lov_user_md *v1, char *pool_name)
+{
+	if (v1->lmm_magic == LOV_USER_MAGIC_V3)
+		snprintf(pool_name, LOV_MAXPOOLNAME + 1, "%s",
+			 ((struct lov_user_md_v3 *)v1)->lmm_pool_name);
+	else
+		pool_name[0] = '\0';
+}
+
+int find_value_cmp(unsigned long long file, unsigned long long limit, int sign,
+		   int negopt, unsigned long long margin, bool mds);
+int find_comp_end_cmp(unsigned long long end, struct find_param *param);
 void validate_printf_str(struct find_param *param);
 int param_callback(char *path, semantic_func_t sem_init,
 		   semantic_func_t sem_fini, struct find_param *param);
@@ -247,6 +282,7 @@ int cb_find_init(char *path, int p, int *dp,
 		 void *data, struct dirent64 *de);
 int cb_common_fini(char *path, int p, int *dp, void *data,
 		   struct dirent64 *de);
+int cb_get_dirstripe(char *path, int *d, struct find_param *param);
 int common_param_init(struct find_param *param, char *path);
 void find_param_fini(struct find_param *param);
 int parallel_find(char *path, struct find_param *param);
