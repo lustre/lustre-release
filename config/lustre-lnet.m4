@@ -114,8 +114,8 @@ case $with_o2ib in
 				O2IBDIR_PATH="/usr/src/ofa_kernel"
 			fi
 			if test -d $O2IBDIR_PATH; then
-				if test -d $O2IBDIR_PATH/${target_cpu}/${LINUXRELEASE}; then
-					O2IBDIR_PATH=$O2IBDIR_PATH/${target_cpu}/${LINUXRELEASE}
+				if test -d $O2IBDIR_PATH/$(uname -m)/${LINUXRELEASE}; then
+					O2IBDIR_PATH=$O2IBDIR_PATH/$(uname -m)/${LINUXRELEASE}
 				fi
 				EXT_O2IBPATHS=$(find -H $O2IBDIR_PATH -name rdma_cm.h |
 					sed -e 's/\/include\/rdma\/rdma_cm.h//')
