@@ -212,6 +212,10 @@ Apart from
 .RB ' all ',
 any role not explicitly specified is forbidden.  To forbid all roles, use
 .RB ' none '.
+.br
+Roles can also be updated incrementally using '+' and '-' operators (e.g.,
+Use '+dne_ops' to add a role, or '-file_perms' to remove a role) without specifying
+the full set of roles.
 .TP
 .B gssonly_identification
 If set to 1, clients for this nodemap are no longer identified based on their
@@ -237,6 +241,7 @@ Commands illustrating how to modify nodemap properties:
 .B # lctl nodemap_modify --name remotesite --property admin --value 1
 .B # lctl nodemap_modify --name remotesite --property map_mode --value uid
 .B # lctl nodemap_modify --name remotesite --property rbac=all
+.B # lctl nodemap_modify --name remotesite --property rbac=+hsm_ops,-file_perms
 .B # lctl nodemap_modify --name othersite --property squash_uid --value 101
 .EE
 .SH AVAILABILITY
@@ -257,5 +262,5 @@ filesystem package since release 2.6.0
 .BR lctl-nodemap-del (8),
 .BR lctl-nodemap-del-idmap (8),
 .BR lctl-nodemap-del-offset (8),
-.BR lctl-nodemap-del-range (8)
-.BR lctl-nodemap-new (8),
+.BR lctl-nodemap-del-range (8),
+.BR lctl-nodemap-new (8)

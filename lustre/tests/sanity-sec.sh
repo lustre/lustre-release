@@ -11980,6 +11980,119 @@ test_85() {
 }
 run_test 85 "forbid squashing to UID/GID 0"
 
+check_contains() {
+	local val="$1"; shift
+	for role in "$@"; do
+		[[ "$val" =~ "$role" ]] ||
+			error "rbac should contain '$role', got '$val'"
+	done
+}
+
+check_not_contains() {
+	local val="$1"; shift
+	for role in "$@"; do
+		[[ "$val" =~ "$role" ]] &&
+			error "rbac should NOT contain '$role', got '$val'"
+	done
+}
+
+test_93() {
+	local nm=c0
+	local val
+
+	(( MGS_VERSION >= $(version_code 2.17.52) )) ||
+		skip "Need MGS >= 2.17.52 for incremental RBAC role updates"
+
+	stack_trap cleanup_local_client_nodemap EXIT
+	setup_local_client_nodemap $nm 1 1
+
+	# Start with only file_perms
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property rbac=file_perms ||
+		error "setting rbac file_perms failed"
+	wait_nm_sync $nm rbac
+
+	val=$(do_facet mgs $LCTL get_param -n nodemap.$nm.rbac)
+	[[ "$val" == "file_perms" ]] ||
+		error "rbac should be 'file_perms', got '$val'"
+
+	# Add dne_ops
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property rbac=+dne_ops ||
+		error "incrementally adding dne_ops failed"
+	wait_nm_sync $nm rbac
+
+	val=$(do_facet mgs $LCTL get_param -n nodemap.$nm.rbac)
+	check_contains "$val" file_perms dne_ops
+
+	# Add quota_ops
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property rbac=+quota_ops ||
+		error "incrementally adding quota_ops failed"
+	wait_nm_sync $nm rbac
+
+	val=$(do_facet mgs $LCTL get_param -n nodemap.$nm.rbac)
+	check_contains "$val" file_perms dne_ops quota_ops
+
+	# Remove dne_ops
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property rbac=-dne_ops ||
+		error "incrementally removing dne_ops failed"
+	wait_nm_sync $nm rbac
+
+	val=$(do_facet mgs $LCTL get_param -n nodemap.$nm.rbac)
+	check_contains "$val" file_perms quota_ops
+	check_not_contains "$val" dne_ops
+
+	# Add multiple roles
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property rbac=+byfid_ops,+chlg_ops ||
+		error "incrementally adding multiple roles failed"
+	wait_nm_sync $nm rbac
+
+	val=$(do_facet mgs $LCTL get_param -n nodemap.$nm.rbac)
+	check_contains "$val" file_perms quota_ops byfid_ops chlg_ops
+
+	# Remove multiple roles
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property rbac=-file_perms,-quota_ops ||
+		error "incrementally removing multiple roles failed"
+	wait_nm_sync $nm rbac
+
+	val=$(do_facet mgs $LCTL get_param -n nodemap.$nm.rbac)
+	check_contains "$val" byfid_ops chlg_ops
+	check_not_contains "$val" file_perms quota_ops
+
+	# Mixed add/remove
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property rbac=+file_perms,-chlg_ops ||
+		error "incrementally adding and removing roles failed"
+	wait_nm_sync $nm rbac
+
+	val=$(do_facet mgs $LCTL get_param -n nodemap.$nm.rbac)
+	check_contains "$val" file_perms byfid_ops
+	check_not_contains "$val" chlg_ops
+
+	# Reset to none
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property rbac=none ||
+		error "setting rbac to none failed"
+	wait_nm_sync $nm rbac
+
+	val=$(do_facet mgs $LCTL get_param -n nodemap.$nm.rbac)
+	[[ -z "$val" ]] || error "rbac should be empty (none), got '$val'"
+
+	# Set to all
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+		--property rbac=all ||
+		error "setting rbac to all failed"
+	wait_nm_sync $nm rbac
+
+	val=$(do_facet mgs $LCTL get_param -n nodemap.$nm.rbac)
+	check_contains "$val" file_perms dne_ops quota_ops byfid_ops chlg_ops fscrypt_admin
+}
+run_test 93 "incremental RBAC role modifications"
+
 cleanup_100() {
 	local orig_sk_path="$1"
 	local test_key="$orig_sk_path/$FSNAME-test100.key"

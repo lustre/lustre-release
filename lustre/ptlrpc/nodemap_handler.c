@@ -5039,6 +5039,31 @@ static bool nodemap_is_dynamic(const char *nodemap_name)
 }
 
 /**
+ * rbac_bit2str() - Convert RBAC bit position to role name string
+ * @bit: bit position (0-31) to convert
+ *
+ * This function is used by cfs_str2mask() to map bit positions to RBAC role
+ * names. It converts a bit position (e.g., 0, 1, 2) to the corresponding bit
+ * value (e.g., 0x01, 0x02, 0x04) and searches for the matching RBAC role name.
+ *
+ * Return:
+ * * %role name string (e.g., "file_perms", "dne_ops")
+ * * %NULL if bit position doesn't correspond to any RBAC role
+ */
+static const char *rbac_bit2str(int bit)
+{
+	__u32 bit_value = BIT(bit);
+	int i;
+
+	/* Search through the RBAC names array to find matching bit */
+	for (i = 0; i < ARRAY_SIZE(nodemap_rbac_names); i++) {
+		if (nodemap_rbac_names[i].nrn_mode == bit_value)
+			return nodemap_rbac_names[i].nrn_name;
+	}
+	return NULL;
+}
+
+/**
  * cfg_nodemap_fileset_cmd() - Fileset command handler and entry point for
  * all "lctl nodemap_fileset*" ops
  * @lcfg: lustre cfg for fileset operation
@@ -5313,39 +5338,27 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 	}
 	case LCFG_NODEMAP_RBAC:
 	{
-		enum nodemap_rbac_roles rbac;
-		char *p;
+		enum nodemap_rbac_roles rbac = NODEMAP_RBAC_NONE;
+		u64 rbac_mask = 0;
 
-		if (strcmp(param, "all") == 0) {
-			rbac = NODEMAP_RBAC_ALL;
-		} else if (strcmp(param, "none") == 0) {
-			rbac = NODEMAP_RBAC_NONE;
-		} else {
-			rbac = NODEMAP_RBAC_NONE;
-			while ((p = strsep(&param, ",")) != NULL) {
-				int i;
+		if (strchr(param, '+') != NULL || strchr(param, '-') != NULL) {
+			struct lu_nodemap *nodemap_tmp;
 
-				if (!*p)
-					break;
-
-				for (i = 0; i < ARRAY_SIZE(nodemap_rbac_names);
-				     i++) {
-					if (strcmp(p,
-						 nodemap_rbac_names[i].nrn_name)
-					    == 0) {
-						rbac |=
-						 nodemap_rbac_names[i].nrn_mode;
-						break;
-					}
-				}
-				if (i == ARRAY_SIZE(nodemap_rbac_names))
-					break;
-			}
-			if (p) {
-				rc = -EINVAL;
-				break;
+			nodemap_tmp = nodemap_lookup_unlocked(nodemap_name);
+			if (!IS_ERR(nodemap_tmp)) {
+				rbac_mask = (u64)nodemap_tmp->nmf_rbac;
+				nodemap_putref(nodemap_tmp);
 			}
 		}
+
+		rc = cfs_str2mask(param, rbac_bit2str, &rbac_mask, 0,
+				  NODEMAP_RBAC_ALL, NODEMAP_RBAC_ALL);
+		if (rc) {
+			CERROR("%s: Invalid RBAC value '%s': rc = %d\n",
+			       nodemap_name, param, rc);
+			break;
+		}
+		rbac = (enum nodemap_rbac_roles)rbac_mask;
 
 		rc = nodemap_set_rbac(nodemap_name, rbac);
 		break;
