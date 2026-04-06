@@ -333,7 +333,7 @@ lnet_sock_setbuf(struct socket *sock, int txbufsize, int rxbufsize)
 
 	if (rxbufsize != 0) {
 		sk->sk_userlocks |= SOCK_RCVBUF_LOCK;
-		sk->sk_sndbuf = rxbufsize;
+		sk->sk_rcvbuf = rxbufsize;
 	}
 }
 EXPORT_SYMBOL(lnet_sock_setbuf);
