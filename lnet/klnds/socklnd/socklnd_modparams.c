@@ -12,9 +12,7 @@
 
 #include "socklnd.h"
 
-#ifdef HAVE_ETHTOOL_LINK_SETTINGS
 #include <lustre_compat/linux/inetdevice.h>
-#endif
 #include <linux/ethtool.h>
 #include <net/addrconf.h>
 
@@ -195,7 +193,6 @@ static int param_set_tos(const char *val, const struct kernel_param *kp)
 	return 0;
 }
 
-#ifdef HAVE_ETHTOOL_LINK_SETTINGS
 static int ksocklnd_ni_get_eth_intf_speed(struct lnet_ni *ni)
 {
 	struct net_device *dev;
@@ -288,20 +285,18 @@ static int ksocklnd_speed2cpp(int speed)
 	 */
 	return ilog2(speed/1000) / 2 + 1;
 }
-#endif
 
 int ksocklnd_lookup_conns_per_peer(struct lnet_ni *ni)
 {
-	int cpp = 1;
-#ifdef HAVE_ETHTOOL_LINK_SETTINGS
 	int speed = ksocklnd_ni_get_eth_intf_speed(ni);
+	int cpp = 1;
 
 	if (ni->ni_interface)
 		CDEBUG(D_NET, "intf %s speed %d\n", ni->ni_interface, speed);
 
 	if (speed > 0)
 		cpp = ksocklnd_speed2cpp(speed);
-#endif
+
 	return cpp;
 }
 

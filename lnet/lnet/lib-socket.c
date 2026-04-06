@@ -12,7 +12,7 @@
 
 #include <linux/if.h>
 #include <linux/in.h>
-#include <lustre_compat/linux/net.h>
+#include <linux/net.h>
 #include <net/addrconf.h>
 #include <net/ipv6.h>
 #include <linux/file.h>
@@ -173,11 +173,7 @@ lnet_sock_create(int interface, struct sockaddr_unsized *remaddr,
 		family = addr->sa_family;
 
 retry:
-#ifdef HAVE_SOCK_CREATE_KERN_USE_NET
 	rc = sock_create_kern(ns, family, SOCK_STREAM, 0, &sock);
-#else
-	rc = sock_create_kern(family, SOCK_STREAM, 0, &sock);
-#endif
 	if (rc == -EAFNOSUPPORT && family == AF_INET6 && !remaddr) {
 		family = AF_INET;
 		goto retry;
@@ -343,16 +339,11 @@ lnet_sock_getaddr(struct socket *sock, bool remote,
 		  struct sockaddr_storage *peer)
 {
 	int rc;
-#ifndef HAVE_KERN_SOCK_GETNAME_2ARGS
-	int len = sizeof(*peer);
-#endif
 
 	if (remote)
-		rc = lnet_kernel_getpeername(sock,
-					     (struct sockaddr *)peer, &len);
+		rc = kernel_getpeername(sock, (struct sockaddr *)peer);
 	else
-		rc = lnet_kernel_getsockname(sock,
-					     (struct sockaddr *)peer, &len);
+		rc = kernel_getsockname(sock, (struct sockaddr *)peer);
 	if (rc < 0) {
 		CERROR("Error %d getting sock %s IP/port\n",
 			rc, remote ? "peer" : "local");
@@ -392,12 +383,7 @@ lnet_sock_listen(int local_port, int backlog, struct net *ns,
 	struct socket *sock;
 	int rc;
 
-
-#ifdef HAVE_SOCK_CREATE_KERN_USE_NET
 	sock = lnet_sock_create(ifindex, NULL, local_port, ns, addr);
-#else
-	sock = lnet_sock_create(-1, NULL, local_port, ns, NULL);
-#endif
 	if (IS_ERR(sock)) {
 		rc = PTR_ERR(sock);
 		if (rc == -EADDRINUSE)

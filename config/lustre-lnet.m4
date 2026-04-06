@@ -799,26 +799,31 @@ AC_SUBST(EXTRA_SYMBOLS)
 ]) # LN_CONFIG_KFILND
 
 #
-# LN_CONFIG_SOCK_CREATE_KERN
+# LN_HAVE_IN_DEV_FOR_EACH_IFA_RTNL
 #
-# 4.x sock_create_kern() added a first parameter as 'struct net *'
-# instead of int.
+# kernel 5.3 commit ef11db3310e272d3d8dbe8739e0770820dd20e52
+# and kernel 4.18.0-193.el8:
+# added in_dev_for_each_ifa_rtnl and in_dev_for_each_ifa_rcu
+# and removed for_ifa and endfor_ifa.
+# Use the _rntl variant as the current locking is rtnl.
 #
-AC_DEFUN([LN_SRC_CONFIG_SOCK_CREATE_KERN], [
-	LB2_LINUX_TEST_SRC([sock_create_kern_net], [
-		#include <linux/net.h>
-		#include <net/net_namespace.h>
+AC_DEFUN([LN_SRC_HAVE_IN_DEV_FOR_EACH_IFA_RTNL], [
+	LB2_LINUX_TEST_SRC([in_dev_for_each_ifa_rtnl_test], [
+		#include <linux/inetdevice.h>
 	],[
-		sock_create_kern((struct net*)0, 0, 0, 0, NULL);
+		const struct in_ifaddr *ifa = NULL;
+		struct in_device *in_dev = NULL;
+
+		in_dev_for_each_ifa_rtnl(ifa, in_dev) {}
 	],[-Werror])
 ])
-AC_DEFUN([LN_CONFIG_SOCK_CREATE_KERN], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'sock_create_kern' first parameter is net],
-	[sock_create_kern_net], [
-		AC_DEFINE(HAVE_SOCK_CREATE_KERN_USE_NET, 1,
-			[sock_create_kern use net as first parameter])
+AC_DEFUN([LN_HAVE_IN_DEV_FOR_EACH_IFA_RTNL], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'in_dev_for_each_ifa_rtnl' is defined],
+	[in_dev_for_each_ifa_rtnl_test], [
+		AC_DEFINE(HAVE_IN_DEV_FOR_EACH_IFA_RTNL, 1,
+			['in_dev_for_each_ifa_rtnl' is defined])
 	])
-]) # LN_CONFIG_SOCK_CREATE_KERN
+]) # LN_HAVE_IN_DEV_FOR_EACH_IFA_RTNL
 
 #
 # LN_CONFIG_SOCK_INUSE_ADD
@@ -848,6 +853,8 @@ AC_DEFUN([LN_CONFIG_SOCK_INUSE_ADD], [
 # cleanup, requiring a change in ksocklnd if present. This has been back-ported
 # to 4.* and 5.* Linux distributions.
 #
+# Kernel 6.8 commit 151c9c724d05 added sock_not_owned_by_me()
+#
 AC_DEFUN([LN_SRC_CONFIG_SOCK_NOT_OWNED_BY_ME], [
 	LB2_LINUX_TEST_SRC([sock_not_owned_by_me], [
 		#include <net/sock.h>
@@ -862,118 +869,6 @@ AC_DEFUN([LN_CONFIG_SOCK_NOT_OWNED_BY_ME], [
 			[sock_not_owned_by_me is defined in sock.h])
 	])
 ]) # LN_CONFIG_SOCK_NOT_OWNED_BY_ME
-
-#
-# LN_ETHTOOL_LINK_SETTINGS
-#
-# ethtool_link_settings was added in Linux 4.6
-#
-AC_DEFUN([LN_SRC_ETHTOOL_LINK_SETTINGS], [
-	LB2_LINUX_TEST_SRC([ethtool_link_settings], [
-		#include <linux/ethtool.h>
-	],[
-		struct ethtool_link_ksettings cmd;
-	],[],[$EXTRA_OFED_CONFIG $EXTRA_OFED_INCLUDE])
-])
-AC_DEFUN([LN_ETHTOOL_LINK_SETTINGS], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'ethtool_link_settings' exists],
-	[ethtool_link_settings], [
-		AC_DEFINE(HAVE_ETHTOOL_LINK_SETTINGS, 1,
-			[ethtool_link_settings is defined])
-	])
-]) # LN_ETHTOOL_LINK_SETTINGS
-
-#
-# LN_HAVE_ORACLE_OFED_EXTENSIONS
-#
-# Oracle UEK 5
-#
-AC_DEFUN([LN_SRC_HAVE_ORACLE_OFED_EXTENSIONS], [
-	LB2_LINUX_TEST_SRC([oracle_ofed_ext], [
-		#include <rdma/ib_fmr_pool.h>
-	],[
-		struct ib_fmr_pool_param param = {
-			.relaxed           = 0
-		};
-		(void)param;
-	])
-])
-AC_DEFUN([LN_HAVE_ORACLE_OFED_EXTENSIONS], [
-	LB2_MSG_LINUX_TEST_RESULT([if Oracle OFED Extensions are enabled],
-	[oracle_ofed_ext], [
-		AC_DEFINE(HAVE_ORACLE_OFED_EXTENSIONS, 1,
-			[if Oracle OFED Extensions are enabled])
-	])
-]) # LN_HAVE_ORACLE_OFED_EXTENSIONS
-
-#
-# LN_SRC_HAVE_NETDEV_CMD_TO_NAME
-#
-# 4.16-rc6 commit ede2762d93ff16e0974f7446516b46b1022db213
-# created netdev_cmd_to_name() to map NETDEV events to char names
-#
-AC_DEFUN([LN_SRC_HAVE_NETDEV_CMD_TO_NAME], [
-	LB2_LINUX_TEST_SRC([netdev_cmd_to_name], [
-		#include <linux/netdevice.h>
-	],[
-		netdev_cmd_to_name(NETDEV_UP);
-	],[-Werror])
-])
-AC_DEFUN([LN_HAVE_NETDEV_CMD_TO_NAME], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'netdev_cmd_to_name' exist],
-	[netdev_cmd_to_name], [
-		AC_DEFINE(HAVE_NETDEV_CMD_TO_NAME, 1,
-			['netdev_cmd_to_name' is present])
-	])
-]) # LN_SRC_HAVE_NETDEV_CMD_TO_NAME
-
-#
-# LN_CONFIG_SOCK_GETNAME
-#
-# 4.17 commit 9b2c45d479d0fb8647c9e83359df69162b5fbe5f getname()
-# does not take the length *int argument and returns the length
-#
-AC_DEFUN([LN_SRC_CONFIG_SOCK_GETNAME], [
-	LB2_LINUX_TEST_SRC([kern_sock_getname_2args], [
-		#include <linux/net.h>
-	],[
-		kernel_getsockname(NULL, NULL);
-	],[-Werror])
-])
-AC_DEFUN([LN_CONFIG_SOCK_GETNAME], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'getname' has two args],
-	[kern_sock_getname_2args], [
-		AC_DEFINE(HAVE_KERN_SOCK_GETNAME_2ARGS, 1,
-			['getname' has two args])
-	])
-]) # LN_CONFIG_SOCK_GETNAME
-
-#
-# LN_HAVE_IN_DEV_FOR_EACH_IFA_RTNL
-#
-# kernel 5.3 commit ef11db3310e272d3d8dbe8739e0770820dd20e52
-# and kernel 4.18.0-193.el8:
-# added in_dev_for_each_ifa_rtnl and in_dev_for_each_ifa_rcu
-# and removed for_ifa and endfor_ifa.
-# Use the _rntl variant as the current locking is rtnl.
-#
-AC_DEFUN([LN_SRC_HAVE_IN_DEV_FOR_EACH_IFA_RTNL], [
-	LB2_LINUX_TEST_SRC([in_dev_for_each_ifa_rtnl_test], [
-		#include <linux/inetdevice.h>
-	],[
-		const struct in_ifaddr *ifa = NULL;
-		struct in_device *in_dev = NULL;
-
-		in_dev_for_each_ifa_rtnl(ifa, in_dev) {}
-	],[-Werror])
-])
-AC_DEFUN([LN_HAVE_IN_DEV_FOR_EACH_IFA_RTNL], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'in_dev_for_each_ifa_rtnl' is defined],
-	[in_dev_for_each_ifa_rtnl_test], [
-		AC_DEFINE(HAVE_IN_DEV_FOR_EACH_IFA_RTNL, 1,
-			['in_dev_for_each_ifa_rtnl' is defined])
-	])
-]) # LN_HAVE_IN_DEV_FOR_EACH_IFA_RTNL
 
 #
 # LN_SRC_HAVE_NETDEV_LOCK_OPS
@@ -1046,22 +941,14 @@ AC_DEFUN([LN_HAVE_STRUCT_SOCKADDR_UNSIZED],[
 
 AC_DEFUN([LN_PROG_LINUX_SRC], [
 	LN_CONFIG_O2IB_SRC
-	# 4.x
-	LN_SRC_CONFIG_SOCK_CREATE_KERN
-	LN_SRC_CONFIG_SOCK_INUSE_ADD
-	LN_SRC_CONFIG_SOCK_NOT_OWNED_BY_ME
-	# 4.6
-	LN_SRC_ETHTOOL_LINK_SETTINGS
-	# 4.14
-	LN_SRC_HAVE_ORACLE_OFED_EXTENSIONS
-	# 4.16
-	LN_SRC_HAVE_NETDEV_CMD_TO_NAME
-	# 4.17
-	LN_SRC_CONFIG_SOCK_GETNAME
 	# 5.3 and 4.18.0-193.el8
 	LN_SRC_HAVE_IN_DEV_FOR_EACH_IFA_RTNL
 	# 5.9
 	LN_SRC_CONFIG_SENDPAGE_OK
+	# 5.17
+	LN_SRC_CONFIG_SOCK_INUSE_ADD
+	# 6.8
+	LN_SRC_CONFIG_SOCK_NOT_OWNED_BY_ME
 	# 6.15
 	LN_SRC_HAVE_NETDEV_LOCK_OPS
 	# 6.19
@@ -1070,22 +957,14 @@ AC_DEFUN([LN_PROG_LINUX_SRC], [
 
 AC_DEFUN([LN_PROG_LINUX_RESULTS], [
 	LN_CONFIG_O2IB_RESULTS
-	# 4.x
-	LN_CONFIG_SOCK_CREATE_KERN
-	LN_CONFIG_SOCK_INUSE_ADD
-	LN_CONFIG_SOCK_NOT_OWNED_BY_ME
-	# 4.6
-	LN_ETHTOOL_LINK_SETTINGS
-	# 4.14
-	LN_HAVE_ORACLE_OFED_EXTENSIONS
-	# 4.16
-	LN_HAVE_NETDEV_CMD_TO_NAME
-	# 4.17
-	LN_CONFIG_SOCK_GETNAME
 	# 5.3 and 4.18.0-193.el8
 	LN_HAVE_IN_DEV_FOR_EACH_IFA_RTNL
 	# 5.9
 	LN_CONFIG_SENDPAGE_OK
+	# 5.17
+	LN_CONFIG_SOCK_INUSE_ADD
+	# 6.8
+	LN_CONFIG_SOCK_NOT_OWNED_BY_ME
 	# 6.15
 	LN_HAVE_NETDEV_LOCK_OPS
 	# 6.19
@@ -1202,24 +1081,6 @@ AC_CHECK_LIB([nl-3], [nla_get_s64], [
 	], [
 ])
 
-#
-# LN_USR_NLMSGERR
-#
-AC_DEFUN([LN_USR_NLMSGERR], [
-AC_MSG_CHECKING([if 'enum nlmsgerr_attrs' exists])
-AC_COMPILE_IFELSE([AC_LANG_SOURCE([
-	#include <linux/netlink.h>
-
-	int main(void) {
-		int x = (int)NLMSGERR_ATTR_MAX;
-		return x;
-	}
-])],[
-	AC_DEFINE(HAVE_USRSPC_NLMSGERR, 1,
-		['enum nlmsgerr_attrs' exists])
-])
-]) # LN_USR_NLMGSERR
-
 # lnet/utils/portals.c
 AC_CHECK_HEADERS([netdb.h])
 
@@ -1247,7 +1108,6 @@ AS_IF([test "$enable_efence" = yes], [
 AC_SUBST(LIBEFENCE)
 
 LN_CONFIG_DLC
-LN_USR_NLMSGERR
 ]) # LN_CONFIGURE
 
 #

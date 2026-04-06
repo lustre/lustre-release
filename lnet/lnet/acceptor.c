@@ -148,14 +148,8 @@ static int lnet_acceptor_add_socket(const char *iface, struct sockaddr *addr,
 			     int ifindex, struct net *ni_net_ns, int port)
 {
 	struct listening_socket *lsock;
-	int rc;
 	char ip_str[INET6_ADDRSTRLEN];
-
-
-#ifndef HAVE_SOCK_CREATE_KERN_USE_NET
-	if (atomic_read(&active_sockets))
-		return 0;
-#endif
+	int rc;
 
 	if (addr == NULL)
 		return -EINVAL;

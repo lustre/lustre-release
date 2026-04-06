@@ -1059,12 +1059,8 @@ static int check_gssd_socket(void)
 	int tries = 0;
 	int err;
 
-#ifdef HAVE_SOCK_CREATE_KERN_USE_NET
 	err = sock_create_kern(current->nsproxy->net_ns,
 			       AF_UNIX, SOCK_STREAM, 0, &sock);
-#else
-	err = sock_create_kern(AF_UNIX, SOCK_STREAM, 0, &sock);
-#endif
 	if (err < 0) {
 		CDEBUG(D_SEC, "Failed to create socket: %d\n", err);
 		return err;

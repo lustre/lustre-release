@@ -45,10 +45,6 @@
 #include <lnet/lib-lnet.h>
 #include <lnet/socklnd.h>
 
-#ifndef NETIF_F_CSUM_MASK
-# define NETIF_F_CSUM_MASK NETIF_F_ALL_CSUM
-#endif
-
 /* assume one thread for each connection type */
 #define SOCKNAL_NSCHEDS		3
 #define SOCKNAL_NSCHEDS_HIGH	(SOCKNAL_NSCHEDS << 1)

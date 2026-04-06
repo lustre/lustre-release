@@ -24,10 +24,6 @@
 #define LNET_CONFIGURE		true
 #define LNET_UNCONFIGURE	false
 
-#ifndef NLM_F_DUMP_FILTERED
-#define NLM_F_DUMP_FILTERED    0x20
-#endif
-
 static int jt_config_lnet(int argc, char **argv);
 static int jt_unconfig_lnet(int argc, char **argv);
 static int jt_add_route(int argc, char **argv);
