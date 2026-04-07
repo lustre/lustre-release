@@ -607,7 +607,13 @@ debs: undef.h debs_common
 	sed "s/_KVERS_/$(LINUXRELEASE)/g" debian/lustre-tests.install.in \
 		> debian/lustre-tests.install; \
 	tmpprofiles=`tr ' ' ',' <<< $$DEB_BUILD_PROFILES`; \
-	dpkg-buildpackage -us -uc -I.git -I\*.out[0-9]\* -I\*.swp -P$$tmpprofiles || { \
+	ignores="-I -I.git"; \
+	if test -s .gitignore; then \
+		ignores+=$$(grep -E -v "^#|^$$" .gitignore | sed -e 's/^/ -I/'); \
+	fi; \
+	ignores+=" -I.\*.cmd -Iconftest.\* -IKbuild -I\*.[adios] -I\*.[kls][ao] "; \
+	ignores+=" -I\*.mod -I.\*.d -I\*.tar.gz -I\*.out[0-9]\* -I\*.sw[opq] "; \
+	dpkg-buildpackage -us -uc $$ignores -P$$tmpprofiles || { \
 		rc=$${PIPESTATUS[0]}; \
 		cp $$debiantmp/control.main.bkp debian/control.main || true && \
 		cp $$debiantmp/control.modules.in.bkp debian/control.modules.in || true && \
