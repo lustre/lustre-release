@@ -1502,11 +1502,31 @@ lnet_match_networks(const char **networksp, const char *ip2nets,
 	return count;
 }
 
-__u32 lnet_set_link_fatal_state(struct lnet_ni *ni, unsigned int link_state)
+ __u32 lnet_set_link_fatal_state(struct lnet_ni *ni, unsigned int link_state)
 {
+	__u32 old;
+	bool push = false;
+
 	CDEBUG(D_NET, "%s: set link fatal state to %u\n",
 	       libcfs_nidstr(&ni->ni_nid), link_state);
-	return atomic_xchg(&ni->ni_fatal_error_on, link_state);
+
+	old = atomic_xchg(&ni->ni_fatal_error_on, link_state);
+
+	if (old && !link_state &&
+	    !nid_is_lo0(&ni->ni_nid) &&
+	    atomic_read(&ni->ni_healthv) == LNET_MAX_HEALTH_VALUE) {
+		lnet_ni_lock(ni);
+		if (ni->ni_status &&
+		    *ni->ni_status != LNET_NI_STATUS_UP)
+			push = lnet_ni_set_status_locked(ni,
+							 LNET_NI_STATUS_UP);
+		lnet_ni_unlock(ni);
+	}
+
+	if (push)
+		lnet_push_update_to_peers(1);
+
+	return old;
 }
 EXPORT_SYMBOL(lnet_set_link_fatal_state);
 
