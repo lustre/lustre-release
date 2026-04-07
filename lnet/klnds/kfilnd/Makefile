@@ -18,3 +18,7 @@ kkfilnd-objs := \
 	kfilnd_debugfs.o
 
 ccflags-y += $(KFICPPFLAGS)
+
+ifdef CONFIG_GCOV_PROFILE_LNET
+GCOV_PROFILE := y
+endif

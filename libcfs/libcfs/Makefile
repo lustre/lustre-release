@@ -22,3 +22,7 @@ endif
 # Compat: mm
 include $(src)/../../lustre_compat/mm/Makefile
 libcfs-y += $(patsubst %,../../lustre_compat/mm/%,$(mm_objs))
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

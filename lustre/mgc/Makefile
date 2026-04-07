@@ -9,3 +9,7 @@ mgc-objs := mgc_request.o lproc_mgc.o
 ifdef CONFIG_LUSTRE_FS_SERVER
 mgc-objs += mgc_request_server.o
 endif
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

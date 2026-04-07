@@ -18,3 +18,7 @@ lustre-objs += llite_foreign.o llite_foreign_symlink.o
 
 lustre-$(CONFIG_FS_POSIX_ACL) += acl.o
 lustre-objs += $(lustre-y)
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

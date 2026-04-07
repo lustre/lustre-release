@@ -7,3 +7,7 @@
 obj-m += mgs.o
 mgs-objs := mgs_handler.o mgs_fs.o mgs_llog.o lproc_mgs.o mgs_nids.o
 mgs-objs += mgs_barrier.o
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

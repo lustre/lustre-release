@@ -34,3 +34,7 @@ lquota-objs := \
 	$(qsd-objs) \
 	$(qmt-objs) \
 	$(quota-objs)
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

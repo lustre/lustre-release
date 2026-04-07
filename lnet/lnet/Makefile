@@ -15,3 +15,7 @@ lnet-objs += lnet-crypto.o adler.o
 lnet-objs += $(lnet-objs-y)
 
 CFLAGS_lnet_rdma.o += -I $(GDS_PATH) -I$(CUDA_PATH)
+
+ifdef CONFIG_GCOV_PROFILE_LNET
+GCOV_PROFILE := y
+endif

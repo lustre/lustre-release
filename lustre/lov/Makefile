@@ -20,3 +20,7 @@ lov-objs := lov_dev.o \
 	lovsub_dev.o \
 	lovsub_object.o \
 	lproc_lov.o
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

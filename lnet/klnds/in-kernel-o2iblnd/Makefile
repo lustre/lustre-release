@@ -30,3 +30,7 @@ o2iblnd_cb.c: ../o2iblnd/o2iblnd_cb.c
 
 o2iblnd_modparams.c: ../o2iblnd/o2iblnd_modparams.c
 	sed $(strip $(o2ib_sed_flags)) $< > $@
+
+ifdef CONFIG_GCOV_PROFILE_LNET
+GCOV_PROFILE := y
+endif

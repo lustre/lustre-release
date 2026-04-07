@@ -6,3 +6,7 @@
 
 obj-m += lmv.o
 lmv-objs := lmv_obd.o lmv_intent.o lmv_fld.o lproc_lmv.o
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

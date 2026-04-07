@@ -38,3 +38,7 @@ endif
 obj-$(CONFIG_LUSTRE_FS_GSS) += gss/
 
 ccflags-y := -I$(LUSTRE)/ldlm -I$(LUSTRE)/target
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

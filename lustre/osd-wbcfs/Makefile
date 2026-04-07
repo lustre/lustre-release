@@ -11,3 +11,7 @@
 obj-m += osd_wbcfs.o
 osd_wbcfs-objs := osd_handler.o osd_object.o osd_hash.o osd_index_hash.o
 osd_wbcfs-objs += osd_io.o osd_dirent.o osd_lproc.o wbcfs.o
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

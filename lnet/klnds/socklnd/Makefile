@@ -12,3 +12,7 @@ ksocklnd-objs := \
 	socklnd_lib.o \
 	socklnd_modparams.o \
 	socklnd_proto.o
+
+ifdef CONFIG_GCOV_PROFILE_LNET
+GCOV_PROFILE := y
+endif

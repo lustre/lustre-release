@@ -6,3 +6,7 @@
 
 obj-m += ec_test.o kinode.o obd_test.o obd_mod_rpcs_test.o
 obj-$(CONFIG_LUSTRE_FS_SERVER) += ldlm_extent.o llog_test.o
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

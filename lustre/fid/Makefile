@@ -9,3 +9,7 @@ fid-objs := fid_request.o lproc_fid.o
 ifdef CONFIG_LUSTRE_FS_SERVER
 fid-objs += fid_handler.o fid_store.o fid_lib.o
 endif
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

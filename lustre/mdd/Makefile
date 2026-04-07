@@ -16,3 +16,7 @@ mdd-objs := \
 	mdd_orphans.o \
 	mdd_permission.o \
 	mdd_trans.o
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

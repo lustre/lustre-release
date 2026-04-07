@@ -14,3 +14,7 @@ mdt-objs += mdt_hsm_cdt_client.o
 mdt-objs += mdt_hsm_cdt_agent.o
 mdt-objs += mdt_coordinator.o
 mdt-objs += mdt_batch.o
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

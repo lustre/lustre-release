@@ -18,3 +18,7 @@ mdc-objs-y := mdc_request.o \
 mdc-objs-$(CONFIG_FS_POSIX_ACL) += mdc_acl.o
 
 mdc-objs := $(mdc-objs-y)
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

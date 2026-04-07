@@ -17,3 +17,7 @@ endif
 ifdef CONFIG_LUSTRE_FS_GSS_KEYRING
 ptlrpc_gss-objs += gss_keyring.o
 endif
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

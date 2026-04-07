@@ -9,3 +9,7 @@ obdecho-objs := echo_client.o debug.o
 ifdef CONFIG_LUSTRE_FS_SERVER
 obdecho-objs += echo.o
 endif
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

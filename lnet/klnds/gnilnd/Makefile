@@ -10,3 +10,7 @@ kgnilnd-objs := gnilnd.o gnilnd_cb.o gnilnd_modparams.o gnilnd_debug.o gnilnd_pr
 		gnilnd_sysctl.o gnilnd_stack.o gnilnd_conn.o
 
 ccflags-y := -D"SVN_CODE_REV=KBUILD_STR(${SVN_CODE_REV})" $(GNICPPFLAGS)
+
+ifdef CONFIG_GCOV_PROFILE_LNET
+GCOV_PROFILE := y
+endif

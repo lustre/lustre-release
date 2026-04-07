@@ -15,3 +15,7 @@ kefalnd-objs := efalnd.o efalnd_modparams.o efalnd_peerni.o efalnd_connection.o
 kefalnd-objs += efalnd_debugfs.o
 
 NOSTDINC_FLAGS += -I $(EFA_INCLUDE_PATH)
+
+ifdef CONFIG_GCOV_PROFILE_LNET
+GCOV_PROFILE := y
+endif

@@ -11,3 +11,7 @@ osd_ldiskfs-objs := osd_handler.o osd_oi.o osd_lproc.o osd_iam.o \
 		    osd_integrity.o
 
 ccflags-y := -I$(LINUX)/fs -I$(ABS_TOP_BUILDDIR) -I$(ABS_TOP_BUILDDIR)/ldiskfs
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

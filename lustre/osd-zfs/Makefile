@@ -20,3 +20,7 @@ ccflags-y += -I$(ZFS) -I$(ZFS)/include
 ifndef CONFIG_LUSTRE_FS_SPL
 ccflags-y += -I$(ZFS)/include/spl
 endif
+
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif

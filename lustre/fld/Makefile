@@ -10,3 +10,7 @@ ifdef CONFIG_LUSTRE_FS_SERVER
 fld-objs += fld_handler.o fld_index.o
 endif
 
+ifdef CONFIG_GCOV_PROFILE_LUSTRE
+GCOV_PROFILE := y
+endif
+
