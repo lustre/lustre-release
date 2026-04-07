@@ -863,7 +863,10 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 			GOTO(out, rc = -EPROTO);
 		}
 
-		/* should conflict with new opens for write/execute */
+		/*
+		 * should conflict with new opens for write/execute, matches the
+		 * check in mdt_object_lock_internal()
+		 */
 		lm = LCK_PW;
 		*ibits = MDS_INODELOCK_OPEN;
 

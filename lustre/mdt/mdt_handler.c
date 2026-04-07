@@ -4365,9 +4365,8 @@ int mdt_object_lock_internal(struct mdt_thread_info *info,
 
 		/* Lease lock are granted with LDLM_FL_CANCEL_ON_BLOCK */
 		if (lh->mlh_type == MDT_REG_LOCK &&
-		    lh->mlh_reg_mode == LCK_EX && *ibits == MDS_INODELOCK_OPEN)
+		    lh->mlh_reg_mode == LCK_PW && *ibits == MDS_INODELOCK_OPEN)
 			dlmflags |= LDLM_FL_CANCEL_ON_BLOCK;
-
 
 		if (info->mti_exp)
 			cookie = &info->mti_exp->exp_handle.h_cookie;
