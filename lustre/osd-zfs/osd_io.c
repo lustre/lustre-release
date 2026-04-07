@@ -854,7 +854,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	int i, rc;
 	bool synced = false;
 	long long space = 0;
-	struct page *last_page = NULL;
+	pgoff_t last_index = 0;
 	unsigned long discont_pages = 0;
 	enum osd_quota_local_flags local_flags = 0;
 	enum osd_qid_declare_flags declare_flags = OSD_QID_BLK;
@@ -869,9 +869,9 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	oh = container_of(th, struct osd_thandle, ot_super);
 
 	for (i = 0; i < npages; i++) {
-		if (last_page && lnb[i].lnb_page->index != (last_page->index + 1))
+		if (i > 0 && (lnb[i].lnb_file_offset >> PAGE_SHIFT) != last_index + 1)
 			++discont_pages;
-		last_page = lnb[i].lnb_page;
+		last_index = lnb[i].lnb_file_offset >> PAGE_SHIFT;
 		if (lnb[i].lnb_rc)
 			/* ENOSPC, network RPC error, etc.
 			 * We don't want to book space for pages which will be
