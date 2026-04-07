@@ -1237,6 +1237,16 @@ static int llog_osd_next_block(const struct lu_env *env,
 		last_rec = (struct llog_rec_hdr *)((char *)tail - tail_len +
 				sizeof(struct llog_rec_tail));
 
+		if ((char *)last_rec < (char *)buf ||
+		    (char *)last_rec + sizeof(*last_rec) >
+		    (char *)buf + rc) {
+			CERROR("%s: invalid llog tail at log id "DFID" offset %llu tail_len %u read_size %d\n",
+			       o->do_lu.lo_dev->ld_obd->obd_name,
+			       PLOGID(&loghandle->lgh_id), *cur_offset,
+			       tail_len, rc);
+			GOTO(out, rc = -EINVAL);
+		}
+
 		if (LLOG_REC_HDR_NEEDS_SWABBING(last_rec))
 			lustre_swab_llog_rec(last_rec);
 
