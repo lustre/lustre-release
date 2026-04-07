@@ -515,7 +515,7 @@ static inline int llog_max_idx(const struct llog_handle *lgh)
 
 static inline int llog_is_full(struct llog_handle *llh)
 {
-	return llh->lgh_last_idx >= llog_max_idx(llh);
+	return (llh->lgh_hdr && llh->lgh_last_idx >= llog_max_idx(llh));
 }
 
 /* Determine if a llog plain of a catalog could be skiped based on record

@@ -1026,6 +1026,10 @@ int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 	CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_CHANGELOG_REORDER, cfs_fail_val);
 	/* nested journal transaction */
 	rc = llog_add(env, ctxt->loc_handle, &rec->cr_hdr, NULL, llog_th);
+	if (unlikely(!(mdd->mdd_cl.mc_flags & CLM_ON))) {
+		/* tolerate errors if changelog was turned off */
+		GOTO(out_put, rc = 0);
+	}
 
 	/* time to recover some space ?? */
 	if (likely(!mdd->mdd_changelog_gc ||

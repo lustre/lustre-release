@@ -133,7 +133,7 @@ static int llog_cat_new_log(const struct lu_env *env,
 	rc = llog_create(env, loghandle, th);
 	/* if llog is already created, no need to initialize it */
 	if (rc == -EEXIST) {
-		GOTO(out, rc = 0);
+		GOTO(out, rc);
 	} else if (rc != 0) {
 		CERROR("%s: can't create new plain llog in catalog: rc = %d\n",
 		       loghandle2name(loghandle), rc);
@@ -195,7 +195,7 @@ static int llog_cat_new_log(const struct lu_env *env,
 
 out:
 	if (handle != NULL) {
-		handle->th_result = rc >= 0 ? 0 : rc;
+		handle->th_result = (rc >= 0 || rc == -EEXIST) ? 0 : rc;
 		dt_trans_stop(env, dt, handle);
 	}
 	RETURN(rc);
@@ -292,27 +292,30 @@ static int llog_cat_prep_log(const struct lu_env *env,
 	loghandle = *ploghandle;
 	if (!IS_ERR_OR_NULL(loghandle)) {
 		loghandle = llog_handle_get(loghandle);
-		if (loghandle) {
-			if (llog_exist(loghandle) == 0)
+		if (loghandle && loghandle->lgh_destroyed) {
+			llog_handle_put(env, loghandle);
+		} else if (loghandle) {
+			if (!llog_exist(loghandle))
 				rc = llog_cat_declare_create(env, cathandle,
 							     loghandle, th);
 			llog_handle_put(env, loghandle);
+			return rc;
 		}
-		return rc;
 	}
 
 	down_write(&cathandle->lgh_lock);
 	if (!IS_ERR_OR_NULL(*ploghandle)) {
-		loghandle = *ploghandle;
-		up_write(&cathandle->lgh_lock);
-		loghandle = llog_handle_get(loghandle);
-		if (loghandle) {
-			if (llog_exist(loghandle) == 0)
+		loghandle = llog_handle_get(*ploghandle);
+		if (loghandle && loghandle->lgh_destroyed) {
+			llog_handle_put(env, loghandle);
+		} else if (loghandle) {
+			up_write(&cathandle->lgh_lock);
+			if (!llog_exist(loghandle))
 				rc = llog_cat_declare_create(env, cathandle,
 							     loghandle, th);
 			llog_handle_put(env, loghandle);
+			return rc;
 		}
-		return rc;
 	}
 
 	/* Slow path with open/create declare, only one thread do all stuff
@@ -463,12 +466,16 @@ EXPORT_SYMBOL(llog_cat_close);
  *
  * Assumes caller has already pushed us into the kernel context and is locking.
  *
- * NOTE: loghandle is write-locked upon successful return
+ * NOTE: loghandle is write-locked and referenced upon successful return
  */
-static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
+static struct llog_handle *llog_cat_current_log(const struct lu_env *env,
+						struct llog_handle *cathandle,
 						struct thandle *th)
 {
-	struct llog_handle *loghandle = NULL;
+	struct llog_handle *loghandle;
+	struct llog_logid lid = {.lgl_oi.oi.oi_id = 0,
+				 .lgl_oi.oi.oi_seq = 0,
+				 .lgl_ogen = 0};
 
 	ENTRY;
 
@@ -479,15 +486,13 @@ static struct llog_handle *llog_cat_current_log(struct llog_handle *cathandle,
 
 retry:
 	loghandle = cathandle->u.chd.chd_current_log;
-	if (likely(loghandle)) {
-		struct llog_log_hdr *llh;
-
+	if (!IS_ERR_OR_NULL(loghandle) && llog_handle_get(loghandle)) {
 		down_write_nested(&loghandle->lgh_lock, LLOGH_LOG);
-		llh = loghandle->lgh_hdr;
-		if (llh == NULL || !llog_is_full(loghandle))
+		if (!loghandle->lgh_destroyed && !llog_is_full(loghandle))
 			RETURN(loghandle);
-		else
-			up_write(&loghandle->lgh_lock);
+		up_write(&loghandle->lgh_lock);
+		lid = loghandle->lgh_id;
+		llog_handle_put(env, loghandle);
 	}
 
 	/* time to use next log */
@@ -495,9 +500,6 @@ next:
 	/* first, we have to make sure the state hasn't changed */
 	down_write_nested(&cathandle->lgh_lock, LLOGH_CAT);
 	if (unlikely(loghandle == cathandle->u.chd.chd_current_log)) {
-		struct llog_logid lid = {.lgl_oi.oi.oi_id = 0,
-					 .lgl_oi.oi.oi_seq = 0,
-					 .lgl_ogen = 0};
 		/* Sigh, the chd_next_log and chd_current_log is initialized
 		 * in declare phase, and we do not serialize the catlog
 		 * accessing, so it might be possible the llog creation
@@ -519,8 +521,6 @@ next:
 			}
 			GOTO(out_unlock, loghandle);
 		}
-		if (!IS_ERR_OR_NULL(loghandle))
-			lid = loghandle->lgh_id;
 
 		CDEBUG(D_OTHER, "%s: use next log "DFID"->"DFID" catalog "DFID"\n",
 		       loghandle2name(cathandle), PLOGID(&lid),
@@ -556,15 +556,20 @@ int llog_cat_add_rec(const struct lu_env *env, struct llog_handle *cathandle,
 	LASSERT(rec->lrh_len <= cathandle->lgh_ctxt->loc_chunk_size);
 
 retry:
-	loghandle = llog_cat_current_log(cathandle, th);
+	loghandle = llog_cat_current_log(env, cathandle, th);
 	if (IS_ERR(loghandle))
 		RETURN(PTR_ERR(loghandle));
 
+	LASSERT(loghandle);
+	LASSERT(!loghandle->lgh_destroyed);
 	/* loghandle is already locked by llog_cat_current_log() for us */
 	if (!llog_exist(loghandle)) {
 		rc = llog_cat_new_log(env, cathandle, loghandle, th);
 		if (rc < 0) {
 			up_write(&loghandle->lgh_lock);
+			llog_handle_put(env, loghandle);
+			if (rc == -EEXIST && retried++ == 0)
+				goto retry;
 			/* When ENOSPC happened no need to drop loghandle
 			 * a new one would be allocated anyway for next llog_add
 			 * so better to stay with the old.
@@ -610,6 +615,7 @@ retry:
 	/* llog_write_rec could unlock a semaphore */
 	if (!(loghandle->lgh_hdr->llh_flags & LLOG_F_UNLCK_SEM))
 		up_write(&loghandle->lgh_lock);
+	llog_handle_put(env, loghandle);
 
 	if (rc == -ENOBUFS) {
 		if (retried++ == 0)
