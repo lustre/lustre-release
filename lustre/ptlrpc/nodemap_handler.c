@@ -1079,7 +1079,7 @@ static __u32 __nodemap_map_id(struct lu_nodemap *nodemap,
 		offset_start = nodemap->nm_offset_start_uid;
 		offset_limit = nodemap->nm_offset_limit_uid;
 	} else if (id_type == NODEMAP_GID) {
-		offset_start = nodemap->nm_offset_start_uid;
+		offset_start = nodemap->nm_offset_start_gid;
 		offset_limit = nodemap->nm_offset_limit_gid;
 	} else if (id_type == NODEMAP_PROJID) {
 		offset_start = nodemap->nm_offset_start_projid;
