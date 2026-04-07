@@ -1048,7 +1048,7 @@ test_6a() {
 
 	$LFS setstripe -E 1M -L mdt -E eof -S 1M $tf-1 ||
 		error "failure to create PFL with DoM file"
-	$LFS mirror create -N2 -E 1M -S 1M -E eof $tf-2 ||
+	$LFS mirror create -N 2 -E 1M -S 1M -E eof $tf-2 ||
 		error "failure to create mirrored file"
 	$LFS mirror extend -N -f $tf-1 $tf-2 ||
 		error "failure to extend mirrored file with DoM extent"
@@ -1870,7 +1870,7 @@ test_39() {
 	local tf=$DIR/$tfile
 
 	rm -f $tf
-	$LFS mirror create -N2 -E1m -c1 -S1M -E-1 $tf ||
+	$LFS mirror create -N 2 -E1m -c1 -S1M -E-1 $tf ||
 	error "create PFL file $tf failed"
 
 	verify_mirror_count $tf 2

@@ -4537,7 +4537,6 @@ create_mirror:
 				mirror_mode = true;
 			}
 			mirror_total_mode = false;
-			mirror_count = 1;
 			if (optarg) {
 				if (optarg[0] == '=') {
 					mirror_total_mode = true;
@@ -4554,6 +4553,23 @@ create_mirror:
 					result = -EINVAL;
 					goto error;
 				}
+			} else if (optind < argc && (*argv[optind] >= '0') &&
+				   (*argv[optind] <= '9')) {
+
+				errno = 0;
+				mirror_count = strtoul(argv[optind], &end, 0);
+				if (errno != 0 || *end != '\0' ||
+				    mirror_count == 0 ||
+				    mirror_count > LUSTRE_MIRROR_COUNT_MAX) {
+					fprintf(stderr,
+						"error: %s: bad mirror count: %s\n",
+						progname, argv[optind]);
+					result = -EINVAL;
+					goto error;
+				}
+				optind++;
+			} else {
+				mirror_count = 1;
 			}
 
 			if (mirror_total_mode) {
