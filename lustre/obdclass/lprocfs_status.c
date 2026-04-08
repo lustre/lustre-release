@@ -2026,11 +2026,11 @@ int lprocfs_alloc_md_stats(struct obd_device *obd,
 			 i);
 	}
 
+	obd->obd_md_stats = stats;
 	rc = lprocfs_stats_register(obd->obd_proc_entry, "md_stats", stats);
 	if (rc < 0) {
 		lprocfs_stats_free(&stats);
-	} else {
-		obd->obd_md_stats = stats;
+		obd->obd_md_stats = NULL;
 	}
 
 	return rc;
