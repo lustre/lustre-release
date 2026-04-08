@@ -784,16 +784,9 @@ static int ldlm_namespace_sysfs_register(struct ldlm_namespace *ns)
 {
 	int err;
 
-	ns->ns_kobj.kset = ldlm_ns_kset;
-	init_completion(&ns->ns_kobj_unregister);
-	err = kobject_init_and_add(&ns->ns_kobj, &ldlm_ns_ktype, NULL,
-				   "%s", ldlm_ns_name(ns));
-
 	ns->ns_stats = lprocfs_stats_alloc(LDLM_NSS_LAST, 0);
-	if (!ns->ns_stats) {
-		kobject_put(&ns->ns_kobj);
+	if (!ns->ns_stats)
 		return -ENOMEM;
-	}
 
 	lprocfs_counter_init(ns->ns_stats, LDLM_NSS_LOCKS,
 			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_TYPE_LOCKS,
@@ -804,6 +797,15 @@ static int ldlm_namespace_sysfs_register(struct ldlm_namespace *ns)
 	lprocfs_counter_init(ns->ns_stats, LDLM_NSS_LRU_HITS,
 			     LPROCFS_CNTR_AVGMINMAX | LPROCFS_TYPE_LOCKS,
 			     "lock_lru_hits");
+
+	ns->ns_kobj.kset = ldlm_ns_kset;
+	init_completion(&ns->ns_kobj_unregister);
+	err = kobject_init_and_add(&ns->ns_kobj, &ldlm_ns_ktype, NULL,
+				   "%s", ldlm_ns_name(ns));
+	if (err) {
+		lprocfs_stats_free(&ns->ns_stats);
+		ns->ns_stats = NULL;
+	}
 
 	return err;
 }
