@@ -981,12 +981,12 @@ static void client_common_put_super(struct super_block *sb)
 
 	ENTRY;
 
+	ll_debugfs_unregister_super(sb);
+
 	cl_sb_fini(sb);
 
 	obd_disconnect(sbi->ll_dt_exp);
 	sbi->ll_dt_exp = NULL;
-
-	ll_debugfs_unregister_super(sb);
 
 	obd_disconnect(sbi->ll_md_exp);
 	sbi->ll_md_exp = NULL;
@@ -2579,6 +2579,10 @@ int ll_statfs_internal(struct ll_sb_info *sbi, struct obd_statfs *osfs,
 	int rc;
 
 	ENTRY;
+
+	if (sbi->ll_client_common_fill_super_succeeded == 0)
+		RETURN(-ENOENT);
+
 	max_age = ktime_get_seconds() - sbi->ll_statfs_max_age;
 
 	if (test_bit(LL_SBI_LAZYSTATFS, sbi->ll_flags))
