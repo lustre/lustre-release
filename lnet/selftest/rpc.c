@@ -206,9 +206,14 @@ static void
 srpc_init_server_rpc(struct srpc_server_rpc *rpc,
 		     struct srpc_buffer *buffer)
 {
-	rpc->srpc_wi.swi_state = SWI_STATE_NEWBORN;
+	/* Recycle path: reset the state only.  srpc_wi's work_struct was
+	 * initialised at srpc_service_init() time and may still be queued.
+	 */
+	swi_reset_workitem(&rpc->srpc_wi);
 
-	rpc->srpc_ev.ev_fired = 1; /* no event expected now */
+	/* no events expected until MDs are posted */
+	rpc->srpc_bulkev.ev_fired = 1;
+	rpc->srpc_replyev.ev_fired = 1;
 
 	rpc->srpc_reqstbuf = buffer;
 	rpc->srpc_peer     = buffer->buf_peer;
@@ -702,11 +707,13 @@ srpc_finish_service(struct srpc_service *sv)
 
 		rpc = list_first_entry(&scd->scd_rpc_active,
 				       struct srpc_server_rpc, srpc_list);
-		CWARN("%s: active RPC %p on shutdown: peer %s, wi %s, ev fired %d type %d status %d lnet %d\n",
+		CWARN("%s: active RPC %p on shutdown: peer %s, wi %s, bulkev fired %d type %d status %d lnet %d, replyev fired %d type %d status %d lnet %d\n",
 			sv->sv_name, rpc, libcfs_idstr(&rpc->srpc_peer),
 			swi_state2str(rpc->srpc_wi.swi_state),
-			rpc->srpc_ev.ev_fired, rpc->srpc_ev.ev_type,
-			rpc->srpc_ev.ev_status, rpc->srpc_ev.ev_lnet);
+			rpc->srpc_bulkev.ev_fired, rpc->srpc_bulkev.ev_type,
+			rpc->srpc_bulkev.ev_status, rpc->srpc_bulkev.ev_lnet,
+			rpc->srpc_replyev.ev_fired, rpc->srpc_replyev.ev_type,
+			rpc->srpc_replyev.ev_status, rpc->srpc_replyev.ev_lnet);
 		spin_unlock(&scd->scd_lock);
 		return 0;
 	}
@@ -897,7 +904,7 @@ srpc_prepare_bulk(struct srpc_client_rpc *rpc)
 static int
 srpc_do_bulk(struct srpc_server_rpc *rpc)
 {
-	struct srpc_event *ev = &rpc->srpc_ev;
+	struct srpc_event *ev = &rpc->srpc_bulkev;
 	struct srpc_bulk *bk = rpc->srpc_bulk;
 	__u64 id = rpc->srpc_reqstbuf->buf_msg.msg_body.reqst.bulkid;
 	int rc;
@@ -963,7 +970,8 @@ srpc_server_rpc_done(struct srpc_server_rpc *rpc, int status)
 	 * - all LNet events have been fired.
 	 * Cancel pending schedules and prevent future schedule attempts:
 	 */
-	LASSERT(rpc->srpc_ev.ev_fired);
+	LASSERT(rpc->srpc_bulkev.ev_fired);
+	LASSERT(rpc->srpc_replyev.ev_fired);
 	rpc->srpc_wi.swi_state = SWI_STATE_DONE;
 
 	if (!sv->sv_shuttingdown && !list_empty(&scd->scd_buf_blocked)) {
@@ -988,17 +996,25 @@ static void srpc_handle_rpc(struct swi_workitem *wi)
 						   srpc_wi);
 	struct srpc_service_cd *scd = rpc->srpc_scd;
 	struct srpc_service *sv = scd->scd_svc;
-	struct srpc_event *ev = &rpc->srpc_ev;
+	struct srpc_event *bev = &rpc->srpc_bulkev;
+	struct srpc_event *rev = &rpc->srpc_replyev;
 	int rc = 0;
 
 	spin_lock(&scd->scd_lock);
 	if (wi->swi_state == SWI_STATE_DONE) {
+		/* RPC is back on scd_rpc_free: this is a stale queue_work
+		 * left over from the UNLINK that drove completion.
+		 */
 		if (rpc->srpc_completed) {
 			spin_unlock(&scd->scd_lock);
 			return;
 		}
-		if (ev->ev_fired &&
-		    (sv->sv_shuttingdown || rpc->srpc_aborted)) {
+		/* Rescheduled after the abort path set SWI_STATE_DONE: wait
+		 * for posted MDs to drain.  NB ev_fired starts at 1, so
+		 * unposted MDs do not block.
+		 */
+		if (bev->ev_fired && rev->ev_fired) {
+			rpc->srpc_completed = 1;
 			spin_unlock(&scd->scd_lock);
 			srpc_server_rpc_done(rpc, -ESHUTDOWN);
 			return;
@@ -1015,7 +1031,7 @@ static void srpc_handle_rpc(struct swi_workitem *wi)
 			LNetMDUnlink(rpc->srpc_bulk->bk_mdh);
 		LNetMDUnlink(rpc->srpc_replymdh);
 
-		if (ev->ev_fired) /* no more event, OK to finish */
+		if (bev->ev_fired && rev->ev_fired)
 			srpc_server_rpc_done(rpc, -ESHUTDOWN);
 		return;
 	}
@@ -1063,16 +1079,16 @@ static void srpc_handle_rpc(struct swi_workitem *wi)
 			if (rc == 0)
 				return; /* wait for bulk */
 
-			LASSERT(ev->ev_fired);
-			ev->ev_status = rc;
+			LASSERT(bev->ev_fired);
+			bev->ev_status = rc;
 		}
 	}
 	fallthrough;
 	case SWI_STATE_BULK_STARTED:
-		LASSERT(rpc->srpc_bulk == NULL || ev->ev_fired);
+		LASSERT(rpc->srpc_bulk == NULL || bev->ev_fired);
 
 		if (rpc->srpc_bulk != NULL) {
-			rc = ev->ev_status;
+			rc = bev->ev_status;
 
 			if (sv->sv_bulk_ready != NULL)
 				rc = (*sv->sv_bulk_ready) (rpc, rc);
@@ -1091,16 +1107,15 @@ static void srpc_handle_rpc(struct swi_workitem *wi)
 		return;
 
 	case SWI_STATE_REPLY_SUBMITTED:
-		if (!ev->ev_fired) {
-			CERROR("RPC %p: bulk %p, service %d\n",
-			       rpc, rpc->srpc_bulk, sv->sv_id);
-			CERROR("Event: status %d, type %d, lnet %d\n",
-			       ev->ev_status, ev->ev_type, ev->ev_lnet);
-			LASSERT(ev->ev_fired);
-		}
+		/* NB defensive: only the reply MD's final event schedules
+		 * the wi here, and it sets ev_fired first, so this wait
+		 * should never trigger.
+		 */
+		if (!rev->ev_fired)
+			return;
 
 		wi->swi_state = SWI_STATE_DONE;
-		srpc_server_rpc_done(rpc, ev->ev_status);
+		srpc_server_rpc_done(rpc, rev->ev_status);
 		return;
 	}
 }
@@ -1396,7 +1411,7 @@ srpc_post_rpc(struct srpc_client_rpc *rpc)
 int
 srpc_send_reply(struct srpc_server_rpc *rpc)
 {
-	struct srpc_event *ev = &rpc->srpc_ev;
+	struct srpc_event *ev = &rpc->srpc_replyev;
 	struct srpc_msg *msg = &rpc->srpc_replymsg;
 	struct srpc_buffer *buffer = rpc->srpc_reqstbuf;
 	struct srpc_service_cd *scd = rpc->srpc_scd;
@@ -1595,11 +1610,16 @@ srpc_lnet_ev_handler(struct lnet_event *ev)
 		LASSERT(ev->type == LNET_EVENT_SEND ||
 			ev->type == LNET_EVENT_REPLY ||
 			ev->type == LNET_EVENT_UNLINK);
-
-		if (!ev->unlinked)
-			break; /* wait for final event */
 		fallthrough;
 	case SRPC_BULK_PUT_SENT:
+		/* Only the final (unlinked) event drives the wi.  One MD
+		 * raises several (SEND, ACK, REPLY, UNLINK); advancing on a
+		 * non-final one recycles the RPC while the MD is still live,
+		 * so later events land on an RPC handed out again.
+		 */
+		if (!ev->unlinked)
+			break;
+
 		if (ev->status == 0 && ev->type != LNET_EVENT_UNLINK) {
 			atomic64_t *data;
 
@@ -1610,12 +1630,31 @@ srpc_lnet_ev_handler(struct lnet_event *ev)
 
 			atomic64_add(ev->mlength, data);
 		}
-		fallthrough;
-	case SRPC_REPLY_SENT:
+
 		srpc = rpcev->ev_data;
 		scd  = srpc->srpc_scd;
 
-		LASSERT(rpcev == &srpc->srpc_ev);
+		LASSERT(rpcev == &srpc->srpc_bulkev);
+
+		spin_lock(&scd->scd_lock);
+
+		rpcev->ev_fired  = 1;
+		rpcev->ev_status = (ev->type == LNET_EVENT_UNLINK) ?
+				   -EINTR : ev->status;
+		swi_schedule_workitem(&srpc->srpc_wi);
+
+		spin_unlock(&scd->scd_lock);
+		break;
+
+	case SRPC_REPLY_SENT:
+		/* Reply MD: as above, only the final unlink event advances. */
+		if (!ev->unlinked)
+			break;
+
+		srpc = rpcev->ev_data;
+		scd  = srpc->srpc_scd;
+
+		LASSERT(rpcev == &srpc->srpc_replyev);
 
 		spin_lock(&scd->scd_lock);
 

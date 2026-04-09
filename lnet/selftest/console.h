@@ -138,6 +138,10 @@ struct lstcon_session {
 	unsigned int		ses_force:1;
 	/** session is shutting down */
 	unsigned int		ses_shutdown:1;
+	/** a teardown gave up: ses_shutdown is set but unowned, so an
+	 * end_session may retry the drain
+	 */
+	unsigned int		ses_inert:1;
 	/** console is timedout */
 	unsigned int		ses_expired:1;
 	__u64			ses_id_cookie;  /* batch id cookie */
@@ -168,7 +172,7 @@ lstcon_trans_stat(void)
 extern int lstcon_session_match(struct lst_sid sid);
 extern int lstcon_session_new(char *name, int key, unsigned int version,
 			      int timeout, int flags);
-extern int lstcon_session_end(void);
+extern int lstcon_session_end(bool drain_forever);
 extern int lstcon_session_debug(int timeout,
 				struct list_head __user *result_up);
 extern int lstcon_session_feats_check(unsigned int feats);

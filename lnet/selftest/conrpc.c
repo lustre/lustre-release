@@ -164,7 +164,14 @@ lstcon_rpc_post(struct lstcon_rpc *crpc)
 	atomic_inc(&trans->tas_remaining);
 	crpc->crp_posted = 1;
 
-	sfw_post_rpc(crpc->crp_rpc);
+	/* NB an RMSN RPC armed with the default rpc_timeout would expire
+	 * while the node was still legitimately draining.  Keyed off the
+	 * RPC service, not tas_opc: the pinger's idle-expiry teardown
+	 * sends RMSN on the SESPING transaction.
+	 */
+	sfw_post_rpc(crpc->crp_rpc,
+		     crpc->crp_rpc->crpc_service ==
+		     SRPC_SERVICE_REMOVE_SESSION ? LST_SESEND_TIMEOUT : 0);
 }
 
 static char *
@@ -1314,6 +1321,12 @@ lstcon_rpc_pinger_stop(void)
 {
 	LASSERT(console_session.ses_shutdown);
 
+	/* Already stopped: lstcon_session_end() can be re-entered from
+	 * lstcon_console_fini() after a drain timeout.
+	 */
+	if (console_session.ses_ping == NULL)
+		return;
+
 	stt_del_timer(&console_session.ses_ping_timer);
 
 	lstcon_rpc_trans_abort(console_session.ses_ping, -ESHUTDOWN);
@@ -1325,9 +1338,14 @@ lstcon_rpc_pinger_stop(void)
 	console_session.ses_ping = NULL;
 }
 
-void
-lstcon_rpc_cleanup_wait(void)
+int
+lstcon_rpc_cleanup_wait(bool drain_forever)
 {
+	int rpc_to = sfw_rpc_timeout();
+	int timeout = LST_CLEANUP_TIMEOUT(rpc_to);
+	unsigned long deadline = jiffies + cfs_time_seconds(timeout);
+	atomic_t *nrpcs = &console_session.ses_rpc_counter;
+	bool first = true;
 	struct lstcon_rpc_trans	*trans;
 	struct lstcon_rpc *crpc;
 	struct list_head *pacer;
@@ -1351,17 +1369,68 @@ lstcon_rpc_cleanup_wait(void)
 		mutex_unlock(&console_session.ses_mutex);
 
 		CWARN("Session is shutting down, waiting for termination of transactions\n");
-		schedule_timeout_uninterruptible(cfs_time_seconds(1));
+
+		/* NB the first sleep is uninterruptible so an already-
+		 * signalled caller still waits out one real drain pass
+		 * instead of giving up after zero time.
+		 */
+		if (drain_forever || first)
+			schedule_timeout_uninterruptible(cfs_time_seconds(1));
+		else
+			schedule_timeout_killable(cfs_time_seconds(1));
+		first = false;
 
 		mutex_lock(&console_session.ses_mutex);
+
+		if (drain_forever)
+			continue;
+
+		/* NB test the signal too: schedule_timeout_killable()
+		 * returns immediately once one is pending, so testing only
+		 * the deadline would spin for the rest of the bound.
+		 */
+		if (!list_empty(&console_session.ses_trans_list) &&
+		    (time_after(jiffies, deadline) ||
+		     fatal_signal_pending(current))) {
+			CERROR("lst-console: gave up after %ds waiting for transactions to terminate: rc = %d\n",
+			       timeout, -ETIMEDOUT);
+			return -ETIMEDOUT;
+		}
 	}
+
+	/* NB a fresh deadline: the aborted RPCs outlive their destroyed
+	 * transactions and pin ses_rpc_counter until the LND releases them,
+	 * however much of the bound the loop above consumed.
+	 */
+	deadline = jiffies + cfs_time_seconds(timeout);
 
 	spin_lock(&console_session.ses_rpc_lock);
 
-	lst_wait_until((atomic_read(&console_session.ses_rpc_counter) == 0),
-			console_session.ses_rpc_lock,
-			"Network is not accessable or target is down, waiting for %d console RPCs to being recycled\n",
-			atomic_read(&console_session.ses_rpc_counter));
+	if (drain_forever) {
+		/* Module unload: these RPCs still reference memory this
+		 * module owns, so there is no safe way to return without
+		 * them.  Wait however long LNet takes to release them.
+		 */
+		lst_wait_until(atomic_read(nrpcs) == 0,
+			       console_session.ses_rpc_lock,
+			       "Network is not accessible or target is down, waiting for %d console RPCs to be recycled\n",
+			       atomic_read(nrpcs));
+	} else if (lst_wait_until_timeout(atomic_read(nrpcs) == 0,
+			console_session.ses_rpc_lock, deadline,
+			"Network is not accessible or target is down, waiting for %d console RPCs to be recycled\n",
+			atomic_read(nrpcs))) {
+		int n = atomic_read(nrpcs);
+
+		spin_unlock(&console_session.ses_rpc_lock);
+
+		/* Leave ses_rpc_freelist alone: the RPCs still in flight
+		 * re-add themselves there from lstcon_rpc_put() when they
+		 * finally complete, so it has to stay a valid list.
+		 */
+		CERROR("lst-console: timed out after %ds waiting for %d console RPCs to be recycled: rc = %d\n",
+		       timeout, n, -ETIMEDOUT);
+		return -ETIMEDOUT;
+	}
 
 	list_splice_init(&console_session.ses_rpc_freelist, &zlist);
 
@@ -1373,6 +1442,8 @@ lstcon_rpc_cleanup_wait(void)
 		list_del(&crpc->crp_link);
 		LIBCFS_FREE(crpc, sizeof(*crpc));
 	}
+
+	return 0;
 }
 
 int

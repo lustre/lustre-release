@@ -26,6 +26,28 @@
 #define LST_TRANS_TIMEOUT	30
 #define LST_TRANS_MIN_TIMEOUT   3
 
+/* Bound for the drain waits in lstcon_rpc_cleanup_wait().  A console RPC to
+ * a dead peer is not recycled until its own timer fires at rpc_timeout, so
+ * the bound has to clear that with slack.  rpc_timeout == 0 means never, so
+ * cap it instead.  NB @rpc_to is evaluated twice.
+ *
+ * The timer only schedules the abort: LNetMDUnlink() on an MD the LND still
+ * holds just flags it, and the counter drops when the event fires.  So the
+ * bound must also clear the LND, exactly as LST_DRAIN_TIMEOUT does, or the
+ * wait gives up on a drain that was about to complete.
+ */
+#define LST_CLEANUP_TIMEOUT(rpc_to)					\
+	max_t(int, (rpc_to) > 0 ? (rpc_to) + LST_TRANS_TIMEOUT :	\
+		   4 * LST_TRANS_TIMEOUT, LST_DRAIN_TIMEOUT)
+
+/* SESEND has to outlast the node-side drain: a node does not answer RMSN
+ * until its aborted RPCs are reclaimed, so giving it the generic
+ * LST_TRANS_TIMEOUT abandons nodes that are merely still settling.
+ * NB derived from this node's LND timeout; a peer tuned with a much
+ * larger one can still be abandoned.
+ */
+#define LST_SESEND_TIMEOUT	(LST_DRAIN_TIMEOUT + LST_TRANS_TIMEOUT)
+
 #define LST_VALIDATE_TIMEOUT(t)	\
 	clamp_t(int, t, LST_TRANS_MIN_TIMEOUT, LST_TRANS_TIMEOUT)
 
@@ -116,7 +138,7 @@ void lstcon_rpc_trans_addreq(struct lstcon_rpc_trans *trans,
 int  lstcon_rpc_trans_postwait(struct lstcon_rpc_trans *trans, int timeout);
 int  lstcon_rpc_pinger_start(void);
 void lstcon_rpc_pinger_stop(void);
-void lstcon_rpc_cleanup_wait(void);
+int lstcon_rpc_cleanup_wait(bool drain_forever);
 int  lstcon_rpc_module_init(void);
 void lstcon_rpc_module_fini(void);
 

@@ -666,13 +666,23 @@ lstcon_ioctl_entry(struct notifier_block *nb,
 
 	console_session.ses_laststamp = ktime_get_real_seconds();
 
+	/* NB session commands are netlink-only here, so the retry of an
+	 * inert session's drain happens in lst_sessions_cmd(); nothing
+	 * this entry dispatches may touch a shut-down session.
+	 */
 	if (console_session.ses_shutdown) {
 		rc = -ESHUTDOWN;
 		goto out;
 	}
 
-	if (console_session.ses_expired)
-		lstcon_session_end();
+	/* NB a failed teardown leaves the session inert, so carrying on
+	 * would only produce an unexplained -ESHUTDOWN.
+	 */
+	if (console_session.ses_expired) {
+		rc = lstcon_session_end(false);
+		if (rc != 0)
+			goto out;
+	}
 
 	if (opc != LSTIO_SESSION_NEW &&
 	    console_session.ses_state == LST_SESSION_NONE) {
@@ -806,6 +816,19 @@ static int lst_sessions_show_dump(struct sk_buff *msg,
 		GOTO(out_unlock, rc = -ESRCH);
 	}
 
+	/* An inert session keeps ses_state active while every command
+	 * fails with -ESHUTDOWN; say why instead of dumping a
+	 * healthy-looking session.
+	 */
+	if (console_session.ses_shutdown) {
+		if (console_session.ses_inert)
+			NL_SET_ERR_MSG(extack,
+				       "session inert, rerun end_session");
+		else
+			NL_SET_ERR_MSG(extack, "session is shutting down");
+		GOTO(out_unlock, rc = -ESHUTDOWN);
+	}
+
 	list_for_each_entry(ndl, &console_session.ses_ndl_list, ndl_link)
 		node_count++;
 
@@ -854,13 +877,23 @@ static int lst_sessions_cmd(struct sk_buff *skb, struct genl_info *info)
 
 	console_session.ses_laststamp = ktime_get_real_seconds();
 
-	if (console_session.ses_shutdown) {
+	/* An inert session - a teardown that gave up - still accepts
+	 * end_session, which retries the drain, and new_session, which
+	 * reports EEXIST or, with --force, retries the drain itself.
+	 */
+	if (console_session.ses_shutdown && !console_session.ses_inert) {
 		GENL_SET_ERR_MSG(info, "session is shutdown");
 		GOTO(out_unlock, rc = -ESHUTDOWN);
 	}
 
-	if (console_session.ses_expired)
-		lstcon_session_end();
+	if (console_session.ses_expired) {
+		rc = lstcon_session_end(false);
+		if (rc != 0) {
+			GENL_SET_ERR_MSG(info,
+					 "expired session teardown failed");
+			GOTO(out_unlock, rc);
+		}
+	}
 
 	if (!(info->nlhdr->nlmsg_flags & NLM_F_CREATE) &&
 	    console_session.ses_state == LST_SESSION_NONE) {
@@ -872,7 +905,22 @@ static int lst_sessions_cmd(struct sk_buff *skb, struct genl_info *info)
 	       sizeof(struct lstcon_trans_stat));
 
 	if (!(info->nlhdr->nlmsg_flags & NLM_F_CREATE)) {
-		lstcon_session_end();
+		/* The session was left inert: every later command fails with
+		 * -ESHUTDOWN, so say so rather than report success.
+		 */
+		rc = lstcon_session_end(false);
+		if (rc != 0) {
+			/* NB not always inert: a transaction-alloc failure
+			 * on a first attempt puts the session back in
+			 * service instead.
+			 */
+			if (console_session.ses_inert)
+				GENL_SET_ERR_MSG(info,
+						 "session teardown incomplete, session left inert");
+			else
+				GENL_SET_ERR_MSG(info,
+						 "session teardown failed");
+		}
 		GOTO(out_unlock, rc);
 	}
 
@@ -929,8 +977,13 @@ err_conf:
 					gnlh->version, timeout,
 					force);
 		if (rc < 0) {
+			/* NB nothing to end: on -EEXIST the live session
+			 * was not force-ended and must survive; on any
+			 * other failure ses_state is still
+			 * LST_SESSION_NONE, which lstcon_session_end()
+			 * asserts against.
+			 */
 			GENL_SET_ERR_MSG(info, "new session creation failed");
-			lstcon_session_end();
 			GOTO(out_unlock, rc);
 		}
 

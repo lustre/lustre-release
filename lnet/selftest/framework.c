@@ -30,6 +30,12 @@ static int rpc_timeout = 64;
 module_param(rpc_timeout, int, 0644);
 MODULE_PARM_DESC(rpc_timeout, "rpc timeout in seconds (64 by default, 0 == never)");
 
+/* How long an in-flight RPC can take to expire.  0 == never. */
+int sfw_rpc_timeout(void)
+{
+	return rpc_timeout;
+}
+
 #define sfw_unpack_id(id)						\
 do {									\
 	__swab64s(&(id).nid);						\
@@ -115,6 +121,90 @@ static struct srpc_service sfw_services[] = {
 static int sfw_stop_batch(struct sfw_batch *tsb, int force);
 static void sfw_destroy_session(struct sfw_session *sn);
 static void sfw_reap_zombie_sessions(struct work_struct *work);
+
+/* Check if any test service has active server-side RPCs. */
+static bool
+sfw_test_services_idle(void)
+{
+	struct sfw_test_case *tsc;
+	struct srpc_service_cd *scd;
+	int i;
+
+	list_for_each_entry(tsc, &sfw_data.fw_tests, tsc_list) {
+		struct srpc_service *sv = tsc->tsc_srv_service;
+
+		cfs_percpt_for_each(scd, i, sv->sv_cpt_data) {
+			spin_lock(&scd->scd_lock);
+			if (!list_empty(&scd->scd_rpc_active)) {
+				spin_unlock(&scd->scd_lock);
+				return false;
+			}
+			spin_unlock(&scd->scd_lock);
+		}
+	}
+
+	return true;
+}
+
+/* Wait for client-side batches to go inactive.  Called before
+ * sfw_deactivate_session(), while the session is still valid.
+ */
+static int
+sfw_wait_batches_idle(struct sfw_session *sn, unsigned long deadline)
+{
+	struct sfw_batch *tsb;
+
+	while (1) {
+		bool idle = true;
+
+		spin_lock(&sfw_data.fw_lock);
+		list_for_each_entry(tsb, &sn->sn_batches, bat_list) {
+			if (sfw_batch_active(tsb))
+				idle = false;
+		}
+		spin_unlock(&sfw_data.fw_lock);
+
+		if (idle)
+			break;
+
+		if (time_after(jiffies, deadline)) {
+			CERROR("lst: timed out waiting for batches to drain: rc = %d\n",
+			       -ETIMEDOUT);
+			return -ETIMEDOUT;
+		}
+
+		schedule_timeout_uninterruptible(cfs_time_seconds(1) / 10);
+	}
+	return 0;
+}
+
+/* Wait for server-side test service RPCs to drain.  Called after
+ * sfw_deactivate_session(), so it must not touch the session.
+ *
+ * Request buffers stay posted, so a peer that keeps sending lands new RPCs
+ * on scd_rpc_active between sweeps; re-abort each pass and let the deadline
+ * guarantee termination.
+ */
+static int
+sfw_wait_services_idle(unsigned long deadline)
+{
+	while (!sfw_test_services_idle()) {
+		struct sfw_test_case *tsc;
+
+		if (time_after(jiffies, deadline)) {
+			CERROR("lst: timed out waiting for test services to drain: rc = %d\n",
+			       -ETIMEDOUT);
+			return -ETIMEDOUT;
+		}
+
+		/* Re-abort to catch RPCs that arrived after initial abort */
+		list_for_each_entry(tsc, &sfw_data.fw_tests, tsc_list)
+			srpc_abort_service(tsc->tsc_srv_service);
+
+		schedule_timeout_uninterruptible(cfs_time_seconds(1) / 10);
+	}
+	return 0;
+}
 
 static inline struct sfw_test_case *
 sfw_find_test_case(enum srpc_service_type id)
@@ -538,6 +628,9 @@ sfw_remove_session(struct srpc_rmsn_reqst *request,
 		   struct srpc_rmsn_reply *reply)
 {
 	struct sfw_session *sn = sfw_data.fw_session;
+	unsigned long deadline;
+	struct sfw_batch *tsb;
+	int rc;
 
 	reply->rmsn_sid = get_old_sid(sn);
 
@@ -556,11 +649,36 @@ sfw_remove_session(struct srpc_rmsn_reqst *request,
 		return 0;
 	}
 
+	/* NB one deadline for the whole drain, not one per phase: what the
+	 * console allows for RMSN has to cover both.
+	 */
+	deadline = jiffies + cfs_time_seconds(LST_DRAIN_TIMEOUT);
+
+	/* Drain client-side batches while the session is still valid. */
+	spin_lock(&sfw_data.fw_lock);
+	list_for_each_entry(tsb, &sn->sn_batches, bat_list) {
+		if (sfw_batch_active(tsb))
+			sfw_stop_batch(tsb, 1);
+	}
+	spin_unlock(&sfw_data.fw_lock);
+
+	rc = sfw_wait_batches_idle(sn, deadline);
+
+	/* Aborts server-side RPCs and zombifies the session.  NB after this
+	 * sn may be freed at any time.
+	 */
 	spin_lock(&sfw_data.fw_lock);
 	sfw_deactivate_session();
 	spin_unlock(&sfw_data.fw_lock);
 
-	reply->rmsn_status = 0;
+	/* Wait for server-side test service RPCs to drain. */
+	if (sfw_wait_services_idle(deadline) != 0)
+		rc = -ETIMEDOUT;
+
+	/* NB report an incomplete drain rather than hide it, so the console
+	 * counts this node as failed instead of cleanly removed.
+	 */
+	reply->rmsn_status = rc != 0 ? ETIMEDOUT : 0;
 	reply->rmsn_sid = get_old_sid(NULL);
 	LASSERT(sfw_data.fw_session == NULL);
 	return 0;
@@ -1043,12 +1161,12 @@ sfw_run_test(struct swi_workitem *wi)
 
 	list_add_tail(&rpc->crpc_list, &tsi->tsi_active_rpcs);
 	wi->swi_state = SWI_STATE_RUNNING;
-	spin_unlock(&tsi->tsi_lock);
 
 	spin_lock(&rpc->crpc_lock);
 	rpc->crpc_timeout = rpc_timeout;
 	srpc_post_rpc(rpc);
 	spin_unlock(&rpc->crpc_lock);
+	spin_unlock(&tsi->tsi_lock);
 	return;
 
 test_done:
@@ -1632,7 +1750,7 @@ sfw_abort_rpc(struct srpc_client_rpc *rpc)
 }
 
 void
-sfw_post_rpc(struct srpc_client_rpc *rpc)
+sfw_post_rpc(struct srpc_client_rpc *rpc, int timeout)
 {
 	spin_lock(&rpc->crpc_lock);
 
@@ -1641,7 +1759,8 @@ sfw_post_rpc(struct srpc_client_rpc *rpc)
 	LASSERT(list_empty(&rpc->crpc_list));
 	LASSERT(!sfw_data.fw_shuttingdown);
 
-	rpc->crpc_timeout = rpc_timeout;
+	/* NB 0 means the caller has no opinion; use the module default */
+	rpc->crpc_timeout = timeout ?: rpc_timeout;
 	srpc_post_rpc(rpc);
 
 	spin_unlock(&rpc->crpc_lock);

@@ -238,7 +238,8 @@ struct srpc_server_rpc {
 	struct list_head	srpc_list;
 	struct srpc_service_cd *srpc_scd;
 	struct swi_workitem	srpc_wi;
-	struct srpc_event	srpc_ev;	/* bulk/reply event */
+	struct srpc_event	srpc_bulkev;	/* bulk MD event */
+	struct srpc_event	srpc_replyev;	/* reply MD event */
 	struct lnet_nid		srpc_self;
 	struct lnet_processid	srpc_peer;
 	struct srpc_msg		srpc_replymsg;
@@ -493,7 +494,7 @@ int sfw_create_test_rpc(struct sfw_test_unit *tsu,
 			struct lnet_processid *peer, unsigned int features,
 			int nblk, int blklen, struct srpc_client_rpc **rpc);
 void sfw_abort_rpc(struct srpc_client_rpc *rpc);
-void sfw_post_rpc(struct srpc_client_rpc *rpc);
+void sfw_post_rpc(struct srpc_client_rpc *rpc, int timeout);
 void sfw_client_rpc_done(struct srpc_client_rpc *rpc);
 void sfw_unpack_message(struct srpc_msg *msg);
 void sfw_add_bulk_page(struct srpc_bulk *bk, struct page *pg, int i);
@@ -554,6 +555,15 @@ swi_init_workitem(struct swi_workitem *swi,
 	INIT_WORK(&swi->swi_work, swi_wi_action);
 }
 
+/* Reset a workitem for reuse.  Only swi_state is reset - the work_struct
+ * may still be queued, and re-initialising it would corrupt the worklist.
+ */
+static inline void
+swi_reset_workitem(struct swi_workitem *swi)
+{
+	swi->swi_state = SWI_STATE_NEWBORN;
+}
+
 static inline void
 swi_schedule_workitem(struct swi_workitem *wi)
 {
@@ -567,6 +577,21 @@ swi_cancel_workitem(struct swi_workitem *swi)
 	return cancel_work_sync(&swi->swi_work);
 }
 
+/* Bound for the node-side teardown drain.
+ *
+ * A node must not answer RMSN until its aborted RPCs are reclaimed, but an
+ * in-flight bulk MD is pinned by the LND: LNetMDUnlink() only flags it and
+ * the event arrives when the LND gives up.  So the drain is bounded by the
+ * LND, not by anything selftest controls - hence lnet_get_lnd_timeout()
+ * rather than rpc_timeout, which governs selftest's own retries.  Twice
+ * that for margin; observed drains run to ~1.2x the LND timeout.
+ *
+ * NB an LND with its own tunable set longer than the generic value can
+ * still exceed this; the per-LND tunables are not exported.
+ */
+#define LST_DRAIN_TIMEOUT	(2 * (int)lnet_get_lnd_timeout())
+
+int sfw_rpc_timeout(void);
 int sfw_startup(void);
 int srpc_startup(void);
 void sfw_shutdown(void);
@@ -657,6 +682,45 @@ do {									\
 		spin_lock(&(lock));					\
 	}								\
 } while (0)
+
+/* As lst_wait_until(), but gives up at @deadline (absolute jiffies) or on a
+ * pending fatal signal.  Evaluates to true if it gave up.
+ *
+ * NB without the signal test the killable sleep would return immediately
+ * and the loop would spin on @lock for the rest of the bound.
+ */
+#define lst_wait_until_timeout(cond, lock, deadline, fmt, ...)		\
+({									\
+	int __I = 2;							\
+	bool __expired = false;						\
+	bool __first = true;						\
+	while (!(cond)) {						\
+		if (time_after(jiffies, deadline) ||			\
+		    (!__first && fatal_signal_pending(current))) {	\
+			__expired = true;				\
+			break;						\
+		}							\
+		__I++;							\
+		CDEBUG_LIMIT(is_power_of_2(__I) ? D_WARNING : D_NET,	\
+		       fmt, ## __VA_ARGS__);				\
+		spin_unlock(&(lock));					\
+									\
+		/* NB the first sleep is uninterruptible so an already-	\
+		 * signalled caller still waits out one real pass	\
+		 * instead of giving up after zero time.		\
+		 */							\
+		if (__first)						\
+			schedule_timeout_uninterruptible(		\
+				cfs_time_seconds(1) / 10);		\
+		else							\
+			schedule_timeout_killable(			\
+				cfs_time_seconds(1) / 10);		\
+		__first = false;					\
+									\
+		spin_lock(&(lock));					\
+	}								\
+	__expired;							\
+})
 
 static inline void
 srpc_wait_service_shutdown(struct srpc_service *sv)

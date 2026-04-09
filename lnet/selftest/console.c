@@ -1637,7 +1637,7 @@ lstcon_session_new(char *name, int key, unsigned int feats,
 			return -EEXIST;
 		}
 
-		rc = lstcon_session_end();
+		rc = lstcon_session_end(false);
 
 		/* lstcon_session_end() only return local error */
 		if  (rc != 0)
@@ -1686,34 +1686,114 @@ lstcon_session_new(char *name, int key, unsigned int feats,
 	return rc;
 }
 
-int lstcon_session_end(void)
+/* @drain_forever is for the module-unload path only: there is no caller to
+ * report a failed drain to, and no safe way to proceed while console RPCs
+ * still reference this module's memory.
+ */
+int lstcon_session_end(bool drain_forever)
 {
 	struct lstcon_rpc_trans *trans;
 	struct lstcon_group *grp;
 	struct lstcon_batch *bat;
+	bool was_inert = console_session.ses_shutdown;
 	int rc = 0;
 
 	LASSERT(console_session.ses_state == LST_SESSION_ACTIVE);
 
+	/* Claim the session before postwait() below first drops ses_mutex:
+	 * ses_shutdown is what keeps a second end_session from running
+	 * nested and freeing the batches this loop walks.
+	 */
+	console_session.ses_shutdown = 1;
+	console_session.ses_inert = 0;
+
+	/* Allocate the transaction before anything drops ses_mutex.  It is
+	 * the one step here that can fail, and after the batch-stop loop
+	 * the session cannot be handed back - the pinger sees ses_shutdown
+	 * and stops re-arming its timer.
+	 */
 	rc = lstcon_rpc_trans_ndlist(&console_session.ses_ndl_list, NULL,
 				     LST_TRANS_SESEND, NULL,
 				     lstcon_sesrpc_condition, &trans);
 	if (rc != 0) {
 		CERROR("Can't create transaction: rc = %d\n", rc);
+		/* Hand the session back as it was: live if this was the
+		 * first attempt, inert if this was a retry - dropping
+		 * ses_inert here would leave a state no gate admits.
+		 */
+		if (was_inert)
+			console_session.ses_inert = 1;
+		else
+			console_session.ses_shutdown = 0;
 		return rc;
 	}
 
-	console_session.ses_shutdown = 1;
+	/* Stop active batches first, or end_session runs into in-flight
+	 * bulk transfers on the servers.
+	 *
+	 * NB a NULL translist keeps these off bat_trans_list: with
+	 * ses_shutdown set, lstcon_rpc_trans_check() would abandon a
+	 * transaction with a non-empty tas_olink, lstcon_batch_destroy()
+	 * asserts bat_trans_list is empty, and TSBSTOP is LST_TRANS_PRIVATE
+	 * so it would collide with any private transaction still queued.
+	 */
+	list_for_each_entry(bat, &console_session.ses_bat_list, bat_link) {
+		struct lstcon_rpc_trans *stop_trans;
+
+		if (bat->bat_state == LST_BATCH_IDLE)
+			continue;
+
+		bat->bat_arg = 1; /* force */
+		rc = lstcon_rpc_trans_ndlist(&bat->bat_cli_list, NULL,
+					     LST_TRANS_TSBSTOP, bat,
+					     lstcon_batrpc_condition,
+					     &stop_trans);
+		if (rc != 0) {
+			CERROR("lst-console: can't create batch stop transaction: rc = %d\n",
+			       rc);
+			continue;
+		}
+
+		rc = lstcon_rpc_trans_postwait(stop_trans, LST_TRANS_TIMEOUT);
+		/* NB postwait reports -ESHUTDOWN whenever ses_shutdown is
+		 * set, which teardown sets by design; real per-node failures
+		 * show up in the stats checked below.
+		 */
+		if (rc != 0 && rc != -ESHUTDOWN)
+			CERROR("lst-console: batch stop incomplete: rc = %d\n",
+			       rc);
+		lstcon_rpc_trans_stat(stop_trans, lstcon_trans_stat());
+		lstcon_rpc_trans_destroy(stop_trans);
+
+		/* Only idle once every node confirmed the stop.  An
+		 * unreachable node fails at the RPC level, not the framework
+		 * level, so check both; a retry then still sees the batch
+		 * as active.
+		 */
+		if (lstcon_rpc_stat_failure(lstcon_trans_stat(), 0) == 0 &&
+		    lstcon_tsbop_stat_failure(lstcon_trans_stat(), 0) == 0)
+			bat->bat_state = LST_BATCH_IDLE;
+	}
 
 	lstcon_rpc_pinger_stop();
 
-	lstcon_rpc_trans_postwait(trans, LST_TRANS_TIMEOUT);
+	lstcon_rpc_trans_postwait(trans, LST_SESEND_TIMEOUT);
 
 	lstcon_rpc_trans_destroy(trans);
 	/* User can do nothing even rpc failed, so go on */
 
 	/* waiting for orphan rpcs to die */
-	lstcon_rpc_cleanup_wait();
+	rc = lstcon_rpc_cleanup_wait(drain_forever);
+	if (rc != 0) {
+		/* The RPCs that failed to drain still point at the batches,
+		 * groups and nodes the destroy phase below would free.
+		 * Leave the session allocated and inert instead.
+		 */
+		CERROR("lst-console: session teardown incomplete, session left inert: rc = %d\n",
+		       rc);
+		console_session.ses_inert = 1;
+		return rc;
+	}
 
 	console_session.ses_id    = LST_INVALID_SID;
 	console_session.ses_state = LST_SESSION_NONE;
@@ -1967,8 +2047,12 @@ lstcon_console_fini(void)
 	srpc_shutdown_service(&lstcon_acceptor_service);
 	srpc_remove_service(&lstcon_acceptor_service);
 
+	/* NB drain_forever: nothing pins the module while console RPCs are
+	 * outstanding, so returning here with any still in flight would free
+	 * the memory they reference.
+	 */
 	if (console_session.ses_state != LST_SESSION_NONE)
-		lstcon_session_end();
+		lstcon_session_end(true);
 
 	lstcon_rpc_module_fini();
 

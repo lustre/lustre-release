@@ -63,6 +63,12 @@ brw_client_init(struct sfw_test_instance *tsi)
 
 		opc   = breq->blk_opc;
 		flags = breq->blk_flags;
+
+		/* NB blk_npg is off the wire; an unchecked multiply can
+		 * wrap len to a value the checks below accept.
+		 */
+		if (breq->blk_npg == 0 || breq->blk_npg > LNET_MAX_IOV)
+			return -EINVAL;
 		/* NB: this is not going to work for variable page size,
 		 * but we have to keep it for compatibility
 		 */
@@ -80,13 +86,23 @@ brw_client_init(struct sfw_test_instance *tsi)
 		opc   = breq->blk_opc;
 		flags = breq->blk_flags;
 		len   = breq->blk_len;
-		off   = breq->blk_offset & ~PAGE_MASK;
+		off   = breq->blk_offset;
+
+		/* Reject rather than mask an offset outside the first
+		 * page - masking silently runs a different test than
+		 * the one requested.
+		 */
+		if (breq->blk_offset >= PAGE_SIZE)
+			return -EINVAL;
 	}
 
 	if (off % BRW_MSIZE != 0)
 		return -EINVAL;
 
-	if (len > LNET_MTU)
+	if (len == 0 || len > LNET_MTU)
+		return -EINVAL;
+
+	if (off + len > LNET_MTU)
 		return -EINVAL;
 
 	if (opc != LST_BRW_READ && opc != LST_BRW_WRITE)
@@ -101,7 +117,7 @@ brw_client_init(struct sfw_test_instance *tsi)
 	list_for_each_entry(tsu, &tsi->tsi_units, tsu_list) {
 		int cpt = lnet_nid2cpt(&tsu->tsu_dest.nid, NULL);
 
-		bulk = srpc_alloc_bulk(cpt, len);
+		bulk = srpc_alloc_bulk(cpt, off + len);
 		if (bulk == NULL) {
 			brw_client_fini(tsi);
 			return -ENOMEM;
