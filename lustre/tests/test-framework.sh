@@ -3211,11 +3211,23 @@ done;
 fi"
 }
 
+# Print a node's uptime for diagnostic logging, bounded to ~10s.
+node_uptime() {
+	local node=$1
+	local out=$(mktemp)
+
+	timeout 10 $PDSH $node "uptime" > $out 2>/dev/null
+	local uptime_info=$(< $out)
+	rm -f $out
+
+	echo "${uptime_info:-no response from $node (already down or unreachable)}"
+}
+
 shutdown_node () {
 	local node=$1
-	local uptime_info=$(do_node $node "uptime" 2>/dev/null || echo "uptime unavailable")
+	local uptime_info=$(node_uptime $node)
 
-	log "shutdown_node: $node uptime: $uptime_info"
+	echo "shutdown_node: $node uptime: $uptime_info"
 	echo + $POWER_DOWN $node
 	$POWER_DOWN $node
 }
@@ -3240,9 +3252,9 @@ shutdown_client() {
 	local client=$1
 	local mnt=${2:-$MOUNT}
 	local attempts=3
-	local uptime_info=$(do_node $client "uptime" 2>/dev/null || echo "uptime unavailable")
+	local uptime_info=$(node_uptime $client)
 
-	log "shutdown_client: $client uptime: $uptime_info"
+	echo "shutdown_client: $client uptime: $uptime_info"
 	if [ "$FAILURE_MODE" = HARD ]; then
 		shutdown_node_hard $client
 	else
@@ -3310,9 +3322,11 @@ shutdown_facet() {
 
 reboot_node() {
 	local node=$1
-	local uptime_info=$(do_node $node "uptime" 2>/dev/null || echo "uptime unavailable")
 
-	log "reboot_node: $node uptime before reboot: $uptime_info"
+	echo "=== reboot_node $node start: $(date)"
+	local uptime_info=$(node_uptime $node)
+
+	echo "reboot_node: $node uptime before reboot: $uptime_info"
 	echo + $POWER_UP $node
 	$POWER_UP $node
 }
