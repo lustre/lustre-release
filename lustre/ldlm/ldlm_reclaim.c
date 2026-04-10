@@ -363,14 +363,14 @@ static inline __u64 ldlm_ratio2locknr(int ratio)
 	__u64 locknr;
 
 	locknr = ((__u64)NUM_CACHEPAGES << PAGE_SHIFT) * ratio;
-	do_div(locknr, 100 * sizeof(struct ldlm_lock));
+	do_div(locknr, 100 * LDLM_LOCK_MEM_OVERHEAD);
 
 	return locknr;
 }
 
 static inline __u64 ldlm_locknr2mb(__u64 locknr)
 {
-	return (locknr * sizeof(struct ldlm_lock) + 512 * 1024) >> 20;
+	return (locknr * LDLM_LOCK_MEM_OVERHEAD + 512 * 1024) >> 20;
 }
 
 #define LDLM_WM_RATIO_LOW_DEFAULT	20

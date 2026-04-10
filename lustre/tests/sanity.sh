@@ -18846,6 +18846,70 @@ test_134b() {
 }
 run_test 134b "Server rejects lock request when reaching lock_limit_mb"
 
+test_134c() {
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	(( $MDS1_VERSION >= $(version_code 2.17.52) )) ||
+		skip "Need MDS version at least 2.17.52"
+
+	local slab=/sys/kernel/slab
+	local lock_sz=$(do_facet mds1 \
+		"cat $slab/ldlm_locks/object_size 2>/dev/null")
+	local res_sz=$(do_facet mds1 \
+		"cat $slab/ldlm_resources/object_size 2>/dev/null")
+	local ibits_sz=$(do_facet mds1 \
+		"cat $slab/ldlm_ibits_node/object_size 2>/dev/null")
+
+	[[ -n "$lock_sz" && -n "$res_sz" && -n "$ibits_sz" ]] ||
+		skip "slab metadata for ldlm caches unavailable"
+
+	local overhead=$((lock_sz + res_sz + ibits_sz))
+
+	echo "per-lock overhead: ${overhead}B" \
+		"(lock=$lock_sz res=$res_sz ibits=$ibits_sz)"
+
+	local orig_low=$(do_facet mds1 $LCTL get_param -n \
+			 ldlm.lock_reclaim_threshold_mb)
+	local orig_high=$(do_facet mds1 $LCTL get_param -n \
+			  ldlm.lock_limit_mb)
+	# kernel enforces threshold <= limit, so raise limit first on restore
+	stack_trap "do_facet mds1 $LCTL set_param \
+		ldlm.lock_limit_mb=$orig_high \
+		ldlm.lock_reclaim_threshold_mb=$orig_low"
+
+	local low_mb=20
+	local high_mb=50
+	do_facet mds1 $LCTL set_param \
+		ldlm.lock_reclaim_threshold_mb=$low_mb \
+		ldlm.lock_limit_mb=$high_mb
+
+	local low=$(do_facet mds1 $LCTL get_param -n \
+		    ldlm.lock_reclaim_threshold_count)
+	local high=$(do_facet mds1 $LCTL get_param -n \
+		     ldlm.lock_limit_count)
+
+	(( low > 0 && high > 0 )) ||
+		error "lock counters unset (low=$low high=$high)"
+
+	# count × overhead should match the MB budget. Without the fix,
+	# sizeof(ldlm_lock) alone is used and count overshoots by ~1.5x,
+	# pushing the product well outside the tolerance band.
+	local low_mb_actual=$((low * overhead / 1024 / 1024))
+	local high_mb_actual=$((high * overhead / 1024 / 1024))
+	local low_pct=$((low_mb_actual * 100 / low_mb))
+	local high_pct=$((high_mb_actual * 100 / high_mb))
+
+	echo "reclaim_threshold: $low locks ≈ ${low_mb_actual}MB" \
+		"(set ${low_mb}MB, ${low_pct}%)"
+	echo "lock_limit:        $high locks ≈ ${high_mb_actual}MB" \
+		"(set ${high_mb}MB, ${high_pct}%)"
+
+	(( low_pct >= 80 && low_pct <= 120 )) ||
+		error "reclaim_threshold accounting off: ${low_mb_actual}MB vs ${low_mb}MB"
+	(( high_pct >= 80 && high_pct <= 120 )) ||
+		error "lock_limit accounting off: ${high_mb_actual}MB vs ${high_mb}MB"
+}
+run_test 134c "Lock memory accounting includes associated structures"
+
 test_135() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 	[[ $MDS1_VERSION -lt $(version_code 2.13.50) ]] &&

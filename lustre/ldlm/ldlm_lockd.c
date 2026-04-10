@@ -3259,7 +3259,7 @@ static ssize_t lock_reclaim_threshold_mb_store(struct kobject *kobj,
 	ldlm_reclaim_threshold_mb = watermark;
 	if (watermark != 0) {
 		watermark <<= 20;
-		do_div(watermark, sizeof(struct ldlm_lock));
+		do_div(watermark, LDLM_LOCK_MEM_OVERHEAD);
 	}
 	ldlm_reclaim_threshold = watermark;
 
@@ -3301,7 +3301,7 @@ static ssize_t lock_limit_mb_store(struct kobject *kobj,
 	ldlm_lock_limit_mb = watermark;
 	if (watermark != 0) {
 		watermark <<= 20;
-		do_div(watermark, sizeof(struct ldlm_lock));
+		do_div(watermark, LDLM_LOCK_MEM_OVERHEAD);
 	}
 	ldlm_lock_limit = watermark;
 
@@ -3318,6 +3318,22 @@ static ssize_t lock_granted_count_show(struct kobject *kobj,
 	return scnprintf(buf, PAGE_SIZE, "%llu\n", sum);
 }
 LUSTRE_RO_ATTR(lock_granted_count);
+
+static ssize_t lock_limit_count_show(struct kobject *kobj,
+				     struct attribute *attr,
+				     char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", ldlm_lock_limit);
+}
+LUSTRE_RO_ATTR(lock_limit_count);
+
+static ssize_t lock_reclaim_threshold_count_show(struct kobject *kobj,
+						 struct attribute *attr,
+						 char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", ldlm_reclaim_threshold);
+}
+LUSTRE_RO_ATTR(lock_reclaim_threshold_count);
 #endif
 
 static ssize_t ldlm_enqueue_min_show(struct kobject *kobj,
@@ -3333,7 +3349,9 @@ static struct attribute *ldlm_attrs[] = {
 	&lustre_attr_cancel_unused_locks_before_replay.attr,
 #ifdef CONFIG_LUSTRE_FS_SERVER
 	&lustre_attr_lock_reclaim_threshold_mb.attr,
+	&lustre_attr_lock_reclaim_threshold_count.attr,
 	&lustre_attr_lock_limit_mb.attr,
+	&lustre_attr_lock_limit_count.attr,
 	&lustre_attr_lock_granted_count.attr,
 #endif
 	&lustre_attr_ldlm_enqueue_min.attr,

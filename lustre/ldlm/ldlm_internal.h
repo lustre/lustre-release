@@ -387,6 +387,17 @@ extern u64 ldlm_lock_limit;
 extern u64 ldlm_reclaim_threshold_mb;
 extern u64 ldlm_lock_limit_mb;
 extern struct percpu_counter ldlm_granted_total;
+
+/*
+ * Per-lock memory cost estimate including associated structures.
+ * Each lock has a corresponding ldlm_resource (roughly 1:1 in real
+ * workloads) and an ldlm_ibits_node (always 1:1 for server IBITS locks,
+ * which dominate on MDTs). Using sizeof(struct ldlm_lock) alone
+ * underestimates the true cost by ~1.5x.
+ */
+#define LDLM_LOCK_MEM_OVERHEAD	(sizeof(struct ldlm_lock) +		\
+				 sizeof(struct ldlm_resource) +		\
+				 sizeof(struct ldlm_ibits_node))
 #endif
 extern unsigned int ldlm_dump_granted_max;
 int ldlm_reclaim_setup(void);
