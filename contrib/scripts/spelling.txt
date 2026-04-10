@@ -19,27 +19,11 @@ cfs_hash_lock_t||union cfs_hash_lock
 cfs_hash_lookup_intent_t||enum cfs_hash_lookup_intent
 cfs_hash_ops_t||struct cfs_hash_ops
 cfs_hash_t||struct cfs_hash
-cfs_rcu_head_t||struct rcu_head
-cfs_rand||get_random_u32
-cfs_srand||add_device_randomness
-cfs_size_round||round_up
-cfs_trimwhite||strim
-cfs_time_add_64||ktime_add
-cfs_time_after||time_after
-cfs_time_aftereq||time_after_eq
-cfs_time_before||time_before
-cfs_time_beforeeq||time_before_eq
-cfs_time_beforeq_64||ktime_compare
-cfs_time_before_64||ktime_before
-cfs_time_current||jiffies
-cfs_time_current_64||ktime_get
-cfs_time_current_sec||ktime_get_real_seconds
-ci_nob||ci_bytes
-CLASSERT||BUILD_BUG_ON()
+cfs_from_timer||timer_container_of
+cfs_from_timer||from_timer
+cfs_timer_setup||timer_setup
 container_of0||container_of_safe
-crw_count||crw_bytes
 msecs_to_jiffies||cfs_time_seconds
-DEFINE_TIMER||CFS_DEFINE_TIMER
 define OBD_CONNECT[A-Z0-9_]*||see 'XXX README XXX' below and contact adilger@thelustrecollective.com
 __u[136][624] ocd_[a-z0-9_]*||see 'XXX README XXX' below and contact adilger@thelustrecollective.com
 del_timer||timer_delete
@@ -47,13 +31,10 @@ del_timer_sync||timer_delete_sync
 del_singleshot_timer_sync||timer_delete_sync
 \.\*s||DNAME and encode_fn_len()
 d_name.name||encode_fn_xxx
-DN_MAX_BONUSLEN||DN_BONUS_SIZE(dnodesize)
-DN_OLD_MAX_BONUSLEN||DN_BONUS_SIZE(DNODE_MIN_SIZE)
 ENOTSUPP||EOPNOTSUPP
 ERR_PTR.PTR_ERR||ERR_CAST
 EWOULDBLOCK||EAGAIN
 fd_flags||lfd_file_flags
-from_timer||cfs_from_timer
 ft_nob||ft_bytes
 f_dentry||f_path.dentry
 [^_]get_seconds||ktime_get_real_seconds
@@ -74,9 +55,6 @@ LASSERT||Try to replace assertions with error handling
 LCK_MINMODE||LCK_MODE_MIN
 LCK_MAXMODE||LCK_MODE_END
 LDEBUGFS_SEQ_FOPS_.*||create Documentation/man4/ page for this parameter
-ldebugfs_remove||debugfs_remove_recursive
-ldlm_appetite_t||enum ldlm_appetite
-ldlm_cancel_flags_t||enum ldlm_cancel_flags
 ldlm_clear_ast_discard_data||deprecated, use LDLM_FL_AST_DISCARD_DATA directly
 ldlm_clear_ast_sent||deprecated, use LDLM_FL_AST_SENT directly
 ldlm_clear_atomic_cb||deprecated, use LDLM_FL_ATOMIC_CB directly
@@ -120,7 +98,6 @@ ldlm_clear_specualtive||deprecated, use LDLM_FL_SPECULATIVE directly
 ldlm_clear_test_lock||deprecated, use LDLM_FL_TEST_LOCK directly
 ldlm_clear_waited||deprecated, use LDLM_FL_WAITED directly
 ldlm_clear_wait_noreproc||deprecated, use LDLM_FL_WAIT_NOREPROC directly
-ldlm_error_t||enum ldlm_error
 ldlm_is_ast_discard_data||deprecated, use LDLM_FL_DISCARD_DATA directly
 ldlm_is_ast_sent||deprecated, use LDLM_FL_AST_SENT directly
 ldlm_is_atomic_cb||deprecated, use LDLM_FL_ATOMIC_CB directly
@@ -167,11 +144,6 @@ ldlm_is_speculative||deprecated, use LDLM_FL_SPECULATIVE directly
 ldlm_is_test_lock||deprecated, use LDLM_FL_TEST_LOCK directly
 ldlm_is_waited||deprecated, use LDLM_FL_WAITED directly
 ldlm_is_wait_noreproc||deprecated, use LDLM_FL_WAIT_NOREPROC directly
-ldlm_mode_t||enum ldlm_mode
-ldlm_ns_hash_def_t||struct ldlm_ns_hash_def
-ldlm_ns_type_t||enum ldlm_ns_type
-ldlm_policy_data_t||enum ldlm_policy_data
-ldlm_policy_res_t||enum ldlm_policy_res
 ldlm_set_ast_discard_data||deprecated, use LDLM_FL_AST_DISCARD_DATA directly
 ldlm_set_ast_sent||deprecated, use LDLM_FL_AST_SENT directly
 ldlm_set_atomic_cb||deprecated, use LDLM_FL_ATOMIC_CB directly
@@ -218,54 +190,25 @@ ldlm_set_speculative||deprecated, use LDLM_FL_SPECULATIVE directly
 ldlm_set_test_lock||deprecated, use LDLM_FL_TEST_LOCK directly
 ldlm_set_waited||deprecated, use LDLM_FL_WAITED directly
 ldlm_set_wait_noreproc||deprecated, use LDLM_FL_WAIT_NOREPROC directly
-ldlm_side_t||enum ldlm_side
 LDLM_LOCK_PUT||ldlm_lock_put
 LDLM_LOCK_RELEASE||ldlm_lock_put
 LDLM_LOCK_GET||ldlm_lock_get
 LDLM_TYPE_MAX||LDLM_TYPE_END
-ldlm_type_t||enum ldlm_type
-ldlm_wire_policy_data_t||union ldlm_wire_policy_data
-libcfs_debug_vmsg2||libcfs_debug_msg
-li_advice||lio_advice
-li_end||lio_end
-li_extent||lai_extent
-li_fid||lio_fid
-li_opc||lai_opc
-li_start||lio_start
-lnet_acceptor_connreq_t||struct lnet_acceptor_connreq
-lnet_counters_t||struct lnet_counters
-lnet_handle_wire_t||struct lnet_handle_wire
-lnet_hdr_t||struct lnet_hdr
-lnet_magicversion_t||struct lnet_magicversion
-lnet_ni_status_t||struct lnet_ni_status
-lnet_ping_info_t||struct lnet_ping_info
-lnet_process_id_packed_t||struct lnet_process_id_packed
 LOOKUP_CONTINUE||LOOKUP_PARENT
-LPD64||%lld
-LPLD||%ld
-LPLU||%lu
-LPLX||%#lx
-LPO64||%#llo
-LPPID||%d
-lprocfs_str_to_s64||kstrtoxxx_from_user
-lprocfs_str_with_units_to_u64||sysfs_memparse using sysfs/kernbuf
-lprocfs_str_with_units_to_s64||sysfs_memparse using sysfs/kernbuf
-LPROC_SEQ_FOPS||LUSTRE_RW_ATTR
-LPROC_SEQ_FOPS_RO_TYPE||LUSTRE_RO_ATTR
-LPROC_SEQ_FOPS_RO||LUSTRE_RO_ATTR
-LPROC_SEQ_FOPS_RW_TYPE||LUSTRE_RW_ATTR
-LPROC_SEQ_FOPS_WR_ONLY||LUSTRE_WO_ATTR
+LPROC_SEQ_FOPS||LUSTRE_RW_ATTR and create Documentation/man4/ page for param
+LPROC_SEQ_FOPS_RO_TYPE||LUSTRE_RO_ATTR, create Documentation/man4 page for param
+LPROC_SEQ_FOPS_RO||LUSTRE_RO_ATTR, create Documentation/man4/ page for param
+LPROC_SEQ_FOPS_RW_TYPE||LUSTRE_RW_ATTR, create Documentation/man4 page for param
+LPROC_SEQ_FOPS_WR_ONLY||LUSTRE_WO_ATTR, create Documentation/man4 page for param
 LUSTRE_RO_ATTR||create Documentation/man4/ page for this parameter
 LUSTRE_RW_ATTR||create Documentation/man4/ page for this parameter
 LUSTRE_WO_ATTR||create Documentation/man4/ page for this parameter
-lu_str_to_s64||sysfs_memparse
 l_wait_event||wait_event_idle
 l_wait_event_exclusive||l_wait_event_abortable_exclusive
 l_wait_event_exclusive_head||wait_event_idle_exclusive_lifo_timeout
 l_wait_condition||wait_event_idle
 MAX\(||max_t
 MIN\(||min_t
-mdo2fid||mdd_object_fid
 mktemp||mkstemp
 nla_strlcpy||nla_strscpy
 obd_abort_recovery||OBDF_ABORT_RECOVERY
@@ -307,9 +250,6 @@ PNAME||encode_fn_luname
 prandom_u32||get_random_u32
 prandom_u32_max||get_random_u32_below
 ptlrpc_req_finished||ptlrpc_req_put
-return seq_printf||seq_printf
-setup_timer||cfs_timer_setup
-= seq_printf||seq_printf
 sprintf||snprintf
 strcat||strncat
 strcpy||strncpy
@@ -318,9 +258,7 @@ struct timeval||struct timespec64
 sysctl_vfs_cache_pressure||vfs_pressure_ratio
 tempnam||mkstemp
 time_t||timeout_t
-timer_setup||cfs_timer_setup
 version_code.*2.1[8-9]||version 2.17.x should be used
-vui_tot_count||vui_tot_bytes
 wait_queue_t||wait_queue_entry_t
 xa_insert||ll_xa_insert
 yaml_emitter_delete||yaml_emitter_cleanup

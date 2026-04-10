@@ -32,36 +32,33 @@ grep -q "^#" "$1" || exit 0
 
 # Add a commented-out Test-Parameters: line. This will let the developer
 # uncomment it out if they think it's appropriate.
-echo "#" >> "$1"
-echo "# If this patch makes only non-functional changes, or test-only" >> "$1"
-echo "# changes, consider adding this 'Test-Parameters' in the" >> "$1"
-echo "# commit message:" >> "$1"
-echo "#" >> "$1"
-echo "# Test-Parameters: trivial" >> "$1"
-echo "#" >> "$1"
-echo "# If you need to repeat the same subtest many times, consider" >> "$1"
-echo "# this instead:" >> "$1"
-echo "#" >> "$1"
-echo "# Test-Parameters: trivial testlist=sanity env=ONLY=1,ONLY_REPEAT=100" >> "$1"
-echo "#" >> "$1"
-echo "# https://wiki.whamcloud.com/display/PUB/Changing+Test+Parameters+with+Gerrit+Commit+Messages" >> "$1"
-echo "#" >> "$1"
+cat <<- PARAMS >> $1
+# If this patch makes only non-functional changes, or test-only changes,
+# consider adding the following 'Test-Parameters' in the commit message:
+#    Test-Parameters: trivial
+#
+# For the full list of Test-Parameters options, see:
+# https://wiki.whamcloud.com/display/PUB/Changing+Test+Parameters+with+Gerrit+Commit+Messages
+#
+PARAMS
 
 # Add a commented-out Signed-off-by: line.  This shouldn't be added in an
 # uncommented form, otherwise sanity checking for an emtpy commit fails.
 # The developer should uncomment it to include it in the commit message.
-echo "#" >> "$1"
-echo "# The 'Signed-off-by' line signifies that you agree to the Developer" >> "$1"
-echo "# Certificate of Origin - https://developercertificate.org/" >> "$1"
-echo "#" >> "$1"
 SIGNOFF=$(git var GIT_AUTHOR_IDENT | sed -n 's/^\(.*>\).*$/Signed-off-by: \1/p')
-grep -qs "^$SIGNOFF" "$1" || echo "# $SIGNOFF" >> "$1"
+if ! grep -qs "^$SIGNOFF" "$1"; then
+	cat <<- SOB >> $1
+	# The 'Signed-off-by' line signifies that you agree to the Developer
+	# Certificate of Origin - https://developercertificate.org/
+	#    $SIGNOFF
+	SOB
+fi
 
 # Add the checkpatch.pl output as comments, but don't cause a commit error
 # yet, as there may be exceptions and it is better let a person decide.
 if [ -x "$CHECKPATCH" ]; then
-	echo "" >> "$1"
 	echo "#" >> "$1"
+	echo "# checkpatch output:" >> "$1"
 	[ -d ".git/rebase-apply" -o -d ".git/rebase-merge" ] &&
 		DIFFOPT="HEAD" || DIFFOPT="--cached"
 	git diff $DIFFOPT | $CHECKPATCH $CHECKPATCH_OPTS - |
@@ -73,7 +70,6 @@ if [[ -x "$SHELLCHECK" && "$SHELLCHECK_RUN" == "yes" ]]; then
 	# Add header
 	echo "#" >> "$1"
 	echo "# shellcheck output:" >> "$1"
-	echo "#" >> "$1"
 	# Get file that needs to be shellchecked. We only consider *.sh files
 	# Example Start --
 	#       modified:   lustre/tests/sanity.sh
@@ -86,8 +82,8 @@ if [[ -x "$SHELLCHECK" && "$SHELLCHECK_RUN" == "yes" ]]; then
 		# scripts to freely use bash-isms and lowers the risks of
 		# failures on Debian based platforms. Output a small warning
 		# if #!/bin/sh is found.
-		echo "#" $(grep -Hn "#\!/bin/sh" "$cur_file" && \
-			echo " : Please don't use sh in shebangs.") >> "$1"
+		grep -Hnq "#\!/bin/sh" "$cur_file" &&
+			echo "# Use /bin/bash for shell scripts" >> "$1"
 
 		# Get start/end range of lines that needs to be reported
 		# range presently not used will come in handy when dealing with
