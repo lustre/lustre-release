@@ -11314,9 +11314,9 @@ test_130()
 run_test 130 "re-register an MDT after writeconf"
 
 test_131() {
-	[ "$mds1_FSTYPE" == "ldiskfs" ] || skip "ldiskfs only test"
-	(( $MDS1_VERSION >= $(version_code 2.14.56.35) )) ||
-		skip "Need MDS version at least 2.14.56.35"
+	[[ "$mds1_FSTYPE" == "ldiskfs" ]] || skip "ldiskfs only test"
+	(( $MDS1_VERSION >= $(version_code v2_14_56-35-g665383d3a1) )) ||
+		skip "Need MDS >= 2.14.56.35 for trusted.projid"
 	do_facet mds1 $DEBUGFS -R features $(mdsdevname 1) |
 		grep -q project || skip "skip project quota not supported"
 
@@ -11340,7 +11340,7 @@ test_131() {
 
 	stopall
 
-	for i in $(seq $MDSCOUNT); do
+	for ((i = 1; i <= $MDSCOUNT; i++)); do
 		mds_backup_restore mds$i ||
 			error "Backup/restore on mds$i failed"
 	done
@@ -11348,19 +11348,27 @@ test_131() {
 	setupall
 
 	projid=($($LFS project -d $DIR/$tdir))
-	[ ${projid[0]} == "1000" ] ||
+	(( ${projid[0]} == "1000" )) ||
 		error "projid expected 1000 not ${projid[0]}"
 	for ((i = 0; i < 512; ++i)); do
 		projid=($($LFS project $DIR/$tdir/f${i}))
-		[ ${projid[0]} == "$i" ] ||
+		(( ${projid[0]} == "$i" )) ||
 			error "projid expected $i not ${projid[0]}"
 	done
 
 	(( $($LFS project $DIR/$tdir.inherit/f* |
 		awk '$1 == 1001 { print }' | wc -l) == 128 )) ||
 			error "restore did not copy projid 1001"
+
+	(( $MDS1_VERSION >= $(version_code 2.17.53) )) ||
+		skip "need MDS > 2.17.53 for projid inherit restore"
+
+	createmany -o $DIR/$tdir.inherit/file 2
+	(( $($LFS project $DIR/$tdir.inherit/file* |
+	     awk '$1 == 1001 { print }' | wc -l) == 2 )) ||
+		error "files did not inherit projid 1001 after restore"
 }
-run_test 131 "MDT backup restore with project ID"
+run_test 131 "MDT backup restore with project ID and inheritance flag"
 
 test_132() {
 	local err_cnt

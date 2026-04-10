@@ -5308,6 +5308,8 @@ static int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 	struct inode *inode = obj->oo_inode;
 	struct osd_thread_info *info = osd_oti_get(env);
 	struct dentry *dentry = &info->oti_obj_dentry;
+	char *end;
+	char *p;
 	int rc;
 
 	if (!dt_object_exists(dt))
@@ -5324,23 +5326,24 @@ static int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 	if (rc < 0 || buf->lb_buf == NULL)
 		return rc;
 
-	/* Hide virtual project ID xattr from list if disabled */
-	if (!dev->od_enable_projid_xattr) {
-		char *end = (char *)buf->lb_buf + rc;
-		char *p = buf->lb_buf;
+	p = buf->lb_buf;
+	end = p + rc;
+	while (p < end) {
+		char *next = p + strlen(p) + 1;
 
-		while (p < end) {
-			char *next = p + strlen(p) + 1;
-
-			if (strcmp(p, XATTR_NAME_PROJID) == 0) {
-				if (end - next > 0)
-					memmove(p, next, end - next);
-				rc -= next - p;
-				break;
-			}
-
-			p = next;
+		/* Hide virtual project ID xattr from list if disabled */
+		/* Hide virtual inode flag xattr */
+		if (strcmp(p, XATTR_NAME_INODEFL) == 0 ||
+		    (!dev->od_enable_projid_xattr &&
+		     strcmp(p, XATTR_NAME_PROJID) == 0)) {
+			if (end - next > 0)
+				memmove(p, next, end - next);
+			rc -= next - p;
+			end -= next - p;
+			continue;
 		}
+
+		p = next;
 	}
 
 	return rc;

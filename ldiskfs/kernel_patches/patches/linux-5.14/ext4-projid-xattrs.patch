@@ -82,27 +82,39 @@ diff --git a/fs/ext4/xattr.c b/fs/ext4/xattr.c
 index aabc92e..442bfbd 100644
 --- a/fs/ext4/xattr.c
 +++ b/fs/ext4/xattr.c
-@@ -62,6 +62,8 @@
+@@ -62,6 +62,9 @@
  #include "xattr.h"
  #include "acl.h"
  
 +#define EXT4_XATTR_PROJID "projid"
++#define EXT4_XATTR_INODEFL "inodefl"
 +
  #ifdef EXT4_XATTR_DEBUG
  # define ea_idebug(inode, fmt, ...)					\
  	printk(KERN_DEBUG "inode %s:%lu: " fmt "\n",			\
-@@ -648,11 +650,30 @@ ext4_xattr_get(struct inode *inode, int name_index, const char *name,
+@@ -648,11 +650,42 @@ ext4_xattr_get(struct inode *inode, int name_index, const char *name,
  		return -ERANGE;
  
  	down_read(&EXT4_I(inode)->xattr_sem);
-+	if (name_index == EXT4_XATTR_INDEX_TRUSTED &&
-+	    strncmp(name, EXT4_XATTR_PROJID, strlen(name)) == 0 &&
-+	    ext4_has_feature_project(inode->i_sb)) {
++	if (name_index == EXT4_XATTR_INDEX_TRUSTED) {
 +		/* 10 chars to hold u32 in decimal, plus ending \0 */
 +		char value[11];
-+		__u32 projid = (__u32)from_kprojid(&init_user_ns,
++		int len = strlen(name);
++
++		if (strncmp(name, EXT4_XATTR_PROJID, len) == 0 &&
++		    ext4_has_feature_project(inode->i_sb)) {
++			__u32 projid = (__u32)from_kprojid(&init_user_ns,
 +						   EXT4_I(inode)->i_projid);
-+		error = snprintf(value, sizeof(value), "%u", projid);
++			error = snprintf(value, sizeof(value), "%u", projid);
++		} else if (strncmp(name, EXT4_XATTR_INODEFL, len) == 0 &&
++			   (EXT4_I(inode)->i_flags & EXT4_FL_USER_MODIFIABLE)
++									!= 0) {
++			__u32 flags = EXT4_I(inode)->i_flags;
++			error = snprintf(value, sizeof(value), "%#x",
++					 flags & EXT4_FL_USER_MODIFIABLE);
++		} else {
++			goto ibody;
++		}
 +		if (buffer) {
 +			if (error > buffer_size) {
 +				error = -ERANGE;
@@ -113,6 +125,7 @@ index aabc92e..442bfbd 100644
 +		goto out;
 +	}
 +
++ibody:
  	error = ext4_xattr_ibody_get(inode, name_index, name, buffer,
  				     buffer_size);
  	if (error == -ENODATA)
@@ -122,7 +135,7 @@ index aabc92e..442bfbd 100644
  	up_read(&EXT4_I(inode)->xattr_sem);
  	return error;
  }
-@@ -775,7 +796,33 @@ ext4_listxattr(struct dentry *dentry, char *buffer, size_t buffer_size)
+@@ -775,7 +796,52 @@ ext4_listxattr(struct dentry *dentry, char *buffer, size_t buffer_size)
  	ret = ext4_xattr_block_list(dentry, buffer, buffer_size);
  	if (ret < 0)
  		goto errout;
@@ -131,6 +144,25 @@ index aabc92e..442bfbd 100644
 +		buffer_size -= ret;
 +	}
  	ret += ret2;
++	if ((EXT4_I(dentry->d_inode)->i_flags & EXT4_FL_USER_MODIFIABLE) != 0) {
++		size_t prefix_len = strlen(XATTR_TRUSTED_PREFIX);
++		size_t name_len = strlen(EXT4_XATTR_INODEFL);
++		size_t size = prefix_len + name_len + 1;
++
++		if (buffer) {
++			if (size > buffer_size) {
++				ret = -ERANGE;
++				goto errout;
++			}
++			strncpy(buffer, XATTR_TRUSTED_PREFIX, prefix_len);
++			buffer += prefix_len;
++			strncpy(buffer, EXT4_XATTR_INODEFL, name_len);
++			buffer += name_len;
++			*buffer++ = 0;
++			buffer_size -= size;
++		}
++		ret += size;
++	}
 +	if (ext4_has_feature_project(dentry->d_sb)) {
 +		size_t prefix_len = strlen(XATTR_TRUSTED_PREFIX);
 +		size_t name_len = strlen(EXT4_XATTR_PROJID);
@@ -156,20 +188,22 @@ index aabc92e..442bfbd 100644
  errout:
  	up_read(&EXT4_I(d_inode(dentry))->xattr_sem);
  	return ret;
-@@ -2456,6 +2503,43 @@ ext4_xattr_set(struct inode *inode, int name_index, const char *name,
+@@ -2456,7 +2503,60 @@ ext4_xattr_set(struct inode *inode, int name_index, const char *name,
+ 	struct super_block *sb = inode->i_sb;
  	int error, retries = 0;
  	int credits;
++	int len = strlen(name);
  
 +	if (name_index == EXT4_XATTR_INDEX_TRUSTED &&
-+	    strncmp(name, EXT4_XATTR_PROJID, strlen(name)) == 0 &&
-+	    ext4_has_feature_project(inode->i_sb)) {
++	    (strncmp(name, EXT4_XATTR_PROJID, len) == 0 ||
++	     strncmp(name, EXT4_XATTR_INODEFL, len) == 0)) {
 +		/* 10 chars to hold u32 in decimal, plus ending \0 */
 +		char buffer[11];
-+		__u32 projid;
++		__u32 att_val;
 +
 +		/*
-+		 * Project Quota ID state is only allowed to change from within
-+		 * the init namespace.
++		 * Project Quota ID state and inode flags are only allowed to
++		 * change from within the init namespace.
 +		 */
 +		if (current_user_ns() != &init_user_ns)
 +			return -EINVAL;
@@ -179,22 +213,37 @@ index aabc92e..442bfbd 100644
 +				return -EINVAL;
 +			memcpy(buffer, value, value_len);
 +			buffer[value_len] = '\0';
-+			error = kstrtouint(buffer, 0, &projid);
++			error = kstrtouint(buffer, 0, &att_val);
 +			if (error)
 +				return error;
 +		} else {
-+			projid = EXT4_DEF_PROJID;
++			att_val = 0; /* EXT4_DEF_PROJID */
 +		}
 +
-+		/*
-+		 * Caller is allowed to change the project ID. If it is being
-+		 * changed, make sure that the new value is valid.
-+		 */
-+		if (!projid_valid(make_kprojid(&init_user_ns, projid)))
-+			return -EINVAL;
++		if (strncmp(name, EXT4_XATTR_PROJID, len) == 0 &&
++		    ext4_has_feature_project(inode->i_sb)) {
++			/*
++			 * Caller is allowed to change the project ID. If it is
++			 * being changed, make sure that the new value is valid.
++			 */
++			if (!projid_valid(make_kprojid(&init_user_ns, att_val)))
++				return -EINVAL;
 +
-+		error = ext4_ioctl_setproject(inode, projid);
-+		return error;
++			error = ext4_ioctl_setproject(inode, att_val);
++			return error;
++		} else if (strncmp(name, EXT4_XATTR_INODEFL, len) == 0 &&
++			   (att_val & EXT4_FL_USER_MODIFIABLE) != 0) {
++			handle_t *handle;
++
++			handle = ext4_journal_start(inode, EXT4_HT_INODE, 1);
++			if (IS_ERR(handle))
++				return PTR_ERR(handle);
++			att_val &= EXT4_FL_USER_MODIFIABLE;
++			EXT4_I(inode)->i_flags |= att_val;
++			error = ext4_mark_inode_dirty(handle, inode);
++			ext4_journal_stop(handle);
++			return error;
++		}
 +	}
 +
  	error = dquot_initialize(inode);
