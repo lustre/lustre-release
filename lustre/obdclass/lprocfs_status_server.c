@@ -133,15 +133,23 @@ ssize_t grant_check_threshold_store(struct kobject *kobj,
 }
 EXPORT_SYMBOL(grant_check_threshold_store);
 
+#define flag2str_old(port, flag)					\
+	do {								\
+		if ((port)->port##_##flag) {				\
+			seq_printf(m, "%s" #flag, first ? "" : ", ");	\
+			first = false;					\
+		}							\
+	} while (0)
+
 static int obd_export_flags2str(struct obd_export *exp, struct seq_file *m)
 {
 	bool first = true;
 
-	flag2str(exp, failed);
-	flag2str(exp, in_recovery);
-	flag2str(exp, disconnected);
-	flag2str(exp, connecting);
-	flag2str(exp, no_recovery);
+	flag2str_old(exp, failed);
+	flag2str_old(exp, in_recovery);
+	flag2str_old(exp, disconnected);
+	flag2str_old(exp, connecting);
+	flag2str_old(exp, no_recovery);
 
 	return 0;
 }

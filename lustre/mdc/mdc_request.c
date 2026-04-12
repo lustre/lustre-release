@@ -769,7 +769,7 @@ int mdc_set_open_replay_data(struct obd_export *exp,
 	LASSERT(body != NULL);
 
 	/* Only if the import is replayable, we set replay_open data */
-	if (och && imp->imp_replayable) {
+	if (och && test_bit(IMPF_REPLAYABLE, imp->imp_flags)) {
 		mod = obd_mod_alloc();
 		if (mod == NULL) {
 			DEBUG_REQ(D_ERROR, open_req,

@@ -138,7 +138,7 @@ static int lov_connect_osc(struct obd_device *obd, u32 index, int activate,
 		RETURN(rc);
 	}
 
-	if (imp->imp_invalid) {
+	if (test_bit(IMPF_INVALID, imp->imp_flags)) {
 		CDEBUG(D_CONFIG, "%s: not connecting - administratively disabled\n",
 		       obd_uuid2str(tgt_uuid));
 		RETURN(0);

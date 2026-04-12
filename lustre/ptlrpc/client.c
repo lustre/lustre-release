@@ -1390,8 +1390,9 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
 			DEBUG_REQ(D_ERROR, req, "invalidate in flight");
 			*status = -EIO;
 		}
-	} else if (imp->imp_invalid || test_bit(OBDF_NO_RECOV, imp->imp_obd->obd_flags)) {
-		if (!imp->imp_deactive)
+	} else if (test_bit(IMPF_INVALID, imp->imp_flags) ||
+		   test_bit(OBDF_NO_RECOV, imp->imp_obd->obd_flags)) {
+		if (!test_bit(IMPF_DEACTIVE, imp->imp_flags))
 			DEBUG_REQ(D_NET, req, "IMP_INVALID");
 		*status = -ESHUTDOWN; /* b=12940 */
 	} else if (req->rq_import_generation != imp->imp_generation) {
@@ -1718,7 +1719,7 @@ static int after_reply(struct ptlrpc_request *req)
 	    lustre_msg_get_opc(req->rq_reqmsg) == LDLM_ENQUEUE)
 		imp->imp_no_cached_data = 0;
 
-	if (imp->imp_replayable) {
+	if (test_bit(IMPF_REPLAYABLE, imp->imp_flags)) {
 		/* if other threads are waiting for ptlrpc_free_committed()
 		 * they could continue the work of freeing RPCs. That reduces
 		 * lock hold times, and distributes work more fairly across
@@ -3299,7 +3300,7 @@ void ptlrpc_retain_replayable_request(struct ptlrpc_request *req,
 	req->rq_resend = 0;
 	spin_unlock(&req->rq_lock);
 
-	LASSERT(imp->imp_replayable);
+	LASSERT(test_bit(IMPF_REPLAYABLE, imp->imp_flags));
 	/* Balanced in ptlrpc_free_committed, usually. */
 	ptlrpc_request_addref(req);
 	list_for_each_entry_reverse(iter, &imp->imp_replay_list,
@@ -3397,9 +3398,8 @@ static int ptlrpc_replay_interpret(const struct lu_env *env,
 	if (lustre_msg_get_status(req->rq_repmsg) == -EOVERFLOW) {
 		/** replay was failed due to version mismatch */
 		DEBUG_REQ(D_WARNING, req, "Version mismatch during replay");
-		spin_lock(&imp->imp_lock);
-		imp->imp_vbr_failed = 1;
-		spin_unlock(&imp->imp_lock);
+		set_bit(IMPF_VBR_FAILED, imp->imp_flags);
+		smp_mb__after_atomic();
 		lustre_msg_set_status(req->rq_repmsg, aa->praa_old_status);
 	} else {
 		/** The transno had better not change over replay. */
@@ -3603,7 +3603,7 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
 	 * Last chance to free reqs left on the replay list, but we
 	 * will still leak reqs that haven't committed.
 	 */
-	if (imp->imp_replayable)
+	if (test_bit(IMPF_REPLAYABLE, imp->imp_flags))
 		ptlrpc_free_committed(imp);
 
 	EXIT;

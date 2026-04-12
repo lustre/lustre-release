@@ -379,7 +379,7 @@ again:
 
 	if (rc != 0) {
 		if (imp->imp_state != LUSTRE_IMP_CLOSED &&
-		    !imp->imp_deactive &&
+		    !test_bit(IMPF_DEACTIVE, imp->imp_flags) &&
 		    imp->imp_connect_flags_orig & OBD_CONNECT_MDS_MDS &&
 		    OCD_HAS_FLAG(&imp->imp_connect_data, LIGHTWEIGHT) &&
 		    rc != -ENOTSUPP) {

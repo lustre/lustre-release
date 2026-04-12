@@ -1808,8 +1808,9 @@ static int osc_makes_rpc(struct client_obd *cli, struct osc_object *osc,
 	/* if we have an invalid import we want to drain the queued pages
 	 * by forcing them through rpcs that immediately fail and complete
 	 * the pages.  recovery relies on this to empty the queued pages
-	 * before canceling the locks and evicting down the llite pages */
-	if ((cli->cl_import == NULL || cli->cl_import->imp_invalid))
+	 * before canceling the locks and evicting down the llite pages
+	 */
+	if (!cli->cl_import || test_bit(IMPF_INVALID, cli->cl_import->imp_flags))
 		invalid_import = 1;
 
 	if (cmd & OBD_BRW_WRITE) {
@@ -2314,7 +2315,8 @@ static struct osc_object *osc_next_obj(struct client_obd *cli)
 
 	/* then return all queued objects when we have an invalid import
 	 * so that they get flushed */
-	if (cli->cl_import == NULL || cli->cl_import->imp_invalid) {
+	if (!cli->cl_import ||
+	    test_bit(IMPF_INVALID, cli->cl_import->imp_flags)) {
 		if (!list_empty(&cli->cl_loi_write_list))
 			RETURN(list_to_obj(&cli->cl_loi_write_list,
 					   write_item));
@@ -2468,9 +2470,10 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 	int    cmd = OBD_BRW_WRITE;
 	int    need_release = 0;
 	int    rc = 0;
-	ENTRY;
 
-	if (cli->cl_import == NULL || cli->cl_import->imp_invalid)
+	ENTRY;
+	if (!cli->cl_import ||
+	    test_bit(IMPF_INVALID, cli->cl_import->imp_flags))
 		RETURN(-EIO);
 
 	if (!list_empty(&oap->oap_pending_item) ||

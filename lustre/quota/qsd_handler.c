@@ -48,7 +48,7 @@ static int qsd_ready(struct lquota_entry *lqe, struct lustre_handle *lockh)
 	/* is the connection to the quota master ready? */
 	if (qsd->qsd_exp_valid)
 		imp = class_exp2cliimp(qsd->qsd_exp);
-	if (imp == NULL || imp->imp_invalid) {
+	if (!imp || test_bit(IMPF_INVALID, imp->imp_flags)) {
 		read_unlock(&qsd->qsd_lock);
 		LQUOTA_DEBUG(lqe, "connection to master not ready");
 		RETURN(-ENOTCONN);

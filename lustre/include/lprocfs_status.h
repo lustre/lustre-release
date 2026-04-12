@@ -65,7 +65,7 @@ static inline unsigned int pct(unsigned long a, unsigned long b)
  */
 #define flag2str(port, flag)						\
 	do {								\
-		if ((port)->port##_##flag) {				\
+		if (test_bit(flag, (port)->port##_flags)) {		\
 			seq_printf(m, "%s" #flag, first ? "" : ", ");	\
 			first = false;					\
 		}							\

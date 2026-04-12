@@ -1439,7 +1439,7 @@ ssize_t pinger_recov_show(struct kobject *kobj, struct attribute *attr,
 
 	with_imp_locked(obd, imp, rc)
 		rc = scnprintf(buf, PAGE_SIZE, "%d\n",
-			       !imp->imp_no_pinger_recover);
+			       !test_bit(IMPF_NO_PINGER_RECOVER, imp->imp_flags));
 
 	return rc;
 }
@@ -1459,9 +1459,11 @@ ssize_t pinger_recov_store(struct kobject *kobj, struct attribute *attr,
 		return rc;
 
 	with_imp_locked(obd, imp, rc) {
-		spin_lock(&imp->imp_lock);
-		imp->imp_no_pinger_recover = !val;
-		spin_unlock(&imp->imp_lock);
+		if (val)
+			clear_bit(IMPF_NO_PINGER_RECOVER, imp->imp_flags);
+		else
+			set_bit(IMPF_NO_PINGER_RECOVER, imp->imp_flags);
+		smp_mb__after_atomic();
 	}
 
 	return rc ?: count;

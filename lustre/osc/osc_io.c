@@ -496,7 +496,8 @@ EXPORT_SYMBOL(osc_io_extent_release);
 
 static bool osc_import_not_healthy(struct obd_import *imp)
 {
-	return imp->imp_invalid || imp->imp_deactive ||
+	return test_bit(IMPF_INVALID, imp->imp_flags) ||
+	       test_bit(IMPF_DEACTIVE, imp->imp_flags) ||
 	       !(imp->imp_state == LUSTRE_IMP_FULL ||
 		 imp->imp_state == LUSTRE_IMP_IDLE);
 }
@@ -518,7 +519,7 @@ int osc_io_iter_init(const struct lu_env *env, const struct cl_io_slice *ios)
 	if (ios->cis_io->ci_type == CIT_READ && ios->cis_io->ci_ndelay &&
 	    !ios->cis_io->ci_tried_all_mirrors && osc_import_not_healthy(imp)) {
 		rc = -EAGAIN;
-	} else if (likely(!imp->imp_invalid)) {
+	} else if (likely(!test_bit(IMPF_INVALID, imp->imp_flags))) {
 		atomic_inc(&osc->oo_nr_ios);
 		oio->oi_is_active = 1;
 		rc = 0;

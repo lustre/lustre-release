@@ -32,7 +32,8 @@ static ssize_t active_show(struct kobject *kobj, struct attribute *attr,
 	int rc;
 
 	with_imp_locked(obd, imp, rc)
-		rc = sprintf(buf, "%d\n", !imp->imp_deactive);
+		rc = scnprintf(buf, PAGE_SIZE, "%d\n",
+			       !test_bit(IMPF_DEACTIVE, imp->imp_flags));
 
 	return rc;
 }
@@ -55,7 +56,7 @@ static ssize_t active_store(struct kobject *kobj, struct attribute *attr,
 	if (rc)
 		return rc;
 	/* opposite senses */
-	if (imp->imp_deactive == val)
+	if (test_bit(IMPF_DEACTIVE, imp->imp_flags) == val)
 		rc = ptlrpc_set_import_active(imp, val);
 	else
 		CDEBUG(D_CONFIG, "activate %u: ignoring repeat request\n",

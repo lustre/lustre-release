@@ -833,7 +833,7 @@ out_sec_put:
 		/*
 		 * don't switch ctx if import was deactivated
 		 */
-		if (req->rq_import->imp_deactive) {
+		if (test_bit(IMPF_DEACTIVE, req->rq_import->imp_flags)) {
 			spin_lock(&req->rq_lock);
 			req->rq_err = 1;
 			spin_unlock(&req->rq_lock);

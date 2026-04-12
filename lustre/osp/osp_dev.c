@@ -459,10 +459,8 @@ static int osp_disconnect(struct osp_device *d)
 	 * fully deactivate the import, or that would drop all requests. */
 	LASSERT(imp != NULL);
 
-	spin_lock(&imp->imp_lock);
-	imp->imp_deactive = 1;
-	spin_unlock(&imp->imp_lock);
-
+	set_bit(IMPF_DEACTIVE, imp->imp_flags);
+	smp_mb__after_atomic();
 	ptlrpc_deactivate_import(imp);
 
 	ldlm_namespace_cleanup(obd->obd_namespace, LDLM_FL_LOCAL_ONLY);
@@ -1621,7 +1619,7 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 		if (d->opd_pre != NULL) {
 			/* Import is invalid, we can`t get stripes so
 			 * wakeup waiters */
-			rc = imp->imp_deactive ? -ESHUTDOWN : -ENODEV;
+			rc = test_bit(IMPF_DEACTIVE, imp->imp_flags) ? -ESHUTDOWN : -ENODEV;
 			osp_pre_update_status(d, rc);
 			wake_up(&d->opd_pre_waitq);
 		}

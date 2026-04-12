@@ -488,7 +488,7 @@ int lprocfs_server_uuid_seq_show(struct seq_file *m, void *data)
 	with_imp_locked(obd, imp, rc) {
 		imp_state_name = ptlrpc_import_state_name(imp->imp_state);
 		seq_printf(m, "%s\t%s%s\n", obd2cli_tgt(obd), imp_state_name,
-			   imp->imp_deactive ? "\tDEACTIVATED" : "");
+			   test_bit(IMPF_DEACTIVE, imp->imp_flags) ? "\tDEACTIVATED" : "");
 	}
 
 	return rc;
@@ -727,15 +727,15 @@ static void obd_import_flags2str(struct obd_import *imp, struct seq_file *m)
 		first = false;
 	}
 
-	flag2str(imp, invalid);
-	flag2str(imp, deactive);
-	flag2str(imp, replayable);
-	flag2str(imp, delayed_recovery);
-	flag2str(imp, vbr_failed);
-	flag2str(imp, pingable);
-	flag2str(imp, resend_replay);
-	flag2str(imp, no_pinger_recover);
-	flag2str(imp, connect_tried);
+	flag2str(imp, IMPF_INVALID);
+	flag2str(imp, IMPF_DEACTIVE);
+	flag2str(imp, IMPF_REPLAYABLE);
+	flag2str(imp, IMPF_DELAYED_RECOVERY);
+	flag2str(imp, IMPF_VBR_FAILED);
+	flag2str(imp, IMPF_PINGABLE);
+	flag2str(imp, IMPF_RESEND_REPLAY);
+	flag2str(imp, IMPF_NO_PINGER_RECOVER);
+	flag2str(imp, IMPF_CONNECT_TRIED);
 }
 
 static const char *const obd_connect_names[] = {

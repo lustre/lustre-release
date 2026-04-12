@@ -584,9 +584,7 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 			CDEBUG(D_HA, "marking %s %s->%s as inactive\n",
 			       name, obd->obd_name,
 			       cli->cl_target_uuid.uuid);
-			spin_lock(&imp->imp_lock);
-			imp->imp_deactive = 1;
-			spin_unlock(&imp->imp_lock);
+			set_bit(IMPF_DEACTIVE, imp->imp_flags);
 		}
 	}
 
@@ -684,12 +682,14 @@ int client_connect_import(const struct lu_env *env,
 	LASSERT(obd->obd_namespace);
 
 	spin_lock(&imp->imp_lock);
-	if (imp->imp_state == LUSTRE_IMP_CLOSED && imp->imp_deactive) {
+	if (imp->imp_state == LUSTRE_IMP_CLOSED &&
+	    test_bit(IMPF_DEACTIVE, imp->imp_flags)) {
 		/* need to reactivate import if trying to connect
 		 * to a previously disconnected
 		 */
-		imp->imp_deactive = 0;
-		imp->imp_invalid = 0;
+		clear_bit(IMPF_DEACTIVE, imp->imp_flags);
+		clear_bit(IMPF_INVALID, imp->imp_flags);
+		smp_mb__after_atomic();
 	}
 	spin_unlock(&imp->imp_lock);
 
@@ -786,9 +786,8 @@ int client_disconnect_export(struct obd_export *exp)
 	 * of the cleanup RPCs fails (e.g. LDLM cancel, etc).  We don't
 	 * fully deactivate the import, or that would drop all requests.
 	 */
-	spin_lock(&imp->imp_lock);
-	imp->imp_deactive = 1;
-	spin_unlock(&imp->imp_lock);
+	set_bit(IMPF_DEACTIVE, imp->imp_flags);
+	smp_mb__after_atomic();
 
 	/*
 	 * Some non-replayable imports (MDS's OSCs) are pinged, so just

@@ -333,7 +333,7 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 		GOTO(err_put_sepol, rc);
 
 	spin_lock(&req->rq_lock);
-	req->rq_replay = req->rq_import->imp_replayable;
+	req->rq_replay = test_bit(IMPF_REPLAYABLE, req->rq_import->imp_flags);
 	spin_unlock(&req->rq_lock);
 
 	/* pack the intent */

@@ -169,11 +169,9 @@ static int lwp_disconnect(struct lwp_device *d)
 	 * fully deactivate the import because that would cause all requests
 	 * to be dropped.
 	 */
-	LASSERT(imp != NULL);
-	spin_lock(&imp->imp_lock);
-	imp->imp_deactive = 1;
-	spin_unlock(&imp->imp_lock);
-
+	LASSERT(imp);
+	set_bit(IMPF_DEACTIVE, imp->imp_flags);
+	smp_mb__after_atomic();
 	ptlrpc_deactivate_import(imp);
 
 	/*

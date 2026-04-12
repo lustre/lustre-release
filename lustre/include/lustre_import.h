@@ -128,6 +128,33 @@ struct import_state_hist {
 	time64_t		ish_time;
 };
 
+/* Flag bits for import flags */
+enum import_flags {
+	IMPF_INVALID,		/* evicted */
+	IMPF_DEACTIVE,		/* administratively disabled */
+	IMPF_REPLAYABLE,		/* try to recover the import */
+	IMPF_DLM_FAKE,		/* don't run recovery (timeout instead) */
+	IMPF_SERVER_TIMEOUT,	/* use 1/2 timeout on MDS' OSCs */
+	IMPF_DELAYED_RECOVERY,	/* VBR: imp in delayed recovery */
+	IMPF_VBR_FAILED,		/* recovery by versions was failed */
+	IMPF_FORCE_VERIFY,	/* force an immidiate ping */
+	IMPF_FORCE_NEXT_VERIFY,	/* force a scheduled ping */
+	IMPF_PINGABLE,		/* pingable */
+	IMPF_RESEND_REPLAY,	/* resend for replay */
+	IMPF_NO_PINGER_RECOVER,	/* disable normal recovery, for test only. */
+	IMPF_FORCE_RECONNECT,	/* import must be reconnected instead of
+				 * choose new connection
+				 */
+	IMPF_CONNECT_TRIED,	/* import has tried to connect with server */
+	IMPF_CONNECTED,		/* connected but not FULL yet */
+	IMPF_GRANT_SHRINK_DISABLED, /* grant shrink disabled */
+	IMPF_WAS_IDLE,		/* to supress LCONSOLE() at conn.restore */
+	IMPF_NO_CACHED_DATA,	/* no data from the server has been cached
+				 * on the client.
+				 */
+	IMPF_NUM_FLAGS
+};
+
 /* Defintion of PortalRPC import structure.
  * Imports are representing client-side view to remote target.
  */
@@ -236,35 +263,18 @@ struct obd_import {
 	 */
 	atomic_t		  imp_waiting;
 	/* flags */
-	unsigned long		  imp_invalid:1,    /* evicted */
-				  /* administratively disabled */
-				  imp_deactive:1,
-				  /* try to recover the import */
-				  imp_replayable:1,
-				  /* don't run recovery (timeout instead) */
+	unsigned long		  /* don't run recovery (timeout instead) */
 				  imp_dlm_fake:1,
 				  /* use 1/2 timeout on MDS' OSCs */
 				  imp_server_timeout:1,
-				  /* VBR: imp in delayed recovery */
-				  imp_delayed_recovery:1,
-				  /* recovery by versions was failed */
-				  imp_vbr_failed:1,
 				  /* force an immidiate ping */
 				  imp_force_verify:1,
 				  /* force a scheduled ping */
 				  imp_force_next_verify:1,
-				  /* pingable */
-				  imp_pingable:1,
-				  /* resend for replay */
-				  imp_resend_replay:1,
-				  /* disable normal recovery, for test only. */
-				  imp_no_pinger_recover:1,
 				  /* import must be reconnected instead of
 				   * chouse new connection
 				   */
 				  imp_force_reconnect:1,
-				  /* import has tried to connect with server */
-				  imp_connect_tried:1,
 				  /* connected but not FULL yet */
 				  imp_connected:1,
 				  /* grant shrink disabled */
@@ -272,6 +282,7 @@ struct obd_import {
 				  /* to supress LCONSOLE() at conn.restore */
 				  imp_was_idle:1,
 				  imp_no_cached_data:1;
+	DECLARE_BITMAP(imp_flags, IMPF_NUM_FLAGS);
 	u32			  imp_connect_op;
 	u32			  imp_idle_timeout;
 	u32			  imp_idle_debug;

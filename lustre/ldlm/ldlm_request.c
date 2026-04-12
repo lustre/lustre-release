@@ -1534,7 +1534,7 @@ int ldlm_cli_cancel_req(struct obd_export *exp, struct ldlm_lock *lock,
 
 	while (1) {
 		imp = class_exp2cliimp(exp);
-		if (imp == NULL || imp->imp_invalid) {
+		if (!imp || test_bit(IMPF_INVALID, imp->imp_flags)) {
 			CDEBUG(D_DLMTRACE,
 			       "skipping cancel on invalid import %p\n", imp);
 			RETURN(count);
@@ -2915,7 +2915,7 @@ static int __ldlm_replay_locks(struct obd_import *imp, bool rate_limit)
 		cond_resched();
 
 	/* don't replay locks if import failed recovery */
-	if (imp->imp_vbr_failed)
+	if (test_bit(IMPF_VBR_FAILED, imp->imp_flags))
 		RETURN(0);
 
 	if (ldlm_cancel_unused_locks_before_replay)

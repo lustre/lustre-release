@@ -59,6 +59,15 @@ f_dentry||f_path.dentry
 [^_]get_seconds||ktime_get_real_seconds
 GPL[vV]3||Using GPLv3 is usually wrong
 HZ||cfs_time_seconds
+imp_connect_tried||IMPF_CONNECT_TRIED
+imp_deactive||IMPF_DEACTIVE
+imp_delayed_recovery||IMPF_DELAYED_RECOVERY
+imp_invalid||IMPF_INVALID
+imp_no_pinger_recover||IMPF_NO_PINGER_RECOVER
+imp_pingable||IMPF_PINGABLE
+imp_replayable||IMPF_REPLAYABLE
+imp_resend_replay||IMPF_RESEND_REPLAY
+imp_vbr_failed||IMPF_VBR_FAILED
 it_flags||it_open_flags
 kmem_cache_alloc.*GFP_ZERO||kmem_cache_zalloc
 LASSERT||Try to replace assertions with error handling
