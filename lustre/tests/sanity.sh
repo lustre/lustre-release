@@ -10313,7 +10313,7 @@ test_56Edb() {
 }
 run_test 56Edb "check lfs find --links for directory striped on multiple MDTs"
 
-test_56ef() {
+test_56Ef() {
 	local dir=$DIR/$tdir
 	local dir1=$dir/d1
 	local dir2=$dir/d2
@@ -10344,9 +10344,9 @@ test_56ef() {
 	[[ $err_msg =~ "No such file or directory" ]] ||
 		error "expected standard error message, got: '$err_msg'"
 }
-run_test 56ef "lfs find with multiple paths"
+run_test 56Ef "lfs find with multiple paths"
 
-test_56eg() {
+test_56Eg() {
 	local dir=$DIR/$tdir
 	local found
 
@@ -10415,9 +10415,9 @@ test_56eg() {
 		error "should have found '$tfile.1' with xattr 'user.test=0x7465737400', got '$found'"
 	}
 }
-run_test 56eg "lfs find -xattr"
+run_test 56Eg "lfs find -xattr"
 
-test_56eh() {
+test_56Eh() {
 	local dir=$DIR/d$(basetest $testnum)g.$TESTSUITE
 
 	# Enough files to give us a statistically reliable sampling
@@ -10442,9 +10442,9 @@ test_56eh() {
 		(( n++ ))
 	done
 }
-run_test 56eh "check lfs find --skip"
+run_test 56Eh "check lfs find --skip"
 
-test_56ei() {
+test_56Ei() {
 	(( $MDS1_VERSION >= $(version_code 2.15.64.110) )) ||
 		skip "need MDS >= v2_15_64-110-g501e5b2c8a for special projid"
 	local path=$DIR/$tdir
@@ -10475,9 +10475,9 @@ test_56ei() {
 	[[ $found_count == $expected_count ]] ||
 		error "Did not find any entries with expected projid $projid"
 }
-run_test 56ei "test lfs find --printf prints correct projid for special files"
+run_test 56Ei "test lfs find --printf prints correct projid for special files"
 
-test_56ej() {
+test_56Ej() {
 	test_mkdir $DIR/$tdir.src ||
 		error "mkdir failed on $DIR/$tdir.src"
 	test_mkdir $DIR/$tdir.dest ||
@@ -10491,9 +10491,9 @@ test_56ej() {
 	$LFS migrate  --non-block --copy $DIR/$tdir.src $f_mgrt ||
 		error "migrate remote dir error $DIR/$tdir.src $f_mgrt"
 }
-run_test 56ej "lfs migration --non-block copy"
+run_test 56Ej "lfs migration --non-block copy"
 
-test_56ek() {
+test_56Ek() {
 	local dir=$DIR/$tdir
 	local numfiles=10
 	local numdirs=5
@@ -10527,7 +10527,7 @@ test_56ek() {
 	rm -rf $dir
 	return 0
 }
-run_test 56ek "Test lfs find error handling with LLAPI_FAIL_LOC"
+run_test 56Ek "Test lfs find error handling with LLAPI_FAIL_LOC"
 
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
