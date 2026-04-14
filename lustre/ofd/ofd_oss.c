@@ -183,6 +183,7 @@ static int oss_device_init(const struct lu_env *env, struct lu_device *lu,
 				break;
 			}
 		}
+		rc = 0;
 	}
 
 	memset(&svc_conf, 0, sizeof(svc_conf));

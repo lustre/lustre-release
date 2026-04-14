@@ -476,6 +476,7 @@ static int mds_start_ptlrpc_service(struct mds_device *m)
 				break;
 			}
 		}
+		rc = 0;
 	}
 
 	memset(&conf, 0, sizeof(conf));
