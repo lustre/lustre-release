@@ -421,6 +421,40 @@ struct lu_nodemap *nodemap_lookup_unlocked(const char *name)
 }
 
 /**
+ * nodemap_lookup_and_lock() - look up a nodemap and keep active_config_lock
+ * held for a subsequent modification.
+ * @name: name of the nodemap
+ *
+ * On success the caller holds active_config_lock and a reference on the
+ * returned nodemap. The caller must release both via nodemap_unlock_and_put().
+ * On failure the lock is not held and no reference is taken.
+ *
+ * Return: pointer to the nodemap on success, or ERR_PTR() on failure.
+ */
+static struct lu_nodemap *nodemap_lookup_and_lock(const char *name)
+{
+	struct lu_nodemap *nodemap;
+
+	mutex_lock(&active_config_lock);
+	nodemap = nodemap_lookup_locked(name);
+	if (IS_ERR(nodemap))
+		mutex_unlock(&active_config_lock);
+
+	return nodemap;
+}
+
+/**
+ * nodemap_unlock_and_put() - release active_config_lock and drop the
+ * reference taken by nodemap_lookup_and_lock().
+ * @nodemap: nodemap previously returned by nodemap_lookup_and_lock()
+ */
+static void nodemap_unlock_and_put(struct lu_nodemap *nodemap)
+{
+	mutex_unlock(&active_config_lock);
+	nodemap_putref(nodemap);
+}
+
+/**
  * nodemap_lookup_sha() - Nodemap lookup by sha of nodemap name
  * @sha: sha of nodemap name
  * @name_buf: buffer to write the nodemap name to
@@ -955,17 +989,14 @@ static int nodemap_add_idmap_range(const char *nodemap_name,
 int nodemap_add_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		      const __u32 map[2])
 {
-	struct lu_nodemap	*nodemap = NULL;
-	int			 rc;
+	struct lu_nodemap *nodemap;
+	int rc;
 
 	ENTRY;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup_locked(nodemap_name);
-	if (IS_ERR(nodemap)) {
-		mutex_unlock(&active_config_lock);
-		GOTO(out, rc = PTR_ERR(nodemap));
-	}
+	nodemap = nodemap_lookup_and_lock(nodemap_name);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
 
 	if (is_default_nodemap(nodemap))
 		GOTO(out_unlock, rc = -EINVAL);
@@ -978,10 +1009,7 @@ int nodemap_add_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		rc = nodemap_idx_idmap_add(nodemap, id_type, map);
 
 out_unlock:
-	mutex_unlock(&active_config_lock);
-	nodemap_putref(nodemap);
-
-out:
+	nodemap_unlock_and_put(nodemap);
 	RETURN(rc);
 }
 EXPORT_SYMBOL(nodemap_add_idmap);
@@ -1002,18 +1030,15 @@ EXPORT_SYMBOL(nodemap_add_idmap);
 int nodemap_del_idmap(const char *nodemap_name, enum nodemap_id_type id_type,
 		      const __u32 map[2])
 {
-	struct lu_nodemap	*nodemap = NULL;
-	struct lu_idmap		*idmap = NULL;
-	int			rc = 0;
+	struct lu_nodemap *nodemap;
+	struct lu_idmap *idmap = NULL;
+	int rc = 0;
 
 	ENTRY;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup_locked(nodemap_name);
-	if (IS_ERR(nodemap)) {
-		mutex_unlock(&active_config_lock);
-		GOTO(out, rc = PTR_ERR(nodemap));
-	}
+	nodemap = nodemap_lookup_and_lock(nodemap_name);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
 
 	if (is_default_nodemap(nodemap))
 		GOTO(out_putref, rc = -EINVAL);
@@ -1037,7 +1062,6 @@ out_putref:
 		nm_member_revoke_locks(nodemap);
 	nodemap_putref(nodemap);
 
-out:
 	RETURN(rc);
 }
 EXPORT_SYMBOL(nodemap_del_idmap);
@@ -1632,15 +1656,12 @@ out:
 int nodemap_add_range(const char *name, const struct lnet_nid nid[2],
 		      u8 netmask)
 {
-	struct lu_nodemap	*nodemap = NULL;
-	int			 rc;
+	struct lu_nodemap *nodemap;
+	int rc;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup_locked(name);
-	if (IS_ERR(nodemap)) {
-		mutex_unlock(&active_config_lock);
-		GOTO(out, rc = PTR_ERR(nodemap));
-	}
+	nodemap = nodemap_lookup_and_lock(name);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
 
 	if (is_default_nodemap(nodemap))
 		GOTO(out_unlock, rc = -EINVAL);
@@ -1659,9 +1680,7 @@ int nodemap_add_range(const char *name, const struct lnet_nid nid[2],
 				      netmask, 0);
 
 out_unlock:
-	mutex_unlock(&active_config_lock);
-	nodemap_putref(nodemap);
-out:
+	nodemap_unlock_and_put(nodemap);
 	return rc;
 }
 EXPORT_SYMBOL(nodemap_add_range);
@@ -1686,12 +1705,9 @@ int nodemap_del_range(const char *name, const struct lnet_nid nid[2],
 	struct lu_nodemap *nodemap;
 	int rc = 0;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup_locked(name);
-	if (IS_ERR(nodemap)) {
-		mutex_unlock(&active_config_lock);
-		GOTO(out, rc = PTR_ERR(nodemap));
-	}
+	nodemap = nodemap_lookup_and_lock(name);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
 
 	if (is_default_nodemap(nodemap))
 		GOTO(out_putref, rc = -EINVAL);
@@ -1746,9 +1762,7 @@ int nodemap_del_range(const char *name, const struct lnet_nid nid[2],
 	nm_member_revoke_locks(nodemap);
 
 out_putref:
-	mutex_unlock(&active_config_lock);
-	nodemap_putref(nodemap);
-out:
+	nodemap_unlock_and_put(nodemap);
 	return rc;
 }
 EXPORT_SYMBOL(nodemap_del_range);
@@ -2280,10 +2294,12 @@ static int nodemap_fileset_del_alternate(struct lu_nodemap *nodemap,
 }
 
 /**
- * nodemap_fileset_del() - deletes one fileset from the nodemap's
+ * nodemap_fileset_del_locked() - deletes one fileset from the nodemap's
  * defined filesets
  * @nodemap: the nodemap to delete the fileset from
  * @fileset_path: the fileset to delete
+ *
+ * The caller must hold active_config_lock.
  *
  * Return:
  * * %0 on success
@@ -2291,8 +2307,8 @@ static int nodemap_fileset_del_alternate(struct lu_nodemap *nodemap,
  *		It cannot be empty and must begin with '/'.
  * * %-ENOENT	fileset does not exist in nodemap
  */
-static int nodemap_fileset_del(struct lu_nodemap *nodemap,
-			       const char *fileset_path)
+static int nodemap_fileset_del_locked(struct lu_nodemap *nodemap,
+				      const char *fileset_path)
 {
 	int rc;
 
@@ -2318,16 +2334,19 @@ static int nodemap_fileset_del(struct lu_nodemap *nodemap,
 }
 
 /**
- * nodemap_fileset_clear() - Deletes all types of filesets from the nodemap
+ * nodemap_fileset_clear_locked() - Deletes all types of filesets from the
+ * nodemap
  *
  * @nodemap: nodemap to clear filesets from
  * @force: true to force fileset clear, i.e., bypass parent nodemap check
+ *
+ * The caller must hold active_config_lock.
  *
  * Return:
  * * %0 on success
  * * %-EINVAL	nodemap is NULL, or dyn nm is not allowed to wipe all filesets
  */
-static int nodemap_fileset_clear(struct lu_nodemap *nodemap, bool force)
+static int nodemap_fileset_clear_locked(struct lu_nodemap *nodemap, bool force)
 {
 	struct lu_fileset_alt *fileset;
 	struct rb_node *node;
@@ -2493,12 +2512,14 @@ static int nodemap_fileset_add_alternate(struct lu_nodemap *nodemap,
 }
 
 /**
- * nodemap_fileset_add() - Adds a fileset to a given nodemap
+ * nodemap_fileset_add_locked() - Adds a fileset to a given nodemap
  *
  * @nodemap: the nodemap to the fileset to
  * @fileset_path: the fileset to be added
  * @alt: true if operation refers to an alt fileset
  * @read_only: true if the fileset is read-only
+ *
+ * The caller must hold active_config_lock.
  *
  * Return:
  * * %0 on success
@@ -2509,9 +2530,9 @@ static int nodemap_fileset_add_alternate(struct lu_nodemap *nodemap,
  * * %-EIO	undo operation failed during IAM update
  * * %-ENOMEM	could not allocate memory for fileset
  */
-static int nodemap_fileset_add(struct lu_nodemap *nodemap,
-			       const char *fileset_path, bool alt,
-			       bool read_only)
+static int nodemap_fileset_add_locked(struct lu_nodemap *nodemap,
+				      const char *fileset_path, bool alt,
+				      bool read_only)
 {
 	int rc;
 
@@ -2772,21 +2793,24 @@ out_cleanup:
 }
 
 /**
- * nodemap_fileset_modify() - modifies an existing fileset, changing its path,
- * type, or read-only flag.
+ * nodemap_fileset_modify_locked() - modifies an existing fileset, changing its
+ * path, type, or read-only flag.
  *
  * @nodemap: the nodemap to modify the fileset on
  * @fileset_src: the fileset to modify
  * @fset_modify: the new fileset information
+ *
+ * The caller must hold active_config_lock.
  *
  * Return:
  * * %0 on success
  * * %-EINVAL if input fields are NULL or fileset is invalid
  * * %-ENOENT if fileset to modify does not exist in nodemap
  */
-static int nodemap_fileset_modify(struct lu_nodemap *nodemap,
-				  const char *fileset_src,
-				  struct lu_nodemap_fileset_modify *fset_modify)
+static int
+nodemap_fileset_modify_locked(struct lu_nodemap *nodemap,
+			      const char *fileset_src,
+			      struct lu_nodemap_fileset_modify *fset_modify)
 {
 	struct lu_fileset_alt *fset_alt;
 	int rc;
@@ -2818,6 +2842,123 @@ out_unlock:
 }
 
 /**
+ * nodemap_fileset_add() - Adds a fileset to a nodemap.
+ *
+ * @nodemap_name: name of the nodemap to add the fileset to
+ * @fileset_path: the fileset to be added
+ * @alt: true if operation refers to an alt fileset
+ * @read_only: true if the fileset is read-only
+ *
+ * Return: see nodemap_fileset_add_locked()
+ */
+int nodemap_fileset_add(const char *nodemap_name, const char *fileset_path,
+			bool alt, bool read_only)
+{
+	struct lu_nodemap *nodemap;
+	int rc;
+
+	nodemap = nodemap_lookup_and_lock(nodemap_name);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_unlock, rc = -ENXIO);
+
+	rc = nodemap_fileset_add_locked(nodemap, fileset_path, alt, read_only);
+
+out_unlock:
+	nodemap_unlock_and_put(nodemap);
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_fileset_add);
+
+/**
+ * nodemap_fileset_del() - Deletes a single fileset from a nodemap.
+ *
+ * @nodemap_name: name of the nodemap to delete the fileset from
+ * @fileset_path: the fileset path to delete
+ *
+ * Return: see nodemap_fileset_del_locked()
+ */
+int nodemap_fileset_del(const char *nodemap_name, const char *fileset_path)
+{
+	struct lu_nodemap *nodemap;
+	int rc;
+
+	nodemap = nodemap_lookup_and_lock(nodemap_name);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_unlock, rc = -ENXIO);
+
+	rc = nodemap_fileset_del_locked(nodemap, fileset_path);
+
+out_unlock:
+	nodemap_unlock_and_put(nodemap);
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_fileset_del);
+
+/**
+ * nodemap_fileset_clear() - Deletes all filesets from a nodemap.
+ *
+ * @nodemap_name: name of the nodemap to clear filesets on
+ * @force: true to bypass parent-nodemap constraint checks
+ *
+ * Return: see nodemap_fileset_clear_locked()
+ */
+int nodemap_fileset_clear(const char *nodemap_name, bool force)
+{
+	struct lu_nodemap *nodemap;
+	int rc;
+
+	nodemap = nodemap_lookup_and_lock(nodemap_name);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_unlock, rc = -ENXIO);
+
+	rc = nodemap_fileset_clear_locked(nodemap, force);
+
+out_unlock:
+	nodemap_unlock_and_put(nodemap);
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_fileset_clear);
+
+/**
+ * nodemap_fileset_modify() - Modifies an existing fileset on a nodemap.
+ *
+ * @nodemap_name: name of the nodemap to modify the fileset on
+ * @fileset_src: the fileset to modify
+ * @fset_modify: the new fileset information
+ *
+ * Return: see nodemap_fileset_modify_locked()
+ */
+int nodemap_fileset_modify(const char *nodemap_name, const char *fileset_src,
+			   struct lu_nodemap_fileset_modify *fset_modify)
+{
+	struct lu_nodemap *nodemap;
+	int rc;
+
+	nodemap = nodemap_lookup_and_lock(nodemap_name);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_unlock, rc = -ENXIO);
+
+	rc = nodemap_fileset_modify_locked(nodemap, fileset_src, fset_modify);
+
+out_unlock:
+	nodemap_unlock_and_put(nodemap);
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_fileset_modify);
+
+/**
  * nodemap_set_fileset_prim_iam() - Set a primary fileset on a nodemap in
  * memory and the nodemap IAM records.
  *
@@ -2832,7 +2973,7 @@ out_unlock:
  * the nodemap_idx_fileset_* functions to update only the in-memory nodemap.
  * Further, the fileset can be cleared.
  *
- * << This is a deprecated function. nodemap_fileset_add should be used. >>
+ * << This is a deprecated function. nodemap_fileset_add() should be used. >>
  *
  * Return:
  * * %0 on success
@@ -3025,8 +3166,8 @@ static int nodemap_copy_fileset(struct lu_nodemap *dst, struct lu_nodemap *src)
 
 	fileset = nodemap_get_fileset_prim(src);
 	if (fileset) {
-		rc = nodemap_fileset_add(dst, fileset, false,
-					 src->nm_fileset_prim_ro);
+		rc = nodemap_fileset_add_locked(dst, fileset, false,
+						src->nm_fileset_prim_ro);
 		if (rc)
 			GOTO(out, rc);
 	}
@@ -3039,8 +3180,8 @@ static int nodemap_copy_fileset(struct lu_nodemap *dst, struct lu_nodemap *src)
 
 		src_fset = rb_entry(node, struct lu_fileset_alt, nfa_rb);
 
-		rc = nodemap_fileset_add(dst, src_fset->nfa_path, true,
-					 src_fset->nfa_ro);
+		rc = nodemap_fileset_add_locked(dst, src_fset->nfa_path, true,
+						src_fset->nfa_ro);
 		if (rc)
 			GOTO(out_unlock, rc);
 	}
@@ -3048,7 +3189,7 @@ static int nodemap_copy_fileset(struct lu_nodemap *dst, struct lu_nodemap *src)
 out_unlock:
 	up_read(&src->nm_fileset_alt_lock);
 	if (rc)
-		nodemap_fileset_clear(dst, true);
+		nodemap_fileset_clear_locked(dst, true);
 
 out:
 	return rc;
@@ -3065,7 +3206,7 @@ out:
  * For backward compatibility this functionality is kept. This function should
  * not be used for any other purpose.
  *
- * << This is a deprecated function. nodemap_fileset_cmd should be used. >>
+ * << This is a deprecated function. nodemap_fileset_add() should be used. >>
  *
  * Return:
  * * %0 on success
@@ -3088,12 +3229,9 @@ int nodemap_set_fileset_prim_lproc(const char *nodemap_name,
 	if (strlen(fileset_path) > PATH_MAX)
 		RETURN(-ENAMETOOLONG);
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup_locked(nodemap_name);
-	if (IS_ERR(nodemap)) {
-		mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_and_lock(nodemap_name);
+	if (IS_ERR(nodemap))
 		RETURN(PTR_ERR(nodemap));
-	}
 
 	if (checkperm && !allow_op_on_nm(nodemap))
 		GOTO(out_unlock, rc = -ENXIO);
@@ -3110,8 +3248,7 @@ int nodemap_set_fileset_prim_lproc(const char *nodemap_name,
 	rc = nodemap_set_fileset_prim_llog(nodemap, fileset_path);
 
 out_unlock:
-	mutex_unlock(&active_config_lock);
-	nodemap_putref(nodemap);
+	nodemap_unlock_and_put(nodemap);
 
 	EXIT;
 	return rc;
@@ -3353,19 +3490,16 @@ static int nodemap_validate_sepol(const char *sepol)
  */
 int nodemap_set_sepol(const char *name, const char *sepol, bool checkperm)
 {
-	struct lu_nodemap	*nodemap = NULL;
-	int			 rc;
+	struct lu_nodemap *nodemap = NULL;
+	int rc;
 
 	rc = nodemap_validate_sepol(sepol);
 	if (rc < 0)
 		GOTO(out, rc);
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup_locked(name);
-	if (IS_ERR(nodemap)) {
-		mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_and_lock(name);
+	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
-	}
 
 	if (is_default_nodemap(nodemap)) {
 		/* We do not want nodes in the default nodemap to have
@@ -3383,8 +3517,7 @@ int nodemap_set_sepol(const char *name, const char *sepol, bool checkperm)
 	strscpy(nodemap->nm_sepol, sepol, sizeof(nodemap->nm_sepol));
 
 out_putref:
-	mutex_unlock(&active_config_lock);
-	nodemap_putref(nodemap);
+	nodemap_unlock_and_put(nodemap);
 out:
 	return rc;
 }
@@ -3474,12 +3607,9 @@ int nodemap_set_capabilities(const char *name, char *buffer)
 	if (i == ARRAY_SIZE(nodemap_captype_names))
 		GOTO(out, rc = -EINVAL);
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup_locked(name);
-	if (IS_ERR(nodemap)) {
-		mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_and_lock(name);
+	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
-	}
 
 	if (!allow_op_on_nm(nodemap))
 		GOTO(out_putref, rc = -ENXIO);
@@ -3524,8 +3654,7 @@ int nodemap_set_capabilities(const char *name, char *buffer)
 	nm_member_revoke_locks(nodemap);
 
 out_putref:
-	mutex_unlock(&active_config_lock);
-	nodemap_putref(nodemap);
+	nodemap_unlock_and_put(nodemap);
 out:
 	return rc;
 }
@@ -4434,7 +4563,7 @@ int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset)
 	if (nodemap->nm_fileset_prim)
 		fileset_prim_exists = true;
 
-	rc2 = nodemap_fileset_clear(nodemap, true);
+	rc2 = nodemap_fileset_clear_locked(nodemap, true);
 	if (rc2)
 		rc = rc2;
 
@@ -4610,12 +4739,9 @@ int nodemap_add_offset(const char *nodemap_name, char *offset)
 		GOTO(out, rc);
 	}
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup_locked(nodemap_name);
-	if (IS_ERR(nodemap)) {
-		mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_and_lock(nodemap_name);
+	if (IS_ERR(nodemap))
 		GOTO(out, rc = -ENOENT);
-	}
 
 	if (is_default_nodemap(nodemap))
 		GOTO(out_putref, rc = -EINVAL);
@@ -4667,8 +4793,7 @@ overlap:
 		nm_member_revoke_locks(nodemap);
 
 out_putref:
-	mutex_unlock(&active_config_lock);
-	nodemap_putref(nodemap);
+	nodemap_unlock_and_put(nodemap);
 out:
 	return rc;
 }
@@ -4701,17 +4826,14 @@ int nodemap_del_offset(const char *nodemap_name)
 	struct lu_nodemap *nodemap;
 	int rc = 0;
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup_locked(nodemap_name);
-	if (IS_ERR(nodemap)) {
-		mutex_unlock(&active_config_lock);
-		GOTO(out, rc = -ENOENT);
-	}
+	nodemap = nodemap_lookup_and_lock(nodemap_name);
+	if (IS_ERR(nodemap))
+		RETURN(-ENOENT);
 
 	if (is_default_nodemap(nodemap))
-		GOTO(out_putref, rc = -EINVAL);
+		GOTO(out_unlock, rc = -EINVAL);
 	if (!allow_op_on_nm(nodemap))
-		GOTO(out_putref, rc = -ENXIO);
+		GOTO(out_unlock, rc = -ENXIO);
 
 	rc = nodemap_del_offset_helper(nodemap);
 	if (rc == 0)
@@ -4719,10 +4841,8 @@ int nodemap_del_offset(const char *nodemap_name)
 	if (rc == 0)
 		nm_member_revoke_locks(nodemap);
 
-out_putref:
-	mutex_unlock(&active_config_lock);
-	nodemap_putref(nodemap);
-out:
+out_unlock:
+	nodemap_unlock_and_put(nodemap);
 	return rc;
 }
 
@@ -5183,12 +5303,9 @@ static int cfg_nodemap_fileset_cmd(struct lustre_cfg *lcfg,
 			RETURN(-ENAMETOOLONG);
 	}
 
-	mutex_lock(&active_config_lock);
-	nodemap = nodemap_lookup_locked(nodemap_name);
-	if (IS_ERR(nodemap)) {
-		mutex_unlock(&active_config_lock);
+	nodemap = nodemap_lookup_and_lock(nodemap_name);
+	if (IS_ERR(nodemap))
 		RETURN(PTR_ERR(nodemap));
-	}
 
 	if (dynamic && nodemap->nm_dyn)
 		*dynamic = true;
@@ -5216,13 +5333,14 @@ static int cfg_nodemap_fileset_cmd(struct lustre_cfg *lcfg,
 		if (rc)
 			GOTO(out_unlock, rc);
 
-		rc = nodemap_fileset_add(nodemap, fset, fset_alt, fset_ro);
+		rc = nodemap_fileset_add_locked(nodemap, fset, fset_alt,
+						fset_ro);
 		break;
 	case LCFG_NODEMAP_FILESET_DEL:
 		if (fset && fset[0] == '*')
-			rc = nodemap_fileset_clear(nodemap, false);
+			rc = nodemap_fileset_clear_locked(nodemap, false);
 		else
-			rc = nodemap_fileset_del(nodemap, fset);
+			rc = nodemap_fileset_del_locked(nodemap, fset);
 		break;
 	case LCFG_NODEMAP_FILESET_MODIFY: {
 		struct lu_nodemap_fileset_modify fset_modify = { 0 };
@@ -5265,7 +5383,7 @@ static int cfg_nodemap_fileset_cmd(struct lustre_cfg *lcfg,
 		else if (strlen(access_new) > 0)
 			GOTO(out_unlock, rc = -EINVAL);
 
-		rc = nodemap_fileset_modify(nodemap, fset, &fset_modify);
+		rc = nodemap_fileset_modify_locked(nodemap, fset, &fset_modify);
 		break;
 	}
 	default:
@@ -5274,8 +5392,7 @@ static int cfg_nodemap_fileset_cmd(struct lustre_cfg *lcfg,
 	}
 
 out_unlock:
-	mutex_unlock(&active_config_lock);
-	nodemap_putref(nodemap);
+	nodemap_unlock_and_put(nodemap);
 
 	RETURN(rc);
 }
