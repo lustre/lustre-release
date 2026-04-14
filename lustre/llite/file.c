@@ -5289,9 +5289,10 @@ int ll_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	int rc, err;
 
 	ENTRY;
-	CDEBUG(D_VFSTRACE,
-	       "VFS Op:inode="DFID"(%p), start %lld, end %lld, datasync %d\n",
-	       PFID(ll_inode2fid(inode)), inode, start, end, datasync);
+	CDEBUG(D_VFSTRACE|D_IOTRACE,
+	       "START file: name="DNAME", fid="DFID", start=%lld, end=%lld, datasync=%d\n",
+	       encode_fn_file(file), PFID(ll_inode2fid(inode)),
+	       start, end, datasync);
 
 	/* fsync's caller has already called _fdata{sync,write}, we want
 	 * that IO to finish before calling the osc and mdc sync methods
@@ -5351,6 +5352,12 @@ int ll_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	if (!rc)
 		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_FSYNC,
 				   ktime_us_delta(ktime_get(), kstart));
+
+	CDEBUG(D_IOTRACE,
+	       "COMPLETED file: name="DNAME", fid="DFID", start=%lld, end=%lld, datasync=%d, rc=%d\n",
+	       encode_fn_file(file), PFID(ll_inode2fid(inode)),
+	       start, end, datasync, rc);
+
 	RETURN(rc);
 }
 
