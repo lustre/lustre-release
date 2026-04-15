@@ -1608,7 +1608,7 @@ static void osd_oxc_free(struct rcu_head *head)
 	struct osd_xattr_entry *oxe;
 
 	oxe = container_of(head, struct osd_xattr_entry, oxe_rcu);
-	OBD_FREE(oxe, oxe->oxe_len);
+	OBD_FREE_LARGE(oxe, oxe->oxe_len);
 }
 
 static void osd_oxc_add(struct osd_object *obj, const char *name,
@@ -1620,7 +1620,7 @@ static void osd_oxc_add(struct osd_object *obj, const char *name,
 	size_t namelen = strlen(name);
 	size_t len = sizeof(*oxe) + namelen + 1 + buflen;
 
-	OBD_ALLOC(oxe, len);
+	OBD_ALLOC_LARGE(oxe, len);
 	if (oxe == NULL)
 		return;
 
@@ -1677,7 +1677,7 @@ static void osd_oxc_fini(struct osd_object *obj)
 
 	list_for_each_entry_safe(oxe, next, &obj->oo_xattr_list, oxe_list) {
 		list_del(&oxe->oxe_list);
-		OBD_FREE(oxe, oxe->oxe_len);
+		OBD_FREE_LARGE(oxe, oxe->oxe_len);
 	}
 }
 
