@@ -5780,8 +5780,11 @@ ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 	int rc;
 
 	ENTRY;
-	CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID" file_lock=%p\n",
-	       PFID(ll_inode2fid(inode)), file_lock);
+	CDEBUG(D_VFSTRACE|D_IOTRACE,
+	       "START file: name="DNAME", fid="DFID
+	       ", file_lock=%p, cmd=%d, type=%d, start=%lld, end=%lld\n",
+	       encode_fn_file(file), PFID(ll_inode2fid(inode)), file_lock,
+	       cmd, fl_type, file_lock->fl_start, file_lock->fl_end);
 
 	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_FLOCK, 1);
 
@@ -5954,6 +5957,14 @@ out:
 	if (!rc)
 		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_FLOCK,
 				   ktime_us_delta(ktime_get(), kstart));
+
+	CDEBUG(D_IOTRACE,
+	       "COMPLETED file: name="DNAME", fid="DFID
+	       ", file_lock=%p, cmd=%d, type=%d, start=%lld, end=%lld, rc=%d\n",
+	       encode_fn_file(file), PFID(ll_inode2fid(inode)), file_lock,
+	       cmd, file_lock->C_FLC_TYPE, file_lock->fl_start,
+	       file_lock->fl_end, rc);
+
 	RETURN(rc);
 }
 
