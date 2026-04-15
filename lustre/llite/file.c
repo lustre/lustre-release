@@ -6699,8 +6699,11 @@ static long ll_fallocate(struct file *filp, int mode, loff_t offset, loff_t len)
 	struct inode *inode = file_inode(filp);
 	int rc;
 
-	CDEBUG(D_VFSTRACE,  "VFS Op: "DNAME", mode %x, offset %lld, len %lld\n",
-	       encode_fn_file(filp), mode, offset, len);
+	CDEBUG(D_VFSTRACE|D_IOTRACE,
+	       "START file: name="DNAME", fid="DFID
+	       ", mode=%x, offset=%lld, len=%lld\n",
+	       encode_fn_file(filp), PFID(ll_inode2fid(inode)),
+	       mode, offset, len);
 
 	if (offset < 0 || len <= 0)
 		RETURN(-EINVAL);
@@ -6734,6 +6737,12 @@ static long ll_fallocate(struct file *filp, int mode, loff_t offset, loff_t len)
 	 */
 	if (rc == -ENOTSUPP)
 		rc = -EOPNOTSUPP;
+
+	CDEBUG(D_IOTRACE,
+	       "COMPLETED file: name="DNAME", fid="DFID
+	       ", mode=%x, offset=%lld, len=%lld, rc=%d\n",
+	       encode_fn_file(filp), PFID(ll_inode2fid(inode)),
+	       mode, offset, len, rc);
 
 	RETURN(rc);
 }
