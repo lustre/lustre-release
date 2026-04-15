@@ -19339,8 +19339,8 @@ test_150ia() {
 run_test 150ia "Verify fallocate zero-range ZERO functionality"
 
 test_150ib() {
-	(( $MDS1_VERSION >= $(version_code 2.16.50) )) ||
-		skip "need MDS1 version >= 2.16.50 for falloc zero-range"
+	(( $MDS1_VERSION >= $(version_code v2_17_50-71-g2cbe29c282) )) ||
+		skip "need MDS1 version >= 2.17.50 for falloc zero-range"
 
 	if [[ "$ost1_FSTYPE" = "zfs" || "$mds1_FSTYPE" = "zfs" ]]; then
 		skip "zero-range mode is not implemented on OSD ZFS"
@@ -19352,10 +19352,15 @@ test_150ib() {
 	[[ "$DOM" == "yes" ]] &&
 		$LFS setstripe -E1M -L mdt -E eof $DIR/$tfile
 
-	local blocks_after_punch=$((4 * PAGE_SIZE / 512))
-	local blocks_after_zero_fill=$((8 * PAGE_SIZE / 512))
-	local blocks_after_extend_ext=$((16 * PAGE_SIZE / 512))
-	local blocks_after_extend_ind=$((16 * PAGE_SIZE / 512 + 8))
+	local features=$(do_facet mds1 "$DEBUGFS -c -R stats $(mdsdevname 1)" |
+			 grep "Filesystem features:")
+	echo "filesystem features: $features"
+
+	# Allow one 4K extent metadata block beyond the data blocks.
+	local blocks_after_zero_fill_min=$((8 * PAGE_SIZE / 512))
+	local blocks_after_zero_fill_max=$((8 * PAGE_SIZE / 512 + 8))
+	local blocks_after_extend_min=$((16 * PAGE_SIZE / 512))
+	local blocks_after_extend_max=$((16 * PAGE_SIZE / 512 + 8))
 	local expect_len=$((8 * PAGE_SIZE))
 
 	# file size [0, 32K)
@@ -19368,20 +19373,22 @@ test_150ib() {
 	local length=$((4 * PAGE_SIZE))
 	out=$(fallocate -p --offset $offset -l $length $DIR/$tfile 2>&1) ||
 		skip_eopnotsupp "$out|falloc(zero): off $offset, len $length"
-
 	# Verify punch worked as expected
-	blocks=$(stat -c '%b' $DIR/$tfile)
-	(( blocks == blocks_after_punch )) ||
-		error "punch failed:$blocks!=$blocks_after_punch"
+	p=$(lseek_test -l 0 $DIR/$tfile)
+	(( p == offset )) ||
+		error "punch failed: hole at $p != $offset"
+	p=$(lseek_test -d $offset $DIR/$tfile)
+	(( p == offset + length )) ||
+		error "punch failed: data at $p != $((offset + length))"
 
 	# zero prealloc fill the hole just punched
 	out=$(fallocate -z --offset $offset -l $length $DIR/$tfile 2>&1) ||
 		skip_eopnotsupp "$out|falloc(zero): off $offset, len $length"
-
 	# Verify zero prealloc worked.
 	blocks=$(stat -c '%b' $DIR/$tfile)
-	(( blocks == blocks_after_zero_fill )) ||
-		error "zero prealloc failed:$blocks!=$blocks_after_zero_fill"
+	(( blocks >= blocks_after_zero_fill_min &&
+	   blocks <= blocks_after_zero_fill_max )) ||
+		error "zero prealloc failed:$blocks not in [$blocks_after_zero_fill_min,$blocks_after_zero_fill_max]"
 
 	# zero prealloc with KEEP_SIZE on
 	offset=$((8 * PAGE_SIZE))
@@ -19390,15 +19397,9 @@ test_150ib() {
 		skip_eopnotsupp "$out|falloc(zero): off $offset, len $length"
 	# block allocate, size remains
 	blocks=$(stat -c '%b' $DIR/$tfile)
-	local features=$(do_facet mds1 "$DEBUGFS -c -R stats $(mdsdevname 1)" |
-		grep "Filesystem features:")
-	if [[ "$features" == *extent* ]]; then
-		(( blocks == blocks_after_extend_ext )) ||
-			error "extend failed:$blocks!=$blocks_after_extend_ext"
-	else
-		(( blocks == blocks_after_extend_ind )) ||
-			error "extend failed:$blocks!=$blocks_after_extend_ind"
-	fi
+	(( blocks >= blocks_after_extend_min &&
+	   blocks <= blocks_after_extend_max )) ||
+		error "extend failed:$blocks not in [$blocks_after_extend_min,$blocks_after_extend_max]"
 	lsz=$(stat -c '%s' $DIR/$tfile)
 	(( lsz == expect_len)) ||
 		error "zero extend failed(len):$lsz!=$expect_len"
