@@ -41,7 +41,7 @@ enum nrs_tbf_field {
 	NRS_TBF_FIELD_UID,
 	NRS_TBF_FIELD_GID,
 	NRS_TBF_FIELD_PROJID,
-	__NRS_TBF_FIELD_MAX,
+	NRS_TBF_FIELD_MAX,
 };
 
 enum nrs_tbf_flag {
@@ -52,14 +52,13 @@ enum nrs_tbf_flag {
 	NRS_TBF_FLAG_UID	= BIT(NRS_TBF_FIELD_UID),
 	NRS_TBF_FLAG_GID	= BIT(NRS_TBF_FIELD_GID),
 	NRS_TBF_FLAG_PROJID	= BIT(NRS_TBF_FIELD_PROJID),
-	__NRS_TBF_FLAG_END	= BIT(__NRS_TBF_FIELD_MAX),
-	NRS_TBF_FLAG_ALL	= (__NRS_TBF_FLAG_END - 1),
+	NRS_TBF_FLAG_END	= BIT(NRS_TBF_FIELD_MAX),
+	NRS_TBF_FLAG_ALL	= (NRS_TBF_FLAG_END - 1),
 	NRS_TBF_FLAG_IDS	= NRS_TBF_FLAG_UID | NRS_TBF_FLAG_GID |
 				  NRS_TBF_FLAG_PROJID,
 };
 
 struct tbf_id {
-	enum nrs_tbf_flag	ti_type;
 	u32			ti_uid;
 	u32			ti_gid;
 	u32			ti_projid;
@@ -68,6 +67,14 @@ struct tbf_id {
 struct nrs_tbf_id {
 	struct tbf_id		nti_id;
 	struct list_head	nti_linkage;
+};
+
+struct nrs_tbf_key {
+	__u32			tk_flags;
+	struct lnet_nid		tk_nid;
+	__u32			tk_opcode;
+	struct tbf_id		tk_id;	/* UID and GID */
+	char			tk_jobid[LUSTRE_JOBID_SIZE];
 };
 
 enum nrs_tbf_cli_bits {
@@ -125,11 +132,14 @@ struct nrs_tbf_client {
 	 * RCU head for rhashtable handling
 	 */
 	struct rcu_head			 tc_rcu_head;
-	/** Valid field in key (key format). */
-	enum nrs_tbf_flag		 tc_key_valid;
-	/** Key of the TBF cli (variable size). */
-	u8				 tc_key[];
+	/** Key of the TBF cli. */
+	struct nrs_tbf_key		 tc_key;
 };
+
+#define tc_nid		tc_key.tk_nid
+#define tc_opcode	tc_key.tk_opcode
+#define tc_id		tc_key.tk_id
+#define tc_jobid	tc_key.tk_jobid
 
 #define MAX_TBF_NAME (16)
 
@@ -198,8 +208,7 @@ struct nrs_tbf_rule {
 struct nrs_tbf_type {
 	const char		*ntt_name;
 	enum nrs_tbf_flag	 ntt_flag;
-	size_t			 ntt_size;
-	int (*ntt_str)(void *data, char *str, int len);
+	int (*ntt_str)(const struct nrs_tbf_key *key, char *str, int len);
 };
 
 enum nrs_tbf_state_bits {

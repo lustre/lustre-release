@@ -38,125 +38,79 @@ static int tbf_depth = 3;
 module_param(tbf_depth, int, 0644);
 MODULE_PARM_DESC(tbf_depth, "How many tokens that a client can save up");
 
-static int nrs_tbf_jobid_str(void *data, char *str, int len)
+static int nrs_tbf_jobid_str(const struct nrs_tbf_key *key, char *str, int len)
 {
-	char *jobid = data;
-
-	return snprintf(str, len, "%.*s", LUSTRE_JOBID_SIZE - 1, jobid);
+	return snprintf(str, len, "%.*s", LUSTRE_JOBID_SIZE - 1, key->tk_jobid);
 }
 
-static int nrs_tbf_nid_str(void *data, char *str, int len)
+static int nrs_tbf_nid_str(const struct nrs_tbf_key *key, char *str, int len)
 {
-	struct lnet_nid *nid = data;
 	char nidstr[LNET_NIDSTR_SIZE];
 
-	libcfs_nidstr_r(nid, nidstr, sizeof(nidstr));
+	libcfs_nidstr_r(&key->tk_nid, nidstr, sizeof(nidstr));
 	return snprintf(str, len, "%s", nidstr);
 }
 
-static int nrs_tbf_opc_str(void *data, char *str, int len)
+static int nrs_tbf_opc_str(const struct nrs_tbf_key *key, char *str, int len)
 {
-	u32 *opc = data;
-
-	return snprintf(str, len, "%s", ll_opcode2str(*opc));
+	return snprintf(str, len, "%s", ll_opcode2str(key->tk_opcode));
 }
 
-static int nrs_tbf_id_str(void *data, char *str, int len)
+static int nrs_tbf_id_str(u32 id, char *str, int len)
 {
-	u32 *id = data;
-
-	if (*id == U32_MAX)
+	if (id == U32_MAX)
 		return snprintf(str, len, "-1");
 
-	return snprintf(str, len, "%u", *id);
+	return snprintf(str, len, "%u", id);
 }
 
-#define NRS_TBF_SIZE_JOBID	LUSTRE_JOBID_SIZE
-#define NRS_TBF_SIZE_NID	sizeof(struct lnet_nid)
-#define NRS_TBF_SIZE_OPCODE	sizeof(u32)
-#define NRS_TBF_SIZE_UID	sizeof(u32)
-#define NRS_TBF_SIZE_GID	sizeof(u32)
-#define NRS_TBF_SIZE_PROJID	sizeof(u32)
+static int nrs_tbf_uid_str(const struct nrs_tbf_key *key, char *str, int len)
+{
+	return nrs_tbf_id_str(key->tk_id.ti_uid, str, len);
+}
 
-#define NRS_TBF_KEY_LEN_MAX (NRS_TBF_SIZE_JOBID + \
-			     NRS_TBF_SIZE_NID + \
-			     NRS_TBF_SIZE_OPCODE + \
-			     NRS_TBF_SIZE_UID + \
-			     NRS_TBF_SIZE_GID + \
-			     NRS_TBF_SIZE_PROJID)
+static int nrs_tbf_gid_str(const struct nrs_tbf_key *key, char *str, int len)
+{
+	return nrs_tbf_id_str(key->tk_id.ti_gid, str, len);
+}
+
+static int nrs_tbf_projid_str(const struct nrs_tbf_key *key, char *str, int len)
+{
+	return nrs_tbf_id_str(key->tk_id.ti_projid, str, len);
+}
 
 static const struct nrs_tbf_type nrs_tbf_types[] = {
 	[NRS_TBF_FIELD_JOBID] = {
 		.ntt_name = NRS_TBF_TYPE_JOBID,
 		.ntt_flag = NRS_TBF_FLAG_JOBID,
-		.ntt_size = NRS_TBF_SIZE_JOBID,
 		.ntt_str = nrs_tbf_jobid_str,
 	},
 	[NRS_TBF_FIELD_NID] = {
 		.ntt_name = NRS_TBF_TYPE_NID,
 		.ntt_flag = NRS_TBF_FLAG_NID,
-		.ntt_size = NRS_TBF_SIZE_NID,
 		.ntt_str = nrs_tbf_nid_str,
 		},
 	[NRS_TBF_FIELD_OPCODE] = {
 		.ntt_name = NRS_TBF_TYPE_OPCODE,
 		.ntt_flag = NRS_TBF_FLAG_OPCODE,
-		.ntt_size = NRS_TBF_SIZE_OPCODE,
 		.ntt_str = nrs_tbf_opc_str,
 	},
 	[NRS_TBF_FIELD_UID] = {
 		.ntt_name = NRS_TBF_TYPE_UID,
 		.ntt_flag = NRS_TBF_FLAG_UID,
-		.ntt_size = NRS_TBF_SIZE_UID,
-		.ntt_str = nrs_tbf_id_str,
+		.ntt_str = nrs_tbf_uid_str,
 	},
 	[NRS_TBF_FIELD_GID] = {
 		.ntt_name = NRS_TBF_TYPE_GID,
 		.ntt_flag = NRS_TBF_FLAG_GID,
-		.ntt_size = NRS_TBF_SIZE_GID,
-		.ntt_str = nrs_tbf_id_str,
+		.ntt_str = nrs_tbf_gid_str,
 	},
 	[NRS_TBF_FIELD_PROJID] = {
 		.ntt_name = NRS_TBF_TYPE_PROJID,
-		.ntt_size = NRS_TBF_SIZE_PROJID,
 		.ntt_flag = NRS_TBF_FLAG_PROJID,
-		.ntt_str = nrs_tbf_id_str,
+		.ntt_str = nrs_tbf_projid_str,
 	},
 };
-
-static int nrs_tbf_key_len(enum nrs_tbf_flag flags)
-{
-	const struct nrs_tbf_type *type = nrs_tbf_types;
-	size_t size = 0;
-	int i;
-
-	for (i = 0; i < ARRAY_SIZE(nrs_tbf_types); i++, type++) {
-		if (flags & type->ntt_flag)
-			size += type->ntt_size;
-	}
-
-	return size;
-}
-
-static void *nrs_tbf_key_field(struct nrs_tbf_client *cli,
-			       enum nrs_tbf_flag ftype)
-{
-	const struct nrs_tbf_type *type = nrs_tbf_types;
-	off_t off = 0;
-	int i;
-
-	if (!(ftype & cli->tc_key_valid))
-		return NULL;
-
-	for (i = 0; i < ARRAY_SIZE(nrs_tbf_types); i++, type++) {
-		if (ftype & type->ntt_flag)
-			return &cli->tc_key[off];
-		if (cli->tc_key_valid & type->ntt_flag)
-			off += type->ntt_size;
-	}
-
-	return NULL;
-}
 
 /* This converts the class key to a string using the TBF rule format.
  * e.g: "jobid={kworker.0}&uid={0}&gid={0}"
@@ -164,29 +118,28 @@ static void *nrs_tbf_key_field(struct nrs_tbf_client *cli,
 static int nrs_tbf_cli2str_r(struct nrs_tbf_client *cli, char *str, int len)
 {
 	const struct nrs_tbf_type *type = nrs_tbf_types;
-	u8 *field = cli->tc_key;
+	struct nrs_tbf_key *key = &cli->tc_key;
 	int outl = 0;
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(nrs_tbf_types); i++, type++) {
-		if (!(cli->tc_key_valid & type->ntt_flag))
+		if (!(key->tk_flags & type->ntt_flag))
 			continue;
+
 		if (!type->ntt_str)
-			goto next_field;
+			continue;
 
 		outl += snprintf(str + outl, len - outl,
-				"%s%s={", outl ? "&" : "", type->ntt_name);
+				 "%s%s={", outl ? "&" : "", type->ntt_name);
 		if (outl >= len - 1)
 			break;
 
-		outl += type->ntt_str(field, str + outl, len - outl);
+		outl += type->ntt_str(key, str + outl, len - outl);
 		if (outl >= len - 2)
 			break;
 
 		str[outl++] = '}';
 		str[outl] = '\0';
-next_field:
-		field += type->ntt_size;
 	}
 
 	outl = min(outl, len - 1);
@@ -251,55 +204,29 @@ do {									\
 static int nrs_tbf_id_cli_set(struct ptlrpc_request *req, struct tbf_id *id,
 			      enum nrs_tbf_flag need);
 
+#define NRS_TBF_JOBID_NULL ""
+
 static void nrs_tbf_cli_gen_key(struct ptlrpc_request *req,
-				void *key_buf, enum nrs_tbf_flag valid)
+				struct nrs_tbf_key *key,
+				enum nrs_tbf_flag valid)
 {
-	const struct nrs_tbf_type *type = nrs_tbf_types;
-	struct tbf_id id = { 0 };
-	u8 *field = key_buf;
-	int i;
-
 	if (valid & NRS_TBF_FLAG_IDS)
-		nrs_tbf_id_cli_set(req, &id, valid & NRS_TBF_FLAG_IDS);
+		nrs_tbf_id_cli_set(req, &key->tk_id, valid & NRS_TBF_FLAG_IDS);
 
-	for (i = 0; i < ARRAY_SIZE(nrs_tbf_types); i++, type++) {
+	if (valid & NRS_TBF_FLAG_NID)
+		key->tk_nid = req->rq_peer.nid;
+	if (valid & NRS_TBF_FLAG_OPCODE)
+		key->tk_opcode = lustre_msg_get_opc(req->rq_reqmsg);
+	if (valid & NRS_TBF_FLAG_JOBID) {
 		const char *jobid;
-		u32 opc;
 
-		if (!(valid & type->ntt_flag))
-			continue;
-
-		switch (valid & type->ntt_flag) {
-		case NRS_TBF_FLAG_JOBID:
-			jobid = lustre_msg_get_jobid(req->rq_reqmsg);
-			if (jobid)
-				strscpy(field, jobid, type->ntt_size);
-			else
-				memset(field, 0, type->ntt_size);
-			break;
-		case NRS_TBF_FLAG_NID:
-			memcpy(field, &req->rq_peer.nid, type->ntt_size);
-			break;
-		case NRS_TBF_FLAG_OPCODE:
-			opc = lustre_msg_get_opc(req->rq_reqmsg);
-			memcpy(field, &opc, type->ntt_size);
-			break;
-		case NRS_TBF_FLAG_UID:
-			memcpy(field, &id.ti_uid, type->ntt_size);
-			break;
-		case NRS_TBF_FLAG_GID:
-			memcpy(field, &id.ti_gid, type->ntt_size);
-			break;
-		case NRS_TBF_FLAG_PROJID:
-			memcpy(field, &id.ti_projid, type->ntt_size);
-			break;
-		default:
-			memset(field, 0, type->ntt_size);
-			CWARN("Non supported tbf type: %s\n", type->ntt_name);
-		}
-
-		field += type->ntt_size;
+		jobid = lustre_msg_get_jobid(req->rq_reqmsg);
+		if (jobid == NULL)
+			jobid = NRS_TBF_JOBID_NULL;
+		strscpy(key->tk_jobid, jobid, sizeof(key->tk_jobid));
 	}
+
+	key->tk_flags = valid;
 }
 
 static enum hrtimer_restart nrs_tbf_timer_cb(struct hrtimer *timer)
@@ -490,16 +417,13 @@ struct nrs_tbf_client *nrs_tbf_cli_alloc(struct nrs_tbf_head *head,
 	enum nrs_tbf_flag valid = head->th_type_flag;
 	struct nrs_tbf_client *cli;
 	struct nrs_tbf_rule *rule;
-	size_t cli_size;
 
-	cli_size = struct_size(cli, tc_key, nrs_tbf_key_len(valid));
 	OBD_CPT_ALLOC_GFP(cli, nrs_pol2cptab(pol), nrs_pol2cptid(pol),
-			  cli_size, gfp);
+			  sizeof(*cli), gfp);
 	if (!cli)
 		return NULL;
 
-	cli->tc_key_valid = valid;
-	nrs_tbf_cli_gen_key(req, cli->tc_key, valid);
+	nrs_tbf_cli_gen_key(req, &cli->tc_key, valid);
 
 	INIT_LIST_HEAD(&cli->tc_lru);
 	INIT_LIST_HEAD(&cli->tc_list);
@@ -517,8 +441,7 @@ static void nrs_tbf_cli_free(struct rcu_head *head)
 	struct nrs_tbf_client *cli = container_of(head, struct nrs_tbf_client,
 						  tc_rcu_head);
 
-	OBD_FREE(cli, struct_size(cli, tc_key,
-				  nrs_tbf_key_len(cli->tc_key_valid)));
+	OBD_FREE_PTR(cli);
 }
 
 static void
@@ -934,10 +857,8 @@ nrs_tbf_startup(struct ptlrpc_nrs_policy *policy, struct nrs_tbf_head *head)
 	struct nrs_tbf_cmd start;
 	int rc;
 
-	LASSERT(nrs_tbf_key_len(NRS_TBF_FLAG_ALL) == NRS_TBF_KEY_LEN_MAX);
-
 	memset(params, 0, sizeof(*params));
-	params->key_len = nrs_tbf_key_len(head->th_type_flag);
+	params->key_len = sizeof(struct nrs_tbf_key);
 	params->key_offset = offsetof(struct nrs_tbf_client, tc_key);
 	params->head_offset = offsetof(struct nrs_tbf_client, tc_rhash);
 	params->min_size = 256;
@@ -1163,7 +1084,6 @@ static int nrs_tbf_id_cli_set(struct ptlrpc_request *req, struct tbf_id *id,
 	int rc = 0;
 	u32 opc;
 
-	id->ti_type = need;
 	id->ti_uid = (__u32) -1;
 	id->ti_gid = (__u32) -1;
 	id->ti_projid = (__u32) -1;
@@ -1315,13 +1235,14 @@ static int nrs_tbf_lru_shrink(struct nrs_tbf_head *head)
 static struct nrs_tbf_client *
 nrs_tbf_cli_find(struct nrs_tbf_head *head, struct ptlrpc_request *req)
 {
-	u8 key[NRS_TBF_KEY_LEN_MAX] = { 0 };
 	struct nrs_tbf_client *cli;
+	struct nrs_tbf_key key;
 
-	nrs_tbf_cli_gen_key(req, key, head->th_type_flag);
+	memset(&key, 0, sizeof(key));
+	nrs_tbf_cli_gen_key(req, &key, head->th_type_flag);
 
 	rcu_read_lock();
-	cli = rhashtable_lookup(&head->th_cli_rhash, key,
+	cli = rhashtable_lookup(&head->th_cli_rhash, &key,
 				head->th_rhash_params);
 	if (cli && !refcount_inc_not_zero(&cli->tc_ref))
 		cli = nrs_tbf_lru_tryhit(head, cli);
@@ -1387,7 +1308,7 @@ nrs_tbf_id_list_free(struct list_head *id_list)
 static void
 nrs_tbf_expression_free(struct nrs_tbf_expression *expr)
 {
-	LASSERT(expr->te_field >= 0 && expr->te_field < __NRS_TBF_FIELD_MAX);
+	LASSERT(expr->te_field >= 0 && expr->te_field < NRS_TBF_FIELD_MAX);
 	switch (expr->te_field) {
 	case NRS_TBF_FIELD_NID:
 		cfs_free_nidlist(&expr->te_cond);
@@ -1583,43 +1504,22 @@ nrs_tbf_expression_match(struct nrs_tbf_expression *expr,
 			 struct nrs_tbf_rule *rule,
 			 struct nrs_tbf_client *cli)
 {
-	struct lnet_nid *nid;
-	char *jobid;
-	u32 *id;
-
 	switch (expr->te_field) {
 	case NRS_TBF_FIELD_NID:
-		nid = nrs_tbf_key_field(cli, NRS_TBF_FLAG_NID);
-		if (!nid)
-			return 0;
-		return cfs_match_nid(nid, &expr->te_cond);
+		return cfs_match_nid(&cli->tc_nid, &expr->te_cond);
 	case NRS_TBF_FIELD_JOBID:
-		jobid = nrs_tbf_key_field(cli, NRS_TBF_FLAG_JOBID);
-		if (!jobid)
-			return 0;
-		return nrs_tbf_jobid_list_match(&expr->te_cond, jobid);
+		return nrs_tbf_jobid_list_match(&expr->te_cond, cli->tc_jobid);
 	case NRS_TBF_FIELD_OPCODE:
-		id = nrs_tbf_key_field(cli, NRS_TBF_FLAG_OPCODE);
-		if (!id)
-			return 0;
-		return test_bit(*id, expr->te_opcodes);
+		return test_bit(cli->tc_opcode, expr->te_opcodes);
 	case NRS_TBF_FIELD_UID:
-		id = nrs_tbf_key_field(cli, NRS_TBF_FLAG_UID);
-		if (!id)
-			return 0;
-		return nrs_tbf_id_list_match(&expr->te_cond, *id,
+		return nrs_tbf_id_list_match(&expr->te_cond, cli->tc_id.ti_uid,
 					     NRS_TBF_FLAG_UID);
 	case NRS_TBF_FIELD_GID:
-		id = nrs_tbf_key_field(cli, NRS_TBF_FLAG_GID);
-		if (!id)
-			return 0;
-		return nrs_tbf_id_list_match(&expr->te_cond, *id,
+		return nrs_tbf_id_list_match(&expr->te_cond, cli->tc_id.ti_gid,
 					     NRS_TBF_FLAG_GID);
 	case NRS_TBF_FIELD_PROJID:
-		id = nrs_tbf_key_field(cli, NRS_TBF_FLAG_PROJID);
-		if (!id)
-			return 0;
-		return nrs_tbf_id_list_match(&expr->te_cond, *id,
+		return nrs_tbf_id_list_match(&expr->te_cond,
+					     cli->tc_id.ti_projid,
 					     NRS_TBF_FLAG_PROJID);
 	default:
 		return 0;
@@ -1767,9 +1667,6 @@ nrs_tbf_id_list_match(struct list_head *id_list, u32 id,
 	list_for_each_entry(nti_id, id_list, nti_linkage) {
 		u32 curid;
 
-		if (!(idtype & nti_id->nti_id.ti_type))
-			continue;
-
 		switch (idtype) {
 		case NRS_TBF_FLAG_UID:
 			curid = nti_id->nti_id.ti_uid;
@@ -1823,7 +1720,6 @@ nrs_tbf_id_list_parse(char *orig, struct list_head *id_list,
 			 */
 			continue;
 
-		id.ti_type = ntf;
 		rc = kstrtoul(tok, 0, &val);
 		if (rc < 0)
 			GOTO(out, rc = -EINVAL);
