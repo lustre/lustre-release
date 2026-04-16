@@ -2340,8 +2340,10 @@ static int ll_rmdir(struct inode *dir, struct dentry *dchild)
 
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:name="DNAME", dir="DFID"(%p)\n",
-	       encode_fn_dentry(dchild), PFID(ll_inode2fid(dir)), dir);
+	CDEBUG(D_VFSTRACE|D_IOTRACE,
+	       "START: name="DNAME", fid="DFID", dir_fid="DFID"\n",
+	       encode_fn_dentry(dchild), PFID(ll_inode2fid(dchild->d_inode)),
+	       PFID(ll_inode2fid(dir)));
 
 	if (unlikely(d_mountpoint(dchild)))
 		GOTO(out, rc = -EBUSY);
@@ -2355,8 +2357,7 @@ static int ll_rmdir(struct inode *dir, struct dentry *dchild)
 	if (IS_ERR(op_data))
 		GOTO(out, rc = PTR_ERR(op_data));
 
-	if (dchild->d_inode != NULL)
-		op_data->op_fid3 = *ll_inode2fid(dchild->d_inode);
+	op_data->op_fid3 = *ll_inode2fid(dchild->d_inode);
 
 	if (fid_is_zero(&op_data->op_fid2))
 		op_data->op_fid2 = op_data->op_fid3;
@@ -2384,6 +2385,11 @@ static int ll_rmdir(struct inode *dir, struct dentry *dchild)
 
 	ptlrpc_req_put(request);
 out:
+	CDEBUG(D_IOTRACE,
+	       "COMPLETED: name="DNAME", fid="DFID", dir_fid="DFID", rc=%d\n",
+	       encode_fn_dentry(dchild), PFID(ll_inode2fid(dchild->d_inode)),
+	       PFID(ll_inode2fid(dir)), rc);
+
 	RETURN(rc);
 }
 
@@ -2430,8 +2436,10 @@ static int ll_unlink(struct inode *dir, struct dentry *dchild)
 
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:name="DNAME", dir="DFID"(%p)\n",
-	       encode_fn_dentry(dchild), PFID(ll_inode2fid(dir)), dir);
+	CDEBUG(D_VFSTRACE|D_IOTRACE,
+	       "START: name="DNAME", fid="DFID", dir_fid="DFID"\n",
+	       encode_fn_dentry(dchild), PFID(ll_inode2fid(dchild->d_inode)),
+	       PFID(ll_inode2fid(dir)));
 
 	/*
 	 * XXX: unlink bind mountpoint maybe call to here,
@@ -2481,6 +2489,11 @@ out_put:
 		ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_UNLINK,
 				   ktime_us_delta(ktime_get(), kstart));
 out:
+	CDEBUG(D_IOTRACE,
+	       "COMPLETED: name="DNAME", fid="DFID", dir_fid="DFID", rc=%d\n",
+	       encode_fn_dentry(dchild), PFID(ll_inode2fid(dchild->d_inode)),
+	       PFID(ll_inode2fid(dir)), rc);
+
 	RETURN(rc);
 }
 
