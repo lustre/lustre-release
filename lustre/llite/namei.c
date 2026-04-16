@@ -2528,13 +2528,15 @@ static int ll_rename(struct mnt_idmap *map,
 
 	ENTRY;
 
+	CDEBUG(D_VFSTRACE|D_IOTRACE,
+	       "START: fid="DFID", oldname="DNAME", srcdir_fid="DFID
+	       ", newname="DNAME", tgtdir_fid="DFID", flags=%u\n",
+	       PFID(ll_inode2fid(src_dchild->d_inode)),
+	       encode_fn_dentry(src_dchild), PFID(ll_inode2fid(src)),
+	       encode_fn_dentry(tgt_dchild), PFID(ll_inode2fid(tgt)), flags);
+
 	if (flags)
 		GOTO(out, err = -EINVAL);
-
-	CDEBUG(D_VFSTRACE,
-	       "VFS Op:oldname="DNAME", src_dir="DFID"(%p), newname=%pd, tgt_dir="DFID"(%p)\n",
-	       encode_fn_dentry(src_dchild), PFID(ll_inode2fid(src)), src,
-	       tgt_dchild, PFID(ll_inode2fid(tgt)), tgt);
 
 	if (unlikely(d_mountpoint(src_dchild) || d_mountpoint(tgt_dchild)))
 		GOTO(out, err = -EBUSY);
@@ -2602,6 +2604,17 @@ static int ll_rename(struct mnt_idmap *map,
 				   ktime_us_delta(ktime_get(), kstart));
 	}
 out:
+	/*
+	 * d_move() above overwrites src_dchild's name with the new one, so
+	 * oldname is dropped here; the START message already recorded it.
+	 */
+	CDEBUG(D_IOTRACE,
+	       "COMPLETED: fid="DFID", srcdir_fid="DFID", newname="DNAME
+	       ", tgtdir_fid="DFID", flags=%u, rc=%d\n",
+	       PFID(ll_inode2fid(src_dchild->d_inode)), PFID(ll_inode2fid(src)),
+	       encode_fn_dentry(tgt_dchild), PFID(ll_inode2fid(tgt)),
+	       flags, err);
+
 	RETURN(err);
 }
 
