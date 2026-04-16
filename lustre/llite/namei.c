@@ -2164,14 +2164,17 @@ static int ll_symlink(struct mnt_idmap *map, struct inode *dir,
 {
 	ktime_t kstart = ktime_get();
 	int len = strlen(oldpath);
+	/* a long target overflows the record and floods the console */
+	int dbg_len = min_t(int, len, 3000);
 	struct llcrypt_str disk_link;
 	int err;
 
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:name="DNAME", dir="DFID"(%p), target="DNAME"\n",
-	       encode_fn_dentry(dchild), PFID(ll_inode2fid(dir)),
-	       dir, encode_fn_dname(3000, oldpath));
+	CDEBUG(D_VFSTRACE|D_IOTRACE,
+	       "START: name="DNAME", target="DNAME", dir_fid="DFID"\n",
+	       encode_fn_dentry(dchild), encode_fn_dname(dbg_len, oldpath),
+	       PFID(ll_inode2fid(dir)));
 
 	err = llcrypt_prepare_symlink(dir, oldpath, len, dir->i_sb->s_blocksize,
 				      &disk_link);
@@ -2189,6 +2192,12 @@ static int ll_symlink(struct mnt_idmap *map, struct inode *dir,
 				   ktime_us_delta(ktime_get(), kstart));
 
 out:
+	CDEBUG(D_IOTRACE,
+	       "COMPLETED: name="DNAME", target="DNAME
+	       ", dir_fid="DFID", rc=%d\n",
+	       encode_fn_dentry(dchild), encode_fn_dname(dbg_len, oldpath),
+	       PFID(ll_inode2fid(dir)), err);
+
 	RETURN(err);
 }
 
@@ -2205,10 +2214,11 @@ static int ll_link(struct dentry *old_dentry, struct inode *dir,
 
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE,
-	       "VFS Op: inode="DFID"(%p), dir="DFID"(%p), target="DNAME"\n",
-	       PFID(ll_inode2fid(src)), src,
-	       PFID(ll_inode2fid(dir)), dir, encode_fn_dentry(new_dentry));
+	CDEBUG(D_VFSTRACE|D_IOTRACE,
+	       "START: name="DNAME", src="DNAME", src_fid="DFID
+	       ", dir_fid="DFID"\n",
+	       encode_fn_dentry(new_dentry), encode_fn_dentry(old_dentry),
+	       PFID(ll_inode2fid(src)), PFID(ll_inode2fid(dir)));
 
 	err = llcrypt_prepare_link(old_dentry, dir, new_dentry);
 	if (err)
@@ -2231,6 +2241,12 @@ static int ll_link(struct dentry *old_dentry, struct inode *dir,
 out_put:
 	ptlrpc_req_put(request);
 out:
+	CDEBUG(D_IOTRACE,
+	       "COMPLETED: name="DNAME", src="DNAME", src_fid="DFID
+	       ", dir_fid="DFID", rc=%d\n",
+	       encode_fn_dentry(new_dentry), encode_fn_dentry(old_dentry),
+	       PFID(ll_inode2fid(src)), PFID(ll_inode2fid(dir)), err);
+
 	RETURN(err);
 }
 
