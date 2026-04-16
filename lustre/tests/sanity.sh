@@ -15718,18 +15718,21 @@ test_119j()
 		skip "needs kernel > 4.5.0 for ki_flags support"
 
 	local rpcs
-	dd if=/dev/urandom of=$DIR/$tfile bs=8 count=1 || error "(0) dd failed"
+	local pages=1
+	local iosize=$((pages * PAGE_SIZE / 1024))k
+	dd if=/dev/urandom of=$DIR/$tfile bs=$iosize count=1 ||
+		error "(0) dd $iosize failed"
 	sync
 	$LCTL set_param -n osc.*.rpc_stats=0
 	# Read from page cache, does not generate an rpc
-	dd if=$DIR/$tfile of=/dev/null bs=8 count=1 || error "(1) dd failed"
+	dd if=$DIR/$tfile of=/dev/null bs=$iosize count=1 ||
+		error "(1) dd $iosize failed"
 	$LCTL get_param osc.*.rpc_stats
 	rpcs=($($LCTL get_param -n 'osc.*.rpc_stats' |
 		sed -n '/pages per rpc/,/^$/p' |
 		awk '/'$pages':/ { reads += $2; writes += $6 }; \
 		END { print reads,writes }'))
-	[[ ${rpcs[0]} == 0 ]] ||
-		error "(3) ${rpcs[0]} != 0 read RPCs"
+	(( ${rpcs[0]} == 0 )) || error "(3) ${rpcs[0]} != 0 read RPCs"
 
 	# Test hybrid IO read
 	# Force next BIO as DIO
@@ -15744,8 +15747,7 @@ test_119j()
 		sed -n '/pages per rpc/,/^$/p' |
 		awk '/'$pages':/ { reads += $2; writes += $6 }; \
 		END { print reads,writes }'))
-	[[ ${rpcs[0]} == 1 ]] ||
-		error "(5) ${rpcs[0]} != 1 read RPCs"
+	(( ${rpcs[0]} == $pages )) || error "(5) ${rpcs[0]} != $pages read RPCs"
 
 	# Test hybrid IO write
 	#define OBD_FAIL_LLITE_FORCE_BIO_AS_DIO	0x1429
@@ -15759,8 +15761,7 @@ test_119j()
 		sed -n '/pages per rpc/,/^$/p' |
 		awk '/'$pages':/ { reads += $2; writes += $6 }; \
 		END { print reads,writes }'))
-	[[ ${rpcs[1]} == 1 ]] ||
-		error "(7) ${rpcs[0]} != 1 read RPCs"
+	(( ${rpcs[1]} == $pages )) || error "(7) ${rpcs[1]} != $pages read RPCs"
 }
 run_test 119j "basic tests of hybrid IO switching"
 
