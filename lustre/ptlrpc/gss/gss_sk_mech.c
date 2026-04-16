@@ -420,7 +420,7 @@ u32 sk_verify_bulk_hmac(enum cfs_crypto_hash_alg sc_hmac, rawobj_t *key,
 		if (rc != 0)
 			goto hash_cleanup;
 
-		ahash_request_set_crypt(req, sg, NULL, msgs[i].len);
+		ahash_request_set_crypt(req, sgt.sgl, NULL, msgs[i].len);
 		rc = crypto_ahash_update(req);
 		if (rc) {
 			gss_teardown_sgtable(&sgt);
