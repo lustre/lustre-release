@@ -2326,25 +2326,23 @@ kgnilnd_eager_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 
 int
 kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
-	     int delayed, unsigned int niov,
-	     struct bio_vec *kiov,
-	     unsigned int offset, unsigned int mlen, unsigned int rlen)
+	     int delayed, struct iov_iter *to, unsigned int rlen)
 {
 	kgn_rx_t    *rx = private;
 	kgn_conn_t  *conn = rx->grx_conn;
 	kgn_msg_t   *rxmsg = rx->grx_msg;
+	int wanted = iov_iter_count(to);
 	kgn_tx_t    *tx;
 	int          rc = 0;
-	__u32        pload_cksum;
+	u32        pload_cksum;
+
 	ENTRY;
-
 	LASSERT(!in_interrupt());
-	LASSERTF(mlen <= rlen, "%d <= %d\n", mlen, rlen);
+	LASSERTF(wanted <= rlen, "%d <= %d\n", wanted, rlen);
 
-	GNIDBG_MSG(D_NET, rxmsg, "conn %p, rxmsg %p, lntmsg %p"
-		" niov=%d kiov=%p offset=%d mlen=%d rlen=%d",
-		conn, rxmsg, lntmsg,
-		niov, kiov, offset, mlen, rlen);
+	GNIDBG_MSG(D_NET, rxmsg,
+		   "conn %px, rxmsg %px, lntmsg %px iov=%px iov len=%d rlen=%d",
+		   conn, rxmsg, lntmsg, to, wanted, rlen);
 
 	/* we need to lock here as recv can be called from any context */
 	read_lock(&kgnilnd_data.kgn_peer_conn_lock);
@@ -2360,17 +2358,17 @@ kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 
 	switch (rxmsg->gnm_type) {
 	default:
-		GNIDBG_MSG(D_NETERROR, rxmsg, "conn %p, rx %p, rxmsg %p, lntmsg %p"
-		" niov=%d kiov=%p offset=%d mlen=%d rlen=%d",
-		conn, rx, rxmsg, lntmsg, niov, kiov, offset, mlen, rlen);
+		GNIDBG_MSG(D_NETERROR, rxmsg,
+			   "conn %px, rx %px, rxmsg %px, lntmsg %px iov %px iov len=%d rlen=%d",
+		conn, rx, rxmsg, lntmsg, to, wanted, rlen);
 		LBUG();
 
 	case GNILND_MSG_IMMEDIATE:
-		if (mlen > rxmsg->gnm_payload_len) {
+		if (wanted > rxmsg->gnm_payload_len) {
 			GNIDBG_MSG(D_ERROR, rxmsg,
-				"Immediate message from %s too big: %d > %d",
-				libcfs_nid2str(conn->gnc_peer->gnp_nid), mlen,
-				rxmsg->gnm_payload_len);
+				   "Immediate message from %s too big: %d > %d",
+				   libcfs_nid2str(conn->gnc_peer->gnp_nid),
+				   wanted, rxmsg->gnm_payload_len);
 			rc = -EINVAL;
 			kgnilnd_consume_rx(rx);
 			RETURN(rc);
@@ -2415,10 +2413,11 @@ kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 			}
 		}
 
-		lnet_copy_flat2kiov(
-			niov, kiov, offset,
-			*kgnilnd_tunables.kgn_max_immediate,
-			&rxmsg[1], 0, mlen);
+		rc = copy_to_iter(&rxmsg[1], wanted, to);
+		if (rc != wanted) {
+			rc = -EFAULT;
+			break;
+		}
 
 		kgnilnd_consume_rx(rx);
 		lnet_finalize(lntmsg, 0);
@@ -2426,7 +2425,7 @@ kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 
 	case GNILND_MSG_PUT_REQ:
 		/* LNET wants to truncate or drop transaction, sending NAK */
-		if (mlen == 0) {
+		if (wanted == 0) {
 			kgnilnd_consume_rx(rx);
 			lnet_finalize(lntmsg, 0);
 
@@ -2451,8 +2450,10 @@ kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 			GOTO(nak_put_req, rc);
 		}
 
-		rc = kgnilnd_setup_rdma_buffer(tx, niov,
-					       kiov, offset, mlen);
+		rc = kgnilnd_setup_rdma_buffer(tx, to->nr_segs,
+					       (struct bio_vec *)to->bvec,
+					       to->iov_offset,
+					       wanted);
 		if (rc != 0) {
 			GOTO(nak_put_req, rc);
 		}
@@ -2462,7 +2463,7 @@ kgnilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 		tx->tx_msg.gnm_u.putack.gnpam_dst_cookie = tx->tx_id.txe_cookie;
 		tx->tx_msg.gnm_u.putack.gnpam_desc.gnrd_addr =
 			(__u64)((unsigned long)tx->tx_buffer);
-		tx->tx_msg.gnm_u.putack.gnpam_desc.gnrd_nob = mlen;
+		tx->tx_msg.gnm_u.putack.gnpam_desc.gnrd_nob = wanted;
 
 		tx->tx_lntmsg[0] = lntmsg; /* finalize this on RDMA_DONE */
 		tx->tx_qtime = jiffies;
@@ -2489,7 +2490,7 @@ nak_put_req:
 		RETURN(-EIO);
 	case GNILND_MSG_GET_REQ_REV:
 		/* LNET wants to truncate or drop transaction, sending NAK */
-		if (mlen == 0) {
+		if (wanted == 0) {
 			kgnilnd_consume_rx(rx);
 			lnet_finalize(lntmsg, 0);
 
@@ -2515,8 +2516,10 @@ nak_put_req:
 			if (rc != 0)
 				GOTO(nak_get_req_rev, rc);
 
-			rc = kgnilnd_setup_rdma_buffer(tx, niov,
-						       kiov, offset, mlen);
+			rc = kgnilnd_setup_rdma_buffer(tx, to->nr_segs,
+						       (struct bio_vec *)to->bvec,
+						       to->iov_offset,
+						       wanted);
 			if (rc != 0)
 				GOTO(nak_get_req_rev, rc);
 
@@ -2525,8 +2528,7 @@ nak_put_req:
 			tx->tx_msg.gnm_u.putack.gnpam_dst_cookie = tx->tx_id.txe_cookie;
 			tx->tx_msg.gnm_u.putack.gnpam_desc.gnrd_addr =
 				(__u64)((unsigned long)tx->tx_buffer);
-			tx->tx_msg.gnm_u.putack.gnpam_desc.gnrd_nob = mlen;
-
+			tx->tx_msg.gnm_u.putack.gnpam_desc.gnrd_nob = wanted;
 			tx->tx_lntmsg[0] = lntmsg; /* finalize this on RDMA_DONE */
 
 			/* we only queue from kgnilnd_recv - we might get called from other contexts
@@ -2561,7 +2563,7 @@ nak_get_req_rev:
 
 	case GNILND_MSG_PUT_REQ_REV:
 		/* LNET wants to truncate or drop transaction, sending NAK */
-		if (mlen == 0) {
+		if (wanted == 0) {
 			kgnilnd_consume_rx(rx);
 			lnet_finalize(lntmsg, 0);
 
@@ -2576,7 +2578,7 @@ nak_get_req_rev:
 
 		if (lntmsg != NULL) {
 			/* Matched! */
-			kgnilnd_setup_rdma(ni, rx, lntmsg, mlen);
+			kgnilnd_setup_rdma(ni, rx, lntmsg, wanted);
 		} else {
 			/* No match */
 			kgnilnd_nak_rdma(conn, rxmsg->gnm_type,
@@ -2589,7 +2591,7 @@ nak_get_req_rev:
 	case GNILND_MSG_GET_REQ:
 		if (lntmsg != NULL) {
 			/* Matched! */
-			kgnilnd_setup_rdma(ni, rx, lntmsg, mlen);
+			kgnilnd_setup_rdma(ni, rx, lntmsg, wanted);
 		} else {
 			/* No match */
 			kgnilnd_nak_rdma(conn, rxmsg->gnm_type,
@@ -3020,24 +3022,29 @@ kgnilnd_reaper(void *arg)
 	return 0;
 }
 
-int
-kgnilnd_recv_bte_get(kgn_tx_t *tx) {
+static int kgnilnd_recv_bte_get(kgn_tx_t *tx)
+{
 	unsigned niov, offset, nob;
 	struct bio_vec *kiov;
 	struct lnet_msg *lntmsg = tx->tx_lntmsg[0];
-	kgnilnd_parse_lnet_rdma(lntmsg, &niov, &offset, &nob, &kiov, tx->tx_nob_rdma);
+	int rc = 0;
 
+	kgnilnd_parse_lnet_rdma(lntmsg, &niov, &offset, &nob, &kiov, tx->tx_nob_rdma);
 	if (kiov != NULL) {
-		lnet_copy_flat2kiov(
-			niov, kiov, offset,
-			nob,
-			tx->tx_buffer_copy + tx->tx_offset, 0, nob);
+		struct iov_iter to;
+
+		iov_iter_bvec(&to, READ, kiov, niov, offset + nob);
+		iov_iter_advance(&to, offset);
+
+		rc = copy_to_iter(tx->tx_buffer_copy + tx->tx_offset, nob, &to);
+		if (rc != nob)
+			rc = -EFAULT;
 	} else {
 		memcpy(tx->tx_buffer, tx->tx_buffer_copy + tx->tx_offset, nob);
 	}
-	return 0;
-}
 
+	return rc;
+}
 
 int
 kgnilnd_check_rdma_cq(kgn_device_t *dev)
@@ -3125,15 +3132,21 @@ kgnilnd_check_rdma_cq(kgn_device_t *dev)
 
 		rc = 0;
 		if (tx->tx_msg.gnm_type == GNILND_MSG_GET_DONE_REV && desc->status == GNI_RC_SUCCESS) {
+			u16 cksum = tx->tx_putinfo.gnpam_payload_cksum;
+
 			if (tx->tx_buffer_copy != NULL)
-				kgnilnd_recv_bte_get(tx);
-			rc = kgnilnd_verify_rdma_cksum(tx, tx->tx_putinfo.gnpam_payload_cksum, tx->tx_nob_rdma);
+				rc = kgnilnd_recv_bte_get(tx);
+			if (rc == 0)
+				rc = kgnilnd_verify_rdma_cksum(tx, cksum, tx->tx_nob_rdma);
 		}
 
 		if (tx->tx_msg.gnm_type == GNILND_MSG_PUT_DONE_REV && desc->status == GNI_RC_SUCCESS) {
+			u16 cksum = tx->tx_getinfo.gngm_payload_cksum;
+
 			if (tx->tx_buffer_copy != NULL)
-				kgnilnd_recv_bte_get(tx);
-			rc = kgnilnd_verify_rdma_cksum(tx, tx->tx_getinfo.gngm_payload_cksum, tx->tx_nob_rdma);
+				rc = kgnilnd_recv_bte_get(tx);
+			if (rc == 0)
+				rc = kgnilnd_verify_rdma_cksum(tx, cksum, tx->tx_nob_rdma);
 		}
 
 		/* remove from rdmaq */

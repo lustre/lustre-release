@@ -843,46 +843,12 @@ lnet_net_set_sel_priority_locked(struct lnet_net *net, __u32 priority)
 unsigned int lnet_iov_nob(unsigned int niov, struct kvec *iov);
 unsigned int lnet_kiov_nob(unsigned int niov, struct bio_vec *iov);
 int lnet_extract_kiov(int dst_niov, struct bio_vec *dst,
-		      int src_niov, struct bio_vec *src,
+		      int src_niov, const struct bio_vec *src,
 		      unsigned int offset, unsigned int len);
 
-void lnet_copy_iov2iov(unsigned int ndiov, struct kvec *diov,
-		       unsigned int doffset,
-		       unsigned int nsiov, struct kvec *siov,
-		       unsigned int soffset, unsigned int nob);
-void lnet_copy_kiov2iov(unsigned int niov, struct kvec *iov,
-			unsigned int iovoffset,
-			unsigned int nkiov, struct bio_vec *kiov,
-			unsigned int kiovoffset, unsigned int nob);
-void lnet_copy_iov2kiov(unsigned int nkiov, struct bio_vec *kiov,
-			unsigned int kiovoffset,
-			unsigned int niov, struct kvec *iov,
-			unsigned int iovoffset, unsigned int nob);
-void lnet_copy_kiov2kiov(unsigned int ndkiov, struct bio_vec *dkiov,
-			 unsigned int doffset,
-			 unsigned int nskiov, struct bio_vec *skiov,
-			 unsigned int soffset, unsigned int nob);
-
-static inline void
-lnet_copy_kiov2flat(int dlen, void *dest, unsigned int doffset,
-		    unsigned int nsiov, struct bio_vec *skiov,
-		    unsigned int soffset, unsigned int nob)
-{
-	struct kvec diov = { .iov_base = dest, .iov_len = dlen };
-
-	lnet_copy_kiov2iov(1, &diov, doffset,
-			   nsiov, skiov, soffset, nob);
-}
-
-static inline void
-lnet_copy_flat2kiov(unsigned int ndiov, struct bio_vec *dkiov,
-		    unsigned int doffset, int slen, void *src,
-		    unsigned int soffset, unsigned int nob)
-{
-	struct kvec siov = { .iov_base = src, .iov_len = slen };
-	lnet_copy_iov2kiov(ndiov, dkiov, doffset,
-			   1, &siov, soffset, nob);
-}
+void lnet_copy_kiov2iter(struct iov_iter *to,
+			 unsigned int nkiov, const struct bio_vec *kiov,
+			 unsigned int kiovoffset, unsigned int nob);
 
 void lnet_me_unlink(struct lnet_me *me);
 

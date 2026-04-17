@@ -22,17 +22,16 @@ lolnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 
 static int
 lolnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
-	   int delayed, unsigned int niov,
-	   struct bio_vec *kiov,
-	   unsigned int offset, unsigned int mlen, unsigned int rlen)
+	   int delayed, struct iov_iter *to, unsigned int rlen)
 {
 	struct lnet_msg *sendmsg = private;
 
-	if (lntmsg) {			/* not discarding */
-		lnet_copy_kiov2kiov(niov, kiov, offset,
+	if (lntmsg) {		/* not discarding */
+		lnet_copy_kiov2iter(to,
 				    sendmsg->msg_niov,
 				    sendmsg->msg_kiov,
-				    sendmsg->msg_offset, mlen);
+				    sendmsg->msg_offset,
+				    iov_iter_count(to));
 
 		lnet_finalize(lntmsg, 0);
 	}
@@ -46,7 +45,7 @@ static int lolnd_instanced;
 static void
 lolnd_shutdown(struct lnet_ni *ni)
 {
-	CDEBUG (D_NET, "shutdown\n");
+	CDEBUG(D_NET, "shutdown\n");
 	LASSERT(lolnd_instanced);
 
 	lolnd_instanced = 0;
@@ -55,11 +54,11 @@ lolnd_shutdown(struct lnet_ni *ni)
 static int
 lolnd_startup(struct lnet_ni *ni)
 {
-	LASSERT (ni->ni_net->net_lnd == &the_lolnd);
-	LASSERT (!lolnd_instanced);
+	LASSERT(ni->ni_net->net_lnd == &the_lolnd);
+	LASSERT(!lolnd_instanced);
 	lolnd_instanced = 1;
 
-	return (0);
+	return 0;
 }
 
 const struct lnet_lnd the_lolnd = {
@@ -67,5 +66,5 @@ const struct lnet_lnd the_lolnd = {
 	.lnd_startup	= lolnd_startup,
 	.lnd_shutdown	= lolnd_shutdown,
 	.lnd_send	= lolnd_send,
-	.lnd_recv	= lolnd_recv
+	.lnd_recv	= lolnd_recv,
 };

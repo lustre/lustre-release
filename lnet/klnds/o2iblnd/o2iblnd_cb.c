@@ -690,7 +690,7 @@ static int kiblnd_map_tx(struct lnet_ni *ni, struct kib_tx *tx,
 
 static int kiblnd_setup_rd_kiov(struct lnet_ni *ni, struct kib_tx *tx,
 				struct kib_rdma_desc *rd, int nkiov,
-				struct bio_vec *kiov, int offset, int nob)
+				const struct bio_vec *kiov, int offset, int nob)
 {
 	struct kib_net *net = ni->ni_data;
 	struct scatterlist *sg;
@@ -1647,15 +1647,15 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	unsigned int payload_offset = lntmsg->msg_offset;
 	unsigned int payload_nob = lntmsg->msg_len;
 	struct lnet_libmd *msg_md = lntmsg->msg_md;
-	bool gpu;
+	struct iov_iter from;
 	struct kib_msg *ibmsg;
 	struct kib_rdma_desc *rd;
 	struct kib_tx *tx;
+	bool gpu;
 	int nob;
 	int rc;
 
 	/* NB 'private' is different depending on what we're sending.... */
-
 	CDEBUG(D_NET, "sending %d bytes in %d frags to %s\n",
 	       payload_nob, payload_niov, libcfs_idstr(target));
 
@@ -1663,6 +1663,12 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 
 	/* Thread context */
 	LASSERT(!in_interrupt());
+
+	iov_iter_bvec(&from, WRITE,
+		      payload_kiov, payload_niov,
+		      payload_nob + payload_offset);
+
+	iov_iter_advance(&from, payload_offset);
 
 	tx = kiblnd_get_idle_tx(ni, &target->nid);
 	if (tx == NULL) {
@@ -1677,7 +1683,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	switch (type) {
 	default:
 		LBUG();
-		return (-EIO);
+		return -EIO;
 
 	case LNET_MSG_ACK:
 		LASSERT(payload_nob == 0);
@@ -1696,9 +1702,8 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		rd = &ibmsg->ibm_u.get.ibgm_rd;
 		tx->tx_gpu = gpu;
 		rc = kiblnd_setup_rd_kiov(ni, tx, rd,
-					  msg_md->md_niov,
-					  msg_md->md_kiov,
-					  0, msg_md->md_length);
+					  payload_niov, payload_kiov,
+					  payload_offset, payload_nob);
 		if (rc != 0) {
 			CERROR("Can't setup GET sink %s: rc = %d\n",
 			       libcfs_nidstr(&target->nid), rc);
@@ -1793,11 +1798,12 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 			wrq->wr.num_sge++;
 		}
 	} else {
-		lnet_copy_kiov2flat(IBLND_MSG_SIZE, ibmsg,
-				    offsetof(struct kib_msg,
-					     ibm_u.immediate.ibim_payload),
-				    payload_niov, payload_kiov,
-				    payload_offset, payload_nob);
+		rc = copy_from_iter(&ibmsg->ibm_u.immediate.ibim_payload,
+				    payload_nob, &from);
+		if (rc != payload_nob) {
+			kiblnd_tx_done(tx);
+			return -EFAULT;
+		}
 
 		nob = offsetof(struct kib_immediate_msg,
 			       ibim_payload[payload_nob]);
@@ -1889,19 +1895,19 @@ kiblnd_get_dev_prio(struct lnet_ni *ni, unsigned int dev_idx)
 
 int
 kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
-	    int delayed, unsigned int niov, struct bio_vec *kiov,
-	    unsigned int offset, unsigned int mlen, unsigned int rlen)
+	    int delayed, struct iov_iter *to, unsigned int rlen)
 {
 	struct kib_rx *rx = private;
 	struct kib_msg *rxmsg = rx->rx_msg;
 	struct kib_conn *conn = rx->rx_conn;
 	struct kib_tx *tx;
-	__u64 ibprm_cookie;
+	u64 ibprm_cookie;
 	int nob;
 	int post_credit = IBLND_POSTRX_PEER_CREDIT;
+	int wanted = iov_iter_count(to);
 	int rc = 0;
 
-	LASSERT(mlen <= rlen);
+	LASSERT(wanted <= rlen);
 	LASSERT(!in_interrupt());
 
 	switch (rxmsg->ibm_type) {
@@ -1922,16 +1928,19 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 			break;
 		}
 
-		lnet_copy_flat2kiov(niov, kiov, offset,
-				    IBLND_MSG_SIZE, rxmsg,
-				    offsetof(struct kib_msg,
-					     ibm_u.immediate.ibim_payload),
-				    mlen);
+		rc = copy_to_iter(&rxmsg->ibm_u.immediate.ibim_payload, wanted,
+				  to);
+		if (rc != wanted) {
+			rc = -EFAULT;
+			break;
+		}
+
+		rc = 0;
 		lnet_finalize(lntmsg, 0);
 		break;
 
 	case IBLND_MSG_PUT_REQ: {
-		struct kib_msg	*txmsg;
+		struct kib_msg *txmsg;
 		struct kib_rdma_desc *rd;
 		struct lnet_libmd *msg_md = NULL;
 
@@ -1939,7 +1948,8 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 			msg_md = lntmsg->msg_md;
 
 		ibprm_cookie = rxmsg->ibm_u.putreq.ibprm_cookie;
-		if (mlen == 0) {
+
+		if (!wanted) {
 			lnet_finalize(lntmsg, 0);
 			kiblnd_send_completion(rx->rx_conn, IBLND_MSG_PUT_NAK,
 					       0, ibprm_cookie);
@@ -1960,7 +1970,9 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 		txmsg = tx->tx_msg;
 		rd = &txmsg->ibm_u.putack.ibpam_rd;
 		rc = kiblnd_setup_rd_kiov(ni, tx, rd,
-					  niov, kiov, offset, mlen);
+					  to->nr_segs, to->bvec,
+					  to->iov_offset,
+					  wanted);
 		if (rc != 0) {
 			CERROR("Can't setup PUT sink for %s: rc = %d\n",
 			       libcfs_nidstr(&conn->ibc_peer->ibp_nid), rc);

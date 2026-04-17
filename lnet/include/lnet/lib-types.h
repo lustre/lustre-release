@@ -306,15 +306,14 @@ struct lnet_lnd {
 	int (*lnd_send)(struct lnet_ni *ni, void *private,
 			struct lnet_msg *msg);
 
-	/* Start receiving 'mlen' bytes of payload data, skipping the following
-	 * 'rlen' - 'mlen' bytes. 'private' is the 'private' passed to
+	/* Start receiving @io bytes of payload data, skipping the following
+	 * 'rlen - @io' bytes. 'private' is the 'private' passed to
 	 * lnet_parse().  Return non-zero for immedaite failure, otherwise
 	 * complete later with lnet_finalize().  This also gives back a receive
-	 * credit if the LND does flow control. */
+	 * credit if the LND does flow control.
+	 */
 	int (*lnd_recv)(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
-			int delayed, unsigned int niov,
-			struct bio_vec *kiov,
-			unsigned int offset, unsigned int mlen, unsigned int rlen);
+			int delayed, struct iov_iter *to, unsigned int rlen);
 
 	/* lnet_parse() has had to delay processing of this message
 	 * (e.g. waiting for a forwarding buffer or send credits).  Give the

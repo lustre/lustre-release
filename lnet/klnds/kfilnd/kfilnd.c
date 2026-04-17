@@ -90,6 +90,12 @@ static int kfilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *msg)
 	bool tn_key = false;
 	lnet_nid_t tgt_nid4;
 	bool gpu = lnet_md_is_gpu(msg->msg_md);
+	struct iov_iter from;
+
+	iov_iter_bvec(&from, WRITE,
+		      msg->msg_kiov, msg->msg_niov,
+		      msg->msg_len + msg->msg_offset);
+	iov_iter_advance(&from, msg->msg_offset);
 
 	switch (type) {
 	default:
@@ -162,12 +168,10 @@ static int kfilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *msg)
 		       tn, msg->msg_kiov, msg->msg_niov,
 		       msg->msg_offset, msg->msg_len);
 
-		lnet_copy_kiov2flat(KFILND_IMMEDIATE_MSG_SIZE,
-				    tn->tn_tx_msg.msg,
-				    offsetof(struct kfilnd_msg,
-					     proto.immed.payload),
-				    msg->msg_niov, msg->msg_kiov,
-				    msg->msg_offset, msg->msg_len);
+		rc = copy_from_iter(&tn->tn_tx_msg.msg->proto.immed.payload,
+				    msg->msg_len, &from);
+		if (rc != msg->msg_len)
+			return -EFAULT;
 
 		tn->tn_nob = msg->msg_len;
 		event = TN_EVENT_INIT_IMMEDIATE;
@@ -236,19 +240,17 @@ static int kfilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *msg)
 }
 
 static int kfilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
-		       int delayed, unsigned int niov,
-		       struct bio_vec *kiov,
-		       unsigned int offset, unsigned int mlen,
-		       unsigned int rlen)
+		       int delayed, struct iov_iter *to, unsigned int rlen)
 {
 	struct kfilnd_transaction *tn = private;
 	struct kfilnd_msg *rxmsg = tn->tn_rx_msg.msg;
+	int wanted = iov_iter_count(to);
 	int nob;
 	int rc = 0;
 	int status = 0;
 	enum tn_events event;
 
-	if (mlen > rlen)
+	if (wanted > rlen)
 		return -EINVAL;
 
 	/* Transaction must be in receive state */
@@ -272,17 +274,18 @@ static int kfilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 		}
 		tn->tn_nob = nob;
 
-		lnet_copy_flat2kiov(niov, kiov, offset,
-				    KFILND_IMMEDIATE_MSG_SIZE, rxmsg,
-				    offsetof(struct kfilnd_msg,
-					     proto.immed.payload),
-				    mlen);
+		rc = copy_to_iter(&rxmsg->proto.immed.payload, wanted, to);
+		if (rc != wanted) {
+			rc = -EFAULT;
+			break;
+		}
 
+		rc = 0;
 		kfilnd_tn_event_handler(tn, TN_EVENT_RX_OK, 0);
 		return 0;
 
 	case KFILND_MSG_BULK_PUT_REQ:
-		if (mlen == 0) {
+		if (wanted == 0) {
 			event = TN_EVENT_SKIP_TAG_RMA;
 		} else {
 			struct lnet_libmd *msg_md = NULL;
@@ -294,8 +297,10 @@ static int kfilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 
 			/* Post the buffer given us as a sink  */
 			tn->sink_buffer = true;
-			rc = kfilnd_tn_set_buf(ni, tn, kiov, niov, offset,
-					       mlen);
+			rc = kfilnd_tn_set_buf(ni, tn,
+					       (struct bio_vec *)to->bvec,
+					       to->nr_segs, to->iov_offset,
+					       wanted);
 			if (rc) {
 				CERROR("Failed to setup PUT sink buffer rc %d\n", rc);
 				kfilnd_tn_free(tn);

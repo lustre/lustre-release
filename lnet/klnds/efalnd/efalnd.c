@@ -986,22 +986,29 @@ kefalnd_fill_putr_msg(struct kefa_conn *conn, struct kefa_tx *tx,
 	msg->msg_v2.u.putr_req.rdma_desc = tx->rdma_desc;
 }
 
-static inline void
+static inline int
 kefalnd_fill_imm_msg(struct kefa_conn *conn, struct lnet_msg *lntmsg,
 		     struct kefa_tx *tx, struct lnet_hdr *hdr)
 {
 	struct kefa_msg *msg = tx->msg;
-	int body_nob;
+	struct iov_iter from;
+	int body_nob, rc;
 
 	body_nob = offsetof(struct kefa_immediate_msg_v2,
 			    payload[lntmsg->msg_len]);
 	kefalnd_init_tx_protocol_msg(tx, conn, EFALND_MSG_IMMEDIATE, body_nob,
 				     conn->proto_ver);
 	lnet_hdr_to_nid16(hdr, &msg->msg_v2.u.immediate.hdr);
-	lnet_copy_kiov2flat(EFALND_MSG_SIZE, msg,
-			    offsetof(struct kefa_msg, msg_v2.u.immediate.payload),
-			    lntmsg->msg_niov, lntmsg->msg_kiov,
-			    lntmsg->msg_offset, lntmsg->msg_len);
+
+	iov_iter_bvec(&from, WRITE,
+		      lntmsg->msg_kiov, lntmsg->msg_niov,
+		      lntmsg->msg_len + lntmsg->msg_offset);
+	iov_iter_advance(&from, lntmsg->msg_offset);
+
+	rc = copy_from_iter(&msg->msg_v2.u.immediate.payload,
+			    lntmsg->msg_len, &from);
+
+	return rc != lntmsg->msg_len ? -EFAULT : 0;
 }
 
 static int
@@ -1124,7 +1131,11 @@ kefalnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	}
 
 	/* SEND based (non-RDMA flow) */
-	kefalnd_fill_imm_msg(conn, lntmsg, tx, hdr);
+	rc = kefalnd_fill_imm_msg(conn, lntmsg, tx, hdr);
+	if (rc < 0) {
+		kefalnd_tx_done(tx);
+		return rc;
+	}
 
 	/* finalise lntmsg on completion */
 	tx->lntmsg[0] = lntmsg;
@@ -1390,12 +1401,11 @@ kefalnd_free_rx(struct kefa_rx *rx)
 
 static int
 kefalnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
-	    int delayed, unsigned int niov, struct bio_vec *kiov,
-	    unsigned int offset, unsigned int mlen, unsigned int rlen)
+	     int delayed, struct iov_iter *to, unsigned int rlen)
 {
 	struct kefa_ni *efa_ni = ni->ni_data;
+	int wanted = iov_iter_count(to);
 	struct kefa_rx *rx = private;
-	unsigned int imm_offset;
 	struct kefa_conn *conn;
 	struct kefa_msg *msg;
 	struct lnet_nid *nid;
@@ -1422,7 +1432,6 @@ kefalnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 		break;
 
 	case EFALND_MSG_IMMEDIATE:
-		imm_offset = offsetof(struct kefa_msg, msg_v2.u.immediate.payload);
 		imm_nob = offsetof(struct kefa_msg, msg_v2.u.immediate.payload[rlen]);
 		if (imm_nob > rx->rx_nob) {
 			EFA_DEV_ERR(efa_ni->efa_dev,
@@ -1433,14 +1442,20 @@ kefalnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 			break;
 		}
 
-		lnet_copy_flat2kiov(niov, kiov, offset, EFALND_MSG_SIZE, msg,
-				    imm_offset, mlen);
+		rc = copy_to_iter(&msg->msg_v2.u.immediate.payload, wanted,
+				  to);
+		if (rc != wanted) {
+			rc = -EFAULT;
+			break;
+		}
+
 		lnet_finalize(lntmsg, 0);
 		break;
 
 	case EFALND_MSG_PUTR_REQ:
 		rc = kefalnd_handle_putr_req_v2(efa_ni, conn, lntmsg,
-						&msg->msg_v2.u.putr_req, mlen);
+						&msg->msg_v2.u.putr_req,
+						wanted);
 		break;
 
 	case EFALND_MSG_GETR_REQ:

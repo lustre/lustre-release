@@ -49,58 +49,43 @@ ksocknal_lib_zc_capable(struct ksock_conn *conn)
 }
 
 int
-ksocknal_lib_send_hdr(struct ksock_conn *conn, struct ksock_tx *tx,
-		      struct kvec *scratchiov)
+ksocknal_lib_send_hdr(struct ksock_conn *conn, struct ksock_tx *tx)
 {
-	struct socket  *sock = conn->ksnc_sock;
-	int		nob = 0;
-	int		rc;
+	struct msghdr msg = { .msg_flags = MSG_DONTWAIT };
+	struct socket *sock = conn->ksnc_sock;
+	int nob = 0;
 
-	if (*ksocknal_tunables.ksnd_enable_csum	       && /* checksum enabled */
+	if (*ksocknal_tunables.ksnd_enable_csum	&&	  /* checksum enabled */
 	    conn->ksnc_proto == &ksocknal_protocol_v2x && /* V2.x connection  */
 	    tx->tx_nob == tx->tx_resid		       && /* frist sending    */
 	    tx->tx_msg.ksm_csum == 0)			  /* not checksummed  */
 		ksocknal_lib_csum_tx(tx);
 
-	/* NB we can't trust socket ops to either consume our iovs
-	 * or leave them alone.
-	 */
-	{
-#if SOCKNAL_SINGLE_FRAG_TX
-		struct kvec scratch;
-		scratchiov = &scratch;
-		unsigned int niov = 1;
-#else
-		unsigned int niov = tx->tx_niov;
-#endif
-		struct msghdr msg = { .msg_flags = MSG_DONTWAIT };
+	if (tx->tx_niov)
+		nob += tx->tx_hdr.iov_len;
 
-		if (tx->tx_niov) {
-			scratchiov[0] = tx->tx_hdr;
-			nob += scratchiov[0].iov_len;
-		}
+	if (!list_empty(&conn->ksnc_tx_queue) ||
+	    nob < tx->tx_resid)
+		msg.msg_flags |= MSG_MORE;
 
-		if (!list_empty(&conn->ksnc_tx_queue) ||
-		    nob < tx->tx_resid)
-			msg.msg_flags |= MSG_MORE;
+	iov_iter_kvec(&msg.msg_iter, WRITE,
+		      &tx->tx_hdr, tx->tx_niov, nob);
 
-		rc = kernel_sendmsg(sock, &msg, scratchiov, niov, nob);
-	}
-	return rc;
+	return sock_sendmsg(sock, &msg);
 }
 
 static int
 ksocknal_lib_sendpage(struct socket *sock, struct bio_vec *kiov,
 		      int nkiov, int msgflg)
 {
-#ifdef MSG_SPLICE_PAGES
+#ifdef MSG_SPLICE_PAGES /* added to kernel 6.4.0-rc2 */
 	struct msghdr msg = {.msg_flags = msgflg | MSG_SPLICE_PAGES};
 
 	iov_iter_bvec(&msg.msg_iter, ITER_SOURCE, kiov, 1, kiov->bv_len);
 
 	return sock_sendmsg(sock, &msg);
 #else
-	struct sock   *sk = sock->sk;
+	struct sock *sk = sock->sk;
 	struct page *page = kiov->bv_page;
 	int offset = kiov->bv_offset;
 	int fragsize = kiov->bv_len;
@@ -110,8 +95,7 @@ ksocknal_lib_sendpage(struct socket *sock, struct bio_vec *kiov,
 }
 
 int
-ksocknal_lib_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx,
-		       struct kvec *scratchiov)
+ksocknal_lib_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx)
 {
 	struct socket *sock = conn->ksnc_sock;
 	struct bio_vec *kiov = tx->tx_kiov;
@@ -119,7 +103,7 @@ ksocknal_lib_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx,
 	int nob;
 
 	/* Not NOOP message */
-	LASSERT(tx->tx_lnetmsg != NULL);
+	LASSERT(tx->tx_lnetmsg);
 
 	/* can't trust socket ops to consume our iovs or leave them alone */
 	if (tx->tx_msg.ksm_zc_cookies[0] != 0) {
@@ -135,33 +119,19 @@ ksocknal_lib_send_kiov(struct ksock_conn *conn, struct ksock_tx *tx,
 
 		rc = ksocknal_lib_sendpage(sock, kiov, tx->tx_nkiov, msgflg);
 	} else {
-#if SOCKNAL_SINGLE_FRAG_TX || !SOCKNAL_RISK_KMAP_DEADLOCK
-		struct kvec scratch;
-		scratchiov = &scratch;
-		unsigned int niov = 1;
-#else
-#ifdef CONFIG_HIGHMEM
-#warning "XXX risk of kmap deadlock on multiple frags..."
-#endif
-		unsigned int  niov = tx->tx_nkiov;
-#endif
 		struct msghdr msg = { .msg_flags = MSG_DONTWAIT };
 		int i;
 
-		for (nob = i = 0; i < niov; i++) {
-			scratchiov[i].iov_base = kmap(kiov[i].bv_page) +
-						 kiov[i].bv_offset;
-			nob += scratchiov[i].iov_len = kiov[i].bv_len;
-		}
+		for (nob = i = 0; i < tx->tx_nkiov; i++)
+			nob += kiov[i].bv_len;
 
 		if (!list_empty(&conn->ksnc_tx_queue) ||
 		    nob < tx->tx_resid)
 			msg.msg_flags |= MSG_MORE;
 
-		rc = kernel_sendmsg(sock, &msg, scratchiov, niov, nob);
-
-		for (i = 0; i < niov; i++)
-			kunmap(kiov[i].bv_page);
+		iov_iter_bvec(&msg.msg_iter, WRITE,
+			      kiov, tx->tx_nkiov, nob);
+		rc = sock_sendmsg(sock, &msg);
 	}
 	return rc;
 }
@@ -178,189 +148,96 @@ ksocknal_lib_eager_ack(struct ksock_conn *conn)
 	tcp_sock_set_quickack(sock->sk, 1);
 }
 
-int
-ksocknal_lib_recv_iov(struct ksock_conn *conn, struct kvec *scratchiov)
+static int lustre_csum(struct kvec *v, void *context)
 {
-#if SOCKNAL_SINGLE_FRAG_RX
-	struct kvec  scratch;
-	scratchiov = &scratch;
-	unsigned int niov = 1;
-#else
-	unsigned int niov = conn->ksnc_rx_niov;
-#endif
-	struct kvec *iov = conn->ksnc_rx_iov;
-	struct msghdr msg = {
-		.msg_flags = 0
-	};
-	int nob;
-	int i;
-	int rc;
-	int fragnob;
-	int sum;
-	__u32 saved_csum;
+	struct ksock_conn *conn = context;
 
-	/* NB we can't trust socket ops to either consume our iovs
-	 * or leave them alone.
-	 */
-	LASSERT(niov > 0);
+	conn->ksnc_rx_csum = crc32_le(conn->ksnc_rx_csum,
+				      v->iov_base, v->iov_len);
+	return 0;
+}
 
-	for (nob = i = 0; i < niov; i++) {
-		scratchiov[i] = iov[i];
-		nob += scratchiov[i].iov_len;
-	}
-	LASSERT(nob <= conn->ksnc_rx_nob_wanted);
+static int ksocknal_iter_for_each_range(struct iov_iter *i, size_t bytes,
+					int (*f)(struct kvec *vec,
+						 void *context),
+					void *context)
+{
+	size_t skip = i->iov_offset;
+	int err = -EINVAL;
+	struct kvec w;
 
-	rc = kernel_recvmsg(conn->ksnc_sock, &msg, scratchiov, niov, nob,
-			    MSG_DONTWAIT);
+	if (!bytes)
+		return 0;
 
-	saved_csum = 0;
-	if (conn->ksnc_proto == &ksocknal_protocol_v2x) {
-		saved_csum = conn->ksnc_msg.ksm_csum;
-		conn->ksnc_msg.ksm_csum = 0;
-	}
+	if (iov_iter_type(i) == ITER_BVEC) {
+		struct bvec_iter start = {
+			.bi_size	= bytes,
+			.bi_bvec_done	= skip,
+			.bi_idx = 0,
+		};
+		struct bvec_iter bi;
+		struct bio_vec v;
 
-	if (saved_csum != 0) {
-		/* accumulate checksum */
-		for (i = 0, sum = rc; sum > 0; i++, sum -= fragnob) {
-			LASSERT(i < niov);
+		for_each_bvec(v, i->bvec, bi, start) {
+			if (!v.bv_len)
+				continue;
 
-			fragnob = iov[i].iov_len;
-			if (fragnob > sum)
-				fragnob = sum;
-
-			conn->ksnc_rx_csum = ksocknal_csum(conn->ksnc_rx_csum,
-							   iov[i].iov_base,
-							   fragnob);
+			w.iov_base = kmap(v.bv_page) + v.bv_offset;
+			w.iov_len = v.bv_len;
+			err = f(&w, context);
+			kunmap(v.bv_page);
 		}
-		conn->ksnc_msg.ksm_csum = saved_csum;
+	} else if (iov_iter_type(i) == ITER_KVEC) {
+		const struct kvec *kvec = i->kvec;
+		size_t wanted = bytes;
+		struct kvec v;
+
+		v.iov_len = min(bytes, kvec->iov_len - skip);
+		if (likely(v.iov_len)) {
+			v.iov_base = kvec->iov_base + skip;
+			err = f(&v, context);
+			skip += v.iov_len;
+			bytes -= v.iov_len;
+		}
+		while (unlikely(bytes)) {
+			kvec++;
+			v.iov_len = min(bytes, kvec->iov_len);
+			if (unlikely(!v.iov_len))
+				continue;
+			v.iov_base = kvec->iov_base;
+			err = f(&v, context);
+			skip = v.iov_len;
+			bytes -= v.iov_len;
+		}
+		bytes = wanted;
 	}
-
-	return rc;
-}
-
-static void
-ksocknal_lib_kiov_vunmap(void *addr)
-{
-	if (addr == NULL)
-		return;
-
-	vunmap(addr);
-}
-
-static void *
-ksocknal_lib_kiov_vmap(struct bio_vec *kiov, int niov,
-		       struct kvec *iov, struct page **pages)
-{
-	void *addr;
-	int nob;
-	int i;
-
-	if (!*ksocknal_tunables.ksnd_zc_recv || pages == NULL)
-		return NULL;
-
-	LASSERT(niov <= LNET_MAX_IOV);
-
-	if (niov < 2 ||
-	    niov < *ksocknal_tunables.ksnd_zc_recv_min_nfrags)
-		return NULL;
-
-	for (nob = i = 0; i < niov; i++) {
-		if ((kiov[i].bv_offset != 0 && i > 0) ||
-		    (kiov[i].bv_offset + kiov[i].bv_len !=
-		     PAGE_SIZE && i < niov - 1))
-			return NULL;
-
-		pages[i] = kiov[i].bv_page;
-		nob += kiov[i].bv_len;
-	}
-
-	addr = vmap(pages, niov, VM_MAP, PAGE_KERNEL);
-	if (addr == NULL)
-		return NULL;
-
-	iov->iov_base = addr + kiov[0].bv_offset;
-	iov->iov_len = nob;
-
-	return addr;
+	return err;
 }
 
 int
-ksocknal_lib_recv_kiov(struct ksock_conn *conn, struct page **pages,
-		       struct kvec *scratchiov)
+ksocknal_lib_recv(struct ksock_conn *conn)
 {
-#if SOCKNAL_SINGLE_FRAG_RX || !SOCKNAL_RISK_KMAP_DEADLOCK
-	struct kvec   scratch;
-	scratchiov = &scratch;
-	pages      = NULL;
-	unsigned int   niov       = 1;
-#else
-#ifdef CONFIG_HIGHMEM
-#warning "XXX risk of kmap deadlock on multiple frags..."
-#endif
-	unsigned int   niov       = conn->ksnc_rx_nkiov;
-#endif
-	struct bio_vec *kiov = conn->ksnc_rx_kiov;
-	struct msghdr msg = {
-		.msg_flags      = 0
-	};
-	int nob;
-	int i;
+	struct msghdr msg = { .msg_iter = conn->ksnc_rx_to };
+	u32 saved_csum;
 	int rc;
-	void *base;
-	void *addr;
-	int sum;
-	int fragnob;
-	int n;
 
-	/* NB we can't trust socket ops to either consume our iovs
-	 * or leave them alone.
-	 */
-	addr = ksocknal_lib_kiov_vmap(kiov, niov, scratchiov, pages);
-	if (addr != NULL) {
-		nob = scratchiov[0].iov_len;
-		n = 1;
+	rc = sock_recvmsg(conn->ksnc_sock, &msg, MSG_DONTWAIT);
+	if (rc <= 0)
+		return rc;
 
-	} else {
-		for (nob = i = 0; i < niov; i++) {
-			nob += scratchiov[i].iov_len = kiov[i].bv_len;
-			scratchiov[i].iov_base = kmap(kiov[i].bv_page) +
-						 kiov[i].bv_offset;
-		}
-		n = niov;
-	}
+	saved_csum = conn->ksnc_msg.ksm_csum;
+	if (!saved_csum)
+		return rc;
 
-	LASSERT(nob <= conn->ksnc_rx_nob_wanted);
+	/* header is included only in V2 - V3 checksums only the bulk data */
+	if (iov_iter_type(&conn->ksnc_rx_to) != ITER_BVEC &&
+	    conn->ksnc_proto != &ksocknal_protocol_v2x)
+		return rc;
 
-	rc = kernel_recvmsg(conn->ksnc_sock, &msg, scratchiov, n, nob,
-			    MSG_DONTWAIT);
-
-	if (conn->ksnc_msg.ksm_csum != 0) {
-		for (i = 0, sum = rc; sum > 0; i++, sum -= fragnob) {
-			LASSERT(i < niov);
-
-			/* Dang! have to kmap again because I have nowhere to
-			 * stash the mapped address.  But by doing it while the
-			 * page is still mapped, the kernel just bumps the map
-			 * count and returns me the address it stashed.
-			 */
-			base = kmap(kiov[i].bv_page) + kiov[i].bv_offset;
-			fragnob = kiov[i].bv_len;
-			if (fragnob > sum)
-				fragnob = sum;
-
-			conn->ksnc_rx_csum = ksocknal_csum(conn->ksnc_rx_csum,
-							   base, fragnob);
-
-			kunmap(kiov[i].bv_page);
-		}
-	}
-
-	if (addr != NULL) {
-		ksocknal_lib_kiov_vunmap(addr);
-	} else {
-		for (i = 0; i < niov; i++)
-			kunmap(kiov[i].bv_page);
-	}
+	/* accumulate checksum */
+	conn->ksnc_msg.ksm_csum = 0;
+	ksocknal_iter_for_each_range(&conn->ksnc_rx_to, rc, lustre_csum, conn);
+	conn->ksnc_msg.ksm_csum = saved_csum;
 
 	return rc;
 }

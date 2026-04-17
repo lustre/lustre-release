@@ -1107,15 +1107,8 @@ int kiblnd_post_rx(struct kib_rx *rx, int credit);
 
 int kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg);
 int kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
-		int delayed, unsigned int niov,
-		struct bio_vec *kiov, unsigned int offset, unsigned int mlen,
-		unsigned int rlen);
+		int delayed, struct iov_iter *to, unsigned int rlen);
 unsigned int kiblnd_get_dev_prio(struct lnet_ni *ni, unsigned int dev_idx);
-
-#if LINUX_VERSION_CODE < KERNEL_VERSION(3, 11, 0)
-#undef netdev_notifier_info_to_dev
-#define netdev_notifier_info_to_dev(ndev) ndev
-#endif
 
 #define kiblnd_dump_conn_dbg(conn)			\
 ({							\

@@ -1540,11 +1540,11 @@ ksocknal_destroy_conn(struct ksock_conn *conn)
 	case SOCKNAL_RX_LNET_PAYLOAD:
 		last_rcv = conn->ksnc_rx_deadline -
 			   ksocknal_timeout();
-		CERROR("Completing partial receive from %s[%d], ip %pIScp, with error, wanted: %d, left: %d, last alive is %lld secs ago\n",
+		CERROR("Completing partial receive from %s[%d], ip %pIScp, with error, wanted: %zd, left: %d, last alive is %lld secs ago\n",
 		       libcfs_idstr(&conn->ksnc_peer->ksnp_id),
 		       conn->ksnc_type,
 		       &conn->ksnc_peeraddr,
-		       conn->ksnc_rx_nob_wanted, conn->ksnc_rx_nob_left,
+		       iov_iter_count(&conn->ksnc_rx_to), conn->ksnc_rx_nob_left,
 		       ktime_get_seconds() - last_rcv);
 		if (conn->ksnc_lnet_msg)
 			conn->ksnc_lnet_msg->msg_health_status =

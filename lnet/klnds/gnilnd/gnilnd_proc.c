@@ -31,6 +31,7 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 {
 	struct bio_vec *src, *dest;
 	struct timespec begin, end, diff;
+	struct iov_iter to;
 	int niov;
 	int rc = 0;
 	int i = 0, j = 0, n;
@@ -64,6 +65,8 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 			GOTO(unwind, rc = -ENOMEM);
 		}
 	}
+	iov_iter_bvec(&to, WRITE, dest, GNILND_MAX_IOV,
+		      GNILND_MAX_IOV * PAGE_SIZE);
 
 	/* add extra 2 pages - one for offset of src, 2nd to allow dest offset */
 	niov = (nob / PAGE_SIZE) + 2;
@@ -96,12 +99,13 @@ _kgnilnd_proc_run_cksum_test(int caseno, int nloops, int nob)
 	src[0].bv_len = PAGE_SIZE - src[0].bv_offset;
 	dest[0].bv_len = PAGE_SIZE - dest[0].bv_offset;
 
+	iov_iter_advance(&to, dest[0].bv_offset);
 	for (i = 0; i < niov; i++) {
 		memset(page_address(src[i].bv_page) + src[i].bv_offset,
 		       0xf0 + i, src[i].bv_len);
 	}
 
-	lnet_copy_kiov2kiov(niov, dest, 0, niov, src, 0, nob);
+	lnet_copy_kiov2iter(&to, GNILND_MAX_IOV, src, 0, nob);
 
 	getnstimeofday(&begin);
 
