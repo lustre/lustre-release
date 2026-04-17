@@ -201,6 +201,7 @@ static struct lu_device *osc_device_alloc(const struct lu_env *env,
 	obd = class_name2obd(lustre_cfg_string(cfg, 0));
 	LASSERT(obd != NULL);
 	obd->obd_lu_dev = d;
+	d->ld_obd = obd;
 	rc = osc_setup(obd, cfg);
 	if (rc) {
 		osc_device_free(env, d);

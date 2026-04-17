@@ -1736,6 +1736,7 @@ static struct lu_device *mdc_device_alloc(const struct lu_env *env,
 	if (obd == NULL)
 		RETURN(ERR_PTR(-ENODEV));
 	obd->obd_lu_dev = d;
+	d->ld_obd = obd;
 
 	rc = mdc_setup(obd, cfg);
 	if (rc < 0) {
