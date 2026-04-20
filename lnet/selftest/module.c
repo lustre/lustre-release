@@ -84,7 +84,7 @@ static int __init
 lnet_selftest_init(void)
 {
 	int nscheds;
-	int rc = -ENOMEM;
+	int rc;
 	int i;
 
 	/* This assertion checks that struct sizes do not drift
@@ -99,7 +99,9 @@ lnet_selftest_init(void)
 
 	lst_serial_wq = alloc_ordered_workqueue("lst_s", 0);
 	if (!lst_serial_wq) {
-		CERROR("Failed to create serial WI scheduler for LST\n");
+		rc = -ENOMEM;
+		CERROR("Failed creating serial WI scheduler for LST: rc = %d\n",
+		       rc);
 		return rc;
 	}
 	lst_init_step = LST_INIT_WI_SERIAL;
