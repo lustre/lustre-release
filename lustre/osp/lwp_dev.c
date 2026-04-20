@@ -136,14 +136,14 @@ static int lwp_setup(const struct lu_env *env, struct lwp_device *lwp,
 
 	imp = lwp->lpd_obd->u.cli.cl_import;
 	rc = ptlrpc_init_import(imp);
+	if (rc)
+		client_obd_cleanup(lwp->lpd_obd);
 out:
 	OBD_FREE_PTR(bufs);
 	OBD_FREE(target, len);
 	OBD_FREE(server_uuid, len);
 	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount,
 				      lcfg->lcfg_buflens));
-	if (rc)
-		client_obd_cleanup(lwp->lpd_obd);
 
 	RETURN(rc);
 }
