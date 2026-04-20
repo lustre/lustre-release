@@ -55,6 +55,25 @@ int lustre_uuid_to_peer(const char *uuid, struct lnet_nid *peer_nid, int index)
 }
 EXPORT_SYMBOL(lustre_uuid_to_peer);
 
+int class_nidstr2uuid(const char *nidstr, char *uuid, size_t uuidlen)
+{
+	if (strlen(nidstr) >= uuidlen)
+		return -EOVERFLOW;
+
+	snprintf(uuid, uuidlen, "%s", nidstr);
+	return 0;
+}
+EXPORT_SYMBOL(class_nidstr2uuid);
+
+int class_nid2uuid(const struct lnet_nid *nid, char *uuid, size_t uuidlen)
+{
+	char nidstr[LNET_NIDSTR_SIZE];
+
+	libcfs_nidstr_r(nid, nidstr, sizeof(nidstr));
+	return class_nidstr2uuid(nidstr, uuid, uuidlen);
+}
+EXPORT_SYMBOL(class_nid2uuid);
+
 /* Add a nid to a niduuid.  Multiple nids can be added to a single uuid;
    LNET will choose the best one. */
 int class_add_uuid(const char *uuid, struct lnet_nid *nid)

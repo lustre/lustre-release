@@ -156,8 +156,17 @@ static bool lustre_add_mgc_failnodes(struct obd_device *obd, char *ptr)
 			large_nids |= !nid_is_nid4(&nid);
 
 			/* New failover node */
-			if (!count) /* construct node UUID from primary NID */
-				libcfs_nidstr_r(&nid, node, LNET_NIDSTR_SIZE);
+			if (!count) {
+				/* construct node UUID from primary NID */
+				rc = class_nid2uuid(&nid, node, sizeof(node));
+				if (rc) {
+					libcfs_nidstr_r(&nid, node,
+							sizeof(node));
+					CWARN("%s: failover NID %s yields invalid UUID, rc = %d\n",
+					      obd->obd_name, node, rc);
+					break;
+				}
+			}
 
 			rc = class_add_uuid(node, &nid);
 			if (rc) {

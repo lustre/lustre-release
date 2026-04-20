@@ -1255,15 +1255,13 @@ static int mgc_create_new_conn(struct obd_import *imp, struct lnet_nid *nidlist,
 	while (i < nid_count) {
 		libcfs_nidstr_r(&nidlist[i], prim_nid, sizeof(prim_nid));
 
-		if (strlen(prim_nid) >= UUID_MAX) {
-			rc = -E2BIG;
-			CDEBUG(D_MGC, "%s: skipping too big NID '%s'\n",
-			      imp->imp_obd->obd_name, prim_nid);
+		rc = class_nid2uuid(&nidlist[i], node_uuid.uuid, sizeof(node_uuid.uuid));
+		if (rc) {
+			CDEBUG(D_MGC, "%s: skipping too big NID '%s': rc = %d\n",
+			      imp->imp_obd->obd_name, prim_nid, rc);
 			i++;
 			continue;
 		}
-
-		obd_str2uuid(&node_uuid, prim_nid);
 		rc = client_import_dyn_add_conn(imp, &node_uuid,
 						&nidlist[i], 1);
 		if (!rc)

@@ -2032,6 +2032,8 @@ int lustre_check_exclusion(struct super_block *sb, char *svname);
 /* lustre_peer.c    */
 int lustre_uuid_to_peer(const char *uuid, struct lnet_nid *peer_nid,
 			int index);
+int class_nidstr2uuid(const char *nidstr, char *uuid, size_t uuidlen);
+int class_nid2uuid(const struct lnet_nid *nid, char *uuid, size_t uuidlen);
 int class_add_uuid(const char *uuid, struct lnet_nid *nid);
 int class_del_uuid (const char *uuid);
 int class_add_nids_to_uuid(struct obd_uuid *uuid, struct lnet_nid *nidlist,
