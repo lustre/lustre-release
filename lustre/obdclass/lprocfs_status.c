@@ -1578,7 +1578,7 @@ struct lprocfs_stats *lprocfs_stats_dup(struct lprocfs_stats *stats)
 	int i;
 
 	s = lprocfs_stats_alloc(stats->ls_num, stats->ls_flags);
-	if (IS_ERR(s))
+	if (!s)
 		return s;
 
 	for (i = 0; i < stats->ls_num; i++) {
@@ -1586,8 +1586,8 @@ struct lprocfs_stats *lprocfs_stats_dup(struct lprocfs_stats *stats)
 
 		header = &stats->ls_cnt_header[i];
 		s->ls_cnt_header[i].lc_config = header->lc_config;
-		s->ls_cnt_header[i].lc_name = header->lc_name;
-		s->ls_cnt_header[i].lc_units = header->lc_units;
+		strcpy(s->ls_cnt_header[i].lc_name, header->lc_name);
+		strcpy(s->ls_cnt_header[i].lc_units, header->lc_units);
 	}
 
 	return s;
@@ -1897,8 +1897,8 @@ int lprocfs_stats_register(struct proc_dir_entry *root, const char *name,
 EXPORT_SYMBOL(lprocfs_stats_register);
 #endif /* CONFIG_PROC_FS */
 
-static const char *lprocfs_counter_config_units(const char *name,
-					 enum lprocfs_counter_config config)
+static
+const char *lprocfs_counter_config_units(enum lprocfs_counter_config config)
 {
 	const char *units;
 
@@ -1922,9 +1922,9 @@ static const char *lprocfs_counter_config_units(const char *name,
 	return units;
 }
 
-void lprocfs_counter_init_units(struct lprocfs_stats *stats, int index,
-				enum lprocfs_counter_config config,
-				const char *name, const char *units)
+void __lprocfs_counter_init_units(struct lprocfs_stats *stats, int index,
+				  enum lprocfs_counter_config config,
+				  const char *name, const char *units)
 {
 	struct lprocfs_counter_header *header;
 	struct lprocfs_counter *percpu_cntr;
@@ -1934,12 +1934,19 @@ void lprocfs_counter_init_units(struct lprocfs_stats *stats, int index,
 
 	LASSERT(stats != NULL);
 
+	if (!units || !units[0])
+		units = lprocfs_counter_config_units(config);
+
 	header = &stats->ls_cnt_header[index];
 	LASSERTF(header != NULL, "Failed to allocate stats header:[%d]%s/%s\n",
 		 index, name, units);
 	header->lc_config = config;
-	header->lc_name = name;
-	header->lc_units = units;
+	if (name &&
+	    strscpy(header->lc_name, name, sizeof(header->lc_name)) < 0)
+		CWARN("%s: stat name '%s' too long\n", stats->ls_source, name);
+	if (units &&
+	    strscpy(header->lc_units, units, sizeof(header->lc_units)) < 0)
+		CWARN("%s: stat unit '%s' too long\n", stats->ls_source, units);
 
 	if (config & LPROCFS_CNTR_HISTOGRAM) {
 		CFS_ALLOC_PTR(stats->ls_cnt_header[index].lc_hist);
@@ -1955,24 +1962,15 @@ void lprocfs_counter_init_units(struct lprocfs_stats *stats, int index,
 		if (!stats->ls_percpu[i])
 			continue;
 		percpu_cntr = lprocfs_stats_counter_get(stats, i, index);
-		percpu_cntr->lc_count		= 0;
-		percpu_cntr->lc_min		= LC_MIN_INIT;
-		percpu_cntr->lc_max		= 0;
-		percpu_cntr->lc_sumsquare	= 0;
-		percpu_cntr->lc_sum		= 0;
+		percpu_cntr->lc_count = 0;
+		percpu_cntr->lc_min = LC_MIN_INIT;
+		percpu_cntr->lc_max = 0;
+		percpu_cntr->lc_sumsquare = 0;
+		percpu_cntr->lc_sum = 0;
 	}
 	lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU, &flags);
 }
-EXPORT_SYMBOL(lprocfs_counter_init_units);
-
-void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
-			  enum lprocfs_counter_config config,
-			  const char *name)
-{
-	lprocfs_counter_init_units(stats, index, config, name,
-				   lprocfs_counter_config_units(name, config));
-}
-EXPORT_SYMBOL(lprocfs_counter_init);
+EXPORT_SYMBOL(__lprocfs_counter_init_units);
 
 static const char * const mps_stats[] = {
 	[LPROC_MD_CLOSE]		= "close",
@@ -2018,19 +2016,22 @@ int lprocfs_alloc_md_stats(struct obd_device *obd,
 		return -ENOMEM;
 
 	for (i = 0; i < ARRAY_SIZE(mps_stats); i++) {
-		lprocfs_counter_init(stats, i, LPROCFS_TYPE_REQS,
-				     mps_stats[i]);
-		LASSERTF(stats->ls_cnt_header[i].lc_name,
-			 "Missing md_stat initializer md_op operation at offset %d. Aborting.\n",
-			 i);
+		lprocfs_counter_init(stats, i, LPROCFS_TYPE_REQS, mps_stats[i]);
+		if (!stats->ls_cnt_header[i].lc_name[0]) {
+			rc = -EINVAL;
+			CERROR("%s: no mps_stats[%u] lc_name string: rc = %d\n",
+			       obd->obd_name, i, rc);
+			GOTO(out, rc);
+		}
 	}
 
 	obd->obd_md_stats = stats;
 	rc = lprocfs_stats_register(obd->obd_proc_entry, "md_stats", stats);
-	if (rc < 0) {
-		lprocfs_stats_free(&stats);
-		obd->obd_md_stats = NULL;
-	}
+	if (!rc)
+		return 0;
+out:
+	lprocfs_stats_free(&stats);
+	obd->obd_md_stats = NULL;
 
 	return rc;
 }

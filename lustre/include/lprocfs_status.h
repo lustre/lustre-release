@@ -141,11 +141,12 @@ enum lprocfs_counter_config {
 
 /* lc_name string displayed in debugfs output length is limited to 35 */
 #define LC_NAME_MAX_SIZE	32
+#define LC_UNITS_MAX_SIZE	16
 
 struct lprocfs_counter_header {
 	enum lprocfs_counter_config	lc_config;
-	const char			*lc_name;   /* must be static */
-	const char			*lc_units;  /* must be static */
+	char				lc_name[LC_NAME_MAX_SIZE];
+	char				lc_units[LC_UNITS_MAX_SIZE];
 	struct obd_histogram		*lc_hist;
 };
 
@@ -546,12 +547,21 @@ extern int obd_io_latency_stats_seq_show(struct seq_file *seq,
 				 struct obd_histogram *write_io_latency_by_size,
 				 int num_buckets, ktime_t stats_init,
 				 spinlock_t *list_lock);
-extern void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
-				 enum lprocfs_counter_config config,
-				 const char *name);
-extern void lprocfs_counter_init_units(struct lprocfs_stats *stats, int index,
+extern void __lprocfs_counter_init_units(struct lprocfs_stats *stats, int index,
 				       enum lprocfs_counter_config config,
 				       const char *name, const char *units);
+#define lprocfs_counter_init_units(stats, index, config, name, units)	\
+do {									\
+	struct lprocfs_counter_header *__header;			\
+	if (__builtin_constant_p(name))					\
+		BUILD_BUG_ON(sizeof(name) > sizeof(__header->lc_name));	\
+	if (__builtin_constant_p(units))				\
+		BUILD_BUG_ON(sizeof(units) > sizeof(__header->lc_units));\
+	__lprocfs_counter_init_units(stats, index, config, name, units);\
+} while (0)
+#define lprocfs_counter_init(stats, index, config, name)		\
+	lprocfs_counter_init_units(stats, index, config, name, "")
+
 extern void ldebugfs_free_obd_stats(struct obd_device *obd);
 extern void lprocfs_free_md_stats(struct obd_device *obd);
 struct obd_export;
