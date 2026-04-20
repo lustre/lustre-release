@@ -3607,6 +3607,9 @@ struct lu_nodemap *nodemap_create(const char *name,
 		CWARN("adding nodemap '%s' to config without default nodemap\n",
 		      nodemap->nm_name);
 
+	if (dynamic)
+		atomic_inc(&config->nmc_dyn_count);
+
 	RETURN(nodemap);
 
 out_list_hash:
@@ -4325,6 +4328,8 @@ int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset)
 	(void)rhashtable_remove_fast(&active_config->nmc_nodemap_sha_hash,
 				     &nodemap->nm_sha_hash,
 				     nodemap_sha_hash_params);
+	if (nodemap->nm_dyn)
+		atomic_dec(&active_config->nmc_dyn_count);
 	nodemap_putref(nodemap);
 
 	/* erase nodemap from active ranges to prevent client assignment */
@@ -4391,6 +4396,17 @@ out:
 	return rc;
 }
 EXPORT_SYMBOL(nodemap_del);
+
+/**
+ * nodemap_has_dynamic_nodemaps() - Check if any dynamic nodemaps exist
+ *
+ * Return: true if any dynamic nodemaps are present in the active config
+ */
+bool nodemap_has_dynamic_nodemaps(void)
+{
+	return atomic_read(&active_config->nmc_dyn_count) > 0;
+}
+EXPORT_SYMBOL(nodemap_has_dynamic_nodemaps);
 
 /**
  * nodemap_clear_dynamic_nodemaps() - Remove all dynamic nodemaps
@@ -4717,6 +4733,7 @@ struct nodemap_config *nodemap_config_alloc(void)
 	config->nmc_range_tree.nmrt_range_interval_root = RB_ROOT_CACHED;
 	config->nmc_ban_range_tree.nmrt_range_interval_root =
 		RB_ROOT_CACHED;
+	atomic_set(&config->nmc_dyn_count, 0);
 
 	return config;
 }

@@ -1044,7 +1044,7 @@ static int mgs_iocontrol_nodemap(const struct lu_env *env,
 	}
 
 	/* if MGS is co-located with an MDT or OST, clear dynamic nodemaps */
-	if (mgs_has_local_targets())
+	if (nodemap_has_dynamic_nodemaps() && mgs_has_local_targets())
 		nodemap_clear_dynamic_nodemaps();
 
 	/* revoke nodemap lock */
