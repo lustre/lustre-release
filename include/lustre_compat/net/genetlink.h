@@ -15,7 +15,7 @@ char *nla_strdup(const struct nlattr *nla, gfp_t flags);
 #define nla_strscpy	nla_strlcpy
 #endif /* HAVE_NLA_STRLCPY */
 
-#ifdef HAVE_GENL_DUMPIT_INFO
+#ifdef HAVE_GENL_DUMPIT_INFO_FAMILY
 struct compat_genl_info {
 	const struct genl_family *family;
 };
@@ -36,6 +36,6 @@ compat_genl_info_dump(struct netlink_callback *cb)
 #define compat_genl_info	genl_info
 #define compat_genl_info_dump	genl_info_dump
 
-#endif /* HAVE_GENL_DUMPIT_INFO */
+#endif /* HAVE_GENL_DUMPIT_INFO_FAMILY */
 
 #endif /* __LIBCFS_NET_GENETLINK_H__ */

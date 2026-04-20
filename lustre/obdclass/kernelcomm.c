@@ -636,7 +636,7 @@ static const struct ln_key_list stats_dataset_list = {
 	},
 };
 
-#ifdef HAVE_GENL_DUMPIT_INFO
+#ifdef HAVE_GENL_DUMPIT_INFO_FAMILY
 static struct compat_genl_info service_info;
 #endif
 
@@ -692,7 +692,7 @@ static int lustre_stats_start(struct netlink_callback *cb)
 	int msg_len = genlmsg_len(gnlh);
 	int rc = 0;
 
-#ifdef HAVE_GENL_DUMPIT_INFO
+#ifdef HAVE_GENL_DUMPIT_INFO_FAMILY
 	cb->args[1] = (unsigned long)&service_info;
 #endif
 	OBD_ALLOC(slist, sizeof(*slist));

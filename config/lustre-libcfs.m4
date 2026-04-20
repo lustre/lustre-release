@@ -141,7 +141,7 @@ AC_DEFUN([LIBCFS_CACHE_DETAIL_WRITERS], [
 ]) # LIBCFS_CACHE_DETAIL_WRITERS
 
 #
-# LIBCFS_GENL_DUMPIT_INFO
+# LIBCFS_GENL_DUMPIT_INFO_FAMILY
 #
 # kernel v5.4-rc1 commit bf813b0afeae2f012f0e527a526c1b78ca21ad82
 # expanded struct genl_dumpit_info to include struct genl_family.
@@ -152,8 +152,8 @@ AC_DEFUN([LIBCFS_CACHE_DETAIL_WRITERS], [
 # Note RHEL8 while earlier than 5.4 does have family info in
 # struct genl_dumpit_info
 #
-AC_DEFUN([LIBCFS_SRC_GENL_DUMPIT_INFO], [
-	LB2_LINUX_TEST_SRC([genl_dumpit_info], [
+AC_DEFUN([LIBCFS_SRC_GENL_DUMPIT_INFO_FAMILY], [
+	LB2_LINUX_TEST_SRC([genl_dumpit_info_family], [
 		#include <net/genetlink.h>
 	],[
 		static struct genl_dumpit_info info;
@@ -161,13 +161,13 @@ AC_DEFUN([LIBCFS_SRC_GENL_DUMPIT_INFO], [
 		info.family = NULL;
 	],[-Werror])
 ])
-AC_DEFUN([LIBCFS_GENL_DUMPIT_INFO], [
+AC_DEFUN([LIBCFS_GENL_DUMPIT_INFO_FAMILY], [
 	LB2_MSG_LINUX_TEST_RESULT([if struct genl_dumpit_info has family field],
-	[genl_dumpit_info], [
-		AC_DEFINE(HAVE_GENL_DUMPIT_INFO, 1,
+	[genl_dumpit_info_family], [
+		AC_DEFINE(HAVE_GENL_DUMPIT_INFO_FAMILY, 1,
 			[struct genl_dumpit_info has family field])
 	])
-]) # LIBCFS_GENL_DUMPIT_INFO
+]) # LIBCFS_GENL_DUMPIT_INFO_FAMILY
 
 #
 # LIBCFS_KALLSYMS_LOOKUP
@@ -915,7 +915,7 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	LIBCFS_SRC_LOOKUP_USER_KEY
 	LIBCFS_SRC_CACHE_DETAIL_WRITERS
 	# 5.4
-	LIBCFS_SRC_GENL_DUMPIT_INFO
+	LIBCFS_SRC_GENL_DUMPIT_INFO_FAMILY
 	# 5.6
 	LIBCFS_SRC_HAVE_PROC_OPS
 	# 5.7
@@ -969,7 +969,7 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	LIBCFS_LOOKUP_USER_KEY
 	LIBCFS_CACHE_DETAIL_WRITERS
 	# 5.4
-	LIBCFS_GENL_DUMPIT_INFO
+	LIBCFS_GENL_DUMPIT_INFO_FAMILY
 	# 5.6
 	LIBCFS_HAVE_PROC_OPS
 	# 5.7
