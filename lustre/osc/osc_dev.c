@@ -175,7 +175,8 @@ static struct lu_device *osc_device_free(const struct lu_env *env,
 	struct obd_device *obd = d->ld_obd;
 
 	cl_device_fini(lu2cl_dev(d));
-	osc_cleanup_common(obd);
+	if (obd)
+		osc_cleanup_common(obd);
 	OBD_FREE_PTR(oc);
 	return NULL;
 }

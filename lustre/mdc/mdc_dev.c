@@ -1702,12 +1702,14 @@ static struct lu_device *mdc_device_free(const struct lu_env *env,
 					 struct lu_device *lu)
 {
 	struct obd_device *obd = lu->ld_obd;
-	struct client_obd *cli = &obd->u.cli;
 	struct osc_device *osc = lu2osc_dev(lu);
 
-	LASSERT(cli->cl_mod_rpcs_in_flight == 0);
 	cl_device_fini(lu2cl_dev(lu));
-	osc_cleanup_common(obd);
+	if (obd) {
+		struct client_obd *cli = &obd->u.cli;
+		LASSERT(cli->cl_mod_rpcs_in_flight == 0);
+		osc_cleanup_common(obd);
+	}
 	OBD_FREE_PTR(osc);
 
 	return NULL;
