@@ -3,7 +3,7 @@ AM_CFLAGS := -fPIC -D_GNU_SOURCE \
 	     -D_LARGEFILE64_SOURCE=1 -D_FILE_OFFSET_BITS=64
 
 DIST_SUBDIRS = mpi
-DIST_SUBDIRS += lutf iabf
+DIST_SUBDIRS += iabf
 
 noinst_DATA =
 noinst_DATA += disk2_7-ldiskfs.tar.bz2 disk2_7-zfs.tar.bz2
@@ -30,7 +30,7 @@ noinst_SCRIPTS += run_dd.sh run_tar.sh run_iozone.sh
 noinst_SCRIPTS += run_dbench.sh run_IOR.sh recovery-double-scale.sh
 noinst_SCRIPTS += recovery-random-scale.sh parallel-scale.sh
 noinst_SCRIPTS += lustre-rsync-test.sh ost-pools.sh rpc.sh yaml.sh
-noinst_SCRIPTS += lutf.sh lcov-merge.sh
+noinst_SCRIPTS += lcov-merge.sh
 noinst_SCRIPTS += lnet-selftest.sh obdfilter-survey.sh mmp.sh
 noinst_SCRIPTS += sgpdd-survey.sh maloo_upload.sh auster setup-nfs.sh
 noinst_SCRIPTS += mds-survey.sh parallel-scale-nfs.sh large-lun.sh
@@ -87,11 +87,6 @@ SUBDIRS = iabf
 if MPITESTS
 SUBDIRS += mpi
 endif
-
-# Build LUTF only if the packages are available
-if BUILD_LUTF
-SUBDIRS += lutf
-endif # BUILD_LUTF
 
 bin_PROGRAMS = mcreate statx
 testdir = $(libdir)/lustre/tests

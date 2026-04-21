@@ -36,7 +36,7 @@
 %global enable_multi_lnds 1
 %endif
 
-# LUTF Turn off brp-python-precompile script as we don't want the python files
+# Turn off brp-python-precompile script as we don't want the python files
 # to be compiled on installation
 %global __os_install_post %(echo '%{__os_install_post}' | sed -e 's!/usr/lib[^[:space:]]*/brp-python-bytecompile[[:space:]].*$!!g')
 
@@ -297,13 +297,6 @@ BuildRequires: kernel-abi-whitelists
 %endif
 # End: Lustre modules
 #
-# Options: lutf, gss, servers, systemd
-#
-%if %{with lustre_tests_lutf}
-Requires: python3 >= 3.6.0
-BuildRequires: python3-devel >= 3.6.0, swig
-%endif
-#
 %if %{with gss}
 BuildRequires: krb5-devel openssl-devel
 %endif
@@ -485,9 +478,6 @@ Requires: (%{lustre_name}-dkms or %{requires_kmod_name} >= %{requires_release_ma
 Requires: %{requires_kmod_name} >= %{requires_release_major_minor}
 %endif
 Requires: %{requires_kmod_tests_name} >= %{requires_release_major_minor}
-%endif
-%if %{with lustre_tests_lutf}
-Requires: python3 >= 3.6.0
 %endif
 Requires: attr, rsync, lsof, /usr/bin/getconf
 Requires: /usr/sbin/getenforce, acl, /usr/bin/killall, /usr/bin/ping, bc
@@ -967,16 +957,9 @@ echo '%{_sbindir}/wiretest' >>lustre-tests.files
 if [ -n "$MPI_BIN" ]; then
 	echo "$MPI_BIN/*" >>lustre-tests.files
 fi
-%if %{with lustre_tests_lutf}
-echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
-%endif
 echo '%exclude %{_libdir}/lustre/tests/gcov.tar.xz' >> lustre-tests.files
 echo '%exclude %{_libdir}/lustre/tests/lcov-merge.sh*' >> lustre-tests.files
 # with lustre_tests
-%endif
-
-%if %{with lustre_tests_lutf}
-echo '%{_libdir}/lustre/tests/lutf/*' >>lustre-tests.files
 %endif
 
 %if %{with coverage}

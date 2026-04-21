@@ -90,13 +90,6 @@ To clean up:
 
     ./lustre/tests/llmountcleanup.sh
 
-To run LUTF (LNet Unit Test Framework) in a Python virtual environment:
-
-    python3 -m venv venv
-    source venv/bin/activate
-    pip3 install -r requirements.txt
-    ./lustre/tests/lutf.sh
-
 +--------------+
 | Contributing |
 +--------------+

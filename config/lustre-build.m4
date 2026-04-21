@@ -266,35 +266,6 @@ AC_MSG_RESULT([$enable_utils])
 ]) # LB_CONFIG_UTILS
 
 #
-# LB_CONFIG_LUTF
-#
-# Build LNet Unit Test Framework?
-#
-AC_DEFUN([LB_CONFIG_LUTF], [
-# Python development libs are optional, disable LUTF is not available
-# if you have python 2 and python3 and python defaults to 2 you can enable
-# python3 here by setting PYTHON_VERSION=3 before calling configure, example:
-#  $ PYTHON_VERSION=3 ./configure [options]
-AX_PYTHON_DEVEL([>= '3.6'], [true])
-AS_IF([test "x$enable_dist" != xno], [
-	enable_lutf="yes"
-], [
-  AS_IF([test "x$ax_python_devel_found" = xno], [
-	enable_lutf="no"
-  ], [
-	AX_PKG_SWIG(2.0, [ enable_lutf="yes" ],
-			 [ enable_lutf="no" ])
-  ])
-])
-AC_ARG_ENABLE([lutf],
-	AS_HELP_STRING([--disable-lutf],
-		[disable building of LUTF]),
-	[], [enable_lutf="yes"])
-AC_MSG_CHECKING([whether to build LUTF (LNet Unit Test Framework)])
-AC_MSG_RESULT([$enable_lutf])
-]) # LB_CONFIG_LUTF
-
-#
 # LB_CONFIG_TESTS
 #
 # Build Lustre/LNet regression tests?
@@ -423,7 +394,6 @@ AM_CONDITIONAL([USE_QUILT], [test x$use_quilt = xyes])
 AM_CONDITIONAL([RHEL], [test -f /etc/redhat-release -o -f /etc/openEuler-release])
 AM_CONDITIONAL([SUSE], [test -f /etc/SUSE-brand -o -f /etc/SuSE-release])
 AM_CONDITIONAL([UBUNTU], [test x$UBUNTU_KERNEL = xyes])
-AM_CONDITIONAL([BUILD_LUTF], [test x$enable_lutf = xyes])
 AM_CONDITIONAL([DEQUOTE_CC_VERSION_TEXT], [test x$lb_cv_dequote_CC_VERSION_TEXT = xyes])
 
 LN_CONDITIONALS
@@ -584,9 +554,6 @@ fi
 if test x$enable_tests != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without lustre_tests"
 fi
-if test x$enable_lutf != xyes ; then
-	RPMBINARGS="$RPMBINARGS --without lustre_tests_lutf"
-fi
 if test x$enable_utils != xyes ; then
 	RPMBINARGS="$RPMBINARGS --without lustre_utils"
 fi
@@ -701,7 +668,6 @@ LB_CONFIG_DOCS
 LB_CONFIG_MANPAGES
 LB_CONFIG_UTILS
 LB_CONFIG_TESTS
-LB_CONFIG_LUTF
 LC_CONFIG_CLIENT
 LB_CONFIG_MPITESTS
 LB_CONFIG_SERVERS
