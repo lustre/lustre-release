@@ -648,9 +648,9 @@ kiblnd_unmap_tx(struct kib_tx *tx)
 {
 	if (
 #ifdef HAVE_OFED_FMR_POOL_API
-		tx->tx_fmr.fmr_pfmr ||
+	    tx->tx_fmr.fmr_pfmr ||
 #endif
-		tx->tx_fmr.fmr_frd)
+	    tx->tx_fmr.fmr_frd)
 		kiblnd_fmr_pool_unmap(&tx->tx_fmr, tx->tx_status);
 
 	if (tx->tx_nfrags != 0) {
@@ -864,7 +864,7 @@ __must_hold(&conn->ibc_lock)
 		/* close_conn will launch failover */
 		rc = -ENETDOWN;
 	} else {
-		struct ib_send_wr *bad = &tx->tx_wrq[tx->tx_nwrq - 1].wr;
+		const struct ib_send_wr *bad = &tx->tx_wrq[tx->tx_nwrq - 1].wr;
 		struct ib_send_wr *wr  = &tx->tx_wrq[0].wr;
 
 		if (frd != NULL && !frd->frd_posted) {
@@ -877,17 +877,12 @@ __must_hold(&conn->ibc_lock)
 			 "bad wr_id %#llx, opc %d, flags %d, peer_ni: %s\n",
 			 bad->wr_id, bad->opcode, bad->send_flags,
 			 libcfs_nidstr(&conn->ibc_peer->ibp_nid));
-
 		bad = NULL;
 		if (lnet_send_error_simulation(tx->tx_lntmsg[0], &tx->tx_hstatus))
 			rc = -EINVAL;
 		else
-#ifdef HAVE_OFED_IB_POST_SEND_RECV_CONST
-			rc = ib_post_send(conn->ibc_cmid->qp, wr,
-					  (const struct ib_send_wr **)&bad);
-#else
 			rc = ib_post_send(conn->ibc_cmid->qp, wr, &bad);
-#endif
+
 		if (frd && !frd->frd_posted) {
 			/* The local invalidate becomes invalid (has been
 			 * successfully used) if the post succeeds or the
@@ -1161,30 +1156,21 @@ kiblnd_init_rdma(struct kib_conn *conn, struct kib_tx *tx, int type,
 			       resid);
 
 		sge = &tx->tx_sge[tx->tx_nsge];
-		sge->addr   = kiblnd_rd_frag_addr(srcrd, srcidx);
-		sge->lkey   = kiblnd_rd_frag_key(srcrd, srcidx);
+		sge->addr = kiblnd_rd_frag_addr(srcrd, srcidx);
+		sge->lkey = kiblnd_rd_frag_key(srcrd, srcidx);
 		sge->length = sge_nob;
 
 		if (wrq_sge == 0) {
 			wrq = &tx->tx_wrq[tx->tx_nwrq];
 
-			wrq->wr.next	= &(wrq + 1)->wr;
-			wrq->wr.wr_id	= kiblnd_ptr2wreqid(tx, IBLND_WID_RDMA);
+			wrq->wr.next = &(wrq + 1)->wr;
+			wrq->wr.wr_id = kiblnd_ptr2wreqid(tx, IBLND_WID_RDMA);
 			wrq->wr.sg_list	= sge;
-			wrq->wr.opcode	= IB_WR_RDMA_WRITE;
+			wrq->wr.opcode = IB_WR_RDMA_WRITE;
 			wrq->wr.send_flags = 0;
 
-#ifdef HAVE_OFED_IB_RDMA_WR
-			wrq->remote_addr	= kiblnd_rd_frag_addr(dstrd,
-								      dstidx);
-			wrq->rkey		= kiblnd_rd_frag_key(dstrd,
-								     dstidx);
-#else
-			wrq->wr.wr.rdma.remote_addr = kiblnd_rd_frag_addr(dstrd,
-									dstidx);
-			wrq->wr.wr.rdma.rkey	= kiblnd_rd_frag_key(dstrd,
-								     dstidx);
-#endif
+			wrq->remote_addr = kiblnd_rd_frag_addr(dstrd, dstidx);
+			wrq->rkey = kiblnd_rd_frag_key(dstrd, dstidx);
 		}
 
 		srcidx = kiblnd_rd_consume_frag(srcrd, srcidx, sge_nob);
@@ -1389,10 +1375,9 @@ kiblnd_connect_peer(struct kib_peer_ni *peer_ni)
 	LASSERT(net != NULL);
 	LASSERT(peer_ni->ibp_connecting > 0);
 
-	cmid = kiblnd_rdma_create_id(peer_ni->ibp_ni->ni_net_ns,
-				     kiblnd_cm_callback, peer_ni,
-				     RDMA_PS_TCP, IB_QPT_RC);
-
+	cmid = rdma_create_id(peer_ni->ibp_ni->ni_net_ns,
+			      kiblnd_cm_callback, peer_ni,
+			      RDMA_PS_TCP, IB_QPT_RC);
 	if (IS_ERR(cmid)) {
 		rc = PTR_ERR(cmid);
 		CERROR("Can't create CMID for %s: rc = %d\n",

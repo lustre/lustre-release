@@ -1050,7 +1050,6 @@ static int yaml_netlink_parse_msg_error(struct nlmsgerr *errmsg,
 		const char *errstr = nl_geterror(nl_syserr2nlerr(errmsg->error));
 		struct yaml_netlink_input *data = parser->read_handler_data;
 
-#ifdef HAVE_USRSPC_NLMSGERR
 		/* Newer kernels support NLM_F_ACK_TLVS in nlmsg_flags
 		 * which gives greater detail why we failed.
 		 */
@@ -1065,7 +1064,7 @@ static int yaml_netlink_parse_msg_error(struct nlmsgerr *errmsg,
 					errstr = nla_strdup(tb[NLMSGERR_ATTR_MSG]);
 			}
 		}
-#endif /* HAVE_USRSPC_NLMSGERR */
+
 		parser->error = YAML_READER_ERROR;
 		data->errmsg = errstr;
 		data->error = errmsg->error;

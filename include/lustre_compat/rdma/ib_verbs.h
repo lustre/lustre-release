@@ -7,8 +7,8 @@
 
 #include <rdma/ib_verbs.h>
 
-#ifndef IB_DEVICE_SG_GAPS_REG
-#define IB_DEVICE_SG_GAPS_REG   0
+#if !defined(HAVE_IBK_SG_GAPS_REG) && !defined(IN_KERNEL_HAVE_IBK_SG_GAPS_REG)
+#define IBK_SG_GAPS_REG	IB_DEVICE_SG_GAPS_REG
 #endif
 
 #endif

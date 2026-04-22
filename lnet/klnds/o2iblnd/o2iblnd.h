@@ -55,7 +55,6 @@
 #define DEBUG_SUBSYSTEM S_LND
 
 #include <linux/libcfs/libcfs.h>
-
 #include <lnet/lib-lnet.h>
 #include <lnet/lnet_rdma.h>
 #include "o2iblnd-idl.h"
@@ -111,19 +110,6 @@ extern struct lnet_ioctl_config_o2iblnd_tunables kib_default_tunables;
 
 #define IBLND_TIMEOUT_DEFAULT	50	/* Default o2iblnd timeout in seconds */
 
-#ifdef HAVE_OFED_RDMA_CREATE_ID_5ARG
-# define kiblnd_rdma_create_id(ns, cb, dev, ps, qpt) \
-	 rdma_create_id((ns) ? (ns) : &init_net, cb, dev, ps, qpt)
-#else
-# ifdef HAVE_OFED_RDMA_CREATE_ID_4ARG
-#  define kiblnd_rdma_create_id(ns, cb, dev, ps, qpt) \
-	  rdma_create_id(cb, dev, ps, qpt)
-# else
-#  define kiblnd_rdma_create_id(ns, cb, dev, ps, qpt) \
-	  rdma_create_id(cb, dev, ps)
-# endif
-#endif
-
 /* 2 OOB shall suffice for 1 keepalive and 1 returning credits */
 #define IBLND_OOB_CAPABLE(v)       ((v) != IBLND_MSG_VERSION_1)
 #define IBLND_OOB_MSGS(v)           (IBLND_OOB_CAPABLE(v) ? 2 : 0)
@@ -156,13 +142,6 @@ extern struct lnet_ioctl_config_o2iblnd_tunables kib_default_tunables;
 
 struct kib_hca_dev;
 
-/* o2iblnd can run over aliased interface */
-#ifdef IFALIASZ
-#define KIB_IFNAME_SIZE              IFALIASZ
-#else
-#define KIB_IFNAME_SIZE              256
-#endif
-
 enum kib_dev_caps {
 	IBLND_DEV_CAPS_FASTREG_ENABLED		= BIT(0),
 	IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT	= BIT(1),
@@ -180,7 +159,7 @@ struct kib_dev {
 	struct list_head	ibd_fail_list;	/* chain on kib_failed_devs */
 	struct sockaddr_storage	ibd_addr;	/* Interface network address */
 	/** IPoIB interface name */
-	char			ibd_ifname[KIB_IFNAME_SIZE];
+	char			ibd_ifname[IFALIASZ];
 	int			ibd_nnets;	/* # nets extant */
 
 	time64_t		ibd_next_failover;
@@ -313,21 +292,10 @@ struct kib_fmr_poolset {
 	time64_t		 fps_next_retry;
 };
 
-#ifndef HAVE_OFED_IB_RDMA_WR
-struct ib_rdma_wr {
-	struct ib_send_wr wr;
-};
-#endif
-
 struct kib_fast_reg_descriptor { /* For fast registration */
 	struct list_head		 frd_list;
 	struct ib_rdma_wr		 frd_inv_wr;
-#ifdef HAVE_OFED_IB_MAP_MR_SG
 	struct ib_reg_wr		 frd_fastreg_wr;
-#else
-	struct ib_rdma_wr		 frd_fastreg_wr;
-	struct ib_fast_reg_page_list	*frd_frpl;
-#endif
 	struct ib_mr			*frd_mr;
 	bool				 frd_valid;
 	bool				 frd_posted;
@@ -364,18 +332,6 @@ struct kib_fmr {
 	struct kib_fast_reg_descriptor	*fmr_frd;
 	u32				 fmr_key;
 };
-
-#ifdef HAVE_OFED_FMR_POOL_API
-
-#ifdef HAVE_ORACLE_OFED_EXTENSIONS
-#define kib_fmr_pool_map(pool, pgs, n, iov) \
-	ib_fmr_pool_map_phys((pool), (pgs), (n), (iov), NULL)
-#else
-#define kib_fmr_pool_map(pool, pgs, n, iov) \
-	ib_fmr_pool_map_phys((pool), (pgs), (n), (iov))
-#endif
-
-#endif /* HAVE_OFED_FMR_POOL_API */
 
 struct kib_net {
 	/* chain on struct kib_dev::ibd_nets */
@@ -661,19 +617,6 @@ struct kib_peer_ni {
 	/* Number of connections allocated. */
 	atomic_t		ibp_nconns;
 };
-
-#ifndef HAVE_OFED_IB_INC_RKEY
-/**
- * ib_inc_rkey - increments the key portion of the given rkey. Can be used
- * for calculating a new rkey for type 2 memory windows.
- * @rkey - the rkey to increment.
- */
-static inline u32 ib_inc_rkey(u32 rkey)
-{
-	const u32 mask = 0x000000ff;
-	return ((rkey + 1) & mask) | (rkey & ~mask);
-}
-#endif
 
 extern struct kib_data kiblnd_data;
 
