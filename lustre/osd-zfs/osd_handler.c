@@ -686,8 +686,8 @@ static int osd_sync(const struct lu_env *env, struct dt_device *d)
 		CDEBUG(D_CACHE, "synced OSD %s\n", LUSTRE_OSD_ZFS_NAME);
 	}
 
-	wait_event(osd->od_commit_cb_waitq,
-		   atomic_read(&osd->od_commit_cb_in_txg[slot]) == 0);
+	io_wait_event(osd->od_commit_cb_waitq,
+		      atomic_read(&osd->od_commit_cb_in_txg[slot]) == 0);
 	return 0;
 }
 
@@ -1354,8 +1354,8 @@ static void osd_umount(const struct lu_env *env, struct osd_device *o)
 			txg_wait_synced(dmu_objset_pool(o->od_os), 0ULL);
 
 		for (slot = 0; slot < OSD_TXG_MAP_SIZE; slot++)
-			wait_event(o->od_commit_cb_waitq,
-				   !atomic_read(&o->od_commit_cb_in_txg[slot]));
+			io_wait_event(o->od_commit_cb_waitq,
+				      !atomic_read(&o->od_commit_cb_in_txg[slot]));
 
 		/* close the object set */
 		dmu_objset_disown(o->od_os, B_TRUE, o);

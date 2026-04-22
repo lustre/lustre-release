@@ -279,7 +279,7 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
 
 	/* ... wait until it is actually destroyed---sub-object clears its
 	 * ->lo_sub[] slot in lovsub_object_free() */
-	wait_event(*wq, r0->lo_sub[idx] != los);
+	io_wait_event(*wq, r0->lo_sub[idx] != los);
 	LASSERT(r0->lo_sub[idx] == NULL);
 }
 

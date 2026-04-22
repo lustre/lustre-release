@@ -2373,8 +2373,8 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	 * IMPORTANT: we have to wait till any IO submited by the thread is
 	 * completed otherwise iobuf may be corrupted by different request
 	 */
-	wait_event(iobuf->dr_wait,
-		       atomic_read(&iobuf->dr_numreqs) == 0);
+	io_wait_event(iobuf->dr_wait,
+		      atomic_read(&iobuf->dr_numreqs) == 0);
 
 	if (!rc)
 		rc = iobuf->dr_error;
@@ -8386,8 +8386,8 @@ static void osd_umount(const struct lu_env *env, struct osd_device *o)
 	if (o->od_mnt != NULL) {
 		shrink_dcache_sb(osd_sb(o));
 		osd_sync(env, &o->od_dt_dev);
-		wait_event(o->od_commit_cb_done,
-			  !atomic_read(&o->od_commit_cb_in_flight));
+		io_wait_event(o->od_commit_cb_done,
+			      !atomic_read(&o->od_commit_cb_in_flight));
 
 		mntput(o->od_mnt);
 		o->od_mnt = NULL;

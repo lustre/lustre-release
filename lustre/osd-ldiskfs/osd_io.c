@@ -533,8 +533,8 @@ out:
 	 * see osd_trans_stop() for more details -bzzz
 	 */
 	if (iobuf->dr_rw == 0 || CFS_FAIL_CHECK(OBD_FAIL_OST_INTEGRITY_FAULT)) {
-		wait_event(iobuf->dr_wait,
-			   atomic_read(&iobuf->dr_numreqs) == 0);
+		io_wait_event(iobuf->dr_wait,
+			      atomic_read(&iobuf->dr_numreqs) == 0);
 	}
 
 	if (rc == 0)

@@ -1398,8 +1398,8 @@ static struct lu_device *osp_device_fini(const struct lu_env *env,
 
 	if (osp->opd_storage_exp) {
 		/* wait for the commit callbacks to complete */
-		wait_event(osp->opd_sync_waitq,
-			  atomic_read(&osp->opd_commits_registered) == 0);
+		io_wait_event(osp->opd_sync_waitq,
+			      atomic_read(&osp->opd_commits_registered) == 0);
 		obd_disconnect(osp->opd_storage_exp);
 	}
 
