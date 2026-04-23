@@ -1217,10 +1217,11 @@ void cl_page_header_print(const struct lu_env *env, void *cookie,
 			  lu_printer_t printer, const struct cl_page *pg)
 {
 	(*printer)(env, cookie,
-		   "page@%p[%d %p %d %d %p]\n",
+		   "page@%p[%d %p %d %d %p %u %d %lu]\n",
 		   pg, refcount_read(&pg->cp_ref), pg->cp_obj,
-		   pg->cp_state, pg->cp_type,
-		   pg->cp_owner);
+		   pg->cp_state, pg->cp_type, pg->cp_owner,
+		   pg->cp_lov_index, pg->cp_defer_uptodate,
+		   pg->cp_page_index);
 }
 EXPORT_SYMBOL(cl_page_header_print);
 
