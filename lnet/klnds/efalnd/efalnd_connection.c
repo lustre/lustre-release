@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-2.0
 
 /*
- * Copyright (c) 2024-2025, Amazon and/or its affiliates. All rights reserved.
+ * Copyright (c) 2024-2026, Amazon and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  */
 
@@ -964,7 +964,7 @@ kefalnd_handle_conn_probe(struct kefa_ni *efa_ni,
 
 	conn = kefalnd_lookup_or_init_conn(efa_ni, srcnid,
 					   KEFA_CONN_TYPE_RESPONDER);
-	if (!conn)
+	if (IS_ERR(conn))
 		return PTR_ERR(conn);
 
 	memcpy(gid.raw, probe_msg->src_gid, sizeof(probe_msg->src_gid));
