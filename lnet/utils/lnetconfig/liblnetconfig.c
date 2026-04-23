@@ -42,10 +42,6 @@
 #include <libcfs/util/param.h>
 #include <dirent.h>
 
-#ifndef HAVE_USRSPC_RDMA_PS_TCP
-#define RDMA_PS_TCP 0x0106
-#endif
-
 const char *gmsg_stat_names[] = {"sent_stats", "received_stats",
 				 "dropped_stats"};
 
