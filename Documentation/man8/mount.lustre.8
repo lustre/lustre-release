@@ -5,7 +5,7 @@
 .\"
 .\" This file may be copied under the terms of the GNU Public License v2.
 .\"
-.TH MOUNT.LUSTRE 8 2025-05-22 Lustre "Lustre Configuration Utilities"
+.TH MOUNT.LUSTRE 8 2026-09-06 Lustre "Lustre Configuration Utilities"
 .SH NAME
 mount.lustre, mount.lustre_tgt \- mount helper for Lustre client/target service
 .SH SYNOPSIS
@@ -92,6 +92,13 @@ if unspecified.  The optional
 is the network number for that
 .IR NETTYPE ,
 or 0 if unspecified.
+.IP
+Lustre derives a UUID from each NID.
+A UUID holds 39 characters.
+A NID with a 16 byte address, which today means an IPv6 address,
+uses hexadecimal digits for the address when its string form is too long.
+If the hexadecimal form is also too long,
+Lustre removes bytes from the start of the address until the UUID fits.
 .TP
 .I BLOCK_DEVICE
 specifies the physical disk or ZFS dataset uses to start the target service

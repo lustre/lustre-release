@@ -2029,6 +2029,10 @@ int lustre_check_exclusion(struct super_block *sb, char *svname);
 /* lustre_peer.c    */
 int lustre_uuid_to_peer(const char *uuid, struct lnet_nid *peer_nid,
 			int index);
+/* Both functions return -EINVAL unless uuidlen is UUID_MAX. A smaller
+ * buffer selects the hex form for a NID that keeps its string form
+ * elsewhere. The peer map then holds one node under two keys.
+ */
 int class_nidstr2uuid(const char *nidstr, char *uuid, size_t uuidlen);
 int class_nid2uuid(const struct lnet_nid *nid, char *uuid, size_t uuidlen);
 int class_add_uuid(const char *uuid, struct lnet_nid *nid);

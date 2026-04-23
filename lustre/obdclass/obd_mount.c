@@ -141,7 +141,8 @@ static DEFINE_MUTEX(mgc_start_lock);
 static bool lustre_add_mgc_failnodes(struct obd_device *obd, char *ptr)
 {
 	struct obd_import *imp = obd->u.cli.cl_import;
-	char node[LNET_NIDSTR_SIZE];
+	char nidstr[LNET_NIDSTR_SIZE];
+	char node[UUID_MAX];
 	struct lnet_nid nid;
 	int rc;
 	bool large_nids = false;
@@ -150,31 +151,33 @@ static bool lustre_add_mgc_failnodes(struct obd_device *obd, char *ptr)
 
 	/* Add any failover MGS NIDs */
 	while (ptr) {
+		int parsed = 0;
 		int count = 0;
 
 		while (class_parse_nid_quiet(ptr, &nid, &ptr) == 0) {
+			parsed++;
 			large_nids |= !nid_is_nid4(&nid);
 
-			/* New failover node */
-			if (!count) {
-				/* construct node UUID from primary NID */
-				rc = class_nid2uuid(&nid, node, sizeof(node));
-				if (rc) {
-					libcfs_nidstr_r(&nid, node,
+			/* The first NID that fits names the group. The
+			 * loop skips a NID that does not fit, so a later
+			 * NID of the group can still name it.
+			 */
+			rc = count ? 0 : class_nid2uuid(&nid, node,
 							sizeof(node));
-					CWARN("%s: failover NID %s yields invalid UUID, rc = %d\n",
-					      obd->obd_name, node, rc);
-					break;
-				}
-			}
-
-			rc = class_add_uuid(node, &nid);
 			if (rc) {
-				libcfs_nidstr_r(&nid, node, LNET_NIDSTR_SIZE);
-				CWARN("%s: can't add failover NID %s, rc = %d\n",
-				      obd->obd_name, node, rc);
+				libcfs_nidstr_r(&nid, nidstr, sizeof(nidstr));
+				CWARN("%s: failover NID %s does not fit in a %d byte UUID, so the MGC skips this NID: rc = %d\n",
+				      obd->obd_name, nidstr, UUID_MAX, rc);
 			} else {
-				count++;
+				rc = class_add_uuid(node, &nid);
+				if (rc) {
+					libcfs_nidstr_r(&nid, nidstr,
+							sizeof(nidstr));
+					CWARN("%s: can't add failover NID %s, rc = %d\n",
+					      obd->obd_name, nidstr, rc);
+				} else {
+					count++;
+				}
 			}
 			if (*ptr == ':')
 				break;
@@ -188,7 +191,7 @@ static bool lustre_add_mgc_failnodes(struct obd_device *obd, char *ptr)
 			if (rc)
 				CWARN("%s: can't add failover peer %s, rc = %d\n",
 				      obd->obd_name, node, rc);
-		} else {
+		} else if (!parsed) {
 			/* at ":/fsname" */
 			break;
 		}
@@ -280,6 +283,7 @@ int lustre_start_mgc(struct super_block *sb)
 	uuid_t uuidc;
 	struct lnet_nid nid;
 	char nidstr[LNET_NIDSTR_SIZE];
+	char node_uuid[UUID_MAX];
 	char *mgcname = NULL, *mgssec = NULL;
 	bool large_nids = false;
 	char *ptr;
@@ -323,6 +327,14 @@ int lustre_start_mgc(struct super_block *sb)
 	if (i == 0) {
 		CERROR("No valid MGS NIDs found.\n");
 		RETURN(-EINVAL);
+	}
+
+	rc = class_nid2uuid(&nid, node_uuid, sizeof(node_uuid));
+	if (rc) {
+		libcfs_nidstr_r(&nid, nidstr, sizeof(nidstr));
+		CERROR("MGS NID %s does not fit in a %d byte UUID, so the mount cannot continue: rc = %d\n",
+		       nidstr, UUID_MAX, rc);
+		RETURN(rc);
 	}
 
 	mutex_lock(&mgc_start_lock);
@@ -426,7 +438,7 @@ int lustre_start_mgc(struct super_block *sb)
 				if (nidnet && libcfs_str2net(nidnet) !=
 					      LNET_NID_NET(&id.nid))
 					continue;
-				rc = class_add_uuid(nidstr, &id.nid);
+				rc = class_add_uuid(node_uuid, &id.nid);
 			}
 		} else {
 			/* Target must have at least one mgsnode */
@@ -444,7 +456,7 @@ int lustre_start_mgc(struct super_block *sb)
 					      LNET_NID_NET(&nid))
 					continue;
 
-				rc = class_add_uuid(nidstr, &nid);
+				rc = class_add_uuid(node_uuid, &nid);
 				if (rc == 0)
 					++i;
 				/* Stop at the first failover NID */
@@ -456,7 +468,7 @@ int lustre_start_mgc(struct super_block *sb)
 		/* Use NIDs from mount line: uml1,1@elan:uml2,2@elan:/lustre */
 		ptr = lsi->lsi_lmd->lmd_dev;
 		while (class_parse_nid(ptr, &nid, &ptr) == 0) {
-			rc = class_add_uuid(nidstr, &nid);
+			rc = class_add_uuid(node_uuid, &nid);
 			if (rc == 0)
 				++i;
 			/* Stop at the first failover NID */
@@ -480,7 +492,7 @@ int lustre_start_mgc(struct super_block *sb)
 	/* Start the MGC */
 	rc = lustre_start_simple(mgcname, LUSTRE_MGC_NAME,
 				 (char *)uuid->uuid, LUSTRE_MGS_OBDNAME,
-				 nidstr, NULL, lsi->lsi_lmd->lmd_nidnet);
+				 node_uuid, NULL, lsi->lsi_lmd->lmd_nidnet);
 	if (rc)
 		GOTO(out_free, rc);
 

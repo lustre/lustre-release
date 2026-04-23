@@ -21,6 +21,7 @@
 #define D_MGS D_CONFIG
 
 #include <obd.h>
+#include <obd_class.h>
 #include <obd_support.h>
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include <uapi/linux/lustre/lustre_param.h>
@@ -213,24 +214,26 @@ static inline void name_destroy(char **name)
 
 static inline int niduuid_create(char **niduuid, char *nidstr)
 {
-	size_t niduuid_len = strlen(nidstr) + 1;
+	char uuid[UUID_MAX];
+	int rc;
+	size_t niduuid_len;
 
 	LASSERT(niduuid);
 
-	/* Large NIDs may be longer than UUID_MAX. In this case we skip bytes at
-	 * the start of the string because the bytes at the end of the NID
-	 * should be more unique
-	 */
-	if (niduuid_len > UUID_MAX) {
-		nidstr += niduuid_len - UUID_MAX;
-		niduuid_len = strlen(nidstr) + 1;
+	rc = class_nidstr2uuid(nidstr, uuid, sizeof(uuid));
+	if (rc) {
+		CERROR("NID %s does not fit in a %d byte UUID, so the MGS cannot write it to the config log: rc = %d\n",
+		       nidstr, UUID_MAX, rc);
+		return rc;
 	}
+
+	niduuid_len = strlen(uuid) + 1;
 
 	OBD_ALLOC(*niduuid, niduuid_len);
 	if (!*niduuid)
 		return -ENOMEM;
 
-	snprintf(*niduuid, niduuid_len, "%s", nidstr);
+	snprintf(*niduuid, niduuid_len, "%s", uuid);
 	return 0;
 }
 

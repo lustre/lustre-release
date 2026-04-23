@@ -57,10 +57,18 @@ EXPORT_SYMBOL(lustre_uuid_to_peer);
 
 int class_nidstr2uuid(const char *nidstr, char *uuid, size_t uuidlen)
 {
+	struct lnet_nid nid;
+
+	if (uuidlen != UUID_MAX)
+		return -EINVAL;
+
+	if (libcfs_strnid(&nid, nidstr) == 0 && nid_is_nid6(&nid))
+		return class_nid2uuid(&nid, uuid, uuidlen);
+
 	if (strlen(nidstr) >= uuidlen)
 		return -EOVERFLOW;
 
-	snprintf(uuid, uuidlen, "%s", nidstr);
+	strscpy(uuid, nidstr, uuidlen);
 	return 0;
 }
 EXPORT_SYMBOL(class_nidstr2uuid);
@@ -68,9 +76,37 @@ EXPORT_SYMBOL(class_nidstr2uuid);
 int class_nid2uuid(const struct lnet_nid *nid, char *uuid, size_t uuidlen)
 {
 	char nidstr[LNET_NIDSTR_SIZE];
+	const char *at;
+	int nbytes;
+
+	if (uuidlen != UUID_MAX)
+		return -EINVAL;
 
 	libcfs_nidstr_r(nid, nidstr, sizeof(nidstr));
-	return class_nidstr2uuid(nidstr, uuid, uuidlen);
+
+	/* Keep the NID string whenever it fits, so that no existing UUID
+	 * changes. The hex form is longer than most IPv6 NID strings.
+	 */
+	if (strlen(nidstr) < uuidlen) {
+		strscpy(uuid, nidstr, uuidlen);
+		return 0;
+	}
+
+	at = nid_is_nid6(nid) ? strchr(nidstr, '@') : NULL;
+	if (!at || strlen(at) >= uuidlen)
+		return -EOVERFLOW;
+
+	/* Drop whole bytes from the start of the address until the UUID fits.
+	 * The start is the routing prefix, which the servers of one site
+	 * share. The end holds the subnet and the interface ID. The widest
+	 * "@net", "@o2ib65535", keeps 14 of 16 bytes.
+	 */
+	nbytes = min_t(int, sizeof(nid->nid_addr),
+		       (uuidlen - 1 - strlen(at)) / 2);
+	snprintf(uuid, uuidlen, "%*phN%s", nbytes,
+		 (const u8 *)nid->nid_addr + sizeof(nid->nid_addr) - nbytes,
+		 at);
+	return 0;
 }
 EXPORT_SYMBOL(class_nid2uuid);
 

@@ -12665,6 +12665,58 @@ test_157b() {
 }
 run_test 157b "verify allow_register (block new OSTs, allow existing)"
 
+test_158() {
+	(( $CLIENT_VERSION >= $(version_code 2.17.57) )) ||
+		skip "need client >= 2.17.57 for wide NID UUIDs"
+
+	# The text form of this NID has 46 characters. The 32 digit hex form
+	# leaves only 7 characters for the net. The UUID thus drops the first
+	# byte of the address, 0x20, to fit "@tcp1000".
+	local wide="2001:db8:ffff:ffff:ffff:ffff:ffff:ffff@tcp1000"
+	local uuid="010db8ffffffffffffffffffffffff@tcp1000"
+	local nid1="192.168.253.253@$NETTYPE"
+	local nid2="192.168.253.254@$NETTYPE"
+	local saved=$MGSNID
+	local olddebug=$($LCTL get_param -n debug)
+	local rc
+
+	setupall || error "setupall failed"
+	umount_client $MOUNT || error "umount client failed"
+
+	$LCTL set_param -n debug=+info
+	$LCTL clear
+
+	# The first group is the real MGS. $wide leads the second group,
+	# and the MGC must keep it. The third group must also reach the
+	# import.
+	MGSNID="$saved:$wide,$nid1:$nid2"
+	mount_client $MOUNT
+	rc=$?
+	MGSNID=$saved
+	(( rc == 0 )) || error "client mount failed with a wide failover NID"
+
+	# class_add_uuid() logs each NID with its UUID. LNet can make $wide
+	# the primary NID of the second group, so the import can show either
+	# NID. The log shows the UUID itself.
+	local log=$($LCTL dk)
+
+	$LCTL set_param -n debug="$olddebug"
+
+	grep -q -F "uuid $uuid $wide" <<< "$log" ||
+		error "MGC did not map $wide to UUID $uuid"
+	grep -q -F "uuid $uuid $nid1" <<< "$log" ||
+		error "MGC did not map $nid1 to UUID $uuid"
+
+	local nids=$($LCTL get_param -n mgc.*.import | grep failover_nids)
+
+	echo "$nids" | grep -q -- "$nid2" ||
+		error "MGC dropped the group after the group $wide leads"
+
+	umount_client $MOUNT || error "umount client failed"
+	cleanup || error "cleanup failed"
+}
+run_test 158 "MGC keeps a failover NID too wide for a text UUID"
+
 test_160() {
 	((OST1_VERSION >= $(version_code 2.16.55) )) ||
 		skip "need OST >= 2.16.55 to have MGC with all failovers"

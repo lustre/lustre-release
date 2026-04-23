@@ -90,6 +90,15 @@ static inline bool nid_is_nid4(const struct lnet_nid *nid)
 	return NID_ADDR_BYTES(nid) == 4;
 }
 
+/* True when the address fills all 16 bytes of nid_addr. Today only an
+ * IPv6 address does. The test is on the width, not on the LND, so a new
+ * 16 byte address form also matches.
+ */
+static inline bool nid_is_nid6(const struct lnet_nid *nid)
+{
+	return NID_ADDR_BYTES(nid) == (int)sizeof(nid->nid_addr);
+}
+
 /**
  * nid_addr_is_set - check if address portion of NID is set
  * @nid: the NID to check
