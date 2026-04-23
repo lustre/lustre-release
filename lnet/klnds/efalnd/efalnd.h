@@ -270,6 +270,7 @@ struct kefa_ni {
 	struct kefa_obj_pool tx_pool;
 	DECLARE_HASHTABLE(conns, EFALND_CONN_HASH_BITS);
 	rwlock_t conn_lock;
+	struct list_head cleanup_conns;		/* conns pending cleanup by CM daemon */
 	struct kefa_peer_ni *self_peer_ni;	/* Only valid for small NID NI*/
 };
 
@@ -310,6 +311,7 @@ struct kefa_conn {
 
 	/* Low frequency fields */
 	struct list_head abort_tx;	/* Only CM iterates this list */
+	struct list_head cleanup_node;	/* node on kefa_ni cleanup list */
 	enum kefa_conn_type type;
 	struct lnet_nid local_nid;
 	struct kefa_peer_ni *peer_ni; /* my peer NI - only valid for small NID*/

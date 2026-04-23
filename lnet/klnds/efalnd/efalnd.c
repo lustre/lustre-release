@@ -1978,12 +1978,19 @@ again:
 static void
 kefalnd_destroy_all_conns(struct kefa_ni *efa_ni)
 {
-	struct kefa_conn *conn;
+	struct kefa_conn *conn, *temp_conn;
 	struct hlist_node *tmp;
 	int bkt;
 
 	hash_for_each_safe(efa_ni->conns, bkt, tmp, conn, ni_node) {
 		hlist_del_init(&conn->ni_node);
+		kefalnd_destroy_conn(conn, LNET_MSG_STATUS_LOCAL_ABORTED,
+				     -ENODEV);
+	}
+
+	list_for_each_entry_safe(conn, temp_conn, &efa_ni->cleanup_conns,
+				 cleanup_node) {
+		list_del_init(&conn->cleanup_node);
 		kefalnd_destroy_conn(conn, LNET_MSG_STATUS_LOCAL_ABORTED,
 				     -ENODEV);
 	}
@@ -3078,6 +3085,7 @@ kefalnd_startup(struct lnet_ni *ni)
 	efa_ni->ni_epoch = ktime_get_real_ns();
 	hash_init(efa_ni->conns);
 	rwlock_init(&efa_ni->conn_lock);
+	INIT_LIST_HEAD(&efa_ni->cleanup_conns);
 	INIT_LIST_HEAD(&efa_ni->lnd_node);
 	INIT_LIST_HEAD(&efa_ni->cm_node);
 
