@@ -2506,8 +2506,8 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 				 * with parallel find.
 				 */
 				if (localtime_r(&stamp, &tm_buf)) {
-					strftime(date_str, sizeof(date_str), "%c",
-						 &tm_buf);
+					strftime(date_str, sizeof(date_str),
+						 "%FT%T%z", &tm_buf);
 					llapi_printf(LLAPI_MSG_NORMAL, "'%s'",
 						     date_str);
 				}
