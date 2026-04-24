@@ -1287,7 +1287,7 @@ static int lst_groups_show_dump(struct sk_buff *msg,
 
 			nla_put_string(msg,
 				       LNET_SELFTEST_GROUP_NODELIST_PROP_ATTR_NID,
-				       libcfs_id2str(ndl->ndl_node->nd_id));
+				       libcfs_idstr(&ndl->ndl_node->nd_id));
 
 			ndstate = lst_node_state2str(ndl->ndl_node->nd_state);
 			nla_put_string(msg,

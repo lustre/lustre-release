@@ -61,7 +61,7 @@ ping_client_fini(struct sfw_test_instance *tsi)
 }
 
 static int
-ping_client_prep_rpc(struct sfw_test_unit *tsu, struct lnet_process_id dest,
+ping_client_prep_rpc(struct sfw_test_unit *tsu, struct lnet_processid *dest,
 		     struct srpc_client_rpc **rpc)
 {
 	struct srpc_ping_reqst *req;
@@ -107,7 +107,7 @@ ping_client_done_rpc(struct sfw_test_unit *tsu, struct srpc_client_rpc *rpc)
 		if (!tsi->tsi_stopping) /* rpc could have been aborted */
 			atomic_inc(&sn->sn_ping_errors);
 		CERROR("Unable to ping %s (%d): %d\n",
-		       libcfs_id2str(rpc->crpc_dest),
+		       libcfs_idstr(&rpc->crpc_dest),
 		       reqst->pnr_seq, rpc->crpc_status);
 		return;
 	}
@@ -122,7 +122,7 @@ ping_client_done_rpc(struct sfw_test_unit *tsu, struct srpc_client_rpc *rpc)
 		rpc->crpc_status = -EBADMSG;
 		atomic_inc(&sn->sn_ping_errors);
 		CERROR("Bad magic %u from %s, %u expected.\n",
-		       reply->pnr_magic, libcfs_id2str(rpc->crpc_dest),
+		       reply->pnr_magic, libcfs_idstr(&rpc->crpc_dest),
 		       LST_PING_TEST_MAGIC);
 		return;
 	}
@@ -131,7 +131,7 @@ ping_client_done_rpc(struct sfw_test_unit *tsu, struct srpc_client_rpc *rpc)
 		rpc->crpc_status = -EBADMSG;
 		atomic_inc(&sn->sn_ping_errors);
 		CERROR("Bad seq %u from %s, %u expected.\n",
-		       reply->pnr_seq, libcfs_id2str(rpc->crpc_dest),
+		       reply->pnr_seq, libcfs_idstr(&rpc->crpc_dest),
 		       reqst->pnr_seq);
 		return;
 	}
@@ -165,7 +165,7 @@ ping_server_handle(struct srpc_server_rpc *rpc)
 
 	if (req->pnr_magic != LST_PING_TEST_MAGIC) {
 		CERROR("Unexpect magic %08x from %s\n",
-		       req->pnr_magic, libcfs_id2str(rpc->srpc_peer));
+		       req->pnr_magic, libcfs_idstr(&rpc->srpc_peer));
 		return -EINVAL;
 	}
 
@@ -181,7 +181,7 @@ ping_server_handle(struct srpc_server_rpc *rpc)
 	replymsg->msg_ses_feats = reqstmsg->msg_ses_feats;
 
 	CDEBUG(D_NET, "Get ping %d from %s\n",
-	       req->pnr_seq, libcfs_id2str(rpc->srpc_peer));
+	       req->pnr_seq, libcfs_idstr(&rpc->srpc_peer));
 	return 0;
 }
 

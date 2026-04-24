@@ -378,7 +378,7 @@ srpc_remove_service(struct srpc_service *sv)
 
 static int
 srpc_post_passive_rdma(int portal, int local, __u64 matchbits, void *buf,
-		       int len, int options, struct lnet_process_id peer4,
+		       int len, int options, struct lnet_processid *peer,
 		       struct lnet_handle_md *mdh, struct srpc_event *ev)
 {
 	struct lnet_md md = {
@@ -391,12 +391,8 @@ srpc_post_passive_rdma(int portal, int local, __u64 matchbits, void *buf,
 	};
 	int rc;
 	struct lnet_me *me;
-	struct lnet_processid peer;
 
-	peer.pid = peer4.pid;
-	lnet_nid4_to_nid(peer4.nid, &peer.nid);
-
-	me = LNetMEAttach(portal, &peer, matchbits, 0, LNET_UNLINK,
+	me = LNetMEAttach(portal, peer, matchbits, 0, LNET_UNLINK,
 			  local ? LNET_INS_LOCAL : LNET_INS_AFTER);
 	if (IS_ERR(me)) {
 		rc = PTR_ERR(me);
@@ -415,14 +411,14 @@ srpc_post_passive_rdma(int portal, int local, __u64 matchbits, void *buf,
 
 	CDEBUG(D_NET,
 	       "Posted passive RDMA: peer %s, portal %d, matchbits %#llx\n",
-	       libcfs_id2str(peer4), portal, matchbits);
+	       libcfs_idstr(peer), portal, matchbits);
 	return 0;
 }
 
 static int
 srpc_post_active_rdma(int portal, __u64 matchbits, void *buf, int len,
-		      int options, struct lnet_process_id peer4,
-		      lnet_nid_t self4, struct lnet_handle_md *mdh,
+		      int options, struct lnet_processid *peer,
+		      struct lnet_nid *self, struct lnet_handle_md *mdh,
 		      struct srpc_event *ev)
 {
 	struct lnet_md md = {
@@ -434,11 +430,6 @@ srpc_post_active_rdma(int portal, __u64 matchbits, void *buf, int len,
 		.umd_options   = options & ~(LNET_MD_OP_PUT | LNET_MD_OP_GET),
 	};
 	int rc;
-	struct lnet_nid self;
-	struct lnet_processid peer;
-
-	lnet_nid4_to_nid(self4, &self);
-	lnet_pid4_to_pid(peer4, &peer);
 
 	rc = LNetMDBind(&md, LNET_UNLINK, mdh);
 	if (rc != 0) {
@@ -452,18 +443,18 @@ srpc_post_active_rdma(int portal, __u64 matchbits, void *buf, int len,
 	 * buffers...
 	 */
 	if ((options & LNET_MD_OP_PUT) != 0) {
-		rc = LNetPut(&self, *mdh, LNET_NOACK_REQ, &peer,
+		rc = LNetPut(self, *mdh, LNET_NOACK_REQ, peer,
 			     portal, matchbits, 0, 0);
 	} else {
 		LASSERT((options & LNET_MD_OP_GET) != 0);
 
-		rc = LNetGet(&self, *mdh, &peer, portal, matchbits, 0, false);
+		rc = LNetGet(self, *mdh, peer, portal, matchbits, 0, false);
 	}
 
 	if (rc != 0) {
 		CERROR("LNet%s(%s, %d, %lld) failed: %d\n",
 		       ((options & LNET_MD_OP_PUT) != 0) ? "Put" : "Get",
-		       libcfs_id2str(peer4), portal, matchbits, rc);
+		       libcfs_idstr(peer), portal, matchbits, rc);
 
 		/* The forthcoming unlink event will complete this operation
 		 * with failure, so fall through and return success here.
@@ -473,7 +464,7 @@ srpc_post_active_rdma(int portal, __u64 matchbits, void *buf, int len,
 	} else {
 		CDEBUG(D_NET,
 		       "Posted active RDMA: peer %s, portal %u, matchbits %#llx\n",
-		       libcfs_id2str(peer4), portal, matchbits);
+		       libcfs_idstr(peer), portal, matchbits);
 	}
 	return 0;
 }
@@ -482,14 +473,11 @@ static int
 srpc_post_passive_rqtbuf(int service, int local, void *buf, int len,
 			 struct lnet_handle_md *mdh, struct srpc_event *ev)
 {
-	struct lnet_process_id any = {0};
-
-	any.nid = LNET_NID_ANY;
-	any.pid = LNET_PID_ANY;
+	struct lnet_processid any = { .nid = LNET_ANY_NID, LNET_PID_ANY };
 
 	return srpc_post_passive_rdma(srpc_serv_portal(service),
 				      local, service, buf, len,
-				      LNET_MD_OP_PUT, any, mdh, ev);
+				      LNET_MD_OP_PUT, &any, mdh, ev);
 }
 
 static int
@@ -704,7 +692,7 @@ srpc_finish_service(struct srpc_service *sv)
 		rpc = list_first_entry(&scd->scd_rpc_active,
 				       struct srpc_server_rpc, srpc_list);
 		CNETERR("Active RPC %p on shutdown: sv %s, peer %s, wi %s, ev fired %d type %d status %d lnet %d\n",
-			rpc, sv->sv_name, libcfs_id2str(rpc->srpc_peer),
+			rpc, sv->sv_name, libcfs_idstr(&rpc->srpc_peer),
 			swi_state2str(rpc->srpc_wi.swi_state),
 			rpc->srpc_ev.ev_fired, rpc->srpc_ev.ev_type,
 			rpc->srpc_ev.ev_status, rpc->srpc_ev.ev_lnet);
@@ -825,7 +813,7 @@ srpc_send_request(struct srpc_client_rpc *rpc)
 	rc = srpc_post_active_rdma(srpc_serv_portal(rpc->crpc_service),
 				   rpc->crpc_service, &rpc->crpc_reqstmsg,
 				   sizeof(struct srpc_msg), LNET_MD_OP_PUT,
-				   rpc->crpc_dest, LNET_NID_ANY,
+				   &rpc->crpc_dest, &LNET_ANY_NID,
 				   &rpc->crpc_reqstmdh, ev);
 	if (rc != 0) {
 		LASSERT(rc == -ENOMEM);
@@ -850,7 +838,7 @@ srpc_prepare_reply(struct srpc_client_rpc *rpc)
 	rc = srpc_post_passive_rdma(SRPC_RDMA_PORTAL, 0, *id,
 				    &rpc->crpc_replymsg,
 				    sizeof(struct srpc_msg),
-				    LNET_MD_OP_PUT, rpc->crpc_dest,
+				    LNET_MD_OP_PUT, &rpc->crpc_dest,
 				    &rpc->crpc_replymdh, ev);
 	if (rc != 0) {
 		LASSERT(rc == -ENOMEM);
@@ -885,7 +873,7 @@ srpc_prepare_bulk(struct srpc_client_rpc *rpc)
 
 	rc = srpc_post_passive_rdma(SRPC_RDMA_PORTAL, 0, *id,
 				    &bk->bk_iovs[0], bk->bk_niov, opt,
-				    rpc->crpc_dest, &bk->bk_mdh, ev);
+				    &rpc->crpc_dest, &bk->bk_mdh, ev);
 	if (rc != 0) {
 		LASSERT(rc == -ENOMEM);
 		ev->ev_fired = 1;  /* no more event expected */
@@ -913,7 +901,7 @@ srpc_do_bulk(struct srpc_server_rpc *rpc)
 
 	rc = srpc_post_active_rdma(SRPC_RDMA_PORTAL, id,
 				   &bk->bk_iovs[0], bk->bk_niov, opt,
-				   rpc->srpc_peer, rpc->srpc_self,
+				   &rpc->srpc_peer, &rpc->srpc_self,
 				   &bk->bk_mdh, ev);
 	if (rc != 0)
 		ev->ev_fired = 1;  /* no more event expected */
@@ -932,7 +920,7 @@ srpc_server_rpc_done(struct srpc_server_rpc *rpc, int status)
 
 	CDEBUG_LIMIT(status == 0 ? D_NET : D_NETERROR,
 		     "Server RPC %p done: service %s, peer %s, status %s:%d\n",
-		     rpc, sv->sv_name, libcfs_id2str(rpc->srpc_peer),
+		     rpc, sv->sv_name, libcfs_idstr(&rpc->srpc_peer),
 		     swi_state2str(rpc->srpc_wi.swi_state), status);
 
 	if (status != 0)
@@ -1029,7 +1017,7 @@ static void srpc_handle_rpc(struct swi_workitem *wi)
 		if (msg->msg_version != SRPC_MSG_VERSION) {
 			CWARN("Version mismatch: %u, %u expected, from %s\n",
 			      msg->msg_version, SRPC_MSG_VERSION,
-			      libcfs_id2str(rpc->srpc_peer));
+			      libcfs_idstr(&rpc->srpc_peer));
 			reply->status = EPROTO;
 			/* drop through and send reply */
 		} else {
@@ -1097,7 +1085,7 @@ srpc_client_rpc_expired (void *data)
 	struct srpc_client_rpc *rpc = data;
 
 	CWARN("Client RPC expired: service %d, peer %s, timeout %d.\n",
-	      rpc->crpc_service, libcfs_id2str(rpc->crpc_dest),
+	      rpc->crpc_service, libcfs_idstr(&rpc->crpc_dest),
 	      rpc->crpc_timeout);
 
 	spin_lock(&rpc->crpc_lock);
@@ -1167,7 +1155,7 @@ srpc_client_rpc_done(struct srpc_client_rpc *rpc, int status)
 
 	CDEBUG_LIMIT((status == 0) ? D_NET : D_NETERROR,
 		     "Client RPC done: service %d, peer %s, status %s:%d:%d\n",
-		     rpc->crpc_service, libcfs_id2str(rpc->crpc_dest),
+		     rpc->crpc_service, libcfs_idstr(&rpc->crpc_dest),
 		     swi_state2str(wi->swi_state), rpc->crpc_aborted, status);
 
 	/*
@@ -1267,7 +1255,7 @@ srpc_send_rpc(struct swi_workitem *wi)
 		    (reply->msg_magic != SRPC_MSG_MAGIC &&
 		     reply->msg_magic != __swab32(SRPC_MSG_MAGIC))) {
 			CWARN("Bad message from %s: type %u (%d expected), magic %u (%d expected).\n",
-			      libcfs_id2str(rpc->crpc_dest),
+			      libcfs_idstr(&rpc->crpc_dest),
 			      reply->msg_type, type,
 			      reply->msg_magic, SRPC_MSG_MAGIC);
 			rc = -EBADMSG;
@@ -1277,7 +1265,7 @@ srpc_send_rpc(struct swi_workitem *wi)
 		if (do_bulk && reply->msg_body.reply.status != 0) {
 			CWARN("Remote error %d at %s, unlink bulk buffer in case peer didn't initiate bulk transfer\n",
 			      reply->msg_body.reply.status,
-			      libcfs_id2str(rpc->crpc_dest));
+			      libcfs_idstr(&rpc->crpc_dest));
 			LNetMDUnlink(rpc->crpc_bulk.bk_mdh);
 		}
 
@@ -1326,7 +1314,7 @@ abort:
 }
 
 struct srpc_client_rpc *
-srpc_create_client_rpc(struct lnet_process_id peer, int service,
+srpc_create_client_rpc(struct lnet_processid *peer, int service,
 		       int nbulkiov, int bulklen,
 		       void (*rpc_done)(struct srpc_client_rpc *),
 		       void (*rpc_fini)(struct srpc_client_rpc *), void *priv)
@@ -1355,7 +1343,7 @@ srpc_abort_rpc(struct srpc_client_rpc *rpc, int why)
 
 	CDEBUG(D_NET,
 	       "Aborting RPC: service %d, peer %s, state %s, why %d\n",
-	       rpc->crpc_service, libcfs_id2str(rpc->crpc_dest),
+	       rpc->crpc_service, libcfs_idstr(&rpc->crpc_dest),
 	       swi_state2str(rpc->crpc_wi.swi_state), why);
 
 	rpc->crpc_aborted = 1;
@@ -1371,7 +1359,7 @@ srpc_post_rpc(struct srpc_client_rpc *rpc)
 	LASSERT(srpc_data.rpc_state == SRPC_STATE_RUNNING);
 
 	CDEBUG(D_NET, "Posting RPC: peer %s, service %d, timeout %d\n",
-	       libcfs_id2str(rpc->crpc_dest), rpc->crpc_service,
+	       libcfs_idstr(&rpc->crpc_dest), rpc->crpc_service,
 	       rpc->crpc_timeout);
 
 	srpc_add_client_rpc_timer(rpc);
@@ -1416,7 +1404,7 @@ srpc_send_reply(struct srpc_server_rpc *rpc)
 
 	rc = srpc_post_active_rdma(SRPC_RDMA_PORTAL, rpyid, msg,
 				   sizeof(*msg), LNET_MD_OP_PUT,
-				   rpc->srpc_peer, rpc->srpc_self,
+				   &rpc->srpc_peer, &rpc->srpc_self,
 				   &rpc->srpc_replymdh, ev);
 	if (rc != 0)
 		ev->ev_fired = 1;  /* no more event expected */
@@ -1507,8 +1495,8 @@ srpc_lnet_ev_handler(struct lnet_event *ev)
 
 		buffer = container_of(ev->md_start, struct srpc_buffer,
 				      buf_msg);
-		buffer->buf_peer = lnet_pid_to_pid4(&ev->source);
-		buffer->buf_self = lnet_nid_to_nid4(&ev->target.nid);
+		buffer->buf_peer = ev->source;
+		buffer->buf_self = ev->target.nid;
 
 		LASSERT(scd->scd_buf_nposted > 0);
 		scd->scd_buf_nposted--;

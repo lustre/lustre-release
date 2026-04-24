@@ -288,7 +288,7 @@ sfw_server_rpc_done(struct srpc_server_rpc *rpc)
 
 	CDEBUG(D_NET,
 	       "Incoming framework RPC done: service %s, peer %s, status %s:%d\n",
-	       sv->sv_name, libcfs_id2str(rpc->srpc_peer),
+	       sv->sv_name, libcfs_idstr(&rpc->srpc_peer),
 	       swi_state2str(rpc->srpc_wi.swi_state), status);
 
 	if (rpc->srpc_bulk) {
@@ -305,7 +305,7 @@ sfw_client_rpc_fini(struct srpc_client_rpc *rpc)
 
 	CDEBUG(D_NET, "Outgoing framework RPC done: "
 	       "service %d, peer %s, status %s:%d:%d\n",
-	       rpc->crpc_service, libcfs_id2str(rpc->crpc_dest),
+	       rpc->crpc_service, libcfs_idstr(&rpc->crpc_dest),
 	       swi_state2str(rpc->crpc_wi.swi_state),
 	       rpc->crpc_aborted, rpc->crpc_status);
 
@@ -814,7 +814,7 @@ sfw_add_test_instance(struct sfw_batch *tsb, struct srpc_server_rpc *rpc)
 				goto error;
 			}
 
-			tsu->tsu_dest.nid = id.nid;
+			lnet_nid4_to_nid(id.nid, &tsu->tsu_dest.nid);
 			tsu->tsu_dest.pid = id.pid;
 			tsu->tsu_instance = tsi;
 			tsu->tsu_private  = NULL;
@@ -911,7 +911,7 @@ sfw_test_rpc_done(struct srpc_client_rpc *rpc)
 }
 
 int
-sfw_create_test_rpc(struct sfw_test_unit *tsu, struct lnet_process_id peer,
+sfw_create_test_rpc(struct sfw_test_unit *tsu, struct lnet_processid *peer,
 		    unsigned features, int nblk, int blklen,
 		    struct srpc_client_rpc **rpcpp)
 {
@@ -963,7 +963,7 @@ sfw_run_test(struct swi_workitem *wi)
 	struct sfw_test_instance *tsi = tsu->tsu_instance;
 	struct srpc_client_rpc *rpc = NULL;
 
-	if (tsi->tsi_ops->tso_prep_rpc(tsu, tsu->tsu_dest, &rpc) != 0) {
+	if (tsi->tsi_ops->tso_prep_rpc(tsu, &tsu->tsu_dest, &rpc) != 0) {
 		LASSERT(rpc == NULL);
 		wi->swi_state = SWI_STATE_DONE;
 		goto test_done;
@@ -1031,13 +1031,12 @@ sfw_run_batch(struct sfw_batch *tsb)
 		atomic_inc(&tsb->bat_nactive);
 
 		list_for_each_entry(tsu, &tsi->tsi_units, tsu_list) {
+			int cpt = lnet_nid2cpt(&tsu->tsu_dest.nid, NULL);
+
 			atomic_inc(&tsi->tsi_nactive);
 			tsu->tsu_loop = tsi->tsi_loop;
 			wi = &tsu->tsu_worker;
-			swi_init_workitem(wi, sfw_run_test,
-					  lst_test_wq[lnet_cpt_of_nid(
-							      tsu->tsu_dest.nid,
-							      NULL)]);
+			swi_init_workitem(wi, sfw_run_test, lst_test_wq[cpt]);
 			swi_schedule_workitem(wi);
 		}
 	}
@@ -1161,7 +1160,7 @@ sfw_add_test(struct srpc_server_rpc *rpc)
 	if (bat == NULL) {
 		CERROR("dropping RPC %s from %s under memory pressure: rc = %d\n",
 			rpc->srpc_scd->scd_svc->sv_name,
-			libcfs_id2str(rpc->srpc_peer), -ENOMEM);
+			libcfs_idstr(&rpc->srpc_peer), -ENOMEM);
 		return -ENOMEM;
 	}
 
@@ -1255,7 +1254,7 @@ sfw_handle_server_rpc(struct srpc_server_rpc *rpc)
 	/* Remove timer to avoid racing with it or expiring active session */
 	if (sfw_del_session_timer() != 0) {
 		CERROR("dropping RPC %s from %s: racing with expiry timer: rc = %d\n",
-		       sv->sv_name, libcfs_id2str(rpc->srpc_peer), -EAGAIN);
+		       sv->sv_name, libcfs_idstr(&rpc->srpc_peer), -EAGAIN);
 		spin_unlock(&sfw_data.fw_lock);
 		return -EAGAIN;
 	}
@@ -1355,7 +1354,7 @@ sfw_bulk_ready(struct srpc_server_rpc *rpc, int status)
 
 	if (status != 0) {
 		CERROR("Bulk transfer failed for RPC: service %s, peer %s, status %d: rc = %d\n",
-		       sv->sv_name, libcfs_id2str(rpc->srpc_peer), status, -EIO);
+		       sv->sv_name, libcfs_idstr(&rpc->srpc_peer), status, -EIO);
 		spin_unlock(&sfw_data.fw_lock);
 		return -EIO;
 	}
@@ -1367,7 +1366,7 @@ sfw_bulk_ready(struct srpc_server_rpc *rpc, int status)
 
 	if (sfw_del_session_timer() != 0) {
 		CERROR("dropping RPC %s from %s: racing with expiry timer: rc = %d\n",
-		       sv->sv_name, libcfs_id2str(rpc->srpc_peer), -EAGAIN);
+		       sv->sv_name, libcfs_idstr(&rpc->srpc_peer), -EAGAIN);
 		spin_unlock(&sfw_data.fw_lock);
 		return -EAGAIN;
 	}
@@ -1388,7 +1387,7 @@ sfw_bulk_ready(struct srpc_server_rpc *rpc, int status)
 }
 
 struct srpc_client_rpc *
-sfw_create_rpc(struct lnet_process_id peer, int service,
+sfw_create_rpc(struct lnet_processid *peer, int service,
 	       unsigned features, int nbulkiov, int bulklen,
 	       void (*done)(struct srpc_client_rpc *), void *priv)
 {

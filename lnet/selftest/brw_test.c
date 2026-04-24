@@ -97,8 +97,9 @@ brw_client_init(struct sfw_test_instance *tsi)
 		return -EINVAL;
 
 	list_for_each_entry(tsu, &tsi->tsi_units, tsu_list) {
-		bulk = srpc_alloc_bulk(lnet_cpt_of_nid(tsu->tsu_dest.nid, NULL),
-				       len);
+		int cpt = lnet_nid2cpt(&tsu->tsu_dest.nid, NULL);
+
+		bulk = srpc_alloc_bulk(cpt, len);
 		if (bulk == NULL) {
 			brw_client_fini(tsi);
 			return -ENOMEM;
@@ -246,7 +247,7 @@ brw_check_bulk(struct srpc_bulk *bk, int pattern, __u64 magic)
 }
 
 static int
-brw_client_prep_rpc(struct sfw_test_unit *tsu, struct lnet_process_id dest,
+brw_client_prep_rpc(struct sfw_test_unit *tsu, struct lnet_processid *dest,
 		    struct srpc_client_rpc **rpcpp)
 {
 	struct srpc_bulk *bulk = tsu->tsu_private;
@@ -322,7 +323,7 @@ brw_client_done_rpc(struct sfw_test_unit *tsu, struct srpc_client_rpc *rpc)
 
 	if (rpc->crpc_status != 0) {
 		CERROR("BRW RPC to %s failed with %d\n",
-		       libcfs_id2str(rpc->crpc_dest), rpc->crpc_status);
+		       libcfs_idstr(&rpc->crpc_dest), rpc->crpc_status);
 		if (!tsi->tsi_stopping) /* rpc could have been aborted */
 			atomic_inc(&sn->sn_brw_errors);
 		return;
@@ -335,7 +336,7 @@ brw_client_done_rpc(struct sfw_test_unit *tsu, struct srpc_client_rpc *rpc)
 
 	CDEBUG(reply->brw_status ? D_WARNING : D_NET,
 	       "BRW RPC to %s finished with brw_status: %d\n",
-	       libcfs_id2str(rpc->crpc_dest), reply->brw_status);
+	       libcfs_idstr(&rpc->crpc_dest), reply->brw_status);
 
 	if (reply->brw_status != 0) {
 		atomic_inc(&sn->sn_brw_errors);
@@ -348,7 +349,7 @@ brw_client_done_rpc(struct sfw_test_unit *tsu, struct srpc_client_rpc *rpc)
 
 	if (brw_check_bulk(&rpc->crpc_bulk, reqst->brw_flags, magic) != 0) {
 		CERROR("Bulk data from %s is corrupted!\n",
-		       libcfs_id2str(rpc->crpc_dest));
+		       libcfs_idstr(&rpc->crpc_dest));
 		atomic_inc(&sn->sn_brw_errors);
 		rpc->crpc_status = -EBADMSG;
 	}
@@ -365,11 +366,11 @@ brw_server_rpc_done(struct srpc_server_rpc *rpc)
 	if (rpc->srpc_status != 0)
 		CERROR("Bulk transfer %s %s has failed: %d\n",
 		       blk->bk_sink ? "from" : "to",
-		       libcfs_id2str(rpc->srpc_peer), rpc->srpc_status);
+		       libcfs_idstr(&rpc->srpc_peer), rpc->srpc_status);
 	else
 		CDEBUG(D_NET, "Transferred %d pages bulk data %s %s\n",
 		       blk->bk_niov, blk->bk_sink ? "from" : "to",
-		       libcfs_id2str(rpc->srpc_peer));
+		       libcfs_idstr(&rpc->srpc_peer));
 }
 
 static int
@@ -389,7 +390,7 @@ brw_bulk_ready(struct srpc_server_rpc *rpc, int status)
 	if (status != 0) {
 		CERROR("BRW bulk %s failed for RPC from %s: %d\n",
 		       reqst->brw_rw == LST_BRW_READ ? "READ" : "WRITE",
-		       libcfs_id2str(rpc->srpc_peer), status);
+		       libcfs_idstr(&rpc->srpc_peer), status);
 		return -EIO;
 	}
 
@@ -401,7 +402,7 @@ brw_bulk_ready(struct srpc_server_rpc *rpc, int status)
 
 	if (brw_check_bulk(rpc->srpc_bulk, reqst->brw_flags, magic) != 0) {
 		CERROR("Bulk data from %s is corrupted!\n",
-		       libcfs_id2str(rpc->srpc_peer));
+		       libcfs_idstr(&rpc->srpc_peer));
 		reply->brw_status = EBADMSG;
 	}
 

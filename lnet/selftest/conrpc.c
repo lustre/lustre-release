@@ -70,7 +70,7 @@ lstcon_rpc_init(struct lstcon_node *nd, int service, unsigned int feats,
 {
 	memset(crpc, 0, sizeof(*crpc));
 
-	crpc->crp_rpc = sfw_create_rpc(nd->nd_id, service,
+	crpc->crp_rpc = sfw_create_rpc(&nd->nd_id, service,
 				       feats, bulk_npg, bulk_len,
 				       lstcon_rpc_done, (void *)crpc);
 	if (crpc->crp_rpc == NULL)
@@ -729,7 +729,7 @@ lstcon_dstnodes_prep(struct lstcon_group *grp, int idx,
 			break;
 
 		pid = lstcon_next_id((i - start), nkiov, kiov);
-		pid->nid = nd->nd_id.nid;
+		pid->nid = lnet_nid_to_nid4(&nd->nd_id.nid);
 		pid->pid = nd->nd_id.pid;
 		i++;
 	}
@@ -743,7 +743,7 @@ lstcon_dstnodes_prep(struct lstcon_group *grp, int idx,
 
 		nd = ndl->ndl_node;
 		pid = lstcon_next_id((i - start), nkiov, kiov);
-		pid->nid = nd->nd_id.nid;
+		pid->nid = lnet_nid_to_nid4(&nd->nd_id.nid);
 		pid->pid = nd->nd_id.pid;
 		i++;
 	}
@@ -928,7 +928,7 @@ lstcon_sesnew_stat_reply(struct lstcon_rpc_trans *trans,
 
 	if (status == EPROTO) {
 		CNETERR("session protocol error from %s: %u\n",
-			libcfs_nid2str(nd->nd_id.nid),
+			libcfs_nidstr(&nd->nd_id.nid),
 			reply->msg_ses_feats);
 	}
 
@@ -946,7 +946,7 @@ lstcon_sesnew_stat_reply(struct lstcon_rpc_trans *trans,
 
 	if (reply->msg_ses_feats != trans->tas_features) {
 		CNETERR("Framework features %x from %s is different with features on this transaction: %x\n",
-			 reply->msg_ses_feats, libcfs_nid2str(nd->nd_id.nid),
+			 reply->msg_ses_feats, libcfs_nidstr(&nd->nd_id.nid),
 			 trans->tas_features);
 		status = mksn_rep->mksn_status = EPROTO;
 	}

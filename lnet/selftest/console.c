@@ -44,18 +44,18 @@ lstcon_node_get(struct lstcon_node *nd)
 }
 
 static int
-lstcon_node_find(struct lnet_process_id id, struct lstcon_node **ndpp,
+lstcon_node_find(struct lnet_processid *id, struct lstcon_node **ndpp,
 		 int create)
 {
+	unsigned int idx = nidhash(&id->nid) % LST_GLOBAL_HASHSIZE;
 	struct lstcon_ndlink *ndl;
-	unsigned int idx = LNET_NIDADDR(id.nid) % LST_GLOBAL_HASHSIZE;
 
-	LASSERT(id.nid != LNET_NID_ANY);
+	LASSERT(!LNET_NID_IS_ANY(&id->nid));
 
 	list_for_each_entry(ndl, &console_session.ses_ndl_hash[idx],
 			    ndl_hlink) {
-		if (ndl->ndl_node->nd_id.nid != id.nid ||
-		    ndl->ndl_node->nd_id.pid != id.pid)
+		if (!nid_same(&ndl->ndl_node->nd_id.nid, &id->nid) ||
+		    ndl->ndl_node->nd_id.pid != id->pid)
 			continue;
 
 		lstcon_node_get(ndl->ndl_node);
@@ -74,8 +74,8 @@ lstcon_node_find(struct lnet_process_id id, struct lstcon_node **ndpp,
 
 	ndl->ndl_node = *ndpp;
 
-	ndl->ndl_node->nd_ref   = 1;
-	ndl->ndl_node->nd_id    = id;
+	ndl->ndl_node->nd_ref = 1;
+	ndl->ndl_node->nd_id = *id;
 	ndl->ndl_node->nd_stamp = ktime_get();
 	ndl->ndl_node->nd_state = LST_NODE_UNKNOWN;
 	ndl->ndl_node->nd_timeout = 0;
@@ -114,21 +114,21 @@ lstcon_node_put(struct lstcon_node *nd)
 }
 
 static int
-lstcon_ndlink_find(struct list_head *hash, struct lnet_process_id id,
+lstcon_ndlink_find(struct list_head *hash, struct lnet_processid *id,
 		   struct lstcon_ndlink **ndlpp, int create)
 {
-	unsigned int idx = LNET_NIDADDR(id.nid) % LST_NODE_HASHSIZE;
+	unsigned int idx = nidhash(&id->nid) % LST_NODE_HASHSIZE;
 	struct lstcon_ndlink *ndl;
 	struct lstcon_node *nd;
 	int rc;
 
-	if (id.nid == LNET_NID_ANY)
+	if (LNET_NID_IS_ANY(&id->nid))
 		return -EINVAL;
 
 	/* search in hash */
 	list_for_each_entry(ndl, &hash[idx], ndl_hlink) {
-		if (ndl->ndl_node->nd_id.nid != id.nid ||
-		    ndl->ndl_node->nd_id.pid != id.pid)
+		if (!nid_same(&ndl->ndl_node->nd_id.nid, &id->nid) ||
+		    ndl->ndl_node->nd_id.pid != id->pid)
 			continue;
 
 		*ndlpp = ndl;
@@ -260,7 +260,7 @@ int lstcon_group_find(const char *name, struct lstcon_group **grpp)
 }
 
 static int
-lstcon_group_ndlink_find(struct lstcon_group *grp, struct lnet_process_id id,
+lstcon_group_ndlink_find(struct lstcon_group *grp, struct lnet_processid *id,
 			 struct lstcon_ndlink **ndlpp, int create)
 {
 	int rc;
@@ -290,8 +290,8 @@ static void
 lstcon_group_ndlink_move(struct lstcon_group *old,
 			 struct lstcon_group *new, struct lstcon_ndlink *ndl)
 {
-	unsigned int idx = LNET_NIDADDR(ndl->ndl_node->nd_id.nid) %
-					LST_NODE_HASHSIZE;
+	unsigned long idx = nidhash(&ndl->ndl_node->nd_id.nid) %
+				    LST_NODE_HASHSIZE;
 
 	old->grp_nnode--;
 
@@ -379,7 +379,8 @@ lstcon_group_nodes_add(struct lstcon_group *grp,
 	struct lstcon_rpc_trans *trans;
 	struct lstcon_ndlink *ndl;
 	struct lstcon_group *tmp;
-	struct lnet_process_id id;
+	struct lnet_process_id id4;
+	struct lnet_processid id;
 	int i;
 	int rc;
 
@@ -390,18 +391,19 @@ lstcon_group_nodes_add(struct lstcon_group *grp,
 	}
 
 	for (i = 0 ; i < count; i++) {
-		if (copy_from_user(&id, &ids_up[i], sizeof(id))) {
+		if (copy_from_user(&id4, &ids_up[i], sizeof(id4))) {
 			rc = -EFAULT;
 			break;
 		}
 
 		/* skip if it's in this group already */
-		rc = lstcon_group_ndlink_find(grp, id, &ndl, 0);
+		lnet_pid4_to_pid(id4, &id);
+		rc = lstcon_group_ndlink_find(grp, &id, &ndl, 0);
 		if (rc == 0)
 			continue;
 
 		/* add to tmp group */
-		rc = lstcon_group_ndlink_find(tmp, id, &ndl, 1);
+		rc = lstcon_group_ndlink_find(tmp, &id, &ndl, 1);
 		if (rc != 0) {
 			CERROR("Can't create ndlink, out of memory: rc = %d\n",
 			       rc);
@@ -447,7 +449,8 @@ lstcon_group_nodes_remove(struct lstcon_group *grp,
 	struct lstcon_rpc_trans *trans;
 	struct lstcon_ndlink *ndl;
 	struct lstcon_group *tmp;
-	struct lnet_process_id id;
+	struct lnet_process_id id4;
+	struct lnet_processid id;
 	int rc;
 	int i;
 
@@ -460,13 +463,14 @@ lstcon_group_nodes_remove(struct lstcon_group *grp,
 	}
 
 	for (i = 0; i < count; i++) {
-		if (copy_from_user(&id, &ids_up[i], sizeof(id))) {
+		if (copy_from_user(&id4, &ids_up[i], sizeof(id4))) {
 			rc = -EFAULT;
 			goto error;
 		}
 
 		/* move node to tmp group */
-		if (lstcon_group_ndlink_find(grp, id, &ndl, 0) == 0)
+		lnet_pid4_to_pid(id4, &id);
+		if (lstcon_group_ndlink_find(grp, &id, &ndl, 0) == 0)
 			lstcon_group_ndlink_move(grp, tmp, ndl);
 	}
 
@@ -1078,9 +1082,9 @@ lstcon_testrpc_condition(int transop, struct lstcon_node *nd, void *arg)
 		head = &batch->bat_srv_list;
 	}
 
-	LASSERT(nd->nd_id.nid != LNET_NID_ANY);
+	LASSERT(!LNET_NID_IS_ANY(&nd->nd_id.nid));
 
-	if (lstcon_ndlink_find(hash, nd->nd_id, &ndl, 1) != 0)
+	if (lstcon_ndlink_find(hash, &nd->nd_id, &ndl, 1) != 0)
 		return -ENOMEM;
 
 	if (list_empty(&ndl->ndl_link))
@@ -1444,7 +1448,8 @@ lstcon_nodes_stat(int count, struct lnet_process_id __user *ids_up,
 {
 	struct lstcon_ndlink *ndl;
 	struct lstcon_group *tmp;
-	struct lnet_process_id id;
+	struct lnet_process_id id4;
+	struct lnet_processid id;
 	int i;
 	int rc;
 
@@ -1455,17 +1460,18 @@ lstcon_nodes_stat(int count, struct lnet_process_id __user *ids_up,
 	}
 
 	for (i = 0 ; i < count; i++) {
-		if (copy_from_user(&id, &ids_up[i], sizeof(id))) {
+		if (copy_from_user(&id4, &ids_up[i], sizeof(id4))) {
 			rc = -EFAULT;
 			break;
 		}
 
 		/* add to tmp group */
-		rc = lstcon_group_ndlink_find(tmp, id, &ndl, 2);
+		lnet_pid4_to_pid(id4, &id);
+		rc = lstcon_group_ndlink_find(tmp, &id, &ndl, 2);
 		if (rc != 0) {
 			CDEBUG((rc == -ENOMEM) ? D_ERROR : D_NET,
 			       "Failed to find or create %s: rc = %d\n",
-			       libcfs_id2str(id), rc);
+			       libcfs_idstr(&id), rc);
 			break;
 		}
 	}
@@ -1552,7 +1558,8 @@ lstcon_nodes_debug(int timeout, int count,
 		   struct lnet_process_id __user *ids_up,
 		   struct list_head __user *result_up)
 {
-	struct lnet_process_id id;
+	struct lnet_process_id id4;
+	struct lnet_processid id;
 	struct lstcon_ndlink *ndl;
 	struct lstcon_group *grp;
 	int i;
@@ -1565,13 +1572,14 @@ lstcon_nodes_debug(int timeout, int count,
 	}
 
 	for (i = 0; i < count; i++) {
-		if (copy_from_user(&id, &ids_up[i], sizeof(id))) {
+		if (copy_from_user(&id4, &ids_up[i], sizeof(id4))) {
 			rc = -EFAULT;
 			break;
 		}
 
 		/* node is added to tmp group */
-		rc = lstcon_group_ndlink_find(grp, id, &ndl, 1);
+		lnet_pid4_to_pid(id4, &id);
+		rc = lstcon_group_ndlink_find(grp, &id, &ndl, 1);
 		if (rc != 0) {
 			CERROR("Can't create node link\n");
 			break;
@@ -1823,13 +1831,13 @@ lstcon_acceptor_handle(struct srpc_server_rpc *rpc)
 		goto out;
 	}
 
-	rc = lstcon_group_ndlink_find(grp, rpc->srpc_peer, &ndl, 0);
+	rc = lstcon_group_ndlink_find(grp, &rpc->srpc_peer, &ndl, 0);
 	if (rc == 0) {
 		jrep->join_status = EEXIST;
 		goto out;
 	}
 
-	rc = lstcon_group_ndlink_find(grp, rpc->srpc_peer, &ndl, 1);
+	rc = lstcon_group_ndlink_find(grp, &rpc->srpc_peer, &ndl, 1);
 	if (rc != 0) {
 		CERROR("Out of memory\n");
 		goto out;

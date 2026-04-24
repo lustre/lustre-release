@@ -27,7 +27,7 @@
 
 /* node descriptor */
 struct lstcon_node {
-	struct lnet_process_id		nd_id;    /* id of the node */
+	struct lnet_processid		nd_id;    /* id of the node */
 	int				nd_ref;   /* reference count */
 	int				nd_state; /* state of the node */
 	int				nd_timeout; /* session timeout */
@@ -163,14 +163,6 @@ static inline struct lstcon_trans_stat *
 lstcon_trans_stat(void)
 {
 	return &console_session.ses_trans_stat;
-}
-
-static inline struct list_head *
-lstcon_id2hash(struct lnet_process_id id, struct list_head *hash)
-{
-	unsigned int idx = LNET_NIDADDR(id.nid) % LST_NODE_HASHSIZE;
-
-	return &hash[idx];
 }
 
 extern int lstcon_session_match(struct lst_sid sid);
