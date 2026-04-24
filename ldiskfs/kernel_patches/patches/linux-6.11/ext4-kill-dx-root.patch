@@ -22,7 +22,6 @@ Reviewed-on: http://review.whamcloud.com/10249
  1 file changed, 71 insertions(+), 76 deletions(-)
 
 diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
-index 015c801a..0bb519ab 100644
 --- a/fs/ext4/namei.c
 +++ b/fs/ext4/namei.c
 @@ -245,22 +245,13 @@ struct dx_entry
@@ -322,10 +321,8 @@ index 015c801a..0bb519ab 100644
 -			dxroot->info.indirect_levels += 1;
 +			info = dx_get_dx_info((struct ext4_dir_entry_2 *)
 +					      frames[0].bh->b_data);
-+			info->indirect_levels = 1;
++			info->indirect_levels += 1;
  			dxtrace(printk(KERN_DEBUG
  				       "Creating %d level index...\n",
  				       dxroot->info.indirect_levels));
 -- 
-2.34.1
-
