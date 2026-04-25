@@ -3143,9 +3143,8 @@ int llapi_file_lookup(int dirfd, const char *name)
 }
 
 static int cb_migrate_mdt_init(char *path, int p, int *dp,
-			       void *param_data, struct dirent64 *de)
+			       struct find_param *param, struct dirent64 *de)
 {
-	struct find_param *param = (struct find_param *)param_data;
 	struct lmv_user_md *lmu = param->fp_lmv_md;
 	int tmp_p = p;
 	char raw[MAX_IOC_BUFLEN] = {'\0'};
@@ -3259,10 +3258,9 @@ out:
 }
 
 /* dir migration finished, shrink its stripes */
-static int cb_migrate_mdt_fini(char *path, int p, int *dp, void *data,
-			       struct dirent64 *de)
+static int cb_migrate_mdt_fini(char *path, int p, int *dp,
+			       struct find_param *param, struct dirent64 *de)
 {
-	struct find_param *param = data;
 	struct lmv_user_md *lmu = param->fp_lmv_md;
 	int lmulen = lmv_user_md_size(lmu->lum_stripe_count, lmu->lum_magic);
 	int ret = 0;
@@ -3294,7 +3292,7 @@ static int cb_migrate_mdt_fini(char *path, int p, int *dp, void *data,
 	}
 
 out:
-	cb_common_fini(path, p, dp, data, de);
+	cb_common_fini(path, p, dp, param, de);
 	return ret;
 }
 
@@ -3445,16 +3443,30 @@ void validate_printf_str(struct find_param *param)
 	}
 }
 
-int llapi_find(char *path, struct find_param *param)
+/*
+ * llapi_find_with_cb - Parallel find with custom callbacks
+ * @path	Starting path for the traversal
+ * @param	Ponter to find_param structure
+ * @cb_init	Callback invoked for each file/directory entry during traversal,
+ *		NULL to use default cb_find_init().
+ * @cb_fini	Callback invoked after processing a directory's contents, NULL
+ *		to use default cb_common_fini().
+ * Return	0 on success, < 0 on error.
+ */
+int llapi_find_with_cb(char *path, struct find_param *param,
+		       llapi_find_cb_t cb_init, llapi_find_cb_t cb_fini)
 {
 	if (param->fp_format_printf_str)
 		validate_printf_str(param);
-	if (param->fp_thread_count) {
-		return parallel_find(path, param);
-	} else {
-		return param_callback(path, cb_find_init, cb_common_fini,
-				      param);
-	}
+	if (param->fp_thread_count > 1)
+		return parallel_find(path, cb_init, cb_fini, param);
+	else
+		return param_callback(path, cb_init, cb_fini, param);
+}
+
+int llapi_find(char *path, struct find_param *param)
+{
+	return llapi_find_with_cb(path, param, cb_find_init, cb_common_fini);
 }
 
 /*
@@ -3469,10 +3481,9 @@ int llapi_file_fget_mdtidx(int fd, int *mdtidx)
 	return 0;
 }
 
-static int cb_get_mdt_index(char *path, int p, int *dp, void *data,
-			    struct dirent64 *de)
+static int cb_get_mdt_index(char *path, int p, int *dp,
+			    struct find_param *param, struct dirent64 *de)
 {
-	struct find_param *param = (struct find_param *)data;
 	int d = dp == NULL ? -1 : *dp;
 	int ret;
 	int mdtidx;
@@ -3535,10 +3546,9 @@ out:
 	return 0;
 }
 
-static int cb_getstripe(char *path, int p, int *dp, void *data,
+static int cb_getstripe(char *path, int p, int *dp, struct find_param *param,
 			struct dirent64 *de)
 {
-	struct find_param *param = (struct find_param *)data;
 	int d = dp == NULL ? -1 : *dp, fd = -1;
 	int ret = 0;
 	struct stat st;

@@ -116,11 +116,9 @@ int common_param_init(struct find_param *param, char *path)
 	return 0;
 }
 
-int cb_common_fini(char *path, int p, int *dp, void *data,
+int cb_common_fini(char *path, int p, int *dp, struct find_param *param,
 		   struct dirent64 *de)
 {
-	struct find_param *param = data;
-
 	param->fp_depth--;
 	return 0;
 }
@@ -2412,10 +2410,9 @@ static int setup_target_indexes(int d, char *path, struct find_param *param)
 	return ret;
 }
 
-int cb_find_init(char *path, int p, int *dp,
-		 void *data, struct dirent64 *de)
+int cb_find_init(char *path, int p, int *dp, struct find_param *param,
+		 struct dirent64 *de)
 {
-	struct find_param *param = (struct find_param *)data;
 	struct lov_user_mds_data *lmd = param->fp_lmd;
 	int d = dp == NULL ? -1 : *dp;
 	int decision = 1; /* 1 is accepted; -1 is rejected. */
@@ -3001,8 +2998,8 @@ out:
 }
 
 int llapi_semantic_traverse(char *path, int size, int parent,
-			    semantic_func_t sem_init,
-			    semantic_func_t sem_fini, void *data,
+			    llapi_find_cb_t sem_init,
+			    llapi_find_cb_t sem_fini, void *data,
 			    struct dirent64 *de)
 {
 	struct find_param *param = (struct find_param *)data;
@@ -3100,7 +3097,7 @@ int llapi_semantic_traverse(char *path, int size, int parent,
 		struct find_work_queue *queue = param->fp_queue;
 		int rc = 0;
 
-		if (param->fp_thread_count && queue->fwq_shutdown)
+		if (param->fp_thread_count > 1 && queue->fwq_shutdown)
 			break;
 
 		if (!strcmp(dent->d_name, ".") || !strcmp(dent->d_name, ".."))
@@ -3138,7 +3135,7 @@ int llapi_semantic_traverse(char *path, int size, int parent,
 			break;
 		case DT_DIR:
 			/* recursion down into a new subdirectory here */
-			if (param->fp_thread_count) {
+			if (param->fp_thread_count > 1) {
 				rc = work_unit_create_and_add(path, param,
 							      dent);
 			} else {
@@ -3186,8 +3183,8 @@ err:
 	return ret;
 }
 
-int param_callback(char *path, semantic_func_t sem_init,
-		   semantic_func_t sem_fini, struct find_param *param)
+int param_callback(char *path, llapi_find_cb_t cb_init,
+		   llapi_find_cb_t cb_fini, struct find_param *param)
 {
 	int ret, len = strlen(path);
 	char *buf;
@@ -3214,8 +3211,8 @@ int param_callback(char *path, semantic_func_t sem_init,
 
 	param->fp_depth = 0;
 
-	ret = llapi_semantic_traverse(buf, 2 * PATH_MAX + 1, -1, sem_init,
-				      sem_fini, param, NULL);
+	ret = llapi_semantic_traverse(buf, 2 * PATH_MAX + 1, -1, cb_init,
+				      cb_fini, param, NULL);
 out:
 	find_param_fini(param);
 	free(buf);
@@ -3254,7 +3251,8 @@ static void *find_worker(void *arg)
 		pthread_mutex_unlock(&queue->fwq_lock);
 
 		rc = llapi_semantic_traverse(unit->fwu_path, 2 * PATH_MAX, -1,
-					     cb_find_init, cb_common_fini,
+					     queue->fwq_cb_init,
+					     queue->fwq_cb_fini,
 					     unit->fwu_param, NULL);
 		if (rc && queue->fwq_error == 0)
 			queue->fwq_error = rc;
@@ -3276,7 +3274,9 @@ static void *find_worker(void *arg)
 }
 
 /* Initialize the work queue */
-static void find_work_queue_init(struct find_work_queue *queue)
+static void find_work_queue_init(struct find_work_queue *queue,
+				 llapi_find_cb_t cb_init,
+				 llapi_find_cb_t cb_fini)
 {
 	queue->fwq_head = NULL;
 	queue->fwq_tail = NULL;
@@ -3285,6 +3285,8 @@ static void find_work_queue_init(struct find_work_queue *queue)
 	pthread_cond_init(&queue->fwq_sleep_cond, NULL);
 	queue->fwq_shutdown = false;
 	queue->fwq_error = 0;
+	queue->fwq_cb_init = cb_init;
+	queue->fwq_cb_fini = cb_fini;
 }
 
 static int find_threads_init(pthread_t *threads, struct find_work_queue *queue,
@@ -3709,7 +3711,8 @@ out:
 	return ret < 0 ? ret : 0;
 }
 
-int parallel_find(char *path, struct find_param *param)
+int parallel_find(char *path, llapi_find_cb_t cb_init, llapi_find_cb_t cb_fini,
+		  struct find_param *param)
 {
 	struct find_work_queue queue = { 0 };
 	pthread_t *threads = NULL;
@@ -3724,7 +3727,7 @@ int parallel_find(char *path, struct find_param *param)
 	if (numthreads < 1)
 		return -EINVAL;
 
-	find_work_queue_init(&queue);
+	find_work_queue_init(&queue, cb_init, cb_fini);
 
 	threads = malloc(numthreads * sizeof(pthread_t));
 	if (!threads)
@@ -3738,7 +3741,6 @@ int parallel_find(char *path, struct find_param *param)
 	}
 	/* Normal find - no parallelism yet */
 	rc = pfind_param_callback(path, param, &queue);
-
 
 	/* Signal shutdown and wait for threads before cleanup */
 	pthread_mutex_lock(&queue.fwq_lock);

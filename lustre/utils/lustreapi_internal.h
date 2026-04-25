@@ -238,9 +238,6 @@ static inline bool is_oss(void)
 	return false;
 }
 
-typedef int (semantic_func_t)(char *path, int p, int *d,
-			      void *data, struct dirent64 *de);
-
 static inline bool lmv_is_foreign(__u32 magic)
 {
 	return magic == LMV_MAGIC_FOREIGN;
@@ -276,21 +273,22 @@ int find_value_cmp(unsigned long long file, unsigned long long limit, int sign,
 		   int negopt, unsigned long long margin, bool mds);
 int find_comp_end_cmp(unsigned long long end, struct find_param *param);
 void validate_printf_str(struct find_param *param);
-int param_callback(char *path, semantic_func_t sem_init,
-		   semantic_func_t sem_fini, struct find_param *param);
-int cb_find_init(char *path, int p, int *dp,
-		 void *data, struct dirent64 *de);
-int cb_common_fini(char *path, int p, int *dp, void *data,
+int param_callback(char *path, llapi_find_cb_t cb_init,
+		   llapi_find_cb_t cb_fini, struct find_param *param);
+int cb_find_init(char *path, int p, int *dp, struct find_param *param,
+		 struct dirent64 *de);
+int cb_common_fini(char *path, int p, int *dp, struct find_param *param,
 		   struct dirent64 *de);
 int cb_get_dirstripe(char *path, int *d, struct find_param *param);
 int common_param_init(struct find_param *param, char *path);
 void find_param_fini(struct find_param *param);
-int parallel_find(char *path, struct find_param *param);
+int parallel_find(char *path, llapi_find_cb_t cb_init, llapi_find_cb_t cb_fini,
+		  struct find_param *param);
 int work_unit_create_and_add(const char *path, struct find_param *param,
 			     struct dirent64 *dent);
 int llapi_semantic_traverse(char *path, int size, int parent,
-			    semantic_func_t sem_init,
-			    semantic_func_t sem_fini, void *data,
+			    llapi_find_cb_t sem_init,
+			    llapi_find_cb_t sem_fini, void *data,
 			    struct dirent64 *de);
 
 #ifndef NSEC_PER_SEC

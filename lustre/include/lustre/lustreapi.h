@@ -464,6 +464,7 @@ struct find_param {
 	unsigned long long	 fp_skip_count;
 	struct xattr_match_info	*fp_xattr_match_info;
 	struct find_work_queue	*fp_queue;
+	void			*fp_cb_data; /* Callback data */
 };
 
 /* Work unit for parallel directory processing */
@@ -473,6 +474,22 @@ struct find_work_unit {
 	struct dirent64 *fwu_de;
 	char *fwu_path;
 };
+
+/* Callback function for semantic traversal
+ *   @path  Full path to the current file/directory being processed
+ *   @p     File descriptor of the parent directory (-1 if not available)
+ *   @d     Pointer to file descriptor of current entry (NULL for non-dirs)
+ *   @param Pointer to the find_param structure (field fp_cb_data is used to
+ *	    pass callback data)
+ *   @de    Directory entry structure (NULL for the root path)
+ * Return values:
+ *   0      Continue traversal normally
+ *   1      Skip descending into this directory (for directories only)
+ *   -1     Stop traversal
+ *   Other  Error code
+ */
+typedef int (*llapi_find_cb_t)(char *path, int p, int *d,
+			       struct find_param *param, struct dirent64 *de);
 
 /* Check if we have C11 atomics available */
 #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 201112L && !defined(__STDC_NO_ATOMICS__)
@@ -503,14 +520,19 @@ struct find_work_queue {
 #else
 	int fwq_active_units;
 #endif
-	bool fwq_shutdown;		/* Flag to signal shutdown */
-	int fwq_error;			/* error code if failed */
+	bool fwq_shutdown;		 /* Flag to signal shutdown */
+	int fwq_error;			 /* error code if failed */
+	/* Callbacks for worker threads */
+	llapi_find_cb_t fwq_cb_init;	 /* Callback for processing entries */
+	llapi_find_cb_t fwq_cb_fini;	 /* Callback for finalization */
 };
 
 int llapi_ostlist(char *path, struct find_param *param);
 int llapi_uuid_match(char *real_uuid, char *search_uuid);
 int llapi_getstripe(char *path, struct find_param *param);
 int llapi_find(char *path, struct find_param *param);
+int llapi_find_with_cb(char *path, struct find_param *param,
+		       llapi_find_cb_t cb_init, llapi_find_cb_t cb_fini);
 
 int llapi_file_fget_mdtidx(int fd, int *mdtidx);
 int llapi_dir_set_default_lmv(const char *name,
