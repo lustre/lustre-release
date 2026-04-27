@@ -78,7 +78,6 @@ static int open_flags_rw = EXT2_FLAG_RW | EXT2_FLAG_64BITS;
 static void append_unique(char *buf, char *prefix, char *key, char *val,
 			  size_t maxbuflen);
 static bool is_e2fsprogs_feature_supp(const char *feature);
-static void disp_old_e2fsprogs_msg(const char *feature, int make_backfs);
 
 /* Determine if a device is a block device (as opposed to a file) */
 static int is_block(char *devname)
@@ -294,10 +293,13 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 		return translate_error(retval);
 
 	/*
-	 * Multiple mount protection enabled if failover node specified,
-	 * unless explicitly disabled with --nommp option.
+	 * Multiple mount protection enabled if explicitly requested with
+	 * --mmp, or if a failover node is specified and not explicitly
+	 * disabled with --nommp option. Explicitly disabling it with
+	 * --nommp removes MMP from a target that already has it.
 	 */
-	if ((mop->mo_flags & MO_FAILOVER) && !(mop->mo_flags & MO_SKIPMMP) &&
+	if (((mop->mo_flags & MO_MMP) ||
+	     ((mop->mo_flags & MO_FAILOVER) && !(mop->mo_flags & MO_NOMMP))) &&
 	    !ext2fs_has_feature_mmp(backfs->super)) {
 		retval = ext2fs_mmp_init(backfs);
 		if (!retval) {
@@ -307,6 +309,23 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 		} else
 			fprintf(stderr,
 				"Error enabling multi-mount protection\n");
+	} else if ((mop->mo_flags & MO_NOMMP) &&
+		   ext2fs_has_feature_mmp(backfs->super)) {
+		retval = ext2fs_mmp_read(backfs, backfs->super->s_mmp_block,
+					 NULL);
+		if (!retval) {
+			backfs->flags &= ~EXT2_FLAG_SUPER_ONLY;
+			ext2fs_block_alloc_stats2(backfs,
+						  backfs->super->s_mmp_block,
+						  -1);
+		} else
+			fprintf(stderr,
+				"Error reading MMP block, disabling anyway\n");
+		backfs->super->s_mmp_block = 0;
+		backfs->super->s_mmp_update_interval = 0;
+		ext2fs_clear_feature_mmp(backfs->super);
+		ext2fs_mark_super_dirty(backfs);
+		ext2fs_flush(backfs);
 	}
 
 	retval = ext2fs_namei(backfs, EXT2_ROOT_INO, EXT2_ROOT_INO,
@@ -463,34 +482,6 @@ void ldiskfs_print_ldd_params(struct mkfs_opts *mop)
 	printf("Parameters:%s\n", mop->mo_ldd.ldd_params);
 }
 
-/* Display the need for the latest e2fsprogs to be installed. make_backfs
- * indicates if the caller is make_lustre_backfs() or not. */
-static void disp_old_e2fsprogs_msg(const char *feature, int make_backfs)
-{
-	static int msg_displayed;
-
-	if (msg_displayed) {
-		fprintf(stderr, "WARNING: %s does not support %s "
-			"feature.\n\n", E2FSPROGS, feature);
-		return;
-	}
-
-	msg_displayed++;
-
-	fprintf(stderr, "WARNING: The %s package currently installed on "
-		"your system does not support \"%s\" feature.\n",
-		E2FSPROGS, feature);
-#if !(HAVE_LDISKFSPROGS)
-	fprintf(stderr, "Please install the latest version of e2fsprogs from\n"
-		"https://downloads.whamcloud.com/public/e2fsprogs/latest/\n"
-		"to enable this feature.\n");
-#endif
-	if (make_backfs)
-		fprintf(stderr,
-			"Feature will not be enabled until %s is updated and '%s -O %s %%{device}' is run.\n\n",
-			E2FSPROGS, TUNE2FS, feature);
-}
-
 /* Check whether the file exists in the device */
 static int file_in_dev(char *file_name, char *dev_name)
 {
@@ -631,16 +622,14 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 	append_unique(anchor, user_spec ? "," : " -O ",
 		      "uninit_bg", NULL, maxbuflen);
 	append_unique(anchor, ",", "extents", NULL, maxbuflen);
+
 	if (IS_MDT(&mop->mo_ldd))
 		append_unique(anchor, ",", "dirdata", NULL, maxbuflen);
 
-	/* Multiple mount protection enabled only if failover node specified */
-	if ((mop->mo_flags & MO_FAILOVER) && !(mop->mo_flags & MO_SKIPMMP)) {
-		if (is_e2fsprogs_feature_supp("-O mmp"))
-			append_unique(anchor, ",", "mmp", NULL, maxbuflen);
-		else
-			disp_old_e2fsprogs_msg("mmp", 1);
-	}
+	/* Multimount protection enabled if failover node or --mmp given */
+	if ((mop->mo_flags & MO_MMP) ||
+	    ((mop->mo_flags & MO_FAILOVER) && !(mop->mo_flags & MO_NOMMP)))
+		append_unique(anchor, ",", "mmp", NULL, maxbuflen);
 
 	/* Allow more than 65000 subdirectories */
 	if (is_e2fsprogs_feature_supp("-O dir_nlink"))

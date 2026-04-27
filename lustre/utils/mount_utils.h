@@ -56,7 +56,8 @@ extern int failover;
 #define MO_NOHOSTID_CHECK	0x20
 #define MO_RENAME		0x40
 #define MO_ERASE_ALL		0x80
-#define MO_SKIPMMP		0x100
+#define MO_NOMMP		0x100
+#define MO_MMP			0x200
 
 #define MAX_LOOP_DEVICES	16
 #define INDEX_UNASSIGNED	0xFFFF

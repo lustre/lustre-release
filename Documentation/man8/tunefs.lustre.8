@@ -87,7 +87,14 @@ Set the NID(s) of the MGS node, required for all targets other than the MGS.
 .B --nomgs
 Remove a configuration management service to this target.
 .TP
-.B --skipmmp
+.B --mmp
+Enable Multi-Mount Protection (MMP) feature on ldiskfs targets. MMP helps
+prevent simultaneous mounts of the same filesystem on multiple nodes, which
+could lead to filesystem corruption. This option is only valid for ldiskfs
+backing filesystems. Use this to add MMP to an existing target that was
+formatted without it.
+.TP
+.BR --nommp | --skipmmp
 Disable Multi-Mount Protection (MMP) feature even when failover nodes are
 configured. By default, MMP is automatically enabled when failover is
 configured. Use this option only if you have alternative mount protection

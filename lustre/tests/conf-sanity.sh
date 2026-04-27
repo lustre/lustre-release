@@ -9610,6 +9610,37 @@ test_108b() {
 }
 run_test 108b "migrate from ZFS to ldiskfs"
 
+test_108c() {
+	[[ -n "$CLIENTONLY" ]] && skip "Client-only testing"
+	[[ "$mds1_FSTYPE" == "ldiskfs" ]] || skip "ldiskfs-only test"
+
+	(( MDS1_VERSION >= $(version_code 2.17.56) )) ||
+		skip "need MDS >= 2.17.56 for mkfs.lustre --mmp"
+	stopall
+	load_modules
+
+	local device=$(mdsdevname 1)
+
+	if ! combined_mgs_mds; then
+		format_mgs
+		start_mgs
+	fi
+
+	add mds1 $(mkfs_opts mds1 $device) --mmp --reformat \
+		$device $(mdsvdevname 1) || error "mkfs with --mmp failed"
+
+	do_facet mds1 "$DUMPE2FS -h $device 2>&1 | grep -q mmp" ||
+		error "MMP feature not enabled after mkfs --mmp"
+
+	start mds1 $device $MDS_MOUNT_OPTS || error "start MDS failed"
+
+	do_facet mds1 "$DEBUGFS -c -R dump_mmp $device 2>&1 | grep -q magic:" ||
+		error "MMP block not found"
+
+	stopall || error "stopall failed"
+}
+run_test 108c "mkfs.lustre --mmp option enables MMP feature"
+
 #
 # set number of permanent parameters
 #

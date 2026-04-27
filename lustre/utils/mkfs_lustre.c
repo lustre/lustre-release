@@ -58,11 +58,14 @@ static int erase_all;
 #endif
 
 enum mkfs_options {
-	MKFS_OPT_SKIPMMP = 1000,
+	MKFS_OPT_MMP = 1000,
+	MKFS_OPT_NOMMP = 1001,
 };
 
 static struct option long_opts[] = {
-	{.val = MKFS_OPT_SKIPMMP, .name = "skipmmp", .has_arg = no_argument},
+	{.val = MKFS_OPT_MMP, .name = "mmp", .has_arg = no_argument},
+	{.val = MKFS_OPT_NOMMP, .name = "nommp", .has_arg = no_argument},
+	{.val = MKFS_OPT_NOMMP, .name = "skipmmp", .has_arg = no_argument},
 	{.val = 'B', .name = "backfs-mount-opts",
 	 .has_arg = required_argument},
 	{.val = 'f', .name = "failnode", .has_arg = required_argument},
@@ -119,7 +122,8 @@ static void usage(FILE *out)
 		fprintf(out,
 			"usage: %s <target type> --backfstype=ldiskfs --fsname=<filesystem name>\n"
 			"\t--index=<target index> [options] <device>\n"
-			"\t--skipmmp: don't add Multi-Mount Protection when failover is configured.\n"
+			"\t--mmp: enable Multi-Mount Protection.\n"
+			"\t--nommp: don't add Multi-Mount Protection when failover is configured.\n"
 			"\tUse with caution - only if alternate mount protection is in place\n\n",
 			progname);
 	}
@@ -458,8 +462,11 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 	while ((opt = getopt_long(argc, argv, short_opts, long_opts,
 				  &longidx)) != EOF) {
 		switch (opt) {
-		case MKFS_OPT_SKIPMMP:
-			mop->mo_flags |= MO_SKIPMMP;
+		case MKFS_OPT_NOMMP:
+			mop->mo_flags = (mop->mo_flags & ~MO_MMP) | MO_NOMMP;
+			break;
+		case MKFS_OPT_MMP:
+			mop->mo_flags = (mop->mo_flags & ~MO_NOMMP) | MO_MMP;
 			break;
 		case 'B':
 			mop->mo_mountopts = optarg;
@@ -742,11 +749,17 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 		}
 	}
 
-	if (mop->mo_flags & MO_FAILOVER && mop->mo_flags & MO_SKIPMMP) {
+	if (mop->mo_flags & MO_FAILOVER && mop->mo_flags & MO_NOMMP)
 		fprintf(stderr,
 			"Disabling Multi-Mount Protection on the failover-configured target.\n"
 			"It may allow simultaneous mounts from multiple nodes, and could cause data\n"
-			"corruption. Only use --skipmmp if there is alternative mount protection\n");
+			"corruption. Only use --nommp if there is alternative mount protection\n");
+
+	if (mop->mo_flags & MO_MMP && ldd->ldd_mount_type != LDD_MT_LDISKFS) {
+		fprintf(stderr,
+			"%s: --mmp is only supported on ldiskfs backing filesystems\n",
+			progname);
+		return EINVAL;
 	}
 
 	if (ldd->ldd_mount_type == LDD_MT_ZFS &&
