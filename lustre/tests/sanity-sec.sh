@@ -3110,6 +3110,89 @@ test_27ac() {
 }
 run_test 27ac "test nodemap llog and IAM fileset compatibility"
 
+test_27ad() { #LU-20087
+	local offset_start=100000
+	local offset_limit=100000
+	local nm="test27ad_nm"
+	local client=${clients_arr[0]}
+	local activedefault
+	local def_trusted def_admin
+
+	(( MDS1_VERSION >= $(version_code v2_16_50-191-ge3051ad0f1) )) ||
+		skip "need MDS >= 2.16.50 for nodemap range offset"
+
+	local client_ip=$(host_nids_address $client $NETTYPE)
+	local client_nid=$(h2nettype $client_ip)
+
+	def_trusted=$(do_facet mgs $LCTL \
+		get_param -n nodemap.default.trusted_nodemap 2>/dev/null)
+	def_admin=$(do_facet mgs $LCTL \
+		get_param -n nodemap.default.admin_nodemap 2>/dev/null)
+	def_trusted=${def_trusted:-0}
+	def_admin=${def_admin:-0}
+	stack_trap "do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value $def_trusted; \
+		do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value $def_admin" EXIT
+
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value 1 ||
+		error "set default trusted=1 failed"
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value 1 ||
+		error "set default admin=1 failed"
+
+	activedefault=$(do_facet mgs $LCTL get_param -n nodemap.active)
+	if ((activedefault != 1)); then
+		do_facet mgs $LCTL nodemap_activate 1
+		wait_nm_sync active
+		stack_trap cleanup_active EXIT
+	fi
+
+	mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
+	chmod 777 $DIR/$tdir || error "chmod $tdir failed"
+	chown $((offset_start + ID0)):$((offset_start + ID0)) $DIR/$tdir ||
+		error "chown $tdir failed"
+
+	do_facet mgs $LCTL nodemap_add $nm ||
+		error "unable to add nodemap $nm"
+	stack_trap "do_facet mgs $LCTL nodemap_del $nm 2>/dev/null || true" EXIT
+
+	do_facet mgs $LCTL nodemap_add_range --name $nm \
+		--range $client_nid ||
+		error "unable to add range $client_nid to $nm"
+	do_facet mgs $LCTL nodemap_add_offset --name $nm \
+		--offset $offset_start --limit $offset_limit ||
+		error "cannot set offset on $nm"
+
+	wait_nm_sync $nm offset
+
+	do_nodes $(all_mdts_nodes) \
+		"$LCTL set_param mdt.*.identity_upcall=NONE" ||
+		error "disable identity_upcall failed"
+
+	do_node $client "$RUNAS_CMD -u $ID0 -g $ID0 \
+		touch $DIR/$tdir/$tfile" ||
+		error "cannot create $tfile as UID/GID $ID0"
+
+	do_node $client "$LFS project -p $ID0 $DIR/$tdir/$tfile" ||
+		error "cannot set projid $ID0 on $tfile"
+
+	do_facet mgs $LCTL nodemap_del $nm ||
+		error "failed to delete nodemap $nm"
+	wait_nm_sync $nm id ''
+
+	do_node $client "sync ; echo 3 > /proc/sys/vm/drop_caches" ||
+		error "drop_caches failed on $client"
+
+	local expected=$((ID0 + offset_start))
+
+	do_node $client $CHECKSTAT -u \\\#$expected -g \\\#$expected \
+		-j $expected $DIR/$tdir/$tfile ||
+		error "expected UID/GID/PROJID = $expected (ID0+$offset_start)"
+}
+run_test 27ad "test nodemap offset applied to file UID/GID/PROJID"
+
 test_27b() { #LU-10703
 	local i
 	local fset
