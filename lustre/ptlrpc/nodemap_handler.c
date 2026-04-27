@@ -1468,7 +1468,6 @@ static int nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nmf_fileset_use_iam = 1;
 		dst->nmf_raise_privs = src->nmf_raise_privs;
 		dst->nmf_rbac_raise = src->nmf_rbac_raise;
-		dst->nmf_gss_identify = src->nmf_gss_identify;
 		dst->nm_squash_uid = src->nm_squash_uid;
 		dst->nm_squash_gid = src->nm_squash_gid;
 		dst->nm_squash_projid = src->nm_squash_projid;
@@ -1480,6 +1479,7 @@ static int nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nm_offset_limit_projid = src->nm_offset_limit_projid;
 		if (src->nm_id == LUSTRE_NODEMAP_DEFAULT_ID) {
 			dst->nm_sepol[0] = '\0';
+			dst->nmf_gss_identify = 0;
 		} else {
 			/* because we are copying from an existing nodemap,
 			 * we already know this string is well formatted
@@ -1488,6 +1488,7 @@ static int nodemap_inherit_properties(struct lu_nodemap *dst,
 			rc = idmap_copy_tree(dst, src);
 			if (rc)
 				goto out;
+			dst->nmf_gss_identify = src->nmf_gss_identify;
 		}
 		/* only dynamic nodemap inherits fileset from parent */
 		if (dst->nm_dyn) {
