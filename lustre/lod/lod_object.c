@@ -4827,7 +4827,7 @@ static int lod_layout_repeat_comp(const struct lu_env *env,
 		OBD_ALLOC(op_array, new_comp->llc_ostlist.op_size);
 		if (!op_array)
 			GOTO(out, rc = -ENOMEM);
-		memcpy(op_array, &new_comp->llc_ostlist.op_array,
+		memcpy(op_array, new_comp->llc_ostlist.op_array,
 		       new_comp->llc_ostlist.op_size);
 		new_comp->llc_ostlist.op_array = op_array;
 	}
