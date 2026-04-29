@@ -1248,6 +1248,10 @@ inherit:
 		it->it_open_flags |= MDS_OPEN_PCC;
 	}
 
+	/* we want at least read access for getattr */
+	if (it->it_op & IT_GETATTR)
+		it->it_open_flags |= FMODE_READ;
+
 	/* If the MDS allows the client to chgrp (CFS_SETGRP_PERM), but the
 	 * client does not know which suppgid should be sent to the MDS, or
 	 * some other(s) changed the target file's GID after this RPC sent
