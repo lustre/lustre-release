@@ -1,19 +1,21 @@
-.TH LCTL-NODEMAP_INFO 8 2025-03-10 Lustre "Lustre Configuration Utilities"
+.TH LCTL-NODEMAP_INFO 8 2026-08-25 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-nodemap_info \- present information about nodemaps
 .SH SYNOPSIS
 .SY "lctl nodemap_info"
 or
 .SY "lctl nodemap info"
-.BI --name " NODEMAP_NAME"
-.BI --property " PROPERTY_NAME"
-.B --list
+.RB [ --list | --list-properties |
+.RB [ --name
+.IR "NODEMAP_NAME" ]
+.RB [ --property
+.IR "PROPERTY_NAME" ]]
 .YS
 .SH DESCRIPTION
 .B nodemap_info
 presents information about the defined nodemaps. This includes whether nodemaps
 are active, a list of the defined nodemaps, and the values of specific nodemap
-parameters. If no options are specified, all nodemaps and their properties
+properties. If no options are specified, all nodemaps and their properties
 are presented.
 .SH OPTIONS
 .TP
@@ -31,12 +33,20 @@ all properties are presented. This option can be used in conjunction with the
 option to present the value of a specific property for a specific nodemap.
 .TP
 .B --list
-Presents the global nodemap state and Lists all defined nodemaps and available
-nodemap properties.
+Presents the global nodemap state and lists all defined nodemaps.
+.TP
+.B --list-properties
+Lists all available nodemap properties together with a short description of
+each. No nodemap state is queried.
 .SH EXAMPLES
 List general nodemap information:
 .EX
 .B # lctl nodemap_info --list
+.EE
+.PP
+List all available nodemap properties:
+.EX
+.B # lctl nodemap_info --list-properties
 .EE
 .PP
 List the values of all properties for all nodemaps:

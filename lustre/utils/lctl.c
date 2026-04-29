@@ -204,7 +204,9 @@ command_t nodemap_cmdlist[] = {
 	 "usage: nodemap test_id --nid NID --idtype {uid|gid|projid} --id ID"},
 	{.pc_name = "info", .pc_func = jt_nodemap_info,
 	 .pc_help = "print nodemap information\n"
-	 "usage: nodemap info --list --name NODEMAP_NAME --property PROPERTY_NAME"},
+	 "usage: nodemap info --list | --list-properties |\n"
+	 "                    [--name NODEMAP_NAME]\n"
+	 "                    [--property PROPERTY_NAME]"},
 	{.pc_help = NULL }
 };
 JT_SUBCMD(nodemap);
@@ -688,7 +690,9 @@ command_t cmdlist[] = {
 	 "Usage: nodemap_test_id --nid NID --idtype ID_TYPE --id ID"},
 	{"nodemap_info", jt_nodemap_info, 0,
 	 "print nodemap information\n"
-	 "usage: nodemap_info --list --name NODEMAP_NAME --property PROPERTY_NAME"},
+	 "usage: nodemap_info --list | --list-properties |\n"
+	 "                    [--name NODEMAP_NAME]\n"
+	 "                    [--property PROPERTY_NAME]"},
 	{"nodemap", jt_nodemap, nodemap_cmdlist, ""},
 
 	/* Changelog commands */

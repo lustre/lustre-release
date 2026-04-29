@@ -5325,9 +5325,10 @@ int jt_nodemap_modify(int argc, char **argv)
  * @argc: number of args
  * @argv: variable string arguments
  *
- * --name	nodemap to present info about
- * --property	nodemap property to present
- * --list	list nodemap state, all nodemaps, and properties
+ * --name		nodemap to present info about
+ * --property		nodemap property to present
+ * --list		list nodemap state and all defined nodemaps
+ * --list-properties	list available nodemap properties and their descriptions
  *
  * deprecated positional parameters:
  * [list|nodemap_name|all]	@list will list all nodemaps (default).
@@ -5342,6 +5343,7 @@ int jt_nodemap_info(int argc, char **argv)
 	char *nodemap_name = NULL;
 	char *property = NULL;
 	bool list = false;
+	bool list_properties = false;
 	char pattern[PATH_MAX];
 	bool is_active = false;
 	char *active_str = NULL;
@@ -5355,25 +5357,43 @@ int jt_nodemap_info(int argc, char **argv)
 		const char *desc;
 	};
 
+	/* keep in sync with lprocfs_nodemap_vars[] in
+	 * lustre/ptlrpc/nodemap_lproc.c
+	 */
 	static const struct nodemap_info_param_desc param_desc[] = {
 		{ "admin_nodemap", "root is not squashed on policy group" },
 		{ "audit_mode",
 		  "client can record FS access events to the Changelogs" },
+		{ "banlist", "NID ranges banned from this nodemap" },
+		{ "child_raise_privileges",
+		  "privileges a subnodemap may raise above its parent" },
 		{ "deny_mount", "disable client mounts" },
 		{ "deny_unknown", "deny access for unknown (squashed) users" },
+		{ "enable_cap_mask",
+		  "capability mask or set for regular users" },
 		{ "exports",
 		  "list of client connections (NIDs) for this nodemap" },
 		{ "fileset", "fileset restrictions for this nodemap" },
 		{ "forbid_encryption",
 		  "prevent clients from using encryption" },
+		{ "gssonly_identification",
+		  "identify by GSS token instead of NID (non-default only)" },
 		{ "id", "unique identifier for this nodemap" },
-		{ "idmap", "identity mapping rules for UID/GID/PROJID translation" },
+		{ "identity",
+		  "human-readable dynamic identity (non-default only)" },
+		{ "idmap",
+		  "UID/GID/PROJID translation rules (non-default only)" },
 		{ "map_mode", "identity mapping mode" },
-		{ "offset", "idmap range offset for identity translation" },
-		{ "ranges", "NID ranges assigned to this nodemap" },
+		{ "offset",
+		  "ID translation range offset (non-default only)" },
+		{ "parent",
+		  "parent nodemap for dynamic nodemaps (non-default only)" },
+		{ "ranges",
+		  "NID ranges assigned to this nodemap (non-default only)" },
 		{ "rbac", "role-based admin control settings" },
 		{ "readonly_mount", "force clients to mount read-only" },
-		{ "sepol", "SELinux policy for this nodemap" },
+		{ "sepol",
+		  "SELinux policy for this nodemap (non-default only)" },
 		{ "squash_gid", "GID for unmapped users" },
 		{ "squash_projid", "project ID for unmapped projects" },
 		{ "squash_uid", "UID for unmapped users" },
@@ -5383,13 +5403,16 @@ int jt_nodemap_info(int argc, char **argv)
 
 	static struct option long_opts[] = {
 		{ .val = 'l',	.name = "list",		.has_arg = no_argument },
+		{ .val = 'L',	.name = "list-properties",
+				.has_arg = no_argument },
 		{ .val = 'p',	.name = "property",	.has_arg = required_argument },
 		{ .val = 'n',	.name = "name",		.has_arg = required_argument },
 		{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 		{ .name = NULL }
 	};
 
-	while ((c = getopt_long(argc, argv, "hln:p:", long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "hlLn:p:",
+				long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'n':
 			nodemap_name = optarg;
@@ -5400,6 +5423,9 @@ int jt_nodemap_info(int argc, char **argv)
 		case 'l':
 			list = true;
 			break;
+		case 'L':
+			list_properties = true;
+			break;
 		case 'h':
 		case '?':
 		default:
@@ -5407,9 +5433,16 @@ int jt_nodemap_info(int argc, char **argv)
 		}
 	}
 
-	if ((nodemap_name || property || list) && optind < argc) {
+	if ((nodemap_name || property || list || list_properties) &&
+	    optind < argc) {
 		fprintf(stderr,
 			"error: using both positional and named arguments is not allowed\n");
+		return CMD_HELP;
+	}
+
+	if ((nodemap_name || property || list) && list_properties) {
+		fprintf(stderr,
+			"error: --list-properties cannot be combined with --list, --name or --property\n");
 		return CMD_HELP;
 	}
 
@@ -5468,6 +5501,16 @@ int jt_nodemap_info(int argc, char **argv)
 		return rc;
 	}
 
+	/* Handle --list-properties argument here */
+	if (list_properties) {
+		printf("Available nodemap properties:\n");
+		for (i = 0; i < ARRAY_SIZE(param_desc); i++) {
+			printf("\t%-24s %s\n", param_desc[i].param,
+			       param_desc[i].desc);
+		}
+		return 0;
+	}
+
 	/* Handle -l argument here */
 	if (list) {
 		/* Get nodemap active state */
@@ -5513,12 +5556,6 @@ int jt_nodemap_info(int argc, char **argv)
 		}
 		cfs_free_param_data(&param);
 
-		/* list all nodemap parameters */
-		printf("\nAvailable nodemap parameters:\n");
-		for (i = 0; i < ARRAY_SIZE(param_desc); i++) {
-			printf("\t%-20s %s\n", param_desc[i].param,
-			       param_desc[i].desc);
-		}
 		return rc;
 	}
 

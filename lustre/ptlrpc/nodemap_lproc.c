@@ -1252,6 +1252,7 @@ static const struct file_operations nodemap_exports_fops = {
 	.release	= single_release
 };
 
+/* Keep param_desc[] in lustre/utils/obd.c in sync with these properties. */
 static struct ldebugfs_vars lprocfs_nodemap_vars[] = {
 	/* in alphabetical order */
 	{
