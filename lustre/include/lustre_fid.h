@@ -617,14 +617,6 @@ static inline void fid_extract_from_quota_res(struct lu_fid *glb_fid,
 		(__u32)(res->name[LUSTRE_RES_ID_QUOTA_VER_OID_OFF] >> 32);
 }
 
-static inline void
-fid_build_pdo_res_name(const struct lu_fid *fid, unsigned int hash,
-		       struct ldlm_res_id *res)
-{
-	fid_build_reg_res_name(fid, res);
-	res->name[LUSTRE_RES_ID_HSH_OFF] = hash;
-}
-
 /**
  * Build DLM resource name from object id & seq, which will be removed
  * finally, when we replace ost_id with FID in data stack.
@@ -752,15 +744,6 @@ static inline void ost_fid_from_resid(struct lu_fid *fid,
 		/* new resid */
 		fid_extract_from_res_name(fid, name);
 	}
-}
-
-static inline __u32 fid_hash(const struct lu_fid *f, int bits)
-{
-	/*
-	 * All objects with same id and different versions will belong to same
-	 * collisions list.
-	 */
-	return hash_long(fid_flatten64(f), bits);
 }
 
 u32 lu_fid_hash(const void *data, u32 len, u32 seed);
