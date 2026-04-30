@@ -2123,11 +2123,6 @@ lu2cl_conf(const struct lu_object_conf *conf)
 	return container_of_safe(conf, struct cl_object_conf, coc_lu);
 }
 
-static inline struct cl_object *cl_object_next(const struct cl_object *obj)
-{
-	return obj ? lu2cl(lu_object_next(&obj->co_lu)) : NULL;
-}
-
 static inline struct cl_object_header *luh2coh(const struct lu_object_header *h)
 {
 	return container_of_safe(h, struct cl_object_header, coh_lu);
@@ -2635,11 +2630,6 @@ struct cl_sub_dio {
 				csd_write_copying:1,
 				csd_write_copied:1;
 };
-
-static inline u64 cl_io_nob_aligned(u64 off, u32 nob, u32 pgsz)
-{
-	return (((nob / pgsz) - 1) * pgsz) + (pgsz - (off & (pgsz - 1)));
-}
 
 void ll_release_user_pages(struct page **pages, int npages);
 int ll_allocate_dio_buffer(struct cl_dio_pages *cdp, size_t io_size);
