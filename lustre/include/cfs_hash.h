@@ -500,13 +500,6 @@ static inline void cfs_hash_unlock(struct cfs_hash *hs, int excl)
 	hs->hs_lops->hs_unlock(&hs->hs_lock, excl);
 }
 
-static inline int cfs_hash_dec_and_lock(struct cfs_hash *hs,
-					atomic_t *condition)
-{
-	LASSERT(cfs_hash_with_no_bktlock(hs));
-	return atomic_dec_and_lock(condition, &hs->hs_lock.spin);
-}
-
 static inline void cfs_hash_bd_lock(struct cfs_hash *hs,
 				    struct cfs_hash_bd *bd, int excl)
 {
@@ -532,12 +525,6 @@ cfs_hash_bd_get_and_lock(struct cfs_hash *hs, const void *key,
 {
 	cfs_hash_bd_get(hs, key, bd);
 	cfs_hash_bd_lock(hs, bd, excl);
-}
-
-static inline unsigned
-cfs_hash_bd_index_get(struct cfs_hash *hs, struct cfs_hash_bd *bd)
-{
-	return bd->bd_offset | (bd->bd_bucket->hsb_index << hs->hs_bkt_bits);
 }
 
 static inline void
@@ -568,12 +555,6 @@ cfs_hash_bd_count_get(struct cfs_hash_bd *bd)
 {
 	/* need hold cfs_hash_bd_lock */
 	return bd->bd_bucket->hsb_count;
-}
-
-static inline int
-cfs_hash_bd_depmax_get(struct cfs_hash_bd *bd)
-{
-	return bd->bd_bucket->hsb_depmax;
 }
 
 static inline int
