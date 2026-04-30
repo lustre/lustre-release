@@ -14296,6 +14296,41 @@ test_103f() {
 }
 run_test 103f "changelog doesn't interfere with default ACLs buffers"
 
+test_103g() {
+	which getfacl || skip "missing getfacl"
+	[[ "$(lctl get_param -n mdc.*-mdc-*.connect_flags)" =~ "acl" ]] ||
+		skip_env "must have acl enabled"
+
+	local mdc_stat_param="mdc.$FSNAME-MDT*.md_stats"
+	local count
+	local f=$DIR/$tfile
+
+	touch $f
+	chmod 755 $f
+	cancel_lru_locks mdc
+	$RUNAS test -r $DIR
+
+	clear_stats $mdc_stat_param ||
+		error "fail to clear mdc stats"
+
+	# access(2) as a non-owner triggers acl_permission_check ->
+	# check_acl -> get_inode_acl -> ll_get_acl_common
+	$RUNAS test -r $f || error "test -r $f as $RUNAS_ID failed"
+
+	count=$(calc_stats $mdc_stat_param "getxattr")
+	echo "getxattr ACL RPCs: $count"
+
+	# access should not send ACL getxattr (ACLs are returned by lock intent)
+	(( !count )) ||
+		error "client sent $count getxattr RPCs"
+
+	# negative cache must be invalidated when an ACL is installed
+	setfacl -m u:$RUNAS_ID:rwx $f || error "setfacl $f failed"
+	$RUNAS getfacl -n $f 2>/dev/null | grep -q "^user:$RUNAS_ID:rwx$" ||
+		error "ACL not visible after setfacl (negative cache stuck)"
+}
+run_test 103g "no MDS_GETXATTR storm for inodes without ACL_ACCESS (LU-17238)"
+
 test_104a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 

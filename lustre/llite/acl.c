@@ -31,7 +31,8 @@ ll_get_acl_common(struct inode *inode, int type, bool rcu)
 	if (rcu)
 		return ERR_PTR(-ECHILD);
 
-	if (type == ACL_TYPE_ACCESS && lli->lli_posix_acl)
+	if (type == ACL_TYPE_ACCESS &&
+	    test_bit(LLIF_ACL_VALID, &lli->lli_flags))
 		goto lli_acl;
 
 	switch (type) {
@@ -166,9 +167,14 @@ int ll_set_acl(struct mnt_idmap *map,
 	ptlrpc_req_put(req);
 out:
 	kfree(value);
-	if (rc)
+	if (rc) {
 		forget_cached_acl(inode, type);
-	else
-		set_cached_acl(inode, type, acl);
-	RETURN(rc);
+		RETURN(rc);
+	}
+
+	set_cached_acl(inode, type, acl);
+	if (type == ACL_TYPE_ACCESS)
+		lli_install_acl(ll_i2info(inode), posix_acl_dup(acl));
+
+	RETURN(0);
 }
