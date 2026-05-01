@@ -9076,20 +9076,25 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 
 	for (tp = types; tp->st_name != NULL; tp++) {
 		bool have_ost = false;
+		int index_max = LOV_ALL_STRIPES;
 
 		if (!(tp->st_op & ops))
 			continue;
 
-		for (index = 0; index < LOV_ALL_STRIPES &&
+		for (index = 0; index < index_max &&
 		     (!lsb || lsb->sb_count < LL_STATFS_MAX); index++) {
 			/* Skip indices that don't match the requested one */
-			if (tp->st_op == LL_STATFS_LMV && mdt_idx >= 0 &&
-			    index != mdt_idx)
-				continue;
+			if (tp->st_op == LL_STATFS_LMV && mdt_idx >= 0) {
+				if (index != mdt_idx)
+					continue;
+				index_max = 0; /* force last loop */
+			}
 
-			if (tp->st_op == LL_STATFS_LOV && ost_idx >= 0 &&
-			    index != ost_idx)
-				continue;
+			if (tp->st_op == LL_STATFS_LOV && ost_idx >= 0) {
+				if (index != ost_idx)
+					continue;
+				index_max = 0; /* force last loop */
+			}
 
 			memset(&stat_buf, 0, sizeof(struct obd_statfs));
 			memset(&uuid_buf, 0, sizeof(struct obd_uuid));
