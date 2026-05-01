@@ -25,6 +25,7 @@
 #endif /* HAVE_SERVER_SUPPORT */
 #include <linux/lustre/lustre_cfg.h>
 #include <linux/lustre/lgss.h>
+#include <lustre_dlm_flags.h>
 #include <lustre/lustreapi.h>
 
 #ifndef BUILD_BUG_ON

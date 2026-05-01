@@ -295,9 +295,10 @@ l_getsepol_LDADD := liblustreapi.la -lcrypto $(SELINUX)
 l_getsepol_DEPENDENCIES := liblustreapi.la
 
 wirecheck_SOURCES = wirecheck.c
-wirecheck_CPPFLAGS := -DCC="\"$(CC)\""
+wirecheck_CPPFLAGS := -DCC="\"$(CC)\"" -I$(top_srcdir)/lustre/include
 
 wiretest_SOURCES = wiretest.c
+wiretest_CPPFLAGS := -I$(top_srcdir)/lustre/include
 
 endif # UTILS
 
