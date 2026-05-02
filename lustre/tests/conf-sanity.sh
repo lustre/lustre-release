@@ -9216,24 +9216,28 @@ test_103() {
 run_test 103 "rename filesystem name"
 
 test_104a() { # LU-6952
-	local mds_mountopts=$MDS_MOUNT_OPTS
-	local ost_mountopts=$OST_MOUNT_OPTS
-	local mds_mountfsopts=$MDS_MOUNT_FS_OPTS
-	local lctl_ver=$(do_facet $SINGLEMDS $LCTL --version |
-			awk '{ print $2 }')
+	local mount_ver=$(do_facet mds1 $LCTL --version | awk '{ print $2 }')
+	local mount_code=$(version_code $mount_ver)
 
-	[[ $(version_code $lctl_ver) -lt $(version_code 2.9.55) ]] &&
-		skip "this test needs utils above 2.9.55"
+	(( $mount_code >= $(version_code v2_9_57_0-52-gb27652cb44) )) ||
+		skip "needs mount.lustre >= 2.9.57 for option parsing fix"
 
-	# specify "acl" in mount options used by mkfs.lustre
-	if [ -z "$MDS_MOUNT_FS_OPTS" ]; then
-		MDS_MOUNT_FS_OPTS="acl,user_xattr"
+	stack_trap "export MDS_MOUNT_OPTS='$MDS_MOUNT_OPTS'"
+	stack_trap "export OST_MOUNT_OPTS='$OST_MOUNT_OPTS'"
+	stack_trap "export MDS_MOUNT_FS_OPTS='$MDS_MOUNT_FS_OPTS'"
+
+	# mount options saved by mkfs.lustre persistently
+	local mkfs_val=222
+	local mkfs_opt="recovery_time_soft=$mkfs_val"
+	
+	if [[ -z "$MDS_MOUNT_FS_OPTS" ]]; then
+		MDS_MOUNT_FS_OPTS="user_xattr,$mkfs_opt"
 	else
 
-		MDS_MOUNT_FS_OPTS="${MDS_MOUNT_FS_OPTS},acl,user_xattr"
+		MDS_MOUNT_FS_OPTS+=",$mkfs_opt"
 	fi
 
-	echo "mountfsopt: $MDS_MOUNT_FS_OPTS"
+	echo "mkfs.lustre --mountfsopts: $MDS_MOUNT_FS_OPTS"
 
 	#reformat/remount the MDT to apply the MDT_MOUNT_FS_OPT options
 	formatall
@@ -9241,29 +9245,33 @@ test_104a() { # LU-6952
 		start_mgs
 	fi
 
-	if [ -z "$MDS_MOUNT_OPTS" ]; then
-		MDS_MOUNT_OPTS="-o noacl"
+	# mount options specified for one mount.lustre call
+	local mount_val=188
+	local mount_opt="recovery_time_soft=$mount_val"
+	if [[ -z "$MDS_MOUNT_OPTS" ]]; then
+		MDS_MOUNT_OPTS="$mount_opt"
 	else
-		MDS_MOUNT_OPTS="${MDS_MOUNT_OPTS},noacl"
-	fi
 
-	for num in $(seq $MDSCOUNT); do
+		MDS_MOUNT_OPTS+=",$mount_opt"
+	fi
+	echo "mount opts: $MDS_MOUNT_OPTS"
+
+	for ((num = 1; num <= $MDSCOUNT; num++)); do
 		start mds$num $(mdsdevname $num) $MDS_MOUNT_OPTS ||
-			error "Failed to start MDS"
+			error "Failed to start mds$num"
 	done
 
-	for num in $(seq $OSTCOUNT); do
+	for ((num = 1; num <= $OSTCOUNT; num++)); do
 		start ost$num $(ostdevname $num) $OST_MOUNT_OPTS ||
-			error "Failed to start OST"
+			error "Failed to start ost$num"
 	done
 
 	mount_client $MOUNT
-	setfacl -m "d:$RUNAS_ID:rwx" $MOUNT &&
-		error "ACL is applied when FS is mounted with noacl."
-
-	MDS_MOUNT_OPTS=$mds_mountopts
-	OST_MOUNT_OPTS=$ost_mountopts
-	MDS_MOUNT_FS_OPTS=$mds_mountfsopts
+	local param=mdt.$FSNAME-MDT0000.recovery_time_soft
+	local found=$(do_facet mds1 "$LCTL get_param -n $param")
+	(( $found == $mount_val )) ||
+		error "found $param=$found (mkfs=$mkfs_val), wanted $mount_val"
+	echo "found wanted $param=$found"
 }
 run_test 104a "Make sure user defined options are reflected in mount"
 

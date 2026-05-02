@@ -8473,11 +8473,12 @@ static int osd_mount(const struct lu_env *env,
 	if (opts != NULL) {
 		/* strip out the options for back compatiblity */
 		static const char * const sout[] = {
-			"mballoc",
-			"iopen",
-			"noiopen",
-			"iopen_nopriv",
 			"extents",
+			"iopen",
+			"iopen_nopriv",
+			"noiopen",
+			"mballoc",
+			"noacl",
 			"noextents",
 			/* strip out option we processed in osd */
 			"bigendian_extents",
