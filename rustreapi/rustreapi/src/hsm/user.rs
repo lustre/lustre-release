@@ -4,9 +4,8 @@
 // Use of this source code is governed by a MIT-style
 // license that can be found in the LICENSE file.
 
-use bitmask_enum::bitmask;
+use bitflags::bitflags;
 use lustreapi_sys::*;
-use serde::{Deserialize, Serialize};
 use std::{ffi::CString, fmt, fmt::Display, os::fd::AsRawFd, path::Path};
 
 use crate::{
@@ -15,33 +14,28 @@ use crate::{
     hsm::Extent,
 };
 
-#[bitmask(u32)]
-#[bitmask_config(vec_debug, flags_iter)]
-pub enum HsmState {
-    // None = HS_NONE, // a flag for 0 doesn't make sense
-    Exists = HS_EXISTS,
-    Dirty = HS_DIRTY,
-    Released = HS_RELEASED,
-    Archived = HS_ARCHIVED,
-    NoRelease = HS_NORELEASE,
-    NoArchive = HS_NOARCHIVE,
-    Lost = HS_LOST,
-    PCCRW = HS_PCCRW,
-    PCCRO = HS_PCCRO,
-}
-impl Default for HsmState {
-    fn default() -> Self {
-        HsmState::none()
+bitflags! {
+    #[repr(transparent)]
+    #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+    pub struct HsmState: u32 {
+        const Exists    = HS_EXISTS;
+        const Dirty     = HS_DIRTY;
+        const Released  = HS_RELEASED;
+        const Archived  = HS_ARCHIVED;
+        const NoRelease = HS_NORELEASE;
+        const NoArchive = HS_NOARCHIVE;
+        const Lost      = HS_LOST;
+
+        #[cfg(feature = "LUSTRE_2_16")]
+        const PCCRW     = HS_PCCRW;
+        #[cfg(feature = "LUSTRE_2_16")]
+        const PCCRO     = HS_PCCRO;
     }
 }
 
 impl Display for HsmState {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let v: Vec<&str> = HsmState::flags()
-            .filter(|&(_, value)| self.contains(*value))
-            .map(|(name, _)| *name)
-            .collect();
-
+        let v: Vec<&str> = self.iter_names().map(|(name, _)| name).collect();
         if v.is_empty() {
             write!(f, "Empty")?;
         } else {
@@ -109,33 +103,24 @@ impl Display for ProgressState {
     }
 }
 
-/// HSM request flags from LU-18940
-///
-/// These flags are used in the `hr_flags` field of `hsm_request` to provide
-/// additional context about HSM requests, particularly to indicate when an HSM
-/// request is blocking an application.
-#[bitmask(u64)]
-#[bitmask_config(vec_debug, flags_iter)]
-#[derive(Serialize, Deserialize)]
-pub enum HsmRequestFlags {
-    /// Flag indicating HSM request is blocking an application
-    /// This occurs when a process opens a released file and triggers an HSM restore
-    Blocking = HSM_REQ_BLOCKING as u64,
-}
-
-impl Default for HsmRequestFlags {
-    fn default() -> Self {
-        HsmRequestFlags::none()
+bitflags! {
+    /// HSM request flags from LU-18940
+    ///
+    /// These flags are used in the `hr_flags` field of `hsm_request` to provide
+    /// additional context about HSM requests, particularly to indicate when an HSM
+    /// request is blocking an application.
+    #[repr(transparent)]
+    #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default, serde::Serialize, serde::Deserialize)]
+    pub struct HsmRequestFlags: u64 {
+        /// Flag indicating HSM request is blocking an application
+        /// This occurs when a process opens a released file and triggers an HSM restore
+        const Blocking = HSM_REQ_BLOCKING as u64;
     }
 }
 
 impl Display for HsmRequestFlags {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let v: Vec<&str> = HsmRequestFlags::flags()
-            .filter(|&(_, value)| self.contains(*value))
-            .map(|(name, _)| *name)
-            .collect();
-
+        let v: Vec<&str> = self.iter_names().map(|(name, _)| name).collect();
         if v.is_empty() {
             write!(f, "Empty")?;
         } else {
@@ -174,7 +159,7 @@ impl HsmCurrent {
             )?;
 
             Ok(HsmCurrent {
-                states: HsmState::from(hus.hus_states),
+                states: HsmState::from_bits_retain(hus.hus_states),
                 archive_id: hus.hus_archive_id,
                 progress_state: ProgressState::from(hca.hca_state),
                 action: UserAction::from(hca.hca_action),

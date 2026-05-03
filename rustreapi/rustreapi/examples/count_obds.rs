@@ -9,7 +9,7 @@
 use rustreapi::{LustrePath, get_lov_uuids, ost_count};
 use std::{env, process};
 
-#[cfg(feature = "LUSTRE_2_14")]
+#[cfg(feature = "LUSTRE_2_17")]
 use rustreapi::{get_lmv_uuids, mdt_count};
 
 fn main() {
@@ -45,13 +45,13 @@ fn main() {
         Err(e) => eprintln!("Error getting LOV UUIDs: {e}"),
     }
 
-    #[cfg(feature = "LUSTRE_2_14")]
+    #[cfg(feature = "LUSTRE_2_17")]
     match mdt_count(&lustre_path) {
         Ok(count) => println!("MDT count: {count}"),
         Err(e) => eprintln!("Error getting MDT count: {e}"),
     }
 
-    #[cfg(feature = "LUSTRE_2_14")]
+    #[cfg(feature = "LUSTRE_2_17")]
     match get_lmv_uuids(&lustre_path) {
         Ok(uuids) => {
             println!("LMV UUIDs:");

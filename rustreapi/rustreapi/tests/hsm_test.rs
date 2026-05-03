@@ -177,7 +177,7 @@ fn test51_hsm_state_set() {
     let (path, f) = create_test_file(1024 * 1024);
 
     for i in 1..48 {
-        let result = HsmCurrent::set_fd(&f, HsmState::Exists, HsmState::none(), i);
+        let result = HsmCurrent::set_fd(&f, HsmState::Exists, HsmState::empty(), i);
         assert!(result.is_ok());
 
         if let Ok(result) = HsmCurrent::get(&path) {
@@ -188,7 +188,7 @@ fn test51_hsm_state_set() {
         }
     }
 
-    let result = HsmCurrent::set(&path, HsmState::Archived, HsmState::none(), 64);
+    let result = HsmCurrent::set(&path, HsmState::Archived, HsmState::empty(), 64);
     assert!(result.is_ok());
 
     let result = HsmCurrent::get(&path);
@@ -212,7 +212,7 @@ fn archive_helper(length: usize, progress_cb: fn(&mut ActionProgress, u64) -> ()
     let (path, f) = create_test_file(length);
     let ct = Copytool::builder().register(&lustre_dir)?;
 
-    let result = archive(&path, 1, HsmRequestFlags::none(), vec![Fid::with_fd(&f)?]);
+    let result = archive(&path, 1, HsmRequestFlags::empty(), vec![Fid::with_fd(&f)?]);
     assert!(result.is_ok());
 
     let Ok(hal) = ct.receive() else {
@@ -530,7 +530,7 @@ fn mover_helper(length: usize, progress_cb: fn(&mut ActionProgress, u64) -> ()) 
 
     let mover = Mover::builder().register(&lustre_dir)?;
 
-    let result = archive(&path, 1, HsmRequestFlags::none(), vec![Fid::with_fd(&f)?]);
+    let result = archive(&path, 1, HsmRequestFlags::empty(), vec![Fid::with_fd(&f)?]);
     assert!(result.is_ok());
 
     let Ok(hal) = ct.receive() else {
@@ -926,7 +926,7 @@ fn blocking_restore_helper() -> Result<()> {
         .register(&lustre_dir)?;
 
     let fid = Fid::with_fd(&f)?;
-    archive(&path, 1, HsmRequestFlags::none(), vec![fid])?;
+    archive(&path, 1, HsmRequestFlags::empty(), vec![fid])?;
 
     let hal = ct.receive()?;
     for hai in hal.iter() {
@@ -934,7 +934,7 @@ fn blocking_restore_helper() -> Result<()> {
         ca.end(hai.extent, 0, 0)?;
     }
 
-    let _ = HsmCurrent::set(&path, HsmState::Released, HsmState::none(), 1);
+    let _ = HsmCurrent::set(&path, HsmState::Released, HsmState::empty(), 1);
 
     // Test restore with blocking flag
     restore(&path, HsmRequestFlags::Blocking, vec![fid])?;
@@ -978,7 +978,7 @@ fn test320_hsm_blocking_with_released_file() {
     }
 
     let (blocking_pri, blocking_level) = get_priority(HsmRequestFlags::Blocking);
-    let (normal_pri, normal_level) = get_priority(HsmRequestFlags::none());
+    let (normal_pri, normal_level) = get_priority(HsmRequestFlags::empty());
 
     assert_eq!(blocking_pri, "HIGH_PRIORITY");
     assert_eq!(blocking_level, 1);

@@ -91,18 +91,18 @@ fn test_flag_debug() {
 
 #[test]
 fn test_flag_none() {
-    let no_flags = ChangelogFlag::none();
+    let no_flags = ChangelogFlag::empty();
     assert_eq!(no_flags.bits(), 0);
     assert!(!no_flags.contains(ChangelogFlag::Follow));
 
-    let no_extra_flags = ChangelogExtraFlag::none();
+    let no_extra_flags = ChangelogExtraFlag::empty();
     assert_eq!(no_extra_flags.bits(), 0);
     assert!(!no_extra_flags.contains(ChangelogExtraFlag::UidGid));
 }
 
 #[test]
 fn test_flag_all() {
-    let all_flags = ChangelogFlag::all_bits();
+    let all_flags = ChangelogFlag::all();
     assert!(all_flags.contains(ChangelogFlag::Follow));
     assert!(all_flags.contains(ChangelogFlag::Block));
     assert!(all_flags.contains(ChangelogFlag::JobId));
@@ -110,7 +110,7 @@ fn test_flag_all() {
     #[cfg(feature = "LUSTRE_2_16")]
     assert!(all_flags.contains(ChangelogFlag::NidBe));
 
-    let all_extra_flags = ChangelogExtraFlag::all_bits();
+    let all_extra_flags = ChangelogExtraFlag::all();
     assert!(all_extra_flags.contains(ChangelogExtraFlag::UidGid));
     assert!(all_extra_flags.contains(ChangelogExtraFlag::Nid));
     assert!(all_extra_flags.contains(ChangelogExtraFlag::OpenMode));

@@ -6,6 +6,12 @@
  * license that can be found in the LICENSE file.
  */
 
+#include <errno.h>
+#include <fcntl.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
 #include <lustre/lustreapi.h>
 #include "wrapper.h"
 

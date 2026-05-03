@@ -6,22 +6,25 @@
 
 use crate::{
     Error, LustrePath,
-    error::{Result, cvt_lz_m, cvt_nz, cvt_rc_m},
+    error::{Result, cvt_nz, cvt_rc_m},
 };
-use lustreapi_sys::{
-    llapi_fd2fid, llapi_fid2path_at, llapi_open_by_fid_at, llapi_path2fid, lu_fid,
-};
+#[cfg(feature = "LUSTRE_2_16")]
+use crate::error::cvt_lz_m;
+#[cfg(feature = "LUSTRE_2_16")]
+use lustreapi_sys::llapi_open_by_fid_at;
+use lustreapi_sys::{llapi_fd2fid, llapi_fid2path_at, llapi_path2fid, lu_fid};
 
 use cstrbuf::CStrBuf;
 use serde::{Deserialize, Serialize};
 use std::{
     ffi::CString,
     fmt::{self, Display, Formatter},
-    fs::File,
-    os::fd::{AsRawFd, FromRawFd},
+    os::fd::AsRawFd,
     path::{Path, PathBuf},
     ptr,
 };
+#[cfg(feature = "LUSTRE_2_16")]
+use std::{fs::File, os::fd::FromRawFd};
 
 pub const MAX_PATH_LEN: usize = 4096;
 
@@ -255,6 +258,7 @@ impl Fid {
     ///
     /// * `Ok(File)` - The opened file handle
     /// * `Err` - If the file cannot be opened using this FID
+    #[cfg(feature = "LUSTRE_2_16")]
     pub fn open_at<Fd: AsRawFd>(&self, lustre_fd: &Fd, flags: i32) -> Result<File> {
         let fd = lustre_fd.as_raw_fd();
         let flags = if flags == 0 { libc::O_RDONLY } else { flags };

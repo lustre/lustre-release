@@ -469,7 +469,9 @@ fn test17_layout_wide_uses_all_osts() -> Result<()> {
     drop(file);
 
     let file = layout.open(&path)?;
-    let ost_count_all = ost_count(&LustrePath::parse("/mnt/lustre")?)?;
+    let ost_count_all = ost_count(&LustrePath::parse(
+        &env::var("LUSTRE_DIR").unwrap_or("/mnt/lustre".to_string()),
+    )?)?;
     drop(file);
 
     let file_layout = Layout::with_path(&path, LayoutGetFlags::EXPECTED)?;

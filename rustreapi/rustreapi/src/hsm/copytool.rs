@@ -731,7 +731,7 @@ impl From<ActionList> for ActionHeader {
         let hal = unsafe { al.hal.as_ref() };
         Self {
             archive_id: hal.hal_archive_id,
-            flags: HsmRequestFlags::from(hal.hal_flags),
+            flags: HsmRequestFlags::from_bits_retain(hal.hal_flags),
             actions: items,
         }
     }

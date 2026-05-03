@@ -44,7 +44,7 @@ impl ChangelogBuilder {
     pub fn new() -> Self {
         Self {
             device: None,
-            flags: ChangelogFlag::none(),
+            flags: ChangelogFlag::empty(),
             extra_flags: None,
             start_record: 0,
         }

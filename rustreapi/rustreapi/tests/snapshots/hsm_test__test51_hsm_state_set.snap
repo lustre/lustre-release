@@ -4,7 +4,9 @@ expression: result
 ---
 Ok(
     HsmCurrent {
-        states: HsmState[Exists, Archived],
+        states: HsmState(
+            Exists | Archived,
+        ),
         archive_id: 64,
         progress_state: Waiting,
         action: Noop,

@@ -20,9 +20,8 @@ use std::{
     path::Path,
 };
 
-use bitmask_enum::bitmask;
+use bitflags::bitflags;
 
-#[cfg(not(feature = "LUSTRE_2_14"))]
 #[repr(u32)]
 #[derive(Clone)]
 pub enum LayoutGetFlags {
@@ -30,14 +29,6 @@ pub enum LayoutGetFlags {
     EXPECTED = LLAPI_LAYOUT_GET_EXPECTED,
     COPY = LLAPI_LAYOUT_GET_COPY,
     CHECK = LLAPI_LAYOUT_GET_CHECK,
-}
-
-#[cfg(feature = "LUSTRE_2_14")]
-#[repr(u32)]
-#[derive(Clone)]
-pub enum LayoutGetFlags {
-    NONE = 0,
-    EXPECTED = 0x1,
 }
 
 #[repr(u32)]
@@ -49,55 +40,34 @@ pub enum CompUse {
     Prev = LLAPI_LAYOUT_COMP_USE_PREV,
 }
 
-#[cfg(not(feature = "LUSTRE_2_14"))]
-#[bitmask(u32)]
-#[bitmask_config(vec_debug, flags_iter)]
-pub enum CompEntryFlags {
-    Stale = LCME_FL_STALE,
-    PrefRd = LCME_FL_PREF_RD,
-    PrefWr = LCME_FL_PREF_WR,
-    PrefRW = LCME_FL_PREF_RW,
-    Offline = LCME_FL_OFFLINE,
-    Init = LCME_FL_INIT,
-    NoSync = LCME_FL_NOSYNC,
-    Extension = LCME_FL_EXTENSION,
-    Parity = LCME_FL_PARITY,
-    Compress = LCME_FL_COMPRESS,
-    Partial = LCME_FL_PARTIAL,
-    NoCompr = LCME_FL_NOCOMPR,
-    Neg = LCME_FL_NEG,
-}
+bitflags! {
+    #[repr(transparent)]
+    #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+    pub struct CompEntryFlags: u32 {
+        const Stale     = LCME_FL_STALE;
+        const PrefRd    = LCME_FL_PREF_RD;
+        const PrefWr    = LCME_FL_PREF_WR;
+        const PrefRW    = LCME_FL_PREF_RW;
+        const Offline   = LCME_FL_OFFLINE;
+        const Init      = LCME_FL_INIT;
+        const NoSync    = LCME_FL_NOSYNC;
+        const Extension = LCME_FL_EXTENSION;
+        const Neg       = LCME_FL_NEG;
 
-#[cfg(feature = "LUSTRE_2_14")]
-#[bitmask(u32)]
-#[bitmask_config(vec_debug, flags_iter)]
-pub enum CompEntryFlags {
-    Stale = LCME_FL_STALE,
-    PrefRd = LCME_FL_PREF_RD,
-    PrefWr = LCME_FL_PREF_WR,
-    PrefRW = LCME_FL_PREF_RW,
-    Offline = LCME_FL_OFFLINE,
-    Init = LCME_FL_INIT,
-    NoSync = LCME_FL_NOSYNC,
-    Extension = LCME_FL_EXTENSION,
-    Compress = LCME_FL_COMPRESS,
-    Partial = LCME_FL_PARTIAL,
-    NoCompr = LCME_FL_NOCOMPR,
-    Neg = LCME_FL_NEG,
-}
-
-impl Default for CompEntryFlags {
-    fn default() -> Self {
-        CompEntryFlags::none()
+        #[cfg(feature = "LUSTRE_2_16")]
+        const Parity    = LCME_FL_PARITY;
+        #[cfg(feature = "LUSTRE_2_16")]
+        const Compress  = LCME_FL_COMPRESS;
+        #[cfg(feature = "LUSTRE_2_16")]
+        const Partial   = LCME_FL_PARTIAL;
+        #[cfg(feature = "LUSTRE_2_16")]
+        const NoCompr   = LCME_FL_NOCOMPR;
     }
 }
+
 impl Display for CompEntryFlags {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let v: Vec<&str> = CompEntryFlags::flags()
-            .filter(|&(_, value)| self.contains(*value))
-            .map(|(name, _)| *name)
-            .collect();
-
+        let v: Vec<&str> = self.iter_names().map(|(name, _)| name).collect();
         if v.is_empty() {
             write!(f, "Uninit")?;
         } else {
@@ -238,7 +208,7 @@ impl Layout {
 
         unsafe { cvt_nz(llapi_layout_comp_flags_get(self.layout, &mut flags))? };
 
-        Ok(flags.into())
+        Ok(CompEntryFlags::from_bits_retain(flags))
     }
 
     pub fn get_mirror_count(&self) -> Result<u16> {
@@ -314,7 +284,7 @@ impl Layout {
     }
 
     pub fn comp_flags(&self, flags: CompEntryFlags) -> Result<&Self> {
-        unsafe { cvt_nz(llapi_layout_comp_flags_set(self.layout, u32::from(flags)))? };
+        unsafe { cvt_nz(llapi_layout_comp_flags_set(self.layout, flags.bits()))? };
         Ok(self)
     }
     pub fn mirror_count(&self, mirror_count: u16) -> Result<&Self> {
@@ -432,7 +402,7 @@ impl Layout {
         Ok(())
     }
 
-    #[cfg(not(feature = "LUSTRE_2_14"))]
+    #[cfg(feature = "LUSTRE_2_16")]
     pub fn sanity_v2(&self, incomplete: bool, flr: bool, fsname: String) -> Result<()> {
         use std::os::raw::c_char;
 

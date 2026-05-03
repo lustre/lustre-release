@@ -11,7 +11,7 @@ repository.workspace = true
 version.workspace = true
 
 [dependencies]
-bitmask-enum.workspace = true
+bitflags.workspace = true
 changelog-sys = { version = "0.3.0", path = "../changelog-sys" }
 chrono.workspace = true
 clap.workspace = true

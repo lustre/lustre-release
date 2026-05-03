@@ -45,25 +45,25 @@ use std::{
 };
 
 // Constants
-#[cfg(not(feature = "LUSTRE_2_14"))]
+#[cfg(feature = "LUSTRE_2_16")]
 #[allow(non_snake_case)]
 pub fn LAYOUT_WIDE_MIN() -> u64 {
     unsafe { llapi_LAYOUT_WIDE_MIN() }
 }
 
-#[cfg(not(feature = "LUSTRE_2_14"))]
+#[cfg(feature = "LUSTRE_2_16")]
 #[allow(non_snake_case)]
 pub fn LAYOUT_WIDE_MAX() -> u64 {
     unsafe { llapi_LAYOUT_WIDE_MAX() }
 }
 
-#[cfg(not(feature = "LUSTRE_2_14"))]
+#[cfg(feature = "LUSTRE_2_16")]
 #[allow(non_snake_case)]
 pub fn OVERSTRIPE_COUNT_MIN() -> u64 {
     unsafe { llapi_OVERSTRIPE_COUNT_MIN() }
 }
 
-#[cfg(not(feature = "LUSTRE_2_14"))]
+#[cfg(feature = "LUSTRE_2_16")]
 #[allow(non_snake_case)]
 pub fn OVERSTRIPE_COUNT_MAX() -> u64 {
     unsafe { llapi_OVERSTRIPE_COUNT_MAX() }
@@ -364,6 +364,7 @@ pub fn file_get_mdtidx(name: &Path) -> Result<i32> {
     Ok(mdtidx)
 }
 
+#[cfg(feature = "LUSTRE_2_16")]
 pub fn open_by_fid_at(lustre_fd: &File, fid: &Fid, flags: i32) -> Result<File> {
     let fd = lustre_fd.as_raw_fd();
     let flags = if flags == 0 { libc::O_RDONLY } else { flags };
@@ -389,7 +390,7 @@ pub fn ost_count(lustre_path: &LustrePath) -> Result<i32> {
     Ok(count)
 }
 
-#[cfg(feature = "LUSTRE_2_14")]
+#[cfg(feature = "LUSTRE_2_17")]
 pub fn mdt_count(lustre_path: &LustrePath) -> Result<i32> {
     let file = lustre_path.open()?;
     let mut count = 0;
@@ -461,7 +462,7 @@ pub fn get_lov_uuids(lustre_path: &LustrePath) -> Result<Vec<ObdUuid>> {
     Ok(uuids)
 }
 
-#[cfg(feature = "LUSTRE_2_14")]
+#[cfg(feature = "LUSTRE_2_17")]
 pub fn get_lmv_uuids(lustre_path: &LustrePath) -> Result<Vec<ObdUuid>> {
     let file = File::open(lustre_path.as_ref())?;
     let mut count = mdt_count(lustre_path)?;

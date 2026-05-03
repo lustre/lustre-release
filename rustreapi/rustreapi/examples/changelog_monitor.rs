@@ -121,7 +121,7 @@ impl MdtReader {
         }
 
         // Build extra flags - include UID/GID by default unless disabled
-        let mut extra_flags = ChangelogExtraFlag::none();
+        let mut extra_flags = ChangelogExtraFlag::empty();
         if !args.no_uidgid {
             extra_flags |= ChangelogExtraFlag::UidGid;
         }

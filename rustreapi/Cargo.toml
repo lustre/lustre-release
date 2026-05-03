@@ -19,7 +19,7 @@ version = "0.3.0"
 
 [workspace.dependencies]
 bindgen = "0.72"
-bitmask-enum = "2"
+bitflags = { version = "2", features = ["serde"] }
 cc = "1"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive", "env"] }

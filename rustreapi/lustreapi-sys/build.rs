@@ -59,6 +59,7 @@ fn main() {
         .allowlist_item("LOV_MAX_STRIPE_COUNT")
         .allowlist_item("LOV_ALL_STRIPES.*")
         .allowlist_item("LUSTRE_EOF")
+        .allowlist_type("llapi_layout_comp_use")
         .constified_enum("llapi_layout_comp_use")
         .allowlist_function("llapi_file_open_param")
         .allowlist_function("llapi_file_fget_mdtidx")
