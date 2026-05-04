@@ -161,8 +161,9 @@ def only_non_testable_paths(affected):
     Returns:
         bool: True if all files are in non-testable paths, False otherwise
     """
+    always_test_prefixes  = [ 'contrib/lbuild/' ]
     non_testable_prefixes = [ 'Documentation/', 'LICENSES/', 'contrib/' ]
-    non_testable_exact = [ 'lustre/ChangeLog' ]
+    non_testable_exact    = [ 'lustre/ChangeLog' ]
 
     # Collect all affected files from all categories
     all_files = affected.get('m', [ ]) + affected.get('a', [ ]) + affected.get('d', [ ])
@@ -173,6 +174,8 @@ def only_non_testable_paths(affected):
 
     # Check each file against the non-testable patterns
     for filepath in all_files:
+        if any(filepath.startswith(p) for p in always_test_prefixes):
+              return False
         is_non_testable = False
 
         # Check against exact matches
