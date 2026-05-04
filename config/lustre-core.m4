@@ -3632,6 +3632,54 @@ AC_DEFUN([LC_HAVE_FILEMAP_ALLOC_FOLIO_NUMA],[
 ]) # LC_HAVE_FILEMAP_ALLOC_FOLIO_NUMA
 
 #
+## LC_HAVE_KILL_LITTER_SUPER
+#
+# Linux commit v6.18-rc5-51-gfc45aee662232
+#   get rid of kill_litter_super()
+#
+AC_DEFUN([LC_SRC_HAVE_KILL_LITTER_SUPER],[
+	LB2_LINUX_TEST_SRC([kill_litter_super], [
+		#include <linux/fs.h>
+	],[
+		struct super_block *sb = NULL;
+
+		kill_litter_super(sb);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_KILL_LITTER_SUPER],[
+	LB2_MSG_LINUX_TEST_RESULT([if kill_litter_super() exists],
+	[kill_litter_super], [
+		AC_DEFINE(HAVE_KILL_LITTER_SUPER, 1,
+			  [kill_litter_super() exists])
+	])
+]) # LC_HAVE_KILL_LITTER_SUPER
+
+#
+## LC_HAVE_D_MAKE_PERSISTENT
+#
+# Linux commit v6.18-rc5-9-gbacdf1d70bbe2
+#   primitives for maintaining persisitency
+#
+AC_DEFUN([LC_SRC_HAVE_D_MAKE_PERSISTENT],[
+	LB2_LINUX_TEST_SRC([d_make_persistent], [
+		#include <linux/dcache.h>
+	],[
+		struct dentry *dentry = NULL;
+		struct inode *inode = NULL;
+
+		dentry = d_make_persistent(dentry, inode);
+		d_make_discardable(dentry);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_D_MAKE_PERSISTENT],[
+	LB2_MSG_LINUX_TEST_RESULT([if d_make_persistent() exists],
+	[d_make_persistent], [
+		AC_DEFINE(HAVE_D_MAKE_PERSISTENT, 1,
+			  [d_make_persistent() exists])
+	])
+]) # LC_HAVE_D_MAKE_PERSISTENT
+
+#
 # LC_HAVE_POSIX_ACL_TO_XATTR_ALLOC_BUFFER
 #
 # Linux commit v6.19-rc1-31-g6cbfdf89470ef
@@ -3867,6 +3915,8 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_VFS_CREATE_DELEGATE
 	LC_SRC_HAVE_ILOOKUP5_NOWAIT_ISNEW
 	LC_SRC_HAVE_FILEMAP_ALLOC_FOLIO_NUMA
+	LC_SRC_HAVE_KILL_LITTER_SUPER
+	LC_SRC_HAVE_D_MAKE_PERSISTENT
 
 	# 7.0
 	LC_SRC_HAVE_POSIX_ACL_TO_XATTR_ALLOC_BUFFER
@@ -4088,6 +4138,8 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_VFS_CREATE_DELEGATE
 	LC_HAVE_ILOOKUP5_NOWAIT_ISNEW
 	LC_HAVE_FILEMAP_ALLOC_FOLIO_NUMA
+	LC_HAVE_KILL_LITTER_SUPER
+	LC_HAVE_D_MAKE_PERSISTENT
 
 	# 7.0
 	LC_HAVE_POSIX_ACL_TO_XATTR_ALLOC_BUFFER

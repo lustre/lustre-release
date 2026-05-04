@@ -86,13 +86,25 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 			 (void *)fid);
 	obj->oo_dt.do_body_ops = &osd_wbcfs_body_ops;
 	if (inode) {
-		obj->oo_inode = inode;
-		__osd_object_init(obj);
-
 		/*
-		 * TODO: check LMA EA and convert LMAI flags to lustre
-		 * LMA flags and cache it in object.
+		 * The inode may still be in the icache after its last link
+		 * was dropped because a persistent dentry pins it. Treat such
+		 * a stale inode as non-existent: returning it as a live object
+		 * would later trip the nlink==0 && !oo_destroyed assertion in
+		 * osd_object_release().
 		 */
+		if (inode->i_nlink == 0) {
+			iput(inode);
+			inode = NULL;
+		} else {
+			obj->oo_inode = inode;
+			__osd_object_init(obj);
+
+			/*
+			 * TODO: check LMA EA and convert LMAI flags to lustre
+			 * LMA flags and cache it in object.
+			 */
+		}
 	}
 
 	CDEBUG(D_INODE, "%s: object init for fid="DFID" inode@%pK nlink=%d\n",

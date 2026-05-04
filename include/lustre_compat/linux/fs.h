@@ -10,6 +10,34 @@
 #define __LIBCFS_LINUX_CFS_FS_H__
 
 #include <linux/fs.h>
+#include <linux/dcache.h>
+
+#ifndef HAVE_D_MAKE_PERSISTENT
+/*
+ * Linux commit v6.18-rc5-9-gbacdf1d70bbe2 introduced d_make_persistent() and
+ * d_make_discardable() so that filesystems can mark dentries as pinned without
+ * leaking unbalanced dget()s. On older kernels we fall back to the equivalent
+ * open-coded sequence: d_instantiate() (or d_add() for unhashed dentries) plus
+ * an extra dget() to pin, and a matching dput() to unpin. Older kernels still
+ * have kill_litter_super() available, which uses d_genocide() to drop these
+ * extra references at unmount.
+ */
+static inline struct dentry *d_make_persistent(struct dentry *dentry,
+					       struct inode *inode)
+{
+	if (d_unhashed(dentry))
+		d_add(dentry, inode);
+	else
+		d_instantiate(dentry, inode);
+	dget(dentry);
+	return dentry;
+}
+
+static inline void d_make_discardable(struct dentry *dentry)
+{
+	dput(dentry);
+}
+#endif /* !HAVE_D_MAKE_PERSISTENT */
 
 #ifndef S_DT_SHIFT
 #define S_DT_SHIFT		12

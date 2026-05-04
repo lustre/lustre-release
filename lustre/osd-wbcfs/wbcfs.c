@@ -307,8 +307,7 @@ static int memfs_mknod(struct mnt_idmap *map, struct inode *dir,
 
 	dir->i_size += BOGO_DIRENT_SIZE;
 	inode_set_mtime_to_ts(dir, inode_set_ctime_current(dir));
-	d_instantiate(dentry, inode);
-	dget(dentry); /* Extra count - pin the dentry in core */
+	d_make_persistent(dentry, inode);
 
 	RETURN(0);
 }
@@ -367,7 +366,7 @@ static int memfs_unlink(struct inode *dir, struct dentry *dentry)
 			      inode_set_ctime_current(inode)));
 	inode_inc_iversion(dir);
 	drop_nlink(inode);
-	dput(dentry);
+	d_make_discardable(dentry);
 	return 0;
 }
 
@@ -409,8 +408,7 @@ static int memfs_link(struct dentry *old_dentry, struct inode *dir,
 	inode_inc_iversion(dir);
 	inc_nlink(inode);
 	ihold(inode);	/* New dentry reference */
-	dget(dentry);	/* Extra pinning count for the created dentry */
-	d_instantiate(dentry, inode);
+	d_make_persistent(dentry, inode);
 	return 0;
 }
 
@@ -1055,7 +1053,18 @@ static const struct address_space_operations memfs_aops = {
 
 static void memfs_kill_super(struct super_block *sb)
 {
+	/*
+	 * On kernels that still have kill_litter_super(), it walks the dentry
+	 * tree via d_genocide() to drop the extra refs left by the
+	 * d_instantiate()+dget() compat fallback for d_make_persistent().
+	 * Newer kernels expose neither, but kill_anon_super() now strips
+	 * DCACHE_PERSISTENT during shrink_dcache_for_umount() instead.
+	 */
+#ifdef HAVE_KILL_LITTER_SUPER
+	kill_litter_super(sb);
+#else
 	kill_anon_super(sb);
+#endif
 }
 
 static struct file_system_type memfs_fstype = {
