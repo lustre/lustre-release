@@ -112,29 +112,6 @@ static inline struct bio *cfs_bio_alloc(struct block_device *bdev,
 	((kcap)->cap[0] = val32)
 #endif
 
-/*
- * mount MS_* flags split from superblock SB_* flags
- * if the SB_* flags are not available use the MS_* flags
- */
-#if !defined(SB_RDONLY) && defined(MS_RDONLY)
-# define SB_RDONLY MS_RDONLY
-#endif
-#if !defined(SB_ACTIVE) && defined(MS_ACTIVE)
-# define SB_ACTIVE MS_ACTIVE
-#endif
-#if !defined(SB_NOSEC) && defined(MS_NOSEC)
-# define SB_NOSEC MS_NOSEC
-#endif
-#if !defined(SB_POSIXACL) && defined(MS_POSIXACL)
-# define SB_POSIXACL MS_POSIXACL
-#endif
-#if !defined(SB_NODIRATIME) && defined(MS_NODIRATIME)
-# define SB_NODIRATIME MS_NODIRATIME
-#endif
-#if !defined(SB_KERNMOUNT) && defined(MS_KERNMOUNT)
-# define SB_KERNMOUNT MS_KERNMOUNT
-#endif
-
 #ifndef HAVE_IOV_ITER_IOVEC
 static inline struct iovec iov_iter_iovec(const struct iov_iter *iter)
 {
@@ -207,10 +184,6 @@ static inline int ll_vfs_removexattr(struct dentry *dentry, struct inode *inode,
 #define FALLOC_FL_INSERT_RANGE 0x20 /* insert space within file */
 #endif
 
-#ifndef raw_cpu_ptr
-#define raw_cpu_ptr(p) __this_cpu_ptr(p)
-#endif
-
 #ifdef HAVE_AOPS_MIGRATE_FOLIO
 #define folio_migr	folio
 #else
@@ -233,20 +206,6 @@ static inline const char *shrinker_debugfs_path(struct shrinker *shrinker)
 
 	return s->debugfs_entry->d_name.name;
 }
-
-#ifndef fallthrough
-# if defined(__GNUC__) && __GNUC__ >= 7
-#  define fallthrough  __attribute__((fallthrough)) /* fallthrough */
-# else
-#  define fallthrough do {} while (0)  /* fallthrough */
-# endif
-#endif
-
-#ifdef VERIFY_WRITE /* removed in kernel commit v4.20-10979-g96d4f267e40f */
-#define ll_access_ok(ptr, len) access_ok(VERIFY_WRITE, ptr, len)
-#else
-#define ll_access_ok(ptr, len) access_ok(ptr, len)
-#endif
 
 #ifndef HAVE_WB_STAT_MOD
 #define wb_stat_mod(wb, item, amount)	__add_wb_stat(wb, item, amount)

@@ -3678,14 +3678,12 @@ static ssize_t pcc_copy_data(struct file *src, struct file *dst)
 
 	ENTRY;
 
-#ifdef FMODE_CAN_READ
 	/* Need to add FMODE_CAN_READ flags here, otherwise the check in
 	 * kernel_read() during open() for auto PCC-RO attach will fail.
 	 */
 	if ((src->f_mode & FMODE_READ) &&
 	    likely(src->f_op->read || src->f_op->read_iter))
 		src->f_mode |= FMODE_CAN_READ;
-#endif
 
 	OBD_ALLOC_LARGE(buf, buf_len);
 	if (buf == NULL)

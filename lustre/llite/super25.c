@@ -281,7 +281,6 @@ MODULE_ALIAS_FS("lustre");
 static int __init lustre_init(void)
 {
 	int rc;
-	unsigned long lustre_inode_cache_flags;
 
 	BUILD_BUG_ON(sizeof(LUSTRE_VOLATILE_HDR) !=
 		     LUSTRE_VOLATILE_HDR_LEN + 1);
@@ -297,15 +296,13 @@ static int __init lustre_init(void)
 	CDEBUG(D_INFO, "Lustre client module (%p).\n",
 	       &lustre_super_operations);
 
-	lustre_inode_cache_flags = SLAB_HWCACHE_ALIGN | SLAB_RECLAIM_ACCOUNT |
-				   SLAB_MEM_SPREAD;
-#ifdef SLAB_ACCOUNT
-	lustre_inode_cache_flags |= SLAB_ACCOUNT;
-#endif
-
 	ll_inode_cachep = kmem_cache_create("lustre_inode_cache",
-					    sizeof(struct ll_inode_info),
-					    0, lustre_inode_cache_flags, NULL);
+					    sizeof(struct ll_inode_info), 0,
+					    SLAB_HWCACHE_ALIGN |
+					    SLAB_RECLAIM_ACCOUNT |
+					    SLAB_MEM_SPREAD |
+					    SLAB_ACCOUNT,
+					    NULL);
 	if (ll_inode_cachep == NULL)
 		GOTO(out_cache, rc = -ENOMEM);
 

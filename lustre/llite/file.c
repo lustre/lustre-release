@@ -1875,33 +1875,36 @@ static bool file_is_noatime(const struct file *file)
 	return false;
 }
 
+static inline unsigned int vvp_io_args_flags(const struct vvp_io_args *args)
+{
+	return args ? args->u.normal.via_iocb->ki_flags : 0;
+}
+
 void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot,
 		struct vvp_io_args *args)
 {
 	struct inode *inode = file_inode(file);
 	struct ll_file_data *lfd  = file->private_data;
-	int flags = vvp_io_args_flags(file, args);
+	unsigned int flags = vvp_io_args_flags(args);
 
 	io->u.ci_rw.crw_nonblock = file->f_flags & O_NONBLOCK;
 	io->ci_lock_no_expand = lfd->lfd_lock_no_expand;
 
 	if (iot == CIT_WRITE) {
-		io->u.ci_wr.wr_append = iocb_ki_flags_check(flags, APPEND);
-		io->u.ci_wr.wr_sync   = !!(iocb_ki_flags_check(flags, SYNC) ||
-					   iocb_ki_flags_check(flags, DSYNC) ||
-					   IS_SYNC(inode));
+		io->u.ci_wr.wr_append = !!(flags & IOCB_APPEND);
+		io->u.ci_wr.wr_sync = flags & IOCB_SYNC ||
+				      !!(flags & IOCB_DSYNC) ||
+				      IS_SYNC(inode);
 	}
 
-#ifdef IOCB_NOWAIT
-	io->ci_iocb_nowait = iocb_ki_flags_check(flags, NOWAIT);
-#endif
+	io->ci_iocb_nowait = !!(flags & IOCB_NOWAIT);
 
 	io->ci_obj = ll_i2info(inode)->lli_clob;
 	io->ci_lockreq = CILR_MAYBE;
 	if (ll_file_nolock(file)) {
 		io->ci_lockreq = CILR_NEVER;
 		io->ci_no_srvlock = 1;
-	} else if (iocb_ki_flags_check(flags, APPEND)) {
+	} else if (flags & IOCB_APPEND) {
 		io->ci_lockreq = CILR_MANDATORY;
 	}
 	io->ci_noatime = file_is_noatime(file);
@@ -1961,7 +1964,6 @@ ll_hybrid_bio_dio_switch_check(struct file *file, struct kiocb *iocb,
 	/* we can only do this with IOCB_FLAGS, since we can't modify f_flags
 	 * because they're visible in userspace.  so we check for IOCB_DIRECT
 	 */
-#ifdef IOCB_DIRECT
 	struct inode *inode = file_inode(file);
 	struct ll_sb_info *sbi = ll_i2sbi(inode);
 	int op = LPROC_LL_HYBRID_NOSWITCH;
@@ -2019,9 +2021,6 @@ ll_hybrid_bio_dio_switch_check(struct file *file, struct kiocb *iocb,
 out:
 	ll_stats_ops_tally(sbi, op, 1);
 	RETURN(dio_switch);
-#else
-	RETURN(false);
-#endif
 }
 
 #define RETRY_ATTEMPTS 1000
@@ -2039,7 +2038,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 	struct cl_dio_aio *ci_dio_aio = NULL;
 	struct range_lock range;
 	struct cl_io *io;
-	int flags = vvp_io_args_flags(file, args);
+	unsigned int flags = vvp_io_args_flags(args);
 	bool is_parallel_dio = false;
 	bool range_locked = false;
 	unsigned int retried = 0;
@@ -2062,8 +2061,8 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 			     sbi->ll_cache->ccc_lru_max >> 2) << PAGE_SHIFT;
 
 	io = vvp_env_new_io(env);
-	if (iocb_ki_flags_check(flags, DIRECT)) {
-		if (iocb_ki_flags_check(flags, APPEND))
+	if (flags & IOCB_DIRECT) {
+		if (flags & IOCB_APPEND)
 			dio_lock = true;
 		if (!is_sync_kiocb(args->u.normal.via_iocb) &&
 		/* hybrid IO is also potentially async */
@@ -2092,7 +2091,7 @@ restart:
 	 * if we have small max_cached_mb but large block IO issued, io
 	 * could not be finished and blocked whole client.
 	 */
-	if (iocb_ki_flags_check(flags, DIRECT) || bytes < max_io_bytes) {
+	if (flags & IOCB_DIRECT || bytes < max_io_bytes) {
 		per_bytes = bytes;
 		partial_io = false;
 	} else {
@@ -2118,7 +2117,7 @@ restart:
 	}
 
 	if (cl_io_rw_init(env, io, iot, *ppos, per_bytes) == 0) {
-		if (iocb_ki_flags_check(flags, APPEND))
+		if (flags & IOCB_APPEND)
 			range_lock_init(&range, 0, LUSTRE_EOF);
 		else
 			range_lock_init(&range, *ppos, *ppos + per_bytes - 1);
@@ -2131,7 +2130,7 @@ restart:
 		 * See LU-6227 for details.
 		 */
 		if (((iot == CIT_WRITE) ||
-		    (iot == CIT_READ && iocb_ki_flags_check(flags, DIRECT))) &&
+		    (iot == CIT_READ && flags & IOCB_DIRECT)) &&
 		    !(vio->vui_fd->lfd_file_flags & LL_FILE_GROUP_LOCKED)) {
 			CDEBUG(D_VFSTRACE, "Range lock "RL_FMT"\n",
 			       RL_PARA(&range));
@@ -2336,7 +2335,6 @@ static ssize_t
 ll_do_fast_read(struct kiocb *iocb, struct iov_iter *iter)
 {
 	struct ll_inode_info *lli = ll_i2info(file_inode(iocb->ki_filp));
-	int flags = iocb_ki_flags_get(iocb->ki_filp, iocb);
 	ssize_t result;
 
 	if (!ll_sbi_has_fast_read(ll_i2sbi(file_inode(iocb->ki_filp))))
@@ -2345,7 +2343,7 @@ ll_do_fast_read(struct kiocb *iocb, struct iov_iter *iter)
 	/* NB: we can't do direct IO for fast read because it will need a lock
 	 * to make IO engine happy.
 	 */
-	if (iocb_ki_flags_check(flags, DIRECT))
+	if (iocb_ki_flags_check(iocb, IOCB_DIRECT))
 		return 0;
 
 	if (ll_layout_version_get(lli) == CL_LAYOUT_GEN_NONE)
@@ -2416,16 +2414,13 @@ static bool is_unaligned_directio(struct kiocb *iocb, struct iov_iter *iter,
 				 enum cl_io_type io_type)
 {
 	struct file *file = iocb->ki_filp;
-	int iocb_flags = iocb_ki_flags_get(file, iocb);
-	bool direct_io = iocb_ki_flags_check(iocb_flags, DIRECT);
+	bool direct_io = iocb_ki_flags_check(iocb, IOCB_DIRECT);
 	bool unaligned = false;
 
-/* This I/O could be switched to direct i/o if the kernel is new enough */
-#ifdef IOCB_DIRECT
+	/* This I/O could be switched to direct i/o with a new enough kernel */
 	if (ll_hybrid_bio_dio_switch_check(file, iocb, iter, io_type,
 					   iov_iter_count(iter)))
 		direct_io = true;
-#endif
 
 	if (direct_io) {
 		if (iocb->ki_pos & ~PAGE_MASK)
@@ -2492,11 +2487,9 @@ static ssize_t do_file_read_iter(struct kiocb *iocb, struct iov_iter *to)
 	if (ll_hybrid_bio_dio_switch_check(file, iocb, to, CIT_READ,
 					   iov_iter_count(to)) ||
 	    CFS_FAIL_CHECK(OBD_FAIL_LLITE_FORCE_BIO_AS_DIO)) {
-#ifdef IOCB_DIRECT
 		iocb->ki_flags |= IOCB_DIRECT;
 		CDEBUG(D_VFSTRACE, "switching to DIO\n");
 		args->via_hybrid_switched = 1;
-#endif
 	}
 
 	rc2 = ll_file_io_generic(env, args, file, CIT_READ,
@@ -2597,7 +2590,6 @@ static ssize_t do_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	struct file *file = iocb->ki_filp;
 	struct vvp_io_args *args;
 	struct lu_env *env;
-	int flags = iocb_ki_flags_get(file, iocb);
 	ktime_t kstart = ktime_get();
 	bool hybrid_switched = false;
 	ssize_t rc_tiny = 0;
@@ -2632,11 +2624,9 @@ static ssize_t do_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	if (ll_hybrid_bio_dio_switch_check(file, iocb, from, CIT_WRITE,
 					   iov_iter_count(from)) ||
 	    CFS_FAIL_CHECK(OBD_FAIL_LLITE_FORCE_BIO_AS_DIO)) {
-#ifdef IOCB_DIRECT
 		iocb->ki_flags |= IOCB_DIRECT;
 		CDEBUG(D_VFSTRACE, "switching to DIO\n");
 		hybrid_switched = true;
-#endif
 	}
 
 	/* NB: we can't do direct IO for tiny writes because they use the page
@@ -2645,9 +2635,9 @@ static ssize_t do_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	 * required DLM locks are held to protect file size.
 	 */
 	if (ll_sbi_has_tiny_write(ll_i2sbi(file_inode(file))) &&
-	    !(flags &
-	      (ki_flag(DIRECT) | ki_flag(DSYNC) | ki_flag(SYNC) |
-	       ki_flag(APPEND))))
+	    !(iocb_ki_flags_check(iocb,
+				  IOCB_DIRECT | IOCB_DSYNC | IOCB_SYNC |
+				  IOCB_APPEND)))
 		rc_tiny = ll_do_tiny_write(iocb, from);
 
 	/* In case of error, go on and try normal write - Only stop if tiny
@@ -2939,7 +2929,7 @@ static int ll_file_getstripe(struct inode *inode, void __user *lum, size_t size)
 
 	ENTRY;
 	/* exit before doing any work if pointer is bad */
-	if (unlikely(!ll_access_ok(lum, sizeof(struct lov_user_md))))
+	if (unlikely(!access_ok(lum, sizeof(struct lov_user_md))))
 		RETURN(-EFAULT);
 
 	env = cl_env_get(&refcheck);
@@ -4735,7 +4725,7 @@ out:
 		struct hsm_user_state *hus;
 		int rc;
 
-		if (!ll_access_ok(uarg, sizeof(*hus)))
+		if (!access_ok(uarg, sizeof(*hus)))
 			RETURN(-EFAULT);
 
 		OBD_ALLOC_PTR(hus);
@@ -4780,7 +4770,7 @@ out:
 		const char *action;
 		int rc;
 
-		if (!ll_access_ok(uarg, sizeof(*hca)))
+		if (!access_ok(uarg, sizeof(*hca)))
 			RETURN(-EFAULT);
 
 		OBD_ALLOC_PTR(hca);
@@ -5612,21 +5602,15 @@ ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
 
 	switch (cmd) {
 	case F_SETLKW:
-#ifdef F_SETLKW64
 	case F_SETLKW64:
-#endif
 		flags = 0;
 		break;
 	case F_SETLK:
-#ifdef F_SETLK64
 	case F_SETLK64:
-#endif
 		flags = LDLM_FL_BLOCK_NOWAIT;
 		break;
 	case F_GETLK:
-#ifdef F_GETLK64
 	case F_GETLK64:
-#endif
 		flags = LDLM_FL_TEST_LOCK;
 		break;
 	case F_CANCELLK:

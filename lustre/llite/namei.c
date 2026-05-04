@@ -1843,9 +1843,8 @@ static int ll_new_node_prepare(struct inode *dir, struct dentry *dchild,
 				GOTO(err_exit, err = -EINVAL);
 			fakeinode->i_sb = dchild->d_sb;
 			fakeinode->i_mode |= S_IFLNK;
-#ifdef IOP_XATTR
 			fakeinode->i_opflags |= IOP_XATTR;
-#endif
+
 			ll_lli_init(ll_i2info(fakeinode));
 			err = ll_set_encflags(fakeinode,
 					      op_data->op_file_encctx,

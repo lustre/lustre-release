@@ -1858,10 +1858,8 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	struct cl_page *page;
 	struct vvp_io *vio;
 	int result;
-	int flags;
 
 	ENTRY;
-
 	if (CFS_FAIL_PRECHECK(OBD_FAIL_LLITE_READPAGE_PAUSE)) {
 		unlock_page(vmpage);
 		CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_READPAGE_PAUSE, cfs_fail_val);
@@ -2070,8 +2068,7 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	 * with lockless i/o, and buffered requires LDLM locking, so in
 	 * this case we must restart without lockless.
 	 */
-	flags = iocb_ki_flags_get(file, vio->vui_iocb);
-	if (iocb_ki_flags_check(flags, DIRECT) &&
+	if (iocb_ki_flags_check(vio->vui_iocb, IOCB_DIRECT) &&
 	    lcc && lcc->lcc_type == LCC_RW &&
 	    !io->ci_dio_lock) {
 		unlock_page(vmpage);

@@ -13,6 +13,7 @@
 
 #ifndef LLITE_INTERNAL_H
 #define LLITE_INTERNAL_H
+
 #include <obd.h>
 #include <lustre_disk.h>  /* for s2sbi */
 #include <lustre_linkea.h>
@@ -33,10 +34,6 @@
 #include "vvp_internal.h"
 #include "pcc.h"
 #include "foreign_symlink.h"
-
-#ifndef FMODE_EXEC
-#define FMODE_EXEC 0
-#endif
 
 /** Only used on client-side for indicating the tail of dir hash/offset. */
 #define LL_DIR_END_OFF          0x7fffffffffffffffULL
@@ -352,13 +349,12 @@ static inline void lli_jobinfo_cpy(const struct ll_inode_info *lli,
 #define ll_getattr(ns, path, stat, mask, fl)	ll_getattr(path, stat, mask, fl)
 #endif
 
-#ifdef IOCB_APPEND
-#define iocb_ki_flags_check(flag, name) (!!((flag) & IOCB_ ## name))
-#define ki_flag(name) IOCB_ ## name
-#else
-#define iocb_ki_flags_check(flag, name) (!!((flag) & O_ ## name))
-#define ki_flag(name) O_ ## name
-#endif
+/* This function checks if any flag is set, not all the flags are set */
+static inline bool iocb_ki_flags_check(const struct kiocb *iocb,
+				       unsigned int flags)
+{
+	return iocb ? iocb->ki_flags & flags : 0;
+}
 
 static inline void ll_trunc_sem_init(struct ll_trunc_sem *sem)
 {
@@ -1591,22 +1587,6 @@ struct vvp_io_args {
 	/* did we switch this IO from BIO to DIO using hybrid IO? */
 	unsigned int	via_hybrid_switched:1;
 };
-
-static inline unsigned int iocb_ki_flags_get(const struct file *file,
-					     const struct kiocb *iocb)
-{
-#ifdef IOCB_APPEND
-	return iocb ? iocb->ki_flags : 0;
-#else
-	return file->f_flags;
-#endif
-}
-
-static inline unsigned int vvp_io_args_flags(const struct file *file,
-					     const struct vvp_io_args *args)
-{
-	return iocb_ki_flags_get(file, args ? args->u.normal.via_iocb : NULL);
-}
 
 enum lcc_type {
 	LCC_RW = 1,

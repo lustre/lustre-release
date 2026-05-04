@@ -335,18 +335,13 @@ out:
 	RETURN(rc);
 }
 
-#ifdef KMALLOC_MAX_SIZE
-#define MAX_MALLOC KMALLOC_MAX_SIZE
-#else
-#define MAX_MALLOC (128 * 1024)
-#endif
-
 /* This is the maximum size of a single O_DIRECT request, based on the
  * kmalloc limit.  We need to fit all of the brw_page structs, each one
  * representing PAGE_SIZE worth of user data, into a single buffer, and
  * then truncate this to be a full-sized RPC.  For 4kB PAGE_SIZE this is
- * up to 22MB for 128kB kmalloc and up to 682MB for 4MB kmalloc. */
-#define MAX_DIO_SIZE ((MAX_MALLOC / sizeof(struct brw_page) * PAGE_SIZE) & \
+ * up to 22MB for 128kB kmalloc and up to 682MB for 4MB kmalloc.
+ */
+#define MAX_DIO_SIZE ((KMALLOC_MAX_SIZE / sizeof(struct brw_page) * PAGE_SIZE) & \
 		      ~((size_t)DT_MAX_BRW_SIZE - 1))
 
 static ssize_t ll_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
@@ -691,9 +686,8 @@ static int ll_write_begin(
 	unsigned from = pos & (PAGE_SIZE - 1);
 	unsigned to = from + len;
 	int result = 0;
-	int iocb_flags;
-	ENTRY;
 
+	ENTRY;
 	CDEBUG(D_VFSTRACE, "Writing %lu of %d to %d bytes\n", index, from, len);
 
 	lcc = ll_cl_find(inode);
@@ -708,8 +702,7 @@ static int ll_write_begin(
 	io  = lcc->lcc_io;
 	vio = vvp_env_io(env);
 
-	iocb_flags = iocb_ki_flags_get(file, vio->vui_iocb);
-	if (iocb_ki_flags_check(iocb_flags, DIRECT)) {
+	if (iocb_ki_flags_check(vio->vui_iocb, IOCB_DIRECT)) {
 		/* direct IO failed because it couldn't clean up cached pages,
 		 * this causes a problem for mirror write because the cached
 		 * page may belong to another mirror, which will result in

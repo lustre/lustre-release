@@ -536,9 +536,8 @@ static int vvp_io_rw_lock(const struct lu_env *env, struct cl_io *io,
 	int result;
 	int ast_flags = 0;
 
-	LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
 	ENTRY;
-
+	LASSERT(io->ci_type == CIT_READ || io->ci_type == CIT_WRITE);
 	vvp_io_update_iov(env, vio, io);
 
 	if (io->u.ci_rw.crw_nonblock)
@@ -546,16 +545,12 @@ static int vvp_io_rw_lock(const struct lu_env *env, struct cl_io *io,
 	if (io->ci_lock_no_expand)
 		ast_flags |= CEF_LOCK_NO_EXPAND;
 	if (vio->vui_fd) {
-		int flags;
-
 		/* Group lock held means no lockless any more */
 		if (vio->vui_fd->lfd_file_flags & LL_FILE_GROUP_LOCKED)
 			io->ci_dio_lock = 1;
 
-		flags = iocb_ki_flags_get(vio->vui_iocb->ki_filp,
-					  vio->vui_iocb);
 		if (ll_file_nolock(vio->vui_fd->fd_file) ||
-		    (iocb_ki_flags_check(flags, DIRECT) &&
+		    (iocb_ki_flags_check(vio->vui_iocb, IOCB_DIRECT) &&
 		     !io->ci_dio_lock))
 			ast_flags |= CEF_NEVER;
 	}
@@ -815,10 +810,8 @@ static int vvp_io_read_start(const struct lu_env *env,
 	int total_bytes_read = 0;
 	struct iov_iter iter;
 	pgoff_t page_offset;
-	int flags;
 
 	ENTRY;
-
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 
 	CDEBUG(D_VFSTRACE, DNAME": read [%llu, %llu)\n",
@@ -834,8 +827,7 @@ static int vvp_io_read_start(const struct lu_env *env,
 	if (!can_populate_pages(env, io, inode))
 		RETURN(0);
 
-	flags = iocb_ki_flags_get(file, vio->vui_iocb);
-	if (!iocb_ki_flags_check(flags, DIRECT)) {
+	if (!iocb_ki_flags_check(vio->vui_iocb, IOCB_DIRECT)) {
 		result = cl_io_lru_reserve(env, io, pos, crw_bytes);
 		if (result)
 			RETURN(result);
@@ -1246,10 +1238,8 @@ static int vvp_io_write_start(const struct lu_env *env,
 	size_t ci_bytes = io->ci_bytes;
 	struct iov_iter iter;
 	size_t written = 0;
-	int flags;
 
 	ENTRY;
-
 	trunc_sem_down_read(&lli->lli_trunc_sem);
 
 	if (!can_populate_pages(env, io, inode))
@@ -1305,8 +1295,7 @@ static int vvp_io_write_start(const struct lu_env *env,
 	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_IMUTEX_NOSEC) && lock_inode)
 		RETURN(-EINVAL);
 
-	flags = iocb_ki_flags_get(file, vio->vui_iocb);
-	if (!iocb_ki_flags_check(flags, DIRECT)) {
+	if (!iocb_ki_flags_check(vio->vui_iocb, IOCB_DIRECT)) {
 		result = cl_io_lru_reserve(env, io, pos, crw_bytes);
 		if (result)
 			RETURN(result);

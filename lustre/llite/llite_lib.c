@@ -433,14 +433,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 	if (test_bit(LL_SBI_USER_XATTR, sbi->ll_flags))
 		data->ocd_connect_flags |= OBD_CONNECT_XATTR;
 
-	sb->s_flags |= SB_I_VERSION;
-#ifdef SB_NOSEC
-	/* Setting this indicates we correctly support S_NOSEC (See kernel
-	 * commit 9e1f1de02c2275d7172e18dc4e7c2065777611bf)
-	 */
-	sb->s_flags |= SB_NOSEC;
-#endif
-
+	sb->s_flags |= SB_I_VERSION | SB_NOSEC;
 	sbi->ll_fop = ll_select_file_operations(sbi, true);
 
 	/* always ping even if server suppress_pings */
@@ -566,15 +559,11 @@ retry_connect:
 	}
 
 	if (data->ocd_connect_flags & OBD_CONNECT_ACL) {
-#ifdef SB_POSIXACL
 		sb->s_flags |= SB_POSIXACL;
-#endif
 		set_bit(LL_SBI_ACL, sbi->ll_flags);
 	} else {
 		LCONSOLE_INFO("client wants to enable acl, but mdt not!\n");
-#ifdef SB_POSIXACL
 		sb->s_flags &= ~SB_POSIXACL;
-#endif
 		clear_bit(LL_SBI_ACL, sbi->ll_flags);
 	}
 
@@ -732,7 +721,6 @@ retry_connect:
 #ifdef HAVE_LUSTRE_CRYPTO
 	llcrypt_set_ops(sb, &lustre_cryptops);
 #endif
-
 	/* make root inode (XXX: move this to after cbd setup?) */
 	valid = OBD_MD_FLGETATTR | OBD_MD_FLBLOCKS | OBD_MD_FLMODEASIZE |
 		OBD_MD_ENCCTX;
@@ -1455,9 +1443,7 @@ int ll_fill_super(struct super_block *sb)
 	sb->s_bdi->ra_pages = 0;
 	sb->s_bdi->io_pages = 0;
 	sb->s_bdi->capabilities |= LL_BDI_CAP_FLAGS;
-#ifdef SB_I_CGROUPWB
 	sb->s_iflags |= SB_I_CGROUPWB;
-#endif
 
 	/* Call ll_debugfs_register_super() before lustre_process_log()
 	 * so that "llite.*.*" params can be processed correctly.
@@ -3421,7 +3407,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 		u32 xflags = 0, projid = 0;
 		int flags = 0;
 
-		if (!ll_access_ok(uarg, sizeof(int)))
+		if (!access_ok(uarg, sizeof(int)))
 			RETURN(-EFAULT);
 		rc = fileattr_get(file->f_inode, &flags, &xflags, &projid);
 		if (rc)
@@ -3447,7 +3433,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 	case IOC_OBD_STATFS:
 		RETURN(ll_obd_statfs(inode, uarg));
 	case LL_IOC_GET_MDTIDX: {
-		if (!ll_access_ok(uarg, sizeof(rc)))
+		if (!access_ok(uarg, sizeof(rc)))
 			RETURN(-EFAULT);
 
 		rc = ll_get_mdt_idx(inode);
