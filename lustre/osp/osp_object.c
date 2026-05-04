@@ -1621,7 +1621,7 @@ static int osp_create(const struct lu_env *env, struct dt_object *dt,
 	 */
 
 	/* we might have lost precreated objects */
-	if (unlikely(d->opd_gap_count) > 0) {
+	if (unlikely(d->opd_gap_count > 0)) {
 		LASSERT(d->opd_pre != NULL);
 		spin_lock(&d->opd_pre_lock);
 		if (d->opd_gap_count > 0) {
