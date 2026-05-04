@@ -6932,7 +6932,7 @@ EOF
 	compare_yaml_files ||
 		error "Round-trip YAML comparison failed"
 
-	rm -f "$modprobe_file" "$yaml_file" "$export_file" "$new_export"
+	rm -f "$modprobe_file" "$yaml_file" "$export_file" "$actual_file"
 }
 run_test 617 \
 	"lnet_legacy2yaml: round-trip tunables from LNet to modprobe to YAML"
