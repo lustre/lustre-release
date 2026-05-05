@@ -1848,16 +1848,16 @@ void gss_svc_reqctx_free(struct gss_svc_reqctx *grctx)
 static inline
 void gss_svc_reqctx_addref(struct gss_svc_reqctx *grctx)
 {
-	LASSERT(atomic_read(&grctx->src_base.sc_refcount) > 0);
-	atomic_inc(&grctx->src_base.sc_refcount);
+	LASSERT(refcount_read(&grctx->src_base.sc_refcount) > 0);
+	refcount_inc(&grctx->src_base.sc_refcount);
 }
 
 static inline
 void gss_svc_reqctx_decref(struct gss_svc_reqctx *grctx)
 {
-	LASSERT(atomic_read(&grctx->src_base.sc_refcount) > 0);
+	LASSERT(refcount_read(&grctx->src_base.sc_refcount) > 0);
 
-	if (atomic_dec_and_test(&grctx->src_base.sc_refcount))
+	if (refcount_dec_and_test(&grctx->src_base.sc_refcount))
 		gss_svc_reqctx_free(grctx);
 }
 
@@ -2395,7 +2395,7 @@ int gss_svc_accept(struct ptlrpc_sec_policy *policy, struct ptlrpc_request *req)
 		RETURN(SECSVC_DROP);
 
 	grctx->src_base.sc_policy = sptlrpc_policy_get(policy);
-	atomic_set(&grctx->src_base.sc_refcount, 1);
+	refcount_set(&grctx->src_base.sc_refcount, 1);
 	grctx->src_base.sc_nodemap = NULL;
 	req->rq_svc_ctx = &grctx->src_base;
 	gw = &grctx->src_wirectx;
@@ -2796,7 +2796,7 @@ void gss_svc_free_rs(struct ptlrpc_reply_state *rs)
 
 void gss_svc_free_ctx(struct ptlrpc_svc_ctx *ctx)
 {
-	LASSERT(atomic_read(&ctx->sc_refcount) == 0);
+	LASSERT(refcount_read(&ctx->sc_refcount) == 0);
 	gss_svc_reqctx_free(gss_svc_ctx2reqctx(ctx));
 }
 

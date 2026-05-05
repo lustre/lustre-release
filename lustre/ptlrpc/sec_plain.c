@@ -701,7 +701,7 @@ int plain_enlarge_reqbuf(struct ptlrpc_sec *sec,
  */
 
 static struct ptlrpc_svc_ctx plain_svc_ctx = {
-	.sc_refcount    = ATOMIC_INIT(1),
+	.sc_refcount    = REFCOUNT_INIT(1),
 	.sc_policy      = &plain_policy,
 };
 
@@ -771,7 +771,7 @@ static int plain_accept(struct ptlrpc_request *req)
 	req->rq_reqlen = msg->lm_buflens[PLAIN_PACK_MSG_OFF];
 
 	req->rq_svc_ctx = &plain_svc_ctx;
-	atomic_inc(&req->rq_svc_ctx->sc_refcount);
+	refcount_inc(&req->rq_svc_ctx->sc_refcount);
 
 	RETURN(SECSVC_OK);
 }
@@ -809,7 +809,7 @@ int plain_alloc_rs(struct ptlrpc_request *req, int msgsize)
 	}
 
 	rs->rs_svc_ctx = req->rq_svc_ctx;
-	atomic_inc(&req->rq_svc_ctx->sc_refcount);
+	refcount_inc(&req->rq_svc_ctx->sc_refcount);
 	rs->rs_repbuf = (struct lustre_msg *) (rs + 1);
 	rs->rs_repbuf_len = rs_size - sizeof(*rs);
 
@@ -823,10 +823,12 @@ int plain_alloc_rs(struct ptlrpc_request *req, int msgsize)
 static
 void plain_free_rs(struct ptlrpc_reply_state *rs)
 {
+	struct ptlrpc_svc_ctx *ctx = rs->rs_svc_ctx;
+
 	ENTRY;
 
-	LASSERT(atomic_read(&rs->rs_svc_ctx->sc_refcount) > 1);
-	atomic_dec(&rs->rs_svc_ctx->sc_refcount);
+	LASSERT(refcount_read(&ctx->sc_refcount) > 1);
+	refcount_dec(&ctx->sc_refcount);
 
 	if (!rs->rs_prealloc)
 		OBD_FREE_LARGE(rs, rs->rs_size);

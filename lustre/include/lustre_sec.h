@@ -909,9 +909,9 @@ void gss_cleanup_sk_key(key_serial_t skid, const char *fsname, const char *uuid)
 #endif
 
 struct ptlrpc_svc_ctx {
-	atomic_t                        sc_refcount;
+	refcount_t                     sc_refcount;
 	struct ptlrpc_sec_policy       *sc_policy;
-	char			       *sc_nodemap;
+	char                           *sc_nodemap;
 };
 
 /*
