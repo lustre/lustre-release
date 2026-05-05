@@ -18,7 +18,6 @@ Reviewed-by: Andreas Dilger <andreas.dilger@sun.com>
  4 files changed, 182 insertions(+), 55 deletions(-)
 
 diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
-index b03dbd7..78d3176 100644
 --- a/fs/ext4/ext4.h
 +++ b/fs/ext4/ext4.h
 @@ -1291,6 +1291,8 @@ extern void mb_set_bits(void *bm, int cur, int len);
@@ -45,7 +44,7 @@ index b03dbd7..78d3176 100644
  	unsigned int s_mb_group_prealloc;
  	unsigned int s_mb_max_inode_prealloc;
  	unsigned int s_max_dir_size_kb;
-@@ -2940,6 +2944,7 @@ int ext4_fc_record_regions(struct super_block *sb, int ino,
+@@ -2939,6 +2943,7 @@ int ext4_fc_record_regions(struct super_block *sb, int ino,
  			   int len, int replay);
  
  /* mballoc.c */
@@ -54,10 +53,9 @@ index b03dbd7..78d3176 100644
  extern const struct seq_operations ext4_mb_seq_structs_summary_ops;
  extern long ext4_mb_stats;
 diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
-index 6723622..2ed00ae 100644
 --- a/fs/ext4/inode.c
 +++ b/fs/ext4/inode.c
-@@ -2720,6 +2720,9 @@ static int ext4_writepages(struct address_space *mapping,
+@@ -2718,6 +2718,9 @@ static int ext4_writepages(struct address_space *mapping,
  						PAGE_SIZE >> inode->i_blkbits);
  	}
  
@@ -68,7 +66,6 @@ index 6723622..2ed00ae 100644
  		range_whole = 1;
  
 diff --git a/fs/ext4/mballoc.c b/fs/ext4/mballoc.c
-index 8164480..94a299b 100644
 --- a/fs/ext4/mballoc.c
 +++ b/fs/ext4/mballoc.c
 @@ -3070,6 +3070,99 @@ const struct seq_operations ext4_mb_seq_structs_summary_ops = {
@@ -227,9 +224,17 @@ index 8164480..94a299b 100644
  	kfree(sbi->s_mb_largest_free_orders_locks);
 +	kfree(sbi->s_mb_prealloc_table);
  	kfree(sbi->s_mb_offsets);
+ 	sbi->s_mb_offsets = NULL;
+ 	kfree(sbi->s_mb_maxs);
+@@ -3581,6 +3694,7 @@ int ext4_mb_release(struct super_block *sb)
+ 	}
+ 	kfree(sbi->s_mb_largest_free_orders);
+ 	kfree(sbi->s_mb_largest_free_orders_locks);
++	kfree(sbi->s_mb_prealloc_table);
+ 	kfree(sbi->s_mb_offsets);
  	kfree(sbi->s_mb_maxs);
  	iput(sbi->s_buddy_cache);
-@@ -3783,7 +3896,6 @@ ext4_mb_mark_diskspace_used(struct ext4_allocation_context *ac,
+@@ -3783,7 +3897,6 @@ ext4_mb_mark_diskspace_used(struct ext4_allocation_context *ac,
  	int err, len;
  
  	BUG_ON(ac->ac_status != AC_STATUS_FOUND);
@@ -237,7 +242,7 @@ index 8164480..94a299b 100644
  
  	sb = ac->ac_sb;
  	sbi = EXT4_SB(sb);
-@@ -4026,13 +4138,14 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
+@@ -4026,13 +4139,14 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
  				struct ext4_allocation_request *ar)
  {
  	struct ext4_sb_info *sbi = EXT4_SB(ac->ac_sb);
@@ -254,7 +259,7 @@ index 8164480..94a299b 100644
  
  	/* do normalize only data requests, metadata requests
  	   do not need preallocation */
-@@ -4061,51 +4174,46 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
+@@ -4061,51 +4175,46 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
  	size = size << bsbits;
  	if (size < i_size_read(ac->ac_inode))
  		size = i_size_read(ac->ac_inode);
@@ -343,7 +348,7 @@ index 8164480..94a299b 100644
  
  	/*
  	 * For tiny groups (smaller than 8MB) the chosen allocation
-@@ -4196,7 +4304,6 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
+@@ -4196,7 +4305,6 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
  			 (unsigned long) ac->ac_o_ex.fe_logical);
  		BUG();
  	}
@@ -351,7 +356,7 @@ index 8164480..94a299b 100644
  
  	/* now prepare goal request */
  
-@@ -5199,11 +5306,19 @@ static void ext4_mb_group_or_file(struct ext4_allocation_context *ac)
+@@ -5199,11 +5307,19 @@ static void ext4_mb_group_or_file(struct ext4_allocation_context *ac)
  
  	/* don't use group allocation for large files */
  	size = max(size, isize);
@@ -373,7 +378,6 @@ index 8164480..94a299b 100644
  	/*
  	 * locality group prealloc space are per cpu. The reason for having
 diff --git a/fs/ext4/sysfs.c b/fs/ext4/sysfs.c
-index d233c24..9d2254f 100644
 --- a/fs/ext4/sysfs.c
 +++ b/fs/ext4/sysfs.c
 @@ -212,7 +212,8 @@ EXT4_RW_ATTR_SBI_UI(mb_stats, s_mb_stats);
@@ -406,5 +410,4 @@ index d233c24..9d2254f 100644
  				ext4_seq_mb_stats_show, sb);
  		proc_create_seq_data("mb_structs_summary", 0444, sbi->s_proc,
 -- 
-2.34.1
 

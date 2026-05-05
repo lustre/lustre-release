@@ -18,10 +18,9 @@ Reviewed-by: Andreas Dilger <andreas.dilger@sun.com>
  4 files changed, 182 insertions(+), 56 deletions(-)
 
 diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
-index 499f3a3..cda3fbd 100644
 --- a/fs/ext4/ext4.h
 +++ b/fs/ext4/ext4.h
-@@ -1302,6 +1302,8 @@ extern void mb_set_bits(void *bm, int cur, int len);
+@@ -1291,6 +1291,8 @@ extern void mb_set_bits(void *bm, int cur, int len);
  #define EXT4_DFL_MAX_MNT_COUNT		20	/* Allow 20 mounts */
  #define EXT4_DFL_CHECKINTERVAL		0	/* Don't use interval check */
  
@@ -30,7 +29,7 @@ index 499f3a3..cda3fbd 100644
  /*
   * Behaviour when detecting errors
   */
-@@ -1608,11 +1610,13 @@ struct ext4_sb_info {
+@@ -1597,11 +1599,13 @@ struct ext4_sb_info {
  	/* tunables */
  	unsigned long s_stripe;
  	unsigned int s_mb_max_linear_groups;
@@ -45,7 +44,7 @@ index 499f3a3..cda3fbd 100644
  	unsigned int s_mb_group_prealloc;
  	unsigned int s_mb_max_inode_prealloc;
  	unsigned int s_max_dir_size_kb;
-@@ -2903,6 +2907,7 @@ int ext4_fc_record_regions(struct super_block *sb, int ino,
+@@ -2892,6 +2896,7 @@ int ext4_fc_record_regions(struct super_block *sb, int ino,
  			   int len, int replay);
  
  /* mballoc.c */
@@ -54,10 +53,9 @@ index 499f3a3..cda3fbd 100644
  extern const struct seq_operations ext4_mb_seq_structs_summary_ops;
  extern long ext4_mb_stats;
 diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
-index 3aa591c..8a5ce9d 100644
 --- a/fs/ext4/inode.c
 +++ b/fs/ext4/inode.c
-@@ -2750,6 +2750,9 @@ static int ext4_writepages(struct address_space *mapping,
+@@ -2755,6 +2755,9 @@ static int ext4_writepages(struct address_space *mapping,
  						PAGE_SIZE >> inode->i_blkbits);
  	}
  
@@ -68,10 +66,9 @@ index 3aa591c..8a5ce9d 100644
  		range_whole = 1;
  
 diff --git a/fs/ext4/mballoc.c b/fs/ext4/mballoc.c
-index 9dad930..987e1d7 100644
 --- a/fs/ext4/mballoc.c
 +++ b/fs/ext4/mballoc.c
-@@ -3016,6 +3016,99 @@ const struct seq_operations ext4_mb_seq_structs_summary_ops = {
+@@ -3010,6 +3010,99 @@ const struct seq_operations ext4_mb_seq_structs_summary_ops = {
  	.show   = ext4_mb_seq_structs_summary_show,
  };
  
@@ -171,7 +168,7 @@ index 9dad930..987e1d7 100644
  static struct kmem_cache *get_groupinfo_cache(int blocksize_bits)
  {
  	int cache_index = blocksize_bits - EXT4_MIN_BLOCK_LOG_SIZE;
-@@ -3329,7 +3422,7 @@ static void ext4_discard_work(struct work_struct *work)
+@@ -3323,7 +3416,7 @@ static void ext4_discard_work(struct work_struct *work)
  int ext4_mb_init(struct super_block *sb)
  {
  	struct ext4_sb_info *sbi = EXT4_SB(sb);
@@ -180,7 +177,7 @@ index 9dad930..987e1d7 100644
  	unsigned offset, offset_incr;
  	unsigned max;
  	int ret;
-@@ -3417,7 +3510,6 @@ int ext4_mb_init(struct super_block *sb)
+@@ -3411,7 +3504,6 @@ int ext4_mb_init(struct super_block *sb)
  	sbi->s_mb_max_to_scan = MB_DEFAULT_MAX_TO_SCAN;
  	sbi->s_mb_min_to_scan = MB_DEFAULT_MIN_TO_SCAN;
  	sbi->s_mb_stats = MB_DEFAULT_STATS;
@@ -188,7 +185,7 @@ index 9dad930..987e1d7 100644
  	sbi->s_mb_order2_reqs = MB_DEFAULT_ORDER2_REQS;
  	sbi->s_mb_max_inode_prealloc = MB_DEFAULT_MAX_INODE_PREALLOC;
  	/*
-@@ -3442,9 +3534,29 @@ int ext4_mb_init(struct super_block *sb)
+@@ -3436,9 +3528,29 @@ int ext4_mb_init(struct super_block *sb)
  	 * RAID stripe size so that preallocations don't fragment
  	 * the stripes.
  	 */
@@ -221,7 +218,7 @@ index 9dad930..987e1d7 100644
  	}
  
  	sbi->s_locality_groups = alloc_percpu(struct ext4_locality_group);
-@@ -3480,6 +3592,7 @@ out:
+@@ -3474,6 +3586,7 @@ out:
  	kfree(sbi->s_mb_avg_fragment_size_locks);
  	kfree(sbi->s_mb_largest_free_orders);
  	kfree(sbi->s_mb_largest_free_orders_locks);
@@ -229,7 +226,15 @@ index 9dad930..987e1d7 100644
  	kfree(sbi->s_mb_offsets);
  	sbi->s_mb_offsets = NULL;
  	kfree(sbi->s_mb_maxs);
-@@ -3750,7 +3863,6 @@ ext4_mb_mark_diskspace_used(struct ext4_allocation_context *ac,
+@@ -3542,6 +3655,7 @@ int ext4_mb_release(struct super_block *sb)
+ 	kfree(sbi->s_mb_avg_fragment_size_locks);
+ 	kfree(sbi->s_mb_largest_free_orders);
+ 	kfree(sbi->s_mb_largest_free_orders_locks);
++	kfree(sbi->s_mb_prealloc_table);
+ 	kfree(sbi->s_mb_offsets);
+ 	kfree(sbi->s_mb_maxs);
+ 	iput(sbi->s_buddy_cache);
+@@ -3744,7 +3858,6 @@ ext4_mb_mark_diskspace_used(struct ext4_allocation_context *ac,
  	int err, len;
  
  	BUG_ON(ac->ac_status != AC_STATUS_FOUND);
@@ -237,7 +242,7 @@ index 9dad930..987e1d7 100644
  
  	sb = ac->ac_sb;
  	sbi = EXT4_SB(sb);
-@@ -3993,13 +4105,14 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
+@@ -3987,13 +4100,14 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
  				struct ext4_allocation_request *ar)
  {
  	struct ext4_sb_info *sbi = EXT4_SB(ac->ac_sb);
@@ -254,7 +259,7 @@ index 9dad930..987e1d7 100644
  
  	/* do normalize only data requests, metadata requests
  	   do not need preallocation */
-@@ -4028,51 +4141,46 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
+@@ -4022,51 +4136,46 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
  	size = size << bsbits;
  	if (size < i_size_read(ac->ac_inode))
  		size = i_size_read(ac->ac_inode);
@@ -343,7 +348,7 @@ index 9dad930..987e1d7 100644
  
  	/*
  	 * For tiny groups (smaller than 8MB) the chosen allocation
-@@ -4178,7 +4286,6 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
+@@ -4172,7 +4281,6 @@ ext4_mb_normalize_request(struct ext4_allocation_context *ac,
  			 (unsigned long) ac->ac_o_ex.fe_logical);
  		BUG();
  	}
@@ -351,7 +356,7 @@ index 9dad930..987e1d7 100644
  
  	/* now prepare goal request */
  
-@@ -5177,8 +5284,8 @@ static void ext4_mb_group_or_file(struct ext4_allocation_context *ac)
+@@ -5171,8 +5279,8 @@ static void ext4_mb_group_or_file(struct ext4_allocation_context *ac)
  		inode_pa_eligible = false;
  
  	size = max(size, isize);
@@ -362,7 +367,7 @@ index 9dad930..987e1d7 100644
  		group_pa_eligible = false;
  
  	if (!group_pa_eligible) {
-@@ -5189,6 +5296,13 @@ static void ext4_mb_group_or_file(struct ext4_allocation_context *ac)
+@@ -5183,6 +5291,13 @@ static void ext4_mb_group_or_file(struct ext4_allocation_context *ac)
  		return;
  	}
  
@@ -377,7 +382,6 @@ index 9dad930..987e1d7 100644
  	/*
  	 * locality group prealloc space are per cpu. The reason for having
 diff --git a/fs/ext4/sysfs.c b/fs/ext4/sysfs.c
-index d233c24..9d2254f 100644
 --- a/fs/ext4/sysfs.c
 +++ b/fs/ext4/sysfs.c
 @@ -212,7 +212,8 @@ EXT4_RW_ATTR_SBI_UI(mb_stats, s_mb_stats);
@@ -400,7 +404,7 @@ index d233c24..9d2254f 100644
  	ATTR_LIST(mb_group_prealloc),
  	ATTR_LIST(mb_max_inode_prealloc),
  	ATTR_LIST(mb_max_linear_groups),
-@@ -543,6 +545,8 @@ int ext4_register_sysfs(struct super_block *sb)
+@@ -548,6 +550,8 @@ int ext4_register_sysfs(struct super_block *sb)
  					ext4_fc_info_show, sb);
  		proc_create_seq_data("mb_groups", S_IRUGO, sbi->s_proc,
  				&ext4_mb_seq_groups_ops, sb);
@@ -410,5 +414,4 @@ index d233c24..9d2254f 100644
  				ext4_seq_mb_stats_show, sb);
  		proc_create_seq_data("mb_structs_summary", 0444, sbi->s_proc,
 -- 
-2.34.1
 
