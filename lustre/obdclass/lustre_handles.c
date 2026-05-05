@@ -20,6 +20,7 @@
 #include <obd_support.h>
 #include <lustre_handles.h>
 #include <lustre_lib.h>
+#include <obd_class.h>
 
 
 static __u64 handle_base;
@@ -31,7 +32,22 @@ static struct handle_bucket {
 	struct hlist_head	head;
 } *handle_hash;
 
-#define HANDLE_HASH_SIZE (1 << 16)
+/**
+ * The hash will keep lock pointers, thus supposed to be of an appropriate size.
+ * LDLM_POOL_HOST_L sets the limit of all the ldlm pools for a node on 50 locks
+ * per 1MB. Let's have 50 locks per a bucket queue at avg.
+ *
+ * For clients, it is not clear how much an individual client will consume.
+ * Let's consider 10M locks. Even if more, the client side is not so critical.
+ */
+#ifdef HAVE_SERVER_SUPPORT
+#define HANDLE_HASH_SIZE	\
+	max_t(unsigned long,	\
+	      1 << 18,		\
+	      roundup_pow_of_two(NUM_CACHEPAGES >> (20 - PAGE_SHIFT)))
+#else
+#define HANDLE_HASH_SIZE (1 << 18)
+#endif
 #define HANDLE_HASH_MASK (HANDLE_HASH_SIZE - 1)
 
 /*

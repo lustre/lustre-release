@@ -85,6 +85,7 @@
 
 /*
  * 50 ldlm locks for 1MB of RAM.
+ * If changed, HANDLE_HASH_SIZE is to be adjusted.
  */
 #define LDLM_POOL_HOST_L ((NUM_CACHEPAGES >> (20 - PAGE_SHIFT)) * 50)
 
