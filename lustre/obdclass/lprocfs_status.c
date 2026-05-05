@@ -784,7 +784,7 @@ static const char *const obd_connect_names[] = {
 	"umask",			/* 0x40000000000 */
 	"einprogress",			/* 0x80000000000 */
 	"grant_param",			/* 0x100000000000 */
-	"flock_owner",			/* 0x200000000000 */
+	"hpreq_check1",			/* 0x200000000000 */
 	"lvb_type",			/* 0x400000000000 */
 	"nanoseconds_times",		/* 0x800000000000 */
 	"lightweight_conn",		/* 0x1000000000000 */

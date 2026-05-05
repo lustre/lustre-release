@@ -1423,11 +1423,12 @@ static __u64 ldlm_cli_cancel_local(struct ldlm_lock *lock)
 }
 
 static inline int __ldlm_pack_lock(struct ldlm_lock *lock,
-				   struct ldlm_request *dlm)
+				   struct ldlm_request *dlm,
+				   bool force)
 {
 	LASSERT(lock->l_conn_export);
 	lock_res_and_lock(lock);
-	if (ldlm_is_ast_sent(lock)) {
+	if (ldlm_is_ast_sent(lock) && !force) {
 		unlock_res_and_lock(lock);
 		return 0;
 	}
@@ -1474,14 +1475,21 @@ static int ldlm_cancel_pack(struct ptlrpc_request *req, struct ldlm_lock *lock,
 	 * so that the server cancel would call filter_lvbo_update() less
 	 * frequently.
 	 */
-	if (lock) { /* only pack one lock */
-		packed = __ldlm_pack_lock(lock, dlm);
+	if (lock) {
+		/*
+		 * Individual lock is given only in ldlm_cli_cancel, likely
+		 * handling blast RPC. It is not supposed to be packed in
+		 * another RPC yet, but let's do not lose it here just in case,
+		 * because we detect the HP by the first lock only now.
+		 */
+		packed = __ldlm_pack_lock(lock, dlm,
+					  lock->l_flags & LDLM_FL_BL_AST);
 		count--;
 	}
 
 	if (count) { /* pack the list as well if given */
 		list_for_each_entry(lock, head, l_bl_ast) {
-			packed += __ldlm_pack_lock(lock, dlm);
+			packed += __ldlm_pack_lock(lock, dlm, false);
 			if (!--count)
 				break;
 		}
@@ -1753,6 +1761,7 @@ int ldlm_cli_cancel(const struct lustre_handle *lockh,
 	struct obd_export *exp;
 	int avail, count = 1;
 	enum ldlm_lru_flags lru_flags = 0;
+	enum ldlm_cancel_flags cancel_flags = 0;
 	__u64 rc = 0;
 	struct ldlm_namespace *ns;
 	struct ldlm_lock *lock;
@@ -1801,6 +1810,7 @@ int ldlm_cli_cancel(const struct lustre_handle *lockh,
 	} else if (rc == LDLM_FL_BL_AST) {
 		/* BL_AST lock must not wait. */
 		lru_flags |= LDLM_LRU_FLAG_NO_WAIT;
+		cancel_flags |= LCF_BL_AST;
 	}
 
 	exp = lock->l_conn_export;
@@ -1817,7 +1827,7 @@ int ldlm_cli_cancel(const struct lustre_handle *lockh,
 
 		ns = ldlm_lock_to_ns(lock);
 		count += ldlm_cancel_lru_local(ns, &cancels, 0, avail - 1,
-					       LCF_BL_AST, lru_flags);
+					       cancel_flags, lru_flags);
 	}
 	ldlm_cli_cancel_list(&cancels, count, lock, NULL, flags);
 
@@ -2529,7 +2539,7 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
 	}
 
 	count = ldlm_cancel_resource_local(res, &cancels, policy, mode,
-					   0, flags | LCF_BL_AST, opaque);
+					   0, flags, opaque);
 	rc = ldlm_cli_cancel_list(&cancels, count, NULL, NULL, flags);
 	if (rc != ELDLM_OK)
 		CERROR("canceling unused lock "DLDLMRES": rc = %d\n",

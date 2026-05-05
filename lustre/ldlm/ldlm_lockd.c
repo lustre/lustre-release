@@ -2667,6 +2667,13 @@ static int ldlm_cancel_hpreq_check(struct ptlrpc_request *req)
 	for (i = 0; i < dlm_req->lock_count; i++) {
 		struct ldlm_lock *lock;
 
+		/*
+		 * 1st locks is enough. Others are guaranteed to get a separate
+		 * cancel RPC or EINVAL on BLAST RPC.
+		 */
+		if (exp_connect_hpreq_check1(req->rq_export) && i > 0)
+			break;
+
 		lock = ldlm_handle2lock(&dlm_req->lock_handle[i]);
 		if (lock == NULL)
 			continue;
@@ -2891,8 +2898,7 @@ static int ldlm_bl_thread_blwi(struct ldlm_bl_pool *blp,
 		 * canceled locally yet.
 		 */
 		count = ldlm_cli_cancel_list_local(&blwi->blwi_head,
-						   blwi->blwi_count,
-						   LCF_BL_AST);
+						   blwi->blwi_count, 0);
 		ldlm_cli_cancel_list(&blwi->blwi_head, count, NULL, NULL,
 				     blwi->blwi_flags);
 	} else if (blwi->blwi_lock) {
