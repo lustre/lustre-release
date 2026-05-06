@@ -2715,6 +2715,17 @@ static int ll_statfs_project(struct inode *inode, struct kstatfs *sfs)
 		GOTO(out, ret);
 	}
 
+	/*
+	 * f_bsize=0: server lod_foreach_mdt passed uninitialized
+	 * sub-MDT opd_statfs (os_bsize=0) into lod_statfs_sum(),
+	 * corrupting os_bsize. Fall back to 4096.
+	 */
+	if (unlikely(sfs->f_bsize == 0)) {
+		sfs->f_bsize = 4096;
+		CDEBUG(D_SUPER, "%s: f_bsize=0 sub-MDT opd_statfs uninitialized, corrected to %u\n",
+			ll_i2sbi(inode)->ll_fsname, sfs->f_bsize);
+	}
+
 	limit = ((qctl.qc_dqblk.dqb_bsoftlimit ?
 		 qctl.qc_dqblk.dqb_bsoftlimit :
 		 qctl.qc_dqblk.dqb_bhardlimit) * 1024) / sfs->f_bsize;

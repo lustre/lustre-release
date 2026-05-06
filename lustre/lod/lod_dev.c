@@ -1607,7 +1607,8 @@ static int lod_statfs(const struct lu_env *env, struct dt_device *dev,
 	lod_foreach_mdt(lod, tgt) {
 		rc = dt_statfs(env, tgt->ltd_tgt, &ost_sfs);
 		/* ignore errors */
-		if (rc)
+		/* skip uninitialized sub-MDT, prevent divide-by-zero */
+		if (rc || ost_sfs.os_bsize == 0)
 			continue;
 		sfs->os_files += ost_sfs.os_files;
 		sfs->os_ffree += ost_sfs.os_ffree;
