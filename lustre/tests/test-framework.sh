@@ -4579,9 +4579,19 @@ h2name_or_ip() {
 		echo "$1@$2"
 	else
 		local addr nidlist large_nidlist
-		local iplist=$(do_node $1 hostname -I | sed "s/$1://")
+		local iplist=$(do_node $1 hostname -I | sed "s/^$1://")
+		local linktype=""
+		local ipshow
 
+		[[ $2 == "tcp" ]] && linktype=eth
+		[[ $2 == "o2ib" ]] && linktype=ib
+		ipshow=$(do_node $1 ip -o addr show)
 		for addr in ${iplist}; do
+			if [[ -n $linktype ]]; then
+				link=$(echo "$ipshow" | awk -v ip=$addr \
+					'$4 ~ ip {print $2}')
+				[[ $link == ${linktype}* ]] || continue
+			fi
 			nid="${addr}@$2"
 			ip_is_v4 "$addr" &&
 				nidlist="${nidlist:+$nidlist,}${nid}" ||
