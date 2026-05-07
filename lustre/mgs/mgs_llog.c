@@ -1343,6 +1343,15 @@ static int param_is_compound(const char *param)
 	return 0;
 }
 
+static inline int mgs_param_empty(const char *ptr)
+{
+	char *tmp = strchr(ptr, '=');
+
+	if (!tmp || tmp[1] == '\0')
+		return 1;
+	return 0;
+}
+
 /*
  * Mark param section with CM_SKIP matching param name and value
  * Return code:
@@ -1365,7 +1374,18 @@ static int mgs_modify_param(const struct lu_env *env, struct mgs_device *mgs,
 	LASSERT(mutex_is_locked(&fsdb->fsdb_mutex));
 	CDEBUG(D_MGS, "modify %s/%s/%s del=%d\n", logname, devname, param, del);
 
-	if (!param || !param[0])
+	if (unlikely(!param || !param[0]))
+		RETURN(-EINVAL);
+
+	/* for compound parameter several entries are allowed, only
+	 * check for existing entries matching name and value.
+	 */
+	if (del)
+		mpm.mpm_mode = MPM_DELETE;
+	else if (!mgs_param_empty(param))
+		mpm.mpm_mode = param_is_compound(param) ?
+			MPM_LOOKUP_VAL : MPM_REPLACE;
+	else /* cannot be 'if (mpm.mpm_mode)' because 'MPM_REPLACE = 0' */
 		RETURN(-EINVAL);
 
 	ctxt = llog_get_context(mgs->mgs_obd, LLOG_CONFIG_ORIG_CTXT);
@@ -1392,17 +1412,6 @@ static int mgs_modify_param(const struct lu_env *env, struct mgs_device *mgs,
 	mpm.mpm_name = strsep(&mpm.mpm_value, "=");
 	if (mpm.mpm_value && !mpm.mpm_value[0])
 		mpm.mpm_value = NULL;
-
-	/* for compound parameter several entries are allowed, only
-	 * check for existing entries matching name and value.
-	 */
-	if (del)
-		mpm.mpm_mode = MPM_DELETE;
-	else if (mpm.mpm_value)
-		mpm.mpm_mode = param_is_compound(param) ?
-			MPM_LOOKUP_VAL : MPM_REPLACE;
-	else
-		GOTO(out_free, rc = EINVAL);
 
 	mpm.mpm_canceltime = ktime_get_real_seconds();
 	mpm.mpm_tgt = devname;
@@ -3961,15 +3970,6 @@ static inline void mgs_param_del_value(char *ptr)
 		tmp[1] = '\0';
 }
 
-static inline int mgs_param_empty(const char *ptr)
-{
-	char *tmp = strchr(ptr, '=');
-
-	if (!tmp || tmp[1] == '\0')
-		return 1;
-	return 0;
-}
-
 static int mgs_write_log_failnid_internal(const struct lu_env *env,
 					  struct mgs_device *mgs,
 					  struct fs_db *fsdb,
@@ -4831,7 +4831,7 @@ static int mgs_write_log_param(const struct lu_env *env,
 				deactive_osc ? "add osc" : "add mdc", flag);
 		name_destroy(&logname);
 		if (rc < 0)
-			goto active_err;
+			GOTO(active_err, rc);
 
 		/* Modify mdtlov */
 		/* Add to all MDT logs for DNE */
@@ -4847,7 +4847,7 @@ static int mgs_write_log_param(const struct lu_env *env,
 					flag);
 			name_destroy(&logname);
 			if (rc < 0)
-				goto active_err;
+				GOTO(active_err, rc);
 		}
 active_err:
 		if (rc < 0) {
@@ -5067,9 +5067,9 @@ active_err:
 		else
 			rc = server_name2index(mti->mti_svname, &idx, NULL);
 		if (rc < 0)
-			goto active_err;
+			GOTO(active_err, rc);
 		if ((rc & LDD_F_SV_TYPE_MDT) == 0)
-			goto active_err;
+			GOTO(active_err, rc);
 		if (rc & LDD_F_SV_ALL) {
 			for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
 				if (!test_bit(i,
@@ -5078,13 +5078,13 @@ active_err:
 				rc = name_create_mdt(&logname,
 						     mti->mti_fsname, i);
 				if (rc)
-					goto active_err;
+					GOTO(active_err, rc);
 				rc = mgs_wlp_lcfg(env, mgs, fsdb, mti,
 						  logname, &mgi->mgi_bufs,
 						  logname, ptr, del);
 				name_destroy(&logname);
 				if (rc)
-					goto active_err;
+					GOTO(active_err, rc);
 			}
 		} else {
 			if ((memcmp(tmp, "root_squash=", 12) == 0) ||
@@ -5098,7 +5098,7 @@ active_err:
 					  mti->mti_svname, &mgi->mgi_bufs,
 					  mti->mti_svname, ptr, del);
 			if (rc)
-				goto active_err;
+				GOTO(active_err, rc);
 		}
 
 		/* root squash settings are also applied to llite
