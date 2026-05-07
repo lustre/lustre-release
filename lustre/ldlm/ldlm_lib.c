@@ -1359,7 +1359,9 @@ int target_handle_connect(struct ptlrpc_request *req)
 			 * kept, let's do not fail such export if they
 			 * come from the same NID, otherwise it might
 			 * cause eviction between MDTs, which might
-			 * cause namespace inconsistency
+			 * cause namespace inconsistency.
+			 *
+			 * target_handle_connect() checks +EALREADY specially.
 			 */
 			spin_lock(&export->exp_lock);
 			export->exp_connecting = 1;

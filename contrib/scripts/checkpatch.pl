@@ -5795,11 +5795,13 @@ sub process {
 		}
 
 # Return of what appears to be an errno should normally be negative
-		if ($sline =~ /\breturn(?:\s*\(+\s*|\s+)(E[A-Z]+)(?:\s*\)+\s*|\s*)[;:,]/) {
-			my $name = $1;
+		if (!is_userspace($realfile) &&
+		    $sline =~ /\b(?i)(return|err =|rc =|ret =|retval =|ERR_PTR)(?-i)(?:\s*\(+\s*|\s+)(E[A-Z]+)(?:\s*\)+\s*|\s*)[;:,]/) {
+			my $fix = ($1 eq 'ERR_PTR') ? "ERR_PTR(-$2)" : "$1 -$2";
+			my $name = $2;
 			if ($name ne 'EOF' && $name ne 'ERROR' && $name !~ /^EPOLL/) {
 				WARN("USE_NEGATIVE_ERRNO",
-				     "return of an errno should typically be negative (ie: return -$1)\n" . $herecurr);
+				     "return of an errno should typically be negative (ie: $fix)\n" . $herecurr);
 			}
 		}
 

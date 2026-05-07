@@ -845,6 +845,7 @@ static int mgs_set_index(const struct lu_env *env,
 		} else {
 			CDEBUG(D_MGS, "Server %s updating index %d\n",
 			       mti->mti_svname, mti->mti_stripe_index);
+			/* mgs_write_log_target() checks +EALREADY specially */
 			GOTO(out_up, rc = EALREADY);
 		}
 	} else {
@@ -5173,8 +5174,8 @@ end:
 int mgs_write_log_target(const struct lu_env *env, struct mgs_device *mgs,
 			 struct mgs_target_info *mti, struct fs_db *fsdb)
 {
-	char	*buf, *params;
-	int	 rc = -EINVAL;
+	char *buf, *params;
+	int rc = -EINVAL;
 
 	ENTRY;
 
@@ -5183,6 +5184,7 @@ int mgs_write_log_target(const struct lu_env *env, struct mgs_device *mgs,
 	if (rc < 0)
 		RETURN(rc);
 
+	/* mgs_set_index() returns +EALREADY for this non-error case */
 	if (rc == EALREADY) {
 		LCONSOLE_WARN("Found index %d for %s, updating log\n",
 			      mti->mti_stripe_index, mti->mti_svname);

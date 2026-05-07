@@ -827,7 +827,9 @@ int mgc_process_server_cfg_log(struct lu_env *env, struct llog_ctxt **ctxt,
 		       mgc->obd_name, cld->cld_logname);
 	} else if (rc) {
 		/* In case of error we may have empty or incomplete local
-		 * config. In both cases proceed with remote llog first
+		 * config. In both cases proceed with remote llog first.
+		 *
+		 * mgs_write_log_target() handles positive EALREADY specially.
 		 */
 		rc = class_config_parse_llog(env, *ctxt, cld->cld_logname,
 					     &cld->cld_cfg);
