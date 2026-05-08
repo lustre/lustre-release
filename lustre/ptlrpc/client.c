@@ -1385,7 +1385,7 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
 		*status = -ETIMEDOUT;
 	} else if (req->rq_send_state == LUSTRE_IMP_CONNECTING &&
 		   imp->imp_state == LUSTRE_IMP_CONNECTING) {
-		;/* allow CONNECT even if import is invalid */
+		/* allow CONNECT even if import is invalid */
 		if (atomic_read(&imp->imp_inval_count) != 0) {
 			DEBUG_REQ(D_ERROR, req, "invalidate in flight");
 			*status = -EIO;
@@ -2210,6 +2210,15 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 
 				list_move_tail(&req->rq_list,
 					       &imp->imp_sending_list);
+
+				/* Drop initiated_at after successful connection
+				 * and empty delayed queue, all reqs have been
+				 * sent. Lustre needs to distinguish between a
+				 * fully connected state and a full from idle.
+				 */
+				if (imp->imp_initiated_at != 0 &&
+				    list_empty(&imp->imp_delayed_list))
+					imp->imp_initiated_at = 0;
 
 				spin_unlock(&imp->imp_lock);
 

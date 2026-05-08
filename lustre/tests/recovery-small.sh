@@ -3888,6 +3888,40 @@ test_163() {
 }
 run_test 163 "changelog check for fail write and processing records"
 
+test_170() {
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	(( "$OST1_VERSION" >= $(version_code 2.17.53) )) ||
+		skip "Need OST version at least 2.17.53"
+	local num_files=20
+	local i
+
+	mkdir $DIR/$tdir || error "mkdir $MOUNT/$tdir failed"
+	$LFS setstripe -i 0 $DIR/$tdir || error "setstripe $tdir failed"
+
+	echo "$tfile" >  $DIR/$tdir/$tfile
+	sync
+	replay_barrier ost1
+
+	for ((i = 0; i < num_files; i++)); do
+		local file=$DIR/$tdir/$tfile-$i
+		dd if=/dev/urandom of=$file count=1 bs=4096 ||
+			error "write failed: $file"
+	done
+
+	#define OBD_FAIL_PTLRPC_FAIL_REPLAY  0x537
+
+	#delay REPLAY_LOCKS phase to accumulate reqs at client side
+	do_facet ost1 "$LCTL set_param fail_loc=0x0000537 fail_val=10"
+	#at client simulate error reply and reconnect
+	$LCTL set_param fail_loc=0x80000537
+	fail_nodf ost1
+
+	wait_clients_import_state ${HOSTNAME} ost1 REPLAY_LOCKS
+	#should be reconnection and new recovery
+	wait_clients_import_state ${HOSTNAME} ost1 FULL
+}
+run_test 170 "Reconnect after REPLAY_LOCKS hangs (LU-18154)"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

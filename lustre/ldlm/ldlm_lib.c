@@ -2866,6 +2866,9 @@ static int target_recovery_thread(void *arg)
 	 */
 	CDEBUG(D_INFO, "2: lock replay stage - %d clients\n",
 	       atomic_read(&obd->obd_lock_replay_clients));
+
+	CFS_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_FAIL_REPLAY, 10);
+
 	while ((req = target_next_replay_lock(lut))) {
 		LASSERT(trd->trd_processing_task == current->pid);
 		DEBUG_REQ(D_HA, req, "processing lock from %s:",
