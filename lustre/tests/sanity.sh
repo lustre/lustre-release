@@ -17302,7 +17302,9 @@ test_124g_run() {
 		done
 
 		local before_priv_cnt=$($LCTL get_param -n $nsdir.lock_unused_priv_count)
-		ls -l "$base_dir"/cold > /dev/null
+		for ((c = 0; c < cold_nr; c++)); do
+			stat "$base_dir"/cold/f$c > /dev/null
+		done
 		# facilitate debugging output
 		local priv_cnt=$($LCTL get_param -n $nsdir.lock_unused_priv_count)
 		local temp_enq=$(do_facet mds1 $LCTL get_param "$nsservdir" |\
@@ -17327,16 +17329,16 @@ test_124g() {
 	(( $MDS1_VERSION >= $(version_code 2.17.50.63) )) ||
 		skip "Need MDS with LFRU support (LU-11509, >= 2.17.50.63)"
 
-	# limit debug output to avoid overwhelming the test output
-	local saved_debug=$($LCTL get_param -n debug)
-	stack_trap "$LCTL set_param debug=\"$saved_debug\""
-	$LCTL set_param debug=trace+info+warning+dlmtrace+error+reada+iotrace
-
 	local nsdir="ldlm.namespaces.*-MDT0000-mdc-*"
 	local lru_size=$(default_lru_size)
 	lru_resize_disable mdc $lru_size
-	local saved_policy=$($LCTL get_param -n $nsdir.lock_cache_policy)
-	stack_trap "$LCTL set_param $nsdir.lock_cache_policy=$saved_policy"
+	local save="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	save_lustre_params client "$nsdir.lock_cache_policy" > $save
+	save_lustre_params client "llite.*.enable_statahead_fname" >> $save
+	stack_trap "restore_lustre_params < $save; rm -f $save"
+	# disable statehead fname to avoid additional threads' execution
+	# which may affect the test result due to its random behavior.
+	$LCTL set_param llite.*.enable_statahead_fname=0
 
 	local cli_nid="0@lo"
 	if remote_mds; then
@@ -17350,19 +17352,9 @@ test_124g() {
 	# test with lru
 	test_124g_run "$cli_nid" "$DIR/$tdir" $lru_size "LRU" enq_priv_disable
 
-	# We may observe a small percentage of variance in the enqueue count
-	# even when LFRU is functioning correctly, due to additional threads'
-	# execution triggered by the `stat` and `ls -l`` commands (e.g.,
-	# statehead operations).
-	# A small tolerance band can be allowed if needed in the future.
-	local tolerance_pct=0
-	local max_allowed=$(( enq_priv_disable * (100 + tolerance_pct) / 100 ))
-	echo ">> lfru_enqueue=$enq_priv_enabled," \
-	     "lru_enqueue=$enq_priv_disable," \
-	     "tolerance=${tolerance_pct}%," \
-	     "max_allowed=$max_allowed"
-	(( enq_priv_enabled <= max_allowed )) ||
-	     error "lfru enqueue $enq_priv_enabled > lru $max_allowed"
+	echo ">> lfru_enqueue=$enq_priv_enabled, lru_enqueue=$enq_priv_disable"
+	(( enq_priv_enabled <= enq_priv_disable )) ||
+	     error "lfru enqueue $enq_priv_enabled > lru $enq_priv_disable"
 }
 run_test 124g "LFRU performance test"
 
