@@ -467,6 +467,120 @@ check_mirror_lseek() {
 		error "mirror $mirror_id lseek $opt at $offset: $expected != $got"
 }
 
+#
+# Run gfni_ec_test for one (k, m, len) geometry and report.  len is
+# optional and defaults to the tester's own default.  Exit status 77
+# means the host has no GFNI, which test_0 screens for up front.
+#
+gfni_ec_run() {
+	local tester=$1 k=$2 m=$3 len=${4:-} isa=${5:-}
+	local start elapsed rc result
+
+	start=$SECONDS
+	$tester -k $k -m $m ${len:+-l $len} ${isa:+-i $isa} >/dev/null 2>&1
+	rc=$?
+	elapsed=$((SECONDS - start))
+	if (( rc == 0 )); then result=PASS; else result=FAIL; fi
+	printf "  k=%3d m=%2d  k+m=%3d  len=%-6s %-6s %3ds  %s\n" \
+		$k $m $((k + m)) "${len:-default}" "${isa:-auto}" \
+		$elapsed $result
+	return $rc
+}
+
+test_0() {
+	local tester
+	local k m len rc
+
+	for tester in "$LUSTRE/tests/gfni_ec_test" \
+		      "$LUSTRE/utils/erasurecode/gfni_ec_test"; do
+		[[ -x "$tester" ]] && break
+		tester=""
+	done
+
+	[[ -n "$tester" ]] ||
+		skip "gfni_ec_test not built; needs libec.a with LUSTRE_EC_GFNI"
+
+	# Without GFNI the tester compares the base path against itself,
+	# so every geometry below would report a vacuous PASS.  It exits
+	# 77 in that case; screen for it once before running the sweep.
+	$tester -k 2 -m 1 >/dev/null 2>&1
+	rc=$?
+	# Plain skip, not skip_env: skip_env means "the environment is
+	# misconfigured" and becomes an error under FAIL_ON_SKIP_ENV, but a
+	# CPU without GFNI is hardware, not misconfiguration.
+	(( rc != 77 )) ||
+		skip "no GFNI on $(hostname); nothing to verify"
+	(( rc == 0 )) ||
+		error "gfni_ec_test probe run failed: rc=$rc"
+
+	# All geometries chosen below satisfy k + m <= 256.
+
+	# Standard range: small/medium k, m up to 7 (forces multi-pass)
+	for k in 2 4 8 16; do
+		for m in 1 2 3 6 7; do
+			(( k >= m )) || continue
+			gfni_ec_run "$tester" $k $m ||
+				error "gfni_ec_test k=$k m=$m failed"
+		done
+	done
+
+	# Standard range: wider k, larger m
+	for k in 8 16 24 32; do
+		for m in 8 12 15; do
+			(( k >= m )) || continue
+			gfni_ec_run "$tester" $k $m ||
+				error "gfni_ec_test k=$k m=$m failed"
+		done
+	done
+
+	# Extended range: large k (EC-expert), plus one random value each
+	# pass so coverage isn't limited to round/power-of-two geometries.
+	for k in 64 128 200 240 $(((RANDOM % 237) + 4)); do
+		for m in 4 8 15 $(((RANDOM % 14) + 2)); do
+			(( k >= m )) || continue
+			gfni_ec_run "$tester" $k $m ||
+				error "gfni_ec_test k=$k m=$m failed"
+		done
+	done
+
+	# Length sweep.  Every run above uses the default len=4096, an exact
+	# multiple of 64, so the masked tail in the AVX-512 kernels and the
+	# 32B / sub-32B staged tails in the AVX2 ones never execute.  Cover
+	# both sides of each block boundary, plus one random length.
+	for len in 1 2 31 32 33 63 64 65 95 96 97 127 129 4095 4097 \
+		   $(((RANDOM % 8192) + 1)); do
+		gfni_ec_run "$tester" 6 3 $len ||
+			error "gfni_ec_test len=$len failed"
+	done
+
+	# Everything above uses the runtime dispatch, which tests
+	# isal_have_avx512_gfni() first -- so on a CPU with both (every
+	# server part that has GFNI at all) the five AVX2 kernels never
+	# execute, and the nine AVX-512 ones never do on a GFNI-only
+	# client.  Force each family so both halves are covered.  Kept to a
+	# representative set on purpose: the sweeps above are already the
+	# long pole in this suite.
+	for isa in avx2 avx512; do
+		$tester -k 2 -m 1 -i $isa >/dev/null 2>&1
+		(( $? != 77 )) || {
+			echo "  $isa: not available on $(hostname), skipping"
+			continue
+		}
+		for k in 2 6 16; do
+			for m in 1 2 3 6; do
+				(( k >= m )) || continue
+				for len in 64 4096 4097; do
+					gfni_ec_run "$tester" $k $m $len \
+						    $isa ||
+						error "gfni_ec_test $isa" \
+						      "k=$k m=$m len=$len"
+				done
+			done
+		done
+	done
+}
+run_test 0 "GFNI/base byte-identical parity self-test"
+
 test_1a() {
 	enable_ec
 	local tf=$DIR/$tfile

@@ -1,7 +1,66 @@
 lsrc         = ec_base.c ec_base_aliases.c
 
-libec_a_CPPFLAGS = -I . 
+# The top-level dist-hook sweeps lustre/ for *.c, *.h and Makefile only,
+# so the vendoring notes would otherwise be missing from every release
+# tarball and SRPM.
+EXTRA_DIST   = GFNI_VENDORED.md
+
+libec_a_CPPFLAGS = -I . $(EC_GFNI_CFLAGS)
 
 noinst_LIBRARIES = libec.a
 libec_a_SOURCES = $(lsrc)
 
+if EC_GFNI
+#
+# x86_64 GFNI / AVX-{2,512} acceleration.  ec_base_aliases.c picks
+# these up at runtime when isal_have_gfni() / isal_have_avx512_gfni()
+# return true; otherwise the *_base path is used and the GFNI objects
+# remain unreferenced.
+#
+# The GFNI kernels are C files that use compiler intrinsics
+# (_mm{256,512}_gf2p8affine_epi64_epi8) gated by per-function
+# __attribute__((target("avx2,gfni"))) / target("avx512f,avx512bw,gfni").
+# No NASM is required.
+#
+
+gfni_c_sources = \
+	gf_vect_dot_prod_avx2_gfni.c \
+	gf_2vect_dot_prod_avx2_gfni.c \
+	gf_3vect_dot_prod_avx2_gfni.c \
+	gf_vect_dot_prod_avx512_gfni.c \
+	gf_2vect_dot_prod_avx512_gfni.c \
+	gf_3vect_dot_prod_avx512_gfni.c \
+	gf_4vect_dot_prod_avx512_gfni.c \
+	gf_5vect_dot_prod_avx512_gfni.c \
+	gf_6vect_dot_prod_avx512_gfni.c \
+	gf_vect_mad_avx2_gfni.c \
+	gf_2vect_mad_avx2_gfni.c \
+	gf_vect_mad_avx512_gfni.c \
+	gf_2vect_mad_avx512_gfni.c \
+	gf_3vect_mad_avx512_gfni.c \
+	gf_4vect_mad_avx512_gfni.c \
+	gf_5vect_mad_avx512_gfni.c \
+	gf_6vect_mad_avx512_gfni.c
+
+libec_a_SOURCES += gfni_glue.c $(gfni_c_sources)
+
+#
+# Standalone smoke test: encodes a small parity stripe via the GFNI
+# fast path and compares against the *_base implementation.  Installed
+# alongside the test suite so sanity-ec.sh test_0 can run it on nodes
+# provisioned from the lustre-tests package, not only in a build tree.
+#
+# This subdirectory is built whenever utils are enabled, so the test
+# must also be gated on TESTS: only lustre-tests.files claims
+# $(libdir)/lustre/tests, and it is generated solely under
+# %if %{with lustre_tests}.  Installing unconditionally would leave
+# the binary unpackaged in a --without lustre_tests RPM build.
+#
+if TESTS
+testdir          = $(libdir)/lustre/tests
+test_PROGRAMS    = gfni_ec_test
+gfni_ec_test_SOURCES  = gfni_ec_test.c
+gfni_ec_test_CPPFLAGS = -I $(srcdir)
+gfni_ec_test_LDADD    = libec.a
+endif # TESTS
+endif # EC_GFNI
