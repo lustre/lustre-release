@@ -130,7 +130,8 @@ static char *format_param(const char *filename, struct stat *st,
 	size_t suffix_len;
 	char *suffix = NULL;
 	char *param_name;
-	char *tmp;
+	const char *tmp;
+	char *p;
 
 	if (popt->po_show_type) {
 		if (S_ISDIR(st->st_mode))
@@ -149,7 +150,7 @@ static char *format_param(const char *filename, struct stat *st,
 	else if ((tmp = strstr(filename, "/lnet/")))
 		tmp += strlen("/lnet/");
 	else
-		tmp = (char *)filename;
+		tmp = filename;
 
 	/* Allocate return string */
 	param_name = strdup(tmp);
@@ -157,16 +158,16 @@ static char *format_param(const char *filename, struct stat *st,
 		return NULL;
 
 	/* replace '/' with '.' to match conf_param and sysctl */
-	for (tmp = strchr(param_name, '/'); tmp != NULL; tmp = strchr(tmp, '/'))
-		*tmp = '.';
+	for (p = strchr(param_name, '/'); p != NULL; p = strchr(p, '/'))
+		*p = '.';
 
 	/* Append the indicator to entries if needed. */
 	if (popt->po_show_type && suffix != NULL) {
 		suffix_len = strlen(suffix);
 
-		tmp = realloc(param_name, suffix_len + strlen(param_name) + 1);
-		if (tmp) {
-			param_name = tmp;
+		p = realloc(param_name, suffix_len + strlen(param_name) + 1);
+		if (p) {
+			param_name = p;
 			strncat(param_name, suffix,
 				strlen(param_name) + suffix_len);
 		}

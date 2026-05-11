@@ -458,7 +458,8 @@ int llapi_changelog_clear(const char *mdtname, const char *idstr,
 	char dev_path[PATH_MAX];
 	char cmd[64];
 	size_t cmd_len = sizeof(cmd);
-	char *dashp, *clidp = NULL;
+	const char *dashp;
+	char *clidp = NULL;
 	int fd;
 	int rc;
 

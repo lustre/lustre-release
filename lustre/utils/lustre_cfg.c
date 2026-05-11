@@ -1002,7 +1002,7 @@ static enum paramtype construct_param(enum paramtype confset, const char *param,
 				      const char *device, char *buf,
 				      int bufsize, bool convert)
 {
-	char *tmp;
+	const char *tmp;
 
 	if (confset == PT_SETPARAM) {
 		strncpy(buf, param, bufsize);

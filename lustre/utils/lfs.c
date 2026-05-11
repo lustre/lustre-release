@@ -2848,7 +2848,7 @@ int calc_stripe(const char *filename, off_t *size, off_t *obj_max_kb,
 
 	if (*obj_max_kb == 0) {
 		char mntdir[PATH_MAX] = {'\0'}, fsname[PATH_MAX] = "";
-		char *poolname = NULL;
+		const char *poolname = NULL;
 		struct obd_statfs stat_buf;
 		struct obd_uuid uuid_buf;
 		off_t ost_min_kb = LLONG_MAX;
@@ -2888,7 +2888,7 @@ int calc_stripe(const char *filename, off_t *size, off_t *obj_max_kb,
 				}
 				poolname++;
 			} else {
-				poolname = (char *)pool;
+				poolname = pool;
 			}
 		}
 
@@ -4322,7 +4322,7 @@ static int parse_ec_stripe_count(const char *optarg, uint8_t *data_count,
 {
 	char *end;
 	unsigned long data, parity;
-	char *sep;
+	const char *sep;
 
 	/* Find the '+' or ':' separator */
 	sep = strchr(optarg, '+');
@@ -6349,7 +6349,7 @@ static inline int name2projid(__u32 *id, const char *name)
 	struct ll_project prj = { .lprj_valid = LPRJ_VALID_SIZE,
 				  .lprj_size = sizeof(prj) };
 	int rc;
-	char *name2;
+	const char *name2;
 
 	name2 = strchr(name, ':');
 	if (name2) {
@@ -10181,7 +10181,7 @@ static unsigned long str2sec(const char *timestr)
 	while (*timestr) {
 		unsigned long v;
 		int ind;
-		char *ptr;
+		const char *ptr;
 
 		v = strtoul(timestr, &tail, 10);
 		if (v == ULONG_MAX || *tail == '\0')
@@ -11075,7 +11075,7 @@ static void kbytes2str(__u64 num, char *buf, int buflen, bool h)
 #endif
 
 #define STRBUF_LEN	24
-static void print_quota(const char *mnt, struct if_quotactl *qctl, int type,
+static void print_quota(char *mnt, struct if_quotactl *qctl, int type,
 			int rc, struct quota_param *param)
 {
 	time_t now;
@@ -11254,7 +11254,8 @@ use_qid_value:
 
 static int tgt_name2index(const char *tgtname, unsigned int *idx)
 {
-	char *dash, *endp;
+	const char *dash;
+	char *endp;
 
 	/* format is "lustre-OST0001" */
 	dash = memchr(tgtname, '-', LUSTRE_MAXFSNAME + 1);
@@ -11315,6 +11316,8 @@ static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt,
 	}
 
 	for (i = 0; i < count; i++) {
+		char name[UUID_MAX+8];
+
 		if (qctl->qc_cmd == LUSTRE_Q_GETQUOTAPOOL) {
 			unsigned int index;
 
@@ -11342,8 +11345,6 @@ static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt,
 
 			/* inactive target */
 			if (rc == -ENODATA) {
-				char name[UUID_MAX+8];
-
 				snprintf(name, sizeof(name), "%s[inact]",
 					obd_uuid2str(&qctl->obd_uuid));
 				memset(&qctl->qc_dqinfo, 0,
@@ -11363,8 +11364,9 @@ static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt,
 			continue;
 		}
 
-		print_quota(obd_uuid2str(&qctl->obd_uuid), qctl,
-			    qctl->qc_valid, 0, param);
+		snprintf(name, sizeof(name), "%s",
+			 obd_uuid2str(&qctl->obd_uuid));
+		print_quota(name, qctl, qctl->qc_valid, 0, param);
 		*total += is_mdt ? qctl->qc_dqblk.dqb_ihardlimit :
 				   qctl->qc_dqblk.dqb_bhardlimit;
 	}

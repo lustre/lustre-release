@@ -345,7 +345,8 @@ out:
 static inline int gss_base64url_decode(char **src, char *dst, int destsize)
 {
 	int bits = 0, len = 0;
-	char *cp = *src, *p;
+	char *cp = *src;
+	const char *p;
 	char *bp = dst;
 	__u32 ac = 0;
 

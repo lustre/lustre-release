@@ -4866,7 +4866,7 @@ int llapi_get_lum_file(const char *path, __u64 *valid, lstatx_t *statx,
 {
 	char parent[PATH_MAX];
 	const char *fname;
-	char *tmp;
+	const char *tmp;
 	int offset;
 	int dir_fd;
 	int rc;

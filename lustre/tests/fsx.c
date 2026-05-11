@@ -585,7 +585,7 @@ get_fd(void)
 
 static const char *my_basename(const char *path)
 {
-	char *c = strrchr(path, '/');
+	const char *c = strrchr(path, '/');
 
 	return c ? c++ : path;
 }
