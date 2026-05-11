@@ -2567,3 +2567,49 @@ int lu_buf_check_and_grow(struct lu_buf *buf, size_t len)
 	return 0;
 }
 EXPORT_SYMBOL(lu_buf_check_and_grow);
+
+/**
+ * lu_buf_check_and_shrink() - Decrease the size of the @buf.
+ * @buf: buffer to shrink
+ * @len: new size of the @buf
+ *
+ * If @len is greater than or equal to the current buffer length, the buffer is
+ * left unchanged.  If @len is zero, the buffer is freed.  For smaller, non-zero
+ * sizes this helper allocates a new buffer of @len bytes, copies the first
+ * @len bytes from the old buffer, and then frees the old one.
+ *
+ * On allocation failure the old buffer remains unchanged.
+ *
+ * Return:
+ * * %0 on success
+ * * %-ENOMEM on failure
+ */
+int lu_buf_check_and_shrink(struct lu_buf *buf, size_t len)
+{
+	char *ptr;
+
+	/* Nothing to do if new length is not smaller. */
+	if (len >= buf->lb_len)
+		return 0;
+
+	/* len == 0 is treated as freeing the buffer. */
+	if (len == 0) {
+		lu_buf_free(buf);
+		return 0;
+	}
+
+	OBD_ALLOC_LARGE(ptr, len);
+	if (ptr == NULL)
+		return -ENOMEM;
+
+	if (buf->lb_buf != NULL) {
+		memcpy(ptr, buf->lb_buf, len);
+		OBD_FREE_LARGE(buf->lb_buf, buf->lb_len);
+	}
+
+	buf->lb_buf = ptr;
+	buf->lb_len = len;
+
+	return 0;
+}
+EXPORT_SYMBOL(lu_buf_check_and_shrink);

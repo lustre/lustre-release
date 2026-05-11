@@ -2897,7 +2897,7 @@ retry:
 			RETURN(0);
 		RETURN(rc);
 	}
-	pin_buf->lb_len = rc;
+	lu_buf_check_and_shrink(pin_buf, rc);
 
 	RETURN(0);
 }

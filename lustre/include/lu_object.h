@@ -1504,6 +1504,7 @@ void lu_buf_alloc(struct lu_buf *buf, size_t size);
 void lu_buf_realloc(struct lu_buf *buf, size_t size);
 
 int lu_buf_check_and_grow(struct lu_buf *buf, size_t len);
+int lu_buf_check_and_shrink(struct lu_buf *buf, size_t len);
 struct lu_buf *lu_buf_check_and_alloc(struct lu_buf *buf, size_t len);
 
 extern __u32 lu_context_tags_default;
