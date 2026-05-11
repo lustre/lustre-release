@@ -2705,6 +2705,8 @@ run_test 201 "load lnet using networks module options in a non-default namespace
 test_202() {
 	[[ ${NETTYPE} == tcp* ]] ||
 		skip "Need tcp NETTYPE"
+	(( $CLIENT_VERSION < $(version_code 2.17.53) )) ||
+		skip "kernel ip2nets deprecated in 2.17.53"
 	cleanup_lnet || return $?
 	setup_netns || error "setup_netns failed with $?"
 	load_lnet "networks=\"\" ip2nets=\"tcp0($FAKE_IF) ${FAKE_IP}\""
@@ -3244,6 +3246,8 @@ test_208_load_and_check_lnet() {
 
 test_208() {
 	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+	(( $CLIENT_VERSION < $(version_code 2.17.53) )) ||
+		skip "kernel ip2nets deprecated in 2.17.53"
 
 	cleanup_lnet || error "Failed to unload modules before test execution"
 	setup_fakeif || error "Failed to add fake IF"
@@ -5215,6 +5219,8 @@ run_test 254 "Message delayed beyond deadline should be dropped (multi-rail)"
 
 test_255() {
 	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+	(( $CLIENT_VERSION < $(version_code 2.17.53) )) ||
+		skip "kernel ip2nets deprecated in 2.17.53"
 
 	reinit_dlc || return $?
 
