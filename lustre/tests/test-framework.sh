@@ -1381,17 +1381,21 @@ check_gss_daemon_nodes() {
 	local loop
 	local node
 	local ret
+	local num
+	local counts
 
-	do_nodesv $list "num=0;
-for proc in \\\$(pgrep $dname); do
-[ \\\$(ps -o ppid= -p \\\$proc) -ne 1 ] || ((num++))
-done;
-if [ \\\"\\\$num\\\" -ne 1 ]; then
-	echo \\\$num instance of $dname;
-	exit 1;
-fi; "
+	# lsvcgssd forks a short-lived child at startup for the Miller-Rabin
+	# speedtest (LU-17175). Only the main daemon is parented to init, so
+	# 'pgrep -P 1' counts the single daemon that should be running.  An
+	# unreachable node makes pdsh return non-zero, caught below in $ret.
+	counts=$(do_nodesv $list "pgrep -P 1 -c $dname")
 	ret=$?
-	(( $ret == 0 )) || return $ret
+	while read -r node num; do
+		(( num == 1 )) && continue
+		echo "$node $num instance of $dname"
+		ret=1
+	done <<< "$counts"
+	(( ret == 0 )) || return 1
 
 	for node in ${list//,/ }; do
 		loop=0
