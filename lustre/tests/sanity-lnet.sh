@@ -4611,6 +4611,45 @@ test_230() {
 		error "should have succeeded $?"
 	$LNETCTL net show -v 1 | grep -q "conns_per_peer: ${default}" ||
 		error "Did not stay at default"
+
+	reinit_dlc || return $?
+	echo "Add > 127; Should fail and not configure NI"
+	! do_lnetctl net add --net "tcp" --if ${INTERFACES[0]} \
+		--conns-per-peer 128 ||
+		error "should have failed $?"
+	! $LNETCTL net show --net tcp 2>/dev/null | grep -qE "nid: .*@tcp$" ||
+		error "tcp NI should not be configured"
+
+	reinit_dlc || return $?
+	echo "Add overflow value; Should fail and not configure NI"
+	! do_lnetctl net add --net "tcp" --if ${INTERFACES[0]} \
+		--conns-per-peer 1000000000000000000000000 ||
+		error "should have failed $?"
+	! $LNETCTL net show --net tcp 2>/dev/null | grep -qE "nid: .*@tcp$" ||
+		error "tcp NI should not be configured"
+
+	reinit_dlc || return $?
+	echo "Add non-numeric value; Should fail and not configure NI"
+	! do_lnetctl net add --net "tcp" --if ${INTERFACES[0]} \
+		--conns-per-peer foo ||
+		error "should have failed $?"
+	! $LNETCTL net show --net tcp 2>/dev/null | grep -qE "nid: .*@tcp$" ||
+		error "tcp NI should not be configured"
+
+	reinit_dlc || return $?
+	echo "Import > 127 conns-per-peer; Should fail and not configure NI"
+	local yfile=$TMP/sanity-lnet-$testnum-import.yaml
+	do_lnetctl net add --net "tcp" --if ${INTERFACES[0]} \
+		--conns-per-peer 8 ||
+		error "should have succeeded $?"
+	$LNETCTL export --backup > $yfile || error "export failed $?"
+	reinit_dlc || return $?
+	# Corrupt the exported value to one outside the valid 0-127 range
+	sed -i 's/conns_per_peer: 8/conns_per_peer: 200/' $yfile
+	! do_lnetctl import < $yfile ||
+		error "import of out-of-range conns-per-peer should have failed"
+	! $LNETCTL net show --net tcp 2>/dev/null | grep -qE "nid: .*@tcp$" ||
+		error "tcp NI should not be configured"
 }
 run_test 230 "Test setting conns-per-peer"
 

@@ -368,7 +368,10 @@ static int parse_long(const char *number, long int *value)
 	if (!number)
 		return -1;
 
+	errno = 0;
 	*value = strtol(number,  &end, 0);
+	if (errno == ERANGE)
+		return -1;
 	if (end != NULL && *end != 0)
 		return -1;
 
@@ -2515,10 +2518,12 @@ static int jt_add_ni(int argc, char **argv)
 			break;
 		case 'm':
 			rc = parse_long(optarg, &cpp);
-			if (rc != 0) {
-				/* ignore option */
-				cpp = -1;
-				continue;
+			if (rc != 0 || cpp > 127) {
+				cYAML_build_error(-1, -1, "ni", "add",
+						  "invalid conns-per-peer value (valid range 0-127)",
+						  &err_rc);
+				rc = -1;
+				goto failed;
 			}
 			break;
 
@@ -3530,9 +3535,16 @@ static int set_value_helper(int argc, char **argv, int cmd)
 			}
 			break;
 		case 'm':
-			if (cmd != LNET_CMD_NETS ||
-			    parse_long(optarg, &cpp) != 0)
+			if (cmd != LNET_CMD_NETS) {
 				cpp = -1;
+			} else if (parse_long(optarg, &cpp) != 0 || cpp > 127) {
+				cYAML_build_error(-1, -1, "net", "set",
+						  "invalid conns-per-peer value (valid range 0-127)",
+						  &err_rc);
+				cYAML_print_tree2file(stderr, err_rc);
+				cYAML_free_tree(err_rc);
+				return -1;
+			}
 			break;
 		case 'n':
 			nidstr = optarg;
