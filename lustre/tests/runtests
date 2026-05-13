@@ -104,8 +104,7 @@ test_1() {
 	$MKDIRMANY $dst/d $COUNT || error "$MKDIRMANY failed"
 	log "finished at $(date) ($(($(date +%s) - stime)))"
 
-	stopall || error "stopall failed"
-	check_and_cleanup_lustre
+	cleanupall || error "cleanupall failed"
 	setupall || error "setupall failed"
 
 	log "After first remount. comparing $COUNT previously copied files"
@@ -121,9 +120,7 @@ test_1() {
 	$LFS df
 	$LFS df -i
 
-	stopall || error "stopall failed (2)"
-	check_and_cleanup_lustre
-
+	cleanupall || error "cleanupall failed (2)"
 	setupall || error "setupall failed (2)"
 
 	log "After second remount. running $RMDIRMANY $dst/d $COUNT"
