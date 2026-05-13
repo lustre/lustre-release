@@ -66,12 +66,6 @@ qmt_lqe_lookup(const struct lu_env *env, struct lquota_site *site,
  * Static helper functions not used outside the scope of this file
  */
 
-static inline void qpi_putref_locked(struct qmt_pool_info *pool)
-{
-	LASSERT(atomic_read(&pool->qpi_ref) > 1);
-	atomic_dec(&pool->qpi_ref);
-}
-
 /* some procfs helpers */
 static int qpi_state_seq_show(struct seq_file *m, void *data)
 {
