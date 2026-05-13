@@ -420,6 +420,13 @@ value must be at least 2, and
 must be at least 1 and less than or equal to
 .I DATA_STRIPES.
 The supported limits are 32 data stripes and 4 parity stripes.
+The sum
+.I DATA_STRIPES
++
+.I PARITY_STRIPES
+must not exceed 256.  This is a theoretical limit of the underlying
+Cauchy matrix construction over GF(2^8) and applies even with
+.BR --ec-expert .
 .PP
 For 1-stripe components the EC mirror will be created with only 1
 parity stripe (ie. only single device redundancy). If 2 (or more)
@@ -452,7 +459,9 @@ is intended for expert users who understand the performance and
 reliability implications, or for testing purposes.
 .PP
 .RS
-The maximum allowed values are 255 for \fIDATA\fR and 15 for \fIPARITY\fR.
+The maximum allowed values are 255 for \fIDATA\fR and 15 for \fIPARITY\fR,
+with \fIDATA\fR + \fIPARITY\fR not exceeding 256
+(Cauchy-matrix-over-GF(2^8) limit).
 .RE
 .TP
 .B --component-add

@@ -896,6 +896,11 @@ static inline bool lov_pool_is_reserved(const char *pool)
 /* EC (Erasure Coding) stripe count limits */
 #define LOV_EC_MAX_DATA_STRIPES   255  /* max data stripes for EC */
 #define LOV_EC_MAX_CODING_STRIPES 15   /* max coding/parity stripes for EC */
+/*
+ * data + coding cap from Cauchy matrix theory over GF(2^8): the
+ * construction requires k+m distinct field elements and GF(2^8) has 256.
+ */
+#define LOV_EC_MAX_TOTAL_STRIPES  256
 
 #define XATTR_LUSTRE_PREFIX	"lustre."
 #define XATTR_LUSTRE_PIN	XATTR_LUSTRE_PREFIX"pin"

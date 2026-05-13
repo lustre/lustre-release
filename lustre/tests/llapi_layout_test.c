@@ -2343,11 +2343,20 @@ static void test47(void)
 	rc = llapi_layout_comp_add_ec(layout, 1, 0, 1024*1024*1024ULL, 255, 16);
 	ASSERTF(rc != 0, "EC component with cstripe_count > 15 should fail");
 
-	/* Test 3: Valid parameters at maximum coding stripe limit (should
-	 * succeed)
+	/* Test 3: dstripe + cstripe > 256 (should fail; Cauchy-over-GF(2^8)
+	 * theoretical limit, k+m needs k+m distinct field elements and
+	 * GF(2^8) has 256)
 	 */
 	rc = llapi_layout_comp_add_ec(layout, 1, 0, 1024*1024*1024ULL, 255, 15);
-	ASSERTF(rc == 0, "EC component with cstripe_count = 15 should succeed");
+	ASSERTF(rc != 0,
+		"EC component with dstripe+cstripe > 256 should fail");
+
+	/* Test 4: Valid parameters at maximum coding stripe limit with sum
+	 * exactly at LOV_EC_MAX_TOTAL_STRIPES (should succeed)
+	 */
+	rc = llapi_layout_comp_add_ec(layout, 1, 0, 1024*1024*1024ULL, 241, 15);
+	ASSERTF(rc == 0,
+		"EC component with dstripe+cstripe == 256 should succeed");
 
 	llapi_layout_free(layout);
 }

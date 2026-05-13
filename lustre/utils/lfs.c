@@ -4363,6 +4363,14 @@ static int parse_ec_stripe_count(const char *optarg, uint8_t *data_count,
 		return -EINVAL;
 	}
 
+	if (data + parity > LOV_EC_MAX_TOTAL_STRIPES) {
+		fprintf(stderr,
+			"error: data+parity (%lu+%lu=%lu) exceeds %u (Cauchy-matrix-over-GF(2^8) limit)\n",
+			data, parity, data + parity,
+			LOV_EC_MAX_TOTAL_STRIPES);
+		return -EINVAL;
+	}
+
 	/* Check supported limits unless --ec-expert is specified */
 	if (!ec_expert) {
 		if (data > LOV_EC_DATA_STRIPES_RECOMMENDED) {

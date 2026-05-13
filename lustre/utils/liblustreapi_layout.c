@@ -2593,6 +2593,11 @@ int llapi_layout_comp_add_ec(struct llapi_layout *layout, uint32_t mirror_id,
 		return -1;
 	}
 
+	if (dstripe_count + cstripe_count > LOV_EC_MAX_TOTAL_STRIPES) {
+		errno = EINVAL;
+		return -1;
+	}
+
 	/* Sync mirror count and IDs so that the data component can be found */
 	rc = llapi_layout_mirror_count_sync(layout);
 	if (rc)
