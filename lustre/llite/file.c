@@ -1063,7 +1063,7 @@ int ll_file_open(struct inode *inode, struct file *file)
 	if (S_ISREG(inode->i_mode)) {
 		rc = ll_file_open_encrypt(inode, file);
 		if (rc) {
-			if (it && it->it_disposition)
+			if (it && it_disposition(it, DISP_ALL))
 				ll_release_openhandle(file_dentry(file), it);
 			GOTO(out_nofiledata, rc);
 		}
@@ -1083,7 +1083,7 @@ int ll_file_open(struct inode *inode, struct file *file)
 		RETURN(0);
 	}
 
-	if (!it || !it->it_disposition) {
+	if (!it || !it_disposition(it, DISP_ALL)) {
 		unsigned int kernel_flags = file->f_flags;
 
 		/* Convert f_flags into access mode. We cannot use file->f_mode,
@@ -1157,7 +1157,7 @@ restart:
 		}
 	} else {
 		LASSERT(*och_usecount == 0);
-		if (!it->it_disposition) {
+		if (!it_disposition(it, DISP_ALL)) {
 			struct dentry *dentry = file_dentry(file);
 			struct ll_sb_info *sbi = ll_i2sbi(inode);
 			int open_threshold = sbi->ll_oc_thrsh_count;
@@ -1238,7 +1238,7 @@ restart:
 
 		LASSERTF(it_disposition(it, DISP_ENQ_OPEN_REF),
 			 "inode %px: disposition %x, status %d\n", inode,
-			 it_disposition(it, ~0), it->it_status);
+			 it_disposition(it, DISP_ALL), it->it_status);
 
 		rc = ll_local_open(file, it, lfd, *och_p);
 		if (rc)

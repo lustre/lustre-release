@@ -41,7 +41,7 @@ struct mdc_enqueue_args {
 	obd_enqueue_update_f		mea_upcall;
 };
 
-int it_open_error(int phase, struct lookup_intent *it)
+int it_open_error(enum lustre_disposition phase, struct lookup_intent *it)
 {
 	if (it_disposition(it, DISP_OPEN_LEASE)) {
 		if (phase >= DISP_OPEN_LEASE)
@@ -77,8 +77,8 @@ int it_open_error(int phase, struct lookup_intent *it)
 			return 0;
 	}
 
-	CERROR("it disp: %X, status: %d\n", it->it_disposition, it->it_status);
-	LBUG();
+	LASSERTF(false, "it disp: %X, status: %d\n",
+		 it_disposition(it, DISP_ALL), it->it_status);
 
 	return 0;
 }
@@ -805,7 +805,7 @@ int mdc_finish_enqueue(struct obd_export *exp,
 	lockrep = req_capsule_server_get(pill, &RMF_DLM_REP);
 	LASSERT(lockrep != NULL); /* checked by ldlm_cli_enqueue() */
 
-	it->it_disposition = (int)lockrep->lock_policy_res1;
+	it->it_disposition = (enum lustre_disposition)lockrep->lock_policy_res1;
 	it->it_status = (int)lockrep->lock_policy_res2;
 	it->it_lock_mode = einfo->ei_mode;
 	it->it_lock_handle = lockh->cookie;
@@ -830,7 +830,7 @@ int mdc_finish_enqueue(struct obd_export *exp,
 		mdc_clear_replay_flag(req, it->it_status);
 
 	DEBUG_REQ(D_RPCTRACE, req, "op=%x disposition=%x, status=%d",
-		  it->it_op, it->it_disposition, it->it_status);
+		  it->it_op, it_disposition(it, DISP_ALL), it->it_status);
 
 	/* We know what to expect, so we do any byte flipping required here */
 	if (it_has_reply_body(it)) {
@@ -1385,7 +1385,7 @@ out:
 	CDEBUG(D_DENTRY,
 	       "D_IT dentry="DNAME" intent=%s status=%d disp=%x: rc = %d\n",
 	       encode_fn_opdata(op_data), ldlm_it2str(it->it_op),
-	       it->it_status, it->it_disposition, rc);
+	       it->it_status, it_disposition(it, DISP_ALL), rc);
 
 	return rc;
 }

@@ -671,7 +671,7 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 	 * when I return
 	 */
 	CDEBUG(D_DENTRY, "it %p it_disposition %x\n", it,
-	       it->it_disposition);
+	       it_disposition(it, DISP_ALL));
 	if (!it_disposition(it, DISP_LOOKUP_NEG)) {
 		struct req_capsule *pill = &request->rq_pill;
 		struct mdt_body *body = req_capsule_server_get(pill,
@@ -1569,7 +1569,7 @@ static struct inode *ll_create_node(struct inode *dir, struct lookup_intent *it)
 
 	ENTRY;
 
-	LASSERT(it && it->it_disposition);
+	LASSERT(it && it_disposition(it, DISP_ALL));
 
 	LASSERT(it_disposition(it, DISP_ENQ_CREATE_REF));
 	request = it->it_request;

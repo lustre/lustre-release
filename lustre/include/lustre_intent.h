@@ -14,13 +14,11 @@
 #ifndef LUSTRE_INTENT_H
 #define LUSTRE_INTENT_H
 
-/* intent IT_XXX are defined in lustre/include/obd.h */
-
 struct lookup_intent {
-	int			 it_op;
+	enum ldlm_intent_flags	 it_op;
 	int			 it_create_mode;
 	enum mds_open_flags	 it_open_flags;
-	int			 it_disposition;
+	enum lustre_disposition	 it_disposition;
 	int			 it_status;
 	__u64			 it_lock_handle;
 	enum mds_ibits_locks	 it_lock_bits;
@@ -31,19 +29,22 @@ struct lookup_intent {
 	unsigned int		 it_lock_set:1;
 };
 
-static inline int it_disposition(const struct lookup_intent *it, int flag)
+static inline int it_disposition(const struct lookup_intent *it,
+				 enum lustre_disposition disp)
 {
-	return it->it_disposition & flag;
+	return it->it_disposition & disp;
 }
 
-static inline void it_set_disposition(struct lookup_intent *it, int flag)
+static inline void it_set_disposition(struct lookup_intent *it,
+				      enum lustre_disposition disp)
 {
-	it->it_disposition |= flag;
+	it->it_disposition |= disp;
 }
 
-static inline void it_clear_disposition(struct lookup_intent *it, int flag)
+static inline void it_clear_disposition(struct lookup_intent *it,
+					enum lustre_disposition disp)
 {
-	it->it_disposition &= ~flag;
+	it->it_disposition &= ~disp;
 }
 
 #endif

@@ -182,7 +182,7 @@ void ll_intent_release(struct lookup_intent *it)
 	if (it_disposition(it, DISP_ENQ_CREATE_REF)) /* create rec */
 		ptlrpc_req_put(it->it_request);
 
-	it->it_disposition = 0;
+	it_clear_disposition(it, DISP_ALL);
 	it->it_request = NULL;
 	EXIT;
 }

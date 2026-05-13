@@ -389,14 +389,14 @@ retry:
 	 * Nothing is found, do not access body->fid1 as it is zero and thus
 	 * pointless.
 	 */
-	if ((it->it_disposition & DISP_LOOKUP_NEG) &&
-	    !(it->it_disposition & DISP_OPEN_CREATE) &&
-	    !(it->it_disposition & DISP_OPEN_OPEN)) {
+	if (it_disposition(it, DISP_LOOKUP_NEG) &&
+	    !it_disposition(it, DISP_OPEN_CREATE) &&
+	    !it_disposition(it, DISP_OPEN_OPEN)) {
 		if (!(it->it_open_flags & MDS_OPEN_BY_FID) &&
 		    lmv_dir_retry_check_update(op_data)) {
 			ptlrpc_req_put(*reqp);
 			it->it_request = NULL;
-			it->it_disposition = 0;
+			it_clear_disposition(it, DISP_ALL);
 			*reqp = NULL;
 
 			it->it_open_flags = flags;
@@ -523,7 +523,7 @@ retry:
 		   lmv_dir_retry_check_update(op_data)) {
 		ptlrpc_req_put(*reqp);
 		it->it_request = NULL;
-		it->it_disposition = 0;
+		it_clear_disposition(it, DISP_ALL);
 		*reqp = NULL;
 
 		goto retry;

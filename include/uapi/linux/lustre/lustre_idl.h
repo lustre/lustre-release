@@ -1837,20 +1837,24 @@ enum mds_reint_op {
 	REINT_MAX
 };
 
-/* the disposition of the intent outlines what was executed */
-#define DISP_IT_EXECD        0x00000001
-#define DISP_LOOKUP_EXECD    0x00000002
-#define DISP_LOOKUP_NEG      0x00000004
-#define DISP_LOOKUP_POS      0x00000008
-#define DISP_OPEN_CREATE     0x00000010
-#define DISP_OPEN_OPEN       0x00000020
-#define DISP_ENQ_COMPLETE    0x00400000		/* obsolete and unused */
-#define DISP_ENQ_OPEN_REF    0x00800000
-#define DISP_ENQ_CREATE_REF  0x01000000
-#define DISP_OPEN_LOCK       0x02000000
-#define DISP_OPEN_LEASE      0x04000000
-#define DISP_OPEN_STRIPE     0x08000000
-#define DISP_OPEN_DENY	     0x10000000
+/* the intent disposition indicates what was executed on the server */
+enum lustre_disposition {
+	DISP_NONE            = 0x00000000,
+	DISP_IT_EXECD        = 0x00000001,
+	DISP_LOOKUP_EXECD    = 0x00000002,
+	DISP_LOOKUP_NEG      = 0x00000004,
+	DISP_LOOKUP_POS      = 0x00000008,
+	DISP_OPEN_CREATE     = 0x00000010,
+	DISP_OPEN_OPEN       = 0x00000020,
+/*	DISP_ENQ_COMPLETE    = 0x00400000,   unused v2_11_55_0-23-g976b609abc */
+	DISP_ENQ_OPEN_REF    = 0x00800000,
+	DISP_ENQ_CREATE_REF  = 0x01000000,
+	DISP_OPEN_LOCK       = 0x02000000,
+	DISP_OPEN_LEASE      = 0x04000000,
+	DISP_OPEN_STRIPE     = 0x08000000,
+	DISP_OPEN_DENY       = 0x10000000,
+	DISP_ALL             = 0xffffffff
+};
 
 /* NOTE: until Lustre 1.8.7/2.1.1 the fid_ver() was packed into name[2],
  * but was moved into name[1] along with the OID to avoid consuming the
