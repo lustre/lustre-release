@@ -408,8 +408,8 @@ AC_DEFUN([LZ_KABI_ZFS], [
 	AC_DEFUN([LZ_SRC_ZFS_ARC_PRUNE_FUNC_UINT64], [
 		LB2_LINUX_TEST_SRC([zfs_arc_prune_func_uint64], [
 			#include <sys/arc.h>
+			static void arc_prune_func(uint64_t bytes, void *priv) {}
 		],[
-			void arc_prune_func(uint64_t bytes, void *priv) {}
 			arc_prune_t *arc_p __attribute__ ((unused)) =
 				arc_add_prune_callback(arc_prune_func, NULL);
 		],[-Werror],[],[])
