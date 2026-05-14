@@ -338,6 +338,48 @@ check_parity_read() {
 }
 
 #
+# Print the distinct mirror ids of a file, lowest id first.
+#
+mirror_ids_of() {
+	$LFS getstripe $1 | awk '/lcme_mirror_id:/ {print $2}' | sort -un
+}
+
+#
+# Print the OST indices holding a mirror's objects, one per line.
+#	$1 file
+#	$2 mirror id
+#
+mirror_ost_indices() {
+	$LFS getstripe --mirror-id=$2 $1 |
+		awk 'match($0, /l_ost_idx: +[0-9]+/) {
+			idx = substr($0, RSTART, RLENGTH)
+			gsub(/[^0-9]/, "", idx)
+			print idx
+		}'
+}
+
+#
+# Verify that a mirror's lcme_mirror_link_id names an expected mirror. An
+# expected id of 0 means the mirror must not be linked at all.
+#	$1 file
+#	$2 mirror id to check
+#	$3 expected mirror id of the counterpart
+#
+verify_mirror_link() {
+	local tf=$1
+	local mirror_id=$2
+	local expected=$3
+	local link=$($LFS getstripe --mirror-id=$mirror_id $tf |
+		     awk '/lcme_mirror_link_id:/ {print $2; exit}')
+
+	(( ${link:-0} == expected )) || {
+		$LFS getstripe -v $tf
+		error "mirror $mirror_id of $tf links to '${link:-0}'," \
+		      "expected $expected"
+	}
+}
+
+#
 # Classify the mirrors of an EC file into the globals ec_parity_id (carries the
 # parity flag), ec_data_id (the data mirror linked to it via
 # lcme_mirror_link_id) and ec_plain_id (a mirror with no link). Any of them is
@@ -2115,9 +2157,12 @@ test_7c() {
 	local tf=$DIR/$tfile
 	local ids
 
+	stack_trap "rm -f $tf"
+
 	# Create file with multiple components and EC
 	$LFS setstripe -E 128M --ec 4+2 -E -1 --ec 4+2 $tf ||
 		error "setstripe failed"
+	dd if=/dev/zero of=$tf bs=1M count=1 || error "write failed"
 
 	verify_mirror_count $tf 2
 	verify_comp_count $tf 4
@@ -2147,6 +2192,10 @@ test_7c() {
 	# Verify only data mirror remains with 2 components
 	verify_mirror_count $tf 1
 	verify_comp_count $tf 2
+
+	# The uninstantiated data tail must work without its former parity.
+	dd if=/dev/zero of=$tf bs=1M count=1 seek=129 conv=notrunc ||
+		error "cannot instantiate data tail after deleting parity"
 }
 run_test 7c "mirror split -d works for multi-component parity mirrors"
 
@@ -2563,6 +2612,732 @@ test_7i() {
 	return 0
 }
 run_test 7i "split resyncs when only parity mirrors are non-stale"
+
+test_8a() {
+	(( MDS1_VERSION > $(version_code 2.17.57) )) ||
+		skip "need MDS > 2.17.57 to attach EC parity to a data mirror"
+	(( OSTCOUNT >= 6 )) || skip "need >= 6 OSTs for EC 4+2"
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf"
+
+	# Two-mirror data-only file (no EC).
+	$LFS mirror create -N -E -1 -c 4 -N -E -1 -c 4 $tf ||
+		error "mirror create failed"
+	verify_mirror_count $tf 2
+
+	local mids=($(mirror_ids_of $tf))
+
+	(( ${#mids[@]} == 2 )) || error "expected 2 mirror ids, got ${#mids[@]}"
+
+	$LFS mirror extend --mirror-id ${mids[0]} --ec 4+2 $tf ||
+		error "mirror extend --mirror-id ${mids[0]} --ec 4+2 failed"
+
+	verify_mirror_count $tf 3
+
+	# Highest mirror id is the new parity mirror.
+	local all_mids=($(mirror_ids_of $tf))
+	local parity_mid=${all_mids[-1]}
+	local parity_comps=($($LFS getstripe --mirror-id=$parity_mid $tf |
+			      awk '/lcme_id/ {print $2}'))
+
+	(( ${#parity_comps[@]} == 1 )) ||
+		error "expected 1 parity component, got ${#parity_comps[@]}"
+	verify_comp_parity $tf ${parity_comps[0]}
+	verify_ec_stripe_count $tf ${parity_comps[0]} 4 2
+	verify_comp_extent $tf ${parity_comps[0]} 0 EOF
+
+	# Both directions of the link, as 'lfs setstripe --ec' creates them:
+	# parity I/O walks parity -> data, 'lfs mirror split' data -> parity.
+	verify_mirror_link $tf $parity_mid ${mids[0]}
+	verify_mirror_link $tf ${mids[0]} $parity_mid
+
+	# The untouched data mirror must not have acquired a link.
+	verify_mirror_link $tf ${mids[1]} 0
+}
+run_test 8a "mirror extend --mirror-id attaches parity to named mirror"
+
+test_8b() {
+	(( MDS1_VERSION > $(version_code 2.17.57) )) ||
+		skip "need MDS > 2.17.57 to attach EC parity to a data mirror"
+	(( OSTCOUNT >= 6 )) || skip "need >= 6 OSTs for EC 4+2"
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf"
+
+	# FLR file: one multi-component data mirror and one simple data mirror.
+	# --mirror-id targets the multi-component one; the parity layout must
+	# match its component extents.
+	$LFS mirror create -N -E 128M -c 2 -E -1 -c 4 -N -E -1 -c 4 $tf ||
+		error "mirror create failed"
+	verify_mirror_count $tf 2
+
+	local data_mid=$($LFS getstripe $tf |
+			 awk '/lcme_mirror_id:/ {print $2; exit}')
+
+	$LFS mirror extend --mirror-id $data_mid --ec 4+2 $tf ||
+		error "mirror extend --mirror-id $data_mid --ec 4+2 failed"
+
+	verify_mirror_count $tf 3
+	# Two multi-comp data comps + one simple data comp + two new parity
+	# comps with extents matching the multi-comp mirror.
+	verify_comp_count $tf 5
+
+	local all_mids=($(mirror_ids_of $tf))
+	local parity_mid=${all_mids[-1]}
+	local parity_comps=($($LFS getstripe --mirror-id=$parity_mid $tf |
+			      awk '/lcme_id/ {print $2}'))
+
+	(( ${#parity_comps[@]} == 2 )) ||
+		error "expected 2 parity comps, got ${#parity_comps[@]}"
+	verify_comp_parity $tf ${parity_comps[0]}
+	verify_comp_parity $tf ${parity_comps[1]}
+	verify_comp_extent $tf ${parity_comps[0]} 0 134217728
+	verify_comp_extent $tf ${parity_comps[1]} 134217728 EOF
+}
+run_test 8b "mirror extend --mirror-id parity matches PFL data extents"
+
+test_8c() {
+	(( MDS1_VERSION > $(version_code 2.17.57) )) ||
+		skip "need MDS > 2.17.57 to attach EC parity to a data mirror"
+	(( OSTCOUNT >= 6 )) || skip "need >= 6 OSTs for EC 4+2"
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf"
+
+	# Plain mirrored file, no EC.
+	$LFS mirror create -N -E -1 -c 4 $tf || error "mirror create failed"
+	verify_mirror_count $tf 1
+
+	# -N --ec D+P should add one data mirror plus one parity mirror.
+	$LFS mirror extend -N -E -1 -c 4 --ec 4+2 $tf ||
+		error "mirror extend -N --ec 4+2 failed"
+	verify_mirror_count $tf 3
+
+	# Exactly one parity mirror should be present (id-wise: the highest).
+	local all_mids=($(mirror_ids_of $tf))
+	local parity_mid=${all_mids[-1]}
+	local parity_comps=($($LFS getstripe --mirror-id=$parity_mid $tf |
+			      awk '/lcme_id/ {print $2}'))
+
+	verify_comp_parity $tf ${parity_comps[0]}
+	verify_ec_stripe_count $tf ${parity_comps[0]} 4 2
+
+	# The parity mirror protects the mirror added alongside it, not the
+	# pre-existing one.
+	verify_mirror_link $tf $parity_mid ${all_mids[1]}
+	verify_mirror_link $tf ${all_mids[1]} $parity_mid
+	verify_mirror_link $tf ${all_mids[0]} 0
+}
+run_test 8c "mirror extend -N --ec adds data + parity pair"
+
+test_8d() {
+	(( MDS1_VERSION > $(version_code 2.17.57) )) ||
+		skip "need MDS > 2.17.57 to attach EC parity to a data mirror"
+	(( OSTCOUNT >= 6 )) || skip "need >= 6 OSTs for EC 4+2"
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local tfec=$DIR/$tfile.ec
+	local opt
+	local out
+
+	# Registered before the first create: the later files are declared
+	# next to the cases that use them, but a failure in any case must
+	# still clean up the ones already made.
+	stack_trap "rm -f $DIR/$tfile $DIR/$tfile.ec $DIR/$tfile.narrow \
+		    $DIR/$tfile.wide $DIR/$tfile.sel $DIR/$tfile.dom \
+		    $DIR/$tfile.victim"
+
+	# FLR file, so the data mirror id is >= 1.
+	$LFS mirror create -N -E -1 -c 4 -N -E -1 -c 4 $tf ||
+		error "mirror create failed"
+
+	local mid=$($LFS getstripe $tf |
+		    awk '/lcme_mirror_id:/ {print $2; exit}')
+
+	# Mirror id 0 is reserved for non-FLR layouts; auto mode covers that
+	# case instead.
+	$LFS mirror extend --mirror-id 0 --ec 4+2 $tf 2>&1 |
+		grep -q "invalid mirror ID" ||
+		error "expected '--mirror-id 0' to be rejected"
+
+	$LFS mirror extend --mirror-id 9999 --ec 4+2 $tf 2>&1 |
+		grep -q "not found" ||
+		error "expected 'mirror id ... not found' rejection"
+
+	# --mirror-id targets one existing mirror, -N adds new ones.
+	$LFS mirror extend --mirror-id $mid --ec 4+2 -N $tf 2>&1 |
+		grep -q "cannot be combined" ||
+		error "expected mutex rejection for --mirror-id then -N"
+
+	$LFS mirror extend -N --mirror-id $mid --ec 4+2 $tf 2>&1 |
+		grep -q "cannot be combined" ||
+		error "expected mutex rejection for -N then --mirror-id"
+
+	# One D+P specification per extend, and a usage error must be
+	# reflected in the exit status, not only printed.
+	out=$($LFS mirror extend -N --ec 4+2 --ec 8+2 $tf 2>&1) &&
+		error "expected a second --ec to fail"
+	echo "$out" | grep -q "single D+P specification" ||
+		error "expected 'single D+P specification' rejection, got: $out"
+
+	out=$($LFS mirror extend -N --ec 4+2 --ec 8+2 -N $tf 2>&1) &&
+		error "expected a second --ec before -N to fail"
+	echo "$out" | grep -q "single D+P specification" ||
+		error "expected 'single D+P specification' rejection, got: $out"
+
+	# Layout options would be silently ignored, so they are rejected.
+	for opt in "-E -1" "-c 2" "-S 1M" "-p ignored"; do
+		$LFS mirror extend --mirror-id $mid --ec 4+2 $opt $tf 2>&1 |
+			grep -q "derives the parity layout" ||
+			error "expected layout-options rejection for '$opt'"
+	done
+
+	# Parity of parity is meaningless.
+	$LFS setstripe -E -1 -c 4 --ec 4+2 $tfec || error "setstripe failed"
+	identify_ec_mirrors $tfec
+	[[ -n $ec_parity_id ]] || error "could not locate parity mirror id"
+
+	$LFS mirror extend --mirror-id $ec_parity_id --ec 4+2 $tfec 2>&1 |
+		grep -q "is a parity mirror" ||
+		error "expected rejection when target is a parity mirror"
+
+	# A component no wider than its stripe size is instantiated with a
+	# single stripe, which cannot carry 2 parity stripes.
+	local tfnarrow=$DIR/$tfile.narrow
+
+	$LFS setstripe -E 1M -c 4 -E -1 -c 4 $tfnarrow ||
+		error "setstripe failed"
+	dd if=/dev/zero of=$tfnarrow bs=512K count=1 2>/dev/null ||
+		error "write failed"
+	$LFS mirror extend --ec 4+2 $tfnarrow 2>&1 |
+		grep -q "too few for the 2 parity stripes" ||
+		error "expected too-narrow-component rejection"
+
+	# -N adds the data mirror before its parity, so a geometry the new
+	# mirror cannot carry must be refused before the file is changed.
+	out=$($LFS mirror extend -N -E -1 -c 1 --ec 4+2 $tf 2>&1) &&
+		error "expected -N -c 1 --ec 4+2 to fail"
+	echo "$out" | grep -q "too few for the 2 parity stripes" ||
+		error "expected too-narrow new mirror rejection, got: $out"
+	verify_mirror_count $tf 2
+
+	# 5 stripes make two 4+3 raidsets, which need 6 parity stripes. The
+	# D+P fit is checked before the merge too, so the layout is untouched.
+	local gen=$($LFS getstripe $tf | awk '/lcm_layout_gen/ { print $2 }')
+
+	out=$($LFS mirror extend -N -E -1 -c 5 --ec 4+3 $tf 2>&1) &&
+		error "expected -N -c 5 --ec 4+3 to fail"
+	echo "$out" | grep -q "cannot add parity component" ||
+		error "expected D+P fit rejection, got: $out"
+	(( $($LFS getstripe $tf | awk '/lcm_layout_gen/ { print $2 }') ==
+	   gen )) || error "refused extend changed the layout of $tf"
+
+	# A parity mirror that fails after its data mirror was merged, here
+	# because EC is off on the client, must not leave that data mirror
+	# behind without parity.
+	$LCTL set_param llite.*.enable_erasure_coding=0
+	$LFS mirror extend -N -E -1 -c 4 --ec 4+2 $tf &&
+		error "expected -N --ec to fail with EC disabled"
+	$LCTL set_param llite.*.enable_erasure_coding=1
+	verify_mirror_count $tf 2
+
+	# An uninstantiated '-c -1' component has no width yet, so the number
+	# of raidsets cannot be derived from it.
+	local tfwide=$DIR/$tfile.wide
+
+	$LFS setstripe -E 64M -c 4 -E -1 -c -1 $tfwide ||
+		error "setstripe failed"
+	dd if=/dev/zero of=$tfwide bs=1M count=1 2>/dev/null ||
+		error "write failed"
+	$LFS mirror extend --ec 4+2 $tfwide 2>&1 |
+		grep -q "no fixed stripe count yet" ||
+		error "expected unresolved-stripe-count rejection"
+
+	# A self-extending component's extent moves as the file grows, so a
+	# parity component could not stay matched to it.
+	local tfsel=$DIR/$tfile.sel
+
+	$LFS setstripe -E 1G -c 4 -z 64M -E -1 -c 4 $tfsel ||
+		error "setstripe failed"
+	dd if=/dev/zero of=$tfsel bs=1M count=1 2>/dev/null ||
+		error "write failed"
+	out=$($LFS mirror extend --ec 4+2 $tfsel 2>&1) &&
+		error "expected a self-extending component to fail"
+	echo "$out" | grep -q "self-extending component" ||
+		error "expected self-extending rejection, got: $out"
+
+	# A Data-on-MDT component has no OST stripes to spread a raidset over.
+	local tfdom=$DIR/$tfile.dom
+
+	$LFS setstripe -E 64K -L mdt -E -1 -c 4 $tfdom ||
+		error "setstripe failed"
+	dd if=/dev/zero of=$tfdom bs=1M count=1 2>/dev/null ||
+		error "write failed"
+	out=$($LFS mirror extend --ec 4+2 $tfdom 2>&1) &&
+		error "expected a Data-on-MDT component to fail"
+	echo "$out" | grep -q "Data-on-MDT component" ||
+		error "expected Data-on-MDT rejection, got: $out"
+
+	# -f takes the new mirror's content and layout from the victim file,
+	# leaving nothing for --ec to act on.
+	local tfvic=$DIR/$tfile.victim
+
+	$LFS setstripe -E -1 -c 4 $tfvic || error "setstripe failed"
+	out=$($LFS mirror extend -N --ec 4+2 -f $tfvic $tf 2>&1) &&
+		error "expected --ec with -f to fail"
+	echo "$out" | grep -q "cannot be combined with -f" ||
+		error "expected '-f' rejection, got: $out"
+
+	out=$($LFS mirror extend -N -f $tfvic --ec 4+2 $tf 2>&1) &&
+		error "expected -f before --ec to fail"
+	echo "$out" | grep -q "cannot be combined with -f" ||
+		error "expected '-f' rejection, got: $out"
+	# A following -N must not hide an earlier mirror's invalid options.
+	out=$($LFS mirror extend -N --ec 4+2 -f $tfvic -N $tf 2>&1) &&
+		error "expected --ec with -f before another -N to fail"
+	echo "$out" | grep -q "cannot be combined with -f" ||
+		error "expected earlier-mirror rejection, got: $out"
+
+	out=$($LFS mirror extend -N -f $tfvic --ec 4+2 -N $tf 2>&1) &&
+		error "expected -f with --ec before another -N to fail"
+	echo "$out" | grep -q "cannot be combined with -f" ||
+		error "expected earlier-mirror rejection, got: $out"
+
+	out=$($LFS mirror extend --mirror-id $mid --ec 4+2 -f $tfvic \
+		--no-verify $tf 2>&1) &&
+		error "expected --mirror-id with -f to fail"
+	echo "$out" | grep -q "cannot be combined with --mirror-id" ||
+		error "expected '--mirror-id' rejection, got: $out"
+	verify_mirror_count $tf 2
+	[[ -e $tfvic ]] || error "rejected extend consumed the victim"
+
+}
+run_test 8d "mirror extend --ec rejects invalid option combinations"
+
+test_8e() {
+	(( MDS1_VERSION > $(version_code 2.17.57) )) ||
+		skip "need MDS > 2.17.57 to attach EC parity to a data mirror"
+	(( OSTCOUNT >= 6 )) || skip "need >= 6 OSTs for EC 4+2"
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf"
+
+	# Single-mirror data file wide enough to fit EC 4+2.
+	$LFS mirror create -N -E -1 -c 4 $tf || error "mirror create failed"
+	verify_mirror_count $tf 1
+
+	dd if=/dev/urandom of=$tf bs=1M count=4 conv=fsync ||
+		error "dd write failed"
+	local sum_before=$(md5sum $tf | awk '{print $1}')
+
+	# Auto mode: --ec without --mirror-id targets the lone mirror.
+	$LFS mirror extend --ec 4+2 $tf ||
+		error "mirror extend --ec 4+2 (auto) failed"
+
+	verify_mirror_count $tf 2
+
+	# Adding a parity mirror must not change what readers see.
+	cancel_lru_locks osc
+	local sum_after=$(md5sum $tf | awk '{print $1}')
+
+	[[ $sum_before == $sum_after ]] ||
+		error "data changed across extend: $sum_before vs $sum_after"
+
+	# The new parity mirror is in sync when extend returns.
+	local all_mids=($(mirror_ids_of $tf))
+	local parity_mid=${all_mids[-1]}
+
+	$LFS getstripe --mirror-id=$parity_mid $tf | grep -q "stale" &&
+		error "parity mirror $parity_mid is stale after extend"
+
+	return 0
+}
+run_test 8e "mirror extend --ec (auto) preserves data, parity in sync"
+
+test_8f() {
+	(( MDS1_VERSION > $(version_code 2.17.57) )) ||
+		skip "need MDS > 2.17.57 to attach EC parity to a data mirror"
+	(( OSTCOUNT >= 6 )) || skip "need >= 6 OSTs for EC 4+2"
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf"
+	local mid
+
+	$LFS mirror create -N -E -1 -c 4 $tf || error "mirror create failed"
+	verify_mirror_count $tf 1
+
+	dd if=/dev/urandom of=$tf bs=1M count=4 conv=fsync ||
+		error "dd write failed"
+	local sum_before=$(md5sum $tf | awk '{print $1}')
+
+	$LFS mirror extend -N -E -1 -c 4 --ec 4+2 $tf ||
+		error "mirror extend -N --ec 4+2 failed"
+	verify_mirror_count $tf 3
+
+	cancel_lru_locks osc
+	local sum_after=$(md5sum $tf | awk '{print $1}')
+
+	[[ $sum_before == $sum_after ]] ||
+		error "data changed across extend: $sum_before vs $sum_after"
+
+	# Both new mirrors are in sync when extend returns.
+	local mids=($(mirror_ids_of $tf))
+	local original_mid=${mids[0]}
+
+	for mid in "${mids[@]:1}"; do
+		$LFS getstripe --mirror-id=$mid $tf | grep -q "stale" &&
+			error "newly-added mirror $mid should not be stale"
+	done
+
+	# The new data mirror must carry a full copy of the file data.
+	local new_data_mid=""
+
+	for mid in "${mids[@]:1}"; do
+		$LFS getstripe --mirror-id=$mid $tf |
+			grep -q "lcme_flags:.*parity" || new_data_mid=$mid
+	done
+	[[ -n $new_data_mid ]] || error "no new data mirror found"
+
+	local new_data_sum=$($LFS mirror read -N $new_data_mid $tf |
+			     md5sum | awk '{print $1}')
+
+	[[ $new_data_sum == $sum_before ]] ||
+		error "new data mirror $new_data_mid content mismatch"
+}
+run_test 8f "mirror extend -N --ec preserves data, new mirrors in sync"
+
+test_8g() {
+	(( MDS1_VERSION > $(version_code 2.17.57) )) ||
+		skip "need MDS > 2.17.57 to attach EC parity to a data mirror"
+	(( OSTCOUNT >= 6 )) || skip "need >= 6 OSTs for EC 4+2"
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf"
+
+	# Plain non-FLR file. Such a layout is not composite, so
+	# 'lfs getstripe -N' returns nothing until it is extended.
+	$LFS setstripe -c 4 $tf || error "setstripe failed"
+
+	# Auto mode resolves the lone data mirror as the target. The kernel
+	# promotes the file's mirror id 0 to 1 when it becomes FLR.
+	$LFS mirror extend --ec 4+2 $tf ||
+		error "mirror extend --ec 4+2 (auto) failed"
+	verify_mirror_count $tf 2
+
+	# Exactly one parity mirror, freshly added and already in sync.
+	local all_mids=($(mirror_ids_of $tf))
+
+	(( ${#all_mids[@]} == 2 )) ||
+		error "expected 2 mirror ids, got ${#all_mids[@]}"
+
+	local parity_mid=${all_mids[-1]}
+	local parity_comps=($($LFS getstripe --mirror-id=$parity_mid $tf |
+			      awk '/lcme_id/ {print $2}'))
+
+	(( ${#parity_comps[@]} >= 1 )) ||
+		error "expected at least 1 parity comp"
+	verify_comp_parity $tf ${parity_comps[0]}
+	verify_mirror_link $tf $parity_mid ${all_mids[0]}
+	verify_mirror_link $tf ${all_mids[0]} $parity_mid
+
+	$LFS getstripe --mirror-id=$parity_mid $tf | grep -q "stale" &&
+		error "parity mirror $parity_mid is stale after extend"
+
+	return 0
+}
+run_test 8g "mirror extend --ec (auto) targets lone mirror of non-FLR file"
+
+test_8h() {
+	(( MDS1_VERSION > $(version_code 2.17.57) )) ||
+		skip "need MDS > 2.17.57 to attach EC parity to a data mirror"
+	(( OSTCOUNT >= 6 )) || skip "need >= 6 OSTs for EC 4+2"
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf"
+	local out
+
+	$LFS mirror create -N -E -1 -c 4 -N -E -1 -c 4 $tf ||
+		error "mirror create failed"
+
+	local mids=($(mirror_ids_of $tf))
+
+	# A write stales every non-primary mirror. Parity built from a stale
+	# mirror would be silently wrong: resyncing the mirror afterwards does
+	# not re-stale the parity, so resync can never correct it.
+	dd if=/dev/urandom of=$tf bs=1M count=4 conv=notrunc ||
+		error "write failed"
+
+	local stale_mid=""
+	local mid
+
+	for mid in ${mids[@]}; do
+		$LFS getstripe --mirror-id=$mid $tf | grep -q stale || continue
+		stale_mid=$mid
+		break
+	done
+	[[ -n $stale_mid ]] || error "write left no stale mirror"
+
+	out=$($LFS mirror extend --mirror-id $stale_mid --ec 4+2 $tf 2>&1) &&
+		error "extend onto stale mirror $stale_mid should be refused"
+	echo "$out" | grep -q "is stale" ||
+		error "refusal should name the stale mirror, got: $out"
+	verify_mirror_count $tf 2
+
+	# Resyncing clears the way for the same command to succeed.
+	$LFS mirror resync $tf || error "mirror resync failed"
+	$LFS mirror extend --mirror-id $stale_mid --ec 4+2 $tf ||
+		error "extend onto resynced mirror $stale_mid failed"
+	verify_mirror_count $tf 3
+}
+run_test 8h "mirror extend --ec refuses a stale data mirror"
+
+test_8i() {
+	(( MDS1_VERSION > $(version_code 2.17.57) )) ||
+		skip "need MDS > 2.17.57 to attach EC parity to a data mirror"
+	(( OSTCOUNT >= 6 )) || skip "need >= 6 OSTs for EC 4+2"
+	enable_ec
+
+	local tf1=$DIR/$tfile.one
+	local tf2=$DIR/$tfile.two
+
+	stack_trap "rm -f $tf1 $tf2"
+	local out
+
+	$LFS mirror create -N -E -1 -c 4 $tf1 || error "mirror create failed"
+	$LFS mirror create -N -E -1 -c 4 -N -E -1 -c 4 $tf2 ||
+		error "mirror create failed"
+
+	# -N=TOTAL that adds nothing must stay the no-op it warns about, not
+	# fall through to the auto mode that plain --ec selects.
+	out=$($LFS mirror extend -N=1 --ec 4+2 $tf1 2>&1) ||
+		error "'-N=1 --ec' no-op should succeed, got: $out"
+	echo "$out" | grep -q "no new mirrors will be created" ||
+		error "expected the 'no new mirrors' warning, got: $out"
+	verify_mirror_count $tf1 1
+
+	out=$($LFS mirror extend -N=2 --ec 4+2 $tf2 2>&1) ||
+		error "'-N=2 --ec' no-op should succeed, got: $out"
+	echo "$out" | grep -q "has multiple mirrors" &&
+		error "'-N=2' no-op must not ask for -N again, got: $out"
+	verify_mirror_count $tf2 2
+
+	# -N=TOTAL that does add a mirror still attaches parity to it.
+	$LFS mirror extend -N=2 --ec 4+2 $tf1 ||
+		error "'-N=2 --ec' on a 1-mirror file failed"
+	verify_mirror_count $tf1 3
+}
+run_test 8i "mirror extend -N=TOTAL no-op does not trigger --ec auto mode"
+
+test_8j() {
+	(( MDS1_VERSION > $(version_code 2.17.57) )) ||
+		skip "need MDS > 2.17.57 to attach EC parity to a data mirror"
+	(( OSTCOUNT >= 6 )) || skip "need >= 6 OSTs for EC 4+2"
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local mdts=$(mdts_nodes)
+	local saved=$(do_facet mds1 $LCTL get_param -n \
+		      lod.*MDT0000*.qos_threshold_rr | sed -e 's/%//')
+	local i
+
+	# The round-robin allocator lays a small EC layout down sequentially
+	# and clears the data mirror by luck, which hides a parity placed
+	# without consulting it.  Force the QoS allocator, which any
+	# filesystem with uneven OST usage is already using.
+	stack_trap "do_nodes $mdts $LCTL set_param \
+		    lod.*.qos_threshold_rr=$saved > /dev/null"
+	do_nodes $mdts $LCTL set_param lod.*.qos_threshold_rr=0 > /dev/null
+
+	stack_trap "rm -f $tf"
+
+	for ((i = 0; i < 5; i++)); do
+		rm -f $tf
+
+		$LFS setstripe -E -1 -c 4 $tf || error "setstripe failed"
+		dd if=/dev/urandom of=$tf bs=1M count=2 ||
+			error "write failed"
+
+		$LFS mirror extend --ec 4+2 $tf ||
+			error "mirror extend --ec 4+2 failed"
+
+		identify_ec_mirrors $tf
+		[[ -n $ec_data_id && -n $ec_parity_id ]] ||
+			error "failed to identify data/parity mirrors"
+
+		local data_osts=($(mirror_ost_indices $tf $ec_data_id))
+		local parity_osts=($(mirror_ost_indices $tf $ec_parity_id))
+
+		(( ${#parity_osts[@]} > 0 )) ||
+			error "parity mirror $ec_parity_id has no objects"
+
+		# A parity object sharing an OST with the data it protects
+		# spends one of the failures the layout promises: losing that
+		# OST costs a data and a parity stripe of the same raid set.
+		local p d
+		for p in "${parity_osts[@]}"; do
+			for d in "${data_osts[@]}"; do
+				(( p != d )) || {
+					$LFS getstripe $tf
+					error "iteration $i: parity OST $p" \
+					      "also holds data of mirror" \
+					      "$ec_data_id"
+				}
+			done
+		done
+	done
+}
+run_test 8j "mirror extend --ec keeps parity off its data mirror's OSTs"
+
+test_8k() {
+	(( MDS1_VERSION > $(version_code 2.17.57) )) ||
+		skip "need MDS > 2.17.57 to attach EC parity to a data mirror"
+	(( OSTCOUNT >= 6 )) || skip "need >= 6 OSTs for EC 4+2"
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local reference=$TMP/$tfile.reference
+	local mirrors data_mid parity_mid tail_id flags sum
+	local mids
+
+	stack_trap "rm -f $tf $reference"
+	dd if=/dev/urandom of=$reference bs=1M count=1 ||
+		error "cannot create reference data"
+
+	for mirrors in 1 2; do
+		rm -f $tf
+		if (( mirrors == 1 )); then
+			$LFS setstripe -E 64M -c 4 -E -1 -c 4 $tf ||
+				error "setstripe failed"
+		else
+			$LFS mirror create -N -E -1 -c 1 \
+				-N -E 64M -c 4 -E -1 -c 4 $tf ||
+				error "mirror create failed"
+		fi
+		if (( mirrors == 1 )); then
+			dd if=$reference of=$tf bs=1M count=1 ||
+				error "initial write failed"
+			$LFS mirror extend --ec 4+2 $tf ||
+				error "parity attach failed"
+		else
+			mids=($(mirror_ids_of $tf))
+			$LFS mirror extend --mirror-id ${mids[1]} --ec 4+2 \
+				$tf || error "parity attach failed"
+			# Resync must instantiate the former EC tail; direct
+			# writes go to the plain mirror.
+			$LFS setstripe --comp-set --mirror-id ${mids[0]} \
+				--comp-flags=prefwr $tf ||
+				error "cannot prefer the plain data mirror"
+			dd if=$reference of=$tf bs=1M count=1 ||
+				error "initial write failed"
+		fi
+
+		identify_ec_mirrors $tf
+		data_mid=$ec_data_id
+		parity_mid=$ec_parity_id
+		[[ -n $data_mid && -n $parity_mid ]] ||
+			error "cannot identify EC mirrors"
+		tail_id=$($LFS getstripe --mirror-id=$data_mid $tf |
+			  awk '/lcme_id:/ {id=$2} END {print id}')
+		flags=$($LFS getstripe -I$tail_id $tf |
+			awk '/lcme_flags:/ {print $2}')
+		[[ $flags != *init* ]] || error "data tail already instantiated"
+
+		$LFS mirror delete --mirror-id $parity_mid $tf ||
+			error "parity delete failed"
+		verify_mirror_count $tf $mirrors
+		verify_mirror_link $tf $data_mid 0
+
+		dd if=$reference of=$tf bs=1M count=1 seek=100 conv=notrunc ||
+			error "write after parity delete failed"
+		if (( mirrors == 2 )); then
+			flags=$($LFS getstripe -I$tail_id $tf |
+				awk '/lcme_flags:/ {print $2}')
+			[[ $flags != *init* ]] ||
+				error "nonpreferred tail was instantiated"
+			$LFS mirror resync --only $data_mid $tf ||
+				error "resync after parity delete failed"
+		fi
+		flags=$($LFS getstripe -I$tail_id $tf |
+			awk '/lcme_flags:/ {print $2}')
+		[[ $flags == *init* ]] || error "data tail not instantiated"
+
+		sum=$(md5sum $tf | awk '{print $1}')
+		[[ $($LFS mirror read -N $data_mid $tf | md5sum |
+		     awk '{print $1}') == $sum ]] ||
+			error "former EC data mirror content differs"
+		dd if=$tf bs=1M skip=100 count=1 | cmp - $reference ||
+			error "tail data differs from reference"
+		dd if=$tf bs=1M count=1 | cmp - $reference ||
+			error "initial data changed after parity delete"
+	done
+}
+run_test 8k "write and resync data tail after parity deletion"
+
+test_8l() {
+	(( MDS1_VERSION > $(version_code 2.17.57) )) ||
+		skip "need MDS > 2.17.57 to attach EC parity to a data mirror"
+	(( OSTCOUNT >= 6 )) || skip "need >= 6 OSTs for EC 4+2"
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local victim=$DIR/$tfile.victim
+	local order sum mid
+	local mids
+
+	stack_trap "rm -f $tf $victim"
+	for order in ec_first file_first; do
+		rm -f $tf $victim
+		$LFS setstripe -E -1 -c 4 $tf || error "setstripe failed"
+		dd if=/dev/urandom of=$tf bs=1M count=1 ||
+			error "write failed"
+		sum=$(md5sum $tf | awk '{print $1}')
+		$LFS setstripe -E -1 -c 1 $victim ||
+			error "victim create failed"
+		dd if=$tf of=$victim bs=1M || error "victim copy failed"
+
+		if [[ $order == ec_first ]]; then
+			$LFS mirror extend -N -E -1 -c 4 --ec 4+2 \
+				-N -f $victim $tf ||
+				error "EC then victim extend failed"
+		else
+			$LFS mirror extend -N -f $victim \
+				-N -E -1 -c 4 --ec 4+2 $tf ||
+				error "victim then EC extend failed"
+		fi
+		verify_mirror_count $tf 4
+		[[ ! -e $victim ]] || error "extend did not consume victim"
+		identify_ec_mirrors $tf
+		[[ -n $ec_data_id && -n $ec_parity_id ]] ||
+			error "extended file has no EC pair"
+		verify_mirror_link $tf $ec_data_id $ec_parity_id
+		verify_mirror_link $tf $ec_parity_id $ec_data_id
+
+		mids=($(mirror_ids_of $tf))
+		for mid in "${mids[@]}"; do
+			(( mid == ec_parity_id )) && continue
+			[[ $($LFS mirror read -N $mid $tf | md5sum |
+			     awk '{print $1}') == $sum ]] ||
+				error "data mirror $mid content differs"
+		done
+	done
+}
+run_test 8l "extend accepts EC and victim on separate mirrors in either order"
 
 test_10() {
 	local tf=${DIR}/${tdir}/$tfile

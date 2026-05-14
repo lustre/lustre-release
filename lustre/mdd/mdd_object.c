@@ -1816,6 +1816,11 @@ static inline void mdd_lcme_clear_link_id(struct lov_comp_md_entry_v1 *entry)
 
 	entry->lcme_time_and_id = cpu_to_le64(
 		lcme_timestamp_and_id_pack(lcme_timestamp_time_unpack(tai), 0));
+	/* Data without its parity mirror uses plain stripe allocation. */
+	if (!(le32_to_cpu(entry->lcme_flags) & LCME_FL_PARITY)) {
+		entry->lcme_dstripe_count = 0;
+		entry->lcme_cstripe_count = 0;
+	}
 }
 
 /**

@@ -62,6 +62,7 @@ LIBMAN = 					\
 	llapi_ladvise.3				\
 	llapi_layout_alloc.3			\
 	llapi_layout_comp_add.3			\
+	llapi_layout_comp_add_parity_only.3	\
 	llapi_layout_comp_del.3			\
 	llapi_layout_comp_extent_get.3		\
 	llapi_layout_comp_extent_set.3		\

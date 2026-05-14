@@ -810,6 +810,8 @@ void lod_qos_set_pool(struct lod_object *lo, int pos, const char *pool_name);
 int lod_comp_prep_create(const struct lu_env *env, struct lod_object *lo,
 			 struct lu_attr *attr, struct thandle *th,
 			 int comp_idx, __u64 reserve);
+struct lod_layout_component *
+lod_comp_find_linked(struct lod_object *lo, struct lod_layout_component *comp);
 __u16 lod_comp_entry_stripe_count(struct lod_object *lo,
 				  int comp_idx, bool is_dir);
 __u16 lod_get_stripe_count_plain(struct lod_device *lod, struct lod_object *lo,

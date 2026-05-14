@@ -2234,11 +2234,19 @@ recheck:
 		/*
 		 * EC k+m bound: Cauchy-matrix-over-GF(2^8) theoretical limit.
 		 * The construction needs k+m distinct field elements and
-		 * GF(2^8) has 256.  Cannot trust userspace; enforce here too.
+		 * GF(2^8) has 256.  Cannot trust userspace; enforce here too,
+		 * along with k and m being non-zero: the allocator divides by
+		 * k and sizes the parity component by m.
 		 */
 		if (le32_to_cpu(ent->lcme_flags) & LCME_FL_PARITY) {
 			__u8 dstripe = ent->lcme_dstripe_count;
 			__u8 cstripe = ent->lcme_cstripe_count;
+
+			if (dstripe == 0 || cstripe == 0) {
+				CDEBUG(D_LAYOUT, "invalid EC k+m (%u+%u)\n",
+				       dstripe, cstripe);
+				RETURN(-EINVAL);
+			}
 
 			if (dstripe + cstripe > LOV_EC_MAX_TOTAL_STRIPES) {
 				CDEBUG(D_LAYOUT,

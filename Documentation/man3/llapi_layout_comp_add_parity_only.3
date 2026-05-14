@@ -1,0 +1,131 @@
+.TH LLAPI_LAYOUT_COMP_ADD_PARITY_ONLY 3 2026-08-25 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_layout_comp_add_parity_only \- add an EC parity component to a layout
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_layout_comp_add_parity_only(struct llapi_layout *" layout ,
+.BI "                                      uint16_t " target_mirror_id ,
+.BI "                                      uint64_t " start ,
+.BI "                                      uint64_t " end ,
+.BI "                                      uint8_t " dstripe_count ,
+.BI "                                      uint8_t " cstripe_count ,
+.BI "                                      uint64_t " stripe_size ,
+.BI "                                      uint64_t " data_stripe_count ,
+.BI "                                      const char *" pool_name ");"
+.fi
+.SH DESCRIPTION
+.BR llapi_layout_comp_add_parity_only (3)
+appends an Erasure Coding (EC) parity component to the in-memory
+.IR layout ,
+bound to the data mirror
+.I target_mirror_id
+of the file that
+.I layout
+will be merged into. The
+.I layout
+is turned into a composite layout if it was plain before the component was
+added, and its current component pointer is left on the newly added
+component.
+.PP
+The data mirror is not part of
+.IR layout ,
+so its attributes are passed in by the caller rather than read out of
+.IR layout ,
+and the parity component is bound to
+.I target_mirror_id
+directly instead of through the transient link id that is resolved while a
+layout is created. Use
+.B llapi_layout_comp_add_ec()
+instead when the data component being protected is in the same
+.IR layout .
+.PP
+.I target_mirror_id
+is the mirror id of the data mirror to protect, and must be non-zero.
+.PP
+.I start
+and
+.I end
+give the extent of the parity component, which must match the extent of the
+data component it protects.
+.PP
+.I dstripe_count
+and
+.I cstripe_count
+are the number of data stripes (K) and parity stripes (P) of each RAID Set.
+.PP
+.I stripe_size
+is the stripe size of the data component being protected. A parity component
+uses the same stripe size as its data component.
+.PP
+.I data_stripe_count
+is the stripe count of the data component being protected. Besides bounding
+K+P, it is stored as the parity component's own stripe count, from which the
+MDS derives the number of RAID Sets when the data component is not part of
+the same layout.
+.PP
+.I pool_name
+is the OST pool of the data component being protected, so that parity objects
+are allocated alongside the data they protect, or NULL to leave the parity
+component unbound.
+.PP
+One parity component is added per call, so a data mirror made of several
+components needs one call per component.
+.SH RETURN VALUES
+.BR llapi_layout_comp_add_parity_only (3)
+returns 0 on success, or -1 if an error occurred (in which case,
+.B errno
+is set appropriately). On failure
+.I layout
+is left unchanged.
+.SH ERRORS
+.TP 15
+.B EINVAL
+An invalid argument was specified:
+.I layout
+was NULL,
+.I target_mirror_id
+was zero,
+.I start
+was not below
+.IR end ,
+or the EC stripe counts exceeded the EC limits or did not fit
+.IR data_stripe_count .
+.TP 15
+.B ENOMEM
+Insufficient memory to complete the operation.
+.SH EXAMPLES
+Build a layout holding one 4+2 EC parity component for mirror 1 of a file
+whose data component has 8 stripes of 1MiB, to be merged into that file:
+.EX
+        struct llapi_layout *layout;
+        int rc;
+\&
+        layout = llapi_layout_alloc();
+        if (layout == NULL)
+                /* error, out of memory */
+\&
+        /* K=4, P=2 per RAID Set over the 8-stripe data mirror */
+        rc = llapi_layout_comp_add_parity_only(layout, 1, 0, LUSTRE_EOF,
+                                               4, 2, 1048576, 8, NULL);
+        if (rc != 0)
+                /* error, errno is set */
+\&
+        llapi_layout_free(layout);
+.EE
+.SH AVAILABILITY
+.B llapi_layout_comp_add_parity_only()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.18.0.
+.\" Added in commit v2_17_56-51-gxxx
+.SH SEE ALSO
+.BR lfs-mirror-extend (1),
+.BR lfs-setstripe (1),
+.BR llapi_layout_alloc (3),
+.BR llapi_layout_comp_add (3),
+.BR llapi_layout_file_comp_add (3),
+.BR llapi_layout_free (3),
+.BR llapi_layout (7),
+.BR lustreapi (7)

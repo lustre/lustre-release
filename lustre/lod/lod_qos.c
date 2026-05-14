@@ -682,7 +682,16 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 		RETURN(rc);
 	}
 
+	/*
+	 * Keeping a parity away from unrelated mirrors is only a preference:
+	 * those are independent copies, so an OST shared with them costs this
+	 * parity nothing.  Relax it on later passes rather than fail to
+	 * allocate.  The caller has already kept it off its own data OSTs.
+	 * An EC data component keeps the unique-OST rule on every pass: short
+	 * of OSTs it shrinks its geometry rather than share.
+	 */
 	if (lod_comp->llc_cstripe_count &&
+	    (speed == 0 || !(lod_comp->llc_flags & LCME_FL_PARITY)) &&
 	    (lag->lag_ost_avail <= 0 ||
 	     lod_should_avoid_ost(lo, lag, ost_idx))) {
 		CDEBUG(D_OTHER,
@@ -1226,7 +1235,7 @@ static __u32 lod_ec_shrink_data_geometry(__u32 nfound,
  *
  * Return: the linked component of the opposite kind, or NULL if none found.
  */
-static struct lod_layout_component *
+struct lod_layout_component *
 lod_comp_find_linked(struct lod_object *lo, struct lod_layout_component *comp)
 {
 	bool is_link_id = comp->llc_flags & LCME_FL_IS_LINK_ID;
@@ -3882,6 +3891,7 @@ int lod_comp_prep_create(const struct lu_env *env, struct lod_object *lo,
 	is_parity = lod_comp->llc_flags & LCME_FL_PARITY;
 	if (is_parity || lod_comp->llc_dstripe_count) {
 		struct lod_layout_component *linked, *data, *parity;
+		__u16 data_stripe_count = lod_comp->llc_stripe_count;
 
 		/* a parity holds cstripe_count stripes per raid set */
 		if (is_parity)
@@ -3891,11 +3901,15 @@ int lod_comp_prep_create(const struct lu_env *env, struct lod_object *lo,
 		if (lod_comp->llc_mirror_link_id == 0)
 			GOTO(out, rc = -EINVAL);
 
-		linked = lod_comp_find_linked(lo, lod_comp);
-		/* a parity component must have a matching data component */
-		if (is_parity && !linked)
+		/*
+		 * lod_verify_striping() rejects zero k or m, but a layout
+		 * loaded from disk does not pass through it again.
+		 */
+		if (lod_comp->llc_dstripe_count == 0 ||
+		    (is_parity && lod_comp->llc_cstripe_count == 0))
 			GOTO(out, rc = -EINVAL);
 
+		linked = lod_comp_find_linked(lo, lod_comp);
 		if (linked) {
 			data = is_parity ? linked : lod_comp;
 			parity = is_parity ? lod_comp : linked;
@@ -3918,6 +3932,36 @@ int lod_comp_prep_create(const struct lu_env *env, struct lod_object *lo,
 				/* TODO: should be set from userspace */
 				parity->llc_pattern |= LOV_PATTERN_OVERSTRIPING;
 			}
+		} else if (is_parity) {
+			/*
+			 * The data component is normally in the same layout,
+			 * but not when 'lfs mirror extend --ec' creates a
+			 * parity component in a volatile file to merge into
+			 * the file holding the data mirror it protects. The
+			 * client sends the stripe count of that data component
+			 * so the raid-set split can still be derived. A
+			 * transient link id (LCME_FL_IS_LINK_ID) can only name
+			 * a component within one layout, so in that case a
+			 * missing counterpart remains an error.
+			 */
+			if ((lod_comp->llc_flags & LCME_FL_IS_LINK_ID) ||
+			    data_stripe_count == 0)
+				GOTO(out, rc = -EINVAL);
+
+			/*
+			 * The data component lives in the file this parity is
+			 * merged into, not in this volatile file, so the
+			 * allocator cannot yet keep the parity off its OSTs.
+			 * Size the component and leave it uninstantiated: the
+			 * resync that follows the merge allocates it against
+			 * the full layout.
+			 */
+			ec_split_stripes(data_stripe_count,
+					 lod_comp->llc_dstripe_count, &sc);
+			lod_comp->llc_stripe_count =
+				(sc.esc_n0 + sc.esc_n1) *
+				lod_comp->llc_cstripe_count;
+			GOTO(out, rc = 0);
 		}
 	}
 

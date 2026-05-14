@@ -288,6 +288,7 @@ command_t mirror_cmdlist[] = {
 	{ .pc_name = "extend", .pc_func = lfs_mirror_extend,
 	  .pc_help = "Extend a mirrored file.\n"
 "Usage: lfs mirror extend [--mirror-count|-N[MIRROR_COUNT]]\n"
+		"\t\t[--ec DATA+PARITY] [--mirror-id MIRROR_ID]\n"
 		"\t\t[--no-verify] [--stats|--stats-interval=STATS_INTERVAL]\n"
 		"\t\t[--bandwidth|-W BANDWIDTH_MB[MG]]\n"
 		"\t\t[--file|-f VICTIM_FILE]\n"
@@ -1804,6 +1805,15 @@ static int mirror_str2state(char *string, __u16 *state, __u16 *neg_state)
  * @m_next:   Point to the next node of the list.
  * @m_inherit: Whether to inherit unspecified attributes from previous mirror.
  * @m_has_ec: True if this layout already contains EC parity components.
+ * @m_target_set: True if --mirror-id named the data mirror to protect in
+ *	@m_target_mirror_id.
+ * @m_target_auto: True for 'lfs mirror extend --ec D+P FILE' with neither -N
+ *	nor --mirror-id, where mirror_extend() resolves the target per file.
+ *	Mutually exclusive with @m_target_set.
+ * @m_target_mirror_id: Mirror id (>= 1) of the data mirror the new parity
+ *	mirror is attached to. Only meaningful with @m_target_set.
+ * @m_ec_data_count, @m_ec_parity_count: EC D+P for the parity mirror
+ *	mirror_extend() attaches.
  *
  * Command-line arguments for mirror(s) will be parsed and stored in
  * a linked list that consists of this structure.
@@ -1816,6 +1826,11 @@ struct mirror_args {
 	struct mirror_args		*m_next;
 	bool				m_inherit;
 	bool				m_has_ec;
+	bool				m_target_set;
+	bool				m_target_auto;
+	__u32				m_target_mirror_id;
+	__u8				m_ec_data_count;
+	__u8				m_ec_parity_count;
 };
 
 /*
@@ -2373,22 +2388,696 @@ out:
 	return rc;
 }
 
+static void ec_extent_str(char *buf, size_t size, uint64_t start,
+			  uint64_t end)
+{
+	if (end == LUSTRE_EOF)
+		snprintf(buf, size, "[%llu, EOF)", (unsigned long long)start);
+	else
+		snprintf(buf, size, "[%llu, %llu)", (unsigned long long)start,
+			 (unsigned long long)end);
+}
+
+/**
+ * ec_check_data_comp() - Refuse a data component EC cannot protect.
+ * @fname:        File the component is in, or is being added to.
+ * @mirror:       Its mirror as named in messages, e.g. "mirror 2".
+ * @extent:       Its extent as named in messages.
+ * @flags:        Its component flags.
+ * @pattern:      Its layout pattern, or LLAPI_LAYOUT_DEFAULT if not set.
+ * @stripe_count: Its stripe count, or an LLAPI_LAYOUT_* value if not fixed.
+ * @data_count:   EC data stripe count (D in D+P).
+ * @parity_count: EC parity stripe count (P in D+P).
+ *
+ * Return: 0 if EC can protect the component, else a negative errno after
+ * printing why not.
+ */
+static int ec_check_data_comp(const char *fname, const char *mirror,
+			      const char *extent, uint32_t flags,
+			      uint64_t pattern, uint64_t stripe_count,
+			      uint8_t data_count, uint8_t parity_count)
+{
+	/*
+	 * A parity component is paired with its data component by
+	 * matching extents, which a self-extending component's do not
+	 * keep as the file grows into the extension space after it.
+	 * 'lfs setstripe -z --ec' refuses the combination as well.
+	 */
+	if (flags & LCME_FL_EXTENSION) {
+		fprintf(stderr,
+			"error: %s: %s of '%s' has a self-extending component at %s, which EC cannot protect\n",
+			progname, mirror, fname, extent);
+		return -EOPNOTSUPP;
+	}
+
+	/*
+	 * A Data-on-MDT component has no OST stripes to spread a
+	 * raidset over, as 'lfs setstripe -L mdt --ec' also refuses.
+	 */
+	if (pattern != LLAPI_LAYOUT_DEFAULT &&
+	    pattern & (LLAPI_LAYOUT_MDT | LOV_PATTERN_MDT)) {
+		fprintf(stderr,
+			"error: %s: %s of '%s' has a Data-on-MDT component at %s, which EC cannot protect\n",
+			progname, mirror, fname, extent);
+		return -EOPNOTSUPP;
+	}
+
+	/*
+	 * Once K is narrowed to the component's width the component
+	 * holds a single raidset, so it needs at least P stripes.
+	 * Name the component rather than leave this to the EINVAL
+	 * from the generic EC validation.
+	 */
+	if (stripe_count < parity_count) {
+		fprintf(stderr,
+			"error: %s: component %s of %s in '%s' has %llu stripe(s), too few for the %u parity stripes of EC %u+%u\n",
+			progname, extent, mirror, fname,
+			(unsigned long long)stripe_count,
+			parity_count, data_count, parity_count);
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+/**
+ * build_parity_layout_for_mirror() - Build a parity-only layout matching the
+ * extents of an existing data mirror.
+ *
+ * @fname:      Path of the file containing the target data mirror.
+ * @mirror_id:  ID of the target data mirror.
+ * @data_count: EC data stripe count (D in D+P).
+ * @parity_count: EC parity stripe count (P in D+P).
+ * @layout_out: On success, set to a freshly-allocated parity-only layout
+ *              with one component per target-mirror component, matching
+ *              extents and EC(D+P).
+ *
+ * The target mirror must exist, must not be a parity mirror or already be
+ * EC-protected (LU-19545), and must be made of components EC can be sized for.
+ *
+ * Return: 0 on success, negative errno on failure.
+ */
+static
+int build_parity_layout_for_mirror(const char *fname, uint32_t mirror_id,
+				   uint8_t data_count, uint8_t parity_count,
+				   struct llapi_layout **layout_out)
+{
+	struct llapi_layout *file_layout = NULL;
+	struct llapi_layout *parity_layout = NULL;
+	/* lod_declare_layout_merge() promotes a non-FLR mirror id 0 to 1, so
+	 * link the parity comps to the data mirror's post-merge id.
+	 */
+	uint16_t link_mirror_id = mirror_id == 0 ? 1 : (uint16_t)mirror_id;
+	/* Named error for the paths that only report through errno. */
+	const char *err_str = NULL;
+	char mirror_name[32];
+	bool target_seen = false;
+	int rc;
+
+	*layout_out = NULL;
+	snprintf(mirror_name, sizeof(mirror_name), "mirror %u", mirror_id);
+
+	file_layout = llapi_layout_get_by_path(fname, 0);
+	if (!file_layout) {
+		fprintf(stderr, "error: %s: cannot get layout for '%s': %s\n",
+			progname, fname, strerror(errno));
+		return -errno;
+	}
+
+	parity_layout = llapi_layout_alloc();
+	if (!parity_layout) {
+		rc = -errno;
+		err_str = "cannot allocate a parity layout";
+		goto out;
+	}
+
+	rc = llapi_layout_comp_use(file_layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	if (rc) {
+		rc = -errno;
+		fprintf(stderr,
+			"error: %s: cannot iterate components of '%s': %s\n",
+			progname, fname, strerror(-rc));
+		goto out;
+	}
+
+	/* One pass over the file's components: reject a target that is itself
+	 * parity or is already EC-protected (LU-19545), and append a parity
+	 * component matching each component of the target data mirror.
+	 */
+	do {
+		uint32_t cur_mirror_id, flags;
+		uint64_t start, end, pattern = 0;
+		uint64_t stripe_size = 0, stripe_count = 0;
+		uint8_t comp_data_count = data_count;
+		char pool_name[LOV_MAXPOOLNAME + 1] = "";
+		char extent[48];
+
+		rc = llapi_layout_mirror_id_get(file_layout, &cur_mirror_id);
+		if (rc) {
+			rc = -errno;
+			err_str = "cannot read a component's mirror id";
+			goto out;
+		}
+		rc = llapi_layout_comp_flags_get(file_layout, &flags);
+		if (rc) {
+			rc = -errno;
+			err_str = "cannot read a component's flags";
+			goto out;
+		}
+
+		if (flags & LCME_FL_PARITY) {
+			uint16_t link_id;
+
+			/* LCME_FL_IS_LINK_ID is transient, so the on-disk link
+			 * id read here is the protected data mirror id itself.
+			 */
+			rc = llapi_layout_comp_mirror_link_id_get(file_layout,
+								  &link_id);
+			if (rc) {
+				rc = -errno;
+				err_str = "cannot read a parity link id";
+				goto out;
+			}
+			if (link_id == (uint16_t)mirror_id) {
+				fprintf(stderr,
+					"error: %s: mirror %u of '%s' is already EC-protected\n",
+					progname, mirror_id, fname);
+				rc = -EEXIST;
+				goto out;
+			}
+			if (cur_mirror_id == mirror_id) {
+				fprintf(stderr,
+					"error: %s: mirror %u of '%s' is a parity mirror; cannot attach parity to it\n",
+					progname, mirror_id, fname);
+				rc = -EINVAL;
+				goto out;
+			}
+			continue;
+		}
+
+		if (cur_mirror_id != mirror_id)
+			continue;
+
+		target_seen = true;
+
+		/*
+		 * Parity is computed from this mirror's current content, and
+		 * resyncing the mirror later does not re-stale its parity, so
+		 * a stale target would leave parity that never matches again.
+		 */
+		if (flags & LCME_FL_STALE) {
+			fprintf(stderr,
+				"error: %s: mirror %u of '%s' is stale; run 'lfs mirror resync %s' first\n",
+				progname, mirror_id, fname, fname);
+			rc = -EINVAL;
+			goto out;
+		}
+
+		/*
+		 * Resync skips a NOSYNC data component, so the parity mirror
+		 * would be attached and then never computed.
+		 */
+		if (flags & LCME_FL_NOSYNC) {
+			fprintf(stderr,
+				"error: %s: mirror %u of '%s' is 'nosync', so its parity cannot be computed\n",
+				progname, mirror_id, fname);
+			rc = -EINVAL;
+			goto out;
+		}
+
+		rc = llapi_layout_comp_extent_get(file_layout, &start, &end);
+		if (rc) {
+			rc = -errno;
+			err_str = "cannot read a component's extent";
+			goto out;
+		}
+
+		ec_extent_str(extent, sizeof(extent), start, end);
+
+		rc = llapi_layout_pattern_get(file_layout, &pattern);
+		if (rc) {
+			rc = -errno;
+			err_str = "cannot read a component's pattern";
+			goto out;
+		}
+
+		rc = llapi_layout_stripe_count_get(file_layout, &stripe_count);
+		if (rc) {
+			rc = -errno;
+			err_str = "cannot read a component's stripe count";
+			goto out;
+		}
+
+		/* before the stripe size: an extension comp has none */
+		rc = ec_check_data_comp(fname, mirror_name, extent, flags,
+					pattern, stripe_count, data_count,
+					parity_count);
+		if (rc)
+			goto out;
+
+		rc = llapi_layout_stripe_size_get(file_layout, &stripe_size);
+		if (rc) {
+			rc = -errno;
+			err_str = "cannot read a component's stripe size";
+			goto out;
+		}
+		/* Parity inherits the data comp's pool, empty if it has none */
+		rc = llapi_layout_pool_name_get(file_layout, pool_name,
+						sizeof(pool_name));
+		if (rc) {
+			rc = -errno;
+			err_str = "cannot read a component's pool name";
+			goto out;
+		}
+
+		/*
+		 * The number of raidsets, and so of parity objects, follows
+		 * the width of the data component, which an uninstantiated
+		 * '-c -1' component does not have yet. The MDS picks it when
+		 * the component is instantiated, so sizing parity for it now
+		 * would only be a guess.
+		 */
+		if (stripe_count >= LLAPI_LAYOUT_DEFAULT &&
+		    stripe_count <= LLAPI_LAYOUT_WIDE_MAX) {
+			fprintf(stderr,
+				"error: %s: component %s of mirror %u in '%s' has no fixed stripe count yet, so EC %u+%u cannot be sized for it\n",
+				progname, extent, mirror_id, fname,
+				data_count, parity_count);
+			fprintf(stderr,
+				"write to the component to instantiate it, or give it an explicit stripe count\n");
+			rc = -EINVAL;
+			goto out;
+		}
+
+		/* Narrow K to a data comp with fewer than K stripes, as
+		 * create_ec_parity_mirror() does: -E 128M -c 4 -E -1 -c 16
+		 * with --ec 8+2 gives 4+2 then 8+2.
+		 */
+		if (stripe_count < comp_data_count)
+			comp_data_count = stripe_count;
+
+		rc = llapi_layout_comp_add_parity_only(parity_layout,
+						       link_mirror_id,
+						       start, end,
+						       comp_data_count,
+						       parity_count,
+						       stripe_size,
+						       stripe_count, pool_name);
+		if (rc) {
+			rc = -errno;
+			fprintf(stderr,
+				"error: %s: cannot add parity component %s EC(%u+%u) over a %llu-stripe data component: %s\n",
+				progname, extent, comp_data_count,
+				parity_count,
+				(unsigned long long)stripe_count,
+				strerror(-rc));
+			goto out;
+		}
+	} while (llapi_layout_comp_use(file_layout,
+				       LLAPI_LAYOUT_COMP_USE_NEXT) == 0);
+
+	if (!target_seen) {
+		fprintf(stderr, "error: %s: mirror id %u not found in '%s'\n",
+			progname, mirror_id, fname);
+		rc = -ENOENT;
+		goto out;
+	}
+
+	rc = llapi_layout_mirror_count_set(parity_layout, 1);
+	if (rc) {
+		rc = -errno;
+		err_str = "cannot set the parity layout's mirror count";
+		goto out;
+	}
+
+	*layout_out = parity_layout;
+	parity_layout = NULL;
+	rc = 0;
+out:
+	if (rc < 0 && err_str)
+		fprintf(stderr, "error: %s: %s: %s: %s\n",
+			progname, fname, err_str, strerror(-rc));
+	if (parity_layout)
+		llapi_layout_free(parity_layout);
+	if (file_layout)
+		llapi_layout_free(file_layout);
+	return rc;
+}
+
+/*
+ * A cid_exclude of MIRROR_ID_NEG excludes nothing: no real mirror id
+ * (0..0x7FFF) has bit 15 set, so a non-FLR file's id 0 is collected too.
+ */
+struct collect_ids_data {
+	__u16	*cid_ids;
+	int	cid_count;
+	int	cid_size;
+	__u16	cid_exclude;
+};
+static int collect_mirror_id(struct llapi_layout *layout, void *cbdata);
+
+/**
+ * max_mirror_id() - Return the highest mirror id present in @fname's layout.
+ * A return of 0 means a non-FLR file (a single, unnumbered mirror).
+ */
+static int max_mirror_id(const char *fname, uint32_t *max_id)
+{
+	struct llapi_layout *layout;
+	__u16 ids[LUSTRE_MIRROR_COUNT_MAX] = { 0 };
+	struct collect_ids_data cid = { .cid_ids = ids,
+					.cid_size = ARRAY_SIZE(ids),
+					.cid_exclude = MIRROR_ID_NEG };
+	int rc, i;
+
+	*max_id = 0;
+	layout = llapi_layout_get_by_path(fname, 0);
+	if (!layout)
+		return -errno;
+
+	rc = llapi_layout_comp_iterate(layout, collect_mirror_id, &cid);
+	llapi_layout_free(layout);
+	if (rc < 0)
+		return rc;
+
+	for (i = 0; i < cid.cid_count; i++)
+		if (ids[i] > *max_id)
+			*max_id = ids[i];
+	return 0;
+}
+
+/**
+ * verify_new_mirror_id() - Return the id the kernel assigned to the mirror just
+ * merged into @fname. lod_declare_layout_merge() numbers a merged mirror
+ * max(existing ids) + 1, and promotes a lone non-FLR mirror id 0 to 1 first,
+ * so the id is deterministic given @max_before, the highest id seen before the
+ * merge. Fail with -EBUSY if it does not hold, catching a concurrent extender
+ * that merged into the same file in the (post-lease) window.
+ */
+static int verify_new_mirror_id(const char *fname, uint32_t max_before,
+				uint32_t *new_id)
+{
+	uint32_t expected = max_before ? max_before + 1 : 2;
+	uint32_t max_after = 0;
+	int rc;
+
+	rc = max_mirror_id(fname, &max_after);
+	if (rc)
+		return rc;
+	if (max_after != expected) {
+		fprintf(stderr,
+			"error: %s: '%s': expected new mirror id %u after extend but highest id is %u (concurrent layout modification?)\n",
+			progname, fname, expected, max_after);
+		return -EBUSY;
+	}
+	*new_id = expected;
+	return 0;
+}
+
+/**
+ * resolve_auto_target() - Return the id of @fname's only mirror, for auto-mode
+ * 'lfs mirror extend --ec D+P FILE' (no -N, no --mirror-id). The id is 0 for a
+ * non-FLR file. A file with 2+ mirrors is an error: the user has to
+ * disambiguate with --mirror-id or -N.
+ */
+static int resolve_auto_target(const char *fname, uint32_t *out)
+{
+	struct llapi_layout *layout;
+	__u16 ids[LUSTRE_MIRROR_COUNT_MAX] = { 0 };
+	struct collect_ids_data cid = { .cid_ids = ids,
+					.cid_size = ARRAY_SIZE(ids),
+					.cid_exclude = MIRROR_ID_NEG };
+	int rc;
+
+	layout = llapi_layout_get_by_path(fname, 0);
+	if (!layout)
+		return -errno;
+
+	rc = llapi_layout_comp_iterate(layout, collect_mirror_id, &cid);
+	llapi_layout_free(layout);
+	if (rc < 0)
+		return rc;
+
+	if (cid.cid_count != 1) {
+		fprintf(stderr,
+			"error: %s: '%s' has multiple mirrors; specify --mirror-id N or -N\n",
+			progname, fname);
+		return -EINVAL;
+	}
+
+	*out = ids[0];
+	return 0;
+}
+
+static inline
+int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
+			   __u16 *mirror_ids, int ids_nr,
+			   long stats_interval_sec, long bandwidth_bytes_sec,
+			   bool force_resync);
+
+/**
+ * attach_ec_parity() - Attach a parity mirror protecting the existing data
+ * mirror @data_mirror_id of @fname, in a single layout merge.
+ *
+ * Builds a parity-only layout from the data mirror's components and merges
+ * it stale (LL_LEASE_ALLOW_STALE) so that the caller's resync finds it.
+ * Common to all three EC extend modes: --mirror-id, auto, and the parity half
+ * of -N --ec. The new mirror's id is returned in @new_id_out, and
+ * @merged_out tells whether the parity mirror is in the file, which it can be
+ * even when an error is returned.
+ */
+static int attach_ec_parity(char *fname, uint32_t data_mirror_id,
+			    uint8_t data_count, uint8_t parity_count,
+			    enum llapi_migration_flags migration_flags,
+			    unsigned long long bandwidth_bytes_sec,
+			    long stats_interval_sec, uint32_t *new_id_out,
+			    bool *merged_out)
+{
+	struct llapi_layout *parity_layout = NULL;
+	uint32_t max_before = 0;
+	uint32_t new_parity_id = 0;
+	int rc;
+
+	*merged_out = false;
+
+	rc = build_parity_layout_for_mirror(fname, data_mirror_id, data_count,
+					    parity_count, &parity_layout);
+	if (rc)
+		return rc;
+
+	rc = max_mirror_id(fname, &max_before);
+	if (rc) {
+		llapi_layout_free(parity_layout);
+		return rc;
+	}
+
+	/*
+	 * A parity mirror's content is computed during resync, not copied,
+	 * so it is merged without sync and the MDT marks it stale. It takes
+	 * no user mirror flags: 'prefer' on a parity is refused by
+	 * lod_declare_layout_set(), and llapi_layout_comp_flags_set() would
+	 * only reach the last parity component anyway.
+	 */
+	rc = mirror_extend_layout(fname, parity_layout, false, false, 0,
+				  migration_flags, bandwidth_bytes_sec,
+				  stats_interval_sec);
+	llapi_layout_free(parity_layout);
+	if (rc)
+		return rc;
+
+	*merged_out = true;
+
+	rc = verify_new_mirror_id(fname, max_before, &new_parity_id);
+	if (rc) {
+		/*
+		 * The merge has committed a stale parity mirror, which any
+		 * later resync completes; only its id is in doubt here.
+		 */
+		fprintf(stderr,
+			"a stale parity mirror was added to '%s', run '%s mirror resync %s' to complete it\n",
+			fname, progname, fname);
+		return rc;
+	}
+
+	*new_id_out = new_parity_id;
+	return 0;
+}
+
+static int mirror_split(const char *fname, __u32 id, const char *pool,
+			enum mirror_flags mflags, const char *victim_file);
+
+/**
+ * mirror_extend_check_ec() - Refuse an '-N --ec' data mirror EC cannot protect
+ * before it is merged.
+ * @fname: File being extended.
+ * @m:     The -N mirror.
+ *
+ * attach_ec_parity() checks the merged data mirror again, but only after the
+ * file's data has been copied into it. A stripe count that is not fixed until
+ * the mirror is instantiated is left to that check.
+ *
+ * Return: 0 if parity can be attached, else a negative errno.
+ */
+static int mirror_extend_check_ec(const char *fname, struct mirror_args *m)
+{
+	struct llapi_layout *layout = m->m_layout;
+	uint64_t inherited = LLAPI_LAYOUT_DEFAULT;
+	int rc;
+
+	/* mirror_extend_layout() gives an inheriting mirror the stripe count
+	 * of the file's last instantiated component.
+	 */
+	if (m->m_inherit) {
+		struct llapi_layout *f_layout;
+
+		f_layout = llapi_layout_get_by_path(fname, 0);
+		if (f_layout) {
+			if (!llapi_layout_get_last_init_comp(f_layout) &&
+			    llapi_layout_stripe_count_get(f_layout, &inherited))
+				inherited = LLAPI_LAYOUT_DEFAULT;
+			llapi_layout_free(f_layout);
+		}
+	}
+
+	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+	while (rc == 0) {
+		uint64_t start, end, pattern, stripe_count;
+		uint32_t flags;
+		char extent[48];
+
+		if (llapi_layout_comp_extent_get(layout, &start, &end) ||
+		    llapi_layout_comp_flags_get(layout, &flags) ||
+		    llapi_layout_pattern_get(layout, &pattern) ||
+		    llapi_layout_stripe_count_get(layout, &stripe_count)) {
+			rc = -errno;
+			fprintf(stderr,
+				"error: %s: cannot read the new mirror's layout: %s\n",
+				progname, strerror(-rc));
+			break;
+		}
+		if (m->m_inherit)
+			stripe_count = inherited;
+
+		ec_extent_str(extent, sizeof(extent), start, end);
+		rc = ec_check_data_comp(fname, "the new mirror", extent, flags,
+					pattern, stripe_count,
+					m->m_ec_data_count,
+					m->m_ec_parity_count);
+		if (rc)
+			break;
+
+		/*
+		 * The D+P fit is the library's rule, so try the parity
+		 * component attach_ec_parity() would add for this one. A
+		 * stripe count that is not fixed yet is left to that path.
+		 */
+		if (stripe_count < LLAPI_LAYOUT_DEFAULT) {
+			uint8_t comp_data_count = m->m_ec_data_count;
+			struct llapi_layout *trial;
+
+			if (stripe_count < comp_data_count)
+				comp_data_count = stripe_count;
+
+			trial = llapi_layout_alloc();
+			if (!trial) {
+				rc = -ENOMEM;
+				break;
+			}
+			rc = llapi_layout_comp_add_parity_only(trial, 1,
+					start, end, comp_data_count,
+					m->m_ec_parity_count, 0,
+					stripe_count, NULL);
+			if (rc)
+				rc = -errno;
+			llapi_layout_free(trial);
+			if (rc) {
+				fprintf(stderr,
+					"error: %s: cannot add parity component %s EC(%u+%u) over a %llu-stripe data component of the new mirror in '%s': %s\n",
+					progname, extent, comp_data_count,
+					m->m_ec_parity_count,
+					(unsigned long long)stripe_count,
+					fname, strerror(-rc));
+				break;
+			}
+		}
+
+		rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
+	}
+
+	/* mirror_extend_layout() applies the -N flags and inheritance to the
+	 * current component, which mirror_adjust_first_extents() left at the
+	 * first one.
+	 */
+	llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_FIRST);
+
+	return rc < 0 ? rc : 0;
+}
+
 static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 			 enum mirror_flags mirror_flags,
 			 enum llapi_migration_flags migration_flags,
 			 unsigned long long bandwidth_bytes_sec,
 			 long stats_interval_sec)
 {
+	__u16 new_ec_ids[LUSTRE_MIRROR_COUNT_MAX];
+	struct mirror_args *m;
+	int new_ec_count = 0;
+	uint32_t new_ec_id = 0;
+	bool parity_merged;
 	int rc = 0;
 
+	for (m = mirror_list; m; m = m->m_next) {
+		if (m->m_target_set || m->m_target_auto || m->m_file ||
+		    !m->m_has_ec || !m->m_ec_data_count)
+			continue;
+
+		rc = mirror_extend_check_ec(fname, m);
+		if (rc)
+			return rc;
+	}
+
 	while (mirror_list) {
-		if (mirror_list->m_file) {
+		if (mirror_list->m_target_set || mirror_list->m_target_auto) {
+			/* --mirror-id names the data mirror to protect; auto
+			 * mode resolves the file's lone mirror.
+			 */
+			uint32_t target_id = mirror_list->m_target_mirror_id;
+
+			if (mirror_list->m_target_auto) {
+				rc = resolve_auto_target(fname, &target_id);
+				if (rc)
+					break;
+			}
+
+			rc = attach_ec_parity(fname, target_id,
+					      mirror_list->m_ec_data_count,
+					      mirror_list->m_ec_parity_count,
+					      migration_flags,
+					      bandwidth_bytes_sec,
+					      stats_interval_sec,
+					      &new_ec_id, &parity_merged);
+			if (!rc)
+				new_ec_ids[new_ec_count++] = new_ec_id;
+		} else if (mirror_list->m_file) {
 			rc = mirror_extend_file(fname, mirror_list->m_file,
 						mirror_flags, migration_flags);
 		} else {
 			__u32 mirror_count = mirror_list->m_count;
+			bool need_parity = mirror_list->m_has_ec &&
+				mirror_list->m_ec_data_count != 0;
 
 			while (mirror_count > 0) {
+				uint32_t max_before = 0;
+				uint32_t new_data_id = 0;
+
+				/* The id of the data mirror added below is
+				 * derived from the highest id before it.
+				 */
+				if (need_parity) {
+					rc = max_mirror_id(fname, &max_before);
+					if (rc)
+						break;
+				}
+
 				rc = mirror_extend_layout(fname,
 							mirror_list->m_layout,
 							mirror_list->m_inherit,
@@ -2400,6 +3089,42 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 				if (rc)
 					break;
 
+				if (need_parity) {
+					/* The parity mirror is a second merge:
+					 * the merge ioctl takes one mirror at
+					 * a time.
+					 */
+					rc = verify_new_mirror_id(fname,
+							max_before,
+							&new_data_id);
+					if (rc)
+						break;
+
+					rc = attach_ec_parity(fname,
+						new_data_id,
+						mirror_list->m_ec_data_count,
+						mirror_list->m_ec_parity_count,
+						migration_flags,
+						bandwidth_bytes_sec,
+						stats_interval_sec,
+						&new_ec_id, &parity_merged);
+					/* A merged parity mirror links to the
+					 * data mirror, so that one has to stay.
+					 */
+					if (rc && !parity_merged &&
+					    mirror_split(fname, new_data_id, NULL,
+							 MF_DESTROY, NULL))
+						fprintf(stderr,
+							"data mirror %u was added to '%s' without parity, remove it with '%s mirror delete --mirror-id %u %s'\n",
+							new_data_id, fname,
+							progname, new_data_id,
+							fname);
+					if (rc)
+						break;
+
+					new_ec_ids[new_ec_count++] = new_ec_id;
+				}
+
 				--mirror_count;
 			}
 		}
@@ -2407,6 +3132,34 @@ static int mirror_extend(char *fname, struct mirror_args *mirror_list,
 			break;
 
 		mirror_list = mirror_list->m_next;
+	}
+
+	/* Bring the new parity mirror(s) in sync before returning, as a
+	 * regular extend never leaves a new mirror stale. This runs after a
+	 * partial extend too, so that the mirrors it did attach are not left
+	 * uncomputed. The first error is the one returned.
+	 */
+	if (new_ec_count > 0) {
+		struct ll_ioc_lease *ioc;
+		int rc2;
+
+		ioc = calloc(1, sizeof(*ioc) + sizeof(__u32) * IOC_IDS_MAX);
+		if (!ioc)
+			return rc ? rc : -ENOMEM;
+
+		rc2 = lfs_mirror_resync_file(fname, ioc, new_ec_ids,
+					     new_ec_count, stats_interval_sec,
+					     bandwidth_bytes_sec, false);
+		if (rc2) {
+			fprintf(stderr,
+				"error: %s: cannot resync new parity mirror(s) of '%s': %s\n",
+				progname, fname, strerror(-rc2));
+			fprintf(stderr,
+				"mirrors left stale, run 'lfs mirror resync'\n");
+			if (!rc)
+				rc = rc2;
+		}
+		free(ioc);
 	}
 
 	return rc;
@@ -2586,13 +3339,6 @@ static int find_comp_id_by_pool(struct llapi_layout *layout, void *cbdata)
 
 	return LLAPI_LAYOUT_ITER_STOP;
 }
-
-struct collect_ids_data {
-	__u16	*cid_ids;
-	int	cid_count;
-	int	cid_size;
-	__u16	cid_exclude;
-};
 
 static int collect_mirror_id(struct llapi_layout *layout, void *cbdata)
 {
@@ -3205,12 +3951,6 @@ int calc_stripe(const char *filename, off_t *size, off_t *obj_max_kb,
 
 	return stripe_count >= 1 ? stripe_count : 1;
 }
-
-static inline
-int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
-			   __u16 *mirror_ids, int ids_nr,
-			   long stats_interval_sec, long bandwidth_bytes_sec,
-			   bool force_resync);
 
 static int lfs_migrate_to_dom(int fd_src, int fd_dst, char *name,
 			      enum llapi_migration_flags migration_flags,
@@ -4677,6 +5417,65 @@ static int guess_only_lustre_mount_root(char *mntdir)
 	return 0;
 }
 
+/*
+ * Stash the single D+P specification 'lfs mirror extend --ec' accepts on @m,
+ * for the parity layout mirror_extend() builds. Returns 0 on success, -1 on a
+ * usage error (message printed).
+ */
+static int mirror_extend_set_ec(struct mirror_args *m,
+				const struct lfs_setstripe_args *lsa)
+{
+	if (lsa->lsa_ec_spec_count != 1) {
+		fprintf(stderr,
+			"error: %s: lfs mirror extend --ec accepts a single D+P specification\n",
+			progname);
+		return -1;
+	}
+	m->m_ec_data_count = lsa->lsa_ec_specs[0].data_count;
+	m->m_ec_parity_count = lsa->lsa_ec_specs[0].parity_count;
+	return 0;
+}
+
+/*
+ * Attach EC parity to @m, the mirror -N is wrapping up, and consume the specs
+ * so the next -N starts clean. Returns CMD_HELP for a command-line error.
+ */
+static int mirror_set_ec_parity(struct mirror_args *m,
+				struct lfs_setstripe_args *lsa,
+				enum setstripe_origin opc)
+{
+	int rc;
+
+	/*
+	 * On extend the parity layout is built in mirror_extend(): the merge
+	 * ioctl takes one mirror at a time, so data and parity go in separate
+	 * merges.
+	 */
+	if (opc == SO_MIRROR_EXTEND) {
+		if (mirror_extend_set_ec(m, lsa))
+			return CMD_HELP;
+	} else {
+		rc = create_ec_parity_mirror(m->m_layout, lsa->lsa_ec_specs,
+					     lsa->lsa_ec_spec_count);
+		if (rc) {
+			fprintf(stderr,
+				"error: %s: failed to create EC parity mirror\n",
+				progname);
+			return rc;
+		}
+	}
+
+	/* m_count stays as given; m_has_ec makes mirror_create() double it. */
+	m->m_has_ec = true;
+
+	free(lsa->lsa_ec_specs);
+	lsa->lsa_ec_specs = NULL;
+	lsa->lsa_ec_spec_count = 0;
+	lsa->lsa_has_ec = false;
+
+	return 0;
+}
+
 static int lfs_setstripe_internal(int argc, char **argv,
 				  enum setstripe_origin opc)
 {
@@ -4703,6 +5502,8 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	struct llapi_layout **lpp = &layout;
 	bool mirror_mode = false;
 	bool mirror_total_mode = false;
+	/* -N was given, even if it added no mirror: auto mode is not implied */
+	bool mirror_count_opt = false;
 	bool has_m_file = false;
 	__u32 mirror_count = 0;
 	enum mirror_flags mirror_flags = 0;
@@ -4950,6 +5751,31 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			}
 
 			mirror_id = (__u16)id;
+
+			if (opc == SO_MIRROR_EXTEND) {
+				/* --mirror-id selects the existing data mirror
+				 * to attach a parity mirror to, at most once
+				 * and not alongside -N, which adds mirrors.
+				 */
+				if (last_mirror && !last_mirror->m_target_set) {
+					fprintf(stderr,
+						"error: %s: --mirror-id cannot be combined with -N\n",
+						progname);
+					goto usage_error;
+				}
+				if (last_mirror && last_mirror->m_target_set) {
+					fprintf(stderr,
+						"error: %s: --mirror-id may only be specified once\n",
+						progname);
+					goto usage_error;
+				}
+				new_mirror = lfs_mirror_alloc();
+				new_mirror->m_count = 1;
+				new_mirror->m_target_set = true;
+				new_mirror->m_target_mirror_id = mirror_id;
+				mirror_list = new_mirror;
+				last_mirror = new_mirror;
+			}
 			break;
 		}
 		case LFS_LAYOUT_FLAGS_OPT: {
@@ -5299,6 +6125,12 @@ static int lfs_setstripe_internal(int argc, char **argv,
 						progname, argv[optopt + 1]);
 					goto usage_error;
 				}
+				if (last_mirror->m_target_set) {
+					fprintf(stderr,
+						"error: %s: -f cannot be combined with --mirror-id\n",
+						progname);
+					goto usage_error;
+				}
 				last_mirror->m_file = optarg;
 				last_mirror->m_count = 1;
 			} else {
@@ -5391,10 +6223,18 @@ static int lfs_setstripe_internal(int argc, char **argv,
 		case 'N':
 			if (restripe)
 				goto restripe_error;
+			mirror_count_opt = true;
 create_mirror:
 			if (opc == SO_SETSTRIPE) {
 				opc = SO_MIRROR_CREATE;
 				mirror_mode = true;
+			}
+			if (opc == SO_MIRROR_EXTEND && last_mirror &&
+			    last_mirror->m_target_set) {
+				fprintf(stderr,
+					"error: %s: -N cannot be combined with --mirror-id\n",
+					progname);
+				goto usage_error;
 			}
 			mirror_total_mode = false;
 			if (optarg) {
@@ -5484,36 +6324,14 @@ create_mirror:
 
 				lsa.lsa_comp_count++;
 
-				/* Create EC parity mirror if this mirror has EC */
 				if (lsa.lsa_has_ec &&
 				    lsa.lsa_ec_spec_count > 0) {
-					result = create_ec_parity_mirror(
-							last_mirror->m_layout,
-							lsa.lsa_ec_specs,
-							lsa.lsa_ec_spec_count);
+					result = mirror_set_ec_parity(
+						last_mirror, &lsa, opc);
 					if (result) {
-						fprintf(stderr,
-							"error: %s: failed to create EC parity mirror\n",
-							progname);
 						lfs_mirror_free(new_mirror);
 						goto error;
 					}
-
-					/* Mark that this layout already contains
-					 * EC parity components. The layout now
-					 * contains 2 mirrors (data + parity).
-					 * We keep m_count at its original value
-					 * (e.g., 1 for -N, 2 for -N2, etc.), and
-					 * set m_has_ec=true so that mirror_create()
-					 * knows to multiply the mirror count by 2.
-					 */
-					last_mirror->m_has_ec = true;
-
-					/* Clear EC specs for next mirror */
-					free(lsa.lsa_ec_specs);
-					lsa.lsa_ec_specs = NULL;
-					lsa.lsa_ec_spec_count = 0;
-					lsa.lsa_has_ec = false;
 				}
 
 				last_mirror->m_next = new_mirror;
@@ -5837,12 +6655,22 @@ create_mirror:
 	}
 
 	if (mirror_mode && (!mirror_total_mode || mirror_count)) {
-		if (mirror_count == 0)
+		bool is_target_attach = last_mirror &&
+				last_mirror->m_target_set;
+		/* Neither attach mode takes a layout from the command line,
+		 * so both skip the implicit -N1 and the default-layout fill.
+		 */
+		bool is_auto_ec = opc == SO_MIRROR_EXTEND &&
+				lsa.lsa_has_ec && !last_mirror;
+
+		if (mirror_count == 0 && !is_target_attach && !is_auto_ec)
 			goto create_mirror;
-		if (!setstripe_args_specified(&lsa))
-			last_mirror->m_inherit = true;
-		if (lsa.lsa_comp_end == 0)
-			lsa.lsa_comp_end = LUSTRE_EOF;
+		if (!is_target_attach && !is_auto_ec) {
+			if (!setstripe_args_specified(&lsa))
+				last_mirror->m_inherit = true;
+			if (lsa.lsa_comp_end == 0)
+				lsa.lsa_comp_end = LUSTRE_EOF;
+		}
 	}
 
 	if (lsa.lsa_comp_end != 0) {
@@ -5856,9 +6684,34 @@ create_mirror:
 		lsa.lsa_comp_count++;
 	}
 
-	/* Create EC parity mirror if --ec without -N was specified */
-	if (lsa.lsa_has_ec && lsa.lsa_ec_spec_count > 0) {
-		if (mirror_mode && last_mirror) {
+	/* Create EC parity mirror if --ec was specified. --mirror-id has no
+	 * command-line extents to build one from; mirror_extend() builds it
+	 * from the target data mirror instead.
+	 */
+	if (lsa.lsa_has_ec && lsa.lsa_ec_spec_count > 0 &&
+	    !(last_mirror && last_mirror->m_target_set)) {
+		if (opc == SO_MIRROR_EXTEND && !last_mirror &&
+		    !mirror_count_opt) {
+			/* Auto mode: --ec without -N or --mirror-id. Attach
+			 * parity as --mirror-id does, to the target
+			 * mirror_extend() resolves per file. A -N=TOTAL that
+			 * added nothing also leaves @last_mirror unset, and
+			 * must stay the no-op the warning promised.
+			 */
+			new_mirror = lfs_mirror_alloc();
+			new_mirror->m_count = 1;
+			new_mirror->m_target_auto = true;
+			mirror_list = new_mirror;
+			last_mirror = new_mirror;
+		} else if (opc == SO_MIRROR_EXTEND && last_mirror) {
+			/* On extend the parity layout is built in
+			 * mirror_extend(): the merge ioctl takes one mirror
+			 * at a time, so data and parity go in separate merges.
+			 */
+			if (mirror_extend_set_ec(last_mirror, &lsa))
+				goto usage_error;
+			last_mirror->m_has_ec = true;
+		} else if (mirror_mode && last_mirror) {
 			result = create_ec_parity_mirror(
 					last_mirror->m_layout,
 					lsa.lsa_ec_specs,
@@ -6037,6 +6890,55 @@ create_mirror:
 			"%s: option -I can only be used with --component-del or --component-set or lfs mirror split\n",
 			progname);
 		goto usage_error;
+	}
+
+	/* A mirror taken from a victim file gets its content and its layout
+	 * from that file, leaving nothing for --ec to act on, as
+	 * lfs-mirror-extend.1 documents.
+	 */
+	if (opc == SO_MIRROR_EXTEND) {
+		struct mirror_args *m;
+
+		for (m = mirror_list; m; m = m->m_next) {
+			if (!m->m_file || !m->m_has_ec)
+				continue;
+			fprintf(stderr,
+				"error: %s: --ec cannot be combined with -f on the same mirror\n",
+				progname);
+			goto usage_error;
+		}
+	}
+
+	/* Both attach modes only add parity, so --ec is required, and the
+	 * parity layout comes from the target data mirror rather than from
+	 * the command line.
+	 */
+	if (opc == SO_MIRROR_EXTEND && last_mirror &&
+	    (last_mirror->m_target_set || last_mirror->m_target_auto)) {
+		const char *mode = last_mirror->m_target_auto ?
+			"--ec (auto mode)" : "--mirror-id";
+
+		if (!lsa.lsa_has_ec) {
+			fprintf(stderr,
+				"error: %s: %s requires --ec D+P on 'lfs mirror extend'\n",
+				progname, mode);
+			goto usage_error;
+		}
+		/* Layout options would be silently ignored here. */
+		if (setstripe_args_specified(&lsa) ||
+		    lsa.lsa_extension_size != 0 ||
+		    lsa.lsa_nr_tgts != 0 ||
+		    lsa.lsa_pool_name != NULL ||
+		    lsa.lsa_comp_flags != 0 ||
+		    lsa.lsa_comp_neg_flags != 0 ||
+		    last_mirror->m_flags != 0) {
+			fprintf(stderr,
+				"error: %s: %s derives the parity layout from the target data mirror; reject layout options (-E, -c, -S, -i, -p, -o, --pattern, --component-flags, --extension-size)\n",
+				progname, mode);
+			goto usage_error;
+		}
+		if (mirror_extend_set_ec(last_mirror, &lsa))
+			goto usage_error;
 	}
 
 	if (migrate_mdt_mode) {

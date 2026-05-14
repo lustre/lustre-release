@@ -1798,6 +1798,17 @@ int llapi_layout_comp_add_ec(struct llapi_layout *layout, uint32_t mirror_id,
 			     uint64_t start, uint64_t end,
 			     uint8_t dstripe_count, uint8_t cstripe_count);
 /**
+ * Adds one EC parity component bound to a data mirror outside the layout.
+ */
+int llapi_layout_comp_add_parity_only(struct llapi_layout *layout,
+				      uint16_t target_mirror_id,
+				      uint64_t start, uint64_t end,
+				      uint8_t dstripe_count,
+				      uint8_t cstripe_count,
+				      uint64_t stripe_size,
+				      uint64_t data_stripe_count,
+				      const char *pool_name);
+/**
  * Get EC coding stripe count from the current component.
  */
 int llapi_layout_ec_cstripe_count_get(const struct llapi_layout *layout,

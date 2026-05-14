@@ -3410,6 +3410,7 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 	size_t offset;
 	__u16 cur_entry_count;
 	__u16 merge_entry_count;
+	__u16 new_entry_count;
 	__u32 id = 0;
 	__u16 mirror_id = 0;
 	__u32 mirror_count;
@@ -3532,9 +3533,76 @@ static int lod_declare_layout_merge(const struct lu_env *env,
 		offset += le32_to_cpu(lcme->lcme_size);
 	}
 
+	/*
+	 * A parity component merged by 'lfs mirror extend --ec' names the
+	 * on-disk data component it protects in lcme_mirror_link_id, out of
+	 * reach of lod_bind_data_parity(). Point that data component back at
+	 * the parity mirror id, or 'lfs mirror split' cannot see the pair,
+	 * and give it the EC geometry, as llapi_layout_comp_add_ec() does:
+	 * lod_comp_prep_create() keys the EC allocation of a data component
+	 * off lcme_dstripe_count, so a data component instantiated after the
+	 * extend would otherwise be placed as a plain component.
+	 * A link that resolves to nothing means the data mirror went away
+	 * after the client read the layout: refuse the merge rather than
+	 * store a half-linked pair that resync can never repair. A data
+	 * component that already carries a link id belongs to another parity
+	 * mirror; re-stamping it would strand that mirror, so refuse the
+	 * merge.
+	 */
+	new_entry_count = cur_entry_count + merge_entry_count;
+	for (i = cur_entry_count; i < new_entry_count; i++) {
+		__u32 flags;
+		__u16 link_id;
+		int j;
+
+		lcme = &lcm->lcm_entries[i];
+		flags = le32_to_cpu(lcme->lcme_flags);
+		if (!(flags & LCME_FL_PARITY) || flags & LCME_FL_IS_LINK_ID)
+			continue;
+
+		link_id = lcme_timestamp_id_unpack(
+				le64_to_cpu(lcme->lcme_time_and_id));
+		if (!link_id)
+			GOTO(out, rc = -EINVAL);
+
+		for (j = 0; j < cur_entry_count; j++) {
+			struct lov_comp_md_entry_v1 *data_lcme;
+			__u64 time_and_id;
+			__u64 timestamp;
+			__u16 parity_mid;
+
+			data_lcme = &lcm->lcm_entries[j];
+			if (le32_to_cpu(data_lcme->lcme_flags) & LCME_FL_PARITY)
+				continue;
+			if (mirror_id_of(le32_to_cpu(data_lcme->lcme_id)) !=
+			    link_id)
+				continue;
+			if (data_lcme->lcme_extent.e_start !=
+			    lcme->lcme_extent.e_start ||
+			    data_lcme->lcme_extent.e_end !=
+			    lcme->lcme_extent.e_end)
+				continue;
+
+			time_and_id = le64_to_cpu(data_lcme->lcme_time_and_id);
+			if (lcme_timestamp_id_unpack(time_and_id))
+				GOTO(out, rc = -EEXIST);
+
+			timestamp = lcme_timestamp_time_unpack(time_and_id);
+			parity_mid = mirror_id_of(le32_to_cpu(lcme->lcme_id));
+			time_and_id = lcme_timestamp_and_id_pack(timestamp,
+								 parity_mid);
+			data_lcme->lcme_time_and_id = cpu_to_le64(time_and_id);
+			data_lcme->lcme_dstripe_count = lcme->lcme_dstripe_count;
+			data_lcme->lcme_cstripe_count = lcme->lcme_cstripe_count;
+			break;
+		}
+		if (j == cur_entry_count)
+			GOTO(out, rc = -EINVAL);
+	}
+
 	/* fixup layout information */
 	lcm->lcm_size = cpu_to_le32(size);
-	lcm->lcm_entry_count = cpu_to_le16(cur_entry_count + merge_entry_count);
+	lcm->lcm_entry_count = cpu_to_le16(new_entry_count);
 	lcm->lcm_mirror_count = cpu_to_le16(mirror_count);
 	if ((le16_to_cpu(lcm->lcm_flags) & LCM_FL_FLR_MASK) == LCM_FL_NONE)
 		lcm->lcm_flags = cpu_to_le16((le16_to_cpu(lcm->lcm_flags) &
@@ -7062,6 +7130,19 @@ static int lod_declare_instantiate_components(const struct lu_env *env,
 	int i;
 	int rc = 0;
 	ENTRY;
+
+	/* a parity without its data component is only deferred at create
+	 * ('lfs mirror extend --ec'); instantiating it is an error, and a
+	 * file of nothing else would trip the assertion below
+	 */
+	for (i = 0; i < info->lti_count; i++) {
+		struct lod_layout_component *lod_comp =
+			&lo->ldo_comp_entries[info->lti_comp_idx[i]];
+
+		if ((lod_comp->llc_flags & LCME_FL_PARITY) &&
+		    !lod_comp_find_linked(lo, lod_comp))
+			RETURN(-EINVAL);
+	}
 
 	LASSERT(info->lti_count < lo->ldo_comp_cnt);
 

@@ -1216,7 +1216,7 @@ load_modules_local() {
 		load_module osp/osp
 	fi
 
-	MODOPTS_LLITE=${MODOPTS_LLITE:-"llite_enable_flr_ec=1"}
+	MODOPTS_LUSTRE=${MODOPTS_LUSTRE:-"llite_enable_flr_ec=1"}
 	load_module llite/lustre
 	[ -d /r ] && OGDB=${OGDB:-"/r/tmp"}
 	OGDB=${OGDB:-$TMP}
@@ -2073,6 +2073,21 @@ set_spl_panic() {
 }
 
 #
+# Turn on FLR EC on an MDT so that its clients can negotiate
+# OBD_CONNECT2_FLR_EC. load_modules_local() passes mdt_enable_flr_ec=1
+# to mdt.ko, but that only reaches the nodes it runs on; a remote MDS
+# loads mdt.ko from the target mount with the default of 0 unless
+# LOAD_MODULES_REMOTE is set. The flag is granted at connect time, so
+# this runs from mount_facet(), before the clients mount.
+#
+set_mdt_flr_ec() {
+	local facet=$1
+	local param=/sys/module/mdt/parameters/mdt_enable_flr_ec
+
+	do_facet $facet "[[ ! -w $param ]] || echo 1 > $param"
+}
+
+#
 # Create ZFS storage pool.
 #
 create_zpool() {
@@ -2792,6 +2807,7 @@ mount_facet() {
 	fi
 
 	set_default_debug_facet $facet
+	[[ $node_type == MDS ]] && set_mdt_flr_ec $facet
 
 	if [[ $opts =~ .*nosvc.* ]]; then
 		echo "Start $dm_dev without service"

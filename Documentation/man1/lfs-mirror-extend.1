@@ -1,13 +1,25 @@
-.TH LFS-MIRROR-EXTEND 1 2025-07-11 Lustre "Lustre User Utilities"
+.TH LFS-MIRROR-EXTEND 1 2026-08-05 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-mirror-extend \- add mirror(s) to an existing file
 .SH SYNOPSIS
 .SY "lfs mirror extend"
-.RB [ --bandwidth | --bandwidth-limit | "-W \fIBANDWIDTH_MB" [ MG ]]
-.RB [ --fid | -F " [" --lustre-dir = \fILUSTRE_MOUNT_POINT ]]
-.RB [ --mirror-count | -N [[ = ] \fIMIRROR_COUNT ]]
+.RB [ --bandwidth | --bandwidth-limit | -W
+.I BANDWIDTH_MB\c
+.RB [ MG ]]
+.RB [ --ec | --ec-stripe-count
+.IR DATA + PARITY ]
+.RB [ --ec-expert
+.IR DATA + PARITY ]
+.RB [ --fid | -F " [" --lustre-dir =\c
+.I LUSTRE_MOUNT_POINT\c
+.RB ]]
+.RB [ --mirror-count | -N [[ = ]\c
+.IR MIRROR_COUNT ]]
+.RB [ --mirror-id
+.IR MIRROR_ID ]
 .RB [ --no-verify "] [" --non-direct | -D ]
-.RB [ --stats | --stats-interval = \fISECONDS ]
+.RB [ --stats | --stats-interval =\c
+.IR SECONDS ]
 .RI [ SETSTRIPE_OPTIONS
 .RB "| " -f
 .IR VICTIM_FILE ]
@@ -21,6 +33,69 @@ The file(s) to be extended can already be a mirrored file,
 or just a regular non-mirrored file.
 If it's a non-mirrored file,
 then the command will convert it to a mirrored file.
+.P
+When
+.B --ec
+is specified, the command operates in one of three erasure-coding modes:
+.IP \(bu 2
+With
+.BI --mirror-id " MIRROR_ID"
+.B --ec
+.IR DATA + PARITY ,
+a parity mirror is attached to the existing data mirror identified by
+.IR MIRROR_ID .
+The parity mirror inherits the extents and stripe configuration of the
+target data mirror. The target must not itself be a parity mirror, and it
+must not already be EC-protected: attaching a second parity mirror of a
+different geometry to one data mirror, to change a file's EC protection
+without rewriting its data, is not implemented yet.
+.IP \(bu 2
+With
+.BR -N [\c
+.IR MIRROR_COUNT ]
+.B --ec
+.IR DATA + PARITY ,
+.I MIRROR_COUNT
+new data+parity mirror pairs are added (one parity mirror per data
+mirror).
+.I MIRROR_COUNT
+defaults to 1.
+.IP \(bu 2
+With
+.B --ec
+.IR DATA + PARITY
+alone (no
+.BR -N ,
+no
+.BR --mirror-id ),
+a parity mirror is attached to the file's lone data mirror, at a cost of
+.IR PARITY / DATA
+of its size in additional storage. The target mirror is resolved per file;
+files with two or more mirrors produce a per-file error directing the user
+to disambiguate with
+.B --mirror-id
+or
+.BR -N .
+.P
+In all three EC modes the new mirrors are brought in sync before the
+command returns, matching the behavior of a regular (non-EC) extend:
+new data mirrors are populated with a copy of the file data, and new
+parity mirrors are computed from their data mirrors as
+.BR lfs-mirror-resync (1)
+does.
+.P
+A data mirror that is
+.B stale
+or
+.B nosync
+cannot be given a parity mirror. Parity is computed from the content of
+the named mirror, and resynchronizing that mirror afterwards does not
+mark its parity stale in turn, so the parity would go on protecting
+superseded data; a
+.B nosync
+mirror is skipped by resync, which would leave the parity uncomputed. Run
+.BR lfs-mirror-resync (1)
+on the file first.
 .P
 .I FILES_FROM
 may be:
@@ -69,6 +144,48 @@ The buffer chunk size in MB used to transfer data. It is 1 (MB) by default.
 But if
 .BR --aio-tasks =0,
 the default value is 64 (MB).
+.TP
+.BR --ec ", " --ec-stripe-count " \fIDATA\fB+\fIPARITY\fR"
+Enable Erasure Coding (EC) for the mirror(s) added by this command, with
+.I DATA
+data stripes and
+.I PARITY
+parity stripes per RAID Set. The format is
+.IR DATA + PARITY
+or
+.IR DATA : PARITY .
+The semantics of the
+.I DATA+PARITY
+specification are identical to those described in
+.BR lfs-setstripe (1).
+.RS
+.PP
+A parity mirror inherits the extents and stripe configuration of the data
+mirror it protects, so no
+.I SETSTRIPE_OPTIONS
+are given for it. This option cannot be combined with
+.B -f
+on the same mirror:
+a mirror taken from a victim file gets both its content and its layout from
+that file, leaving nothing for
+.B --ec
+to act on.
+.PP
+The target data mirror must be made of components that a RAID Set can be
+spread over. A Data-on-MDT component has no OST stripes, and a self-extending
+component
+.RB ( -z )
+has no fixed extent for a parity component to match, so a mirror containing
+either is rejected, as it is by
+.BR lfs-setstripe (1)
+.BR --ec .
+.RE
+.TP
+.BR --ec-expert " \fIDATA\fB+\fIPARITY\fR"
+Equivalent to
+.B --ec
+but allows EC stripe counts that exceed the supported limits, as described in
+.BR lfs-setstripe (1).
 .TP
 .BR -F ", " --fid
 FID(s) are provided from command
@@ -127,13 +244,33 @@ This also means that if there are already at least
 .I TOTAL_MIRROR_COUNT
 mirrors in the layout then no new mirrors will be created.
 .TP
+.BR --mirror-id " \fIMIRROR_ID\fR"
+Identify the existing data mirror that a new parity mirror should be
+attached to. Requires
+.BR --ec ,
+and may be passed at most once per command. Cannot be combined with
+.BR -N
+or
+.BR -f .
+.I MIRROR_ID
+must be 1 or greater;
+.BR "--mirror-id 0"
+is rejected. The target mirror must be a data mirror that is not already
+EC-protected; otherwise the command fails.
+.IP
+For a non-mirrored (single-mirror) file omit
+.B --mirror-id
+entirely and rely on
+.B --ec
+auto mode to attach parity to the lone mirror.
+.TP
 .BR --no-verify
 This option indicates not to verify the mirror(s) from victim file(s) in case
 the victim file(s) contains the same data as the original mirrored file. This
 option can save siginificant time on file comparison if the file size is large,
 but it should only be used when the file contents are known to be the same.
 .TP
-.BR --non-direct , -D
+.BR -D ", " --non-direct
 Use buffered, not
 .BR O_DIRECT ,
 read and write operations when migrating a file.
@@ -222,6 +359,34 @@ the same data as /mnt/lustre/file1, use the layouts as mirrors and add them to
 .EX
 .B # lfs mirror extend --no-verify -N -f /mnt/lustre/file2 -N -f \
 /mnt/lustre/file3 /mnt/lustre/file1
+.EE
+.RE
+.PP
+Attach an 8+2 parity mirror to mirror ID 1 of /mnt/lustre/file1. The parity
+is computed from the data mirror before the command returns:
+.RS
+.EX
+.B # lfs mirror extend --mirror-id 1 --ec 8+2 /mnt/lustre/file1
+.EE
+.RE
+.PP
+Attach an 8+2 parity mirror to a non-mirrored file in place (auto mode).
+The single existing data mirror is auto-resolved as the target;
+the storage cost is
+.I (8 + 2) / 8
+= 1.25x the file size, vs 2x for a plain mirror:
+.RS
+.EX
+.B # lfs mirror extend --ec 8+2 /mnt/lustre/file1
+.EE
+.RE
+.PP
+Add 2 new data+parity mirror pairs to /mnt/lustre/file1, each data mirror
+having a single PFL component striped across 4 OSTs and protected by a
+4+2 EC parity mirror:
+.RS
+.EX
+.B # lfs mirror extend -N2 -E -1 -c 4 --ec 4+2 /mnt/lustre/file1
 .EE
 .RE
 .SH AVAILABILITY
