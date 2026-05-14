@@ -901,7 +901,6 @@ static inline bool obd_mdt_recovery_abort(struct obd_device *obd)
 
 /* Flags for op_xvalid */
 enum op_xvalid {
-	OP_XVALID_CTIME_SET	= BIT(0),	/* 0x0001 */
 	OP_XVALID_BLOCKS	= BIT(1),	/* 0x0002 */
 	OP_XVALID_OWNEROVERRIDE	= BIT(2),	/* 0x0004 */
 	OP_XVALID_FLAGS		= BIT(3),	/* 0x0008 */

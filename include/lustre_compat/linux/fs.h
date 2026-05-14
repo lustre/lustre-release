@@ -66,6 +66,10 @@
 })
 #endif /* HAVE_IOPS_MKDIR_RETURNS_DENTRY */
 
+#ifndef ATTR_CTIME_SET /* added in v6.17-rc7-14-gafc5b36e29 */
+#define ATTR_CTIME_SET (1 << 28) /* safe for at least v4.18..v6.17 */
+#endif
+
 static inline int ll_vfs_getattr(struct path *path, struct kstat *st,
 				 u32 request_mask, unsigned int flags)
 {

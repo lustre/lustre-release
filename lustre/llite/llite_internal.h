@@ -47,7 +47,8 @@
 
 #define LL_IT2STR(it) ((it) ? ldlm_it2str((it)->it_op) : "0")
 
-#define TIMES_SET_FLAGS (ATTR_MTIME_SET | ATTR_ATIME_SET | ATTR_TIMES_SET)
+#define TIMES_SET_FLAGS (ATTR_MTIME_SET | ATTR_ATIME_SET | ATTR_CTIME_SET | \
+			 ATTR_TIMES_SET)
 
 struct ll_dentry_data {
 	unsigned int			lld_sa_generation;

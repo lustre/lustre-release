@@ -2271,7 +2271,7 @@ int volatile_ref_file(const char *volatile_name, int volatile_len,
  * object(s) determine the file size and mtime.  Otherwise, the MDS will
  * keep these values until such a time that objects are allocated for it.
  * We do the MDS operations first, as it is checking permissions for us.
- * We don't to the MDS RPC if there is nothing that we want to store there,
+ * We don't do the MDS RPC if there is nothing that we want to store there,
  * otherwise there is no harm in updating mtime/atime on the MDS if we are
  * going to do an RPC anyways.
  *
@@ -2330,10 +2330,10 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 	}
 
 	/* We mark all of the fields "set" so MDS/OST does not re-set them */
-	if (!(xvalid & OP_XVALID_CTIME_SET) &&
-	     (attr->ia_valid & ATTR_CTIME)) {
+	if (!(attr->ia_valid & ATTR_CTIME_SET) &&
+	    (attr->ia_valid & ATTR_CTIME)) {
 		attr->ia_ctime = current_time(inode);
-		xvalid |= OP_XVALID_CTIME_SET;
+		attr->ia_valid |= ATTR_CTIME_SET;
 	}
 	if (!(attr->ia_valid & ATTR_ATIME_SET) &&
 	    (attr->ia_valid & ATTR_ATIME)) {
@@ -2388,8 +2388,8 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 		GOTO(out, rc = 0);
 
 	if (attr->ia_valid & (ATTR_SIZE | ATTR_ATIME | ATTR_ATIME_SET |
-			      ATTR_MTIME | ATTR_MTIME_SET | ATTR_CTIME) ||
-	    xvalid & OP_XVALID_CTIME_SET) {
+			      ATTR_MTIME | ATTR_MTIME_SET |
+			      ATTR_CTIME | ATTR_CTIME_SET)) {
 		bool cached = false;
 
 		rc = pcc_inode_setattr(inode, attr, &cached);

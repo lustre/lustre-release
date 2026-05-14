@@ -112,8 +112,7 @@ static void ll_prepare_close(struct inode *inode, struct md_op_data *op_data,
 	}
 	op_data->op_attr.ia_valid |= (ATTR_MODE | ATTR_ATIME | ATTR_ATIME_SET |
 				      ATTR_MTIME | ATTR_MTIME_SET |
-				      ATTR_CTIME);
-	op_data->op_xvalid |= OP_XVALID_CTIME_SET;
+				      ATTR_CTIME | ATTR_CTIME_SET);
 	op_data->op_attr_blocks = inode->i_blocks;
 	op_data->op_attr_flags = ll_inode2ext_flags(inode);
 	op_data->op_open_handle = och->och_open_handle;
@@ -3880,7 +3879,7 @@ static int ll_file_futimes_3(struct file *file, const struct ll_futimes_3 *lfu)
 	struct iattr ia = {
 		.ia_valid = ATTR_ATIME | ATTR_ATIME_SET |
 			    ATTR_MTIME | ATTR_MTIME_SET |
-			    ATTR_CTIME,
+			    ATTR_CTIME | ATTR_CTIME_SET,
 		.ia_atime = {
 			.tv_sec = lfu->lfu_atime_sec,
 			.tv_nsec = lfu->lfu_atime_nsec,
@@ -3904,8 +3903,7 @@ static int ll_file_futimes_3(struct file *file, const struct ll_futimes_3 *lfu)
 		RETURN(-EINVAL);
 
 	inode_lock(inode);
-	rc = ll_setattr_raw(file_dentry(file), &ia, OP_XVALID_CTIME_SET,
-			    false);
+	rc = ll_setattr_raw(file_dentry(file), &ia, 0, false);
 	inode_unlock(inode);
 
 	RETURN(rc);

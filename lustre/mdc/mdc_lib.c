@@ -381,7 +381,7 @@ static inline enum mds_attr_flags mdc_attr_pack(unsigned int ia_valid,
 		sa_valid |=  MDS_ATTR_KILL_SUID;
 	if (ia_valid & ATTR_KILL_SGID)
 		sa_valid |= MDS_ATTR_KILL_SGID;
-	if (ia_xvalid & OP_XVALID_CTIME_SET)
+	if (ia_valid & ATTR_CTIME_SET)
 		sa_valid |= MDS_ATTR_CTIME_SET;
 	if (ia_valid & ATTR_OPEN)
 		sa_valid |= MDS_ATTR_FROM_OPEN;
