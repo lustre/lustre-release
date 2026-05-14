@@ -327,17 +327,6 @@ static inline void qmt_restore_lqes(const struct lu_env *env)
 		qmt_restore(qti_lqes(env)[i], &qti_lqes_rstr(env)[i]);
 }
 
-#define QMT_GRANT(lqe, slv, cnt)             \
-	do {                                 \
-		(lqe)->lqe_granted += (cnt); \
-		(slv) += (cnt);              \
-	} while (0)
-#define QMT_REL(lqe, slv, cnt)               \
-	do {                                 \
-		(lqe)->lqe_granted -= (cnt); \
-		(slv) -= (cnt);              \
-	} while (0)
-
 /* helper routine returning true when reached hardlimit */
 static inline bool qmt_hard_exhausted(struct lquota_entry *lqe)
 {
