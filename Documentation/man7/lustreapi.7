@@ -18,6 +18,9 @@ is part of the
 filesystem package since release 0.10.0
 .\" Added in release 0.9.1
 .SH SEE ALSO
+.SS Changelogs
+Functions for accessing and managing Lustre changelogs.
+.PP
 .BR llapi_changelog_clear (3),
 .BR llapi_changelog_fini (3),
 .BR llapi_changelog_free (3),
@@ -25,33 +28,24 @@ filesystem package since release 0.10.0
 .BR llapi_changelog_in_buf (3),
 .BR llapi_changelog_recv (3),
 .BR llapi_changelog_set_xflags (3),
-.BR llapi_changelog_start (3),
-.BR llapi_create_volatile_param (3),
+.BR llapi_changelog_start (3)
+.SS FID Handling
+Functions for working with Lustre File Identifiers (FIDs).
+.PP
 .BR llapi_fd2parent (3),
 .BR llapi_fid_parse (3),
 .BR llapi_fid2path (3),
+.BR llapi_path2fid (3),
+.BR llapi_path2parent (3),
+.BR llapi_rmfid (3),
+.BR llapi_rmfid_at (3)
+.SS File Layouts and Striping
+Functions for file layouts and striping across OSTs.
+.PP
+.BR llapi_create_volatile_param (3),
 .BR llapi_file_create (3),
 .BR llapi_file_get_stripe (3),
 .BR llapi_file_open (3),
-.BR llapi_get_data_version (3),
-.BR llapi_get_obd_count (3),
-.BR llapi_group_lock (3),
-.BR llapi_group_unlock (3),
-.BR llapi_heat_get (3),
-.BR llapi_heat_set (3),
-.BR llapi_hsm_action_begin (3),
-.BR llapi_hsm_action_end (3),
-.BR llapi_hsm_action_get_dfid (3),
-.BR llapi_hsm_action_get_fd (3),
-.BR llapi_hsm_action_progress (3),
-.BR llapi_hsm_copytool_get_fd (3),
-.BR llapi_hsm_copytool_recv (3),
-.BR llapi_hsm_copytool_register (3),
-.BR llapi_hsm_copytool_unregister (3),
-.BR llapi_hsm_data_version_set (3),
-.BR llapi_hsm_state_get (3),
-.BR llapi_hsm_state_set (3),
-.BR llapi_ladvise (3),
 .BR llapi_layout_alloc (3),
 .BR llapi_layout_comp_add (3),
 .BR llapi_layout_comp_del (3),
@@ -81,12 +75,36 @@ filesystem package since release 0.10.0
 .BR llapi_layout_stripe_count_get (3),
 .BR llapi_layout_stripe_count_set (3),
 .BR llapi_layout_stripe_size_get (3),
-.BR llapi_layout_stripe_size_set (3),
-.BR llapi_path2fid (3),
-.BR llapi_path2parent (3),
-.BR llapi_quotactl (3),
-.BR llapi_rmfid (3),
-.BR llapi_rmfid_at (3),
+.BR llapi_layout_stripe_size_set (3)
+.SS Hierarchical Storage Management (HSM)
+Functions for HSM copytool operations and archive management.
+.PP
+.BR llapi_hsm_action_begin (3),
+.BR llapi_hsm_action_end (3),
+.BR llapi_hsm_action_get_dfid (3),
+.BR llapi_hsm_action_get_fd (3),
+.BR llapi_hsm_action_progress (3),
+.BR llapi_hsm_copytool_get_fd (3),
+.BR llapi_hsm_copytool_recv (3),
+.BR llapi_hsm_copytool_register (3),
+.BR llapi_hsm_copytool_unregister (3),
+.BR llapi_hsm_data_version_set (3),
+.BR llapi_hsm_state_get (3),
+.BR llapi_hsm_state_set (3)
+.SS Project IDs and Quotas
+Functions for quota management.
+.PP
+.BR llapi_quotactl (3)
+.SS Miscellaneous
+Other utility functions.
+.PP
+.BR llapi_get_data_version (3),
+.BR llapi_get_obd_count (3),
+.BR llapi_group_lock (3),
+.BR llapi_group_unlock (3),
+.BR llapi_heat_get (3),
+.BR llapi_heat_set (3),
+.BR llapi_ladvise (3),
 .BR llapi_root_path_open (3),
 .BR llapi_search_rootpath (3),
 .BR llapi_search_rootpath_by_dev (3),
