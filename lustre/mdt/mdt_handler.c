@@ -72,9 +72,6 @@ static const struct kernel_param_ops
 	.get = param_get_uint,
 };
 
-#define param_check_max_mod_rpcs_per_client(name, p) \
-		__param_check(name, p, unsigned int)
-
 module_param_cb(max_mod_rpcs_per_client,
 				&param_ops_max_mod_rpcs_per_client,
 				&max_mod_rpcs_per_client, 0644);
