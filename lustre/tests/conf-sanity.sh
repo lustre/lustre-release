@@ -418,19 +418,25 @@ test_10a() {
 run_test 10a "find lctl param broken symlinks"
 
 test_11() {
-	# set $version variable with tool build version
+	# set $version variable with local tool build version
 	local version=$($LCTL --version | awk '{ print $2 }')
+	local facet=mgs
 
 	[[ -n "$version" ]] || error "'$LCTL --version' did not print version"
 
-	for cmd in $LFS $LNETCTL $LST $MKFS $MOUNT_LUSTRE $TUNEFS; do
-		local tool_ver0=$(do_facet mgs $cmd --version 2>&1)
-		local tool_ver1=$(do_facet mgs $cmd --version some_args 2>&1)
+	local version_cmds="$LFS $LNETCTL $LST $MOUNT_LUSTRE "
+	# interop tests run on client, do not check server-only commands
+	(( $MGS_VERSION == $CLIENT_VERSION )) && version_cmds+="$MKFS $TUNEFS"||
+		facet=client
+
+	for cmd in $version_cmds; do
+		local tool_ver0=$(do_facet $facet $cmd --version 2>&1)
+		local tool_ver1=$(do_facet $facet $cmd --version some_args 2>&1)
 
 		[[ "$tool_ver0" =~ $version ]] ||
-			error "'$cmd --version' has ' $tool_ver0', not '$version'"
+			error "'$cmd --version' '$tool_ver0' != '$version'"
 		[[ "$tool_ver1" =~ $version ]] ||
-			error "'$cmd --version some_args ' has '$tool_ver1', not '$version'"
+			error "'$cmd --version some_args' '$tool_ver1' != '$version'"
 	done
 }
 run_test 11 "Verify tool --version option works properly"
