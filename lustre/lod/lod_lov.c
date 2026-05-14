@@ -2211,6 +2211,25 @@ recheck:
 			RETURN(-EINVAL);
 		}
 
+		/*
+		 * EC k+m bound: Cauchy-matrix-over-GF(2^8) theoretical limit.
+		 * The construction needs k+m distinct field elements and
+		 * GF(2^8) has 256.  Cannot trust userspace; enforce here too.
+		 */
+		if (le32_to_cpu(ent->lcme_flags) & LCME_FL_PARITY) {
+			__u8 dstripe = ent->lcme_dstripe_count;
+			__u8 cstripe = ent->lcme_cstripe_count;
+
+			if (dstripe + cstripe > LOV_EC_MAX_TOTAL_STRIPES) {
+				CDEBUG(D_LAYOUT,
+				       "EC k+m (%u+%u=%u) exceeds %u\n",
+				       dstripe, cstripe,
+				       dstripe + cstripe,
+				       LOV_EC_MAX_TOTAL_STRIPES);
+				RETURN(-EINVAL);
+			}
+		}
+
 		if (is_from_disk) {
 			/* lcme_id contains valid value */
 			if (le32_to_cpu(ent->lcme_id) == 0 ||
