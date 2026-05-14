@@ -1252,12 +1252,6 @@ static inline void lov_conf_thaw(struct lov_object *lov)
 	__result;                                                       \
 })
 
-/**
- * Performs a locked double-dispatch based on the layout type of an object.
- */
-#define LOV_2DISPATCH(obj, op, ...)                     \
-	LOV_2DISPATCH_MAYLOCK(obj, op, 1, __VA_ARGS__)
-
 #define LOV_2DISPATCH_VOID(obj, op, ...)                                \
 do {                                                                    \
 	struct lov_object                      *__obj = (obj);          \
