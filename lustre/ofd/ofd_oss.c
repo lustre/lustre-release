@@ -56,8 +56,6 @@ static char *oss_io_cpts;
 module_param(oss_io_cpts, charp, 0444);
 MODULE_PARM_DESC(oss_io_cpts, "CPU partitions OSS IO threads should run on");
 
-#define OST_WATCHDOG_TIMEOUT (obd_timeout * 1000)
-
 static struct cfs_cpt_table *ost_io_cptable;
 
 /* Sigh - really, this is an OSS, the _server_, not the _target_ */
