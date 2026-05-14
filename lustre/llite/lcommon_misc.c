@@ -112,8 +112,6 @@ int cl_ocd_update(struct obd_device *host, struct obd_device *watched,
 	RETURN(result);
 }
 
-#define GROUPLOCK_SCOPE "grouplock"
-
 int cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
 		     struct ll_grouplock *lg)
 {
