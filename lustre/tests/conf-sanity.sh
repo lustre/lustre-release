@@ -7328,9 +7328,7 @@ restore_ostindex() {
 }
 
 max_lov_stripe_index() {
-	locale facet=$1
-
-	if [[ $(lustre_version_code $facet) -lt $(version_code 2.15.64) ]]; then
+	if (( $OST1_VERSION < $(version_code v2_15_63-53-g1a6ef725c2) )); then
 		echo "65532"
 	else
 		echo "65503"
@@ -7341,8 +7339,8 @@ max_lov_stripe_index() {
 # expected. This test uses OST_INDEX_LIST to format OSTs with a randomly
 # assigned index and ensures we can mount such a formatted file system
 test_81() { # LU-4665
-	(( MDS1_VERSION >= $(version_code 2.6.54) )) ||
-		skip "Need MDS version at least 2.6.54"
+	(( MDS1_VERSION >= $(version_code v2_6_54_0-55-g979203503a) )) ||
+		skip "Need MDS >= 2.6.54.55 for sparse OST index"
 	(( OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs"
 
 	stopall
@@ -7351,7 +7349,7 @@ test_81() { # LU-4665
 	# is generated.
 	local i
 	local saved_ostindex1=$OSTINDEX1
-	local LOV_V1_INSANE_STRIPE_INDEX=$(max_lov_stripe_index ost1)
+	local LOV_V1_INSANE_STRIPE_INDEX=$(max_lov_stripe_index)
 	local invalid_index=$((LOV_V1_INSANE_STRIPE_INDEX+4))
 
 	for i in $((LOV_V1_INSANE_STRIPE_INDEX + 3)) $((RANDOM + invalid_index)); do
@@ -7369,9 +7367,9 @@ test_81() { # LU-4665
 	stack_trap restore_ostindex
 
 	# Format OSTs with random sparse indices.
-	LOV_V1_INSANE_STRIPE_INDEX=$(max_lov_stripe_index ost2)
+	LOV_V1_INSANE_STRIPE_INDEX=$(max_lov_stripe_index)
 	local rand_ost=$((RANDOM * 2 % (LOV_V1_INSANE_STRIPE_INDEX - 1) + 1))
-	LOV_V1_INSANE_STRIPE_INDEX=$(max_lov_stripe_index ost3)
+	LOV_V1_INSANE_STRIPE_INDEX=$(max_lov_stripe_index)
 	echo  "Format $OSTCOUNT OSTs with OST_INDEX_LIST=[0,$rand_ost,$LOV_V1_INSANE_STRIPE_INDEX]"
 	OST_INDEX_LIST=[0,$rand_ost,$LOV_V1_INSANE_STRIPE_INDEX] formatall ||
 		error "formatall failed with $?"
