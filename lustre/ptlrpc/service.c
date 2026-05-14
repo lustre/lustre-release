@@ -212,9 +212,6 @@ struct ptlrpc_hr_partition {
 	struct ptlrpc_hr_thread		*hrp_thrs;
 };
 
-#define HRT_RUNNING 0
-#define HRT_STOPPING 1
-
 struct ptlrpc_hr_service {
 	/* CPU partition table, it's just cfs_cpt_tab for now */
 	struct cfs_cpt_table		*hr_cpt_table;
