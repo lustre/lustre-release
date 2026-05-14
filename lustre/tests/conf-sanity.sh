@@ -12248,8 +12248,8 @@ test_154() {
 run_test 154 "expand .. on rename after MDT backup restore"
 
 test_155() {
-	(( OST1_VERSION >= $(version_code 2.16.50.134) )) ||
-		skip "Need OST version at least 2.16.50.134"
+	(( OST1_VERSION >= $(version_code v2_16_50-174-g66e51e654a) )) ||
+		skip "Need OST >= 2.16.50.174 to avoid gap in OST OIDs"
 
 	reformat_and_config
 	setupall
@@ -12285,8 +12285,8 @@ test_156() {
 	local root_fid_export
 	local root_fid_client
 
-	(( MDS1_VERSION >= $(version_code 2.16.57) )) ||
-		skip "Need MDS version at least 2.16.57"
+	(( MDS1_VERSION >= $(version_code v2_16_57-151-g328f6c48da) )) ||
+		skip "Need MDS >= 2.16.57.151 for root FID in exports"
 
 	reformat
 	setupall
@@ -12343,11 +12343,11 @@ cleanup_157a() {
 }
 
 test_157a() {
+	(( $MGS_VERSION >= $(version_code v2_17_52-30-gf96f38c9e1) )) ||
+		skip "need MGS >= 2.17.52.30 for 'allow_register' tunable"
+
 	stopall
 	setup
-
-	do_facet mgs $LCTL get_param -n allow_register ||
-        	skip "MGS does not have the allow_register tunable"
 
 	# Verify interface works
 	do_facet mgs "$LCTL set_param allow_register=1" ||
@@ -12453,10 +12453,10 @@ cleanup_157b() {
 }
 
 test_157b() {
-	setup
+	(( $MGS_VERSION >= $(version_code v2_17_52-30-gf96f38c9e1) )) ||
+		skip "need MGS >= 2.17.52.30 for 'allow_register' tunable"
 
-	do_facet mgs $LCTL get_param -n allow_register ||
-		skip "MGS does not have the allow_register tunable"
+	setup
 
 	# existing targets can re-register, new targets blocked
 
@@ -12571,6 +12571,9 @@ test_160() {
 run_test 160 "MGC updates failnodes from all participants"
 
 test_161() {
+	(( $MGS_VERSION >= $(version_code v2_16_58-27-gb850dbb71d) )) ||
+		skip "need MGS >= 2.16.58.27 for 'mgsname' option"
+
 	setup
 
 	local custom_mgsname="test-mgs-custom"
@@ -12645,8 +12648,8 @@ test_161() {
 run_test 161 "test '-o mgsname' option"
 
 test_162() {
-	(( MGS_VERSION >= $(version_code 2.17.50) )) ||
-		skip "Need MGS version at least 2.17.50"
+	(( $MGS_VERSION >= $(version_code v2_17_50-68-g666ead3301) )) ||
+		skip "Need MGS >= 2.17.50.68 for 'noclient' option"
 	local_mode && skip_env "skip in local mode"
 	local mhost
 
@@ -12726,8 +12729,8 @@ cleanup_164() {
 }
 
 test_164() {
-	(( $MDS1_VERSION >= $(version_code 2.17.50) )) ||
-		skip "Need MDS version >= 2.17.50"
+	(( $MDS1_VERSION >= $(version_code v2_17_50-225-g671e757102) )) ||
+		skip "Need MDS >= 2.17.50.225 for expected_clients"
 
 	formatall
 	setup
