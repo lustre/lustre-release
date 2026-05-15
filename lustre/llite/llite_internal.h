@@ -157,7 +157,10 @@ struct ll_inode_info {
 	s64				lli_ctime;
 	s64				lli_btime;
 	spinlock_t			lli_agl_lock;
-	bool				lli_synced_to_mds;
+	/* need to ll_mdsync() newly created inode to MDT */
+	unsigned int			lli_need_sync_to_mds:1;
+	/* need to ll_fsync() file writes for "sync_on_close" */
+	unsigned int			lli_need_sync_to_oss:1;
 
 	/* inode specific open lock caching threshold */
 	u32				lli_open_thrsh_count;
@@ -816,6 +819,7 @@ enum ll_sbi_flags {
 	LL_SBI_LRU_RESIZE,		/* lru resize support */
 	LL_SBI_NOLCK,			/* DLM locking disabled directio-only */
 	LL_SBI_STATFS_PROJECT,		/* statfs returns project quota */
+	LL_SBI_SYNC_ON_CLOSE,		/* files sync data on close */
 	LL_SBI_TEST_DUMMY_ENCRYPTION,	/* test dummy encryption */
 	LL_SBI_USER_FID2PATH,		/* fid2path by unprivileged users */
 	LL_SBI_USER_PRINCIPAL,		/* user principal for IAM */
@@ -1462,6 +1466,7 @@ int ll_dir_getstripe_default(struct inode *inode, void **lmmp,
 			     struct ptlrpc_request **root_request, u64 valid);
 int ll_dir_getstripe(struct inode *inode, void **plmm, int *plmm_size,
 		     struct ptlrpc_request **request, u64 valid);
+int ll_mdsync(struct inode *inode);
 int ll_fsync(struct file *file, loff_t start, loff_t end, int data);
 int ll_merge_attr(const struct lu_env *env, struct inode *inode);
 int ll_merge_attr_try(const struct lu_env *env, struct inode *inode);

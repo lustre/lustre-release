@@ -1,0 +1,99 @@
+.TH LLITE.*.SYNC_ON_CLOSE 4 2026-05-19 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+llite.sync_on_close \- enable (meta)data sync on file close
+.SH SYNOPSIS
+.SY
+.BI "lctl get_param llite." INSTANCE .sync_on_close
+.SY
+.BI "lctl set_param llite." INSTANCE .sync_on_close= ENABLE
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.br
+.BR 644 " | " -rw-r--r--
+.TP
+.B Scope
+.br
+Per client mountpoint
+.TP
+.B Config
+.br
+Always present on client
+.TP
+.B Default
+.br
+.RB llite.*.sync_on_close= 0
+.br
+.TP
+.B Valid Range
+.br
+.RB llite.*.sync_on_close= 0
+.br
+.RB llite.*.sync_on_close= 1
+.SH DESCRIPTION
+The
+.BR sync_on_close (4)
+tunable parameter allows a client mountpoint to have more NFS-like behavior.
+When
+.IB ENABLE =1
+then new file data is written to the servers immediately when
+.BR close (2)
+or
+.BR fclose (3)
+is called and they do not return until the data has been saved persistently.
+This avoids issues with applications that do not call
+.BR fsync (2)
+or
+.BR fflush (3)
+themselves, but depend on NFS sync-on-close write semantics for consistency.
+.PP
+With the default
+.IB ENABLE =0
+setting, writes are flushed to the server when they form a full-sized RPC,
+as determined by
+.BR osc.max_pages_per_rpc (4),
+when
+.BR fsync (2)
+or equivalent is called,
+when the LDLM lock covering the file data is cancelled
+(e.g. if another client wants to read the data),
+or when the kernel flushes old data under memory pressure or by age.
+.PP
+It is preferable that applications flush file data explicitly themselves
+when this is required, since
+.BR sync_on_close (4)
+can hurt overall IO performance due to increased close latency,
+especially when a large number of small files are being written, like with
+.BR tar (1)
+or
+.BR rsync (1).
+.SS NOTE
+The "dirty" state of a file is tracked per inode rather than per file
+descriptor, so if multiple processes on a client have the same file
+open, then the file data and metadata is sync'd only once for the file,
+unless it is modified again afterward.
+.PP
+If multiple threads have the same file open, then the kernel's
+VFS-level close will delay calling into Lustre until the last process
+using a file closes its descriptor.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B llite.*.sync_on_close
+.EE
+.SH EXAMPLES
+Enable data fsync on close for all files on the local client:
+.EX
+.RB "client# " "lctl set_param llite.*.sync_on_close=1"
+.EE
+.SH AVAILABILITY
+.B llite.*.sync_on_close
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" Added in commit 2.17.5x
+.SH SEE ALSO
+.BR osc.max_pages_per_rpc (4),
+.BR lctl-get_param (8),
+.BR lctl-set_param (8)

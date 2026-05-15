@@ -77,7 +77,7 @@ int it_open_error(enum lustre_disposition phase, struct lookup_intent *it)
 			return 0;
 	}
 
-	LASSERTF(false, "it disp: %X, status: %d\n",
+	LASSERTF(false, "it_disp: %#x, status: %d\n",
 		 it_disposition(it, DISP_ALL), it->it_status);
 
 	return 0;
@@ -829,7 +829,7 @@ int mdc_finish_enqueue(struct obd_export *exp,
 	    (!it_disposition(it, DISP_OPEN_OPEN) || it->it_status != 0))
 		mdc_clear_replay_flag(req, it->it_status);
 
-	DEBUG_REQ(D_RPCTRACE, req, "op=%x disposition=%x, status=%d",
+	DEBUG_REQ(D_RPCTRACE, req, "op=%#x disposition=%#x, status=%d",
 		  it->it_op, it_disposition(it, DISP_ALL), it->it_status);
 
 	/* We know what to expect, so we do any byte flipping required here */
@@ -1383,7 +1383,7 @@ static int mdc_finish_intent_lock(struct obd_export *exp,
 	EXIT;
 out:
 	CDEBUG(D_DENTRY,
-	       "D_IT dentry="DNAME" intent=%s status=%d disp=%x: rc = %d\n",
+	       "D_IT dentry="DNAME" intent=%s status=%d disp=%#x: rc = %d\n",
 	       encode_fn_opdata(op_data), ldlm_it2str(it->it_op),
 	       it->it_status, it_disposition(it, DISP_ALL), rc);
 

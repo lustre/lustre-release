@@ -698,6 +698,37 @@ out_unlock:
 }
 LDEBUGFS_SEQ_FOPS(ll_max_cached_mb);
 
+static ssize_t sync_on_close_show(struct kobject *kobj, struct attribute *attr,
+				  char *buf)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n",
+			 test_bit(LL_SBI_SYNC_ON_CLOSE, sbi->ll_flags));
+}
+
+static ssize_t sync_on_close_store(struct kobject *kobj, struct attribute *attr,
+				   const char *buffer, size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	if (val)
+		set_bit(LL_SBI_SYNC_ON_CLOSE, sbi->ll_flags);
+	else
+		clear_bit(LL_SBI_SYNC_ON_CLOSE, sbi->ll_flags);
+
+	return count;
+}
+LUSTRE_RW_ATTR(sync_on_close);
+
 static int ll_unevict_cached_mb_seq_show(struct seq_file *m, void *v)
 {
 	struct super_block *sb = m->private;
@@ -2612,7 +2643,11 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_kbytestotal.attr,
 	&lustre_attr_kbytesfree.attr,
 	&lustre_attr_kbytesavail.attr,
+	&lustre_attr_checksums.attr,
+	&lustre_attr_checksum_pages.attr,
 	&lustre_attr_client_type.attr,
+	&lustre_attr_default_easize.attr,
+	&lustre_attr_fast_read.attr,
 	&lustre_attr_foreign_symlink_enable.attr,
 	&lustre_attr_foreign_symlink_prefix.attr,
 	&lustre_attr_foreign_symlink_upcall.attr,
@@ -2624,8 +2659,7 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_hybrid_io_write_threshold_bytes.attr,
 	&lustre_attr_hybrid_io_read_threshold_bytes.attr,
 	&lustre_attr_inode_cache.attr,
-	&lustre_attr_checksums.attr,
-	&lustre_attr_checksum_pages.attr,
+	&lustre_attr_intent_mkdir.attr,
 	&lustre_attr_max_easize.attr,
 	&lustre_attr_max_read_ahead_mb.attr,
 	&lustre_attr_max_read_ahead_per_file_mb.attr,
@@ -2659,10 +2693,8 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_statfs_max_age.attr,
 	&lustre_attr_statfs_project.attr,
 	&lustre_attr_statfs_state.attr,
-	&lustre_attr_default_easize.attr,
+	&lustre_attr_sync_on_close.attr,
 	&lustre_attr_xattr_cache.attr,
-	&lustre_attr_intent_mkdir.attr,
-	&lustre_attr_fast_read.attr,
 	&lustre_attr_tiny_write.attr,
 	&lustre_attr_enable_erasure_coding.attr,
 	&lustre_attr_unaligned_dio.attr,

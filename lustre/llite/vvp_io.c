@@ -1621,6 +1621,10 @@ static int vvp_io_fault_start(const struct lu_env *env,
 					result = -ENOSPC;
 				GOTO(out, result);
 			} else {
+				CDEBUG(D_DENTRY,
+				       "inode %p need_sync_to_oss "DFID"\n",
+				       inode, PFID(&ll_i2info(inode)->lli_fid));
+				ll_i2info(inode)->lli_need_sync_to_oss = true;
 				cl_page_disown(env, io, page);
 			}
 		}

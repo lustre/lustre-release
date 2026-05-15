@@ -181,7 +181,9 @@ static int ll_xattr_set_common(const struct xattr_handler *handler,
 		GOTO(out, rc);
 	}
 
-	ll_i2info(inode)->lli_synced_to_mds = false;
+	CDEBUG(D_INODE, "inode %p need_sync_to_mds "DFID"\n",
+	       inode, PFID(&ll_i2info(inode)->lli_fid));
+	ll_i2info(inode)->lli_need_sync_to_mds = true;
 
 	ptlrpc_req_put(req);
 

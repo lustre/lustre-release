@@ -5812,45 +5812,42 @@ BG_DIRTY_RATIO_SAVE=10
 MAX_BG_DIRTY_RATIO=25
 
 start_writeback() {
-	trap 0
-	# in 2.6, restore /proc/sys/vm/dirty_writeback_centisecs,
-	# dirty_ratio, dirty_background_ratio
-	if [ -f /proc/sys/vm/dirty_writeback_centisecs ]; then
-		sysctl -w vm.dirty_writeback_centisecs=$WRITEBACK_SAVE
-		sysctl -w vm.dirty_background_ratio=$BG_DIRTY_RATIO_SAVE
-		sysctl -w vm.dirty_ratio=$DIRTY_RATIO_SAVE
-	else
-		# if file not here, we are a 2.4 kernel
-		kill -CONT `pidof kupdated`
-	fi
+	sysctl -w vm.dirty_writeback_centisecs=$WRITEBACK_SAVE
+	sysctl -w vm.dirty_background_ratio=$BG_DIRTY_RATIO_SAVE
+	sysctl -w vm.dirty_ratio=$DIRTY_RATIO_SAVE
 }
 
 stop_writeback() {
 	# setup the trap first, so someone cannot exit the test at the
 	# exact wrong time and mess up a machine
-	trap start_writeback EXIT
-	# in 2.6, save and 0 /proc/sys/vm/dirty_writeback_centisecs
-	if [ -f /proc/sys/vm/dirty_writeback_centisecs ]; then
-		WRITEBACK_SAVE=`sysctl -n vm.dirty_writeback_centisecs`
-		sysctl -w vm.dirty_writeback_centisecs=0
-		sysctl -w vm.dirty_writeback_centisecs=0
-		# save and increase /proc/sys/vm/dirty_ratio
-		DIRTY_RATIO_SAVE=`sysctl -n vm.dirty_ratio`
-		sysctl -w vm.dirty_ratio=$MAX_DIRTY_RATIO
-		# save and increase /proc/sys/vm/dirty_background_ratio
-		BG_DIRTY_RATIO_SAVE=`sysctl -n vm.dirty_background_ratio`
-		sysctl -w vm.dirty_background_ratio=$MAX_BG_DIRTY_RATIO
-	else
-		# if file not here, we are a 2.4 kernel
-		kill -STOP `pidof kupdated`
-	fi
+	stack_trap start_writeback
+
+	# save and zero /proc/sys/vm/dirty_writeback_centisecs
+	WRITEBACK_SAVE=$(sysctl -n vm.dirty_writeback_centisecs)
+	sysctl -w vm.dirty_writeback_centisecs=0
+	sysctl -w vm.dirty_writeback_centisecs=0
+	# save and increase /proc/sys/vm/dirty_ratio
+	DIRTY_RATIO_SAVE=$(sysctl -n vm.dirty_ratio)
+	sysctl -w vm.dirty_ratio=$MAX_DIRTY_RATIO
+	# save and increase /proc/sys/vm/dirty_background_ratio
+	BG_DIRTY_RATIO_SAVE=$(sysctl -n vm.dirty_background_ratio)
+	sysctl -w vm.dirty_background_ratio=$MAX_BG_DIRTY_RATIO
+
+	# disable sync_on_close if enabled
+	local save="$($LCTL get_param llite.*.sync_on_close)"
+	[[ ! $save =~ "=1" ]] || {
+		stack_trap "$LCTL set_param $save"
+		$LCTL set_param llite.*.sync_on_close=0
+	}
 }
 
 # ensure that all stripes have some grant before we test client-side cache
 setup_test42() {
-	for i in `seq -f $DIR/f42-%g 1 $OSTCOUNT`; do
-		dd if=/dev/zero of=$i bs=4k count=1
-		rm $i
+	for ((i=1; i <= $OSTCOUNT; i++)); do
+		local file=$DIR/$tfile-$i
+
+		dd if=/dev/zero of=$file bs=4k count=1
+		rm -f $file
 	done
 }
 
@@ -11045,6 +11042,138 @@ test_63b() {
 	debugrestore
 }
 run_test 63b "async write errors should be returned to fsync ==="
+
+test_63c() {
+	stack_trap "$LCTL set_param $($LCTL get_param llite.*.sync_on_close)"
+	$LCTL set_param llite.$FSNAME*.sync_on_close=1
+	local count=20
+	local dir=$DIR/$tdir
+
+	mkdir $dir || error "mkdir $dir failed"
+	# ensure only a single OST stripe per file so accounting works
+	$LFS setstripe -c 1 $dir || error "setstripe $dir failed"
+
+	# open+create files without writing, expect one MDT sync for each
+	# MDT (N*open/create)
+	local mdt_before=$(calc_stats mdc.*.stats mds_sync)
+	local ost_before=$(calc_stats osc.*.stats ost_sync)
+	createmany -o $dir/$tfile-empty- $count ||
+		error "'createmany -o $tfile-empty $count' failed"
+	local mdt_after=$(calc_stats mdc.*.stats mds_sync)
+	local ost_after=$(calc_stats osc.*.stats ost_sync)
+	(( $mdt_after == $mdt_before + $count )) ||
+		error "expect MDT create $mdt_after == $mdt_before + $count"
+	(( $ost_after == $ost_before )) ||
+		error "expect OST create $ost_after == $ost_before"
+
+	# append data to existing files, expect one OST sync for each
+	# MDT(open) OST(N*setattr)
+	mdt_before=$mdt_after
+	ost_before=$ost_after
+	for ((i = 0; i < count; i++)); do
+		echo "foo-$i" >> $dir/$tfile-empty-$i ||
+			error "write $tfile-empty-$i failed"
+	done
+	mdt_after=$(calc_stats mdc.*.stats mds_sync)
+	ost_after=$(calc_stats osc.*.stats ost_sync)
+	(( $mdt_after == $mdt_before )) ||
+		error "expect MDT write $mdt_after == $mdt_before"
+	(( $ost_after == $ost_before + $count )) ||
+		error "expect OST write $ost_after == $ost_before + $count"
+
+	# overwrite same file notrunc+fsync, expect only one OST sync for each
+	# MDT (open/create), OST (N*write+sync)
+	mdt_before=$mdt_after
+	ost_before=$ost_after
+	for ((i = 0; i < count; i++)); do
+		dd if=/dev/zero of=$dir/$tfile-1 bs=4k count=2 \
+			conv=notrunc,fsync status=none ||
+			error "dd $tfile-1 $i failed"
+	done
+	mdt_after=$(calc_stats mdc.*.stats mds_sync)
+	ost_after=$(calc_stats osc.*.stats ost_sync)
+	(( $mdt_after == $mdt_before + 1 )) ||
+		error "expect MDT write+sync $mdt_after == $mdt_before + 1"
+	(( $ost_after == $ost_before + $count )) ||
+		error "expect OST write+sync $ost_after == $ost_before + $count"
+
+	# extend existing file, expect one OST sync for each
+	# OST (write)
+	mdt_before=$mdt_after
+	ost_before=$ost_after
+	for ((i = 0; i < count; i++)); do
+		dd if=/dev/zero of=$dir/$tfile-1 bs=4k count=2 seek=$((i+1)) \
+		   conv=notrunc status=none ||
+			error "dd append $tfile-1 $i failed"
+	done
+	mdt_after=$(calc_stats mdc.*.stats mds_sync)
+	ost_after=$(calc_stats osc.*.stats ost_sync)
+	(( $mdt_after == $mdt_before )) ||
+		error "expect MDT append $mdt_after == $mdt_before"
+	(( $ost_after == $ost_before + $count )) ||
+		error "expect OST append $ost_after == $ost_before + $count"
+
+	# list directory, expect no MDT or OST sync
+	# MDT (readdir,getattr), OST (getattr)
+	mdt_before=$mdt_after
+	ost_before=$ost_after
+	ls -l $dir || error "ls -l $dir failed"
+	mdt_after=$(calc_stats mdc.*.stats mds_sync)
+	ost_after=$(calc_stats osc.*.stats ost_sync)
+	(( $mdt_after == $mdt_before )) ||
+		error "expect MDT ls $mdt_after == $mdt_before"
+	(( $ost_after == $ost_before )) ||
+		error "expect OST ls $ost_after == $ost_before"
+
+	# truncate existing files, expect one MDT+OST sync for each
+	# MDT (open+truncate) OST (truncate)
+	mdt_before=$mdt_after
+	ost_before=$ost_after
+	for ((i = 0; i < count; i++)); do
+		> $dir/$tfile-empty-$i || error "truncate $tfile-empty-$i fail"
+	done
+	mdt_after=$(calc_stats mdc.*.stats mds_sync)
+	ost_after=$(calc_stats osc.*.stats ost_sync)
+	(( $mdt_after == $mdt_before + $count)) ||
+		error "expect MDT truncate $mdt_after == $mdt_before + $count"
+	(( $ost_after == $ost_before + $count )) ||
+		error "expect OST truncate $ost_after == $ost_before + $count"
+
+	stack_trap "set_default_debug"
+	set_default_debug "rpctrace+dlmtrace+inode+entry" "" 512
+	# write to multi-striped file, expect one MDT+OSTCOUNT OST sync
+	# MDT (create/setstripe+truncate), OST (8*OSTCOUNT*write)
+	mdt_before=$mdt_after
+	ost_before=$ost_after
+	$LFS setstripe -c $OSTCOUNT -S 1M $dir/$tfile-striped
+	local stripes=$($LFS getstripe -c $dir/$tfile-striped)
+	stack_trap "rm -f $dir/$tfile-stripes"
+	dd if=/dev/zero of=$dir/$tfile-striped bs=1M count=$((8 * $stripes)) ||
+		error "dd striped $tfile-striped failed"
+	mdt_after=$(calc_stats mdc.*.stats mds_sync)
+	ost_after=$(calc_stats osc.*.stats ost_sync)
+	(( $mdt_after == $mdt_before + 2 )) ||
+		error "expect MDT striped $mdt_after == $mdt_before + 2"
+	(( $ost_after >= $ost_before + $stripes &&
+	   $ost_after < $ost_before + 2 * $stripes )) ||
+		error "expect OST striped $ost_after == $ost_before + $stripes"
+
+	# read file, expect no MDT or OST sync
+	# MDT(open), OST(2*OSTCOUNT*read)
+	mdt_before=$mdt_after
+	ost_before=$ost_after
+	dd if=$dir/$tfile-1 of=/dev/null bs=4k status=none ||
+		error "dd read $tfile-1 failed"
+	dd if=$dir/$tfile-striped of=/dev/null bs=1M status=none ||
+		error "dd read $tfile-1 failed"
+	mdt_after=$(calc_stats mdc.*.stats mds_sync)
+	ost_after=$(calc_stats osc.*.stats ost_sync)
+	(( $mdt_after == $mdt_before )) ||
+		error "expect MDT read $mdt_after == $mdt_before"
+	(( $ost_after == $ost_before )) ||
+		error "expect OST read $ost_after == $ost_before"
+}
+run_test 63c "test sync_on_close=1"
 
 test_64a () {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

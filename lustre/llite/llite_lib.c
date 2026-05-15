@@ -1167,6 +1167,8 @@ static const match_table_t ll_sbi_flags_name = {
 	{LL_SBI_NOLCK,			"nolock"},
 	{LL_SBI_STATFS_PROJECT,		"statfs_project"},
 	{LL_SBI_STATFS_PROJECT,		"nostatfs_project"},
+	{LL_SBI_SYNC_ON_CLOSE,		"sync_on_close"},
+	{LL_SBI_SYNC_ON_CLOSE,		"nosync_on_close"},
 	{LL_SBI_TEST_DUMMY_ENCRYPTION,	"test_dummy_encryption=%s"},
 	{LL_SBI_TEST_DUMMY_ENCRYPTION,	"test_dummy_encryption"},
 	{LL_SBI_USER_FID2PATH,		"user_fid2path"},
@@ -1298,12 +1300,13 @@ static int ll_options(char *options, struct super_block *sb)
 		case LL_SBI_CHECKSUM:
 			sbi->ll_checksum_set = 1;
 			fallthrough;
-		case LL_SBI_USER_XATTR:
-		case LL_SBI_USER_FID2PATH:
 		case LL_SBI_LRU_RESIZE:
 		case LL_SBI_LAZYSTATFS:
-		case LL_SBI_VERBOSE:
 		case LL_SBI_STATFS_PROJECT:
+		case LL_SBI_SYNC_ON_CLOSE:
+		case LL_SBI_USER_XATTR:
+		case LL_SBI_USER_FID2PATH:
+		case LL_SBI_VERBOSE:
 			if (turn_off)
 				clear_bit(token, sbi->ll_flags);
 			else
@@ -2449,6 +2452,9 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 		}
 
 		attr->ia_valid |= ATTR_MTIME | ATTR_CTIME;
+		CDEBUG(D_INODE, "inode %p attr need_sync_to_oss "DFID"\n",
+		       inode, PFID(&ll_i2info(inode)->lli_fid));
+		lli->lli_need_sync_to_oss = true;
 	}
 
 	/* POSIX: check before ATTR_*TIME_SET set (from inode_change_ok) */
@@ -2483,6 +2489,12 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 	if (S_ISREG(inode->i_mode))
 		inode_unlock(inode);
 
+	if (attr->ia_valid & ~(ATTR_ATIME | ATTR_CTIME | ATTR_MTIME)) {
+		CDEBUG(D_INODE, "inode %p attr %#x need_sync_to_mds "DFID"\n",
+		       inode, attr->ia_valid, PFID(&ll_i2info(inode)->lli_fid));
+		lli->lli_need_sync_to_mds = true;
+	}
+
 	/* We always do an MDS RPC, even if we're only changing the size;
 	 * only the MDS knows whether truncate() should fail with -ETXTBUSY
 	 */
@@ -2511,14 +2523,14 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 	rc = ll_md_setattr(dentry, op_data);
 	if (rc)
 		GOTO(out, rc);
-	lli->lli_synced_to_mds = false;
 
 	if (!S_ISREG(inode->i_mode) || hsm_import)
 		GOTO(out, rc = 0);
 
 	if (attr->ia_valid & (ATTR_SIZE | ATTR_ATIME | ATTR_ATIME_SET |
 			      ATTR_MTIME | ATTR_MTIME_SET |
-			      ATTR_CTIME | ATTR_CTIME_SET)) {
+			      ATTR_CTIME | ATTR_CTIME_SET |
+			      ATTR_UID | ATTR_GID)) {
 		bool cached = false;
 
 		rc = pcc_inode_setattr(inode, attr, &cached);

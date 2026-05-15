@@ -336,12 +336,24 @@ static int ll_md_close(struct inode *inode, struct file *file)
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct lustre_handle lockh;
 	enum ldlm_mode lockmode;
-	int rc = 0;
+	int rc = 0, rc2;
 
 	ENTRY;
 	/* clear group lock, if present */
 	if (unlikely(lfd->lfd_file_flags & LL_FILE_GROUP_LOCKED))
 		ll_put_grouplock(inode, file, lfd->fd_grouplock.lg_gid);
+
+	/* Sync on close, if enabled and data modified since last open/fsync.
+	 * Sync OSS *before* close so size/blocks can be sent to MDS for LSOM.
+	 *
+	 * The OSS_SYNC RPC could be optimized if file stays open after write:
+	 * - OSC commit callback clears need_sync_to_oss on *last* write commit
+	 * - write range tracking to limit filemap_write_and_wait_range() OST
+	 *   range (only useful for small writes in a large striped file)
+	 */
+	if (test_bit(LL_SBI_SYNC_ON_CLOSE, ll_i2sbi(inode)->ll_flags) &&
+	    lli->lli_need_sync_to_oss)
+		rc = ll_fsync(file, 0, MAX_LFS_FILESIZE, 1);
 
 	mutex_lock(&lli->lli_och_mutex);
 	if (lfd->fd_lease_och != NULL) {
@@ -355,7 +367,9 @@ static int ll_md_close(struct inode *inode, struct file *file)
 		/* Usually the lease is not released when the
 		 * application crashed, we need to release here.
 		 */
-		rc = ll_lease_close(lease_och, inode, &lease_broken);
+		rc2 = ll_lease_close(lease_och, inode, &lease_broken);
+		if (!rc)
+			rc = rc2;
 
 		mutex_lock(&lli->lli_och_mutex);
 
@@ -371,7 +385,9 @@ static int ll_md_close(struct inode *inode, struct file *file)
 		lfd->fd_och = NULL;
 		mutex_unlock(&lli->lli_och_mutex);
 
-		rc = ll_close_inode_openhandle(inode, och, 0, NULL);
+		rc2 = ll_close_inode_openhandle(inode, och, 0, NULL);
+		if (!rc)
+			rc = rc2;
 		GOTO(out, rc);
 	}
 
@@ -396,10 +412,26 @@ static int ll_md_close(struct inode *inode, struct file *file)
 	/* LU-4398: do not cache write open lock if the file has exec bit */
 	if ((lockmode == LCK_CW && inode->i_mode & 0111) ||
 	    !md_lock_match(ll_i2mdexp(inode), flags, ll_inode2fid(inode),
-			   LDLM_IBITS, &policy, lockmode, 0, &lockh))
-		rc = ll_md_real_close(inode, lfd->fd_open_mode);
+			   LDLM_IBITS, &policy, lockmode, 0, &lockh)) {
+		rc2 = ll_md_real_close(inode, lfd->fd_open_mode);
+		if (!rc)
+			rc = rc2;
+	}
 
 out:
+	/* Sync on close, if enabled and inode modified since open/last fsync.
+	 * Sync MDS *after* close so that LSOM xattr will be persisted to MDT.
+	 *
+	 * The MDS_SYNC RPC could be optimized in a couple of ways:
+	 * - MDC commit callback clear need_sync_to_mds on create/setattr commit
+	 *   (maybe need separate bits for create, setattrs, truncate?)
+	 * - MDS_CLOSE with new MDS_SYNC_RPC flag to avoid extra RPC (protocol)
+	 */
+	if (test_bit(LL_SBI_SYNC_ON_CLOSE, ll_i2sbi(inode)->ll_flags)) {
+		rc2 = ll_mdsync(inode);
+		if (!rc)
+			rc = rc2;
+	}
 	file->private_data = NULL;
 	ll_file_data_put(lfd);
 
@@ -2588,6 +2620,7 @@ static ssize_t ll_do_tiny_write(struct kiocb *iocb, struct iov_iter *iter)
 static ssize_t do_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 {
 	struct file *file = iocb->ki_filp;
+	struct inode *inode = file_inode(file);
 	struct vvp_io_args *args;
 	struct lu_env *env;
 	ktime_t kstart = ktime_get();
@@ -2601,11 +2634,15 @@ static ssize_t do_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	ENTRY;
 	CDEBUG(D_VFSTRACE|D_IOTRACE,
 	       "START file "DNAME":"DFID", ppos: %lld, count: %zu\n",
-	       encode_fn_file(file), PFID(ll_inode2fid(file_inode(file))),
+	       encode_fn_file(file), PFID(ll_inode2fid(inode)),
 	       iocb->ki_pos, iov_iter_count(from));
 
 	if (!iov_iter_count(from))
 		GOTO(out, rc_normal = 0);
+
+	CDEBUG(D_INODE, "inode %p need_sync_to_oss "DFID"\n",
+	       inode, PFID(&ll_i2info(inode)->lli_fid));
+	ll_i2info(inode)->lli_need_sync_to_oss = true;
 
 	/*
 	 * When PCC write failed, we usually do not fall back to the normal
@@ -2634,7 +2671,7 @@ static ssize_t do_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	 * pages, and we can't do append writes because we can't guarantee the
 	 * required DLM locks are held to protect file size.
 	 */
-	if (ll_sbi_has_tiny_write(ll_i2sbi(file_inode(file))) &&
+	if (ll_sbi_has_tiny_write(ll_i2sbi(inode)) &&
 	    !(iocb_ki_flags_check(iocb,
 				  IOCB_DIRECT | IOCB_DSYNC | IOCB_SYNC |
 				  IOCB_APPEND)))
@@ -2670,16 +2707,16 @@ static ssize_t do_file_write_iter(struct kiocb *iocb, struct iov_iter *from)
 	cl_env_put(env, &refcheck);
 out:
 	if (rc_normal > 0) {
-		ll_rw_stats_tally(ll_i2sbi(file_inode(file)), current->pid,
+		ll_rw_stats_tally(ll_i2sbi(inode), current->pid,
 				  file->private_data, iocb->ki_pos,
 				  rc_normal, WRITE);
-		ll_stats_ops_tally(ll_i2sbi(file_inode(file)), LPROC_LL_WRITE,
+		ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_WRITE,
 				   ktime_us_delta(ktime_get(), kstart));
 	}
 
 	CDEBUG(D_IOTRACE,
 	       "COMPLETED: file "DNAME":"DFID", ppos: %lld, count: %zu, rc = %zu\n",
-	       encode_fn_file(file), PFID(ll_inode2fid(file_inode(file))),
+	       encode_fn_file(file), PFID(ll_inode2fid(inode)),
 	       iocb->ki_pos, iov_iter_count(from), rc_normal);
 
 	RETURN(rc_normal);
@@ -2958,6 +2995,7 @@ static ssize_t ll_lov_setstripe(struct inode *inode, struct file *file,
 	rc = ll_lov_setstripe_ea_info(inode, file_dentry(file), flags, klum,
 				      lum_size);
 	if (!rc) {
+		struct ll_inode_info *lli = ll_i2info(inode);
 		__u32 gen;
 
 		rc = put_user(0, &lum->lmm_stripe_count);
@@ -2968,9 +3006,12 @@ static ssize_t ll_lov_setstripe(struct inode *inode, struct file *file,
 		if (rc)
 			GOTO(out, rc);
 
+		CDEBUG(D_INODE, "inode %p need_sync_to_mds "DFID"\n",
+		       inode, PFID(&lli->lli_fid));
+		lli->lli_need_sync_to_mds = true;
 		rc = ll_file_getstripe(inode, arg, lum_size);
 		if (S_ISREG(inode->i_mode) && IS_ENCRYPTED(inode) &&
-		    ll_i2info(inode)->lli_clob) {
+		    lli->lli_clob) {
 			struct iattr attr = { 0 };
 
 			rc = cl_setattr_ost(inode, &attr, OP_XVALID_FLAGS,
@@ -5234,6 +5275,7 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 	struct lu_env *env;
 	struct cl_io *io;
 	struct cl_fsync_io *fio;
+	struct ll_inode_info *lli;
 	int result;
 	__u16 refcheck;
 
@@ -5248,7 +5290,8 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 		RETURN(PTR_ERR(env));
 
 	io = vvp_env_new_io(env);
-	io->ci_obj = ll_i2info(inode)->lli_clob;
+	lli = ll_i2info(inode);
+	io->ci_obj = lli->lli_clob;
 	cl_object_get(io->ci_obj);
 	io->ci_ignore_layout = ignore_layout;
 
@@ -5261,6 +5304,8 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 	fio->fi_nr_written = 0;
 	fio->fi_prio = prio;
 
+	/* clear before sync starts, so write during sync will set it again */
+	lli->lli_need_sync_to_oss = false;
 	if (cl_io_init(env, io, CIT_FSYNC, io->ci_obj) == 0)
 		result = cl_io_loop(env, io);
 	else
@@ -5275,6 +5320,37 @@ int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end,
 }
 
 /*
+ * ll_mdsync() - perform metadata sync to MDS inode
+ *
+ * Only the first sync on MDS makes sense unless MDS attributes are
+ * explicitly changed, regular file writes/timestamps are all stored on OSTs.
+ * @inode - inode to sync
+ *
+ * Return:
+ * 0 - on success
+ * -ve errno - on error
+ */
+int ll_mdsync(struct inode *inode)
+{
+	struct ptlrpc_request *req;
+	struct ll_inode_info *lli = ll_i2info(inode);
+	int rc;
+
+	CDEBUG(D_INODE, "inode %p metadata sync "DFID" (need_sync=%u)\n",
+	       inode, PFID(&lli->lli_fid), lli->lli_need_sync_to_mds);
+	if (!lli->lli_need_sync_to_mds)
+		return 0;
+
+	rc = md_fsync(ll_i2sbi(inode)->ll_md_exp, &lli->lli_fid, &req);
+	if (!rc) {
+		lli->lli_need_sync_to_mds = false;
+		ptlrpc_req_put(req);
+	}
+
+	return rc;
+}
+
+/*
  * When dentry is provided (the 'else' case), file_dentry() may be
  * null and dentry must be used directly rather than pulled from
  * file_dentry() as is done otherwise.
@@ -5284,15 +5360,15 @@ int ll_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 	struct dentry *dentry = file_dentry(file);
 	struct inode *inode = dentry->d_inode;
 	struct ll_inode_info *lli = ll_i2info(inode);
-	struct ptlrpc_request *req;
 	ktime_t kstart = ktime_get();
 	int rc, err;
 
 	ENTRY;
 	CDEBUG(D_VFSTRACE|D_IOTRACE,
-	       "START file: name="DNAME", fid="DFID", start=%lld, end=%lld, datasync=%d\n",
+	       "START file: name="DNAME", fid="DFID", start=%lld, end=%lld, datasync=%d, need_sync %u/%u\n",
 	       encode_fn_file(file), PFID(ll_inode2fid(inode)),
-	       start, end, datasync);
+	       start, end, datasync, lli->lli_need_sync_to_mds,
+	       lli->lli_need_sync_to_oss);
 
 	/* fsync's caller has already called _fdata{sync,write}, we want
 	 * that IO to finish before calling the osc and mdc sync methods
@@ -5314,34 +5390,24 @@ int ll_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 		}
 	}
 
-	if (S_ISREG(inode->i_mode) && !lli->lli_synced_to_mds && !datasync) {
-		/*
-		 * only the first sync on MDS makes sense,
-		 * everything else is stored on OSTs
-		 */
-		err = md_fsync(ll_i2sbi(inode)->ll_md_exp,
-			       ll_inode2fid(inode), &req);
-		if (!rc)
-			rc = err;
-		if (!err) {
-			lli->lli_synced_to_mds = true;
-			ptlrpc_req_put(req);
-		}
-	}
-
+	/* Sync metadata on MDT first, and then sync the cached data on PCC */
 	if (S_ISREG(inode->i_mode)) {
 		struct ll_file_data *lfd = file->private_data;
 		bool cached;
 
-		/* Sync metadata on MDT first, and then sync the cached data
-		 * on PCC.
-		 */
+		if (!datasync) {
+			err = ll_mdsync(inode);
+			if (!rc)
+				rc = err;
+		}
+
 		err = pcc_fsync(file, start, end, datasync, &cached);
 		if (!cached)
+			/* cl_sync_file_range() clears lli_need_sync_to_oss */
 			err = cl_sync_file_range(inode, start, end,
 						 CL_FSYNC_ALL, 0,
 						 IO_PRIO_NORMAL);
-		if (rc == 0 && err < 0)
+		if (!rc && err < 0)
 			rc = err;
 		if (rc < 0)
 			lfd->fd_write_failed = true;
