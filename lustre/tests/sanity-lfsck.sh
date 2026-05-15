@@ -60,6 +60,7 @@ START_LAYOUT="do_facet $SINGLEMDS \
 		$LCTL lfsck_start -M ${MDT_DEV} -t layout"
 START_LAYOUT_ON_OST="do_facet ost1 $LCTL lfsck_start -M ${OST_DEV} -t layout"
 STOP_LFSCK="do_facet $SINGLEMDS $LCTL lfsck_stop -M ${MDT_DEV}"
+STOP_LFSCK_ALL="do_facet $SINGLEMDS $LCTL lfsck_stop -A -M ${MDT_DEV}"
 SHOW_NAMESPACE="do_facet $SINGLEMDS \
 		$LCTL get_param -n mdd.${MDT_DEV}.lfsck_namespace"
 SHOW_LAYOUT="do_facet $SINGLEMDS \
@@ -5507,7 +5508,7 @@ test_32b()
 	sleep 4
 
 	echo "stop LFSCK"
-	$STOP_LFSCK || error "(7) Fail to stop LFSCK!"
+	$STOP_LFSCK_ALL || error "(7) Fail to stop LFSCK!"
 
 	start mds2 $(mdsdevname 2) $MOUNT_OPTS_NOSCRUB > /dev/null ||
 		error "(8) Fail to start MDT2"
