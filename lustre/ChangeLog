@@ -4,7 +4,7 @@ TBD Whamcloud
          for currently supported client and server kernel versions.
        * Server primary kernels built and tested during release cycle:
          6.12.0-124.49.1.el10 (RHEL 10.1)
-         5.14.0-611.47.1.el9  (RHEL9.7)
+         5.14.0-611.55.1.el9  (RHEL9.7)
          5.14.0-570.62.1.el9  (RHEL9.6)
          5.14.0-503.40.1.el9  (RHEL9.5)
          5.14.0-427.42.1.el9  (RHEL9.4)
@@ -36,7 +36,7 @@ TBD Whamcloud
        * Client primary kernels built and tested during release cycle:
          6.12.0-124.49.1.el10 (RHEL 10.1)
          6.12.0-55.43.1.el10  (RHEL10.0)
-         5.14.0-611.47.1.el9  (RHEL9.7)
+         5.14.0-611.55.1.el9  (RHEL9.7)
          5.14.0-570.62.1.el9  (RHEL9.6)
          5.14.0-503.40.1.el9  (RHEL9.5)
          4.18.0-553.125.1.el8 (RHEL8.10)
