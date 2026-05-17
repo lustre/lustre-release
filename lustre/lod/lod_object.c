@@ -6256,8 +6256,18 @@ static int lod_declare_create(const struct lu_env *env, struct dt_object *dt,
 		GOTO(out, rc);
 
 	/* Inject EDQUOT for sanity-quota test_98 */
-	if (CFS_FAIL_CHECK(OBD_FAIL_QUOTA_EDQUOT) && S_ISDIR(attr->la_mode))
-		GOTO(out, rc = -EDQUOT);
+	if (CFS_FAIL_CHECK(OBD_FAIL_QUOTA_EDQUOT) && S_ISDIR(attr->la_mode)) {
+		struct seq_server_site *ss;
+
+		ss = lu_site2seq(dt->do_lu.lo_dev->ld_site);
+		if (cfs_fail_index(cfs_fail_val, ss->ss_node_id)) {
+			rc = -EDQUOT;
+			CERROR("%s: Injecting -EDQUOT for directory create on MDT%04x (fail_val=%x): rc = %d\n",
+			       dt->do_lu.lo_dev->ld_obd->obd_name,
+			       ss->ss_node_id, cfs_fail_val, rc);
+			GOTO(out, rc);
+		}
+	}
 
 	/*
 	 * it's lod_ah_init() that has decided the object will be striped

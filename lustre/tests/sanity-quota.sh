@@ -7922,21 +7922,35 @@ test_98() {
 	wait_clients_import_state $HOSTNAME mds$((idx+1)) FULL
 	wait_clients_import_state $HOSTNAME mds$((expected_mdt+1)) FULL
 
-	local idx_hex
-	printf -v idx_hex "%04x" "$idx"
-
 	local old_rr=$($LCTL get_param -n lmv.*.qos_threshold_rr | head -1)
 	stack_trap "$LCTL set_param lmv.*.qos_threshold_rr=$old_rr"
 
 	#define OBD_FAIL_QUOTA_EDQUOT            0xA02
-	stack_trap "do_facet mds$((idx+1)) $LCTL set_param fail_loc=0"
-	do_facet mds$((idx+1)) $LCTL set_param fail_loc=0x80000A02
+	# fail_val selects which MDTs to fail:
+	#   0            - fail all MDTs
+	#   1..0xffff    - fail single MDT at index (fail_val - 1)
+	#   0x10000+     - bitmask mode: bits 0-15 are MDT indices to fail
+	# We use mode 2 (single MDT) with fail_val = idx+1 to target specific MDT
+	stack_trap "do_facet mds$((idx+1)) $LCTL set_param fail_loc=0 fail_val=0"
+	do_facet mds$((idx+1)) $LCTL set_param \
+		fail_val=$((idx+1)) fail_loc=0xA02 ||
+		error "Failed to set fail_loc on mds$((idx+1))"
 
-	$LCTL set_param lmv.*.qos_threshold_rr=100
+	$LCTL set_param lmv.*.qos_threshold_rr=100 ||
+		error "Failed to set qos_threshold_rr"
+
+	local set_qos_rr=$($LCTL get_param -n lmv.*.qos_threshold_rr | head -1)
+	[[ "$set_qos_rr" == "100%" ]] ||
+		error "qos_threshold_rr expected 100%, got $set_qos_rr"
 
 	local old_qos_maxage=$($LCTL get_param -n lmv.*.qos_maxage)
-	$LCTL set_param lmv.*.qos_maxage=10
+	$LCTL set_param lmv.*.qos_maxage=10 ||
+		error "Failed to set qos_maxage"
 	stack_trap "$LCTL set_param -n lmv.*.qos_maxage=$old_qos_maxage"
+
+	local set_qos_maxage=$($LCTL get_param -n lmv.*.qos_maxage | head -1)
+	(( set_qos_maxage == 10 )) ||
+		error "qos_maxage not set correctly: expected 10, got $set_qos_maxage"
 	# import can be used only after (qos_maxage >> 1)s after setup
 	sleep 5
 
@@ -7949,7 +7963,7 @@ test_98() {
 	local stripe_index=$($LFS getdirstripe -i $testdir)
 
 	(( stripe_index != idx )) ||
-		error "Failed to create directory on another MDT"
+		error "Created on MDT$stripe_index, should not be MDT$idx"
 
 	echo "Directory successfully created on MDT$stripe_index after retry"
 }

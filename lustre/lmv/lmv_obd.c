@@ -2178,7 +2178,7 @@ struct lu_tgt_desc *lmv_locate_tgt_next_avail(struct lmv_obd *lmv,
 		return ERR_PTR(-EDQUOT);
 
 	/* Make start random to spread creates across MDTs */
-	start = (cur->ltd_index + get_random_u32()) % count;
+	start = (cur->ltd_index + 1 + get_random_u32_below(count - 1)) % count;
 
 	for (i = 0; i < count ; i++) {
 		__u32 idx = (start+i) % count;
@@ -2358,11 +2358,10 @@ retry:
 	    lmv->lmv_mdt_descs.ltd_lmv_desc.ld_active_tgt_count > 1) {
 		struct lmv_tgt_desc *new_tgt;
 
-		/* below message is checked in sanity-quota test_98 */
 		CDEBUG(D_QUOTA,
-		       "mkdir hit EDQUOT on MDT%04x (retry %d/%u), searching for alternative MDT\n",
-		       tgt->ltd_index, quota_retry,
-		       lmv->lmv_mdt_descs.ltd_lmv_desc.ld_active_tgt_count);
+		       "%s: mkdir hit EDQUOT on MDT%04x (retry %d/%u), searching for alternative MDT: rc = %d\n",
+		       lmv2obd_dev(lmv)->obd_name, tgt->ltd_index, quota_retry,
+		       lmv->lmv_mdt_descs.ltd_lmv_desc.ld_active_tgt_count, rc);
 
 		set_bit(tgt->ltd_index, exclude_bitmap);
 

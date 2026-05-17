@@ -99,6 +99,24 @@ static inline int cfs_fail_check_set_loc(const char *file, const char *func,
 	return ret;
 }
 
+/* Helper function to check if fail_val targets a specific index.
+ * Supports three modes:
+ *   0            - target all indices
+ *   1..0xffff    - target single index (index == fail_val - 1)
+ *   0x10000+     - bitmask mode: bits 0-15 are a bitmask of target indices
+ *
+ * Returns true if the given index should fail, false otherwise.
+ */
+static inline bool cfs_fail_index(unsigned int fail_val, unsigned int index)
+{
+	if (fail_val == 0)
+		return true; /* fail all */
+	if (fail_val > 0xffff)
+		return (index < 16) && (fail_val & BIT(index)); /* bitmask mode */
+
+	return index == (fail_val - 1); /* single index mode */
+}
+
 /*
  * If id hit cfs_fail_loc, return 1, otherwise return 0
  */
