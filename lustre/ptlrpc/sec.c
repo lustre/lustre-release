@@ -1909,6 +1909,8 @@ void sptlrpc_cli_free_repbuf(struct ptlrpc_request *req)
 	policy = ctx->cc_sec->ps_policy;
 	policy->sp_cops->free_repbuf(ctx->cc_sec, req);
 	req->rq_repmsg = NULL;
+	req->rq_repdata = NULL;
+	req->rq_repdata_len = 0;
 	EXIT;
 }
 EXPORT_SYMBOL(sptlrpc_cli_free_repbuf);
