@@ -1819,7 +1819,7 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
 	int idx = *(loff_t *)v;
 
 	if (idx == 0)
-		lprocfs_stats_header(p, ktime_get_real(), stats->ls_init, 25,
+		lprocfs_stats_header(p, ktime_get_real(), stats->ls_init, 35,
 				     "", true, "");
 
 	hdr = &stats->ls_cnt_header[idx];
@@ -1828,7 +1828,7 @@ static int lprocfs_stats_seq_show(struct seq_file *p, void *v)
 	if (ctr.lc_count == 0)
 		return 0;
 
-	seq_printf(p, "%-25s %lld samples [%s]", hdr->lc_name,
+	seq_printf(p, "%-35s %lld samples [%s]", hdr->lc_name,
 		   ctr.lc_count, hdr->lc_units);
 
 	if ((hdr->lc_config & LPROCFS_CNTR_AVGMINMAX) && ctr.lc_count > 0) {
@@ -1937,7 +1937,6 @@ void lprocfs_counter_init_units(struct lprocfs_stats *stats, int index,
 	header = &stats->ls_cnt_header[index];
 	LASSERTF(header != NULL, "Failed to allocate stats header:[%d]%s/%s\n",
 		 index, name, units);
-
 	header->lc_config = config;
 	header->lc_name = name;
 	header->lc_units = units;

@@ -92,7 +92,7 @@ enum lustre_param_list_attrs {
  * @LUSTRE_STATS_ATTR_TIMESTAMP:       time of collection in nanoseconds
  *				       (NLA_S64)
  * @LUSTRE_STATS_ATTR_START_TIME:      start time of collection (NLA_S64)
- * @LUSTRE_STATS_ATTR_ELPASE_TIME:     elpase time of collection (NLA_S64)
+ * @LUSTRE_STATS_ATTR_ELAPSE_TIME:     elapsed time of collection (NLA_S64)
  * @LUSTRE_STATS_ATTR_DATASET:	       bookmarks for that stats data
  *				       (NLA_NESTED)
  */
@@ -163,7 +163,7 @@ int lustre_stats_done(struct netlink_callback *cb);
  * enum lustre_target_attrs	      - Lustre general top-level netlink
  *					attributes that describe lustre
  *					'target_obd'. These values are used
- *					to piece togther messages for
+ *					to piece together messages for
  *					sending and receiving.
  *
  * @LUSTRE_TARGET_ATTR_UNSPEC:		unspecified attribute to catch errors

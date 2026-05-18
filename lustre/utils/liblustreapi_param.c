@@ -635,7 +635,7 @@ static int print_out_stats(yaml_parser_t *reply, int version, int flags)
 
 				value = (char *)event.data.scalar.value;
 				num = strtoll(value, NULL, 10);
-				fprintf(stdout, "%-25s %lu.%09lu secs.nsecs\n",
+				fprintf(stdout, "%-35s %lu.%09lu secs.nsecs\n",
 					"snapshot_time", num / 1000000000L,
 					num % 1000000000L);
 			} else if (strcmp(value, "start_time") == 0) {
@@ -646,7 +646,7 @@ static int print_out_stats(yaml_parser_t *reply, int version, int flags)
 
 				value = (char *)event.data.scalar.value;
 				num = strtoll(value, NULL, 10);
-				fprintf(stdout, "%-25s %lu.%09lu secs.nsecs\n",
+				fprintf(stdout, "%-35s %lu.%09lu secs.nsecs\n",
 					"start_time", num / 1000000000L,
 					num % 1000000000L);
 			} else if (strcmp(value, "elapsed_time") == 0) {
@@ -657,7 +657,7 @@ static int print_out_stats(yaml_parser_t *reply, int version, int flags)
 
 				value = (char *)event.data.scalar.value;
 				num = strtoll(value, NULL, 10);
-				fprintf(stdout, "%-25s %lu.%09lu secs.nsecs\n",
+				fprintf(stdout, "%-35s %lu.%09lu secs.nsecs\n",
 					"elapsed_time", num / 1000000000L,
 					num % 1000000000L);
 			} else if (strcmp(value, "source") == 0) {
@@ -699,7 +699,7 @@ static int print_out_stats(yaml_parser_t *reply, int version, int flags)
 
 				value = (char *)event.data.scalar.value;
 				if (tmp == buf)
-					len = sprintf(tmp, "%-26s", value);
+					len = sprintf(tmp, "%-36s", value);
 				else if (index == 1)
 					len = sprintf(tmp, " [%s]", value);
 				else

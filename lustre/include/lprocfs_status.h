@@ -139,6 +139,9 @@ enum lprocfs_counter_config {
 };
 #define LC_MIN_INIT ((~(__u64)0) >> 1)
 
+/* lc_name string displayed in debugfs output length is limited to 35 */
+#define LC_NAME_MAX_SIZE	32
+
 struct lprocfs_counter_header {
 	enum lprocfs_counter_config	lc_config;
 	const char			*lc_name;   /* must be static */

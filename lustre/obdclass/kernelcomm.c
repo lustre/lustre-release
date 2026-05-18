@@ -127,7 +127,8 @@ static int lustre_device_list_start(struct netlink_callback *cb)
 					continue;
 
 				prop = nla_next(prop, &rem2);
-				if (nla_type(prop) != LN_SCALAR_ATTR_VALUE)
+				if (!nla_ok(prop, rem2) ||
+				    nla_type(prop) != LN_SCALAR_ATTR_VALUE)
 					GOTO(report_err, rc = -EINVAL);
 
 				rc = nla_strscpy(name, prop, sizeof(name));
@@ -343,7 +344,8 @@ static int lustre_targets_start(struct netlink_callback *cb)
 					continue;
 
 				prop = nla_next(prop, &rem2);
-				if (nla_type(prop) != LN_SCALAR_ATTR_VALUE)
+				if (!nla_ok(prop, rem2) ||
+				    nla_type(prop) != LN_SCALAR_ATTR_VALUE)
 					GOTO(report_err, rc = -EINVAL);
 
 				len = nla_strscpy(name, prop, sizeof(name));
@@ -765,19 +767,8 @@ static int lustre_stats_start(struct netlink_callback *cb)
 			len += STATS_MSG_DATASET_SIZE * rc;
 		rc = 0;
 	}
+	cb->min_dump_alloc = len;
 
-	/* Older kernels only support 64K. Our stats can be huge. */
-	if (len >= (1UL << (sizeof(cb->min_dump_alloc) << 3))) {
-		struct lprocfs_stats **stats;
-		struct genradix_iter iter;
-
-		genradix_for_each(&slist->gfl_list, iter, stats)
-			lprocfs_stats_free(stats);
-		NL_SET_ERR_MSG(extack, "Netlink msg is too large");
-		rc = -EMSGSIZE;
-	} else {
-		cb->min_dump_alloc = len;
-	}
 report_err:
 	if (rc < 0)
 		lustre_stats_done(cb);
@@ -792,7 +783,7 @@ int lustre_stats_dump(struct sk_buff *msg, struct netlink_callback *cb)
 	struct genlmsghdr *gnlh = nlmsg_data(cb->nlh);
 	struct netlink_ext_ack *extack = cb->extack;
 	int portid = NETLINK_CB(cb->skb).portid;
-	struct lprocfs_stats *prev = NULL;
+	char prev_name[LC_NAME_MAX_SIZE] = "";
 	int seq = cb->nlh->nlmsg_seq;
 	int idx = slist->gfl_index;
 	int count, i, rc = 0;
@@ -806,20 +797,26 @@ int lustre_stats_dump(struct sk_buff *msg, struct netlink_callback *cb)
 
 		tmp = genradix_ptr(&slist->gfl_list, idx);
 		stats = tmp[0];
-		if (!stats)
+		if (!stats) {
+			idx++;
 			continue;
+		}
 
 		if (gnlh->version &&
-		   (!idx || (prev && strcmp(stats->ls_cnt_header[2].lc_name,
-					    prev->ls_cnt_header[2].lc_name) != 0))) {
+		   (!idx || (prev_name[0] &&
+			     strcmp(stats->ls_cnt_header[2].lc_name,
+				    prev_name) != 0))) {
 			size_t len = sizeof(struct ln_key_list);
 			int flags = NLM_F_CREATE | NLM_F_MULTI;
 			const struct ln_key_list **all;
 			struct ln_key_list *start;
 
-			/* LUSTRE_STATS_ATTR_MAX includes one stat entry
-			 * by default since we need to define what a stat
-			 * entry is.
+			/* enum lustre_stats_attrs defines one
+			 * LUSTRE_STATS_ATTR_DATASET. The stats have a
+			 * count of ls_num LUSTRE_STATS_ATTR_DATASET.
+			 * Since by default LUSTRE_STATS_ATTR_MAX covers
+			 * one LUSTRE_STATS_ATTR_DATASET we need to allocate
+			 * ls_num - 1 dataset attributes.
 			 */
 			count = LUSTRE_STATS_ATTR_MAX + stats->ls_num - 1;
 			len += sizeof(struct ln_key_props) * count;
@@ -877,7 +874,9 @@ int lustre_stats_dump(struct sk_buff *msg, struct netlink_callback *cb)
 				GOTO(out_cancel, rc);
 			}
 		}
-		prev = stats;
+		memset(prev_name, 0, sizeof(prev_name));
+		strscpy(prev_name, stats->ls_cnt_header[2].lc_name,
+			sizeof(prev_name));
 
 		ghdr = genlmsg_put(msg, portid, seq, info->family, NLM_F_MULTI,
 				  gnlh->cmd);
@@ -912,8 +911,8 @@ int lustre_stats_dump(struct sk_buff *msg, struct netlink_callback *cb)
 				GOTO(out_cancel, rc);
 
 			rc = nla_put_s64(msg, LUSTRE_STATS_ATTR_ELAPSE_TIME,
-					 ktime_to_ns(ktime_sub(stats->ls_init,
-							       ktime_get())),
+					 ktime_to_ns(ktime_sub(ktime_get_real(),
+							       stats->ls_init)),
 					 LUSTRE_STATS_ATTR_PAD);
 			if (rc < 0)
 				GOTO(out_cancel, rc);
