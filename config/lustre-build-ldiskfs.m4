@@ -775,10 +775,10 @@ AC_DEFUN([LB_KABI_LDISKFS], [AS_IF([test x$enable_ldiskfs != xno],[
 		LB_JBD2_JOURNAL_GET_MAX_TXN_BUFS
 		LB2_TEST_CHECK_CONFIG_IM([FS_ENCRYPTION], [
 			EXT4_CRYPTO=],[
-			EXT4_CRYPTO='%/crypto.c'])
+			EXT4_CRYPTO='crypto.c'])
 		LB2_TEST_CHECK_CONFIG_IM([FS_VERITY], [
 			EXT4_VERITY=],[
-			EXT4_VERITY='%/verity.c'])
+			EXT4_VERITY='verity.c'])
 	])
 	AC_SUBST(EXT4_CRYPTO)
 	AC_SUBST(EXT4_VERITY)

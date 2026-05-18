@@ -12,15 +12,15 @@ linux_new_headers := htree_lock.h
 trace_headers := $(wildcard @LINUX@/include/trace/events/ext4*.h)
 backfs_unit_tests := $(wildcard @EXT4_SRC_DIR@/*-test.c)
 
-backfs_sources := $(filter-out %.mod.c $(backfs_unit_tests) @EXT4_CRYPTO@ @EXT4_VERITY@,$(wildcard @EXT4_SRC_DIR@/*.c))
+backfs_sources := $(filter-out %.mod.c $(backfs_unit_tests), $(wildcard @EXT4_SRC_DIR@/*.c))
 
 new_sources := mmp.c htree_lock.c critical_encode.h encdata.h
 new_headers :=
 
 ldiskfs_patched_sources := $(notdir $(backfs_sources) $(backfs_headers)) $(new_sources) $(new_headers)
-ldiskfs_sources := $(ldiskfs_patched_sources)
+ldiskfs_sources := $(filter-out @EXT4_CRYPTO@ @EXT4_VERITY@, $(ldiskfs_patched_sources))
 
-ldiskfs-objs := $(filter %.o,$(ldiskfs_sources:.c=.o))
+ldiskfs-objs := $(filter %.o, $(ldiskfs_sources:.c=.o))
 
 EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@abs_top_srcdir@/ldiskfs
 
