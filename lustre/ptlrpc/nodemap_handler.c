@@ -4436,7 +4436,7 @@ int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset)
 		rc = rc2;
 
 	if (fileset_prim_exists && !rc && !nodemap->nmf_fileset_use_iam &&
-	    !nodemap->nm_dyn)
+	    !nodemap->nm_dyn && out_clean_llog_fileset)
 		*out_clean_llog_fileset = true;
 
 	rc2 = nodemap_idx_nodemap_del(nodemap);
