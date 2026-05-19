@@ -294,7 +294,7 @@ command_t llog_cmdlist[] = {
 	  .pc_help = "verify that log content is valid.\n"
 	 "usage: llog_check {LOGNAME|FID} [--start INDEX] [--end INDEX]\n"
 	 "       check all records from index 1 by default."},
-	{ .pc_name = "remove", .pc_func = jt_llog_check,
+	{ .pc_name = "remove", .pc_func = jt_llog_remove,
 	  .pc_help = "remove one log and erase it from disk.\n"
 	 "usage: llog remove {LOGNAME|FID} [--log_id ID]"},
 	{ .pc_help = NULL }
