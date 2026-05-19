@@ -1255,7 +1255,7 @@ static inline void orr_le_to_cpu(struct out_read_reply *orr_dst,
 {
 	orr_dst->orr_size = le32_to_cpu(orr_src->orr_size);
 	orr_dst->orr_padding = le32_to_cpu(orr_src->orr_padding);
-	orr_dst->orr_offset = le64_to_cpu(orr_dst->orr_offset);
+	orr_dst->orr_offset = le64_to_cpu(orr_src->orr_offset);
 }
 
 static int osp_md_check_creating(struct osp_object *obj)

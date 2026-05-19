@@ -23,7 +23,7 @@ static inline void orr_cpu_to_le(struct out_read_reply *orr_dst,
 {
 	orr_dst->orr_size = cpu_to_le32(orr_src->orr_size);
 	orr_dst->orr_padding = cpu_to_le32(orr_src->orr_padding);
-	orr_dst->orr_offset = cpu_to_le64(orr_dst->orr_offset);
+	orr_dst->orr_offset = cpu_to_le64(orr_src->orr_offset);
 }
 
 static void out_reconstruct(const struct lu_env *env, struct dt_device *dt,
