@@ -2564,9 +2564,53 @@ lnet_shutdown_lndnet(struct lnet_net *net)
 }
 
 static void
+lnet_shutdown_lndnet_start(struct lnet_net *net)
+{
+	struct lnet_ni *ni;
+
+	lnet_net_lock(LNET_LOCK_EX);
+	while ((ni = list_first_entry_or_null(&net->net_ni_list,
+					      struct lnet_ni,
+					      ni_netlist)) != NULL) {
+		lnet_ni_lock(ni);
+		ni->ni_state = LNET_NI_STATE_DELETING;
+		lnet_ni_unlock(ni);
+		lnet_ni_unlink_locked(ni);
+		lnet_incr_dlc_seq();
+	}
+	lnet_net_unlock(LNET_LOCK_EX);
+}
+
+static void
+lnet_shutdown_lndnet_finish(struct lnet_net *net)
+{
+	struct lnet_ni *ni;
+
+	lnet_net_lock(LNET_LOCK_EX);
+	list_del_init(&net->net_list);
+	lnet_net_unlock(LNET_LOCK_EX);
+
+	list_for_each_entry(ni, &net->net_ni_zombie, ni_netlist) {
+		int i;
+
+		/* clear messages for this NI on the lazy portal */
+		for (i = 0; i < the_lnet.ln_nportals; i++)
+			lnet_clear_lazy_portal(ni, i, "Shutting down NI");
+	}
+
+	lnet_net_lock(LNET_LOCK_EX);
+	lnet_clear_zombies_nis_locked(net);
+	lnet_net_unlock(LNET_LOCK_EX);
+
+	lnet_peer_tables_cleanup(net);
+	lnet_net_free(net);
+}
+
+static void
 lnet_shutdown_lndnets(void)
 {
 	struct lnet_net *net;
+	struct lnet_net *net_tmp;
 	LIST_HEAD(resend);
 	struct lnet_msg *msg, *tmp;
 
@@ -2594,11 +2638,17 @@ lnet_shutdown_lndnets(void)
 	}
 	lnet_net_unlock(LNET_LOCK_EX);
 
-	/* iterate through the net zombie list and delete each net */
-	while ((net = list_first_entry_or_null(&the_lnet.ln_net_zombie,
-					       struct lnet_net,
-					       net_list)) != NULL)
-		lnet_shutdown_lndnet(net);
+	/*
+	 * split the shutdown into two parts so that we can parallelize the
+	 * shutdown process.
+	 */
+	list_for_each_entry(net, &the_lnet.ln_net_zombie, net_list)
+		lnet_shutdown_lndnet_start(net);
+
+	list_for_each_entry_safe(net, net_tmp, &the_lnet.ln_net_zombie,
+				 net_list) {
+		lnet_shutdown_lndnet_finish(net);
+	}
 
 	spin_lock(&the_lnet.ln_msg_resend_lock);
 	list_splice(&the_lnet.ln_msg_resend, &resend);
