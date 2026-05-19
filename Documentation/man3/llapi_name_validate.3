@@ -1,0 +1,78 @@
+.TH LLAPI_NAME_VALIDATE 3 2026-08-23 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_name_validate() \- check string contains only valid characters
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_name_validate(const char *" name ", const char *" extra_chars \c
+.BI ", int " maxlen );
+.fi
+.SH DESCRIPTION
+.B llapi_name_validate()
+verifies that the characters in
+.I name
+contain only alphanumeric characters,
+plus a limited number of other characters in
+.IR extra_chars ,
+and is not longer than
+.I maxlen
+bytes in length (excluding NUL terminator).
+This ensures that
+.I name
+is suitable for use in filesystem identifiers such as the filesystem name,
+OST pool name, nodemap name, and similar.
+.SH RETURN VALUE
+.B llapi_name_validate()
+returns 0 on success, or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM EINVAL
+The supplied
+.B name
+contained an illegal character.
+.TP
+.SM ENAMETOOLONG
+The supplied
+.B name
+exceeded
+.B maxlen
+characters without a NUL terminator.
+.TP
+.SM ENXIO
+The
+.B name
+was NULL or empty.
+.SH EXAMPLES
+Check if
+.B fsname
+contains only alphanumeric, dash
+.RB (' - '),
+and underscore
+.RB (' _ ')
+characters and does not exceed the maximum filesystem name length:
+.PP
+.EX
+#include <string.h>
+#include <lustre/lustreapi.h>
+
+int main(int argc, char *argv[])
+{
+        char fsname[] = "newfs123";
+
+        rc = llapi_name_validate(fsname, "-_", LUSTRE_MAXFSNAME);
+        if (rc < 0) {
+                fprintf(stderr, "%s: fsname '%s' invalid: %s\\n",
+                        argv[1], fsname, strerror(errno));
+                return rc;
+        }
+}
+.EE
+.SH AVAILABILITY
+.B llapi_name_validate
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" added in commit 2.17.52.xx
+.SH SEE ALSO
+.BR lustreapi (7)

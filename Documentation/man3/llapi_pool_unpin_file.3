@@ -1,4 +1,4 @@
-.TH LLAPI_POOL_UNPIN_FILE 3 2026-03-19 "Lustre User API" "Lustre Library Functions"
+.TH LLAPI_POOL_UNPIN_FILE 3 2026-08-23 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_pool_unpin_fd, llapi_pool_unpin_file, llapi_pool_unpin_fid \- remove pool pinning from a Lustre file
 .SH SYNOPSIS
@@ -72,11 +72,12 @@ and set
 .B errno
 to the corresponding error code.
 .SH ERRORS
+Errors from
+.IR llapi_pool_name_validate (3)
+will be returned on malformed pool names.
 .TP 15
 .B EINVAL
-An invalid argument was specified, such as a NULL or overly long
-.I pool_name
-string.
+An invalid argument was specified.
 .TP 15
 .B ENOENT
 No pool entry for the specified
@@ -86,8 +87,6 @@ was found in the
 attribute when calling one of the
 .B llapi_pool_unpin_*()
 functions, or the attribute itself was missing.
-.PP
-.in +8n
 .SH EXAMPLES
 .EX
 #include <lustre/lustreapi.h>
@@ -111,10 +110,11 @@ and
 functions are part of the
 .BR lustre (7)
 user application interface library since release 2.18.0.
-.\" Added in commit v2_17-51-gxxx
+.\" Added in commit v2_17_52-151-g86b0c90666
 .SH SEE ALSO
-.BR llapi_pool_pin_file (3),
 .BR llapi_pool_is_pinned_file (3),
+.BR llapi_pool_name_validate (3),
+.BR llapi_pool_pin_file (3),
 .BR lustre (7),
 .BR lustreapi (7)
 

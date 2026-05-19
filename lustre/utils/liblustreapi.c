@@ -390,15 +390,15 @@ static int llapi_stripe_param_verify(const struct llapi_stripe_param *param,
 	}
 
 	/* Make sure we have a good pool */
-	if (*pool_name != NULL) {
-		if (!llapi_pool_name_is_valid(pool_name)) {
-			rc = -EINVAL;
+	if (*pool_name && **pool_name) {
+		rc = llapi_pool_name_validate(pool_name);
+		if (rc) {
 			llapi_error(LLAPI_MSG_ERROR, rc,
 				    "Invalid Poolname '%s'", *pool_name);
 			goto out;
 		}
 
-		if (!lov_pool_is_ignored((const char *) *pool_name)) {
+		if (!lov_pool_is_ignored(*pool_name)) {
 			/* Make sure the pool exists */
 			rc = llapi_search_ost(fsname, *pool_name, NULL);
 			if (rc < 0) {

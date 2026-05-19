@@ -1,4 +1,4 @@
-.TH LLAPI_POOL_IS_PINNED_FILE 3 2026-03-19 "Lustre User API" "Lustre Library Functions"
+.TH LLAPI_POOL_IS_PINNED_FILE 3 2026-08-23 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_pool_is_pinned_fd, llapi_pool_is_pinned_file, llapi_pool_is_pinned_fid \- test whether a Lustre file is pinned to an OST pool
 .SH SYNOPSIS
@@ -89,13 +89,18 @@ if not, and a negative error code
 on failure.
 .SH ERRORS
 .TP 15
-.B EINVAL
-An invalid argument was specified,
-such as a NULL or overly long
+.B ENAMETOOLONG
+The
 .I pool_name
-string.
-.PP
-.in +8n
+exceeds the maximum number of characters.
+.TP 15
+.B ENXIO
+The
+.I pool_name
+was not specified.
+.TP 15
+.B EINVAL
+An invalid argument was specified.
 .SH EXAMPLES
 .EX
 #include <lustre/lustreapi.h>
@@ -127,8 +132,9 @@ and
 functions are part of the
 .BR lustre (7)
 user application interface library since release 2.18.0.
-.\" Added in commit v2_17-51-gxxx
+.\" Added in commit v2_17_52-151-g86b0c90666
 .SH SEE ALSO
+.BR llapi_pool_name_validate (3),
 .BR llapi_pool_pin_file (3),
 .BR llapi_pool_unpin_file (3),
 .BR lustre (7),

@@ -38,12 +38,13 @@
 #include <string.h>
 #include <getopt.h>
 #include <limits.h>
-#include <ctype.h>
 #include <linux/lnet/nidstr.h>
 #include <linux/lnet/lnetctl.h>
 #include <linux/lustre/lustre_user.h>
 #include <linux/lustre/lustre_ver.h>
 #include <libcfs/util/string.h>
+#include <lustre/lustreapi.h>
+#include "lustreapi_internal.h"
 
 #include "mount_utils.h"
 
@@ -533,29 +534,10 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			break;
 		}
 		case 'L': {
-			const char *tmp;
-			size_t len;
-
-			len = strlen(optarg);
-			if (len < 1 || len > LUSTRE_MAXFSNAME) {
-				fprintf(stderr,
-					"%s: filesystem name must be 1-%d chars\n",
-					progname, LUSTRE_MAXFSNAME);
+			rc = llapi_name_verify(optarg, "_-", LUSTRE_MAXFSNAME,
+					       "filesystem");
+			if (rc)
 				return 1;
-			}
-
-			for (tmp = optarg; *tmp != '\0'; ++tmp) {
-				if (isalnum(*tmp) || *tmp == '_' || *tmp == '-')
-					continue;
-				else
-					break;
-			}
-			if (*tmp != '\0') {
-				fprintf(stderr,
-					"%s: char '%c' not allowed in filesystem name\n",
-					progname, *tmp);
-				return 1;
-			}
 			strscpy(new_fsname, optarg, sizeof(new_fsname));
 			break;
 		}

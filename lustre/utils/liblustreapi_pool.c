@@ -20,6 +20,30 @@
 
 #define PIN_YAML_POOL_STR	"pool"
 
+/* check validity of the supplied pool name, stripping off the
+ * leading fsname portion, if supplied.
+ *
+ * Also sanity checked in the kernel by mgs_extract_fs_pool().
+ *
+ * Return 0 on success, or negative errno on error
+ */
+int llapi_pool_name_validate(const char **pool_name)
+{
+	const char *ptr;
+
+	if (!pool_name || *pool_name == NULL) {
+		errno = ENXIO;
+		return -errno;
+	}
+
+	/* Strip off any 'fsname.' portion. */
+	ptr = strchr(*pool_name, '.');
+	if (ptr != NULL)
+		*pool_name = ptr + 1;
+
+	return llapi_name_validate(*pool_name, "-_", LOV_MAXPOOLNAME);
+}
+
 static int pool_pin_ensure_entry(struct cYAML *yaml, const char *pool_name,
 				 char *buff, size_t bufflen)
 {
@@ -125,14 +149,13 @@ static int pool_is_pinned_from_yaml(struct cYAML *yaml, const char *pool_name)
  */
 int llapi_pool_pin_fd(int fd, const char *pool_name)
 {
-	int rc = 0;
 	struct cYAML *yaml = NULL;
 	char buff[XATTR_SIZE_MAX];
+	int rc;
 
-	if (!llapi_pool_name_is_valid(&pool_name)) {
-		errno = EINVAL;
-		return -errno;
-	}
+	rc = llapi_pool_name_validate(&pool_name);
+	if (rc)
+		return rc;
 
 	yaml = read_pin_xattr_object_fd(fd);
 
@@ -172,14 +195,13 @@ out:
  */
 int llapi_pool_pin_file(const char *path, const char *pool_name)
 {
-	int rc = 0;
 	struct cYAML *yaml = NULL;
 	char buff[XATTR_SIZE_MAX];
+	int rc;
 
-	if (!llapi_pool_name_is_valid(&pool_name)) {
-		errno = EINVAL;
-		return -errno;
-	}
+	rc = llapi_pool_name_validate(&pool_name);
+	if (rc)
+		return rc;
 
 	yaml = read_pin_xattr_object(path);
 
@@ -259,14 +281,13 @@ int llapi_pool_pin_fid(const char *lustre_dir, const struct lu_fid *fid,
  */
 int llapi_pool_unpin_fd(int fd, const char *pool_name)
 {
-	int rc = 0;
 	struct cYAML *yaml = NULL;
 	char buff[XATTR_SIZE_MAX];
+	int rc;
 
-	if (!llapi_pool_name_is_valid(&pool_name)) {
-		errno = EINVAL;
-		return -errno;
-	}
+	rc = llapi_pool_name_validate(&pool_name);
+	if (rc)
+		return rc;
 
 	yaml = read_pin_xattr_object_fd(fd);
 
@@ -314,14 +335,13 @@ out:
  */
 int llapi_pool_unpin_file(const char *path, const char *pool_name)
 {
-	int rc = 0;
 	struct cYAML *yaml = NULL;
 	char buff[XATTR_SIZE_MAX];
+	int rc;
 
-	if (!llapi_pool_name_is_valid(&pool_name)) {
-		errno = EINVAL;
-		return -errno;
-	}
+	rc = llapi_pool_name_validate(&pool_name);
+	if (rc)
+		return rc;
 
 	yaml = read_pin_xattr_object(path);
 
@@ -409,11 +429,11 @@ int llapi_pool_unpin_fid(const char *lustre_dir, const struct lu_fid *fid,
 int llapi_pool_is_pinned_fd(int fd, const char *pool_name)
 {
 	struct cYAML *yaml;
+	int rc;
 
-	if (!llapi_pool_name_is_valid(&pool_name)) {
-		errno = EINVAL;
-		return -errno;
-	}
+	rc = llapi_pool_name_validate(&pool_name);
+	if (rc)
+		return rc;
 
 	yaml = read_pin_xattr_object_fd(fd);
 	if (yaml == NULL) {
@@ -443,11 +463,11 @@ int llapi_pool_is_pinned_fd(int fd, const char *pool_name)
 int llapi_pool_is_pinned_file(const char *path, const char *pool_name)
 {
 	struct cYAML *yaml;
+	int rc;
 
-	if (!llapi_pool_name_is_valid(&pool_name)) {
-		errno = EINVAL;
-		return -errno;
-	}
+	rc = llapi_pool_name_validate(&pool_name);
+	if (rc)
+		return rc;
 
 	yaml = read_pin_xattr_object(path);
 	if (yaml == NULL) {

@@ -123,6 +123,27 @@ void llapi_error(enum llapi_message_level level, int err, const char *fmt, ...)
 	llapi_error((level) | LLAPI_MSG_NO_ERRNO, 0, fmt, ## a)
 void llapi_printf(enum llapi_message_level level, const char *fmt, ...)
 	__attribute__((__format__(__printf__, 2, 3)));
+/** Check if a string contains valid alphanumeric plus extra characters
+ *
+ * @name        String to check for validity
+ * @extra_chars Extra characters to allow in @name
+ * @maxlen      Maximum number of characters in @name
+ * @return 0 if @name has only alphanumeric and extra chars,
+ *        -ve errno otherwise
+ */
+int llapi_name_validate(const char *name, const char *extra_chars,
+			unsigned int maxlen);
+
+/** Check if string contains valid pool name, stripping off fsname
+ *
+ * The @pool_name argument is verified locally against allowed characters in
+ * the string (alphanumeric, '-' and '_').  If it starts with an `fsname.`
+ * prefix then @pool_name is advanced to the start of the actual pool name.
+ *
+ * @pool_name        String pointer to check for pool name
+ * @return 0 if @pool_name is valid or negative errno otherwise
+ */
+int llapi_pool_name_validate(const char **pool_name);
 
 struct llapi_stripe_param {
 	unsigned long long	lsp_stripe_size;

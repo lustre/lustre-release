@@ -1864,14 +1864,18 @@ int llapi_layout_pool_name_set(struct llapi_layout *layout,
 {
 	struct llapi_layout_comp *comp;
 
+	if (!pool_name) {
+		errno = ENXIO;
+		return -1;
+	}
+
 	comp = __llapi_layout_cur_comp(layout);
 	if (comp == NULL)
 		return -1;
 
-	if (!llapi_pool_name_is_valid(&pool_name)) {
-		errno = EINVAL;
+	/* an empty "" pool_name is allowed, meaning "no pool" */
+	if (*pool_name && llapi_pool_name_validate(&pool_name) < 0)
 		return -1;
-	}
 
 	if (comp->llc_pattern == LLAPI_LAYOUT_FOREIGN) {
 		errno = EINVAL;

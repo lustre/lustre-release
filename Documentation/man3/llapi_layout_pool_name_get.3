@@ -1,4 +1,4 @@
-.TH LLAPI_LAYOUT_POOL_NAME_GET 3 2024-08-27 "Lustre User API" "Lustre Library Functions"
+.TH LLAPI_LAYOUT_POOL_NAME_GET 3 2026-08-23 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_layout_pool_name_get, llapi_layout_pool_name_set \- get or set the OST pool name of a Lustre file
 .SH SYNOPSIS
@@ -17,22 +17,29 @@ stores into
 .I pool_name
 up to
 .I n
-characters of the name of the pool of OSTS associated with
+characters of the name of the pool of OSTs associated with
 .IR layout .
 .PP
 .B llapi_layout_pool_name_set()
 sets the OST pool name of
-.I  layout
+.I layout
 to
-.IR pool_name .
-If
+.IR pool_name ,
+up to
+.B LOV_MAXPOOLNAME
+characters.  If
 .I pool_name
 uses "fsname.pool" notation to qualify the pool name
 with a filesystem name, the "fsname." portion will be silently
 discarded before storing the value.
 .PP
 .B llapi_layout_pool_name_set()
-does not validate that
+will validate that the
+.I pool_name
+is not longer than the maximum allowed name and only contains
+valid characters (per
+.I llapi_pool_name_validate (3)),
+but does not validate that
 .I pool_name
 names an existing non-empty pool, since it is not known a priori which
 filesystem
@@ -49,6 +56,9 @@ and
 return 0 on success, or -1 if an error occurred (in which case, errno is
 set appropriately).
 .SH ERRORS
+Errors from
+.IR llapi_pool_name_validate (3)
+will be returned on malformed pool names.
 .TP 15
 .B EINVAL
 An invalid argument was specified.
@@ -74,5 +84,6 @@ user application interface library since release 2.7.0
 .BR lctl (1),
 .BR llapi_layout_alloc (3),
 .BR llapi_layout_file_open (3),
+.BR llapi_pool_name_validate (3),
 .BR llapi_layout (7),
 .BR lustreapi (7)

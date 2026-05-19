@@ -10336,30 +10336,6 @@ static inline int has_lqa_option(int argc, char **argv)
 	return 0;
 }
 
-/* return true if arg is insane */
-static inline bool lfs_arg_insane(const char *arg, int len, const char *name)
-{
-	const char *c;
-
-	if (strnlen(arg, len + 1) > len) {
-		fprintf(stderr, "%s name '%.*s' is longer than %d\n", name, len,
-			arg, len);
-		return true;
-	}
-
-	for (c = arg; *c != '\0'; c++) {
-		if (isalnum(*c) || *c == '_')
-			continue;
-		fprintf(stderr, "%s name '%.*s' has illegal character '%c'(0x%02x)\n",
-			name, len, arg, isprint(*c) ? *c : ' ', *c);
-		return true;
-	}
-
-	return false;
-}
-#define lfs_poolarg_insane(pool) lfs_arg_insane(pool, LOV_MAXPOOLNAME, "Pool")
-#define lfs_lqaarg_insane(lqa) lfs_arg_insane(lqa, LQA_NAME_MAX, "LQA")
-
 /* special grace time, only notify the user when its quota is over soft limit
  * but doesn't block new writes until the hard limit is reached.
  */
@@ -10428,15 +10404,17 @@ static int lfs_setquota_times(int argc, char **argv, struct if_quotactl *qctl)
 			qtype = PRJQUOTA;
 			goto quota_type;
 		case LFS_LQA_OPT:
-			if (lfs_lqaarg_insane(optarg))
-				return -1;
+			rc = llint_lqa_name_verify(optarg);
+			if (rc)
+				return rc;
 			snprintf(qctl->qc_lqaname, LQA_NAME_MAX + 1, "%s",
 				 optarg);
 			qctl->qc_cmd  = LUSTRE_Q_SETINFOLQA;
 			break;
 		case LFS_POOL_OPT:
-			if (lfs_poolarg_insane(optarg))
-				return -1;
+			rc = llint_pool_name_verify(optarg);
+			if (rc)
+				return rc;
 			snprintf(qctl->qc_poolname, LOV_MAXPOOLNAME + 1, "%s",
 				 optarg);
 			qctl->qc_cmd  = LUSTRE_Q_SETINFOPOOL;
@@ -10825,20 +10803,18 @@ quota_type_def:
 				rc = CMD_HELP;
 				goto out;
 			}
-			if (lfs_lqaarg_insane(optarg)) {
-				rc = -1;
+			rc = llint_lqa_name_verify(optarg);
+			if (rc)
 				goto out;
-			}
 			snprintf(qctl->qc_lqaname, LQA_NAME_MAX + 1, "%s",
 				 optarg);
 			qctl->qc_cmd = LUSTRE_Q_SETQUOTALQA;
 			qctl->qc_id = 1;
 			break;
 		case LFS_POOL_OPT:
-			if (lfs_poolarg_insane(optarg)) {
-				rc = -1;
+			rc = llint_pool_name_verify(optarg);
+			if (rc)
 				goto out;
-			}
 			snprintf(qctl->qc_poolname, LOV_MAXPOOLNAME + 1, "%s",
 				 optarg);
 			qctl->qc_cmd = qctl->qc_cmd == LUSTRE_Q_SETDEFAULT ?
@@ -12066,10 +12042,9 @@ static int lfs_quota(int argc, char **argv)
 				rc = CMD_HELP;
 				goto out;
 			}
-			if (lfs_lqaarg_insane(optarg)) {
-				rc = -1;
+			rc = llint_lqa_name_verify(optarg);
+			if (rc)
 				goto out;
-			}
 			snprintf(qctl->qc_lqaname, LQA_NAME_MAX + 1, "%s",
 				 optarg);
 			qctl->qc_cmd = LUSTRE_Q_GETQUOTALQA;
@@ -12077,13 +12052,12 @@ static int lfs_quota(int argc, char **argv)
 			break;
 		case LFS_POOL_OPT:
 			if ((!optarg) && (argv[optind] != NULL) &&
-				(argv[optind][0] != '-') &&
-				(argv[optind][0] != '/')) {
+			    (argv[optind][0] != '-') &&
+			    (argv[optind][0] != '/')) {
 				optarg = argv[optind++];
-				if (lfs_poolarg_insane(optarg)) {
-					rc = -EINVAL;
+				rc = llint_pool_name_verify(optarg);
+				if (rc)
 					goto out;
-				}
 				snprintf(qctl->qc_poolname,
 					 LOV_MAXPOOLNAME + 1, "%s", optarg);
 				if (qctl->qc_cmd == LUSTRE_Q_GETINFO)

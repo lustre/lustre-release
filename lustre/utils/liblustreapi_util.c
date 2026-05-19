@@ -12,6 +12,7 @@
  * Author: Frank Zago <fzago@cray.com>
  */
 
+#include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
 #include <stdbool.h>
@@ -20,7 +21,6 @@
 #include <stdlib.h>
 #include <sys/ioctl.h>
 #include <string.h>
-#include <ctype.h>
 #include <unistd.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -701,4 +701,73 @@ int llapi_convert_mask2str(char *str, int size, __u64 mask,
 		str[size - 1] = '\0';
 
 	return len;
+}
+
+/** llapi_name_validate() - check string contains only valid characters
+ *
+ * Verify that the supplied @name contains only alphanumeric characters,
+ * plus a limited number of @extra_chars (e.g. '-' and '_'), and
+ * is no longer than @maxlen characters, so that it can be used as an
+ * filesystem identifier (fsname, OST pool, nodemap, etc.)
+ *
+ * @name        String to check for validity
+ * @extra_chars Extra characters to allow in @name
+ * @maxlen      Maximum number of characters in @name
+ * @return 0 if @name has only alphanumeric and extra chars,
+ *        -ve error number otherwise and sets @errno
+ */
+int llapi_name_validate(const char *name, const char *extra_chars,
+			unsigned int maxlen)
+{
+	int len = 0;
+	int rc;
+
+	if (!name || !*name) {
+		rc = -ENXIO;
+		goto out;
+	}
+
+	if (!extra_chars)
+		extra_chars = "";
+
+	while (*name && len++ < maxlen) {
+		if (!isalnum((unsigned char)*name) &&
+		    strchr(extra_chars, *name) == NULL) {
+			rc = -EINVAL;
+			goto out;
+		}
+		name++;
+	}
+	if (len > maxlen) {
+		rc = -ENAMETOOLONG;
+		goto out;
+	}
+
+	return 0;
+out:
+	errno = -rc;
+	return rc;
+}
+
+/* check @name and print error message if it is too long or has illegal chars */
+int llapi_name_verify(const char *name, const char *extra_chars,
+		      unsigned int maxlen, const char *type)
+{
+	int rc;
+
+	rc = llapi_name_validate(name, extra_chars, maxlen);
+	if (rc == -ENAMETOOLONG) {
+		llapi_error(LLAPI_MSG_ERROR, -rc,
+			    "%s name '%s' longer than maximum %u chars",
+			    type, name, maxlen);
+	} else if (rc == -ENXIO) {
+		llapi_error(LLAPI_MSG_ERROR, -rc,
+			    "%s name must be 1-%u characters",
+			    type, maxlen);
+	} else if (rc < 0) {
+		llapi_error(LLAPI_MSG_ERROR, -rc, "%s name '%s' not valid",
+			    type, name);
+	}
+
+	return rc;
 }

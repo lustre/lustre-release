@@ -503,7 +503,8 @@ static void test12(void)
 	/* NULL pool name */
 	errno = 0;
 	rc = llapi_layout_pool_name_set(layout, NULL);
-	ASSERTF(rc == -1 && errno == EINVAL, "rc = %d, errno = %d", rc, errno);
+	ASSERTF(rc == -1 && (errno == EINVAL || errno == ENXIO),
+		"rc = %d, errno = %d", rc, errno);
 
 	/* NULL layout */
 	errno = 0;
@@ -518,7 +519,8 @@ static void test12(void)
 	/* Pool name too long*/
 	errno = 0;
 	rc = llapi_layout_pool_name_set(layout, "0123456789abcdef");
-	ASSERTF(rc == -1 && errno == EINVAL, "rc = %d, errno = %d", rc, errno);
+	ASSERTF(rc == -1 && (errno == EINVAL || errno == ENAMETOOLONG),
+		"rc = %d, errno = %d", rc, errno);
 
 	llapi_layout_free(layout);
 }

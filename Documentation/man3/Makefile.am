@@ -90,6 +90,7 @@ LIBMAN = 					\
 	llapi_lov_get_uuids.3			\
 	llapi_lov_pattern_string.3		\
 	llapi_lov_string_pattern.3		\
+	llapi_name_validate.3			\
 	llapi_open_by_fid.3			\
 	llapi_open_by_fid_at.3			\
 	llapi_param_get_paths.3			\
@@ -109,15 +110,16 @@ LIBMAN = 					\
 	llapi_pcc_state_get_fd.3		\
 	llapi_pcc_clear.3			\
 	llapi_pcc_del.3				\
-	llapi_pool_pin_file.3			\
-	llapi_pool_pin_fd.3			\
-	llapi_pool_pin_fid.3			\
-	llapi_pool_unpin_file.3			\
-	llapi_pool_unpin_fd.3			\
-	llapi_pool_unpin_fid.3			\
-	llapi_pool_is_pinned_file.3		\
 	llapi_pool_is_pinned_fd.3		\
 	llapi_pool_is_pinned_fid.3		\
+	llapi_pool_is_pinned_file.3		\
+	llapi_pool_name_validate.3		\
+	llapi_pool_pin_fd.3			\
+	llapi_pool_pin_fid.3			\
+	llapi_pool_pin_file.3			\
+	llapi_pool_unpin_fd.3			\
+	llapi_pool_unpin_fid.3			\
+	llapi_pool_unpin_file.3			\
 	llapi_project_close.3			\
 	llapi_project_fgetnam.3			\
 	llapi_project_fgetprjid.3		\

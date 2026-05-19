@@ -4189,6 +4189,9 @@ int jt_nodemap_new(int argc, char **argv)
 		}
 		nodemap_name = argv[optind];
 	}
+	if (llapi_name_verify(nodemap_name, "_", LUSTRE_NODEMAP_NAME_LENGTH,
+			      "nodemap"))
+		return CMD_HELP;
 
 	if (dynamic && !parent_nm) {
 		fprintf(stderr,
@@ -6260,6 +6263,7 @@ int parse_pool_cmd_args(int argc, char **argv, bool *wait,
 {
 	char *cmdname, *param, *ptr;
 	int fsname_len;
+	int rc;
 
 	*wait = true;
 	*cmd = POOL_LIST;
@@ -6338,17 +6342,15 @@ int parse_pool_cmd_args(int argc, char **argv, bool *wait,
 	if (ptr[0] == '\0')
 		return -EINVAL;
 
-	if (strlen(ptr) > LOV_MAXPOOLNAME) {
-		fprintf(stderr, "%s: poolname is too long\n", cmdname);
-		return -ENAMETOOLONG;
-	}
-
-	snprintf(poolname, LOV_MAXPOOLNAME + 1, "%s", ptr);
-	if (lov_pool_is_reserved(poolname)) {
+	rc = llint_pool_name_verify(ptr);
+	if (rc)
+		return rc;
+	if (lov_pool_is_reserved(ptr)) {
 		fprintf(stderr, "%s: poolname cannot be '%s'\n",
-			cmdname, poolname);
+			cmdname, ptr);
 		return -EINVAL;
 	}
+	snprintf(poolname, LOV_MAXPOOLNAME + 1, "%s", ptr);
 
 	if (*wait && (*cmd != POOL_LIST) && !combined_mgs_mds(fsname)) {
 		int min_wait = get_mgc_requeue_timeout_min();
@@ -6523,8 +6525,8 @@ lqa_list_print(const char *fsname, const char *lqa, const char *buf, int len)
 	printf("\n");
 }
 
-int lqa_ioctl(enum lqa_cmd_type cmd, char *cmdname, char *fsname, char *lqaname,
-	      __u32 start, __u32 end)
+static int lqa_ioctl(enum lqa_cmd_type cmd, char *cmdname, char *fsname,
+		     char *lqaname, __u32 start, __u32 end)
 {
 	struct obd_ioctl_data data;
 	int rc, lqalen;
@@ -6627,30 +6629,6 @@ static inline int lqa_get_range(const char *range, __u32 *start, __u32 *end)
 	return 0;
 }
 
-static inline int lqa_name_insane(const char *arg, int len)
-{
-	const char *c;
-	int rc = 0;
-
-	if (strnlen(arg, len + 1) > len) {
-		rc = -ENAMETOOLONG;
-		fprintf(stderr, "lqa name '%.*s' is longer than %d: rc = %d\n",
-			len, arg, len, rc);
-		return rc;
-	}
-
-	for (c = arg; *c != '\0'; c++) {
-		if (isalnum(*c) || *c == '_')
-			continue;
-		rc = -EINVAL;
-		fprintf(stderr, "lqa name '%.*s' has illegal character '%c'(0x%02x): rc = %d\n",
-			len, arg, isprint(*c) ? *c : ' ', *c, rc);
-		return rc;
-	}
-
-	return rc;
-}
-
 static inline int lqa_cmd(int argc, char **argv, enum lqa_cmd_type cmd)
 {
 	char *lqaname = NULL;
@@ -6678,7 +6656,7 @@ static inline int lqa_cmd(int argc, char **argv, enum lqa_cmd_type cmd)
 			}
 			break;
 		case 'n':
-			rc = lqa_name_insane(optarg, LQA_NAME_MAX);
+			rc = llint_lqa_name_verify(optarg);
 			if (rc)
 				return rc;
 			lqaname = optarg;
@@ -6687,7 +6665,8 @@ static inline int lqa_cmd(int argc, char **argv, enum lqa_cmd_type cmd)
 			if (!(cmd == LQA_ADD || cmd == LQA_REM))
 				return CMD_HELP;
 			if (lqa_get_range(optarg, &start, &end)) {
-				fprintf(stderr, "range is insane\n");
+				fprintf(stderr, "LQA range '%s' is insane\n",
+					optarg);
 				return -EINVAL;
 			}
 			range_defined = true;

@@ -101,21 +101,24 @@ case $SECTION in
 EOF
 	)
 	printf -v OPTIONS "\n.SH OPTIONS\n"
-	printf -v EXAMPLES "\n.SH EXAMPLES\n"
+	printf -v EXAMPLES "\n.SH EXAMPLES\nFor example ...\n.EX\n...\n.EE\n"
 	printf -v SEE_ALSO ".RB lfs (1),\n.RB lctl (8)"
 	;;
 	2|3)
+	PROTO=$(grep $NAME include/lustre/lustreapi.h)
+	[[ -n "$PROTO" ]] || PROTO="\"int $NAME(\" arg \", ...);\""
 	SYNOPSIS=$(cat <<EOF
 .nf
-.B #include
-.PP
-.BI "RETURN_TYPE $NAME( ... );
+.B #include <lustre/lustreapi.h>
+.BI $PROTO
 .fi
 EOF
 	)
-	printf -v EXIT_STATUS "\n.SH EXIT_STATUS\n"
-	printf -v RETURN_VALUE "\n.SH RETURN_VALUE\n"
-	printf -v ERRORS "\n.SH ERRORS\n"
+	printf -v RETURN_VALUE "\n.SH RETURN VALUE
+$NAME() returns 0 on success, or a negative error number on failure and sets
+.B errno
+on failure.\n"
+	printf -v ERRORS "\n.SH ERRORS\n.TP 15\n.SM EINVAL\nThe ..."
 	printf -v SEE_ALSO ".RB liblustreapi (3)\n"
 	;;
 	4)
@@ -193,9 +196,9 @@ cat > "$OUTPUT" <<EOF
 .SH NAME
 ${NAME//.\*} \-$NAMEDESC
 .SH SYNOPSIS
-$SYNOPSIS$CONFIGURATION
+$SYNOPSIS
 .SH DESCRIPTION
-$OPTIONS$EXIT_STATUS$RETURN_VALUE$ERRORS$ENVIRONMENT$FILES$ATTRIBUTES$VERSIONS$HISTORY$NOTES$CAVEATS$BUGS$EXAMPLES
+$OPTIONS$RETURN_VALUE$ERRORS$ENVIRONMENT$FILES$ATTRIBUTES$VERSIONS$HISTORY$NOTES$CAVEATS$BUGS$EXAMPLES
 .SH AVAILABILITY
 .B $NAME
 is part of the

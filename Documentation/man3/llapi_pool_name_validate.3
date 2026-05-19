@@ -1,0 +1,84 @@
+.TH LLAPI_POOL_NAME_VALIDATE 3 2026-08-23 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_pool_name_validate() \- check pool name contains only valid characters
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_pool_name_validate(const char **" pool_name ");"
+.fi
+.SH DESCRIPTION
+.B llapi_pool_name_validate()
+verifies that the characters in
+.I pool_name
+contain only alphanumeric characters, '-', and '_', and is not longer than
+.I LOV_MAXPOOLNAME
+(15) bytes in length (excluding NUL terminator).
+If
+.I pool_name
+is of the form
+.IR fsname . pool_name
+then the leading
+.I fsname.
+part of the pool name is removed and the
+.I pool_name
+pointer will only point at the pool name upon return.
+This ensures that
+.I pool_name
+is suitable for use in filesystem pool identifiers.
+If the removal of the leading
+.I fsname.
+component of the pool name is undesirable, then
+.BR llapi_name_validate (3)
+should be used to verify the pool name.
+.SH RETURN VALUE
+.B llapi_pool_name_validate()
+returns 0 on success, or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM EINVAL
+The supplied
+.B name
+contained an illegal character.
+.TP
+.SM ENAMETOOLONG
+The supplied
+.B name
+exceeded
+.B LOV_MAXPOOLNAME
+characters without a NUL terminator.
+.TP
+.SM ENXIO
+The
+.B name
+was NULL or empty.
+.SH EXAMPLES
+Check if
+.B pool_name
+can be used as a pool identifier.
+.PP
+.EX
+#include <string.h>
+#include <lustre/lustreapi.h>
+
+int main(int argc, char *argv[])
+{
+        char pool_name[] = "newfs123.testpool";
+
+        rc = llapi_pool_name_validate(&pool_name);
+        if (rc < 0) {
+                fprintf(stderr, "%s: pool name '%s' invalid: %s\\n",
+                        argv[1], pool_name, strerror(errno));
+                return rc;
+        }
+}
+.EE
+.SH AVAILABILITY
+.B llapi_pool_name_validate
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" added in commit v2_17_56
+.SH SEE ALSO
+.BR llapi_name_validate (3),
+.BR lustreapi (7)

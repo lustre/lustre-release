@@ -134,24 +134,6 @@ static inline bool llapi_stripe_index_is_valid(int64_t index)
 	return index >= -1 && index <= LOV_V1_INSANE_STRIPE_INDEX;
 }
 
-static inline bool llapi_pool_name_is_valid(const char **pool_name)
-{
-	const char *ptr;
-
-	if (*pool_name == NULL)
-		return false;
-
-	/* Strip off any 'fsname.' portion. */
-	ptr = strchr(*pool_name, '.');
-	if (ptr != NULL)
-		*pool_name = ptr + 1;
-
-	if (strlen(*pool_name) > LOV_MAXPOOLNAME)
-		return false;
-
-	return true;
-}
-
 static inline bool llapi_dir_stripe_count_is_valid(int64_t count)
 {
 	return count >= LMV_OVERSTRIPE_COUNT_MAX &&
@@ -339,4 +321,10 @@ int llapi_convert_mask2str(char *str, int size, __u64 mask,
 int llapi_convert_str2mask(const char *str, const char *(*bit2str)(int bit),
 			   __u64 *oldmask, __u64 minmask, __u64 allmask,
 			   __u64 defmask);
+int llapi_name_verify(const char *name, const char *extra_char,
+		      unsigned int maxlen, const char *type);
+#define llint_pool_name_verify(pool) \
+	llapi_name_verify(pool, "-_", LOV_MAXPOOLNAME, "Pool")
+#define llint_lqa_name_verify(lqa) \
+	llapi_name_verify(lqa, "_", LQA_NAME_MAX, "LQA")
 #endif /* _LUSTREAPI_INTERNAL_H_ */
