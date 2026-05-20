@@ -18,6 +18,7 @@
 /create_foreign_file
 /dirent_ino
 /llapi_fid_test
+/llapi_fid2mdtidx_test
 /llapi_hsm_test
 /llapi_layout_test
 /llapi_root_test

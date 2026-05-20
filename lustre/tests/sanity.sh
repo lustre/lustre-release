@@ -21721,6 +21721,41 @@ test_154g()
 }
 run_test 154g "various llapi FID tests"
 
+test_154ga()
+{
+	local facet
+	local mdsmnt
+	local mdtidx
+	local path
+	local fid
+	local i
+
+	(( MDS1_VERSION >= $(version_code 2.17.59) )) ||
+		skip "Need MDS with server-mount FID2MDTIDX fix"
+	[[ "$mds1_FSTYPE" == ldiskfs ]] || skip "ldiskfs only test"
+
+	mkdir_on_mdt0 $DIR/$tdir
+	for ((i = 0; i < MDSCOUNT; i++)); do
+		facet=mds$((i + 1))
+		mdsmnt=$(facet_mntpt $facet)
+		path=$DIR/$tdir/mdt$i/$tfile
+
+		$LFS mkdir -i $i $DIR/$tdir/mdt$i ||
+			error "(0) mkdir mdt$i failed"
+		touch $path || error "(1) touch $path failed"
+
+		fid=$(path2fid $path) || error "(2) path2fid $path failed"
+		mdtidx=$($LFS getstripe -m $path) ||
+			error "(3) getstripe -m $path failed"
+		(( mdtidx == i )) || error "(4) $path on MDT$mdtidx, not MDT$i"
+
+		do_facet $facet llapi_fid2mdtidx_test -d "$mdsmnt" -f "$fid" \
+			-i "$mdtidx" ||
+			error "(5) FID2MDTIDX failed for $fid on $facet:$mdsmnt"
+	done
+}
+run_test 154ga "server mount LL_IOC_FID2MDTIDX returns MDT index"
+
 test_154h()
 {
 	(( $CLIENT_VERSION >= $(version_code 2.15.55.1) )) ||

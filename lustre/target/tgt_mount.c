@@ -2366,7 +2366,7 @@ static long server_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 				   KEY_FID2IDX, &len, &u.fid);
 		if (err == 0) {
 			err = -EINVAL;
-			if (u.range.lsr_flags & LU_SEQ_RANGE_MDT)
+			if (fld_range_is_mdt(&u.range))
 				err = u.range.lsr_index;
 		}
 		lu_env_fini(env);

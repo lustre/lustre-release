@@ -61,17 +61,18 @@ static inline unsigned fld_range_is_any(const struct lu_seq_range *range)
 }
 
 /**
- * Apply flags to range \a range \a flags
+ * Set range \a range type to \a flags
  */
 
 static inline void fld_range_set_type(struct lu_seq_range *range,
 				      unsigned flags)
 {
-	range->lsr_flags |= flags;
+	range->lsr_flags &= ~LU_SEQ_RANGE_MASK;
+	range->lsr_flags |= flags & LU_SEQ_RANGE_MASK;
 }
 
 /**
- * Add MDT to range type \a range
+ * Set range \a range type to MDT
  */
 
 static inline void fld_range_set_mdt(struct lu_seq_range *range)
@@ -80,7 +81,7 @@ static inline void fld_range_set_mdt(struct lu_seq_range *range)
 }
 
 /**
- * Add OST to range type \a range
+ * Set range \a range type to OST
  */
 
 static inline void fld_range_set_ost(struct lu_seq_range *range)
@@ -89,7 +90,7 @@ static inline void fld_range_set_ost(struct lu_seq_range *range)
 }
 
 /**
- * Add ANY to range type \a range
+ * Set range \a range type to ANY
  */
 
 static inline void fld_range_set_any(struct lu_seq_range *range)
