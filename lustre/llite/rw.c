@@ -1611,8 +1611,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	struct cl_sync_io	  *anchor = NULL;
 	int			   rc = 0, rc2 = 0;
 	bool			   uptodate;
-	struct vvp_io *vio = vvp_env_io(env);
-	bool mmap = !vio->vui_ra_valid;
+	bool mmap = !!(io->ci_type == CIT_FAULT);
 	pgoff_t ra_start_index = 0;
 	pgoff_t io_start_index;
 	pgoff_t io_end_index;
