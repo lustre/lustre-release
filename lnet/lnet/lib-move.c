@@ -19,8 +19,8 @@
 
 #include <linux/libcfs/libcfs.h>
 #include <linux/libcfs/libcfs_fail.h>
-#include <lnet/lib-lnet.h>
-#include <lnet/lnet_rdma.h>
+#include <linux/lnet/lib-lnet.h>
+#include <linux/lnet/lnet_rdma.h>
 #include <net/net_namespace.h>
 
 static int local_nid_dist_zero = 1;

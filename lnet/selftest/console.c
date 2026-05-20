@@ -15,7 +15,7 @@
  * Author: Liang Zhen <liangzhen@clusterfs.com>
  */
 
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 
 #include "console.h"
 #include "conrpc.h"

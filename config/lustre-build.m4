@@ -247,7 +247,7 @@ AC_DEFUN([LB_KABI_CHECKS], [
 			AC_MSG_ERROR([Modules are not supported on $target_os])
 	])
 	# Use OpenSFS UAPI header path instead of linux kernel
-	CPPFLAGS="-I$PWD/lnet/include/uapi -I$PWD/lustre/include/uapi $CPPFLAGS"
+	CPPFLAGS="-I$PWD/include/uapi $CPPFLAGS"
 ])
 ]) # LB_CONFIG_MODULES
 

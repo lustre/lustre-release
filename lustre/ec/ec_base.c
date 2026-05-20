@@ -34,14 +34,18 @@
 #include <linux/limits.h>
 #include <linux/string.h> // for memset
 #include <linux/types.h>
+
+#include <uapi/linux/lustre/erasure_code.h>
+#include <uapi/linux/lustre/ec_base.h> // for GF tables
 #else
 #include <limits.h>
 #include <string.h> // for memset
 #include <stdint.h>
-#endif /* __KERNEL__ */
 
-#include "erasure_code.h"
-#include "ec_base.h" // for GF tables
+#include <linux/lustre/erasure_code.h>
+#include <linux/lustre/ec_base.h> // for GF tables
+
+#endif /* __KERNEL__ */
 
 void
 ec_init_tables_base(int k, int rows, unsigned char *a, unsigned char *g_tbls)

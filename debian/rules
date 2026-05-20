@@ -493,8 +493,7 @@ binary-$(DKMS_PKG): build-stamp
 	# Clean it up
 	$(MAKE) -C debian/$(DKMS_PKG)/usr/src/lustre-client-modules-$(UPVERSION) -f debian/rules clean
 
-	$(MAKE) install -C lustre/include DESTDIR=$(CURDIR)/debian/$(DKMS_PKG)
-	$(MAKE) install -C lnet/include DESTDIR=$(CURDIR)/debian/$(DKMS_PKG)
+	$(MAKE) install -C include DESTDIR=$(CURDIR)/debian/$(DKMS_PKG)
 	rm -rf $(CURDIR)/debian/$(DKMS_PKG)/usr/include/lustre
 
 	# Put the DKMS configuration file in place

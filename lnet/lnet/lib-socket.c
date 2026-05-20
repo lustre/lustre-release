@@ -26,7 +26,7 @@
 #include <lustre_compat/linux/inetdevice.h>
 
 #include <linux/libcfs/libcfs.h>
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 
 int
 lnet_sock_write(struct socket *sock, void *buffer, int nob, int timeout)

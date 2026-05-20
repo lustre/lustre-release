@@ -24,7 +24,7 @@
 #include <linux/falloc.h>
 
 #include "osc_internal.h"
-#include <lnet/lnet_rdma.h>
+#include <linux/lnet/lnet_rdma.h>
 
 /** \addtogroup osc
  *  @{

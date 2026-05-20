@@ -2,11 +2,11 @@
 
 /* This file is part of Lustre, http://www.lustre.org/ */
 
-#include <lnet/lnet_rdma.h>
+#include <linux/lnet/lnet_rdma.h>
 #include <linux/libcfs/libcfs.h>
 
 /* MAX / MIN conflict */
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 
 #define NVFS_HOLD_TIME_MS 1000
 

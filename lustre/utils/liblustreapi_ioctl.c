@@ -23,7 +23,6 @@
 #include <libcfs/util/ioctl.h>
 #include <linux/lustre/lustre_ioctl.h>
 #include <linux/lustre/lustre_ver.h>
-#include <lustre_ioctl_old.h>
 
 #include "lustreapi_internal.h"
 

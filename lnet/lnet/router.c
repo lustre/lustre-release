@@ -11,7 +11,7 @@
 
 #include <linux/random.h>
 #include <linux/libcfs/libcfs.h>
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 
 #define LNET_NRB_TINY_MIN	512	/* min value for each CPT */
 #define LNET_NRB_TINY		(LNET_NRB_TINY_MIN * 4)

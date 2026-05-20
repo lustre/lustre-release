@@ -18,8 +18,8 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/libcfs/libcfs.h>
-#include <lnet/lib-types.h>
-#include <lnet/lib-cpt.h>
+#include <linux/lnet/lib-types.h>
+#include <linux/lnet/lib-cpt.h>
 
 /* virtual processing unit */
 struct cfs_cpu_partition {

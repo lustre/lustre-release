@@ -15,8 +15,7 @@
 #include <linux/ethtool.h>
 #include <linux/rtnetlink.h>
 #include <net/net_namespace.h>
-
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 
 #include <lustre_compat/net/netdev_lock.h>
 

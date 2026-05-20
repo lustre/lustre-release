@@ -21,9 +21,9 @@
 #include <linux/refcount.h>
 #include <lustre_compat/linux/mm.h>
 #include <linux/libcfs/libcfs.h>
-#include <lnet/api.h>
-#include <lnet/lib-lnet.h>
-#include <lnet/lib-types.h>
+#include <linux/lnet/api.h>
+#include <linux/lnet/lib-lnet.h>
+#include <linux/lnet/lib-types.h>
 #include <uapi/linux/lnet/lnetst.h>
 
 #include "rpc.h"

@@ -17,7 +17,7 @@
 #include <lustre_compat/linux/folio.h>
 #include <linux/libcfs/libcfs_debug.h>
 #include <linux/libcfs/libcfs_private.h>
-#include <lnet/lnet_crypto.h>
+#include <linux/lnet/lnet_crypto.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 
 int obd_t10_cksum_speed(const char *obd_name,

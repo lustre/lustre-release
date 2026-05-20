@@ -16,7 +16,7 @@
 #include <linux/sunrpc/addr.h>
 #include <linux/libcfs/libcfs.h>
 #include <uapi/linux/lnet/nidstr.h>
-#include <lnet/lib-types.h>
+#include <linux/lnet/lib-types.h>
 #include <linux/ctype.h>
 #include <linux/inet.h>
 #include <linux/inetdevice.h>

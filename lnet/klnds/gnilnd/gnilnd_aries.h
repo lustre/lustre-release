@@ -13,7 +13,7 @@
 #ifndef _GNILND_ARIES_H
 #define _GNILND_ARIES_H
 
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 
 #ifndef _GNILND_HSS_OPS_H
 # error "must include gnilnd_hss_ops.h first"

@@ -36,7 +36,7 @@
 
 #include <linux/libcfs/libcfs.h>
 #include <lustre_compat/linux/linux-misc.h>
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 #include "tracefile.h"
 
 struct lnet_debugfs_symlink_def {

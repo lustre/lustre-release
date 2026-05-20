@@ -26,9 +26,9 @@
 #include <linux/libcfs/libcfs_debug.h>
 #include <linux/libcfs/libcfs_private.h>
 
-#include <lnet/api.h>
-#include <lnet/lib-cpt.h>
-#include <lnet/lib-types.h>
+#include <linux/lnet/api.h>
+#include <linux/lnet/lib-cpt.h>
+#include <linux/lnet/lib-types.h>
 #include <uapi/linux/lnet/lnet-dlc.h>
 #include <uapi/linux/lnet/lnet-types.h>
 #include <uapi/linux/lnet/lnetctl.h>

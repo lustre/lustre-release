@@ -23,7 +23,7 @@
 #include <linux/libcfs/libcfs_debug.h>
 #include <linux/libcfs/libcfs_private.h>
 
-#include <lnet/lib-cpt.h>
+#include <linux/lnet/lib-cpt.h>
 #include <lprocfs_status.h>
 #include <lustre_handles.h>
 #include <uapi/linux/lustre/lustre_idl.h>

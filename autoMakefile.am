@@ -41,22 +41,22 @@ UAPI_LUSTRE_EXCLUDE += lustre_access_log.h lustre_barrier_user.h \
 endif
 
 install-data-local:
-	for fname in $$(find lustre/include/lustre -type f -name '*.h'); do \
-		target=$$(echo $${fname} | sed 's:^lustre/include/::g'); \
+	for fname in $$(find include/lustre -type f -name '*.h'); do \
+		target=$$(echo $${fname} | sed 's:^include/::g'); \
 		$(INSTALL) -D -m 0644 $${fname} $(DESTDIR)$(includedir)/$${target}; \
 	done
-	for fname in $$(find lnet/include/uapi/linux/lnet -type f -name '*.h'); do \
-		target=$$(echo $${fname} | sed 's:^lnet/include/uapi/::g'); \
+	for fname in $$(find include/uapi/linux/lnet -type f -name '*.h'); do \
+		target=$$(echo $${fname} | sed 's:^include/uapi/::g'); \
 		$(INSTALL) -D -m 0644 $${fname} $(DESTDIR)$(includedir)/$${target}; \
 	done
-	for fname in $$(find lustre/include/uapi/linux/lustre -type f -name '*.h'); do \
+	for fname in $$(find include/uapi/linux/lustre -type f -name '*.h'); do \
 		base=$$(basename $${fname}); \
 		skip=false; \
 		for s in $(UAPI_LUSTRE_EXCLUDE); do \
 			if test "$$base" = "$$s"; then skip=true; break; fi; \
 		done; \
 		if ! $$skip; then \
-			target=$$(echo $${fname} | sed 's:^lustre/include/uapi/::g'); \
+			target=$$(echo $${fname} | sed 's:^include/uapi/::g'); \
 			$(INSTALL) -D -m 0644 $${fname} $(DESTDIR)$(includedir)/$${target}; \
 		fi; \
 	done

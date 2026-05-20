@@ -32,7 +32,7 @@
 #include <obd_class.h>
 
 #include "osc_internal.h"
-#include <lnet/lnet_rdma.h>
+#include <linux/lnet/lnet_rdma.h>
 
 atomic_t osc_pool_req_count;
 unsigned int osc_reqpool_maxreqcount;

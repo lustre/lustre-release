@@ -14,7 +14,7 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <linux/libcfs/libcfs_fail.h>
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 
 void
 lnet_build_unlink_event(struct lnet_libmd *md, struct lnet_event *ev)

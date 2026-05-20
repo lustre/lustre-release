@@ -20,7 +20,7 @@
 
 #include <linux/uaccess.h>
 #include <linux/libcfs/libcfs.h>
-#include <lnet/lib-types.h>
+#include <linux/lnet/lib-types.h>
 
 #include "selftest.h"
 #include "conrpc.h"

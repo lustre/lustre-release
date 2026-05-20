@@ -9,7 +9,8 @@
 /* This file is part of Lustre, http://www.lustre.org/ */
 
 #define DEBUG_SUBSYSTEM S_LNET
-#include <lnet/lib-lnet.h>
+
+#include <linux/lnet/lib-lnet.h>
 
 static int
 lolnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)

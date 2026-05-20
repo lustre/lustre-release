@@ -401,9 +401,6 @@ static inline bool ldlm_res_eq(const struct ldlm_res_id *res0,
 	return memcmp(res0, res1, sizeof(*res0)) == 0;
 }
 
-/* exports for testing */
-struct ldlm_lock *ldlm_lock_new_testing(struct ldlm_resource *resource);
-
 /* ldlm_cache_policy.c */
 extern struct ldlm_lock_cache_ops ldlm_lru_cache_ops;
 extern struct ldlm_lock_cache_ops ldlm_lfru_cache_ops;

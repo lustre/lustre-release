@@ -11,7 +11,7 @@
 
 #include <linux/uaccess.h>
 #include <linux/libcfs/libcfs.h>
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 
 #define LNET_LOFFT_BITS		(sizeof(loff_t) * 8)
 /* NB: max allowed LNET_CPT_BITS is 8 on 64-bit system and 2 on 32-bit system

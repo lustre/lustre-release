@@ -18,9 +18,9 @@
 #include <linux/sched/signal.h>
 
 #include <linux/libcfs/libcfs.h>
-#include <lnet/udsp.h>
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 #include <uapi/linux/lustre/lustre_ver.h>
+#include "udsp.h"
 
 #define D_LNI D_CONSOLE
 

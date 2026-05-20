@@ -14,7 +14,6 @@
  *
  */
 
-#include <erasure_code.h>
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/completion.h>
@@ -22,6 +21,8 @@
 #include <linux/fs.h>
 #include <linux/slab.h>
 #include <linux/version.h>
+
+#include <uapi/linux/lustre/erasure_code.h>
 
 /* Random ID passed by userspace, and printed in messages, used to
  * separate different runs of that module. */

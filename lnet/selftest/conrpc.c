@@ -15,7 +15,7 @@
  * Author: Liang Zhen <liang@whamcloud.com>
  */
 
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 
 #include "timer.h"
 #include "conrpc.h"

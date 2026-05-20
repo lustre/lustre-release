@@ -1627,6 +1627,7 @@ struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *lh,
 void ldlm_cancel_callback(struct ldlm_lock *ll);
 int ldlm_lock_remove_from_lru(struct ldlm_lock *ll);
 int ldlm_lock_set_data(const struct lustre_handle *lockh, void *data);
+struct ldlm_lock *ldlm_lock_new_testing(struct ldlm_resource *resource);
 
 /**
  * Obtain a lock reference by its handle.

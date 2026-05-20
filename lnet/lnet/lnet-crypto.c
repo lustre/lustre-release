@@ -9,7 +9,7 @@
 #include <linux/scatterlist.h>
 #include <linux/pagemap.h>
 #include <linux/libcfs/libcfs.h>
-#include <lnet/lnet_crypto.h>
+#include <linux/lnet/lnet_crypto.h>
 #include "adler.h"
 
 /* Array of hash algorithm speed in MByte per second */

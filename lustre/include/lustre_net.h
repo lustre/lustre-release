@@ -30,8 +30,8 @@
 #include <linux/rhashtable.h>
 #include <linux/uio.h>
 #include <linux/pm_qos.h>
-#include <lnet/api.h>
-#include <lnet/lib-types.h>
+#include <linux/lnet/api.h>
+#include <linux/lnet/lib-types.h>
 #include <uapi/linux/lnet/nidstr.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_ha.h>

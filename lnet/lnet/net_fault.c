@@ -15,7 +15,7 @@
 #include <lustre_compat/linux/timer.h>
 #include <lustre_compat/linux/linux-misc.h>
 
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 #include <uapi/linux/lnet/lnetctl.h>
 
 #define LNET_MSG_MASK		(LNET_PUT_BIT | LNET_ACK_BIT | \

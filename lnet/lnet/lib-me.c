@@ -13,7 +13,7 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 
 /**
  * LNetMEAttach() - Create and attach a match entry to the match list of @portal

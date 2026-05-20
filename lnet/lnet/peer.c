@@ -15,9 +15,9 @@
 #include <lustre_compat/linux/string.h>
 #include <linux/uaccess.h>
 #include <linux/libcfs/libcfs.h>
-#include <lnet/udsp.h>
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 #include <uapi/linux/lnet/lnet-dlc.h>
+#include <udsp.h>
 
 /* Value indicating that recovery needs to re-check a peer immediately. */
 #define LNET_REDISCOVER_PEER	(1)

@@ -11,7 +11,7 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 
 /** destroy cpu-partition lock, see libcfs_private.h for more detail */
 void

@@ -52,7 +52,7 @@
 
 #include <lustre_compat/linux/timer.h>
 #include <linux/libcfs/libcfs_fail.h>
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 
 #include <gni_pub.h>
 

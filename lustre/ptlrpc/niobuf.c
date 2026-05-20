@@ -19,7 +19,7 @@
 #include <obd.h>
 #include <obd_class.h>
 #include "ptlrpc_internal.h"
-#include <lnet/lib-lnet.h> /* for CFS_FAIL_PTLRPC_OST_BULK_CB2 */
+#include <linux/lnet/lib-lnet.h> /* for CFS_FAIL_PTLRPC_OST_BULK_CB2 */
 
 /* whether we should use PM-QoS to lower CPUs resume latency during I/O */
 bool ptlrpc_enable_pmqos = true;

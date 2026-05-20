@@ -13,7 +13,7 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 
 /* must be called with lnet_res_lock held */
 void

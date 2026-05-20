@@ -426,7 +426,8 @@ struct lnet_net {
 	/* net ID, which is composed of
 	 * (net_type << 16) | net_num.
 	 * net_type can be one of the enumerated types defined in
-	 * lnet/include/lnet/nidstr.h */
+	 * include/linux/lnet/nidstr.h
+	 */
 	__u32			net_id;
 
 	/* round robin selection */

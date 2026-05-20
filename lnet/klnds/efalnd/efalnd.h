@@ -21,9 +21,9 @@
 #include <linux/rhashtable.h>
 #include <linux/libcfs/libcfs.h>
 
-#include <lnet/lib-lnet.h>
-#include <lnet/lib-types.h>
-#include <lnet/lnet_rdma.h>
+#include <linux/lnet/lib-lnet.h>
+#include <linux/lnet/lib-types.h>
+#include <linux/lnet/lnet_rdma.h>
 
 #include <efa_verbs.h>
 

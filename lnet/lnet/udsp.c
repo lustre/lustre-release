@@ -76,7 +76,7 @@
  */
 
 #include <linux/uaccess.h>
-#include <lnet/udsp.h>
+#include <udsp.h>
 
 struct udsp_info {
 	struct lnet_peer_ni *udi_lpni;

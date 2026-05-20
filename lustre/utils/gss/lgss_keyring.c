@@ -33,7 +33,6 @@
 
 #include <libcfs/util/param.h>
 #include <libcfs/util/string.h>
-#include <uapi/linux/lustre/lgss.h>
 #include "lsupport.h"
 #include "lgss_utils.h"
 #include "lgss_krb5_utils.h"

@@ -18,7 +18,7 @@
 #ifndef __LST_CONRPC_H__
 #define __LST_CONRPC_H__
 
-#include <lnet/lib-types.h>
+#include <linux/lnet/lib-types.h>
 #include "rpc.h"
 #include "selftest.h"
 

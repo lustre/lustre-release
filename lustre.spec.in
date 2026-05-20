@@ -813,8 +813,8 @@ basemodpath=$RPM_BUILD_ROOT%{modules_fs_path}/%{name}
 %if %{with lustre_modules}
 %{__install} -D -m 0644 ${PWD}/Module.symvers %{buildroot}/%{_usrsrc}/lustre-%{version}/%{_arch}/%{_flavor}/Module.symvers
 %{__install} -D -m 0644 ${PWD}/config.h %{buildroot}/%{_usrsrc}/lustre-%{version}/%{_arch}/%{_flavor}/config.h
-for fname in $(find lnet/include -type f -name \*.h); do
-	target=$(echo ${fname} | sed 's:^lnet/include/::g')
+for fname in $(find include/{linux,uapi} -type f -name \*.h); do
+	target=$(echo ${fname} | sed 's:^include/::g')
 	%{__install} -D -m 0644 ${fname} %{buildroot}/%{_usrsrc}/lustre-%{version}/${target}
 done
 %endif

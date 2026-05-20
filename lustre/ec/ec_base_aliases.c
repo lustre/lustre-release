@@ -27,7 +27,7 @@
   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 **********************************************************************/
 
-#include "erasure_code.h"
+#include <linux/lustre/erasure_code.h>
 
 void
 gf_vect_dot_prod(int len, int vlen, unsigned char *v, unsigned char **src, unsigned char *dest)

@@ -16,7 +16,7 @@
  */
 
 #include <linux/libcfs/libcfs.h>
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 #include "console.h"
 
 static int

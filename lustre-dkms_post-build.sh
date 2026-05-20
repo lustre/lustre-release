@@ -66,19 +66,12 @@ mkdir -p ${kapi}/$5/$flavor
 ln -s $7/$1/$2/$3/$5/config.h ${kapi}/$5/$flavor
 ln -s $7/$1/$2/$3/$5/Module.symvers ${kapi}/$5/$flavor
 
-# LNet headers:
-for fname in $(find lnet/include -type f -name \*.h); do
-    target=$(echo ${fname} | sed -e 's:^lnet/include/::g')
-    if [[ ${target} == uapi/* ]]; then
-        header=$(echo ${target} | sed -e 's:^uapi/linux/lnet/::g')
-        install -D -m 0644 ${fname} ${kapi}/uapi/linux/lnet/${header}
-        install -D -m 0644 ${fname} ${kapi}/linux/lnet/${header}
-        >&2 echo "installing ${fname} => ${kapi}/uapi/linux/lnet/${header}"
-        >&2 echo "installing ${fname} => ${kapi}/linux/lnet/${header}"
-    else
-        install -D -m 0644 ${fname} ${kapi}/${target}
-        >&2 echo "installing ${fname} => ${kapi}/${target}"
-    fi
+# LNet / Lustre headers:
+# LNet / Lustre kernel headers:
+for fname in $(find include/{linux/uapi} -type f -name \*.h); do
+    target=$(echo ${fname} | sed -e 's:^/include/::g')
+    install -D -m 0644 ${fname} ${kapi}/${target}
+    >&2 echo "installing ${fname} => ${kapi}/${target}"
 done
 
 alternatives --install /usr/src/lustre lustre ${kapi} 90

@@ -24,7 +24,7 @@
 #include <libcfs/util/list.h>
 #include <linux/lnet/lnet-types.h>
 #include <linux/lnet/nidstr.h>
-#include <uapi/linux/lustre/lgss.h>
+#include <linux/lustre/lgss.h>
 
 #include <krb5.h>
 

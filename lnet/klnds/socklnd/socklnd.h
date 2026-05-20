@@ -42,8 +42,9 @@
 #include <lustre_compat/net/tcp.h>
 
 #include <linux/libcfs/libcfs.h>
-#include <lnet/lib-lnet.h>
-#include <lnet/socklnd.h>
+#include <linux/lnet/lib-lnet.h>
+
+#include "socklnd-idl.h"
 
 /* assume one thread for each connection type */
 #define SOCKNAL_NSCHEDS		3

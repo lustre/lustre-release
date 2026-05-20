@@ -6,8 +6,8 @@
 
 /* This file is part of Lustre, http://www.lustre.org/ */
 
-#ifndef __LNET_LNET_SOCKLND_H__
-#define __LNET_LNET_SOCKLND_H__
+#ifndef __SOCKLND_SOCKLND_IDL_H__
+#define __SOCKLND_SOCKLND_IDL_H__
 
 #include <uapi/linux/lnet/lnet-types.h>
 #include <uapi/linux/lnet/socklnd.h>

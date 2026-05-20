@@ -55,8 +55,8 @@
 #define DEBUG_SUBSYSTEM S_LND
 
 #include <linux/libcfs/libcfs.h>
-#include <lnet/lib-lnet.h>
-#include <lnet/lnet_rdma.h>
+#include <linux/lnet/lib-lnet.h>
+#include <linux/lnet/lnet_rdma.h>
 #include "o2iblnd-idl.h"
 
 enum kiblnd_ni_lnd_tunables_attr {

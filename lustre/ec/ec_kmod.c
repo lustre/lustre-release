@@ -32,7 +32,7 @@
 #include <linux/module.h>
 #include <linux/string.h>	/* for memset */
 
-#include "erasure_code.h"
+#include <uapi/linux/lustre/erasure_code.h>
 
 void ec_init_tables(int k, int rows, unsigned char *a, unsigned char *g_tbls);
 EXPORT_SYMBOL(ec_init_tables);

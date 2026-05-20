@@ -10,7 +10,7 @@
 #include <obd.h>
 #include <obd_class.h>
 #include <lustre_lib.h>
-#include "../../ldlm/ldlm_internal.h"
+//#include "../../ldlm/ldlm_internal.h"
 
 #define LUSTRE_TEST_LDLM_DEVICE "ldlm_test"
 

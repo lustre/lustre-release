@@ -34,7 +34,6 @@
 #include <linux/lnet/socklnd.h>
 #include <lnetconfig/liblnetconfig.h>
 #include <lustre/lustreapi.h>
-#include <lustre_ioctl_old.h>
 
 #include "obdctl.h"
 

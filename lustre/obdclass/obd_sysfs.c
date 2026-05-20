@@ -41,7 +41,7 @@
 #include <linux/seq_file.h>
 #include <linux/kobject.h>
 
-#include <lnet/lnet_crypto.h>
+#include <linux/lnet/lnet_crypto.h>
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>

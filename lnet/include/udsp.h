@@ -15,7 +15,7 @@
 #ifndef UDSP_H
 #define UDSP_H
 
-#include <lnet/lib-lnet.h>
+#include <linux/lnet/lib-lnet.h>
 
 /**
  * lnet_udsp_add_policy
