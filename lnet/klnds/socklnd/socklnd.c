@@ -1342,7 +1342,8 @@ ksocknal_close_conn_locked(struct ksock_conn *conn, int error)
 		if (!list_empty(&peer_ni->ksnp_tx_queue)) {
 			struct ksock_tx *tx;
 
-			LASSERT(conn->ksnc_proto == &ksocknal_protocol_v3x);
+			LASSERT(conn->ksnc_proto == &ksocknal_protocol_v3x ||
+				conn->ksnc_proto == &ksocknal_protocol_v4x);
 
 			/* throw them to the last connection...,
 			 * these TXs will be send to /dev/null by scheduler
