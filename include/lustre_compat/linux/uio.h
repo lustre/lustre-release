@@ -19,9 +19,12 @@
 #define iov_iter_is_pipe(iter)	0
 #endif
 
-#ifndef HAVE_USER_BACKED_ITER
+#ifdef HAVE_USER_BACKED_ITER
+#define iter_ubuf(iter)			((iter)->ubuf)
+#else
 #define iter_is_ubuf(iter)		0
 #define user_backed_iter(iter)		iter_is_iovec(iter)
+#define iter_ubuf(iter)			(0ul) /* unused */
 #endif /* HAVE_USER_BACKED_ITER */
 
 #ifndef HAVE_IOV_ITER_IS_ALIGNED
@@ -56,7 +59,7 @@ static inline bool iov_iter_is_aligned(const struct iov_iter *i,
 	if (likely(iter_is_ubuf(i))) {
 		if (i->count & len_mask)
 			return false;
-		if ((unsigned long)(iter_iov(i) + i->iov_offset) & addr_mask)
+		if ((unsigned long)(iter_ubuf(i) + i->iov_offset) & addr_mask)
 			return false;
 		return true;
 	}
