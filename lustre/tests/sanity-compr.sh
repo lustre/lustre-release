@@ -55,36 +55,45 @@ test_1000() {
 	local filefrag_op=$(filefrag -l 2>&1 | grep "invalid option")
 	[[ -z "$filefrag_op" ]] || skip_env "filefrag missing logical ordering"
 
-	local blocks=128
-	local dense=$(do_facet ost1 lctl get_param -n \
-			      osd*.*OST0000*.extents_dense)
-	[[ -n $dense ]] || skip "no dense writes supported"
+	local blocks=256
+	local dense=$(do_facet ost1 \
+		      "$LCTL get_param -n osd*.*OST0000*.extents_dense")
+	if [[ -z "$dense" ]]; then
+		[[ "$ost1_FSTYPE" == "ldiskfs" ]] ||
+			skip "no dense writes supported for $ost1_FSTYPE"
+		(( $OST1_VERSION >= $(version_code v2_15_61-99-g686dee707f))) ||
+			skip "need OST >= 2.15.61.99 for ldiskfs dense writes"
+		do_facet ost1 "mount | grep lustre"
+		do_facet ost1 "$LCTL list_param osd*.*OST0000*.*"
+		skip "port ext4-mballoc-dense.patch to $OST1_OS_ID$OST1_OS_VERSION_ID"
+	fi
 
-	local osts=$(comma_list $(osts_nodes))
+	local osts=$(osts_nodes)
 	do_nodes $osts $LCTL set_param osd*.*.extents_dense=0 ||
-		error "cannot enable dense extent allocation"
+		error "cannot disable dense extent allocation"
 	stack_trap "do_nodes $osts $LCTL set_param osd*.*.extents_dense=$dense"
+	(( $ONLY_REPEAT_ITER == 1 )) || wait_delete_completed
 
 	local tf=$DIR/$tfile
 	stack_trap "rm -f $tf"
 	log "create file with dense=0"
 
-	$LFS setstripe -c 1 -i 0 $tf
-	for ((i=0; i<$blocks; i++)); do
+	$LFS setstripe -c 1 $tf || error "setstripe -c 1 $tf failed (1)"
+	for ((i = 0; i < $blocks; i++)); do
 		dd if=/dev/zero of=$tf bs=32k seek=$((i*2)) count=1 \
-			oflag=direct >&/dev/null conv=notrunc ||
-				error "can't dd (sparse)"
+			oflag=direct conv=notrunc >&/dev/null ||
+				error "can't dd (normal)"
 	done
 	filefrag -sv $tf
 	local nonr=0
 	while read EX LS LE PS PE LEN DEV FLAGS; do
-		[[ "$EX" == "ext:" || "$EX" =~ "File" ]] && continue
-		[[ "$EX" == "0:" ]] && PREV=${PE%:} && ((nonr+=1)) && continue
-		(( ${PS%%.*} == PREV + 1 )) || ((nonr+=1))
+		[[ $EX == ext: || $EX =~ File || $EX =~ found ]] && continue
+		[[ $EX == 0: ]] && PREV=${PE%:} && ((nonr += 1)) && continue
+		(( ${PS%%.*} == PREV + 1 )) || ((nonr += 1))
 		PREV=${PE%:}
 	done < <(filefrag -v $tf)
-	(( nonr > 0 )) || error "no extents?"
-	rm -f $tf
+	(( nonr > 0 )) || error "no extents for normal allocator?"
+	> $tf
 	wait_delete_completed
 
 	do_nodes $osts $LCTL set_param osd*.*.extents_dense=1 ||
@@ -93,8 +102,7 @@ test_1000() {
 	$LCTL set_param fail_loc=0x419
 	log "create file with dense=1"
 
-	$LFS setstripe -c 1 -i 0 $tf
-	for ((i=0; i<$blocks; i++)); do
+	for ((i = 0; i < $blocks; i++)); do
 		dd if=/dev/zero of=$tf bs=32k seek=$((i*2)) count=1 \
 			oflag=direct conv=notrunc >&/dev/null ||
 				error "can't dd (dense)"
@@ -102,31 +110,41 @@ test_1000() {
 	filefrag -sv $tf
 	local nr=0
 	while read EX LS LE PS PE LEN DEV FLAGS; do
-		[[ "$EX" == "ext:" || "$EX" =~ "File" ]] && continue
-		[[ "$EX" == "0:" ]] && PREV=${PE%:} && ((nr+=1)) && continue
-		(( ${PS%%.*} == PREV + 1 )) || ((nr+=1))
+		[[ $EX == ext: || $EX =~ File || $EX =~ found ]] && continue
+		[[ $EX == 0: ]] && PREV=${PE%:} && ((nr += 1)) && continue
+		(( ${PS%%.*} == PREV + 1 )) || ((nr += 1))
 		PREV=${PE%:}
 	done < <(filefrag -v $tf)
-	(( nr > 0 )) || error "no extents?"
+	(( nr > 0 )) || error "no extents for dense allocator?"
 
-	echo "dense ($nr) should have fewer extents ($nonr)"
-	(( (nonr / nr) > 3 )) ||
-		error "dense ($nr) should have less extents ($nonr)"
+	echo "allocation segments/gaps: dense=$nr normal=$nonr"
+	(( nonr / nr >= 2 )) ||
+		error "dense ($nr) should have fewer gaps than normal ($nonr)"
 	$LCTL set_param fail_loc=0
 
 	local tmpfile=$(mktemp)
 	stack_trap "rm -f $tmpfile"
 	echo "generate temp file $tmpfile"
-	dd if=/dev/urandom of=$tmpfile bs=32k count=$((blocks*2)) iflag=fullblock ||
-		error "can't generate temporary file"
-	dd if=$tmpfile of=$tf bs=32k conv=notrunc
+	for ((i = 0; i < $blocks; i++)); do
+		dd if=/dev/urandom of=$tmpfile bs=32k seek=$((i*2)) count=1 \
+			iflag=fullblock conv=notrunc >&/dev/null ||
+				error "can't dd random (sparse)"
+	done
+	for ((i = 0; i < $blocks; i++)); do
+		dd if=$tmpfile of=$tf bs=32k skip=$((i*2)) seek=$((i*2)) \
+			count=1 oflag=direct conv=notrunc >&/dev/null ||
+				error "can't dd random (dense)"
+	done
 	cancel_lru_locks osc
 
-	stop ost1 || error "(2) Fail to stop ost1"
-	run_e2fsck $(facet_host ost1) $(ostdevname 1) "-y" ||
+	local ostidx=$($LFS getstripe -i $tf)
+	local ostnum=$((ostidx + 1))
+	local facet=ost$ostnum
+	stop $facet || error "(2) Fail to stop $facet"
+	run_e2fsck $(facet_host $facet) $(ostdevname $ostnum) "-y" ||
 		error "(3) Fail to run e2fsck error"
-	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS ||
-		error "(4) Fail to start ost1"
+	start $facet $(ostdevname $ostnum) $OST_MOUNT_OPTS ||
+		error "(4) Fail to start $facet"
 
 	cmp $tmpfile $tf || error "data mismatch"
 }
