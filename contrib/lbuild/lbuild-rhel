@@ -104,10 +104,20 @@ prepare_and_build_srpm() {
     # get any release specific build options
     rpmbuildopt="$rpmbuildopt $(get_rpmbuildopts)"
 
+    # First look in kabiversion (rhel9, rhel10, ...)
+    local currdist=$(grep -E '^%define kabiversion' $TOPDIR/SPECS/$SPEC_NAME \
+        | awk '{print $3}' | awk -F. '{print "." $NF}')
+    # Then look in pkgrelease (rhel8)
+    [[ -n $currdist ]] ||
+        currdist=$(grep -E '^%define pkgrelease' $TOPDIR/SPECS/$SPEC_NAME \
+            | awk '{print $3}' | awk -F. '{print "." $NF}')
+    # If not found in spec, fall back to system value
+    [[ -n $currdist ]] || currdist=$(rpm --eval '%{dist}')
+
 	# now build it
 	if ! eval rpmbuild $rpmbuildopt --target ${TARGET_ARCH} \
 		--define \"_topdir $TOPDIR\" \
-		${buildid:+--define \"buildid $buildid\"} \
+		${currdist:+--define \"dist ${currdist}${buildid}\"} \
 		--define \"_tmppath $TMPDIR\" \
 		$TOPDIR/SPECS/$SPEC_NAME 2>&1; then
 		return 1
