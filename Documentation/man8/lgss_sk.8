@@ -1,20 +1,25 @@
-.TH LGSS_SK 8 2024-08-29 Lustre "Lustre Configuration Utilities"
+.TH LGSS_SK 8 2026-06-25 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lgss_sk \- Lustre GSS Shared-Key tool
 .SH SYNOPSIS
 .SY lgss_sk
 .RI [ OPTIONS ]
-.RB { -r | -w | -m | -l }
+.RB { -r | -w | -m | -l | -R }
 .I KEYFILE
+.YS
 .SH DESCRIPTION
 .B lgss_sk
-can be used to read, write, modify, and load the contents of a shared-key keyfile.
+can be used to read, write, modify, and load the contents of a shared-key
+keyfile, and to remove a loaded key from the kernel keyring.
 .SH OPTIONS
 .B lgss_sk
 accepts the following options:
 .TP
 .BR -l ", " --load \ \fIKEYFILE
 Load key from file into user's session keyring.
+.TP
+.BR -R ", " --remove \ \fIKEYFILE
+Remove key matching file from user's session keyring.
 .TP
 .BR -m ", " --modify \ \fIKEYFILE
 Modify a file's key attributes.

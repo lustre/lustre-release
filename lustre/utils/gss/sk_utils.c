@@ -446,6 +446,22 @@ next:
 	return 0;
 }
 
+/*
+ * Link @u into the caller's session keyring so we possess the keys we add to
+ * @u. keyctl_setperm() here (and keyctl_read()/keyctl_revoke() in
+ * sk_remove_key()) require a permission the kernel grants on a newly added key
+ * only via possession, not by UID match. @u is linked into @s by pam_keyinit
+ * at interactive login, but not under sudo, systemd, cron, or Pacemaker - so
+ * without this the setperm silently fails and the key keeps restrictive perms.
+ */
+static void sk_link_user_keyring(void)
+{
+	/* EEXIST just means @u was already linked (e.g. interactive login). */
+	if (keyctl_link(KEY_SPEC_USER_KEYRING,
+			KEY_SPEC_SESSION_KEYRING) < 0 && errno != EEXIST)
+		printerr(0, "Failed to link @u to @s: %s\n", strerror(errno));
+}
+
 /**
  * Checks if a key matching \a description is found in the keyring for
  * logging purposes and then attempts to load the payload from \a skc keyfile
@@ -472,6 +488,12 @@ static key_serial_t sk_load_key(const struct sk_keyfile_config *skc,
 
 	/* In the keyring use the disk layout so keyctl pipe can be used */
 	sk_config_cpu_to_disk(&payload);
+
+	/* Possess keys in @u so the keyctl_setperm() below - and the
+	 * keyctl_set_timeout() on former keys - succeed; see
+	 * sk_link_user_keyring().
+	 */
+	sk_link_user_keyring();
 
 	/* Check to see if a key is already loaded matching description */
 	key = keyctl_search(KEY_SPEC_USER_KEYRING, "user", description, 0);
@@ -527,8 +549,9 @@ static key_serial_t sk_load_key(const struct sk_keyfile_config *skc,
 			KEY_GRP_ALL | KEY_OTH_ALL;
 
 		if (keyctl_setperm(key, perm) < 0)
-			printerr(2, "Failed to set perm 0x%x on key %d\n",
-				 perm, key);
+			printerr(0,
+				 "Failed to set perm 0x%x on key %d: %s\n",
+				 perm, key, strerror(errno));
 		printerr(2, "Added key %d with description %s\n", key,
 			 description);
 
@@ -780,6 +803,13 @@ static int sk_remove_key(const struct sk_keyfile_config *skc, char *description)
 
 	/* In the keyring use the disk layout so keyctl pipe can be used */
 	sk_config_cpu_to_disk(&file_payload);
+
+	/* Possess keys in @u so the keyctl_read()/keyctl_revoke() below can act
+	 * on keys that were loaded with the restrictive default perms (e.g. by
+	 * an older mount.lustre, or before this fix); see
+	 * sk_link_user_keyring().
+	 */
+	sk_link_user_keyring();
 
 	rc = build_keys_array(description, &keys);
 	if (rc)

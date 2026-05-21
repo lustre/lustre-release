@@ -12999,6 +12999,60 @@ test_106() {
 }
 run_test 106 "switch nodemap to gssonly"
 
+unlink_sktest_keys() {
+	# Unlink our test keys from @u directly. List @u with `keyctl list @u`
+	# (not `keyctl show`, which walks the session chain and only reaches @u
+	# when pam_keyinit linked it - the very thing this test avoids relying
+	# on) and unlink with an explicit @u argument.
+	keyctl list @u 2>/dev/null | awk -F: '/lustre:sktest:/ { print $1 }' |
+		xargs -r -I{} keyctl unlink {} @u 2>/dev/null || true
+}
+
+cleanup_200() {
+	unlink_sktest_keys
+	rm -f $1
+}
+
+test_200() {
+	local test_key=$TMP/sk_load_key_perms.key
+	local perm
+
+	$SHARED_KEY || skip "Need shared key feature for this test"
+
+	# Regression for sk_load_key()'s keyctl_setperm() silently failing when
+	# the caller does not possess @u (the sudo / systemd / cron case - no
+	# pam_keyinit). Load a key in a fresh session with no @u link and assert
+	# its perms end up broadened to 0x3f3f3f3f, not the default 0x3f010000.
+
+	stack_trap "cleanup_200 $test_key" EXIT
+
+	# Self-contained server key - metadata is baked into the file, no MGS
+	# needed. Loading it creates one keyring entry: lustre:sktest:default.
+	$LGSS_SK -t server -f sktest -g 127.0.0.1@tcp \
+		-w $test_key -d /dev/urandom -p 512 ||
+		error "failed to create test key"
+
+	# Drop any stale key so add_key() creates a fresh one - an
+	# update-in-place would keep old perms and mask a regression.
+	unlink_sktest_keys
+
+	# `keyctl session -` runs lgss_sk in a new anonymous session keyring
+	# with no @u link - the same starting point sudo / systemd give.
+	keyctl session - $LGSS_SK -l $test_key ||
+		error "lgss_sk -l failed in fresh session keyring"
+
+	# Read the perm mask (column 5) from /proc/keys; we parse it rather
+	# than `keyctl search` because a buggy USR_VIEW-only key has no SEARCH
+	# perm and a search would not find it.
+	perm=$(awk '$9 ~ /^lustre:sktest:default:/ {print $5}' /proc/keys)
+
+	[[ -n "$perm" ]] ||
+		error "key lustre:sktest:default not found in /proc/keys"
+	[[ "$perm" == "3f3f3f3f" ]] || error \
+		"key perm=$perm, expected 3f3f3f3f - sk_load_key did not broaden perms"
+}
+run_test 200 "sk_load_key broadens SSK key perms without @u linked"
+
 test_300() {
 	local principal="mock_iam_test"
 	local mount_opts=$(csa_add "$MOUNT_OPTS" "" "user_principal=$principal")
