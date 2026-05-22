@@ -853,11 +853,11 @@ lustre_os_release() {
 	local facet=$1
 	local facet_os=$(tr "[:lower:]" "[:upper:]" <<<$facet)_OS_
 	local facet_version=${facet_os}VERSION_
+	local os_release="/etc/os-release"
 	local line
 
-	echo "$facet: $(do_facet $facet "cat /etc/system-release")"
-	do_facet $facet "test -r /etc/os-release" || {
-		echo "$facet: has no /etc/os-release"
+	do_facet $facet "test -r $os_release" || {
+		echo "$facet: has no $os_release"
 		do_facet $facet "uname -a; ls -s /etc/*release"
 		return 0
 	}
@@ -868,12 +868,15 @@ lustre_os_release() {
 		case $line in
 		VERSION_ID=*|ID=*|ID_LIKE=*) eval export ${facet_os}$line ;;
 		esac
-	done < <(do_facet $facet "cat /etc/os-release")
+	done < <(do_facet $facet "cat $os_release")
 
 	eval export ${facet_version}CODE=\$\(version_code \$${facet_version}ID\)
 	# add in the "self" ID to ID_LIKE so only one needs to be checked
 	eval export ${facet_os}ID_LIKE+=\" \$${facet_os}ID\"
-	env | grep "${facet_os}"
+	env | grep "${facet_os}" || {
+		echo "no ID information in $os_release:"
+		cat $os_release
+	}
 }
 
 module_loaded () {
