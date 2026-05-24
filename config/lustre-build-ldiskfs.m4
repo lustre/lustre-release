@@ -219,15 +219,15 @@ AS_IF([test -z "$LDISKFS_SERIES"],
 	AS_VERSION_COMPARE([$LINUXRELEASE],[6.12.0], [
 		LDISKFS_SERIES="6.6-ml.series"], [
 		LDISKFS_SERIES="6.12-ml.series"], [
-	AS_VERSION_COMPARE([$LINUXRELEASE],[6.15.0], [
-		LDISKFS_SERIES="6.12-ml.series"], [
-		LDISKFS_SERIES="6.15-ml.series"], [
 	AS_VERSION_COMPARE([$LINUXRELEASE],[6.18.0], [
-		LDISKFS_SERIES="6.15-ml.series"], [
+		LDISKFS_SERIES="6.12-ml.series"], [
 		LDISKFS_SERIES="6.18-ml.series"], [
-		LDISKFS_SERIES="6.18-ml.series"]
+	AS_VERSION_COMPARE([$LINUXRELEASE],[6.19.0], [
+		LDISKFS_SERIES="6.18-ml.series"], [
+		LDISKFS_SERIES="7.0-ml.series"], [
+		LDISKFS_SERIES="7.0-ml.series"]
+	)] # 7.0 - stable
 	)] # 6.18 - LTS (6.18)
-	)] # 6.15 - deprecated (fedora 42 and others)
 	)] # 6.12 - LTS
 	)] # 6.6  - LTS
 	)] # 6.1  - LTS
