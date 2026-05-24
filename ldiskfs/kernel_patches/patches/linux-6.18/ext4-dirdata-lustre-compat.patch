@@ -1,0 +1,190 @@
+commit 409935cc7094bf0d98b392d8ddc9a016f02749eb
+Author: Artem Blagodarenko <ablagodarenko@thelustrecollective.com>
+Date:   Mon Jan 19 09:37:24 2026 +0300
+LU-19847 ldiskfs: dirent and fscrypt+case_insensitive
+
+EXT4 occupies space in dirent just after the name with
+a hash for simultaneous fscrypt and casefold support.
+
+It was discussed with the EXT4 community that it is
+possible to move the hash to dirdata. It could be the
+second (or third, if 64-bit inode count) user of
+dirdata.
+
+At the same time, the hash placed after the file name
+should also be supported.
+
+This patch makes LDISKFS ready for such a hash present
+in both variants. While it is not currently possible
+to enable fscrypt + case_insensitive on LDISKFS, it is
+useful to verify that LUFID works well with such code.
+
+fscrypt + case_insensitive support with dirdata
+enabled is checked in a special xfstest sent to EXT4
+with the dirdata patch.
+
+Test-Parameters: clientdistro=el10.0 serverdistro=el10.0
+Test-Parameters: clientdistro=el10.1 serverdistro=el10.1
+Signed-off-by: Artem Blagodarenko <ablagodarenko@thelustrecollective.com>
+Change-Id: Ia9874396037a24b494dd3cfa7208e10a366f5eb3
+Reviewed-on: https://review.whamcloud.com/c/fs/lustre-release/+/64439
+Tested-by: jenkins <devops@whamcloud.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Tested-by: Maloo <maloo@whamcloud.com>
+Reviewed-by: Jian Yu <yujian@whamcloud.com>
+Reviewed-by: Andreas Dilger <adilger@thelustrecollective.com>
+---
+Patch 3 of 3: ext4-dirdata-lustre-compat.patch
+---
+ fs/ext4/ext4.h  | 19 ++++++++++++++++++
+ fs/ext4/namei.c | 51 ++++++++++++++++++++++++++++++++++++++++++++++---
+ 2 files changed, 67 insertions(+), 3 deletions(-)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1184,6 +1184,7 @@ struct ext4_inode_info {
+ 	__u32 i_csum_seed;
+ 
+ 	kprojid_t i_projid;
++	void *i_dirdata;
+ 
+ #ifdef CONFIG_FS_ENCRYPTION
+ 	struct fscrypt_inode_info *i_crypt_info;
+@@ -2503,6 +2504,13 @@ struct ext4_dir_entry_tail {
+ #define EXT4_DIRENT_INO64		0x20
+ #define EXT4_DIRENT_CFHASH		0x40
+ 
++#define EXT4_LUFID_MAGIC    0xAD200907UL
++struct ext4_dentry_param {
++	__u32  edp_magic;	/* EXT4_LUFID_MAGIC */
++	char   edp_len;		/* size of edp_data in bytes */
++	char   edp_data[];	/* packed array of data */
++} __packed;
++
+ struct ext4_dirent_data_header {
+ 	/* length of this header + the whole data blob */
+ 	__u8	ddh_length;
+@@ -2513,6 +2521,17 @@ struct ext4_dirent_hash {
+ 	struct ext4_dir_entry_hash	dh_hash;
+ } __packed;
+ 
++static inline unsigned char *ext4_dentry_get_data(struct super_block *sb,
++						  struct ext4_dentry_param *p)
++{
++	if (!ext4_has_feature_dirdata(sb))
++		return NULL;
++	if (p && p->edp_magic == EXT4_LUFID_MAGIC)
++		return &p->edp_len;
++	else
++		return NULL;
++}
++
+ #define EXT4_FT_DIR_CSUM	0xDE
+ 
+ /*
+diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
+--- a/fs/ext4/namei.c
++++ b/fs/ext4/namei.c
+@@ -2233,6 +2233,8 @@ static int add_dirent_to_buf(handle_t *handle, struct ext4_filename *fname,
+ 	if (ext4_has_feature_metadata_csum(inode->i_sb))
+ 		csum_size = sizeof(struct ext4_dir_entry_tail);
+ 
++	data = ext4_dentry_get_data(inode->i_sb, (struct ext4_dentry_param *)
++						EXT4_I(inode)->i_dirdata);
+ 	if (!de) {
+ 		if (data)
+ 			dlen = (*data) + 1;
+@@ -2606,7 +2608,8 @@ static int ext4_update_dotdot(handle_t *handle, struct dentry *dentry,
+ 
+ 	dotdot_de->inode = cpu_to_le32(inode->i_ino);
+ 
+-	/* Deliver data any appropriate way here. Now it is NULL */
++	data = ext4_dentry_get_data(dir->i_sb,
++			(struct ext4_dentry_param *)dentry->d_fsdata);
+ 	if (data != NULL) {
+ 		dlen = *data + 1;
+ 		if (is_dx(dir)) {
+@@ -2666,6 +2669,7 @@ static int ext4_add_entry(handle_t *handle, struct dentry *dentry,
+ 	ext4_lblk_t block, blocks;
+ 	int	csum_size = 0;
+ 
++	EXT4_I(inode)->i_dirdata = dentry->d_fsdata;
+ 	if (ext4_has_feature_metadata_csum(inode->i_sb))
+ 		csum_size = sizeof(struct ext4_dir_entry_tail);
+ 
+@@ -3250,22 +3254,40 @@ static int _ext4_init_dirblock(handle_t *handle, struct inode *inode,
+ 	struct ext4_dir_entry_2 *de = (struct ext4_dir_entry_2 *) bh->b_data;
+ 	size_t			blocksize = bh->b_size;
+ 	int			csum_size = 0, header_size;
++	int dot_reclen = 0;
+ 
+ 	if (ext4_has_feature_metadata_csum(inode->i_sb))
+ 		csum_size = sizeof(struct ext4_dir_entry_tail);
+ 
+ 	de->inode = cpu_to_le32(inode->i_ino);
+ 	de->name_len = 1;
+-	de->rec_len = ext4_rec_len_to_disk(ext4_dir_rec_len(de->name_len, NULL),
+-					   blocksize);
+ 	memcpy(de->name, ".", 2);
+ 	ext4_set_de_type(inode->i_sb, de, S_IFDIR);
+ 
++	/* get packed fid data*/
++	data1 = ext4_dentry_get_data(inode->i_sb,
++				(struct ext4_dentry_param *) data1);
++	if (data1) {
++		de->name[1] = 0;
++		memcpy(&de->name[2], data1, *(char *) data1);
++		de->file_type |= EXT4_DIRENT_LUFID;
++	}
++	de->rec_len = cpu_to_le16(EXT4_DIR_ENTRY_LEN(de, NULL));
++
++	dot_reclen = cpu_to_le16(de->rec_len);
+ 	de = ext4_next_entry(de, blocksize);
+ 	de->inode = cpu_to_le32(parent_ino);
+ 	de->name_len = 2;
+ 	memcpy(de->name, "..", 3);
+ 	ext4_set_de_type(inode->i_sb, de, S_IFDIR);
++	data2 = ext4_dentry_get_data(inode->i_sb,
++			(struct ext4_dentry_param *) data2);
++	if (data2) {
++		de->name[2] = 0;
++		memcpy(&de->name[3], data2, *(char *) data2);
++		de->file_type |= EXT4_DIRENT_LUFID;
++	}
++
+ 	if (inline_buf) {
+ 		de->rec_len = ext4_rec_len_to_disk(
+ 					ext4_dir_entry_len(de, NULL),
+@@ -3390,6 +3412,29 @@ out_retry:
+ 	return ERR_PTR(err);
+ }
+ 
++/* Initialize @inode as a subdirectory of @dir, and add the
++ * "." and ".." entries into the first directory block. */
++int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
++			struct inode *inode,
++			const void *data1, const void *data2)
++{
++	int rc;
++
++	if (IS_ERR(handle))
++		return PTR_ERR(handle);
++
++	if (IS_DIRSYNC(dir))
++		ext4_handle_sync(handle);
++
++	inode->i_op = &ext4_dir_inode_operations;
++	inode->i_fop = &ext4_dir_operations;
++	rc = ext4_init_new_dir(handle, dir, inode, data1, data2);
++	if (!rc)
++		rc = ext4_mark_inode_dirty(handle, inode);
++	return rc;
++}
++EXPORT_SYMBOL(ext4_add_dot_dotdot);
++
+ /*
+  * routine to check that the specified directory is empty (for rmdir)
+  */
+-- 
+2.53.0

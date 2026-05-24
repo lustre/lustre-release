@@ -1,0 +1,205 @@
+commit 07660ad33a7d109cced29b6400f99f25adab3f54
+Author: Wang Shilong <wshilong@ddn.com>
+AuthorDate: Thu, 2 Jul 2015 21:04:45 -0400
+Subject: LU-6824 ldiskfs: give warning with dir htree growing
+
+Currently without large dir feature, ldiskfs directory hash tree
+will be limited 2 height, this means directory size is limited about
+1GB, and in fact users are likely to hit ENOSPC when reaching half of
+limit because of bad hash. tested by following scripts.
+
+i=0
+filename="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbbbbbbbbb"
+while [ 1 ]
+do
+        touch $filename"$i"
+        if [ $? -ne 0 ];then
+                break
+        fi
+        ((i++))
+done
+
+When directoy size grow about 590M, we hit ENOSPC. Better way is to
+add support to e2fsprogs so that we can use large dir feature.
+As a walkaround way, this patch try to give warning messages to
+console when 10/16 and 11/16 of limit reach.
+
+So this patch will try to give following messages when warning
+limit or hash index tree limit reach:
+
+Directory (inode: 8388610 FID: [0x200000401:0x1:0x0]) has approached
+maximum limit.
+
+Directory (inode: 8388610 FID: [0x200000401:0x1:0x0]) is approaching
+maximum limit.
+
+FID output here is useful for administrators to locate lustre
+file path
+
+Signed-off-by: Wang Shilong <wshilong@ddn.com>
+Reviewed-by: Andreas Dilger <andreas.dilger@intel.com>
+Reviewed-by: Yang Sheng <yang.sheng@intel.com>
+Reviewed-by: James Simmons <uja.ornl@yahoo.com>
+Change-Id: I7f78c421bbb89f76298e0174cc46d774ea82eb06
+---
+ fs/ext4/ext4.h  |  1 +
+ fs/ext4/namei.c | 68 +++++++++++++++++++++++++++++++++++++++++++++++--
+ fs/ext4/super.c |  3 +++
+ fs/ext4/sysfs.c |  2 ++
+ 4 files changed, 72 insertions(+), 2 deletions(-)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1631,6 +1631,7 @@ struct ext4_sb_info {
+ 	unsigned long *s_mb_prealloc_table;
+ 	unsigned int s_mb_group_prealloc;
+ 	unsigned int s_max_dir_size_kb;
++	unsigned long s_warning_dir_size;
+ 	unsigned int s_mb_prefetch;
+ 	unsigned int s_mb_prefetch_limit;
+ 	unsigned int s_mb_best_avail_max_trim_order;
+diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
+--- a/fs/ext4/namei.c
++++ b/fs/ext4/namei.c
+@@ -797,12 +797,20 @@ struct ext4_dir_lock_data {
+ #define ext4_htree_lock_data(l)	((struct ext4_dir_lock_data *)(l)->lk_private)
+ #define ext4_find_entry(dir, name, dirent, inline) \
+ 			ext4_find_entry_locked(dir, name, dirent, inline, NULL)
+-#define ext4_add_entry(handle, dentry, inode) \
+-			ext4_add_entry_locked(handle, dentry, inode, NULL)
+ 
+ /* NB: ext4_lblk_t is 32 bits so we use high bits to identify invalid blk */
+ #define EXT4_HTREE_NODE_CHANGED	(0xcafeULL << 32)
+ 
++inline int ext4_add_entry(handle_t *handle, struct dentry *dentry,
++			  struct inode *inode)
++{
++	int ret = ext4_add_entry_locked(handle, dentry, inode, NULL);
++
++	if (ret == -ENOBUFS)
++		ret = 0;
++	return ret;
++}
++
+ static void ext4_htree_event_cb(void *target, void *event)
+ {
+ 	u64 *block = (u64 *)target;
+@@ -2926,6 +2934,54 @@ out:
+ 	return retval;
+ }
+ 
++static unsigned long __ext4_max_dir_size(struct dx_frame *frames,
++			       struct dx_frame *frame, struct inode *dir)
++{
++	unsigned long max_dir_size;
++
++	if (EXT4_SB(dir->i_sb)->s_max_dir_size_kb) {
++		max_dir_size = EXT4_SB(dir->i_sb)->s_max_dir_size_kb << 10;
++	} else {
++		max_dir_size = EXT4_BLOCK_SIZE(dir->i_sb);
++		while (frame >= frames) {
++			max_dir_size *= dx_get_limit(frame->entries);
++			if (frame == frames)
++				break;
++			frame--;
++		}
++		/* use 75% of max dir size in average */
++		max_dir_size = max_dir_size / 4 * 3;
++	}
++	return max_dir_size;
++}
++
++/*
++ * With hash tree growing, it is easy to hit ENOSPC, but it is hard
++ * to predict when it will happen. let's give administrators warning
++ * when reaching 3/5 and 2/3 of limit
++ */
++static inline bool dir_size_in_warning_range(struct dx_frame *frames,
++					     struct dx_frame *frame,
++					     struct inode *dir)
++{
++	unsigned long size1, size2;
++	struct super_block *sb = dir->i_sb;
++
++	if (unlikely(!EXT4_SB(sb)->s_warning_dir_size))
++		EXT4_SB(sb)->s_warning_dir_size =
++			__ext4_max_dir_size(frames, frame, dir);
++
++	size1 = EXT4_SB(sb)->s_warning_dir_size / 16 * 10;
++	size1 = size1 & ~(EXT4_BLOCK_SIZE(sb) - 1);
++	size2 = EXT4_SB(sb)->s_warning_dir_size / 16 * 11;
++	size2 = size2 & ~(EXT4_BLOCK_SIZE(sb) - 1);
++	if (in_range(dir->i_size, size1, EXT4_BLOCK_SIZE(sb)) ||
++	    in_range(dir->i_size, size2, EXT4_BLOCK_SIZE(sb)))
++		return true;
++
++	return false;
++}
++
+ /*
+  *	ext4_add_entry()
+  *
+@@ -3064,6 +3120,7 @@ static int ext4_dx_add_entry(handle_t *handle, struct ext4_filename *fname,
+ 	struct ext4_dir_entry_2 *de;
+ 	int restart;
+ 	int err;
++	bool ret_warn = false;
+ 
+ again:
+ 	restart = 0;
+@@ -3092,6 +3149,11 @@ again:
+ 	/* Block full, should compress but for now just split */
+ 	dxtrace(printk(KERN_DEBUG "using %u of %u node entries\n",
+ 		       dx_get_count(entries), dx_get_limit(entries)));
++
++	if (frame - frames + 1 >= ext4_dir_htree_level(sb) ||
++	    EXT4_SB(sb)->s_warning_dir_size)
++		ret_warn = dir_size_in_warning_range(frames, frame, dir);
++
+ 	/* Need to split index? */
+ 	if (dx_get_count(entries) == dx_get_limit(entries)) {
+ 		ext4_lblk_t newblock;
+@@ -3264,6 +3326,8 @@ cleanup:
+ 	 */
+ 	if (restart && err == 0)
+ 		goto again;
++	if (err == 0 && ret_warn)
++		err = -ENOBUFS;
+ 	return err;
+ }
+ 
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -2835,6 +2835,9 @@ static void ext4_apply_options(struct fs_context *fc, struct super_block *sb)
+ #ifdef CONFIG_EXT4_DEBUG
+ 	APPLY(s_fc_debug_max_replay);
+ #endif
++	/* reset s_warning_dir_size and make it re-calculated */
++	if (ctx->spec & EXT4_SPEC_s_max_dir_size_kb)
++		sbi->s_warning_dir_size = 0;
+ 
+ 	ext4_apply_quota_options(fc, sb);
+ 	ext4_apply_test_dummy_encryption(ctx, sb);
+diff --git a/fs/ext4/sysfs.c b/fs/ext4/sysfs.c
+--- a/fs/ext4/sysfs.c
++++ b/fs/ext4/sysfs.c
+@@ -220,6 +220,7 @@ EXT4_ATTR_OFFSET(mb_best_avail_max_trim_order, 0644, mb_order,
+ EXT4_RW_ATTR_SBI_UI(inode_goal, s_inode_goal);
+ EXT4_RW_ATTR_SBI_UI(max_dir_size, s_max_dir_size_kb);
+ EXT4_RW_ATTR_SBI_UI(max_dir_size_kb, s_max_dir_size_kb);
++EXT4_RW_ATTR_SBI_UI(warning_dir_size, s_warning_dir_size);
+ EXT4_RW_ATTR_SBI_UI(mb_stats, s_mb_stats);
+ EXT4_RW_ATTR_SBI_UI(mb_max_to_scan, s_mb_max_to_scan);
+ EXT4_RW_ATTR_SBI_UI(mb_min_to_scan, s_mb_min_to_scan);
+@@ -273,6 +274,7 @@ static struct attribute *ext4_attrs[] = {
+ 	ATTR_LIST(inode_goal),
+ 	ATTR_LIST(max_dir_size),
+ 	ATTR_LIST(max_dir_size_kb),
++	ATTR_LIST(warning_dir_size),
+ 	ATTR_LIST(mb_stats),
+ 	ATTR_LIST(mb_max_to_scan),
+ 	ATTR_LIST(mb_min_to_scan),
+-- 

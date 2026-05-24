@@ -216,31 +216,23 @@ AS_IF([test -z "$LDISKFS_SERIES"],
 	AS_VERSION_COMPARE([$LINUXRELEASE],[6.6.0], [
 		LDISKFS_SERIES="6.1.38-ml.series"], [
 		LDISKFS_SERIES="6.6-ml.series"], [
-	AS_VERSION_COMPARE([$LINUXRELEASE],[6.7.0], [
-		LDISKFS_SERIES="6.6-ml.series"], [
-		LDISKFS_SERIES="6.7-ml.series"], [
-	AS_VERSION_COMPARE([$LINUXRELEASE],[6.10.0], [
-		LDISKFS_SERIES="6.7-ml.series"], [
-		LDISKFS_SERIES="6.10-ml.series"], [
-	AS_VERSION_COMPARE([$LINUXRELEASE],[6.10.5], [
-		LDISKFS_SERIES="6.10-ml.series"], [
-		LDISKFS_SERIES="6.11-ml.series"], [
 	AS_VERSION_COMPARE([$LINUXRELEASE],[6.12.0], [
-		LDISKFS_SERIES="6.11-ml.series"], [
+		LDISKFS_SERIES="6.6-ml.series"], [
 		LDISKFS_SERIES="6.12-ml.series"], [
 	AS_VERSION_COMPARE([$LINUXRELEASE],[6.15.0], [
 		LDISKFS_SERIES="6.12-ml.series"], [
 		LDISKFS_SERIES="6.15-ml.series"], [
-		LDISKFS_SERIES="6.15-ml.series"]
-	)] # 6.15
-	)] # 6.12
-	)] # 6.11
-	)] # 6.10
-	)] # 6.7
-	)] # 6.6
-	)] # 6.1
-	)] # 5.10
-	)] # 5.4 LTS
+	AS_VERSION_COMPARE([$LINUXRELEASE],[6.18.0], [
+		LDISKFS_SERIES="6.15-ml.series"], [
+		LDISKFS_SERIES="6.18-ml.series"], [
+		LDISKFS_SERIES="6.18-ml.series"]
+	)] # 6.18 - LTS (6.18)
+	)] # 6.15 - deprecated (fedora 42 and others)
+	)] # 6.12 - LTS
+	)] # 6.6  - LTS
+	)] # 6.1  - LTS
+	)] # 5.10 - LTS
+	)] # 5.4  - LTS
 	)],
 [])
 AS_IF([test -z "$LDISKFS_SERIES"],

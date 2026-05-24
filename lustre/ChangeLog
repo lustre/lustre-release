@@ -27,6 +27,8 @@ TBD Whamcloud
          vanilla linux 5.4.136  (ZFS + ldiskfs)
          vanilla linux 6.1.36 (ZFS + ldiskfs)
          vanilla linux 6.6.13 (ZFS + ldiskfs)
+         vanilla linux 6.12.6 (ZFS + ldiskfs)
+         vanilla linux 6.18.22 (ZFS + ldiskfs)
          5.10.0-60.94.0.118.oe2203 (openEuler 22.03 LTS)
          5.10.0-136.32.0.108.oe2203sp1 (openEuler 22.03 LTS SP1)
          5.10.0-153.19.0.95.oe2203sp2 (openEuler 22.03 LTS SP2)
@@ -60,7 +62,14 @@ TBD Whamcloud
          5.4.0-37             (Ubuntu 20.04)
          5.8.0-53             (Ubuntu 20.04.2 HWE)
          5.11.0-31            (Ubuntu 20.04.3 HWE)
+         7.0.0-15             (Ubuntu 24.04)
          5.11.0               (vanilla kernel.org)
+         6.15.6               (vanilla kernel.org)
+         6.16.1               (vanilla kernel.org)
+         6.17.6               (vanilla kernel.org)
+         6.18.22              (vanilla kernel.org)
+         6.19.12              (vanilla kernel.org)
+         7.0.8                (vanilla kernel.org)
          5.10.0               (openEuler 22.03 LTS)
        * Recommended e2fsprogs version: 1.47.3-wc2 or newer
        * Recommended ZFS version: 2.4.0

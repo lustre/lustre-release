@@ -1,0 +1,92 @@
+From b2772e48e110a6412dfe300df95016f5b9c28c6f Mon Sep 17 00:00:00 2001
+From: Li Dongyang <dongyangli@ddn.com>
+Date: Thu, 19 Feb 2026 22:23:13 -0800
+Subject: [PATCH] LU-13932 ldiskfs: mmp wait time adjustments
+
+Introduce a small delay of 2 seconds between write and read
+back of the mmp block for the SEQ_CLEAN case,
+currently there is no delay at all and could potentially
+break mmp proction when 2 nodes mounts the same fs
+simultaneously and both see SEQ_CLEAN from the initial read.
+
+Reduce the max wait time from mmp_check_interval + 60 to
+mmp_check_interval + 20.
+
+In kmmpd thread, slowly decay mmp_check_interval to
+EXT4_MMP_MIN_CHECK_INTERVAL according to IO completion time
+to avoid fluctuations.
+
+Signed-off-by: Li Dongyang <dongyangli@ddn.com>
+Change-Id: I9d08e0f62c89e041275f3edc53e1da496b8c0444
+Reviewed-on: https://review.whamcloud.com/c/fs/lustre-release/+/63479
+Tested-by: jenkins <devops@whamcloud.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Reviewed-by: Jian Yu <yujian@whamcloud.com>
+Tested-by: Maloo <maloo@whamcloud.com>
+Reviewed-by: Andreas Dilger <adilger@thelustrecollective.com>
+
+---
+ fs/ext4/mmp.c | 21 ++++++++++++++-------
+ 1 file changed, 14 insertions(+), 7 deletions(-)
+
+diff --git a/fs/ext4/mmp.c b/fs/ext4/mmp.c
+--- a/fs/ext4/mmp.c
++++ b/fs/ext4/mmp.c
+@@ -140,6 +140,7 @@ static int kmmpd(void *data)
+ 	unsigned long failed_writes = 0;
+ 	int mmp_update_interval = le16_to_cpu(es->s_mmp_update_interval);
+ 	unsigned mmp_check_interval;
++	unsigned new_check_interval;
+ 	unsigned long last_update_time;
+ 	unsigned long diff;
+ 	int retval = 0;
+@@ -185,6 +186,8 @@ static int kmmpd(void *data)
+ 		}
+ 
+ 		diff = jiffies - last_update_time;
++		new_check_interval = EXT4_MMP_CHECK_MULT * diff / HZ;
++
+ 		if (diff < mmp_update_interval * HZ)
+ 			schedule_timeout_interruptible(mmp_update_interval *
+ 						       HZ - diff);
+@@ -224,12 +227,16 @@ static int kmmpd(void *data)
+ 		}
+ 
+ 		 /*
+-		 * Adjust the mmp_check_interval depending on how much time
+-		 * it took for the MMP block to be written.
++		 * Increase mmp_check_interval immediately if IO completion time
++		 * is longer, but decay slowly to minimum if it is shorter.
+ 		 */
+-		mmp_check_interval = clamp(EXT4_MMP_CHECK_MULT * diff / HZ,
+-					   EXT4_MMP_MIN_CHECK_INTERVAL,
+-					   EXT4_MMP_MAX_CHECK_INTERVAL);
++		if (new_check_interval >= mmp_check_interval)
++			mmp_check_interval = min_t(unsigned, new_check_interval,
++						   EXT4_MMP_MAX_CHECK_INTERVAL);
++		else
++			mmp_check_interval = (mmp_check_interval * 15 +
++					      max_t(unsigned, new_check_interval,
++						    EXT4_MMP_MIN_CHECK_INTERVAL)) / 16;
+ 		mmp->mmp_check_interval = cpu_to_le16(mmp_check_interval);
+ 	}
+ 
+@@ -280,7 +287,7 @@ int ext4_multi_mount_protect(struct super_block *sb,
+ 	struct mmp_struct *mmp = NULL;
+ 	u32 seq;
+ 	unsigned int mmp_check_interval = le16_to_cpu(es->s_mmp_update_interval);
+-	unsigned int wait_time = 0;
++	unsigned int wait_time = 2;
+ 	int retval;
+ 
+ 	if (mmp_block < le32_to_cpu(es->s_first_data_block) ||
+@@ -317,7 +324,7 @@ int ext4_multi_mount_protect(struct super_block *sb,
+ 	}
+ 
+ 	wait_time = min(mmp_check_interval * 2 + 1,
+-			mmp_check_interval + 60);
++			mmp_check_interval + 20);
+ 
+ 	/* Print MMP interval if more than 20 secs. */
+ 	if (wait_time > EXT4_MMP_MIN_CHECK_INTERVAL * 4)
+-- 

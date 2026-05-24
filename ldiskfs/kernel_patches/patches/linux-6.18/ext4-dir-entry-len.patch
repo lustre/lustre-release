@@ -1,0 +1,238 @@
+commit 409935cc7094bf0d98b392d8ddc9a016f02749eb
+Author: Artem Blagodarenko <ablagodarenko@thelustrecollective.com>
+Date:   Mon Jan 19 09:37:24 2026 +0300
+LU-19847 ldiskfs: dirent and fscrypt+case_insensitive
+
+EXT4 occupies space in dirent just after the name with
+a hash for simultaneous fscrypt and casefold support.
+
+It was discussed with the EXT4 community that it is
+possible to move the hash to dirdata. It could be the
+second (or third, if 64-bit inode count) user of
+dirdata.
+
+At the same time, the hash placed after the file name
+should also be supported.
+
+This patch makes LDISKFS ready for such a hash present
+in both variants. While it is not currently possible
+to enable fscrypt + case_insensitive on LDISKFS, it is
+useful to verify that LUFID works well with such code.
+
+fscrypt + case_insensitive support with dirdata
+enabled is checked in a special xfstest sent to EXT4
+with the dirdata patch.
+
+Test-Parameters: clientdistro=el10.0 serverdistro=el10.0
+Test-Parameters: clientdistro=el10.1 serverdistro=el10.1
+Signed-off-by: Artem Blagodarenko <ablagodarenko@thelustrecollective.com>
+Change-Id: Ia9874396037a24b494dd3cfa7208e10a366f5eb3
+Reviewed-on: https://review.whamcloud.com/c/fs/lustre-release/+/64439
+Tested-by: jenkins <devops@whamcloud.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Tested-by: Maloo <maloo@whamcloud.com>
+Reviewed-by: Jian Yu <yujian@whamcloud.com>
+Reviewed-by: Andreas Dilger <adilger@thelustrecollective.com>
+---
+Patch 1 of 3: ext4-dir-entry-len.patch
+---
+ fs/ext4/ext4.h  | 99 +++++++++++++++++++++++++++++++++++++++++++++++--
+ fs/ext4/namei.c | 12 +++---
+ 2 files changed, 102 insertions(+), 9 deletions(-)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1213,6 +1213,7 @@ struct ext4_inode_info {
+  * Mount flags set via mount options or defaults
+  */
+ #define EXT4_MOUNT_NO_MBCACHE		0x00001 /* Do not use mbcache */
++#define EXT4_MOUNT_DIRDATA		0x00002	/* Data in directory entries */
+ #define EXT4_MOUNT_GRPID		0x00004	/* Create files with directory's group */
+ #define EXT4_MOUNT_DEBUG		0x00008	/* Some debugging messages */
+ #define EXT4_MOUNT_ERRORS_CONT		0x00010	/* Continue on errors */
+@@ -2244,6 +2245,7 @@ EXT4_FEATURE_INCOMPAT_FUNCS(casefold,		CASEFOLD)
+ 					 EXT4_FEATURE_INCOMPAT_FLEX_BG| \
+ 					 EXT4_FEATURE_INCOMPAT_EA_INODE| \
+ 					 EXT4_FEATURE_INCOMPAT_MMP | \
++					 EXT4_FEATURE_INCOMPAT_DIRDATA | \
+ 					 EXT4_FEATURE_INCOMPAT_INLINE_DATA | \
+ 					 EXT4_FEATURE_INCOMPAT_ENCRYPT | \
+ 					 EXT4_FEATURE_INCOMPAT_CASEFOLD | \
+@@ -2481,6 +2483,35 @@ struct ext4_dir_entry_tail {
+ #define EXT4_FT_SYMLINK		7
+ 
+ #define EXT4_FT_MAX		8
++#define EXT4_FT_MASK		0xf
++
++#if EXT4_FT_MAX > EXT4_FT_MASK
++#error "conflicting EXT4_FT_MAX and EXT4_FT_MASK"
++#endif
++
++/*
++ * d_type has 4 unused bits, so it can hold four types data. these different
++ * type of data (e.g. lustre data, high 32 bits of 64-bit inode number) can be
++ * stored, in flag order, after file-name in ext4 dirent.
++*/
++/*
++ * These flags is added to d_type if ext4 dirent has extra data after
++ * filename. This data length is variable and length is stored in first byte
++ * of data. Data starts after filename NUL byte.
++ */
++#define EXT4_DIRENT_LUFID		0x10
++#define EXT4_DIRENT_INO64		0x20
++#define EXT4_DIRENT_CFHASH		0x40
++
++struct ext4_dirent_data_header {
++	/* length of this header + the whole data blob */
++	__u8	ddh_length;
++} __packed;
++
++struct ext4_dirent_hash {
++	struct ext4_dirent_data_header	dh_header;
++	struct ext4_dir_entry_hash	dh_hash;
++} __packed;
+ 
+ #define EXT4_FT_DIR_CSUM	0xDE
+ 
+@@ -2492,6 +2523,17 @@ struct ext4_dir_entry_tail {
+ #define EXT4_DIR_PAD			4
+ #define EXT4_DIR_ROUND			(EXT4_DIR_PAD - 1)
+ #define EXT4_MAX_REC_LEN		((1<<16)-1)
++#define EXT4_DIR_REC_LEN_(name_len, i_dir) \
++	ext4_dir_rec_len((name_len), (i_dir))
++#define EXT4_DIR_ENTRY_LEN_(de, i_dir) \
++	(EXT4_DIR_REC_LEN_((de)->name_len + ext4_get_dirent_data_len(de), \
++		(i_dir)))
++/* ldiskfs */
++#define EXT4_DIR_REC_LEN(name_len, i_dir)	EXT4_DIR_REC_LEN_((name_len), (i_dir))
++#define EXT4_DIR_ENTRY_LEN(de, i_dir)		EXT4_DIR_ENTRY_LEN_((de), (i_dir))
++/* lustre osd_handler compat -- ifdef LDISKFS_DIR_REC_LEN_WITH_DIR */
++#define EXT4_DIR_REC_LEN_WITH_DIR		1
++#define __EXT4_DIR_REC_LEN(name_len)		EXT4_DIR_REC_LEN_((name_len), NULL)
+ 
+ /*
+  * The rec_len is dependent on the type of directory. Directories that are
+@@ -2499,10 +2541,10 @@ struct ext4_dir_entry_tail {
+  * ext4_extended_dir_entry_2. For all entries related to '.' or '..' you should
+  * pass NULL for dir, as those entries do not use the extra fields.
+  */
+-static inline unsigned int ext4_dir_rec_len(__u8 name_len,
++static inline unsigned int ext4_dir_rec_len(__u32 name_len,
+ 						const struct inode *dir)
+ {
+-	int rec_len = (name_len + 8 + EXT4_DIR_ROUND);
++	__u32 rec_len = (name_len + 8 + EXT4_DIR_ROUND);
+ 
+ 	if (dir && ext4_hash_in_dirent(dir))
+ 		rec_len += sizeof(struct ext4_dir_entry_hash);
+@@ -2942,10 +2984,16 @@ static const unsigned char ext4_filetype_table[] = {
+ 
+ static inline  unsigned char get_dtype(struct super_block *sb, int filetype)
+ {
+-	if (!ext4_has_feature_filetype(sb) || filetype >= EXT4_FT_MAX)
++	int fl_index = filetype & EXT4_FT_MASK;
++
++	if (!ext4_has_feature_filetype(sb) || fl_index >= EXT4_FT_MAX)
+ 		return DT_UNKNOWN;
+ 
+-	return ext4_filetype_table[filetype];
++	if (!test_opt(sb, DIRDATA))
++		return ext4_filetype_table[fl_index];
++
++	return (ext4_filetype_table[fl_index]) |
++		(filetype & ~EXT4_FT_MASK);
+ }
+ extern int ext4_check_all_de(struct inode *dir, struct buffer_head *bh,
+ 			     void *buf, int buf_size);
+@@ -3948,6 +3996,49 @@ static inline void ext4_clear_io_unwritten_flag(ext4_io_end_t *io_end)
+ 		io_end->flag &= ~EXT4_IO_END_UNWRITTEN;
+ }
+ 
++#define ext4_dirdata_next(ddh) \
++	(struct ext4_dirent_data_header *)((char *)ddh + ddh->ddh_length)
++/*
++ * Compute the total directory entry data length.
++ * This includes the filename and an implicit NUL terminator (always present),
++ * and optional extensions. Each extension has a bit set in the high 4 bits of
++ * de->file_type, and the extension length is the first byte in each entry.
++ */
++static inline int ext4_get_dirent_data_len(struct ext4_dir_entry_2 *de)
++{
++	struct ext4_dirent_data_header *ddh =
++		(struct ext4_dirent_data_header *)de->name + de->name_len +
++		1 /* NUL terminator */;
++	__u8 extra_data_flags = (de->file_type & ~EXT4_FT_MASK) >> 4;
++	struct ext4_dir_entry_tail *t = (struct ext4_dir_entry_tail *)de;
++	int dlen = 0;
++
++	if (!t->det_reserved_zero1 &&
++	    le16_to_cpu(t->det_rec_len) ==
++		sizeof(struct ext4_dir_entry_tail) &&
++	    !t->det_reserved_zero2 &&
++	    t->det_reserved_ft == EXT4_FT_DIR_CSUM)
++		return 0;
++
++	while (extra_data_flags) {
++		if (extra_data_flags & 1) {
++			dlen += ddh->ddh_length + (dlen == 0);
++			ddh = ext4_dirdata_next(ddh);
++		}
++		extra_data_flags >>= 1;
++	}
++	return dlen;
++}
++
++/* Inline function to calculate directory entry length */
++static inline unsigned int ext4_dir_entry_len(struct ext4_dir_entry_2 *de,
++					      const struct inode *dir)
++{
++	unsigned int name_len = de->name_len + ext4_get_dirent_data_len(de);
++
++	return ext4_dir_rec_len(name_len, dir);
++}
++
+ extern const struct iomap_ops ext4_iomap_ops;
+ extern const struct iomap_ops ext4_iomap_overwrite_ops;
+ extern const struct iomap_ops ext4_iomap_report_ops;
+diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
+--- a/fs/ext4/namei.c
++++ b/fs/ext4/namei.c
+@@ -525,13 +525,15 @@ ext4_next_entry(struct ext4_dir_entry_2 *p, unsigned long blocksize)
+  * Future: use high four bits of block for coalesce-on-delete flags
+  * Mask them off for now.
+  */
+-struct dx_root_info *dx_get_dx_info(struct ext4_dir_entry_2 *de)
++static struct dx_root_info *dx_get_dx_info(struct ext4_dir_entry_2 *de)
+ {
+ 	/* get dotdot first */
+-	de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_REC_LEN(1));
++	de = (struct ext4_dir_entry_2 *)((char *)de +
++		ext4_dir_entry_len(de, NULL));
+ 
+ 	/* dx root info is after dotdot entry */
+-	de = (struct ext4_dir_entry_2 *)((char *)de + EXT4_DIR_REC_LEN(2));
++	de = (struct ext4_dir_entry_2 *)((char *)de +
++		ext4_dir_entry_len(de, NULL));
+ 
+ 	return (struct dx_root_info *)de;
+ }
+@@ -2367,7 +2369,7 @@ out_frames:
+ 	return retval;
+ }
+ 
+-/* update ".." entry */
++/* update ".." entry, try to expand the entry if necessary */
+ static int ext4_update_dotdot(handle_t *handle, struct dentry *dentry,
+ 			      struct inode *inode)
+ {
+@@ -3054,7 +3056,7 @@ int ext4_init_dirblock(handle_t *handle, struct inode *inode,
+ 	ext4_set_de_type(inode->i_sb, de, S_IFDIR);
+ 	if (inline_buf) {
+ 		de->rec_len = ext4_rec_len_to_disk(
+-					ext4_dir_rec_len(de->name_len, NULL),
++					ext4_dir_rec_len(de, NULL),
+ 					blocksize);
+ 		de = ext4_next_entry(de, blocksize);
+ 		header_size = (char *)de - bh->b_data;
+-- 
