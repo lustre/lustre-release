@@ -102,6 +102,7 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	    ])
 ], [test x$UBUNTU_KERNEL = xyes], [
         BASEVER=$(echo $LINUXRELEASE | cut -d'-' -f1)
+	AS_VERSION_COMPARE([$BASEVER],[7.0.0],[
 	AS_VERSION_COMPARE([$BASEVER],[6.15.0],[
 	AS_VERSION_COMPARE([$BASEVER],[6.11.0],[
 	AS_VERSION_COMPARE([$BASEVER],[6.10.0],[
@@ -189,8 +190,20 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	[LDISKFS_SERIES="6.10-ml.series"])],
 	[LDISKFS_SERIES="6.11-ml.series"],
 	[LDISKFS_SERIES="6.11-ml.series"])],
-	[LDISKFS_SERIES="6.15-ml.series"],
-	[LDISKFS_SERIES="6.15-ml.series"])
+	[LDISKFS_SERIES="7.0.0-14-ubuntu26.series"],
+	[LDISKFS_SERIES="7.0.0-14-ubuntu26.series"])],
+	[
+		KPLEV=$(echo $LINUXRELEASE | cut -d'-' -f2)
+		AS_IF(
+			[test -z "$KPLEV"], [
+				AC_MSG_WARN([Failed to determine Kernel patch level. Assume latest.])
+				LDISKFS_SERIES="7.0.0-14-ubuntu26.series"
+			],
+			[test $KPLEV -ge 14], [LDISKFS_SERIES="7.0.0-14-ubuntu26.series"],
+			[LDISKFS_SERIES="7.0-ml.series"]
+		)
+	],
+	[LDISKFS_SERIES="7.0-ml.series"])
 ], [test x$OPENEULER_KERNEL = xyes], [
 	case $OPENEULER_VERSION_NO in
 	2203.0) LDISKFS_SERIES="5.10.0-oe2203.series" ;;
