@@ -28,15 +28,17 @@
 #include <libcfs/util/string.h>
 #include <lustre/lustreapi.h>
 
-/** Quick-n'-dirty JSON string escape routine.
- * \param[out]	out_string	JSON-escaped string, allocated here
- * \param[in]	in_string	Unescaped string
- *
- * \retval	0 on success.
- * \retval	-errno on error.
+/**
+ * json_escape_string() - Quick-n'-dirty JSON string escape routine.
+ * @out_string: JSON-escaped string, allocated here [out]
+ * @in_string: Unescaped string
  *
  * http://json.org/
  * http://www.ietf.org/rfc/rfc4627.txt (section 2.5)
+ *
+ * Return:
+ * * %0 on success.
+ * * %-errno on error
  */
 static int json_escape_string(char **out_string, char *in_string)
 {
@@ -88,12 +90,14 @@ static int json_escape_string(char **out_string, char *in_string)
 	return 0;
 }
 
-/** Write a list of JSON items to a filehandle.
- * \param	json_items	list of JSON items to be written
- * \param	fp		open filehandle to use for write
+/**
+ * llapi_json_write_list() - Write a list of JSON items to a filehandle.
+ * @json_items: list of JSON items to be written
+ * @fp: open filehandle to use for write
  *
- * \retval	0 on success.
- * \retval	-errno on error.
+ * Return:
+ * * %0 on success.
+ * * %-errno on error
  */
 int llapi_json_write_list(struct llapi_json_item_list **json_items, FILE *fp)
 {
@@ -161,11 +165,13 @@ int llapi_json_write_list(struct llapi_json_item_list **json_items, FILE *fp)
 	return 0;
 }
 
-/** Create a list to hold JSON items.
- * \param[out]	json_items	Item list handle, allocated here
+/**
+ * llapi_json_init_list() - Create a list to hold JSON items.
+ * @json_items: Item list handle, allocated here [out]
  *
- * \retval	0 on success.
- * \retval	-errno on error.
+ * Return:
+ * * %0 on success.
+ * * %-errno on error
  */
 int llapi_json_init_list(struct llapi_json_item_list **json_items)
 {
@@ -182,11 +188,13 @@ int llapi_json_init_list(struct llapi_json_item_list **json_items)
 	return 0;
 }
 
-/** Deallocate a list of JSON items.
- * \param	json_items	Item list handle, deallocated here
+/**
+ * llapi_json_destroy_list() - Deallocate a list of JSON items.
+ * @json_items: Item list handle, deallocated here
  *
- * \retval	0 on success.
- * \retval	-errno on error.
+ * Return:
+ * * %0 on success.
+ * * %-errno on error
  */
 int llapi_json_destroy_list(struct llapi_json_item_list **json_items)
 {
