@@ -11,11 +11,9 @@
 
 /**
  * callvpe() - execute a file with given arguments and environment.
- * \param file[in] name or path of file to be executed.
- * \param args[in] arguments to file.
- * \param envp[in] execution environment.
- * \return -1 on failure (for example if fork() failed).
- * \return process return status on success.
+ * @file: name or path of file to be executed.
+ * @args: arguments to file.
+ * @envp: execution environment.
  *
  * callvpe() is intended as a safer replacement for system(). It
  * executes the file specified and returns after it has completed. As
@@ -39,6 +37,10 @@
  * Note that since callvpe() does not use the shell, IO redirection
  * and pipelines (cmd > /dev/null, cmd 2>&1, cmd1 | cmd2, ...) are not
  * supported.
+ *
+ * Return:
+ * * process return status on success.
+ * * %-1 on failure (for example if fork() failed).
  */
 int callvpe(const char *file, char *const args[], char *const envp[])
 {
