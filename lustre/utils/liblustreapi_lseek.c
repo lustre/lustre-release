@@ -28,11 +28,12 @@
 #include "lustreapi_internal.h"
 
 /**
- * Check if file has a hole
+ * llapi_file_is_sparse() - Check if file has a hole
+ * @fd: file descriptor
  *
- * \param fd	file descriptor
+ * Note: Errors are ignored and file is just reported as non-sparse
  *
- * \retval boolean, true if file has a hole, false otherwise
+ * Return %true if file has a hole, %false otherwise
  */
 bool llapi_file_is_sparse(int fd)
 {
@@ -46,14 +47,14 @@ bool llapi_file_is_sparse(int fd)
 }
 
 /**
- * Get the first data segment in given extent.
+ * llapi_data_seek() - Get the first data segment in given extent.
+ * @src_fd: source file descriptor
+ * @offset: offset to start from
+ * @length: length of data segment found
  *
- * \param src_fd  source file descriptor
- * \param offset  offset to start from
- * \param length  length of data segment found
- *
- * \retval next data offset and length on \p length on success.
- * \retval -errno on failure.
+ * Return:
+ * * next data offset and length on @length on success.
+ * * %-errno on failure.
  */
 off_t llapi_data_seek(int src_fd, off_t offset, size_t *length)
 {
@@ -98,14 +99,14 @@ off_t llapi_data_seek(int src_fd, off_t offset, size_t *length)
 }
 
 /**
- * Punch hole in a file.
+ * llapi_hole_punch() - Punch hole in a file.
+ * @fd: file descriptor
+ * @start: offset to start from
+ * @length: hole length
  *
- * \param fd     file descriptor
- * \param start  offset to start from
- * \param length hole length
- *
- * \retval 0 on success.
- * \retval -errno on failure to punch hole
+ * Return:
+ * * %0 on success.
+ * * %-errno on failure to punch hole
  */
 int llapi_hole_punch(int fd, off_t start, size_t length)
 {
