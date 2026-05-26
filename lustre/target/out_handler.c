@@ -1196,6 +1196,8 @@ int out_handle(struct tgt_session_info *tsi)
 
 				if (update->ou_flags & UPDATE_FL_SYNC)
 					ta->ta_handle->th_sync = 1;
+				if (update->ou_flags & UPDATE_FL_IGNORE_QUOTA)
+					ta->ta_handle->th_ignore_quota = 1;
 			}
 
 			/* Stop the current update transaction, if the update
@@ -1210,12 +1212,20 @@ int out_handle(struct tgt_session_info *tsi)
 
 				/* start a new transaction if needed */
 				if (h->th_flags & IS_MUTABLE) {
+					struct thandle *th;
+
 					rc = out_tx_start(env, dt, ta,
 							  tsi->tsi_exp);
 					if (rc != 0)
 						GOTO(next, rc);
+
+					th = ta->ta_handle;
+
 					if (update->ou_flags & UPDATE_FL_SYNC)
-						ta->ta_handle->th_sync = 1;
+						th->th_sync = 1;
+					if (update->ou_flags &
+					    UPDATE_FL_IGNORE_QUOTA)
+						th->th_ignore_quota = 1;
 					current_batchid = update->ou_batchid;
 				}
 			}

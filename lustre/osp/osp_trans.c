@@ -1524,9 +1524,13 @@ int osp_trans_start(const struct lu_env *env, struct dt_device *dt,
 	if (ou) {
 		LASSERT(oth->ot_our);
 		oth->ot_our->our_generation = ou->ou_generation;
+
+		if (oth->ot_super.th_sync)
+			oth->ot_our->our_flags |= UPDATE_FL_SYNC;
+		if (oth->ot_super.th_ignore_quota)
+			oth->ot_our->our_flags |= UPDATE_FL_IGNORE_QUOTA;
 	}
-	if (oth->ot_super.th_sync)
-		oth->ot_our->our_flags |= UPDATE_FL_SYNC;
+
 	/* For remote thandle, if there are local thandle, start it here*/
 	if (is_only_remote_trans(th) && oth->ot_storage_th != NULL)
 		return dt_trans_start(env, oth->ot_storage_th->th_dev,

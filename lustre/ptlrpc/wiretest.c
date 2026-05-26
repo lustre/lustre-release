@@ -5914,6 +5914,7 @@ void lustre_assert_wire_constants(void)
 	BUILD_BUG_ON(UPDATE_FL_SYNC != 0x00000002);
 	BUILD_BUG_ON(UPDATE_FL_COMMITTED != 0x00000004);
 	BUILD_BUG_ON(UPDATE_FL_NOLOG != 0x00000008);
+	BUILD_BUG_ON(UPDATE_FL_IGNORE_QUOTA != 0x00000010);
 
 	/* Checks for struct object_update_request */
 	LASSERTF((int)sizeof(struct object_update_request) == 8, "found %lld\n",

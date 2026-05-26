@@ -2536,7 +2536,7 @@ run_test 7b "Quota reintegration (slave index)"
 test_7c() {
 	local limit=20 # MB
 	local testfile=$DIR/$tdir/$tfile
- 
+
 	[[ "$SLOW" == "yes" ]] || limit=5
 
 	setup_quota_test || error "setup quota failed with $?"
@@ -7968,6 +7968,87 @@ test_98() {
 	echo "Directory successfully created on MDT$stripe_index after retry"
 }
 run_test 98 "Verify MDT retry on -EDQUOT during mkdir"
+
+# test inode quota with MDT directory migration
+test_300() {
+	(( $MDS1_VERSION >= $(version_code 2.17.53) )) ||
+		skip "Need MDS version at least 2.17.53"
+	(( $MDSCOUNT >= 2 )) || skip_env "needs >= 2 MDTs"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+
+	local least_qunit
+	least_qunit=$(do_facet mds1 $LCTL get_param -n \
+		qmt.$FSNAME-QMT0000.md-0x0.info |
+		awk '/least.qunit/ { print $NF }')
+
+	# 500 inodes quota, fill 80% = 400 files
+	local quota_limit=$least_qunit
+	local fill_target=$((least_qunit * 80 / 100))
+
+	setup_quota_test || error "setup quota failed with $?"
+
+	# Enable MDT user quota
+	set_mdt_qtype u || error "enable mdt user quota failed"
+
+	# Set inode quota for test user
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I $quota_limit $DIR ||
+		error "set user inode quota failed"
+
+	# Verify quota is set
+	local set_limit
+	set_limit=$($LFS quota -u $TSTUSR --ihardlimit -q $DIR)
+	(( $set_limit == $quota_limit )) ||
+		error "quota limit mismatch: expected $quota_limit, got $set_limit"
+
+	# Verify clean state
+	local used
+	sync_all_data
+	used=$($LFS quota -u $TSTUSR --inodes -q $DIR)
+	(( $used == 0 )) ||
+		error "Used inodes($used) for user $TSTUSR isn't 0 before test"
+
+	# Create files as test user, 80% of quota (400 files)
+	log "Creating $fill_target files as $TSTUSR ..."
+	$RUNAS createmany -m $DIR/$tdir/$tfile-92_ $fill_target ||
+		error "create failure at ~80% of inode quota"
+
+	# Verify we reached ~80% of quota
+	sync_all_data
+	used=$($LFS quota -u $TSTUSR --inodes -q $DIR)
+	echo "Current inode usage: $used / $quota_limit"
+	(( $used >= $(( fill_target * 90 / 100 )) )) ||
+		error "Expected at least $((fill_target * 90 / 100)) inodes, got $used"
+	(( $used <= $quota_limit )) ||
+		error "Exceeded quota: $used > $quota_limit"
+
+	# Migrate directory from MDT0 to MDT1 as root
+	log "Migrating directory from MDT0 to MDT1 ..."
+	$LFS migrate -m 1 $DIR/$tdir || error "migrate fails"
+
+	# Verify migration completed successfully
+	local tgt_mdt
+	tgt_mdt=$($LFS getdirstripe -m $DIR/$tdir)
+	echo "Target directory is on MDT: $tgt_mdt"
+	(( $tgt_mdt == 1 )) ||
+		error "Migration failed: directory still on MDT $tgt_mdt, expected MDT1"
+
+	# Verify files still exist and are accessible
+	local file_count
+	file_count=$($LFS find -type f $DIR/$tdir 2>/dev/null | wc -l)
+	echo "Files after migration: $file_count"
+	(( $file_count >= $fill_target )) ||
+		error "File count mismatch after migration: $file_count < $fill_target"
+
+	# Verify quota is updated on new MDT
+	sync_all_data
+	used=$($LFS quota -u $TSTUSR --inodes -q $DIR)
+	echo "Inode usage after migration: $used / $quota_limit"
+	(( $used == $fill_target )) ||
+		error "Quota usage mismatch after migration: $used != $fill_target"
+
+	log "Migration completed successfully"
+}
+run_test 300 "inode quota with MDT directory migration at 80% limit"
 
 quota_fini()
 {
