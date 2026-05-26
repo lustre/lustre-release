@@ -1657,8 +1657,9 @@ out_free_cfg:
 	if (err)
 		ll_put_super(sb);
 	else if (test_bit(LL_SBI_VERBOSE, sbi->ll_flags))
-		LCONSOLE_WARN("Mounted %s%s\n", profilenm,
-			      sb->s_flags & SB_RDONLY ? " read-only" : "");
+		LCONSOLE_WARN("Mounted %s%s - version %s\n", profilenm,
+			      sb->s_flags & SB_RDONLY ? " read-only" : "",
+			      LUSTRE_VERSION_STRING);
 	RETURN(err);
 } /* ll_fill_super */
 
