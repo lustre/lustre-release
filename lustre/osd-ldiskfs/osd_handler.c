@@ -324,7 +324,7 @@ static void osd_idc_dump_lma(const struct lu_env *env,
 	}
 	fid = &loa->loa_lma.lma_self_fid;
 	LCONSOLE(D_INFO, "%s: "DFID" in inode %lu/%u\n", osd->od_svname,
-		      PFID(fid), ino, (unsigned)inode->i_generation);
+		      PFID(fid), ino, (unsigned int)inode->i_generation);
 	if (!check_in_oi)
 		goto put;
 	rc = osd_oi_lookup(osd_oti_get(env), osd, fid, &lid, 0);
@@ -512,8 +512,7 @@ static struct inode *osd_iget2(struct osd_thread_info *info,
 		       id->oii_ino, PTR_ERR(inode));
 	} else if (id->oii_gen != OSD_OII_NOGEN &&
 		   inode->i_generation != id->oii_gen) {
-		CDEBUG(D_INODE, "unmatched inode: ino = %u, oii_gen = %u, "
-		       "i_generation = %u\n",
+		CDEBUG(D_INODE, "unmatched inode: ino = %u, oii_gen = %u, i_generation = %u\n",
 		       id->oii_ino, id->oii_gen, inode->i_generation);
 		rc = -ESTALE;
 	} else if (inode->i_nlink == 0) {
@@ -1787,8 +1786,8 @@ static void __osd_th_check_slow(void *oth, struct osd_device *dev,
 
 #else /* OSD_THANDLE_STATS */
 
-#define osd_th_alloced(h)                  do {} while(0)
-#define osd_th_started(h)                  do {} while(0)
+#define osd_th_alloced(h)                  do {} while (0)
+#define osd_th_started(h)                  do {} while (0)
 #define OSD_CHECK_SLOW_TH(oth, dev, expr)  expr
 
 #endif /* OSD_THANDLE_STATS */
@@ -2034,8 +2033,7 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 	ENTRY;
 
 	if (d->dd_rdonly) {
-		CERROR("%s: someone try to start transaction under "
-		       "readonly mode, should be disabled.\n",
+		CERROR("%s: someone try to start transaction under readonly mode, should be disabled.\n",
 		       osd_name(osd_dt_dev(d)));
 		dump_stack();
 		RETURN(ERR_PTR(-EROFS));
@@ -2831,6 +2829,7 @@ static int osd_sync(const struct lu_env *env, struct dt_device *d)
 {
 	int rc;
 	struct super_block *s = osd_sb(osd_dt_dev(d));
+
 	ENTRY;
 
 	down_read(&s->s_umount);
@@ -3689,7 +3688,7 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
 {
 	int result;
 	struct osd_thandle *oth;
-	__u32 mode = (attr->la_mode & (S_IFMT | S_IRWXUGO | S_ISVTX | S_ISGID));
+	__u32 mode = (attr->la_mode & (S_IFMT | 0777 | S_ISVTX | S_ISGID));
 
 	LASSERT(S_ISDIR(attr->la_mode));
 
@@ -6309,7 +6308,8 @@ static int osd_ea_add_rec(const struct lu_env *env, struct osd_object *pobj,
 					      hlock, th);
 		}
 	}
-	if (!rc && fid_is_namespace_visible(lu_object_fid(&pobj->oo_dt.do_lu))){
+	if (!rc &&
+	    fid_is_namespace_visible(lu_object_fid(&pobj->oo_dt.do_lu))) {
 		int dirent_count = atomic_read(&pobj->oo_dirent_count);
 
 		/* avoid extremely unlikely 2B-entry directory overflow case */
@@ -7315,7 +7315,7 @@ struct osd_filldir_cbs {
  * information i.e. name, namelen, rec_size etc.
  *
  * \param buf in which information to be filled in.
- * \param name name of the file in given dir
+ * \param name of the file in given dir
  *
  * \retval 0 on success
  * \retval 1 on buffer full
@@ -7956,7 +7956,7 @@ out_inode:
  * Returns the value at current position from iterator's in memory structure.
  *
  * \param di struct osd_it_ea, iterator's in memory structure
- * \param attr attr requested for dirent.
+ * \param attr requested for dirent.
  * \param lde lustre dirent
  *
  * \retval   0 no error and \param lde has correct lustre dirent.
@@ -8036,7 +8036,7 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 }
 
 /**
- * Returns the record size size at current position.
+ * Returns the record size at current position.
  *
  * This function will return record(lu_dirent) size in bytes.
  *
@@ -8451,9 +8451,8 @@ static int osd_mount(const struct lu_env *env,
 	opts = lustre_cfg_string(cfg, 3);
 #ifdef __BIG_ENDIAN
 	if (opts == NULL || strstr(opts, "bigendian_extents") == NULL) {
-		CERROR("%s: device %s extents feature is not guaranteed to "
-		       "work on big-endian systems. Use \"bigendian_extents\" "
-		       "mount option to override.\n", name, dev);
+		CERROR("%s: device %s extents feature is not guaranteed to work on big-endian systems. Use \"bigendian_extents\" mount option to override.\n",
+		       name, dev);
 		RETURN(-EINVAL);
 	}
 #endif
@@ -8575,10 +8574,8 @@ static int osd_mount(const struct lu_env *env,
 	if (ldiskfs_has_feature_dirdata(o->od_mnt->mnt_sb))
 		LDISKFS_SB(osd_sb(o))->s_mount_opt |= LDISKFS_MOUNT_DIRDATA;
 	else if (strstr(name, "MDT")) /* don't complain for MGT or OSTs */
-		CWARN("%s: device %s was upgraded from Lustre-1.x without "
-		      "enabling the dirdata feature. If you do not want to "
-		      "downgrade to Lustre-1.x again, you can enable it via "
-		      "'tune2fs -O dirdata device'\n", name, dev);
+		CWARN("%s: device %s was upgraded from Lustre-1.x without enabling the dirdata feature. If you do not want to downgrade to Lustre-1.x again, you can enable it via 'tune2fs -O dirdata device'\n",
+		      name, dev);
 #endif
 	/* enable large_dir on MDTs to avoid REMOTE_PARENT_DIR overflow,
 	 * and on very large OSTs to avoid object directory overflow */

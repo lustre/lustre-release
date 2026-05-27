@@ -50,6 +50,7 @@ static int osd_bio_init(struct bio *bio, struct osd_iobuf *iobuf,
 			int start_page_idx)
 {
 	struct osd_bio_private *bio_private = NULL;
+
 	ENTRY;
 
 	OBD_SLAB_ALLOC_GFP(bio_private, biop_cachep, sizeof(*bio_private),
@@ -469,8 +470,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 				       lnb->lnb_file_offset);
 				lnb->lnb_hole = 1;
 				LASSERTF(iobuf->dr_rw == 0,
-					 "page_idx %u, block_idx %u, i %u,"
-					 "start_blocks: %llu, count: %llu, npages: %d\n",
+					 "page_idx %u, block_idx %u, i %u, start_blocks: %llu, count: %llu, npages: %d\n",
 					 page_idx, block_idx, i,
 					 (unsigned long long)start_blocks,
 					 (unsigned long long)count, npages);
@@ -559,6 +559,7 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
 				   struct niobuf_local *lnb, int maxlnb)
 {
 	int rc = 0;
+
 	ENTRY;
 
 	*nrpages = 0;
@@ -1306,6 +1307,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	unsigned int		extent_bytes;
 	loff_t extent_start = 0;
 	loff_t extent_end = 0;
+
 	ENTRY;
 
 	LASSERT(handle != NULL);
@@ -1874,6 +1876,7 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 	struct inode *inode = obj->oo_inode;
 	struct osd_thandle *oh;
 	loff_t pos;
+
 	ENTRY;
 
 	LASSERT(buf != NULL);
@@ -1911,6 +1914,7 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 
 	if (obj->oo_brm && _pos != -1) {
 		unsigned long i;
+
 		credits = 0;
 		for (i = (pos >> bits); i < (pos >> bits) + blocks; i++) {
 			/* check if block has been allocated already, then
@@ -2702,6 +2706,7 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 	struct osd_object  *obj = osd_dt_obj(dt);
 	struct inode	   *inode;
 	int		    rc;
+
 	ENTRY;
 
 	LASSERT(th);
@@ -2751,6 +2756,7 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 	struct osd_thandle *oh;
 	int rc = 0, found = 0;
 	bool grow = false;
+
 	ENTRY;
 
 	LASSERT(dt_object_exists(dt));
@@ -2897,6 +2903,7 @@ static int osd_ladvise(const struct lu_env *env, struct dt_object *dt,
 {
 	struct osd_object *obj = osd_dt_obj(dt);
 	int rc = 0;
+
 	ENTRY;
 
 	switch (advice) {

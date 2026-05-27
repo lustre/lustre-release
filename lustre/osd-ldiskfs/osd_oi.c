@@ -106,8 +106,7 @@ static int osd_oi_index_create_one(struct osd_thread_info *info,
 	if (IS_ERR(jh))
 		return PTR_ERR(jh);
 
-	inode = ldiskfs_create_inode(jh, dir, (S_IFREG | S_IRUGO | S_IWUSR),
-				     NULL);
+	inode = ldiskfs_create_inode(jh, dir, (S_IFREG | 0644), NULL);
 	if (IS_ERR(inode)) {
 		ldiskfs_journal_stop(jh);
 		return PTR_ERR(inode);
@@ -273,6 +272,7 @@ osd_oi_table_open(struct osd_thread_info *info, struct osd_device *osd,
 	int count = 0;
 	int rc = 0;
 	int i;
+
 	ENTRY;
 
 	/* NB: oi_count != 0 means that we have already created/known all OIs
@@ -377,6 +377,7 @@ int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd,
 	struct osd_oi **oi;
 	int count;
 	int rc;
+
 	ENTRY;
 
 	if (unlikely((sf->sf_oi_count & (sf->sf_oi_count - 1)) != 0 ||
@@ -516,6 +517,7 @@ static int osd_oi_iam_lookup(struct osd_thread_info *oti,
 	struct iam_iterator   *it = &oti->oti_idx_it;
 	struct iam_path_descr *ipd;
 	int rc;
+
 	ENTRY;
 
 	LASSERT(oi);
@@ -546,6 +548,7 @@ int fid_is_on_ost(struct osd_thread_info *info, struct osd_device *osd,
 {
 	struct lu_seq_range *range = &info->oti_seq_range;
 	int rc;
+
 	ENTRY;
 
 	if (flags & OI_KNOWN_ON_OST)
@@ -649,6 +652,7 @@ static int osd_oi_iam_refresh(struct osd_thread_info *oti, struct osd_oi *oi,
 	struct iam_container *bag;
 	struct iam_path_descr *ipd;
 	int rc;
+
 	ENTRY;
 
 	LASSERT(oi);
@@ -760,6 +764,7 @@ static int osd_oi_iam_delete(struct osd_thread_info *oti, struct osd_oi *oi,
 	struct iam_container	*bag;
 	struct iam_path_descr	*ipd;
 	int			 rc;
+
 	ENTRY;
 
 	LASSERT(oi);

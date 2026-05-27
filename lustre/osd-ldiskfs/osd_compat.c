@@ -731,8 +731,8 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 	 * either a crashed object or a uninitialized one. Replace it.
 	 */
 	if (oi_fid != NULL && lu_fid_eq(fid, oi_fid)) {
-		CERROR("%s: the FID "DFID" is used by two objects: "
-		       "%u/%u %u/%u\n", osd_name(osd), PFID(fid),
+		CERROR("%s: the FID "DFID" is used by two objects: %u/%u %u/%u\n",
+		       osd_name(osd), PFID(fid),
 		       oi_id->oii_ino, oi_id->oii_gen,
 		       id->oii_ino, id->oii_gen);
 		GOTO(out, rc = -EEXIST);
@@ -745,16 +745,15 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 		struct lu_fid *tfid = &info->oti_fid3;
 
 		LASSERTF(idx1 == 0 || idx1 == osd->od_index,
-			 "invalid given FID "DFID", not match the "
-			 "device index %u\n", PFID(fid), osd->od_index);
+			 "invalid given FID "DFID", not match the device index %u\n",
+			 PFID(fid), osd->od_index);
 
 		if (idx1 != idx2) {
 			if (idx1 == 0 && idx2 == osd->od_index) {
 				fid_to_ostid(fid, ostid);
 				ostid_to_fid(tfid, ostid, idx2);
 				if (lu_fid_eq(tfid, oi_fid)) {
-					CERROR("%s: the FID "DFID" is used by "
-					       "two objects(2): %u/%u %u/%u\n",
+					CERROR("%s: the FID "DFID" is used by two objects(2): %u/%u %u/%u\n",
 					       osd_name(osd), PFID(fid),
 					       oi_id->oii_ino, oi_id->oii_gen,
 					       id->oii_ino, id->oii_gen);
@@ -765,8 +764,7 @@ static int osd_obj_update_entry(struct osd_thread_info *info,
 				fid_to_ostid(oi_fid, ostid);
 				ostid_to_fid(tfid, ostid, idx1);
 				if (lu_fid_eq(tfid, fid)) {
-					CERROR("%s: the FID "DFID" is used by "
-					       "two objects(2): %u/%u %u/%u\n",
+					CERROR("%s: the FID "DFID" is used by two objects(2): %u/%u %u/%u\n",
 					       osd_name(osd), PFID(fid),
 					       oi_id->oii_ino, oi_id->oii_gen,
 					       id->oii_ino, id->oii_gen);

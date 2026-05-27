@@ -198,6 +198,7 @@ int osd_scrub_refresh_mapping(struct osd_thread_info *info,
 {
 	handle_t *th;
 	int	  rc;
+
 	ENTRY;
 
 	if (dev->od_scrub.os_scrub.os_file.sf_param & SP_DRYRUN && !force)
@@ -530,8 +531,7 @@ again:
 	offset = param->offset++;
 	if (unlikely(*pos == param->gbase + offset && *pos != param->start)) {
 		/* We should NOT find the same object more than once. */
-		CERROR("%s: scan the same object multiple times at the pos: "
-		       "group = %u, base = %u, offset = %u, start = %u\n",
+		CERROR("%s: scan the same object multiple times at the pos: group = %u, base = %u, offset = %u, start = %u\n",
 		       osd_sb2name(param->sb), (__u32)param->bg, param->gbase,
 		       offset, param->start);
 		goto again;
@@ -690,8 +690,8 @@ static int osd_iit_iget(struct osd_thread_info *info, struct osd_device *dev,
 		if (rc == -ENOENT || rc == -ESTALE || rc == -ENOMEM)
 			RETURN(SCRUB_NEXT_CONTINUE);
 
-		CDEBUG(D_LFSCK, "%s: fail to read inode, ino# = %u: "
-		       "rc = %d\n", osd_dev2name(dev), pos, rc);
+		CDEBUG(D_LFSCK, "%s: fail to read inode, ino# = %u: rc = %d\n",
+		       osd_dev2name(dev), pos, rc);
 		RETURN(rc);
 	}
 
@@ -853,8 +853,8 @@ static int osd_scrub_exec(struct osd_thread_info *info, struct osd_device *dev,
 
 	rc = scrub_checkpoint(info->oti_env, scrub);
 	if (rc) {
-		CDEBUG(D_LFSCK, "%s: fail to checkpoint, pos = %llu: "
-		       "rc = %d\n", osd_scrub2name(scrub),
+		CDEBUG(D_LFSCK, "%s: fail to checkpoint, pos = %llu: rc = %d\n",
+		       osd_scrub2name(scrub),
 		       scrub->os_pos_current, rc);
 		/* Continue, as long as the scrub itself can go ahead. */
 	}
@@ -916,6 +916,7 @@ static void osd_scrub_join(const struct lu_env *env, struct osd_device *dev,
 	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
 	struct scrub_file    *sf     = &scrub->os_file;
 	int		      rc;
+
 	ENTRY;
 
 	LASSERT(!(flags & SS_AUTO_PARTIAL));
@@ -991,6 +992,7 @@ static int osd_inode_iteration(struct osd_thread_info *info,
 	__u32 limit;
 	int rc;
 	bool noslot = true;
+
 	ENTRY;
 
 	if (preload)
@@ -1197,6 +1199,7 @@ static int osd_otable_it_preload(const struct lu_env *env,
 	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
 	struct osd_otable_cache *ooc   = &it->ooi_cache;
 	int			 rc;
+
 	ENTRY;
 
 	rc = osd_inode_iteration(osd_oti_get(env), dev,
@@ -1228,6 +1231,7 @@ static int osd_scrub_main(void *args)
 	struct osd_device *dev = (struct osd_device *)args;
 	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
 	int rc, ret;
+
 	ENTRY;
 
 	rc = lu_env_init(&env, LCT_LOCAL | LCT_DT_THREAD);
@@ -1726,6 +1730,7 @@ osd_ios_new_item(struct osd_device *dev, struct dentry *dentry,
 		 scandir_t scandir, filldir_t filldir)
 {
 	struct osd_ios_item *item;
+
 	ENTRY;
 
 	OBD_ALLOC_PTR(item);
@@ -1747,6 +1752,7 @@ static bool osd_index_need_recreate(const struct lu_env *env,
 	struct osd_directory *iam = &osd_oti_get(env)->oti_iam;
 	struct iam_container *bag = &iam->od_container;
 	int rc;
+
 	ENTRY;
 
 	rc = iam_container_init(bag, &iam->od_descr, inode);
@@ -1773,6 +1779,7 @@ static void osd_ios_index_register(const struct lu_env *env,
 	__u32 keysize = 0;
 	__u32 recsize = 0;
 	int rc;
+
 	ENTRY;
 
 	/* Index must be a regular file. */
@@ -1822,6 +1829,7 @@ static void osd_index_restore(const struct lu_env *env, struct osd_device *dev,
 	char *name = buf;
 	struct lu_fid bak_fid;
 	int rc;
+
 	ENTRY;
 
 	lustre_fid2lbx(name, tgt_fid, bufsize);
@@ -1886,6 +1894,7 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 	struct scrub_file	*sf     = &scrub->os_file;
 	struct lu_fid		 tfid;
 	int			 rc;
+
 	ENTRY;
 
 	if (!inode) {
@@ -1897,8 +1906,8 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 	rc = osd_get_lma(info, inode, &info->oti_obj_dentry,
 			 &info->oti_ost_attrs);
 	if (rc != 0 && rc != -ENODATA) {
-		CDEBUG(D_LFSCK, "%s: fail to get lma for init OI scrub: "
-		       "rc = %d\n", osd_name(dev), rc);
+		CDEBUG(D_LFSCK, "%s: fail to get lma for init OI scrub: rc = %d\n",
+		       osd_name(dev), rc);
 
 		RETURN(rc);
 	}
@@ -1917,8 +1926,8 @@ osd_ios_scan_one(struct osd_thread_info *info, struct osd_device *dev,
 		}
 		rc = osd_ea_fid_set(info, inode, &tfid, 0, 0);
 		if (rc != 0) {
-			CDEBUG(D_LFSCK, "%s: fail to set LMA for init OI "
-			      "scrub: rc = %d\n", osd_name(dev), rc);
+			CDEBUG(D_LFSCK, "%s: fail to set LMA for init OI scrub: rc = %d\n",
+			      osd_name(dev), rc);
 
 			RETURN(rc);
 		}
@@ -2005,6 +2014,7 @@ static FILLDIR_TYPE do_osd_ios_lf_fill(struct dir_context *buf,
 	struct inode		   *dir      = parent->d_inode;
 	struct inode		   *inode;
 	int			    rc;
+
 	ENTRY;
 
 	fill_buf->oifb_items++;
@@ -2032,8 +2042,8 @@ static FILLDIR_TYPE do_osd_ios_lf_fill(struct dir_context *buf,
 		rc = osd_ios_new_item(dev, child, osd_ios_general_scan,
 				      osd_ios_lf_fill);
 		if (rc != 0)
-			CDEBUG(D_LFSCK, "%s: cannot add child '%.*s': "
-			      "rc = %d\n", osd_name(dev), namelen, name, rc);
+			CDEBUG(D_LFSCK, "%s: cannot add child '%.*s': rc = %d\n",
+			      osd_name(dev), namelen, name, rc);
 		GOTO(put, rc);
 	}
 
@@ -2044,8 +2054,9 @@ static FILLDIR_TYPE do_osd_ios_lf_fill(struct dir_context *buf,
 	if (rc == SCRUB_NEXT_OSTOBJ || rc == SCRUB_NEXT_OSTOBJ_OLD) {
 		rc = osd_obj_map_recover(info, dev, dir, child, fid);
 		if (rc == 0) {
-			CDEBUG(D_LFSCK, "recovered '%.*s' ["DFID"] from "
-			       "/lost+found.\n", namelen, name, PFID(fid));
+			CDEBUG(D_LFSCK,
+			       "recovered '%.*s' ["DFID"] from /lost+found.\n",
+			       namelen, name, PFID(fid));
 			scrub->os_lf_repaired++;
 		} else {
 			CDEBUG(D_LFSCK, "%s: cannot rename for '%.*s' "
@@ -2055,8 +2066,9 @@ static FILLDIR_TYPE do_osd_ios_lf_fill(struct dir_context *buf,
 	}
 
 	/* XXX: For MDT-objects, we can move them from /lost+found to namespace
-	 * 	visible place, such as the /ROOT/.lustre/lost+found, then LFSCK
-	 * 	can process them in furtuer. */
+	 *	visible place, such as the /ROOT/.lustre/lost+found, then LFSCK
+	 *	can process them in furtuer.
+	 */
 
 	GOTO(put, rc);
 
@@ -2079,6 +2091,7 @@ static FILLDIR_TYPE do_osd_ios_varfid_fill(struct dir_context *buf,
 	struct osd_device	   *dev      = fill_buf->oifb_dev;
 	struct dentry		   *child;
 	int			    rc;
+
 	ENTRY;
 
 	fill_buf->oifb_items++;
@@ -2115,6 +2128,7 @@ static FILLDIR_TYPE do_osd_ios_dl_fill(struct dir_context *buf,
 	const struct osd_lf_map    *map;
 	struct dentry		   *child;
 	int			    rc       = 0;
+
 	ENTRY;
 
 	fill_buf->oifb_items++;
@@ -2159,6 +2173,7 @@ static FILLDIR_TYPE do_osd_ios_uld_fill(struct dir_context *buf,
 	struct dentry		   *child;
 	struct lu_fid		    tfid;
 	int			    rc       = 0;
+
 	ENTRY;
 
 	fill_buf->oifb_items++;
@@ -2197,6 +2212,7 @@ static FILLDIR_TYPE do_osd_ios_root_fill(struct dir_context *buf,
 	const struct osd_lf_map    *map;
 	struct dentry		   *child;
 	int			    rc       = 0;
+
 	ENTRY;
 
 	fill_buf->oifb_items++;
@@ -2284,6 +2300,7 @@ osd_ios_ROOT_scan(struct osd_thread_info *info, struct osd_device *dev,
 	struct scrub_file *sf = &scrub->os_file;
 	struct dentry *child;
 	int rc;
+
 	ENTRY;
 
 	/* It is existing MDT0 device. We only allow the case of object without
@@ -2368,6 +2385,7 @@ osd_ios_OBJECTS_scan(struct osd_thread_info *info, struct osd_device *dev,
 	struct scrub_file *sf = &scrub->os_file;
 	struct dentry *child;
 	int rc;
+
 	ENTRY;
 
 	if (unlikely(sf->sf_internal_flags & SIF_NO_HANDLE_OLD_FID)) {
@@ -2414,6 +2432,7 @@ static void osd_initial_OI_scrub(struct osd_thread_info *info,
 	filldir_t		 filldir = osd_ios_root_fill;
 	struct dentry		*dentry  = osd_sb(dev)->s_root;
 	const struct osd_lf_map *map     = osd_lf_maps;
+
 	ENTRY;
 
 	/* Lookup IGIF in OI by force for initial OI scrub. */
@@ -2523,6 +2542,7 @@ int osd_scrub_start(const struct lu_env *env, struct osd_device *dev,
 {
 	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
 	int rc;
+
 	ENTRY;
 
 	if (dev->od_dt_dev.dd_rdonly)
@@ -2580,6 +2600,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev,
 	struct dt_object *obj;
 	bool dirty = false;
 	int rc = 0;
+
 	ENTRY;
 
 	memset(&dev->od_scrub, 0, sizeof(struct osd_scrub));
@@ -2767,6 +2788,7 @@ static struct dt_it *osd_otable_it_init(const struct lu_env *env,
 	struct osd_otable_it   *it;
 	__u32			start = 0;
 	int			rc;
+
 	ENTRY;
 
 	/* od_otable_mutex: prevent curcurrent init/fini */
@@ -2867,6 +2889,7 @@ static int osd_otable_it_next(const struct lu_env *env, struct dt_it *di)
 	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
 	struct osd_otable_cache *ooc = &it->ooi_cache;
 	int rc;
+
 	ENTRY;
 
 	LASSERT(it->ooi_user_ready);
@@ -2970,6 +2993,7 @@ static int osd_otable_it_load(const struct lu_env *env,
 	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
 	struct osd_iit_param	*param = &it->ooi_iit_param;
 	int			 rc;
+
 	ENTRY;
 
 	/* Forbid to set iteration position after iteration started. */

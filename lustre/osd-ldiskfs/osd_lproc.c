@@ -70,7 +70,8 @@ static void osd_symlink_brw_stats(struct osd_device *osd)
 	strscpy(path, root, len_root);
 	if (p > path + len_root) {
 		s = path + len_root;
-		while ((*s++ = *p++) != '\0');
+		while ((*s++ = *p++) != '\0')
+			;
 	}
 
 	*(path + len_root + len_path) = '\0';
@@ -760,8 +761,8 @@ static ssize_t index_in_idif_store(struct kobject *kobj,
 		if (val)
 			return count;
 
-		LCONSOLE_WARN("%s: OST-index in IDIF has been enabled, "
-			      "it cannot be reverted back.\n", osd_name(dev));
+		LCONSOLE_WARN("%s: OST-index in IDIF has been enabled, it cannot be reverted back.\n",
+			      osd_name(dev));
 		return -EPERM;
 	}
 
@@ -779,8 +780,8 @@ static ssize_t index_in_idif_store(struct kobject *kobj,
 	if (rc < 0)
 		return rc;
 
-	LCONSOLE_INFO("%s: enable OST-index in IDIF successfully, "
-		      "it cannot be reverted back.\n", osd_name(dev));
+	LCONSOLE_INFO("%s: enable OST-index in IDIF successfully, it cannot be reverted back.\n",
+		      osd_name(dev));
 
 	dev->od_index_in_idif = 1;
 	return count;

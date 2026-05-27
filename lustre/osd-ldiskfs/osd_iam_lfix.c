@@ -84,7 +84,7 @@ static int lentry_count_get(const struct iam_leaf *leaf)
 	return le16_to_cpu(iam_get_head(leaf)->ill_count);
 }
 
-static void lentry_count_set(struct iam_leaf *leaf, unsigned count)
+static void lentry_count_set(struct iam_leaf *leaf, unsigned int count)
 {
 	assert_corr(0 <= count && count <= leaf_count_limit(leaf));
 	iam_get_head(leaf)->ill_count = cpu_to_le16(count);
@@ -199,7 +199,7 @@ static void iam_lfix_next(struct iam_leaf *l)
 /*
  * Bug chasing.
  */
-int lfix_dump = 0;
+int lfix_dump;
 
 static char hdigit(char ch)
 {
@@ -254,7 +254,7 @@ static int iam_lfix_lookup(struct iam_leaf *l, const struct iam_key *k)
 
 	count = lentry_count_get(l);
 	if (count == 0)
-                return IAM_LOOKUP_EMPTY;
+		return IAM_LOOKUP_EMPTY;
 
 	result = IAM_LOOKUP_OK;
 	c = iam_leaf_container(l);
@@ -298,10 +298,10 @@ static int iam_lfix_lookup(struct iam_leaf *l, const struct iam_key *k)
 	assert_corr(iam_leaf_at_rec(l));
 
 	if (lfix_keycmp(c, iam_leaf_key_at(l->il_at), k) == 0)
-                result = IAM_LOOKUP_EXACT;
+		result = IAM_LOOKUP_EXACT;
 
 	if (lfix_dump)
-                lfix_print(l);
+		lfix_print(l);
 
 	return result;
 }
@@ -548,7 +548,7 @@ static __u32 iam_lfix_root_ptr(struct iam_container *c)
 }
 
 static int iam_lfix_node_init(struct iam_container *c, struct buffer_head *bh,
-                              int root)
+			      int root)
 {
 	return 0;
 }
@@ -690,12 +690,12 @@ int iam_lfix_guess(struct iam_container *c)
 #define PTRSIZE (4)
 
 #define LFIX_ROOT_RECNO \
-        ((4096 - sizeof(struct iam_lfix_root)) / (KEYSIZE + PTRSIZE))
+	((4096 - sizeof(struct iam_lfix_root)) / (KEYSIZE + PTRSIZE))
 
 #define LFIX_INDEX_RECNO (4096 / (KEYSIZE + PTRSIZE))
 
 #define LFIX_LEAF_RECNO \
-        ((4096 - sizeof(struct iam_leaf_head)) / (KEYSIZE + RECSIZE))
+	((4096 - sizeof(struct iam_leaf_head)) / (KEYSIZE + RECSIZE))
 
 	struct lfix_root {
 	struct iam_lfix_root lr_root;

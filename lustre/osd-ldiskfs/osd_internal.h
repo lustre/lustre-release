@@ -85,7 +85,7 @@ extern struct kmem_cache *dynlock_cachep;
 
 #define MAX_OBJID_GROUP (FID_SEQ_ECHO + 1)
 
-#define OBJECTS  	"OBJECTS"
+#define OBJECTS		"OBJECTS"
 #define ADMIN_USR	"admin_quotafile_v2.usr"
 #define ADMIN_GRP	"admin_quotafile_v2.grp"
 
@@ -510,21 +510,21 @@ struct osd_obj_declare {
 
 #ifdef CONFIG_PROC_FS
 enum {
-        LPROC_OSD_READ_BYTES    = 0,
-        LPROC_OSD_WRITE_BYTES   = 1,
-        LPROC_OSD_GET_FOLIO     = 2,
-        LPROC_OSD_NO_FOLIO      = 3,
-        LPROC_OSD_CACHE_ACCESS  = 4,
-        LPROC_OSD_CACHE_HIT     = 5,
-        LPROC_OSD_CACHE_MISS    = 6,
+	LPROC_OSD_READ_BYTES    = 0,
+	LPROC_OSD_WRITE_BYTES   = 1,
+	LPROC_OSD_GET_FOLIO     = 2,
+	LPROC_OSD_NO_FOLIO      = 3,
+	LPROC_OSD_CACHE_ACCESS  = 4,
+	LPROC_OSD_CACHE_HIT     = 5,
+	LPROC_OSD_CACHE_MISS    = 6,
 
 #if OSD_THANDLE_STATS
-        LPROC_OSD_THANDLE_STARTING,
-        LPROC_OSD_THANDLE_OPEN,
-        LPROC_OSD_THANDLE_CLOSING,
+	LPROC_OSD_THANDLE_STARTING,
+	LPROC_OSD_THANDLE_OPEN,
+	LPROC_OSD_THANDLE_CLOSING,
 #endif
 	LPROC_OSD_TOO_MANY_CREDITS,
-        LPROC_OSD_LAST,
+	LPROC_OSD_LAST,
 };
 #endif
 
@@ -545,7 +545,7 @@ struct osd_it_ea_dirent {
 	unsigned short	oied_namelen;
 	unsigned int	oied_type;
 	char		oied_name[];
-} __attribute__((packed));
+} __packed;
 
 /*
  * as osd_it_ea_dirent (in memory dirent struct for osd) is greater
@@ -629,7 +629,7 @@ struct osd_iobuf {
 	struct osd_device *dr_dev;
 	/* Already written blocks of the start page */
 	unsigned int	   dr_start_pg_wblks;
-	struct inode 	  *dr_inode;
+	struct inode	  *dr_inode;
 };
 
 #define osd_dirty_inode(inode, flag)  (inode)->i_sb->s_op->dirty_inode((inode), flag)
@@ -1089,6 +1089,7 @@ static inline u32 i_projid_read(struct inode *inode)
 static inline void i_projid_write(struct inode *inode, u32 projid)
 {
 	kprojid_t kprojid;
+
 	kprojid = make_kprojid(&init_user_ns, (projid_t)projid);
 	LDISKFS_I(inode)->i_projid = kprojid;
 }

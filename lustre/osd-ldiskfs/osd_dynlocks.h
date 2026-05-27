@@ -16,7 +16,7 @@
  *   - lock to protect this list
  */
 struct dynlock {
-	unsigned		dl_magic;
+	unsigned int		dl_magic;
 	struct list_head	dl_list;
 	spinlock_t		dl_list_lock;
 };
@@ -27,7 +27,7 @@ enum dynlock_type {
 };
 
 struct dynlock_handle {
-	unsigned		dh_magic;
+	unsigned int		dh_magic;
 	struct list_head	dh_list;
 	unsigned long		dh_value;	/* lock value */
 	int			dh_refcount;	/* number of users */
