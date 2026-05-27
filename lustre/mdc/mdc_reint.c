@@ -102,7 +102,7 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
 		count = mdc_resource_cancel_unused(exp, &op_data->op_fid1,
 						   &cancels, LCK_EX, bits);
 	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
-			   	   &RQF_MDS_REINT_SETATTR);
+				   &RQF_MDS_REINT_SETATTR);
 	if (req == NULL) {
 		ldlm_lock_list_put(&cancels, l_bl_ast, count);
 		RETURN(-ENOMEM);

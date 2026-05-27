@@ -25,7 +25,7 @@ static void mdc_lock_build_policy(const struct lu_env *env,
 				  const struct cl_lock *lock,
 				  union ldlm_policy_data *policy)
 {
-	memset(policy, 0, sizeof *policy);
+	memset(policy, 0, sizeof(*policy));
 	policy->l_inodebits.bits = MDS_INODELOCK_DOM;
 	if (lock) {
 		policy->l_inodebits.li_gid = lock->cll_descr.cld_gid;
@@ -447,8 +447,8 @@ void mdc_lock_lvb_update(const struct lu_env *env, struct osc_object *osc,
 	if (attr->cat_size < oinfo->loi_kms)
 		attr->cat_size = oinfo->loi_kms;
 
-	LDLM_DEBUG(dlmlock, "acquired size %llu, setting rss=%llu;%s "
-		   "kms=%llu, end=%llu", lvb->lvb_size, attr->cat_size,
+	LDLM_DEBUG(dlmlock, "acquired size %llu, setting rss=%llu;%s kms=%llu, end=%llu",
+		   lvb->lvb_size, attr->cat_size,
 		   setkms ? "" : " leaving",
 		   setkms ? attr->cat_kms : oinfo->loi_kms,
 		   dlmlock ? dlmlock->l_policy_data.l_extent.end : -1ull);
@@ -1478,6 +1478,7 @@ static int mdc_object_ast_clear(struct ldlm_lock *lock, void *data)
 	struct osc_object *osc = (struct osc_object *)data;
 	struct ost_lvb *lvb = &lock->l_ost_lvb;
 	struct lov_oinfo *oinfo;
+
 	ENTRY;
 
 	if (lock->l_ast_data != data)

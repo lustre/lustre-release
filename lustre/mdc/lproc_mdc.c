@@ -421,9 +421,9 @@ static int mdc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 	seq_printf(seq, "pending read pages:   %d\n",
 		   atomic_read(&cli->cl_pending_r_pages));
 
-	seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-	seq_printf(seq, "pages per rpc         rpcs   %% cum %% |");
-	seq_printf(seq, "       rpcs   %% cum %%\n");
+	seq_puts(seq, "\n\t\t\tread\t\t\twrite\n");
+	seq_puts(seq, "pages per rpc         rpcs   %% cum %% |");
+	seq_puts(seq, "       rpcs   %% cum %%\n");
 
 	read_tot = lprocfs_oh_sum(&cli->cl_read_page_hist);
 	write_tot = lprocfs_oh_sum(&cli->cl_write_page_hist);
@@ -445,9 +445,9 @@ static int mdc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 			break;
 	}
 
-	seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-	seq_printf(seq, "rpcs in flight        rpcs   %% cum %% |");
-	seq_printf(seq, "       rpcs   %% cum %%\n");
+	seq_puts(seq, "\n\t\t\tread\t\t\twrite\n");
+	seq_puts(seq, "rpcs in flight        rpcs   %% cum %% |");
+	seq_puts(seq, "       rpcs   %% cum %%\n");
 
 	read_tot = lprocfs_oh_sum(&cli->cl_read_rpc_hist);
 	write_tot = lprocfs_oh_sum(&cli->cl_write_rpc_hist);
@@ -467,9 +467,9 @@ static int mdc_rpc_stats_seq_show(struct seq_file *seq, void *v)
 			break;
 	}
 
-	seq_printf(seq, "\n\t\t\tread\t\t\twrite\n");
-	seq_printf(seq, "offset                rpcs   %% cum %% |");
-	seq_printf(seq, "       rpcs   %% cum %%\n");
+	seq_puts(seq, "\n\t\t\tread\t\t\twrite\n");
+	seq_puts(seq, "offset                rpcs   %% cum %% |");
+	seq_puts(seq, "       rpcs   %% cum %%\n");
 
 	read_tot = lprocfs_oh_sum(&cli->cl_read_offset_hist);
 	write_tot = lprocfs_oh_sum(&cli->cl_write_offset_hist);
@@ -519,7 +519,7 @@ static int mdc_batch_stats_seq_show(struct seq_file *seq, void *v)
 
 	lprocfs_stats_header(seq, ktime_get_real(), cli->cl_batch_stats_init,
 			     25, ":", true, "");
-	seq_printf(seq, "subreqs per batch   batches   %% cum %%\n");
+	seq_puts(seq, "subreqs per batch   batches   %% cum %%\n");
 	tot = lprocfs_oh_sum(&cli->cl_batch_rpc_hist);
 	cum = 0;
 

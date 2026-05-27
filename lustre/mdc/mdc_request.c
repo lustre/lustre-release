@@ -1250,6 +1250,7 @@ static struct folio *mdc_page_locate(struct address_space *mapping, __u64 *hash,
 static void mdc_adjust_dirpages(struct folio **folios, int cfs_pgs, int lu_pgs)
 {
 	int i;
+
 	ENTRY;
 
 	for (i = 0; i < cfs_pgs; i++) {
@@ -1310,6 +1311,7 @@ static int mdc_dirpage_add(struct obd_export *exp,
 			   unsigned int lu_pgs, int is_hash64)
 {
 	int i;
+
 	ENTRY;
 
 	mdc_adjust_dirpages(folio_pool, rd_pgs, lu_pgs);

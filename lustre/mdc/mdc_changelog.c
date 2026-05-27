@@ -145,7 +145,7 @@ static void chlg_dev_clear(struct kref *kref)
 	EXIT;
 }
 
-static inline struct obd_device* chlg_obd_get(struct chlg_registered_dev *dev)
+static inline struct obd_device *chlg_obd_get(struct chlg_registered_dev *dev)
 {
 	struct obd_device *obd;
 
@@ -190,6 +190,7 @@ static int chlg_read_cat_process_cb(const struct lu_env *env,
 	struct chlg_rec_entry *enq;
 	size_t len;
 	int rc;
+
 	ENTRY;
 
 	LASSERT(crs != NULL);
@@ -404,6 +405,7 @@ static ssize_t chlg_read(struct file *file, char __user *buff, size_t count,
 	size_t written_total = 0;
 	ssize_t rc;
 	LIST_HEAD(consumed);
+
 	ENTRY;
 
 	if (file->f_flags & O_NONBLOCK && crs->crs_rec_count == 0) {
@@ -584,6 +586,7 @@ static ssize_t chlg_write(struct file *file, const char __user *buff,
 	__u64 record;
 	__u32 reader;
 	int rc = 0;
+
 	ENTRY;
 
 	if (count > CHLG_CONTROL_CMD_MAX)
@@ -623,6 +626,7 @@ static int chlg_open(struct inode *inode, struct file *file)
 {
 	struct chlg_reader_state *crs;
 	struct chlg_registered_dev *dev;
+
 	ENTRY;
 
 	dev = container_of(inode->i_cdev, struct chlg_registered_dev, ced_cdev);
@@ -918,6 +922,7 @@ int mdc_changelog_cdev_init(struct obd_device *obd)
 	struct chlg_registered_dev *exist;
 	struct chlg_registered_dev *entry;
 	int minor, rc;
+
 	ENTRY;
 
 	OBD_ALLOC_PTR(entry);
