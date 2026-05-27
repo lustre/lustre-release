@@ -19,7 +19,7 @@ static int service = 987;
 module_param(service, int, 0444);
 MODULE_PARM_DESC(service, "service number (within RDMA_PS_TCP)");
 
-static int cksum = 0;
+static int cksum;
 module_param(cksum, int, 0644);
 MODULE_PARM_DESC(cksum, "set non-zero to enable message (not RDMA) checksums");
 
@@ -51,11 +51,11 @@ static int peer_credits = DEFAULT_PEER_CREDITS;
 module_param(peer_credits, int, 0444);
 MODULE_PARM_DESC(peer_credits, "# concurrent sends to 1 peer");
 
-static int peer_credits_hiw = 0;
+static int peer_credits_hiw;
 module_param(peer_credits_hiw, int, 0444);
 MODULE_PARM_DESC(peer_credits_hiw, "when eagerly to return credits");
 
-static int peer_buffer_credits = 0;
+static int peer_buffer_credits;
 module_param(peer_buffer_credits, int, 0444);
 MODULE_PARM_DESC(peer_buffer_credits, "# per-peer router buffer credits");
 
@@ -123,7 +123,7 @@ MODULE_PARM_DESC(fmr_cache, "non-zero to enable FMR caching");
  * 1: enable failover if necessary
  * 2: force to failover (for debug)
  */
-static int dev_failover = 0;
+static int dev_failover;
 module_param(dev_failover, int, 0444);
 MODULE_PARM_DESC(dev_failover, "HCA failover for bonding (0 off, 1 on, other values reserved)");
 
@@ -271,8 +271,7 @@ kiblnd_tunables_setup(struct lnet_lnd_tunables *lnd_tunables,
 		tunables->lnd_concurrent_sends = net_tunables->lct_peer_tx_credits / 2;
 
 	if (tunables->lnd_concurrent_sends < net_tunables->lct_peer_tx_credits) {
-		CWARN("Concurrent sends %d is lower than message "
-		      "queue size: %d, performance may drop slightly.\n",
+		CWARN("Concurrent sends %d is lower than message queue size: %d, performance may drop slightly.\n",
 		      tunables->lnd_concurrent_sends,
 		      net_tunables->lct_peer_tx_credits);
 	}
