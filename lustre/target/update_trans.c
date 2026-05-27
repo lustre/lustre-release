@@ -62,8 +62,7 @@ static void top_multiple_thandle_dump(struct top_multiple_thandle *tmt,
 	list_for_each_entry(st, &tmt->tmt_sub_thandle_list, st_sub_list) {
 		struct sub_thandle_cookie *stc;
 
-		CDEBUG(mask, "st %p obd %s committed %d started %d stopped %d "
-		       "result %d sub_th %p\n",
+		CDEBUG(mask, "st %p obd %s committed %d started %d stopped %d result %d sub_th %p\n",
 		       st, st->st_dt->dd_lu_dev.ld_obd->obd_name,
 		       st->st_committed, st->st_started, st->st_stopped,
 		       st->st_result, st->st_sub_th);
@@ -100,7 +99,7 @@ static int sub_declare_updates_write(const struct lu_env *env,
 	int rc;
 
 	/* If ctxt is NULL, it means not need to write update,
-	 * for example if the the OSP is used to connect to OST */
+	 * for example if the OSP is used to connect to OST */
 	ctxt = llog_get_context(dt->dd_lu_dev.ld_obd,
 				LLOG_UPDATELOG_ORIG_CTXT);
 
@@ -163,6 +162,7 @@ static int sub_updates_write(const struct lu_env *env,
 	size_t reclen;
 	bool eof = false;
 	int rc;
+
 	ENTRY;
 
 	ctxt = llog_get_context(dt->dd_lu_dev.ld_obd,
@@ -375,6 +375,7 @@ static int prepare_writing_updates(const struct lu_env *env,
 static void top_trans_committed_cb(struct top_multiple_thandle *tmt)
 {
 	struct lu_target *lut;
+
 	ENTRY;
 
 	LASSERT(kref_read(&tmt->tmt_refcount) > 0);
@@ -493,6 +494,7 @@ static void sub_trans_stop_cb(struct lu_env *env,
 {
 	struct sub_thandle		*st;
 	struct top_multiple_thandle	*tmt = cb->dcb_data;
+
 	ENTRY;
 
 	spin_lock(&tmt->tmt_sub_lock);
@@ -722,6 +724,7 @@ static int prepare_multiple_node_trans(const struct lu_env *env,
 {
 	struct thandle_update_records	*tur;
 	int				rc;
+
 	ENTRY;
 
 	if (tmt->tmt_update_records == NULL) {
@@ -759,6 +762,7 @@ int top_trans_start(const struct lu_env *env, struct dt_device *master_dev,
 	struct sub_thandle		*st;
 	struct top_multiple_thandle	*tmt = top_th->tt_multiple_thandle;
 	int				rc = 0;
+
 	ENTRY;
 
 	if (tmt == NULL) {
@@ -909,6 +913,7 @@ int top_trans_stop(const struct lu_env *env, struct dt_device *master_dev,
 	struct thandle_update_records	*tur;
 	bool				write_updates = false;
 	int			rc = 0;
+
 	ENTRY;
 
 	if (likely(top_th->tt_multiple_thandle == NULL)) {
@@ -1006,6 +1011,7 @@ stop_master_trans:
 	/* Step 3: write updates to other MDTs */
 	if (write_updates) {
 		struct llog_update_record *lur;
+
 		if (CFS_FAIL_PRECHECK(OBD_FAIL_OUT_OBJECT_MISS)) {
 			if (cfs_fail_val == 1) {
 				long timeout = cfs_time_seconds(1) / 10;
@@ -1153,6 +1159,7 @@ struct thandle *thandle_get_sub_by_dt(const struct lu_env *env,
 	struct top_thandle	*top_th;
 	struct thandle		*sub_th = NULL;
 	int			rc = 0;
+
 	ENTRY;
 
 	top_th = container_of(th, struct top_thandle, tt_super);
@@ -1264,6 +1271,7 @@ static int distribute_txn_cancel_records(const struct lu_env *env,
 					 struct top_multiple_thandle *tmt)
 {
 	struct sub_thandle *st;
+
 	ENTRY;
 
 	if (CFS_FAIL_CHECK(OBD_FAIL_TGT_TXN_NO_CANCEL))
@@ -1366,6 +1374,7 @@ distribute_txn_commit_batchid_update(const struct lu_env *env,
 	__u64			 tmp;
 	__u64			 off;
 	int			 rc;
+
 	ENTRY;
 
 	OBD_ALLOC_PTR(dtbd);
@@ -1441,11 +1450,12 @@ distribute_txn_commit_batchid_init(const struct lu_env *env,
 	__u64			tmp;
 	__u64			off;
 	int			rc;
+
 	ENTRY;
 
 	memset(attr, 0, sizeof(*attr));
 	attr->la_valid = LA_MODE;
-	attr->la_mode = S_IFREG | S_IRUGO | S_IWUSR;
+	attr->la_mode = S_IFREG | 0644;
 	dof->dof_type = dt_mode_to_dft(S_IFREG);
 
 	lu_local_obj_fid(fid, BATCHID_COMMITTED_OID);
@@ -1566,8 +1576,8 @@ static int distribute_txn_commit_thread(void *_arg)
 		}
 		spin_unlock(&tdtd->tdtd_batchid_lock);
 
-		CDEBUG(D_HA, "%s: batchid: %llu committed batchid "
-		       "%llu\n", tdtd->tdtd_lut->lut_obd->obd_name, batchid,
+		CDEBUG(D_HA, "%s: batchid: %llu committed batchid %llu\n",
+		       tdtd->tdtd_lut->lut_obd->obd_name, batchid,
 		       tdtd->tdtd_committed_batchid);
 		/* update globally committed on a storage */
 		if (batchid > tdtd->tdtd_committed_batchid) {
@@ -1637,6 +1647,7 @@ int distribute_txn_init(const struct lu_env *env,
 {
 	struct task_struct	*task;
 	int			rc;
+
 	ENTRY;
 
 	INIT_LIST_HEAD(&tdtd->tdtd_list);

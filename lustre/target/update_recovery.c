@@ -236,6 +236,7 @@ dtrq_sub_create_and_insert(struct distribute_txn_replay_req *dtrq,
 	struct distribute_txn_replay_req_sub	*dtrqs = NULL;
 	struct distribute_txn_replay_req_sub	*new;
 	int					rc;
+
 	ENTRY;
 
 	spin_lock(&dtrq->dtrq_sub_list_lock);
@@ -287,6 +288,7 @@ static int dtrq_append_updates(struct distribute_txn_replay_req *dtrq,
 	struct llog_update_record *new_lur;
 	size_t lur_size = dtrq->dtrq_lur_size;
 	void *ptr;
+
 	ENTRY;
 
 	/* Because several threads might retrieve the same records from
@@ -356,16 +358,17 @@ insert_update_records_to_replay_list(struct target_distribute_txn_data *tdtd,
 	struct update_records *record = &lur->lur_update_rec;
 	bool replace_record = false;
 	int rc = 0;
+
 	ENTRY;
 
-	CDEBUG(D_HA, "%s: insert record batchid = %llu transno = %llu"
-	       " mdt_index %u\n", tdtd->tdtd_lut->lut_obd->obd_name,
+	CDEBUG(D_HA, "%s: insert record batchid = %llu transno = %llu mdt_index %u\n",
+	       tdtd->tdtd_lut->lut_obd->obd_name,
 	       record->ur_batchid, record->ur_master_transno, mdt_index);
 
 	/* Update batchid if necessary */
 	spin_lock(&tdtd->tdtd_batchid_lock);
 	if (record->ur_batchid >= tdtd->tdtd_batchid) {
-		CDEBUG(D_HA, "%s update batchid from %llu" " to %llu\n",
+		CDEBUG(D_HA, "%s update batchid from %llu to %llu\n",
 		       tdtd->tdtd_lut->lut_obd->obd_name,
 		       tdtd->tdtd_batchid, record->ur_batchid);
 		tdtd->tdtd_batchid = record->ur_batchid + 1;
@@ -644,6 +647,7 @@ static int update_is_committed(const struct lu_env *env,
 	const struct lu_fid	*fid = lu_object_fid(&dt_obj->do_lu);
 	struct distribute_txn_replay_req_sub	*dtrqs;
 	__u32			mdt_index;
+
 	ENTRY;
 
 	if (st->st_sub_th != NULL)
@@ -728,6 +732,7 @@ static int update_recovery_create(const struct lu_env *env,
 	__u16			size;
 	unsigned int		param_count;
 	int rc;
+
 	ENTRY;
 
 	if (dt_object_exists(dt_obj))
@@ -763,6 +768,7 @@ static int update_recovery_destroy(const struct lu_env *env,
 				   struct thandle *th)
 {
 	int rc;
+
 	ENTRY;
 
 	rc = out_tx_destroy(env, dt_obj, ta, th, NULL, 0);
@@ -778,6 +784,7 @@ static int update_recovery_ref_add(const struct lu_env *env,
 				   struct thandle *th)
 {
 	int rc;
+
 	ENTRY;
 
 	rc = out_tx_ref_add(env, dt_obj, ta, th, NULL, 0);
@@ -793,6 +800,7 @@ static int update_recovery_ref_del(const struct lu_env *env,
 				   struct thandle *th)
 {
 	int rc;
+
 	ENTRY;
 
 	rc = out_tx_ref_del(env, dt_obj, ta, th, NULL, 0);
@@ -815,6 +823,7 @@ static int update_recovery_attr_set(const struct lu_env *env,
 	__u16		size;
 	unsigned int	param_count;
 	int		rc;
+
 	ENTRY;
 
 	param_count = lur->lur_update_rec.ur_param_count;
@@ -850,6 +859,7 @@ static int update_recovery_xattr_set(const struct lu_env *env,
 	__u16		size;
 	__u32		param_count;
 	int		rc;
+
 	ENTRY;
 
 	param_count = uti->uti_dtrq->dtrq_lur->lur_update_rec.ur_param_count;
@@ -898,6 +908,7 @@ static int update_recovery_index_insert(const struct lu_env *env,
 	__u32			type;
 	__u16			size;
 	int rc;
+
 	ENTRY;
 
 	param_count = uti->uti_dtrq->dtrq_lur->lur_update_rec.ur_param_count;
@@ -949,6 +960,7 @@ static int update_recovery_index_delete(const struct lu_env *env,
 	char	*name;
 	__u16	size;
 	int	rc;
+
 	ENTRY;
 
 	param_count = uti->uti_dtrq->dtrq_lur->lur_update_rec.ur_param_count;
@@ -979,6 +991,7 @@ static int update_recovery_write(const struct lu_env *env,
 	__u64		pos;
 	__u16		size;
 	int rc;
+
 	ENTRY;
 
 	param_count = uti->uti_dtrq->dtrq_lur->lur_update_rec.ur_param_count;
@@ -1015,6 +1028,7 @@ static int update_recovery_xattr_del(const struct lu_env *env,
 	char	*name;
 	__u16	size;
 	int	rc;
+
 	ENTRY;
 
 	param_count = uti->uti_dtrq->dtrq_lur->lur_update_rec.ur_param_count;
@@ -1129,6 +1143,7 @@ static int update_recovery_exec(const struct lu_env *env,
 	struct update_op	*op;
 	unsigned int		i;
 	int			rc = 0;
+
 	ENTRY;
 
 	/* These records have been swabbed in llog_cat_process() */
@@ -1147,12 +1162,10 @@ static int update_recovery_exec(const struct lu_env *env,
 		if (IS_ERR(dt_obj)) {
 			rc = PTR_ERR(dt_obj);
 			if (rc == -EREMCHG)
-				LCONSOLE_WARN("%.16s: hit invalid OI mapping "
-					      "for "DFID" during recovering, "
-					      "that may because auto scrub is "
-					      "disabled on related MDT, and "
-					      "will cause recovery failure. "
-					      "Please enable auto scrub and "
+				LCONSOLE_WARN("%.16s: hit invalid OI mapping for "
+					      DFID" during recovering, "
+					      "that may because auto scrub is disabled on related MDT, and "
+					      "will cause recovery failure. Please enable auto scrub and "
 					      "retry the recovery.\n",
 					      tdtd->tdtd_lut->lut_obd->obd_name,
 					      PFID(fid));
@@ -1285,6 +1298,7 @@ int distribute_txn_replay_handle(struct lu_env *env,
 	struct thandle_update_records *tur = NULL;
 	int			i;
 	int			rc = 0;
+
 	ENTRY;
 
 	/* initialize session, it is needed for the handler of target */

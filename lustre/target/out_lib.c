@@ -28,7 +28,7 @@ const char *update_op_str(__u16 opc)
 		[OUT_CREATE] = "create",
 		[OUT_DESTROY] = "destroy",
 		[OUT_REF_ADD] = "ref_add",
-		[OUT_REF_DEL] = "ref_del" ,
+		[OUT_REF_DEL] = "ref_del",
 		[OUT_ATTR_SET] = "attr_set",
 		[OUT_ATTR_GET] = "attr_get",
 		[OUT_XATTR_SET] = "xattr_set",
@@ -135,6 +135,7 @@ int out_update_pack(const struct lu_env *env, struct object_update *update,
 	struct object_update_param	*param;
 	unsigned int			i;
 	int				rc;
+
 	ENTRY;
 
 	rc = out_update_header_pack(env, update, max_update_size, op, fid,
@@ -182,6 +183,7 @@ int out_create_pack(const struct lu_env *env, struct object_update *update,
 	int			buf_count = 1;
 	const struct lu_fid	*parent_fid = NULL;
 	int			rc;
+
 	ENTRY;
 
 	if (hint != NULL && hint->dah_parent) {
@@ -239,6 +241,7 @@ int out_attr_set_pack(const struct lu_env *env, struct object_update *update,
 	struct obdo		*obdo;
 	__u16			size = sizeof(*obdo);
 	int			rc;
+
 	ENTRY;
 
 	rc = out_update_header_pack(env, update, max_update_size,
@@ -728,6 +731,7 @@ static int out_tx_xattr_set_exec(const struct lu_env *env,
 {
 	struct dt_object *dt_obj = arg->object;
 	int rc;
+
 	ENTRY;
 
 	CDEBUG(D_INFO, "%s: set xattr buf %p name %s flag %d\n",

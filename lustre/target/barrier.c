@@ -157,6 +157,7 @@ static int barrier_freeze(const struct lu_env *env,
 	time64_t left;
 	int rc = 0;
 	__s64 inflight = 0;
+
 	ENTRY;
 
 	write_lock(&barrier->bi_rwlock);
@@ -234,6 +235,7 @@ bool barrier_entry(struct dt_device *key)
 {
 	struct barrier_instance *barrier;
 	bool entered = false;
+
 	ENTRY;
 
 	barrier = barrier_instance_find(key);
@@ -282,6 +284,7 @@ int barrier_handler(struct dt_device *key, struct ptlrpc_request *req)
 	struct barrier_lvb *lvb;
 	struct lu_env env;
 	int rc = 0;
+
 	ENTRY;
 
 	/* glimpse on barrier locks always packs a glimpse descriptor */
@@ -350,8 +353,8 @@ out_barrier:
 	lvb->lvb_status = barrier->bi_status;
 	lvb->lvb_index = barrier_dev_idx(barrier);
 
-	CDEBUG(D_SNAPSHOT, "%s: handled barrier request: status %u, "
-	       "deadline %lld: rc = %d\n", barrier_barrier2name(barrier),
+	CDEBUG(D_SNAPSHOT, "%s: handled barrier request: status %u, deadline %lld: rc = %d\n",
+	       barrier_barrier2name(barrier),
 	       lvb->lvb_status, barrier->bi_deadline, rc);
 
 	barrier_instance_put(barrier);
@@ -367,6 +370,7 @@ int barrier_register(struct dt_device *key, struct dt_device *next)
 {
 	struct barrier_instance	*barrier;
 	int rc;
+
 	ENTRY;
 
 	OBD_ALLOC_PTR(barrier);

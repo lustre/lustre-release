@@ -47,8 +47,8 @@ void update_records_dump(const struct update_records *records,
 	struct update_params	*params = NULL;
 	unsigned int		i;
 
-	CDEBUG(mask, "master transno = %llu batchid = %llu flags = %x"
-	       " ops = %d params = %d\n", records->ur_master_transno,
+	CDEBUG(mask, "master transno = %llu batchid = %llu flags = %x ops = %d params = %d\n",
+	       records->ur_master_transno,
 	       records->ur_batchid, records->ur_flags, records->ur_update_count,
 	       records->ur_param_count);
 
@@ -1017,6 +1017,7 @@ int tur_update_extend(struct thandle_update_records *tur,
 	size_t params_size;
 	size_t extend_size;
 	int rc;
+
 	ENTRY;
 
 	record_size = llog_update_record_size(tur->tur_update_records);

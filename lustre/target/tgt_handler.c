@@ -122,6 +122,7 @@ int tgt_validate_obdo(struct tgt_session_info *tsi, struct obdo *oa)
 	u64		 seq	= ostid_seq(oi);
 	u64		 id	= ostid_id(oi);
 	int		 rc;
+
 	ENTRY;
 
 	if (unlikely(!(exp_connect_flags(tsi->tsi_exp) & OBD_CONNECT_FID) &&
@@ -169,7 +170,7 @@ EXPORT_SYMBOL(tgt_validate_obdo);
 
 static int tgt_io_data_unpack(struct tgt_session_info *tsi, struct ost_id *oi)
 {
-	unsigned		 max_brw;
+	unsigned int max_brw;
 	struct niobuf_remote	*rnb;
 	struct obd_ioobj	*ioo;
 	int			 obj_count;
@@ -678,6 +679,7 @@ static int process_req_last_xid(struct ptlrpc_request *req)
 	struct obd_export *exp = req->rq_export;
 	struct tg_export_data *ted = &exp->exp_target_data;
 	bool need_lock = tgt_is_multimodrpcs_client(exp);
+
 	ENTRY;
 
 	if (need_lock)
@@ -758,6 +760,7 @@ int tgt_request_handle(struct ptlrpc_request *req)
 	struct obd_device	*obd;
 	int			 rc;
 	bool			 is_connect = false;
+
 	ENTRY;
 
 	if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_TGT_RECOVERY_REQ_RACE))) {
@@ -997,8 +1000,8 @@ int tgt_connect_check_sptlrpc(struct ptlrpc_request *req, struct obd_export *exp
 
 		if (exp->exp_flvr.sf_rpc != SPTLRPC_FLVR_ANY &&
 		    exp->exp_flvr.sf_rpc != req->rq_flvr.sf_rpc) {
-			CERROR("%s: unauthorized rpc flavor %x from %s, "
-			       "expect %x\n", tgt_name(tgt),
+			CERROR("%s: unauthorized rpc flavor %x from %s, expect %x\n",
+			       tgt_name(tgt),
 			       req->rq_flvr.sf_rpc,
 			       libcfs_nidstr(&req->rq_peer.nid),
 			       exp->exp_flvr.sf_rpc);
@@ -1323,8 +1326,8 @@ static int tgt_obd_idx_read(struct tgt_session_info *tsi)
 	if (rc < 0)
 		GOTO(out, rc);
 
-	LASSERTF(rc <= rdpg->rp_count, "dt_index_read() returned more than "
-		 "asked %d > %d\n", rc, rdpg->rp_count);
+	LASSERTF(rc <= rdpg->rp_count, "dt_index_read() returned more than asked %d > %d\n",
+		 rc, rdpg->rp_count);
 
 	/* send pages to client */
 	rc = tgt_sendpage(tsi, rdpg, rc);
@@ -1342,8 +1345,8 @@ out:
 }
 
 struct tgt_handler tgt_obd_handlers[] = {
-TGT_OBD_HDL    (0,	OBD_PING,		tgt_obd_ping),
-TGT_OBD_HDL    (0,	OBD_IDX_READ,		tgt_obd_idx_read)
+TGT_OBD_HDL(0,	OBD_PING,		tgt_obd_ping),
+TGT_OBD_HDL(0,	OBD_IDX_READ,		tgt_obd_idx_read)
 };
 EXPORT_SYMBOL(tgt_obd_handlers);
 
@@ -1437,8 +1440,7 @@ int tgt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
 		rc = tgt_sync(&env, tgt, obj, start, end);
 		if (rc < 0) {
-			CERROR("%s: syncing "DFID" (%llu-%llu) on lock "
-			       "cancel: rc = %d\n",
+			CERROR("%s: syncing "DFID" (%llu-%llu) on lock cancel: rc = %d\n",
 			       tgt_name(tgt), PFID(&fid),
 			       lock->l_policy_data.l_extent.start,
 			       lock->l_policy_data.l_extent.end, rc);
@@ -1581,10 +1583,10 @@ EXPORT_SYMBOL(tgt_llog_prev_block);
 
 /* generic llog target handler */
 struct tgt_handler tgt_llog_handlers[] = {
-TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_CREATE,	tgt_llog_open),
-TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_NEXT_BLOCK,	tgt_llog_next_block),
-TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_READ_HEADER,	tgt_llog_read_header),
-TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_PREV_BLOCK,	tgt_llog_prev_block),
+TGT_LLOG_HDL(0,	LLOG_ORIGIN_HANDLE_CREATE,	tgt_llog_open),
+TGT_LLOG_HDL(0,	LLOG_ORIGIN_HANDLE_NEXT_BLOCK,	tgt_llog_next_block),
+TGT_LLOG_HDL(0,	LLOG_ORIGIN_HANDLE_READ_HEADER,	tgt_llog_read_header),
+TGT_LLOG_HDL(0,	LLOG_ORIGIN_HANDLE_PREV_BLOCK,	tgt_llog_prev_block),
 };
 EXPORT_SYMBOL(tgt_llog_handlers);
 
@@ -1653,6 +1655,7 @@ static int tgt_handle_lfsck_notify(struct tgt_session_info *tsi)
 	struct dt_device	*key = tsi->tsi_tgt->lut_bottom;
 	struct lfsck_request	*lr;
 	int			 rc;
+
 	ENTRY;
 
 	lr = req_capsule_client_get(tsi->tsi_pill, &RMF_LFSCK_REQUEST);
@@ -1669,6 +1672,7 @@ static int tgt_handle_lfsck_query(struct tgt_session_info *tsi)
 	struct lfsck_request	*request;
 	struct lfsck_reply	*reply;
 	int			 rc;
+
 	ENTRY;
 
 	request = req_capsule_client_get(tsi->tsi_pill, &RMF_LFSCK_REQUEST);
@@ -2011,12 +2015,12 @@ static void dump_all_bulk_pages(struct obdo *oa, int count,
 	if (IS_ERR(filp)) {
 		rc = PTR_ERR(filp);
 		if (rc == -EEXIST)
-			CDEBUG(D_INFO, "%s: can't open to dump pages with "
-			       "checksum error: rc = %d\n", dbgcksum_file_name,
+			CDEBUG(D_INFO, "%s: can't open to dump pages with checksum error: rc = %d\n",
+			       dbgcksum_file_name,
 			       rc);
 		else
-			CERROR("%s: can't open to dump pages with checksum "
-			       "error: rc = %d\n", dbgcksum_file_name, rc);
+			CERROR("%s: can't open to dump pages with checksum error: rc = %d\n",
+			       dbgcksum_file_name, rc);
 		OBD_FREE(dbgcksum_file_name, PATH_MAX);
 		return;
 	}
@@ -2029,8 +2033,8 @@ static void dump_all_bulk_pages(struct obdo *oa, int count,
 		while (len != 0) {
 			rc = kernel_write(filp, buf, len, &filp->f_pos);
 			if (rc < 0) {
-				CERROR("%s: wanted to write %u but got %d "
-				       "error\n", dbgcksum_file_name, len, rc);
+				CERROR("%s: wanted to write %u but got %d error\n",
+				       dbgcksum_file_name, len, rc);
 				break;
 			}
 			len -= rc;
@@ -2609,8 +2613,7 @@ out_lock:
 		req->rq_no_reply = 1;
 		/* reply out callback would free */
 		ptlrpc_req_drop_rs(req);
-		LCONSOLE_WARN("%s: Bulk IO read error with %s (at %s), "
-			      "client will retry: rc %d\n",
+		LCONSOLE_WARN("%s: Bulk IO read error with %s (at %s), client will retry: rc %d\n",
 			      obd_name,
 			      obd_uuid2str(&exp->exp_client_uuid),
 			      obd_export_nid2str(exp), rc);
@@ -2884,8 +2887,8 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 						     RCL_CLIENT);
 		short_io_buf = req_capsule_client_get(&req->rq_pill,
 						      &RMF_SHORT_IO);
-		CDEBUG(D_INFO, "Client use short io for data transfer,"
-			       " size = %d\n", short_io_size);
+		CDEBUG(D_INFO, "Client use short io for data transfer, size = %d\n",
+			       short_io_size);
 
 		/* Copy short io buf to pages */
 		rc = tgt_shortio2pages(local_nb, npages, short_io_buf,
@@ -3018,8 +3021,7 @@ out:
 		/* reply out callback would free */
 		ptlrpc_req_drop_rs(req);
 		if (!exp->exp_obd->obd_no_transno)
-			LCONSOLE_WARN("%s: Bulk IO write error with %s (at %s),"
-				      " client will retry: rc = %d\n",
+			LCONSOLE_WARN("%s: Bulk IO write error with %s (at %s), client will retry: rc = %d\n",
 				      obd_name,
 				      obd_uuid2str(&exp->exp_client_uuid),
 				      obd_export_nid2str(exp), rc);

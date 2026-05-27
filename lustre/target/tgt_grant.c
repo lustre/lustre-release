@@ -126,8 +126,8 @@ static int tgt_check_export_grants(struct obd_export *exp, u64 *dirty,
 		     ted->ted_dirty, ted->ted_pending, ted->ted_grant);
 
 	if (ted->ted_grant + ted->ted_pending > maxsize) {
-		CERROR("%s: cli %s/%p ted_grant(%ld) + ted_pending(%ld)"
-			" > maxsize(%llu)\n", exp->exp_obd->obd_name,
+		CERROR("%s: cli %s/%p ted_grant(%ld) + ted_pending(%ld) > maxsize(%llu)\n",
+			exp->exp_obd->obd_name,
 			exp->exp_client_uuid.uuid, exp, ted->ted_grant,
 			ted->ted_pending, maxsize);
 		return -EFAULT;
@@ -193,8 +193,8 @@ void tgt_grant_sanity_check(struct obd_device *obd, const char *func)
 	spin_lock(&tgd->tgd_grant_lock);
 	exp = obd->obd_self_export;
 	ted = &exp->exp_target_data;
-	CDEBUG(D_CACHE, "%s: processing self export: %ld %ld "
-	       "%ld\n", obd->obd_name, ted->ted_grant,
+	CDEBUG(D_CACHE, "%s: processing self export: %ld %ld %ld\n",
+	       obd->obd_name, ted->ted_grant,
 	       ted->ted_pending, ted->ted_dirty);
 	tot_granted += ted->ted_grant + ted->ted_pending;
 	tot_pending += ted->ted_pending;
@@ -270,6 +270,7 @@ int tgt_statfs_internal(const struct lu_env *env, struct lu_target *lut,
 {
 	struct tg_grants_data *tgd = &lut->lut_tgd;
 	int rc = 0;
+
 	ENTRY;
 
 	spin_lock(&tgd->tgd_osfs_lock);
@@ -486,6 +487,7 @@ static void tgt_grant_incoming(const struct lu_env *env, struct obd_export *exp,
 	struct obd_device	*obd = exp->exp_obd;
 	struct tg_grants_data	*tgd = &obd2obt(obd)->obt_lut->lut_tgd;
 	long long		 dirty, dropped;
+
 	ENTRY;
 
 	assert_spin_locked(&tgd->tgd_grant_lock);
@@ -510,6 +512,7 @@ static void tgt_grant_incoming(const struct lu_env *env, struct obd_export *exp,
 	/* inflate grant counters if required */
 	if (!exp_grant_param_supp(exp)) {
 		u64 tmp;
+
 		oa->o_grant	= tgt_grant_inflate(tgd, oa->o_grant);
 		oa->o_dirty	= tgt_grant_inflate(tgd, oa->o_dirty);
 		/* inflation can bump client's wish to >4GB which doesn't fit
@@ -722,8 +725,7 @@ static void tgt_grant_check(const struct lu_env *env, struct obd_export *exp,
 		/* Recoverable resend, grant info have already been processed as
 		 * well */
 		skip = true;
-		CDEBUG(D_CACHE, "Recoverable resend arrived, skipping "
-				"accounting\n");
+		CDEBUG(D_CACHE, "Recoverable resend arrived, skipping accounting\n");
 	} else if (exp_grant_param_supp(exp) && oa->o_grant_used > 0) {
 		/* Client supports the new grant parameters and is telling us
 		 * how much grant space it consumed for this bulk write.
@@ -777,15 +779,14 @@ static void tgt_grant_check(const struct lu_env *env, struct obd_export *exp,
 				continue;
 			}
 
-			CDEBUG(D_CACHE, "%s: cli %s/%p claims %ld+%d GRANT, "
-			       "real grant %lu idx %d\n", obd->obd_name,
+			CDEBUG(D_CACHE, "%s: cli %s/%p claims %ld+%d GRANT, real grant %lu idx %d\n",
+			       obd->obd_name,
 			       exp->exp_client_uuid.uuid, exp, granted, bytes,
 			       ted->ted_grant, i);
 		}
 
 		if (test_bit(OBDF_RECOVERING, obd->obd_flags))
-			CERROR("%s: cli %s is replaying OST_WRITE while one rnb"
-			       " hasn't OBD_BRW_FROM_GRANT set (0x%x)\n",
+			CERROR("%s: cli %s is replaying OST_WRITE while one rnb hasn't OBD_BRW_FROM_GRANT set (0x%x)\n",
 			       obd->obd_name, exp->exp_client_uuid.uuid,
 			       rnb[i].rnb_flags);
 
@@ -830,8 +831,8 @@ static void tgt_grant_check(const struct lu_env *env, struct obd_export *exp,
 	tgd->tgd_tot_pending += oa->o_grant_used;
 
 	CDEBUG(D_CACHE,
-	       "%s: cli %s/%p granted: %lu ungranted: %lu grant: %lu dirty: %lu"
-	       "\n", obd->obd_name, exp->exp_client_uuid.uuid, exp,
+	       "%s: cli %s/%p granted: %lu ungranted: %lu grant: %lu dirty: %lu\n",
+	       obd->obd_name, exp->exp_client_uuid.uuid, exp,
 	       granted, ungranted, ted->ted_grant, ted->ted_dirty);
 
 	if (test_bit(OBDF_RECOVERING, obd->obd_flags) ||
@@ -963,12 +964,12 @@ static long tgt_grant_alloc(struct obd_export *exp, u64 curgrant,
 	}
 
 	CDEBUG(D_CACHE,
-	       "%s: cli %s/%p wants: %llu current grant %llu"
-	       " granting: %llu\n", obd->obd_name, exp->exp_client_uuid.uuid,
+	       "%s: cli %s/%p wants: %llu current grant %llu granting: %llu\n",
+	       obd->obd_name, exp->exp_client_uuid.uuid,
 	       exp, want, curgrant, grant);
 	CDEBUG(D_CACHE,
-	       "%s: cli %s/%p tot cached:%llu granted:%llu"
-	       " num_exports: %d\n", obd->obd_name, exp->exp_client_uuid.uuid,
+	       "%s: cli %s/%p tot cached:%llu granted:%llu num_exports: %d\n",
+	       obd->obd_name, exp->exp_client_uuid.uuid,
 	       exp, tgd->tgd_tot_dirty, tgd->tgd_tot_granted,
 	       obd->obd_num_exports);
 
@@ -1361,6 +1362,7 @@ long tgt_grant_create(const struct lu_env *env, struct obd_export *exp, s64 *nr)
 	u64			 left = 0;
 	unsigned long		 wanted;
 	unsigned long		 granted;
+
 	ENTRY;
 
 	if (test_bit(OBDF_RECOVERING, exp->exp_obd->obd_flags) ||
@@ -1559,6 +1561,7 @@ int tgt_grant_commit_cb_add(struct thandle *th, struct obd_export *exp,
 	struct tgt_grant_cb	*tgc;
 	struct dt_txn_commit_cb	*dcb;
 	int			 rc;
+
 	ENTRY;
 
 	OBD_ALLOC_PTR(tgc);
