@@ -644,7 +644,7 @@ failed:
 			lsock->liss_sock->sk->sk_data_ready =
 				lnet_acceptor_state.pta_odata;
 
-		if (atomic_dec_and_test(&lsock->refcnt)) 
+		if (atomic_dec_and_test(&lsock->refcnt))
 			list_add_tail(&lsock->liss_tmp_list, &copy_list);
 	}
 	spin_unlock(&socket_lock);

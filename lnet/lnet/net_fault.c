@@ -183,6 +183,7 @@ lnet_fault_stat_inc(struct lnet_fault_stat *stat, unsigned int type)
 int lnet_drop_rule_add(struct lnet_fault_large_attr *attr)
 {
 	struct lnet_drop_rule *rule;
+
 	ENTRY;
 
 	if (!((attr->u.drop.da_rate == 0) ^ (attr->u.drop.da_interval == 0))) {
@@ -247,6 +248,7 @@ int lnet_drop_rule_del(struct lnet_nid *src, struct lnet_nid *dst)
 	struct lnet_drop_rule *tmp;
 	LIST_HEAD(zombies);
 	int n = 0;
+
 	ENTRY;
 
 	CDEBUG(D_NET, "src %s dst %s\n", libcfs_nidstr(src),
@@ -296,6 +298,7 @@ lnet_drop_rule_list(int pos, struct lnet_fault_large_attr *attr,
 	int		       cpt;
 	int		       i = 0;
 	int		       rc = -ENOENT;
+
 	ENTRY;
 
 	cpt = lnet_net_lock_current();
@@ -349,6 +352,7 @@ void lnet_drop_rule_reset(void)
 {
 	struct lnet_drop_rule *rule;
 	int		       cpt;
+
 	ENTRY;
 
 	cpt = lnet_net_lock_current();
@@ -465,6 +469,7 @@ drop_rule_match(struct lnet_drop_rule *rule,
 	spin_lock(&rule->dr_lock);
 	if (attr->u.drop.da_random) {
 		int value = get_random_u32_below(attr->u.drop.da_interval);
+
 		if (value >= (attr->u.drop.da_interval / 2))
 			drop = true;
 		else
@@ -935,13 +940,13 @@ lnet_delay_rule_add(struct lnet_fault_large_attr *attr)
 {
 	struct lnet_delay_rule *rule;
 	int rc = 0;
+
 	ENTRY;
 
 	if (!((attr->u.delay.la_rate == 0) ^
 	      (attr->u.delay.la_interval == 0))) {
 		CDEBUG(D_NET,
-		       "please provide either delay rate or delay interval, "
-		       "but not both at the same time %d/%d\n",
+		       "please provide either delay rate or delay interval, but not both at the same time %d/%d\n",
 		       attr->u.delay.la_rate, attr->u.delay.la_interval);
 		RETURN(-EINVAL);
 	}
@@ -1040,6 +1045,7 @@ lnet_delay_rule_del(struct lnet_nid *src, struct lnet_nid *dst, bool shutdown)
 	LIST_HEAD(msg_list);
 	int n = 0;
 	bool cleanup;
+
 	ENTRY;
 
 	mutex_lock(&delay_dd.dd_mutex);
@@ -1114,6 +1120,7 @@ lnet_delay_rule_list(int pos, struct lnet_fault_large_attr *attr,
 	int			cpt;
 	int			i = 0;
 	int			rc = -ENOENT;
+
 	ENTRY;
 
 	cpt = lnet_net_lock_current();
@@ -1168,6 +1175,7 @@ lnet_delay_rule_reset(void)
 {
 	struct lnet_delay_rule *rule;
 	int			cpt;
+
 	ENTRY;
 
 	cpt = lnet_net_lock_current();
@@ -1268,10 +1276,10 @@ lnet_fault_ctl(int opc, struct libcfs_ioctl_data *data)
 int
 lnet_fault_init(void)
 {
-	BUILD_BUG_ON(LNET_PUT_BIT != BIT(LNET_MSG_PUT));
-	BUILD_BUG_ON(LNET_ACK_BIT != BIT(LNET_MSG_ACK));
-	BUILD_BUG_ON(LNET_GET_BIT != BIT(LNET_MSG_GET));
-	BUILD_BUG_ON(LNET_REPLY_BIT != BIT(LNET_MSG_REPLY));
+	BUILD_BUG_ON(BIT(LNET_MSG_PUT) != LNET_PUT_BIT);
+	BUILD_BUG_ON(BIT(LNET_MSG_ACK) != LNET_ACK_BIT);
+	BUILD_BUG_ON(BIT(LNET_MSG_GET) != LNET_GET_BIT);
+	BUILD_BUG_ON(BIT(LNET_MSG_REPLY) != LNET_REPLY_BIT);
 
 	mutex_init(&delay_dd.dd_mutex);
 	spin_lock_init(&delay_dd.dd_lock);

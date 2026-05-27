@@ -114,7 +114,7 @@ lnet_get_dev_prio(struct device *dev, unsigned int dev_idx)
 	if (!nvfs_ops)
 		return dev_prio;
 
-	dev_prio = nvfs_ops->nvfs_device_priority (dev, dev_idx);
+	dev_prio = nvfs_ops->nvfs_device_priority(dev, dev_idx);
 
 	nvfs_put_ops();
 	return dev_prio;

@@ -18,7 +18,7 @@
 #include <uapi/linux/lnet/lnet-dlc.h>
 #include <uapi/linux/lustre/lustre_ver.h>
 
-static int config_on_load = 0;
+static int config_on_load;
 module_param(config_on_load, int, 0444);
 MODULE_PARM_DESC(config_on_load, "configure network at module load");
 

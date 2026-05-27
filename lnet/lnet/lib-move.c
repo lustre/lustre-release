@@ -97,6 +97,7 @@ void lnet_incr_stats(struct lnet_element_stats *stats,
 		     enum lnet_stats_type stats_type)
 {
 	struct lnet_comm_count *counts = get_stats_counts(stats, stats_type);
+
 	if (!counts)
 		return;
 
@@ -126,6 +127,7 @@ __u32 lnet_sum_stats(struct lnet_element_stats *stats,
 		     enum lnet_stats_type stats_type)
 {
 	struct lnet_comm_count *counts = get_stats_counts(stats, stats_type);
+
 	if (!counts)
 		return 0;
 
@@ -510,7 +512,7 @@ lnet_prep_send(struct lnet_msg *msg, int type, struct lnet_processid *target,
 	if (len != 0)
 		lnet_setpayloadbuffer(msg);
 
-	memset (&msg->msg_hdr, 0, sizeof (msg->msg_hdr));
+	memset(&msg->msg_hdr, 0, sizeof(msg->msg_hdr));
 	msg->msg_hdr.type           = type;
 	/* dest_nid will be overwritten by lnet_select_pathway() */
 	msg->msg_hdr.dest_nid = target->nid;
@@ -551,8 +553,7 @@ lnet_ni_eager_recv(struct lnet_ni *ni, struct lnet_msg *msg)
 	rc = (ni->ni_net->net_lnd->lnd_eager_recv)(ni, msg->msg_private, msg,
 						  &msg->msg_private);
 	if (rc != 0) {
-		CERROR("recv from %s / send to %s aborted: "
-		       "eager_recv failed %d\n",
+		CERROR("recv from %s / send to %s aborted: eager_recv failed %d\n",
 		       libcfs_nidstr(&msg->msg_rxpeer->lpni_nid),
 		       libcfs_idstr(&msg->msg_target), rc);
 		LASSERT(rc < 0); /* required by my callers */
@@ -663,8 +664,7 @@ lnet_post_send_locked(struct lnet_msg *msg, int do_send)
 	    (msg->msg_md->md_flags & LNET_MD_FLAG_ABORTED) != 0) {
 		lnet_net_unlock(cpt);
 
-		CNETERR("Aborting message for %s: LNetM[DE]Unlink() already "
-			"called on the MD/ME.\n",
+		CNETERR("Aborting message for %s: LNetM[DE]Unlink() already called on the MD/ME.\n",
 			libcfs_idstr(&msg->msg_target));
 		if (do_send) {
 			msg->msg_no_resend = true;
@@ -1064,6 +1064,7 @@ routing_off:
 		 * peer. */
 		if (lnet_routing_disabled()) {
 			LIST_HEAD(drop);
+
 			list_splice_init(&lp->lp_rtrq, &drop);
 			spin_unlock(&lp->lp_lock);
 			lnet_drop_routed_msgs_locked(&drop, msg->msg_rx_cpt);
@@ -1233,6 +1234,7 @@ lnet_find_best_lpni(struct lnet_ni *lni, struct lnet_nid *dst_nid,
 	if (net_id == LNET_NET_ANY) {
 		struct lnet_peer_ni *best_lpni = NULL;
 		struct lnet_peer_net *lpn;
+
 		list_for_each_entry(lpn, &peer->lp_peer_nets, lpn_peer_nets) {
 			/* no net specified find any reachable peer ni */
 			if (!lnet_islocalnet_locked(lpn->lpn_net_id))
@@ -1723,6 +1725,7 @@ lnet_handle_send(struct lnet_send_data *sd)
 	cpt2 = lnet_cpt_of_nid_locked(&best_lpni->lpni_nid, best_ni);
 	if (sd->sd_cpt != cpt2) {
 		__u32 seq = lnet_get_dlc_seq_locked();
+
 		lnet_net_unlock(sd->sd_cpt);
 		sd->sd_cpt = cpt2;
 		lnet_net_lock(sd->sd_cpt);
@@ -2617,8 +2620,7 @@ lnet_handle_any_mr_dsta(struct lnet_send_data *sd)
 			return lnet_handle_send(sd);
 		}
 
-		CERROR("Internal Error. Expected to have a best_lpni: "
-		       "%s -> %s\n",
+		CERROR("Internal Error. Expected to have a best_lpni: %s -> %s\n",
 		       libcfs_nidstr(&sd->sd_src_nid),
 		       libcfs_nidstr(&sd->sd_dst_nid));
 
@@ -2766,7 +2768,7 @@ lnet_handle_send_case_locked(struct lnet_send_data *sd)
 	 * turn off the SND_RESP bit.
 	 * It will be checked in the case handling
 	 */
-	__u32 send_case = sd->sd_send_case &= ~SND_RESP ;
+	__u32 send_case = sd->sd_send_case &= ~SND_RESP;
 
 	CDEBUG(D_NET, "Source %s%s to %s %s %s destination\n",
 		(send_case & SRC_SPEC) ? "Specified: " : "ANY",
@@ -3505,6 +3507,7 @@ static int
 lnet_resendqs_create(void)
 {
 	struct list_head **resendqs;
+
 	resendqs = lnet_create_array_of_queues();
 
 	if (!resendqs)
@@ -4112,6 +4115,7 @@ static int
 lnet_rsp_tracker_create(void)
 {
 	struct list_head **rstqs;
+
 	rstqs = lnet_create_array_of_queues();
 
 	if (!rstqs)
@@ -4313,8 +4317,7 @@ lnet_parse_put(struct lnet_ni *ni, struct lnet_msg *msg)
 		fallthrough;
 
 	case LNET_MATCHMD_DROP:
-		CNETERR("Dropping PUT from %s portal %d match %llu"
-			" offset %d length %d: %d\n",
+		CNETERR("Dropping PUT from %s portal %d match %llu offset %d length %d: %d\n",
 			libcfs_idstr(&info.mi_id), info.mi_portal,
 			info.mi_mbits, info.mi_roffset, info.mi_rlength, rc);
 
@@ -4355,8 +4358,7 @@ lnet_parse_get(struct lnet_ni *ni, struct lnet_msg *msg, int rdma_get)
 
 	rc = lnet_ptl_match_md(&info, msg);
 	if (rc == LNET_MATCHMD_DROP) {
-		CNETERR("Dropping GET from %s portal %d match %llu"
-			" offset %d length %d\n",
+		CNETERR("Dropping GET from %s portal %d match %llu offset %d length %d\n",
 			libcfs_idstr(&info.mi_id), info.mi_portal,
 			info.mi_mbits, info.mi_roffset, info.mi_rlength);
 		return -ENOENT;	/* -ve: OK but no match */
@@ -4416,8 +4418,7 @@ lnet_parse_reply(struct lnet_ni *ni, struct lnet_msg *msg)
 	/* NB handles only looked up by creator (no flips) */
 	md = lnet_wire_handle2md(&hdr->msg.reply.dst_wmd);
 	if (md == NULL || md->md_threshold == 0 || md->md_me != NULL) {
-		CNETERR("%s: Dropping REPLY from %s for %s "
-			"MD %#llx.%#llx\n",
+		CNETERR("%s: Dropping REPLY from %s for %s MD %#llx.%#llx\n",
 			libcfs_nidstr(&ni->ni_nid), libcfs_idstr(&src),
 			(md == NULL) ? "invalid" : "inactive",
 			hdr->msg.reply.dst_wmd.wh_interface_cookie,
@@ -4437,8 +4438,7 @@ lnet_parse_reply(struct lnet_ni *ni, struct lnet_msg *msg)
 
 	if (mlength < rlength &&
 	    (md->md_options & LNET_MD_TRUNCATE) == 0) {
-		CNETERR("%s: Dropping REPLY from %s length %d "
-			"for MD %#llx would overflow (%d)\n",
+		CNETERR("%s: Dropping REPLY from %s length %d for MD %#llx would overflow (%d)\n",
 			libcfs_nidstr(&ni->ni_nid), libcfs_idstr(&src),
 			rlength, hdr->msg.reply.dst_wmd.wh_object_cookie,
 			mlength);
@@ -4562,7 +4562,7 @@ lnet_parse_local(struct lnet_ni *ni, struct lnet_msg *msg)
 }
 
 char *
-lnet_msgtyp2str (int type)
+lnet_msgtyp2str(int type)
 {
 	switch (type) {
 	case LNET_MSG_ACK:
@@ -4598,7 +4598,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr,
 	int cpt;
 	time64_t now = ktime_get_seconds();
 
-	LASSERT (!in_interrupt ());
+	LASSERT(!in_interrupt());
 
 	type = hdr->type;
 	src_nid = hdr->src_nid;
@@ -4632,8 +4632,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr,
 	case LNET_MSG_REPLY:
 		if (payload_length >
 		    (__u32)(for_me ? LNET_MAX_PAYLOAD : LNET_MTU)) {
-			CERROR("%s, src %s: bad %s payload %d "
-			       "(%d max expected)\n",
+			CERROR("%s, src %s: bad %s payload %d (%d max expected)\n",
 			       libcfs_nidstr(from_nid),
 			       libcfs_nidstr(&src_nid),
 			       lnet_msgtyp2str(type),
@@ -4677,8 +4676,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr,
 	if (!for_me) {
 		if (LNET_NID_NET(&dest_nid) == LNET_NID_NET(&ni->ni_nid)) {
 			/* should have gone direct */
-			CERROR("%s, src %s: Bad dest nid %s "
-			       "(should have been sent direct)\n",
+			CERROR("%s, src %s: Bad dest nid %s (should have been sent direct)\n",
 				libcfs_nidstr(from_nid),
 				libcfs_nidstr(&src_nid),
 				libcfs_nidstr(&dest_nid));
@@ -4688,8 +4686,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr,
 		if (lnet_islocalnid(&dest_nid)) {
 			/* dest is another local NI; sender should have used
 			 * this node's NID on its own network */
-			CERROR("%s, src %s: Bad dest nid %s "
-			       "(it's my nid but on a different network)\n",
+			CERROR("%s, src %s: Bad dest nid %s (it's my nid but on a different network)\n",
 				libcfs_nidstr(from_nid),
 				libcfs_nidstr(&src_nid),
 				libcfs_nidstr(&dest_nid));
@@ -4697,8 +4694,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr,
 		}
 
 		if (rdma_req && type == LNET_MSG_GET) {
-			CERROR("%s, src %s: Bad optimized GET for %s "
-			       "(final destination must be me)\n",
+			CERROR("%s, src %s: Bad optimized GET for %s (final destination must be me)\n",
 				libcfs_nidstr(from_nid),
 				libcfs_nidstr(&src_nid),
 				libcfs_nidstr(&dest_nid));
@@ -4706,8 +4702,7 @@ lnet_parse(struct lnet_ni *ni, struct lnet_hdr *hdr,
 		}
 
 		if (lnet_routing_disabled()) {
-			CERROR("%s, src %s: Dropping message for %s "
-			       "(routing not enabled)\n",
+			CERROR("%s, src %s: Dropping message for %s (routing not enabled)\n",
 				libcfs_nidstr(from_nid),
 				libcfs_nidstr(&src_nid),
 				libcfs_nidstr(&dest_nid));
@@ -4915,8 +4910,7 @@ lnet_drop_delayed_msg_list(struct list_head *head, char *reason)
 		LASSERT(msg->msg_rxpeer != NULL);
 		LASSERT(msg->msg_hdr.type == LNET_MSG_PUT);
 
-		CWARN("Dropping delayed PUT from %s portal %d match %llu"
-		      " offset %d length %d: %s\n",
+		CWARN("Dropping delayed PUT from %s portal %d match %llu offset %d length %d: %s\n",
 		      libcfs_idstr(&id),
 		      msg->msg_hdr.msg.put.ptl_index,
 		      msg->msg_hdr.msg.put.match_bits,
@@ -4964,8 +4958,7 @@ lnet_recv_delayed_msg_list(struct list_head *head)
 		LASSERT(msg->msg_rxni != NULL);
 		LASSERT(msg->msg_hdr.type == LNET_MSG_PUT);
 
-		CDEBUG(D_NET, "Resuming delayed PUT from %s portal %d "
-		       "match %llu offset %d length %d.\n",
+		CDEBUG(D_NET, "Resuming delayed PUT from %s portal %d match %llu offset %d length %d.\n",
 			libcfs_idstr(&id), msg->msg_hdr.msg.put.ptl_index,
 			msg->msg_hdr.msg.put.match_bits,
 			msg->msg_hdr.msg.put.offset,
@@ -5516,6 +5509,7 @@ LNetDist(struct lnet_nid *dstnid, struct lnet_nid *srcnid, __u32 *orderp)
 			hops = shortest_hops;
 			if (srcnid) {
 				struct lnet_net *net;
+
 				net = lnet_get_net_locked(shortest->lr_lnet);
 				LASSERT(net);
 				ni = lnet_get_next_ni_locked(net, NULL);

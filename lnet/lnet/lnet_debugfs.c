@@ -171,8 +171,7 @@ static int proc_lnet_stats(const struct ctl_table *table,
 	common = ctrs->lct_common;
 
 	len = scnprintf(tmpstr, sizeof(tmpstr),
-			"%u %u %u %u %u %u %u %llu %llu "
-			"%llu %llu",
+			"%u %u %u %u %u %u %u %llu %llu %llu %llu",
 			common.lcc_msgs_alloc, common.lcc_msgs_max,
 			common.lcc_errors,
 			common.lcc_send_count, common.lcc_recv_count,
@@ -737,7 +736,7 @@ proc_lnet_nis(const struct ctl_table *table, int write,
 			       "%-24s %6s %5s %4s %4s %4s %5s %5s %5s\n",
 			       "nid", "status", "alive", "refs", "peer",
 			       "rtr", "max", "tx", "min");
-		LASSERT (tmpstr + tmpsiz - s > 0);
+		LASSERT(tmpstr + tmpsiz - s > 0);
 	} else {
 		struct lnet_ni *ni   = NULL;
 		int skip = *ppos - 1;
@@ -832,20 +831,17 @@ static struct lnet_portal_rotors	portal_rotors[] = {
 	{
 		.pr_value = LNET_PTL_ROTOR_ON,
 		.pr_name  = "ON",
-		.pr_desc  = "round-robin dispatch all PUT messages for "
-			    "wildcard portals"
+		.pr_desc  = "round-robin dispatch all PUT messages for wildcard portals"
 	},
 	{
 		.pr_value = LNET_PTL_ROTOR_RR_RT,
 		.pr_name  = "RR_RT",
-		.pr_desc  = "round-robin dispatch routed PUT message for "
-			    "wildcard portals"
+		.pr_desc  = "round-robin dispatch routed PUT message for wildcard portals"
 	},
 	{
 		.pr_value = LNET_PTL_ROTOR_HASH_RT,
 		.pr_name  = "HASH_RT",
-		.pr_desc  = "dispatch routed PUT message by hashing source "
-			    "NID for wildcard portals"
+		.pr_desc  = "dispatch routed PUT message by hashing source NID for wildcard portals"
 	},
 	{
 		.pr_value = -1,

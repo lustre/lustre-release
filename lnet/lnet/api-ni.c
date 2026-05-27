@@ -59,7 +59,7 @@ module_param(use_tcp_bonding, int, 0444);
 MODULE_PARM_DESC(use_tcp_bonding,
 		 "use_tcp_bonding parameter has been removed");
 
-unsigned int lnet_numa_range = 0;
+unsigned int lnet_numa_range;
 module_param(lnet_numa_range, uint, 0444);
 MODULE_PARM_DESC(lnet_numa_range,
 		"NUMA range to consider during Multi-Rail selection");
@@ -77,7 +77,7 @@ static struct kernel_param_ops param_ops_health_sensitivity = {
 };
 #define param_check_health_sensitivity(name, p) \
 		__param_check(name, p, int)
-module_param(lnet_health_sensitivity, health_sensitivity, S_IRUGO|S_IWUSR);
+module_param(lnet_health_sensitivity, health_sensitivity, 0644);
 MODULE_PARM_DESC(lnet_health_sensitivity,
 		"Value to decrement the health value by on error");
 
@@ -93,7 +93,7 @@ static struct kernel_param_ops param_ops_recovery_interval = {
 };
 #define param_check_recovery_interval(name, p) \
 		__param_check(name, p, int)
-module_param(lnet_recovery_interval, recovery_interval, S_IRUGO|S_IWUSR);
+module_param(lnet_recovery_interval, recovery_interval, 0644);
 MODULE_PARM_DESC(lnet_recovery_interval,
 		"DEPRECATED - Interval to recover unhealthy interfaces in seconds");
 
@@ -134,7 +134,7 @@ module_param(lnet_interfaces_max, interfaces_max, 0644);
 MODULE_PARM_DESC(lnet_interfaces_max,
 		"Maximum number of interfaces in a node.");
 
-unsigned lnet_peer_discovery_disabled = 0;
+unsigned int lnet_peer_discovery_disabled;
 static int discovery_set(const char *val, const struct kernel_param *kp);
 
 static struct kernel_param_ops param_ops_discovery_disabled = {
@@ -172,7 +172,7 @@ static struct kernel_param_ops param_ops_transaction_timeout = {
 
 #define param_check_transaction_timeout(name, p) \
 		__param_check(name, p, int)
-module_param(lnet_transaction_timeout, transaction_timeout, S_IRUGO|S_IWUSR);
+module_param(lnet_transaction_timeout, transaction_timeout, 0644);
 MODULE_PARM_DESC(lnet_transaction_timeout,
 		"Maximum number of seconds to wait for a peer response.");
 
@@ -186,7 +186,7 @@ static struct kernel_param_ops param_ops_retry_count = {
 
 #define param_check_retry_count(name, p) \
 		__param_check(name, p, int)
-module_param(lnet_retry_count, retry_count, S_IRUGO|S_IWUSR);
+module_param(lnet_retry_count, retry_count, 0644);
 MODULE_PARM_DESC(lnet_retry_count,
 		 "Maximum number of times to retry transmitting a message");
 
@@ -239,6 +239,7 @@ struct lnet_genl_ping_list {
 	unsigned int			lgpl_failed_count;
 	signed long			lgpl_timeout;
 	struct lnet_nid			lgpl_src_nid;
+
 	GENRADIX(struct lnet_fail_ping)	lgpl_failed;
 	GENRADIX(struct lnet_processid)	lgpl_list;
 };
@@ -254,7 +255,7 @@ static int
 sensitivity_set(const char *val, const struct kernel_param *kp)
 {
 	int rc;
-	unsigned *sensitivity = (unsigned *)kp->arg;
+	unsigned int *sensitivity = kp->arg;
 	unsigned long value;
 
 	rc = kstrtoul(val, 0, &value);
@@ -333,7 +334,7 @@ static int
 discovery_set(const char *val, const struct kernel_param *kp)
 {
 	int rc;
-	unsigned *discovery_off = (unsigned *)kp->arg;
+	unsigned int *discovery_off = kp->arg;
 	unsigned long value;
 	struct lnet_ping_buffer *pbuf;
 
@@ -397,8 +398,7 @@ drop_asym_route_set(const char *val, const struct kernel_param *kp)
 
 	rc = kstrtoul(val, 0, &value);
 	if (rc) {
-		CERROR("Invalid module parameter value for "
-		       "'lnet_drop_asym_route'\n");
+		CERROR("Invalid module parameter value for 'lnet_drop_asym_route'\n");
 		return rc;
 	}
 
@@ -424,7 +424,7 @@ static int
 transaction_to_set(const char *val, const struct kernel_param *kp)
 {
 	int rc;
-	unsigned *transaction_to = (unsigned *)kp->arg;
+	unsigned int *transaction_to = kp->arg;
 	unsigned long value;
 
 	rc = kstrtoul(val, 0, &value);
@@ -441,8 +441,7 @@ transaction_to_set(const char *val, const struct kernel_param *kp)
 
 	if (value <= lnet_retry_count || value == 0) {
 		mutex_unlock(&the_lnet.ln_api_mutex);
-		CERROR("Invalid value for lnet_transaction_timeout (%lu). "
-		       "Has to be greater than lnet_retry_count (%u)\n",
+		CERROR("Invalid value for lnet_transaction_timeout (%lu). Has to be greater than lnet_retry_count (%u)\n",
 		       value, lnet_retry_count);
 		return -EINVAL;
 	}
@@ -467,7 +466,7 @@ static int
 retry_count_set(const char *val, const struct kernel_param *kp)
 {
 	int rc;
-	unsigned *retry_count = (unsigned *)kp->arg;
+	unsigned int *retry_count = kp->arg;
 	unsigned long value;
 
 	rc = kstrtoul(val, 0, &value);
@@ -490,8 +489,7 @@ retry_count_set(const char *val, const struct kernel_param *kp)
 
 	if (value > lnet_transaction_timeout) {
 		mutex_unlock(&the_lnet.ln_api_mutex);
-		CERROR("Invalid value for lnet_retry_count (%lu). "
-		       "Has to be smaller than lnet_transaction_timeout (%u)\n",
+		CERROR("Invalid value for lnet_retry_count (%lu). Has to be smaller than lnet_transaction_timeout (%u)\n",
 		       value, lnet_transaction_timeout);
 		return -EINVAL;
 	}
@@ -2874,7 +2872,7 @@ __must_hold(&the_lnet.ln_api_mutex)
 					      ni_netlist)) != NULL) {
 		list_del_init(&ni->ni_netlist);
 
-		/* make sure that the the NI we're about to start
+		/* make sure that the NI we're about to start
 		 * up is actually unique. if it's not fail. */
 
 		if (ni->ni_interface &&
@@ -3180,8 +3178,7 @@ int lnet_lib_init(void)
 	LASSERT(the_lnet.ln_cpt_number > 0);
 	if (the_lnet.ln_cpt_number > LNET_CPT_MAX) {
 		/* we are under risk of consuming all lh_cookie */
-		CERROR("Can't have %d CPTs for LNet (max allowed is %d), "
-		       "please change setting of CPT-table and retry\n",
+		CERROR("Can't have %d CPTs for LNet (max allowed is %d), please change setting of CPT-table and retry\n",
 		       the_lnet.ln_cpt_number, LNET_CPT_MAX);
 		return -E2BIG;
 	}
@@ -3435,6 +3432,7 @@ LNetNIFini(void)
 		the_lnet.ln_refcount--;
 	} else {
 		lnet_handler_t dc_handler = the_lnet.ln_dc_handler;
+
 		LASSERT(!the_lnet.ln_niinit_self);
 
 		lnet_net_lock(LNET_LOCK_EX);
@@ -4719,6 +4717,7 @@ LNetCtl(unsigned int cmd, void *arg)
 
 	case IOC_LIBCFS_SET_NUMA_RANGE: {
 		struct lnet_ioctl_set_value *numa;
+
 		numa = arg;
 		if (numa->sv_hdr.ioc_len != sizeof(*numa))
 			return -EINVAL;
@@ -4730,6 +4729,7 @@ LNetCtl(unsigned int cmd, void *arg)
 
 	case IOC_LIBCFS_GET_NUMA_RANGE: {
 		struct lnet_ioctl_set_value *numa;
+
 		numa = arg;
 		if (numa->sv_hdr.ioc_len != sizeof(*numa))
 			return -EINVAL;
@@ -4769,6 +4769,7 @@ LNetCtl(unsigned int cmd, void *arg)
 
 	case IOC_LIBCFS_GET_RECOVERY_QUEUE: {
 		struct lnet_ioctl_recovery_list *list = arg;
+
 		if (list->rlst_hdr.ioc_len < sizeof(*list))
 			return -EINVAL;
 
@@ -5244,6 +5245,7 @@ struct lnet_nid_cpt {
 struct lnet_genl_nid_cpt_list {
 	unsigned int lgncl_index;
 	unsigned int lgncl_list_count;
+
 	GENRADIX(struct lnet_nid_cpt) lgncl_lnc_list;
 };
 
@@ -7230,6 +7232,7 @@ struct lnet_route_properties {
 struct lnet_genl_route_list {
 	unsigned int				lgrl_index;
 	unsigned int				lgrl_count;
+
 	GENRADIX(struct lnet_route_properties)	lgrl_list;
 };
 
@@ -7604,6 +7607,7 @@ send_error:
 struct lnet_genl_processid_list {
 	unsigned int			lgpl_index;
 	unsigned int			lgpl_count;
+
 	GENRADIX(struct lnet_processid)	lgpl_list;
 };
 
@@ -9403,6 +9407,7 @@ struct lnet_genl_debug_recovery_list {
 	unsigned int			lgdrl_len;
 	struct ln_key_list		*lgdrl_keys;
 	enum lnet_health_type		lgdrl_type;
+
 	GENRADIX(struct lnet_nid)	lgdrl_nids;
 };
 

@@ -1606,6 +1606,7 @@ struct lnet_peer_net *
 lnet_peer_get_net_locked(struct lnet_peer *peer, __u32 net_id)
 {
 	struct lnet_peer_net *peer_net;
+
 	list_for_each_entry(peer_net, &peer->lp_peer_nets, lpn_peer_nets) {
 		if (peer_net->lpn_net_id == net_id)
 			return peer_net;
@@ -1627,7 +1628,7 @@ static int
 lnet_peer_attach_peer_ni(struct lnet_peer *lp,
 			 struct lnet_peer_net *lpn,
 			 struct lnet_peer_ni *lpni,
-			 unsigned flags)
+			 unsigned int flags)
 {
 	struct lnet_peer_table *ptable;
 	bool new_lpn = false;
@@ -2049,7 +2050,7 @@ __must_hold(&the_lnet.ln_api_mutex)
 	struct lnet_peer *lp = NULL;
 	struct lnet_peer_net *lpn = NULL;
 	struct lnet_peer_ni *lpni;
-	unsigned flags = 0;
+	unsigned int flags = 0;
 	int rc = 0;
 
 	if (LNET_NID_IS_ANY(nid)) {
@@ -3757,7 +3758,7 @@ __must_hold(&lp->lp_lock)
 	/*
 	 * Check whether the primary NID in the message matches the
 	 * primary NID of the peer. If it does, update the peer, if
-	 * it it does not, check whether there is already a peer with
+	 * it does not, check whether there is already a peer with
 	 * that primary NID. If no such peer exists, try to update
 	 * the primary NID of the current peer (allowed if it was
 	 * created due to message traffic) and complete the update.
@@ -3817,6 +3818,7 @@ __must_hold(&lp->lp_lock)
 				lnet_peer_ni_decref_locked(lpni);
 		} else {
 			struct lnet_peer *new_lp;
+
 			new_lp = lpni->lpni_peer_net->lpn_peer;
 			/*
 			 * if lp has discovery/MR enabled that means new_lp

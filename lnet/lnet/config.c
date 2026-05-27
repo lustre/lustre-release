@@ -26,7 +26,7 @@ struct lnet_text_buf {
 	char			ltb_text[];	/* text buffer */
 };
 
-static int lnet_tbnob = 0;			/* track text buf allocation */
+static int lnet_tbnob;			/* track text buf allocation */
 #define LNET_MAX_TEXTBUF_NOB	 (64<<10)	/* bound allocation */
 #define LNET_SINGLE_TEXTBUF_NOB  (4<<10)
 
@@ -1048,8 +1048,8 @@ lnet_expand1tb(struct list_head *list,
 	int		 len2 = strlen(sep2 + 1);
 	struct lnet_text_buf *ltb;
 
-	LASSERT (*sep1 == '[');
-	LASSERT (*sep2 == ']');
+	LASSERT(*sep1 == '[');
+	LASSERT(*sep2 == ']');
 
 	ltb = lnet_new_text_buf(len1 + itemlen + len2);
 	if (ltb == NULL)
@@ -1143,7 +1143,7 @@ lnet_str2tbs_expand(struct list_head *tbs, char *str)
 }
 
 static int
-lnet_parse_hops (char *str, unsigned int *hops)
+lnet_parse_hops(char *str, unsigned int *hops)
 {
 	int	len = strlen(str);
 	int	nob = len;
@@ -1305,8 +1305,7 @@ lnet_parse_route(char *str, int *im_a_router)
 
 			rc = lnet_add_route(net, hops, &nid, priority);
 			if (rc != 0 && rc != -EEXIST && rc != -EHOSTUNREACH) {
-				CERROR("Can't create route "
-				       "to %s via %s\n",
+				CERROR("Can't create route to %s via %s\n",
 				       libcfs_net2str(net),
 				       libcfs_nidstr(&nid));
 				goto out;
@@ -1362,7 +1361,7 @@ lnet_parse_routes(const char *routes, int *im_a_router)
 		rc = lnet_parse_route_tbs(&tbs, im_a_router);
 	}
 
-	LASSERT (lnet_tbnob == 0);
+	LASSERT(lnet_tbnob == 0);
 	return rc;
 }
 

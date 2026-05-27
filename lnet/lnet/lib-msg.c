@@ -1111,8 +1111,8 @@ lnet_is_health_check(struct lnet_msg *msg)
 	/* Check for status inconsistencies */
 	if ((!status && msg->msg_health_status != LNET_MSG_STATUS_OK) ||
 	     (status && msg->msg_health_status == LNET_MSG_STATUS_OK)) {
-		CDEBUG(D_NET, "Msg %p is in inconsistent state, don't perform health "
-		       "checking (%d, %d)\n", msg, status,
+		CDEBUG(D_NET, "Msg %p is in inconsistent state, don't perform health checking (%d, %d)\n",
+		       msg, status,
 		       msg->msg_health_status);
 		hc = false;
 	}
@@ -1162,7 +1162,7 @@ lnet_send_error_simulation(struct lnet_msg *msg,
 		return false;
 
 	if (list_empty(&the_lnet.ln_drop_rules))
-	    return false;
+		return false;
 
 	/* match only health rules */
 	if (!lnet_drop_rule_match(&msg->msg_hdr, NULL, hstatus))

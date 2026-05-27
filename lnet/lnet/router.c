@@ -97,7 +97,7 @@ static struct kernel_param_ops param_ops_rtr_sensitivity = {
 };
 #define param_check_rtr_sensitivity(name, p) \
 		__param_check(name, p, int)
-module_param(router_sensitivity_percentage, rtr_sensitivity, S_IRUGO|S_IWUSR);
+module_param(router_sensitivity_percentage, rtr_sensitivity, 0644);
 MODULE_PARM_DESC(router_sensitivity_percentage,
 		"(Deprecated) How healthy a gateway should be to be used in percent");
 
@@ -111,7 +111,7 @@ static int
 rtr_sensitivity_set(const char *val, const struct kernel_param *kp)
 {
 	int rc;
-	unsigned *sen = (unsigned *)kp->arg;
+	unsigned int *sen = kp->arg;
 	unsigned long value;
 
 	rc = kstrtoul(val, 0, &value);
@@ -204,6 +204,7 @@ __must_hold(&the_lnet.ln_api_mutex)
 	list_for_each_entry_safe(route, tmp, &src->lp_routes, lr_gwlist) {
 		struct lnet_route *r2;
 		bool present = false;
+
 		list_for_each_entry_safe(r2, tmp2, &target->lp_routes, lr_gwlist) {
 			if (route->lr_net == r2->lr_net) {
 				if (route->lr_priority >= r2->lr_priority)
@@ -1703,8 +1704,7 @@ lnet_rtrpools_enable(void)
 	lnet_net_unlock(LNET_LOCK_EX);
 
 	if (lnet_peer_discovery_disabled)
-		CWARN("Consider turning discovery on to enable full "
-		      "Multi-Rail routing functionality\n");
+		CWARN("Consider turning discovery on to enable full Multi-Rail routing functionality\n");
 
 	return rc;
 }
