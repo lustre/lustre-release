@@ -84,8 +84,7 @@ static int ec_test_01(void)
 	for (i = 0; i < p; i++)
 		for (j = 0; j < len; j++)
 			if (stripes[i + k][j] != er[i]) {
-				pr_err(PREFIX " Wrong value for p:%d pos:%d "
-				       "Expected 0x%02x but got 0x%02x\n",
+				pr_err(PREFIX " Wrong value for p:%d pos:%d Expected 0x%02x but got 0x%02x\n",
 				       run_id, i, j,
 				       er[i], stripes[i + k][j]);
 				goto out;
