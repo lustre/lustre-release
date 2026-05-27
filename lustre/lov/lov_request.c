@@ -152,6 +152,7 @@ lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs, int success)
 int lov_fini_statfs_set(struct lov_request_set *set)
 {
 	int rc = 0;
+
 	ENTRY;
 
 	if (!set)

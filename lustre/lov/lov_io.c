@@ -100,6 +100,7 @@ static int lov_io_sub_init(const struct lu_env *env, struct lov_io *lio,
 	int index = lov_comp_entry(sub->sub_subio_index);
 	int stripe = lov_comp_stripe(sub->sub_subio_index);
 	int result = 0;
+
 	LASSERT(sub->sub_env == NULL);
 	ENTRY;
 
@@ -226,6 +227,7 @@ static int lov_io_mirror_write_intent(struct lov_io *lio,
 	struct lov_mirror_entry *primary;
 	struct lov_layout_entry *lle;
 	size_t count = 0;
+
 	ENTRY;
 
 	*ext = (typeof(*ext)) { lio->lis_pos, lio->lis_endpos };
@@ -265,8 +267,7 @@ static int lov_io_mirror_write_intent(struct lov_io *lio,
 		 * does not recognize, and old client would mark it as
 		 * invalid.
 		 */
-		CERROR(DFID ": cannot find known valid non-stale mirror, "
-		       "could be new server picked a mirror which this client "
+		CERROR(DFID ": cannot find known valid non-stale mirror, could be new server picked a mirror which this client "
 		       "does not recognize.\n",
 		       PFID(lu_object_fid(lobj)));
 		RETURN(-EIO);
@@ -282,8 +283,8 @@ static int lov_io_mirror_write_intent(struct lov_io *lio,
 		++count;
 	}
 	if (count == 0) {
-		CERROR(DFID ": cannot find any valid components covering "
-		       "file extent "DEXT", mirror: %d\n",
+		CERROR(DFID ": cannot find any valid components covering file extent "
+		       DEXT", mirror: %d\n",
 		       PFID(lu_object_fid(lobj)), PEXT(ext),
 		       primary->lre_mirror_id);
 		RETURN(-EIO);
@@ -305,8 +306,8 @@ static int lov_io_mirror_write_intent(struct lov_io *lio,
 		}
 	}
 
-	CDEBUG(D_VFSTRACE, DFID "there are %zd components to be staled to "
-	       "modify file extent "DEXT", iot: %d\n",
+	CDEBUG(D_VFSTRACE, DFID "there are %zd components to be staled to modify file extent "
+	       DEXT", iot: %d\n",
 	       PFID(lu_object_fid(lobj)), count, PEXT(ext), io->ci_type);
 
 	io->ci_need_write_intent = count > 0;
@@ -471,6 +472,7 @@ static int lov_io_mirror_init(const struct lu_env *env, struct lov_io *lio,
 	int index;
 	int i;
 	int result;
+
 	ENTRY;
 
 	if (!lov_is_flr(obj)) {
@@ -634,14 +636,12 @@ static int lov_io_mirror_init(const struct lu_env *env, struct lov_io *lio,
 	if (i == comp->lo_mirror_count) {
 		/* If we only skipped parity mirrors, return EINVAL */
 		if (skipped_parity) {
-			CERROR(DFID": only parity mirrors available for read "
-			       "I/O at %llu\n",
+			CERROR(DFID": only parity mirrors available for read I/O at %llu\n",
 			       PFID(lu_object_fid(lov2lu(obj))), lio->lis_pos);
 			RETURN(-EINVAL);
 		}
 
-		CERROR(DFID": failed to find a component covering "
-		       "I/O region at %llu\n",
+		CERROR(DFID": failed to find a component covering I/O region at %llu\n",
 		       PFID(lu_object_fid(lov2lu(obj))), lio->lis_pos);
 
 		dump_lsm(D_ERROR, obj->lo_lsm);
@@ -649,8 +649,7 @@ static int lov_io_mirror_init(const struct lu_env *env, struct lov_io *lio,
 		RETURN(-EIO);
 	}
 
-	CDEBUG(D_VFSTRACE, DFID ": flr state: %d, move mirror from %d to %d, "
-	       "have retried: %d, mirror count: %d\n",
+	CDEBUG(D_VFSTRACE, DFID ": flr state: %d, move mirror from %d to %d, have retried: %d, mirror count: %d\n",
 	       PFID(lu_object_fid(lov2lu(obj))), lov_flr_state(obj),
 	       lio->lis_mirror_index, index, io->ci_ndelay_tried,
 	       comp->lo_mirror_count);
@@ -718,6 +717,7 @@ static int lov_io_slice_init(const struct lu_env *env, struct lov_io *lio,
 	int index;
 	int result = 0;
 	bool rdonly;
+
 	ENTRY;
 
 	io->ci_result = 0;
@@ -874,8 +874,7 @@ static int lov_io_slice_init(const struct lu_env *env, struct lov_io *lio,
 		 * mirror for now. The server won't be able to figure out
 		 * which mirror it should instantiate components
 		 */
-		CERROR(DFID": trying to instantiate components for designated "
-		       "I/O, file state: %d\n",
+		CERROR(DFID": trying to instantiate components for designated I/O, file state: %d\n",
 		       PFID(lu_object_fid(lov2lu(obj))), lov_flr_state(obj));
 
 		io->ci_need_write_intent = 0;
@@ -1290,6 +1289,7 @@ static int lov_io_setattr_iter_init(const struct lu_env *env,
 	struct lov_io *lio = cl2lov_io(env, ios);
 	struct cl_io *io = ios->cis_io;
 	int index;
+
 	ENTRY;
 
 	if (cl_io_is_trunc(io) && lio->lis_pos > 0) {
@@ -1452,6 +1452,7 @@ static int lov_io_read_ahead_prep(const struct lu_env *env,
 	int			 stripe;
 	int			 index;
 	int			 rc;
+
 	ENTRY;
 
 	offset = start << PAGE_SHIFT;
@@ -1507,8 +1508,7 @@ static int lov_io_read_ahead_prep(const struct lu_env *env,
 
 	pps = lov_lse(loo, index)->lsme_stripe_size >> PAGE_SHIFT;
 
-	CDEBUG(D_READA, DFID " max_index = %lu, pps = %u, index = %d, "
-	       "stripe_size = %u, stripe no = %u, start index = %lu\n",
+	CDEBUG(D_READA, DFID " max_index = %lu, pps = %u, index = %d, stripe_size = %u, stripe no = %u, start index = %lu\n",
 	       PFID(lu_object_fid(lov2lu(loo))), ra->cra_end_idx, pps, index,
 	       lov_lse(loo, index)->lsme_stripe_size, stripe, start);
 
@@ -1582,6 +1582,7 @@ static int lov_dio_submit(const struct lu_env *env,
 	struct lov_io_sub *sub;
 	int rc = 0;
 	int index;
+
 	ENTRY;
 
 	if (lov_pages_is_empty(cdp)) {
@@ -1642,6 +1643,7 @@ static int lov_io_submit(const struct lu_env *env,
 	bool dio = false;
 	int index;
 	int rc = 0;
+
 	ENTRY;
 
 	if (page->cp_type == CPT_TRANSIENT)
@@ -1715,6 +1717,7 @@ static int lov_io_commit_async(const struct lu_env *env,
 	struct lov_io_sub *sub;
 	struct cl_page *page;
 	int rc = 0;
+
 	ENTRY;
 
 	if (lio->lis_nr_subios == 1) {
@@ -1810,11 +1813,10 @@ static int lov_io_fault_start(const struct lu_env *env,
 	 * refer to another mirror of an old IO.
 	 */
 	if (lov_is_flr(lio->lis_object)) {
-		offset = fio->ft_index << PAGE_SHIFT;;
+		offset = fio->ft_index << PAGE_SHIFT;
 		entry = lov_io_layout_at(lio, offset);
 		if (entry < 0) {
-			CERROR(DFID": page fault index %lu invalid component: "
-			       "%d, mirror: %d\n",
+			CERROR(DFID": page fault index %lu invalid component: %d, mirror: %d\n",
 			       PFID(lu_object_fid(&ios->cis_obj->co_lu)),
 			       fio->ft_index, entry,
 			       lio->lis_mirror_index);
@@ -1825,8 +1827,7 @@ static int lov_io_fault_start(const struct lu_env *env,
 
 		if (fio->ft_page->cp_lov_index !=
 		    lov_comp_index(entry, stripe)) {
-			CDEBUG(D_INFO, DFID": page fault at index %lu, "
-			       "at mirror %u comp entry %u stripe %u, "
+			CDEBUG(D_INFO, DFID": page fault at index %lu, at mirror %u comp entry %u stripe %u, "
 			       "been used with comp entry %u stripe %u\n",
 			       PFID(lu_object_fid(&ios->cis_obj->co_lu)),
 			       fio->ft_index, lio->lis_mirror_index,
@@ -1877,6 +1878,7 @@ static void lov_io_fsync_end(const struct lu_env *env,
 	struct lov_io *lio = cl2lov_io(env, ios);
 	struct lov_io_sub *sub;
 	unsigned int *written = &ios->cis_io->u.ci_fsync.fi_nr_written;
+
 	ENTRY;
 
 	*written = 0;
@@ -2083,6 +2085,7 @@ static void lov_empty_io_fini(const struct lu_env *env,
 	struct lov_object *lov = cl2lov(ios->cis_obj);
 	struct lov_io *lio = cl2lov_io(env, ios);
 	struct cl_io *io = lio->lis_cl.cis_io;
+
 	ENTRY;
 
 	if (!(io->ci_type == CIT_MISC && io->ci_ignore_layout) &&
@@ -2244,6 +2247,7 @@ int lov_io_init_released(const struct lu_env *env, struct cl_object *obj,
 	struct lov_object *lov = cl2lov(obj);
 	struct lov_io *lio = lov_env_io(env);
 	int result;
+
 	ENTRY;
 
 	LASSERT(lov->lo_lsm != NULL);

@@ -359,6 +359,7 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
 	struct lov_obd *lov;
 	struct lov_pool_desc *new_pool;
 	int rc;
+
 	ENTRY;
 
 	lov = &(obd->u.lov);
@@ -461,6 +462,7 @@ int lov_pool_del(struct obd_device *obd, char *poolname)
 {
 	struct lov_obd *lov;
 	struct lov_pool_desc *pool;
+
 	ENTRY;
 
 	lov = &(obd->u.lov);

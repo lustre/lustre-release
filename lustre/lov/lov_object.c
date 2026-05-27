@@ -435,8 +435,8 @@ static int lov_fld_lookup(struct lov_device *ld, const struct lu_fid *fid,
 	rc = fld_client_lookup(&ld->ld_lmv->u.lmv.lmv_fld, fid_seq(fid),
 			       LU_SEQ_RANGE_MDT, NULL, &res);
 	if (rc) {
-		CERROR("%s: error while looking for mds number. Seq %#llx"
-		       ", err = %d\n", lu_dev_name(cl2lu_dev(&ld->ld_cl)),
+		CERROR("%s: error while looking for mds number. Seq %#llx, err = %d\n",
+		       lu_dev_name(cl2lu_dev(&ld->ld_cl)),
 		       fid_seq(fid), rc);
 		RETURN(rc);
 	}
@@ -453,8 +453,8 @@ static int lov_fld_lookup(struct lov_device *ld, const struct lu_fid *fid,
 	}
 
 	if (i == ld->ld_md_tgts_nr) {
-		CERROR("%s: cannot find corresponding MDC device for mds #%x "
-		       "for fid="DFID"\n", lu_dev_name(cl2lu_dev(&ld->ld_cl)),
+		CERROR("%s: cannot find corresponding MDC device for mds #%x for fid="
+		       DFID"\n", lu_dev_name(cl2lu_dev(&ld->ld_cl)),
 		       mds_idx, PFID(fid));
 		rc = -EINVAL;
 	} else {
@@ -670,10 +670,8 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 						      24 * 3600 * MSEC_PER_SEC);
 			}
 			if (nr++ < 20) {
-				CWARN("%s: unknown layout entry %d pattern %#x"
-				      " could be an unrecognizable component"
-				      " set by other clients, skip to"
-				      " initialize the next component.\n",
+				CWARN("%s: unknown layout entry %d pattern %#x could be an unrecognizable component"
+				      " set by other clients, skip to initialize the next component.\n",
 					lov2obd(dev->ld_lov)->obd_name,
 					i,
 					lsm->lsm_entries[i]->lsme_pattern);
@@ -911,6 +909,7 @@ static void lov_fini_composite(const struct lu_env *env,
 			       union lov_layout_state *state)
 {
 	struct lov_layout_composite *comp = &state->composite;
+
 	ENTRY;
 
 	if (comp->lo_entries != NULL) {
@@ -1095,8 +1094,8 @@ static int lov_attr_get_composite(const struct lu_env *env,
 		if (lov_attr == NULL)
 			continue;
 
-		CDEBUG(D_INODE, "COMP ID #%i: s=%llu m=%llu a=%llu c=%llu "
-		       "b=%llu\n", index - 1, lov_attr->cat_size,
+		CDEBUG(D_INODE, "COMP ID #%i: s=%llu m=%llu a=%llu c=%llu b=%llu\n",
+		       index - 1, lov_attr->cat_size,
 		       lov_attr->cat_mtime, lov_attr->cat_atime,
 		       lov_attr->cat_ctime, lov_attr->cat_blocks);
 
@@ -1338,6 +1337,7 @@ static int lov_layout_change(const struct lu_env *unused,
 	struct lu_env *env;
 	__u16 refcheck;
 	int rc;
+
 	ENTRY;
 
 	LASSERT(lov->lo_type < ARRAY_SIZE(lov_dispatch));
@@ -1406,6 +1406,7 @@ static int lov_object_init(const struct lu_env *env, struct lu_object *obj,
 	const struct lov_layout_operations *ops;
 	struct lov_stripe_md *lsm = NULL;
 	int rc;
+
 	ENTRY;
 
 	init_rwsem(&lov->lo_type_guard);
@@ -1443,6 +1444,7 @@ static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
 	struct lov_stripe_md *lsm = NULL;
 	struct lov_object *lov = cl2lov(obj);
 	int result = 0;
+
 	ENTRY;
 
 	if (conf->coc_opc == OBJECT_CONF_SET &&
@@ -2020,6 +2022,7 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	unsigned int stripe_last = 0;
 	unsigned int start_stripe = 0;
 	bool resume = false;
+
 	ENTRY;
 
 	lsm = lov_lsm_addref(cl2lov(obj));
@@ -2128,8 +2131,8 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 	}
 
 	if (start_entry == ~0U) {
-		CERROR(DFID": FIEMAP does not init start entry, cur_stripe=%u, "
-		       "stripe_last=%u\n", PFID(lu_object_fid(&obj->co_lu)),
+		CERROR(DFID": FIEMAP does not init start entry, cur_stripe=%u, stripe_last=%u\n",
+		       PFID(lu_object_fid(&obj->co_lu)),
 		       cur_stripe, stripe_last);
 		GOTO(out_fm_local, rc = -EINVAL);
 	}
@@ -2256,6 +2259,7 @@ static int lov_object_getstripe(const struct lu_env *env, struct cl_object *obj,
 	struct lov_object	*lov = cl2lov(obj);
 	struct lov_stripe_md	*lsm;
 	int			rc = 0;
+
 	ENTRY;
 
 	lsm = lov_lsm_addref(lov);
@@ -2275,6 +2279,7 @@ static int lov_object_layout_get(const struct lu_env *env,
 	struct lov_stripe_md *lsm = lov_lsm_addref(lov);
 	struct lu_buf *buf = &cl->cl_buf;
 	ssize_t rc;
+
 	ENTRY;
 
 	if (lsm == NULL) {
@@ -2389,6 +2394,7 @@ int lov_read_and_clear_async_rc(struct cl_object *clob)
 {
 	struct lu_object *luobj;
 	int rc = 0;
+
 	ENTRY;
 
 	luobj = lu_object_locate(&cl_object_header(clob)->coh_lu,

@@ -23,7 +23,7 @@
 #include <cl_object.h>
 #include "lov_internal.h"
 
-/* \defgroup lov lov
+/* \defgroup lov
  * Logical object volume layer. This layer implements data striping (raid0).
  *
  * At the lov layer top-entity (object, lock, io) is connected to one or

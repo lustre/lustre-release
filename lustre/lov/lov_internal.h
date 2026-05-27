@@ -81,7 +81,7 @@ static inline bool lsme_is_dom(struct lov_stripe_md_entry *lsme)
 static inline void copy_lsm_entry(struct lov_stripe_md_entry *dst,
 				  struct lov_stripe_md_entry *src)
 {
-	unsigned i;
+	unsigned int i;
 
 	for (i = 0; i < src->lsme_stripe_count; i++)
 		*dst->lsme_oinfo[i] = *src->lsme_oinfo[i];

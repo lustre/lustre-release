@@ -91,6 +91,7 @@ static void lov_key_fini(const struct lu_context *ctx,
 			 struct lu_context_key *key, void *data)
 {
 	struct lov_thread_info *info = data;
+
 	OBD_SLAB_FREE_PTR(info, lov_thread_kmem);
 }
 
@@ -179,7 +180,7 @@ static int lov_mdc_dev_init(const struct lu_env *env, struct lov_device *ld,
 /**
  * lov_device_fini() - Free Resource associated with LOV device context
  * @env: execution environment
- * @d: 	LU device of LOV device
+ * @d:	LU device of LOV device
  *
  *Returns NULL always
  */
@@ -226,7 +227,7 @@ static struct lu_device *lov_device_fini(const struct lu_env *env,
 /**
  * lov_device_init() - Initilize lov_device
  * @env: execution environment
- * @d: 	LU device of LOV device
+ * @d:	LU device of LOV device
  * @name: Device name
  * @next: Pointer to next lu_device
  *
@@ -287,7 +288,7 @@ out_err:
 /**
  * lov_device_free() - Free LOV specific data created for the back end lu_device
  * @env: execution environment
- * @d: 	Backend lu_device
+ * @d:	Backend lu_device
  *
  * Returns NULL always
  */
@@ -509,7 +510,7 @@ static int lov_add_mdc_target(const struct lu_env *env, struct lu_device *d,
 /**
  * lov_process_config() - Called when LOV configuration changes are needed
  * @env: execution environment
- * @d: 	LU device of LOV device
+ * @d:	LU device of LOV device
  * @cfg: setup configuration commands and arguments
  *
  * Return a new lu_device on success or Error pointer on failure

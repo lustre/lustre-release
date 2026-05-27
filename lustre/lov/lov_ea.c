@@ -463,8 +463,7 @@ static int lsm_verify_comp_md_v1(struct lov_comp_md_v1 *lcm,
 
 		if (lcm_size < blob_offset || lcm_size < blob_size ||
 		    lcm_size < blob_offset + blob_size) {
-			CERROR("LCM entry %u has invalid blob: "
-			       "LCM size = %zu, offset = %zu, size = %zu\n",
+			CERROR("LCM entry %u has invalid blob: LCM size = %zu, offset = %zu, size = %zu\n",
 			       le32_to_cpu(lcme->lcme_id),
 			       lcm_size, blob_offset, blob_size);
 			RETURN(-EINVAL);
