@@ -47,6 +47,7 @@ static int lmv_intent_remote(struct obd_export *exp, struct lookup_intent *it,
 	struct mdt_body		*body;
 	int			pmode;
 	int			rc = 0;
+
 	ENTRY;
 
 	body = req_capsule_server_get(&(*reqp)->rq_pill, &RMF_MDT_BODY);
@@ -374,8 +375,8 @@ retry:
 		op_data->op_layout_version = 1;
 
 
-	CDEBUG(D_INODE, "OPEN_INTENT with fid1="DFID", fid2="DFID","
-	       " name='"DNAME"' -> mds #%u layout version %u\n",
+	CDEBUG(D_INODE, "OPEN_INTENT with fid1="DFID", fid2="DFID", name='"
+	       DNAME"' -> mds #%u layout version %u\n",
 	       PFID(&op_data->op_fid1), PFID(&op_data->op_fid2),
 	       encode_fn_opdata(op_data), tgt->ltd_index,
 	       op_data->op_layout_version);
@@ -442,6 +443,7 @@ lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
 	struct lmv_tgt_desc *tgt = NULL;
 	struct mdt_body *body;
 	int rc;
+
 	ENTRY;
 
 	/* foreign dir is not striped */

@@ -226,6 +226,7 @@ restart:
 	list_for_each_entry(pat, &lmv->lmv_qos_exclude_list, qep_list) {
 		if (is_prefix) {
 			size_t len = strnlen(pat->qep_name, NAME_MAX + 3);
+
 			if (len >= 2 && pat->qep_name[len - 2] == '.' &&
 			    pat->qep_name[len - 1] == '*')
 				continue;
