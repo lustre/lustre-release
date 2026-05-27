@@ -1078,6 +1078,7 @@ void ldlm_extent_unlink_lock(struct ldlm_lock *lock)
 		RB_CLEAR_NODE(&lock->l_rb);
 	} else {
 		struct ldlm_lock *next = list_next_entry(lock, l_same_extent);
+
 		list_del_init(&lock->l_same_extent);
 		extent_remove(lock, &tree->lit_root);
 		RB_CLEAR_NODE(&lock->l_rb);

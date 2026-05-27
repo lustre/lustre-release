@@ -1174,8 +1174,7 @@ static int ldlm_resource_complain(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	struct ldlm_resource  *res = cfs_hash_object(hs, hnode);
 
 	lock_res(res);
-	CERROR("%s: namespace resource "DLDLMRES" (%p) refcount nonzero "
-	       "(%d) after lock cleanup; forcing cleanup.\n",
+	CERROR("%s: namespace resource "DLDLMRES" (%p) refcount nonzero (%d) after lock cleanup; forcing cleanup.\n",
 	       ldlm_ns_name(ldlm_res_to_ns(res)), PLDLMRES(res), res,
 	       refcount_read(&res->lr_refcount) - 1);
 
@@ -1240,16 +1239,14 @@ force_wait:
 		 */
 		if (force && rc == 0) {
 			rc = -ETIMEDOUT;
-			LCONSOLE_ERROR("Forced cleanup waiting for %s "
-				       "namespace with %d resources in use, "
+			LCONSOLE_ERROR("Forced cleanup waiting for %s namespace with %d resources in use, "
 				       "(rc=%d)\n", ldlm_ns_name(ns),
 				       atomic_read(&ns->ns_bref), rc);
 			GOTO(force_wait, rc);
 		}
 
 		if (atomic_read(&ns->ns_bref)) {
-			LCONSOLE_ERROR("Cleanup waiting for %s namespace "
-				       "with %d resources in use, (rc=%d)\n",
+			LCONSOLE_ERROR("Cleanup waiting for %s namespace with %d resources in use, (rc=%d)\n",
 				       ldlm_ns_name(ns),
 				       atomic_read(&ns->ns_bref), rc);
 			RETURN(ELDLM_NAMESPACE_EXISTS);

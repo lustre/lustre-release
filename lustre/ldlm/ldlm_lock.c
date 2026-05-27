@@ -1530,8 +1530,8 @@ out_fail_match:
 
 	/* less verbose for test-only */
 	if (!matched && !(flags & LDLM_FL_TEST_LOCK)) {
-		LDLM_DEBUG_NOLOCK("not matched ns %p type %u mode %u res "
-				  "%llu/%llu (%llu %llu)", ns,
+		LDLM_DEBUG_NOLOCK("not matched ns %p type %u mode %u res %llu/%llu (%llu %llu)",
+				  ns,
 				  type, mode, res_id->name[0], res_id->name[1],
 				  (type == LDLM_PLAIN || type == LDLM_IBITS) ?
 				  res_id->name[2] : policy->l_extent.start,

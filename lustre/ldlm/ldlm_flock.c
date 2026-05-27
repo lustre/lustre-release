@@ -817,7 +817,7 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 		goto granted;
 
 	if (!(flags & LDLM_FL_BLOCKED_MASK)) {
-		if (NULL == data)
+		if (data == NULL)
 			/* mds granted the lock in the reply */
 			goto granted;
 		/* CP AST RPC: lock get granted, wake it up */

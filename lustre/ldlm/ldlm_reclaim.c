@@ -167,6 +167,7 @@ static void ldlm_reclaim_res(struct ldlm_namespace *ns, int *count,
 	struct ldlm_reclaim_cb_data	data;
 	int				idx, type, start;
 	int				rc;
+
 	ENTRY;
 
 	LASSERT(*count != 0);
@@ -195,8 +196,8 @@ static void ldlm_reclaim_res(struct ldlm_namespace *ns, int *count,
 	cfs_hash_for_each_nolock(ns->ns_rs_hash, ldlm_reclaim_lock_cb, &data,
 				 start);
 
-	CDEBUG(D_DLMTRACE, "NS(%s): %d locks to be reclaimed, found %d/%d "
-	       "locks.\n", ldlm_ns_name(ns), *count, data.rcd_added,
+	CDEBUG(D_DLMTRACE, "NS(%s): %d locks to be reclaimed, found %d/%d locks.\n",
+	       ldlm_ns_name(ns), *count, data.rcd_added,
 	       data.rcd_total);
 
 	LASSERTF(*count >= data.rcd_added, "count:%d, added:%d\n", *count,
@@ -242,6 +243,7 @@ static void ldlm_reclaim_ns(void)
 	enum ldlm_side		 ns_cli = LDLM_NAMESPACE_SERVER;
 	s64 age_ns;
 	bool			 skip = true;
+
 	ENTRY;
 
 	if (!atomic_add_unless(&ldlm_nr_reclaimer, 1, 1)) {

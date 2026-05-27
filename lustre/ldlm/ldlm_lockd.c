@@ -2705,10 +2705,10 @@ static int ldlm_hpreq_handler(struct ptlrpc_request *req)
 	if (req->rq_export == NULL)
 		RETURN(0);
 
-	if (LDLM_CANCEL == lustre_msg_get_opc(req->rq_reqmsg)) {
+	if (lustre_msg_get_opc(req->rq_reqmsg) == LDLM_CANCEL) {
 		req_capsule_set(&req->rq_pill, &RQF_LDLM_CANCEL);
 		req->rq_ops = &ldlm_cancel_hpreq_ops;
-	} else if (LDLM_CONVERT == lustre_msg_get_opc(req->rq_reqmsg)) {
+	} else if (lustre_msg_get_opc(req->rq_reqmsg) == LDLM_CONVERT) {
 		req_capsule_set(&req->rq_pill, &RQF_LDLM_CONVERT);
 		req->rq_ops = &ldlm_cancel_hpreq_ops;
 	}

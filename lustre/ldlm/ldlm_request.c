@@ -1564,7 +1564,7 @@ int ldlm_cli_cancel_req(struct obd_export *exp, struct ldlm_lock *lock,
 
 		/*
 		 * If OSP want cancel cross-MDT lock, let's not block it in
-		 * in recovery, otherwise the lock will not released, if
+		 * recovery, otherwise the lock will not released, if
 		 * the remote target is also in recovery, and it also need
 		 * this lock, it might cause deadlock.
 		 */
@@ -2108,6 +2108,7 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns,
 	ldlm_cancel_lru_policy_t pf;
 	int added = 0;
 	int no_wait = lru_flags & LDLM_LRU_FLAG_NO_WAIT;
+
 	ENTRY;
 
 	/*
@@ -2451,6 +2452,7 @@ int ldlm_cli_cancel_list(struct list_head *cancels, int count,
 	struct ldlm_lock *lock = primary;
 	struct obd_export *export;
 	int res = 0;
+
 	ENTRY;
 
 	if (count == 0)

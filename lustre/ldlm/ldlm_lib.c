@@ -3034,8 +3034,8 @@ void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
 		return;
 	}
 
-	CDEBUG(D_HA, "RECOVERY: service %s, %d recoverable clients, "
-	       "last_transno %llu\n", obd->obd_name,
+	CDEBUG(D_HA, "RECOVERY: service %s, %d recoverable clients, last_transno %llu\n",
+	       obd->obd_name,
 	       atomic_read(&obd->obd_max_recoverable_clients),
 	       obd->obd_last_committed);
 	LASSERT(!test_bit(OBDF_STOPPING, obd->obd_flags));
