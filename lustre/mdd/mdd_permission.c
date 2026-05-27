@@ -239,6 +239,7 @@ int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
 	struct lu_ucred *uc = lu_ucred(env);
 	__u32 mode;
 	int rc;
+
 	ENTRY;
 
 	if (may_mask == 0)
@@ -265,7 +266,7 @@ int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
 	if (uc->uc_fsuid == la->la_uid) {
 		mode >>= 6;
 	} else {
-		if (mode & S_IRWXG) {
+		if (mode & 0070) {
 			if (role != -1)
 				mdd_read_lock(env, obj, role);
 			rc = mdd_check_acl(env, obj, la, may_mask);
@@ -287,12 +288,12 @@ int __mdd_permission_internal(const struct lu_env *env, struct mdd_object *obj,
 	       la->la_uid, la->la_gid, uc->uc_fsuid, uc->uc_fsgid,
 	       uc->uc_suppgids[0], uc->uc_suppgids[1]);
 
-	if (((mode & may_mask & S_IRWXO) == may_mask))
+	if (((mode & may_mask & 0007) == may_mask))
 		RETURN(0);
 
 check_capabilities:
 	if (!(may_mask & MAY_EXEC) ||
-	    (la->la_mode & S_IXUGO) || S_ISDIR(la->la_mode))
+	    (la->la_mode & 0111) || S_ISDIR(la->la_mode))
 		if (cap_raised(uc->uc_cap, CAP_DAC_OVERRIDE))
 			RETURN(0);
 
@@ -317,6 +318,7 @@ int mdd_permission(const struct lu_env *env, struct md_object *pobj,
 	struct lu_attr *pattr = NULL;
 	struct lu_attr *cattr = MDD_ENV_VAR(env, cattr);
 	int rc = 0;
+
 	ENTRY;
 
 	LASSERT(cobj);

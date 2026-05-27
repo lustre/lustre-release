@@ -4869,6 +4869,7 @@ static int mdd_migrate_cmd_check(const struct lu_env *env, struct mdd_device *md
 	struct md_layout_change *mlc = &info->mdi_mlc;
 	__u32 lmv_hash_type;
 	int rc = 0;
+
 	ENTRY;
 
 	if (lmv && !lmv_is_sane(lmv))
@@ -4917,14 +4918,14 @@ static int mdd_migrate_cmd_check(const struct lu_env *env, struct mdd_device *md
 	}
 
 	if (rc == 0) {
-		mlc->mlc_buf.lb_buf = (void*)lum;
+		mlc->mlc_buf.lb_buf = (void *)lum;
 		mlc->mlc_buf.lb_len = lum_len;
 		rc = mo_layout_check(env, &sobj->mod_obj, mlc);
 	}
 
 	if (rc == -EPERM) {
-		CERROR("%s: '"DNAME"' migration was interrupted, run "
-		       "'lfs migrate -m %d -c %d -H %s "DNAME"' to finish migration: rc = %d\n",
+		CERROR("%s: '"DNAME"' migration was interrupted, run 'lfs migrate -m %d -c %d -H %s "
+		       DNAME"' to finish migration: rc = %d\n",
 		       mdd2obd_dev(mdd)->obd_name, encode_fn_luname(lname),
 		       le32_to_cpu(lmv->lmv_master_mdt_index),
 		       le32_to_cpu(lmv->lmv_migrate_offset),

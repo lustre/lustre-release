@@ -865,7 +865,7 @@ static int obf_lookup(const struct lu_env *env, struct md_object *p,
 	while (*name == '[')
 		name++;
 
-        if (sscanf(name, SFID, RFID(f)) != 3)
+	if (sscanf(name, SFID, RFID(f)) != 3)
 		GOTO(out, rc = -ENOENT);
 
 	if (!fid_is_sane(f))

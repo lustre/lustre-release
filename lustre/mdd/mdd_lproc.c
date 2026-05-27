@@ -56,8 +56,8 @@ static ssize_t atime_diff_store(struct kobject *kobj,
 	if (rc)
 		return rc;
 
-        mdd->mdd_atime_diff = diff;
-        return count;
+	mdd->mdd_atime_diff = diff;
+	return count;
 }
 LUSTRE_RW_ATTR(atime_diff);
 
@@ -209,11 +209,11 @@ static int mdd_changelog_users_seq_show(struct seq_file *m, void *data)
 	if ((mdd->mdd_cl.mc_flags & CLM_INIT_DONE) == 0)
 		return -ENXIO;
 
-        ctxt = llog_get_context(mdd2obd_dev(mdd),
+	ctxt = llog_get_context(mdd2obd_dev(mdd),
 				LLOG_CHANGELOG_USER_ORIG_CTXT);
-        if (ctxt == NULL)
-                return -ENXIO;
-        LASSERT(ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT);
+	if (ctxt == NULL)
+		return -ENXIO;
+	LASSERT(ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT);
 
 	rc = lu_env_init(&env, LCT_LOCAL);
 	if (rc) {

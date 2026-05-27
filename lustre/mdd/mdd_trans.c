@@ -27,7 +27,7 @@
 #include "mdd_internal.h"
 
 struct thandle *mdd_trans_create(const struct lu_env *env,
-                                 struct mdd_device *mdd)
+				 struct mdd_device *mdd)
 {
 	struct thandle *th;
 	struct lu_ucred *uc = lu_ucred_check(env);
@@ -60,9 +60,9 @@ out:
 }
 
 int mdd_trans_start(const struct lu_env *env, struct mdd_device *mdd,
-                    struct thandle *th)
+		    struct thandle *th)
 {
-        return mdd_child_ops(mdd)->dt_trans_start(env, mdd->mdd_child, th);
+	return mdd_child_ops(mdd)->dt_trans_start(env, mdd->mdd_child, th);
 }
 
 struct mdd_changelog_gc {
@@ -217,13 +217,13 @@ int mdd_trans_stop(const struct lu_env *env, struct mdd_device *mdd,
 		gc_task = kthread_run(mdd_chlg_garbage_collect, mdd,
 				      "chlg_gc_thread");
 		if (IS_ERR(gc_task)) {
-			CERROR("%s: cannot start ChangeLog garbage collection "
-			       "thread: rc = %ld\n", obd->obd_name,
+			CERROR("%s: cannot start ChangeLog garbage collection thread: rc = %ld\n",
+			       obd->obd_name,
 			       PTR_ERR(gc_task));
 			mdd->mdd_cl.mc_gc_task = MDD_CHLG_GC_NONE;
 		} else {
-			CDEBUG(D_HA, "%s: a ChangeLog garbage collection "
-			       "thread has been started\n", obd->obd_name);
+			CDEBUG(D_HA, "%s: a ChangeLog garbage collection thread has been started\n",
+			       obd->obd_name);
 		}
 	}
 

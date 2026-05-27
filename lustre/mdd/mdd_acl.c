@@ -131,14 +131,14 @@ int lustre_posix_acl_chmod_masq(struct posix_acl_xattr_entry *entry, u32 mode,
 	/* There is implicit conversion between S_IRWX modes and ACL_* modes.
 	 * Don't bother explicitly converting them unless they actually change.
 	 */
-	BUILD_BUG_ON(S_IROTH != ACL_READ);
-	BUILD_BUG_ON(S_IWOTH != ACL_WRITE);
-	BUILD_BUG_ON(S_IXOTH != ACL_EXECUTE);
+	BUILD_BUG_ON(0004 != ACL_READ);
+	BUILD_BUG_ON(0002 != ACL_WRITE);
+	BUILD_BUG_ON(0001 != ACL_EXECUTE);
 
 	for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
 		switch (le16_to_cpu(pa->e_tag)) {
 		case ACL_USER_OBJ:
-			pa->e_perm = cpu_to_le16((mode & S_IRWXU) >> 6);
+			pa->e_perm = cpu_to_le16((mode & 0700) >> 6);
 			break;
 		case ACL_USER:
 		case ACL_GROUP:
@@ -150,7 +150,7 @@ int lustre_posix_acl_chmod_masq(struct posix_acl_xattr_entry *entry, u32 mode,
 			mask_obj = pa;
 			break;
 		case ACL_OTHER:
-			pa->e_perm = cpu_to_le16(mode & S_IRWXO);
+			pa->e_perm = cpu_to_le16(mode & 0007);
 			break;
 		default:
 			return -EIO;
@@ -158,11 +158,11 @@ int lustre_posix_acl_chmod_masq(struct posix_acl_xattr_entry *entry, u32 mode,
 	}
 
 	if (mask_obj) {
-		mask_obj->e_perm = cpu_to_le16((mode & S_IRWXG) >> 3);
+		mask_obj->e_perm = cpu_to_le16((mode & 0070) >> 3);
 	} else {
 		if (!group_obj)
 			return -EIO;
-		group_obj->e_perm = cpu_to_le16((mode & S_IRWXG) >> 3);
+		group_obj->e_perm = cpu_to_le16((mode & 0070) >> 3);
 	}
 
 	return 0;
@@ -181,19 +181,20 @@ int lustre_posix_acl_equiv_mode(struct posix_acl_xattr_entry *entry,
 
 	for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
 		__u16 perm = le16_to_cpu(pa->e_perm);
+
 		switch (le16_to_cpu(pa->e_tag)) {
 			case ACL_USER_OBJ:
-				mode |= (perm & S_IRWXO) << 6;
+				mode |= (perm & 0007) << 6;
 				break;
 			case ACL_GROUP_OBJ:
-				mode |= (perm & S_IRWXO) << 3;
+				mode |= (perm & 0007) << 3;
 				break;
 			case ACL_OTHER:
-				mode |= perm & S_IRWXO;
+				mode |= perm & 0007;
 				break;
 			case ACL_MASK:
-				mode = (mode & ~S_IRWXG) |
-					((perm & S_IRWXO) << 3);
+				mode = (mode & ~0070) |
+					((perm & 0007) << 3);
 				not_equiv = 1;
 				break;
 			case ACL_USER:
@@ -205,7 +206,7 @@ int lustre_posix_acl_equiv_mode(struct posix_acl_xattr_entry *entry,
 		}
 	}
 	if (mode_p)
-		*mode_p = (*mode_p & ~S_IRWXUGO) | mode;
+		*mode_p = (*mode_p & ~0777) | mode;
 	return not_equiv;
 }
 
@@ -226,7 +227,7 @@ int lustre_posix_acl_create_masq(struct posix_acl_xattr_entry *entry,
 		case ACL_USER_OBJ:
 			ae.e_perm &= (mode >> 6) | ~(0007);
 			pa->e_perm = cpu_to_le16(ae.e_perm);
-			mode &= (ae.e_perm << 6) | ~S_IRWXU;
+			mode &= (ae.e_perm << 6) | ~0700;
 			break;
 		case ACL_USER:
 		case ACL_GROUP:
@@ -252,18 +253,18 @@ int lustre_posix_acl_create_masq(struct posix_acl_xattr_entry *entry,
 	if (mask_obj) {
 		ae.e_perm = le16_to_cpu(mask_obj->e_perm) &
 					((mode >> 3) | ~(0007));
-		mode &= (ae.e_perm << 3) | ~S_IRWXG;
+		mode &= (ae.e_perm << 3) | ~0070;
 		mask_obj->e_perm = cpu_to_le16(ae.e_perm);
 	} else {
 		if (!group_obj)
 			return -EIO;
 		ae.e_perm = le16_to_cpu(group_obj->e_perm) &
 					((mode >> 3) | ~(0007));
-		mode &= (ae.e_perm << 3) | ~S_IRWXG;
+		mode &= (ae.e_perm << 3) | ~0070;
 		group_obj->e_perm = cpu_to_le16(ae.e_perm);
 	}
 
-	*pmode = (*pmode & ~S_IRWXUGO) | mode;
+	*pmode = (*pmode & ~0777) | mode;
 	return not_equiv;
 }
 #endif
