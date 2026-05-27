@@ -578,6 +578,7 @@ static int ll_prepare_partial_page(const struct lu_env *env, struct cl_io *io,
 	struct cl_object *obj  = io->ci_obj;
 	loff_t offset = cl_page_index(pg) << PAGE_SHIFT;
 	int result;
+
 	ENTRY;
 
 	cl_object_attr_lock(obj);
@@ -667,8 +668,8 @@ static int ll_write_begin(
 	struct cl_object *clob = ll_i2info(mapping->host)->lli_clob;
 	pgoff_t index = pos >> PAGE_SHIFT;
 	struct page *vmpage = NULL;
-	unsigned from = pos & (PAGE_SIZE - 1);
-	unsigned to = from + len;
+	unsigned int from = pos & (PAGE_SIZE - 1);
+	unsigned int to = from + len;
 	int result = 0;
 
 	ENTRY;
@@ -846,7 +847,7 @@ static int ll_write_end(
 			struct file *file,
 #endif
 			struct address_space *mapping,
-			loff_t pos, unsigned len, unsigned copied,
+			loff_t pos, unsigned int len, unsigned int copied,
 			struct wbe_folio *folio, void *fsdata)
 {
 	struct ll_cl_context *lcc = fsdata;
@@ -858,10 +859,11 @@ static int ll_write_end(
 	struct vvp_io *vio;
 	struct cl_page *cl_page;
 	struct page *vmpage = wbe_folio_page(folio);
-	unsigned from = pos & (PAGE_SIZE - 1);
+	unsigned int from = pos & (PAGE_SIZE - 1);
 	enum cl_io_priority prio = IO_PRIO_NORMAL;
 	bool unplug = false;
 	int result = 0;
+
 	ENTRY;
 
 	put_page(vmpage);

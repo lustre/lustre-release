@@ -905,7 +905,7 @@ static ssize_t pcc_mode_store(struct kobject *kobj, struct attribute *attr,
 	if (rc)
 		return rc;
 
-	if (mode & ~S_IRWXUGO)
+	if (mode & ~0777)
 		return -EINVAL;
 
 	super->pccs_mode = mode;
@@ -1098,8 +1098,8 @@ static ssize_t statahead_running_max_store(struct kobject *kobj,
 		return count;
 	}
 
-	CERROR("Bad statahead_running_max value %lu. Valid values "
-	       "are in the range [0, %d]\n", val, LL_SA_RUNNING_MAX);
+	CERROR("Bad statahead_running_max value %lu. Valid values are in the range [0, %d]\n",
+	       val, LL_SA_RUNNING_MAX);
 
 	return -ERANGE;
 }
@@ -1901,8 +1901,8 @@ read_ahead_async_file_threshold_mb_store(struct kobject *kobj,
 	pages_number = MiB_TO_PAGES(pages_number);
 	max_ra_per_file = sbi->ll_ra_info.ra_max_pages_per_file;
 	if (pages_number < 0 || pages_number > max_ra_per_file) {
-		CERROR("%s: can't set read_ahead_async_file_threshold_mb=%lu > "
-		       "max_read_readahead_per_file_mb=%lu\n", sbi->ll_fsname,
+		CERROR("%s: can't set read_ahead_async_file_threshold_mb=%lu > max_read_readahead_per_file_mb=%lu\n",
+		       sbi->ll_fsname,
 		       PAGES_TO_MiB(pages_number),
 		       PAGES_TO_MiB(max_ra_per_file));
 		return -ERANGE;
@@ -2963,8 +2963,8 @@ static void ll_display_extents_info(struct ll_rw_extents_info *rw_extents,
 		read_cum += r;
 		write_cum += w;
 		end = 1 << (i + LL_HIST_START - units);
-		seq_printf(seq, "%4lu%c - %4lu%c%c: %14lu %4u %4u  | "
-			   "%14lu %4u %4u\n", start, *unitp, end, *unitp,
+		seq_printf(seq, "%4lu%c - %4lu%c%c: %14lu %4u %4u  | %14lu %4u %4u\n",
+			   start, *unitp, end, *unitp,
 			   (i == LL_HIST_MAX - 1) ? '+' : ' ',
 			   r, pct(r, read_tot), pct(read_cum, read_tot),
 			   w, pct(w, write_tot), pct(write_cum, write_tot));

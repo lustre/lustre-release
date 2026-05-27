@@ -1287,8 +1287,8 @@ static int vvp_io_write_start(const struct lu_env *env,
 			 pos, pos + crw_bytes);
 	}
 
-	CDEBUG(D_VFSTRACE, DNAME": write [%llu, %llu) append %d append lockpos "
-	       "%llu\n", encode_fn_file(file), pos, pos + crw_bytes,
+	CDEBUG(D_VFSTRACE, DNAME": write [%llu, %llu) append %d append lockpos %llu\n",
+	       encode_fn_file(file), pos, pos + crw_bytes,
 	       cl_io_is_append(io), io->u.ci_wr.wr_append_lockpos);
 
 	/* The maximum Lustre file size is variable, based on the OST maximum

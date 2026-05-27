@@ -1994,7 +1994,7 @@ int ll_readpage(struct file *file, struct page *vmpage)
 		 * Because this page is beyond the boundary of the requested
 		 * read, Lustre does not lock it as part of the read.  This
 		 * means we must check if there is a valid dlmlock on this
-		 * this page and reference it before we attempt to read in the
+		 * page and reference it before we attempt to read in the
 		 * page.  If there is not a valid dlmlock, then we are racing
 		 * with dlmlock cancellation and the page is being removed
 		 * from the cache.

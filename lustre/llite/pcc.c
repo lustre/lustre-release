@@ -114,7 +114,7 @@ int pcc_super_init(struct pcc_super *super)
 	INIT_LIST_HEAD(&super->pccs_datasets);
 	super->pccs_generation = 1;
 	super->pccs_async_threshold = PCC_DEFAULT_ASYNC_THRESHOLD;
-	super->pccs_mode = S_IRUSR;
+	super->pccs_mode = 0400;
 
 	return 0;
 }
@@ -1725,7 +1725,7 @@ static int pcc_try_datasets_attach(struct inode *inode, enum pcc_io_type iot,
 	if (!rc && !*cached) {
 		/*
 		 * Currently auto attach strategy for a PCC backend is
-		 * unchangeable once once it was added into the PCC datasets on
+		 * unchangeable once it was added into the PCC datasets on
 		 * a client as the support to change auto attach strategy is
 		 * not implemented yet.
 		 */
@@ -2345,10 +2345,10 @@ bool pcc_inode_permission(struct inode *inode)
 {
 	umode_t mask = inode->i_mode & ll_i2pccs(inode)->pccs_mode;
 
-	return (mask & (S_IRUSR | S_IXUSR) &&
+	return (mask & (0500) &&
 		inode_owner_or_capable(&nop_mnt_idmap, inode)) ||
-	       (mask & (S_IRGRP | S_IXGRP) && in_group_p(inode->i_gid)) ||
-	       (mask & (S_IROTH | S_IXOTH));
+	       (mask & (0050) && in_group_p(inode->i_gid)) ||
+	       (mask & (0005));
 }
 
 int pcc_file_open(struct inode *inode, struct file *file)

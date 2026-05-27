@@ -26,6 +26,7 @@ ll_get_acl_common(struct inode *inode, int type, bool rcu)
 	int len, xtype;
 	char buf[200];
 	char *xname;
+
 	ENTRY;
 
 	if (rcu)
@@ -127,6 +128,7 @@ int ll_set_acl(struct mnt_idmap *map,
 	char *value = NULL;
 	size_t value_size = 0;
 	int rc = 0;
+
 	ENTRY;
 
 	switch (type) {

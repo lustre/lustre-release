@@ -350,7 +350,7 @@ static int ll_iterate(struct file *filp, struct dir_context *ctx)
 			struct obd_export *exp = ll_i2mdexp(i_dir);
 			enum mds_ibits_locks ibits = MDS_INODELOCK_LOOKUP;
 
-			if (ll_have_md_lock(exp, i_dir, &ibits, LCK_MODE_MIN,0))
+			if (ll_have_md_lock(exp, i_dir, &ibits, LCK_MODE_MIN, 0))
 				pfid = *ll_inode2fid(i_dir);
 		}
 		dput(parent);
@@ -495,7 +495,7 @@ static int ll_dir_setdirstripe(struct dentry *dparent, struct lmv_user_md *lump,
 
 	if (!IS_POSIXACL(parent) || !exp_connect_umask(ll_i2mdexp(parent)))
 		mode &= ~current_umask();
-	mode = (mode & (S_IRWXUGO | S_ISVTX)) | S_IFDIR;
+	mode = (mode & (0777 | S_ISVTX)) | S_IFDIR;
 	op_data = ll_prep_md_op_data(NULL, parent, NULL, dirname,
 				     strlen(dirname), mode, LUSTRE_OPC_MKDIR,
 				     lump);
@@ -788,21 +788,21 @@ int ll_dir_get_default_layout(struct inode *inode, void **plmm, int *plmm_size,
 	case LOV_MAGIC_V3:
 	case LOV_MAGIC_COMP_V1:
 	case LOV_USER_MAGIC_SPECIFIC:
-		if (LOV_MAGIC != cpu_to_le32(LOV_MAGIC))
+		if (cpu_to_le32(LOV_MAGIC) != LOV_MAGIC)
 			lustre_swab_lov_user_md((struct lov_user_md *)lmm, 0);
 		break;
 	case LMV_MAGIC_V1:
-		if (LMV_MAGIC != cpu_to_le32(LMV_MAGIC))
+		if (cpu_to_le32(LMV_MAGIC) != LMV_MAGIC)
 			lustre_swab_lmv_mds_md((union lmv_mds_md *)lmm);
 		break;
 	case LMV_USER_MAGIC:
-		if (LMV_USER_MAGIC != cpu_to_le32(LMV_USER_MAGIC))
+		if (cpu_to_le32(LMV_USER_MAGIC) != LMV_USER_MAGIC)
 			lustre_swab_lmv_user_md((struct lmv_user_md *)lmm);
 		break;
 	case LMV_MAGIC_FOREIGN: {
 		struct lmv_foreign_md *lfm = (struct lmv_foreign_md *)lmm;
 
-		if (LMV_MAGIC_FOREIGN != cpu_to_le32(LMV_MAGIC_FOREIGN)) {
+		if (cpu_to_le32(LMV_MAGIC_FOREIGN) != LMV_MAGIC_FOREIGN) {
 			__swab32s(&lfm->lfm_magic);
 			__swab32s(&lfm->lfm_length);
 			__swab32s(&lfm->lfm_type);
@@ -997,8 +997,7 @@ static int ll_ioc_copy_start(struct super_block *sb, struct hsm_copy *copy)
 		iput(inode);
 		if (rc != 0) {
 			CDEBUG(D_HSM, "Could not read file data version of "
-				      DFID" (rc = %d). Archive request ("
-				      "%#llx) could not be done.\n",
+				      DFID" (rc = %d). Archive request (%#llx) could not be done.\n",
 				      PFID(&copy->hc_hai.hai_fid), rc,
 				      copy->hc_hai.hai_cookie);
 			hpk.hpk_flags |= HP_FLAG_RETRY;
@@ -1102,8 +1101,7 @@ static int ll_ioc_copy_end(struct super_block *sb, struct hsm_copy *copy)
 		 */
 		if ((copy->hc_hai.hai_action == HSMA_ARCHIVE) &&
 		    (copy->hc_data_version != data_version)) {
-			CDEBUG(D_HSM, "File data version mismatched. "
-			      "File content was changed during archiving. "
+			CDEBUG(D_HSM, "File data version mismatched. File content was changed during archiving. "
 			       DFID", start:%#llx current:%#llx\n",
 			       PFID(&copy->hc_hai.hai_fid),
 			       copy->hc_data_version, data_version);

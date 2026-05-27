@@ -481,7 +481,7 @@ int ll_file_release(struct inode *inode, struct file *file)
 	lfd = file->private_data;
 	LASSERT(lfd != NULL);
 
-	/* The last ref on @file, maybe not the the owner pid of statahead,
+	/* The last ref on @file, maybe not the owner pid of statahead,
 	 * because parent and child process can share the same file handle.
 	 */
 	if (S_ISDIR(inode->i_mode) &&
@@ -720,7 +720,7 @@ void ll_dir_finish_open(struct inode *inode, struct ptlrpc_request *req)
 	int is_hash64;
 	struct lu_dirpage *dp;
 	int rc = 0;
-	unsigned long   offset;
+	unsigned long offset;
 	__u64 hash;
 	gfp_t gfp;
 
@@ -2569,7 +2569,7 @@ static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
  * All writes here are within one page, so exclusion is handled by the page
  * lock on the vm page.  We do not do tiny writes for writes which touch
  * multiple pages because it's very unlikely multiple sequential pages are
- * are already dirty.
+ * already dirty.
  *
  * We limit these to < PAGE_SIZE because PAGE_SIZE writes are relatively common
  * and are unlikely to be to already dirty pages.
@@ -3833,6 +3833,7 @@ static int ll_hsm_data_version_sync(struct inode *inode, __u64 data_version)
 	struct obd_export *exp = ll_i2mdexp(inode);
 	struct md_op_data *op_data;
 	int rc;
+
 	ENTRY;
 
 	if (!data_version)
@@ -6154,7 +6155,7 @@ static int ll_inode_revalidate_fini(struct inode *inode, int rc)
 			return 0;
 
 		/* This path cannot be hit for regular files unless in
-		 * case of obscure races, so no need to to validate
+		 * case of obscure races, so no need to validate
 		 * size.
 		 */
 		if (!S_ISREG(inode->i_mode) && !S_ISDIR(inode->i_mode))

@@ -101,8 +101,7 @@ int cl_ocd_update(struct obd_device *host, struct obd_device *watched,
 		mutex_unlock(&lco->lco_lock);
 		result = 0;
 	} else {
-		CERROR("unexpected notification from %s %s"
-		       "(setup:%d,stopping:%d)!\n",
+		CERROR("unexpected notification from %s %s(setup:%d,stopping:%d)!\n",
 		       watched->obd_type->typ_name,
 		       watched->obd_name,
 		       test_bit(OBDF_SET_UP, watched->obd_flags),

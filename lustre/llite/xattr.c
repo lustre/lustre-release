@@ -717,7 +717,7 @@ out_env:
 			GOTO(out_req, rc);
 
 		xattr_size = lmm_size;
-		rc = ll_sanitize_xattr(inode, (void*)lmm, buf_size,
+		rc = ll_sanitize_xattr(inode, (void *)lmm, buf_size,
 				       xattr_size);
 		if (buf && rc > 0)
 			memcpy(buf, lmm, lmm_size);

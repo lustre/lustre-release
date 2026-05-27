@@ -2241,7 +2241,7 @@ static inline int do_mkdir(struct inode *dir, struct dentry *dchild,
 	if (!IS_POSIXACL(dir) || !exp_connect_umask(ll_i2mdexp(dir)))
 		mode &= ~current_umask();
 
-	mode = (mode & (S_IRWXUGO | S_ISVTX)) | S_IFDIR;
+	mode = (mode & (0777 | S_ISVTX)) | S_IFDIR;
 	if (!sbi->ll_intent_mkdir_enabled) {
 		rc = ll_new_node(dir, dchild, NULL, mode, 0, LUSTRE_OPC_MKDIR);
 		GOTO(out_tally, rc);
