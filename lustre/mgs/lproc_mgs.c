@@ -79,17 +79,17 @@ static void seq_show_srpc_rules(struct seq_file *seq, const char *tgtname,
 			net = libcfs_net2str_r(r->sr_netid, net_buf,
 					       sizeof(net_buf));
 
-                if (r->sr_from == LUSTRE_SP_ANY && r->sr_to == LUSTRE_SP_ANY)
-                        dirbuf[0] = '\0';
-                else
-                        snprintf(dirbuf, sizeof(dirbuf), ".%s2%s",
-                                 sptlrpc_part2name(r->sr_from),
-                                 sptlrpc_part2name(r->sr_to));
+		if (r->sr_from == LUSTRE_SP_ANY && r->sr_to == LUSTRE_SP_ANY)
+			dirbuf[0] = '\0';
+		else
+			snprintf(dirbuf, sizeof(dirbuf), ".%s2%s",
+				 sptlrpc_part2name(r->sr_from),
+				 sptlrpc_part2name(r->sr_to));
 
-                sptlrpc_flavor2name(&r->sr_flvr, flvrbuf, sizeof(flvrbuf));
-                seq_printf(seq, "%s.srpc.flavor.%s%s=%s\n", tgtname,
-                           net, dirbuf, flvrbuf);
-        }
+		sptlrpc_flavor2name(&r->sr_flvr, flvrbuf, sizeof(flvrbuf));
+		seq_printf(seq, "%s.srpc.flavor.%s%s=%s\n", tgtname,
+			   net, dirbuf, flvrbuf);
+	}
 }
 
 static int mgsself_srpc_seq_show(struct seq_file *seq, void *v)
@@ -102,7 +102,7 @@ static int mgsself_srpc_seq_show(struct seq_file *seq, void *v)
 	seq_show_srpc_rules(seq, MGSSELF_NAME, &tgt->lut_sptlrpc_rset);
 	read_unlock(&tgt->lut_sptlrpc_lock);
 
-        return 0;
+	return 0;
 }
 LDEBUGFS_SEQ_FOPS_RO(mgsself_srpc);
 
@@ -124,7 +124,7 @@ static int mgs_live_seq_show(struct seq_file *seq, void *v)
 		if (test_bit(i, fsdb->fsdb_ost_index_map))
 			 seq_printf(seq, "%s-OST%04x\n", fsdb->fsdb_name, i);
 
-	seq_printf(seq, "\nSecure RPC Config Rules:\n");
+	seq_puts(seq, "\nSecure RPC Config Rules:\n");
 #if 0
 	seq_printf(seq, "%s.%s=%s\n", fsdb->fsdb_name,
 		   PARAM_SRPC_UDESC, fsdb->fsdb_srpc_fl_udesc ? "yes" : "no");

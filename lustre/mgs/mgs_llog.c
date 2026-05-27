@@ -275,8 +275,7 @@ static inline int name_create_lov(char **lovname, char *mdtname)
 }
 
 
-struct mgs_fsdb_handler_data
-{
+struct mgs_fsdb_handler_data {
 	struct fs_db   *fsdb;
 	__u32		ver;
 };
@@ -507,6 +506,7 @@ static struct fs_db *mgs_new_fsdb(const struct lu_env *env,
 {
 	struct fs_db *fsdb;
 	int rc;
+
 	ENTRY;
 
 	if (strlen(fsname) >= sizeof(fsdb->fsdb_name)) {
@@ -651,6 +651,7 @@ int mgs_find_or_make_fsdb_nolock(const struct lu_env *env,
 {
 	struct fs_db *fsdb;
 	int rc = 0;
+
 	ENTRY;
 
 	fsdb = mgs_find_fsdb(mgs, name);
@@ -693,6 +694,7 @@ int mgs_find_or_make_fsdb(const struct lu_env *env, struct mgs_device *mgs,
 			  char *name, struct fs_db **dbh)
 {
 	int rc;
+
 	ENTRY;
 
 	mutex_lock(&mgs->mgs_mutex);
@@ -752,7 +754,7 @@ out:
 	return rc;
 }
 
-static __inline__ int next_index(void *index_map, int map_len)
+static inline int next_index(void *index_map, int map_len)
 {
 	int i;
 
@@ -904,6 +906,7 @@ static int mgs_search_pool_cb(const struct lu_env *env,
 	char *poolname;
 	char *ostname = NULL;
 	int rc;
+
 	ENTRY;
 
 	if (rec->lrh_type != OBD_CFG_REC) {
@@ -1480,7 +1483,7 @@ struct mgs_replace_data {
 static int check_markers(struct lustre_cfg *lcfg,
 			 struct mgs_replace_data *mrd)
 {
-	 struct cfg_marker *marker;
+	struct cfg_marker *marker;
 
 	/* Track markers. Find given device */
 	if (lcfg->lcfg_command == LCFG_MARKER) {
@@ -1639,8 +1642,7 @@ static int process_command(const struct lu_env *env, struct lustre_cfg *lcfg,
 				rc = niduuid_create(&mrd->nodeuuid,
 						    libcfs_nidstr(&nid));
 				if (rc) {
-					CERROR("Can't create uuid for "
-						"nid  %s, device %s\n",
+					CERROR("Can't create uuid for nid  %s, device %s\n",
 						libcfs_nidstr(&nid),
 						mrd->target.mti_svname);
 					return rc;
@@ -1801,10 +1803,8 @@ static int mgs_replace_nids_handler(const struct lu_env *env,
 	    (lcfg->lcfg_command == LCFG_ADD_UUID ||
 	     lcfg->lcfg_command == LCFG_ADD_CONN)) {
 		if (!mrd->failover)
-			CWARN("Previous failover is deleted, but new one is "
-			      "not set. This means you configure system "
-			      "without failover or passed wrong replace_nids "
-			      "command parameters. Device %s, passed nids %s\n",
+			CWARN("Previous failover is deleted, but new one is not set. This means you configure system "
+			      "without failover or passed wrong replace_nids command parameters. Device %s, passed nids %s\n",
 			      mrd->target.mti_svname, mrd->target.mti_params);
 		GOTO(skip_out, rc = 0);
 	}
@@ -1858,6 +1858,7 @@ static int mgs_replace_log(const struct lu_env *env,
 	char *backup;
 	int rc, rc2, buf_size;
 	time64_t now;
+
 	ENTRY;
 
 	ctxt = llog_get_context(mgs, LLOG_CONFIG_ORIG_CTXT);
@@ -1888,7 +1889,7 @@ static int mgs_replace_log(const struct lu_env *env,
 	} else if (rc != -ENOENT) {
 		CERROR("%s: can't make backup for %s: rc = %d\n",
 		       mgs->obd_name, logname, rc);
-		GOTO(out_free,rc);
+		GOTO(out_free, rc);
 	}
 
 	/* open local log */
@@ -1994,6 +1995,7 @@ static int mgs_replace_nids_log(const struct lu_env *env,
 static int mgs_parse_devname(char *devname, char *fsname, u32 *index)
 {
 	int rc = 0;
+
 	ENTRY;
 
 	/* Extract fsname */
@@ -2083,6 +2085,7 @@ int mgs_replace_nids(const struct lu_env *env,
 	unsigned int i;
 	int conn_state;
 	struct obd_device *mgs_obd = mgs->mgs_obd;
+
 	ENTRY;
 
 	/* We can only change NIDs if no other nodes are connected */
@@ -2172,8 +2175,8 @@ static int mgs_clear_config_handler(const struct lu_env *env,
 	ENTRY;
 
 	if (rec->lrh_type != OBD_CFG_REC) {
-		CDEBUG(D_MGS, "Config llog Name=%s, Record Index=%u, "
-		       "Unhandled Record Type=%#x\n", llh->lgh_name,
+		CDEBUG(D_MGS, "Config llog Name=%s, Record Index=%u, Unhandled Record Type=%#x\n",
+		       llh->lgh_name,
 		       rec->lrh_index, rec->lrh_type);
 		RETURN(-EINVAL);
 	}
@@ -2195,8 +2198,8 @@ static int mgs_clear_config_handler(const struct lu_env *env,
 			if (marker->cm_flags & CM_END)
 				mrd->state = REPLACE_COPY;
 			/* SKIP section started or finished */
-			CDEBUG(D_MGS, "Skip idx=%d, rc=%d, len=%d, "
-			       "cmd %x %s %s\n", rec->lrh_index, rc,
+			CDEBUG(D_MGS, "Skip idx=%d, rc=%d, len=%d, cmd %x %s %s\n",
+			       rec->lrh_index, rc,
 			       rec->lrh_len, lcfg->lcfg_command,
 			       lustre_cfg_string(lcfg, 0),
 			       lustre_cfg_string(lcfg, 1));
@@ -2205,8 +2208,8 @@ static int mgs_clear_config_handler(const struct lu_env *env,
 	} else {
 		if (mrd->state == REPLACE_SKIP) {
 			/* record enclosed between SKIP markers, skip it */
-			CDEBUG(D_MGS, "Skip idx=%d, rc=%d, len=%d, "
-			       "cmd %x %s %s\n", rec->lrh_index, rc,
+			CDEBUG(D_MGS, "Skip idx=%d, rc=%d, len=%d, cmd %x %s %s\n",
+			       rec->lrh_index, rc,
 			       rec->lrh_len, lcfg->lcfg_command,
 			       lustre_cfg_string(lcfg, 0),
 			       lustre_cfg_string(lcfg, 1));
@@ -2239,7 +2242,8 @@ static bool config_to_clear(const char *logname)
 		return 0;
 
 	i = 0;
-	while (isalnum(str[++i]));
+	while (isalnum(str[++i]))
+		;
 	return str[i] == '\0';
 }
 
@@ -2369,7 +2373,7 @@ static inline int record_mdc_add(const struct lu_env *env,
 				 char *mdtuuid, char *index,
 				 char *gen)
 {
-	return record_base(env,llh,logname,0,LCFG_ADD_MDC,
+	return record_base(env, llh, logname, 0, LCFG_ADD_MDC,
 			   mdtuuid, index, gen, mdcuuid);
 }
 
@@ -2434,6 +2438,7 @@ static int record_start_log(const struct lu_env *env, struct mgs_device *mgs,
 	static struct obd_uuid	 cfg_uuid = { .uuid = "config_uuid" };
 	struct llog_ctxt	*ctxt;
 	int			 rc = 0;
+
 	ENTRY;
 
 	if (*llh)
@@ -2488,7 +2493,7 @@ static int mgs_write_log_direct(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
-        /* FIXME These should be a single journal transaction */
+	/* FIXME These should be a single journal transaction */
 	rc = record_marker(env, llh, fsdb, CM_START, devname, comment);
 	if (rc)
 		GOTO(out_end, rc);
@@ -2500,7 +2505,7 @@ static int mgs_write_log_direct(const struct lu_env *env,
 		GOTO(out_end, rc);
 out_end:
 	record_end_log(env, &llh);
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /* write the lcfg in all logs for the given fs */
@@ -3873,7 +3878,7 @@ static int mgs_write_log_ost(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 	/* FIXME these should be a single journal transaction */
-	rc = record_marker(env, llh, fsdb, CM_START, mti->mti_svname,"add ost");
+	rc = record_marker(env, llh, fsdb, CM_START, mti->mti_svname, "add ost");
 	if (rc)
 		GOTO(out_end, rc);
 	if (*mti->mti_uuid == '\0')
@@ -4050,7 +4055,7 @@ static int mgs_write_log_add_failnid(const struct lu_env *env,
 		RETURN(rc);
 	}
 
-	rc = mgs_write_log_failnid_internal(env, mgs, fsdb,mti,logname,cliname);
+	rc = mgs_write_log_failnid_internal(env, mgs, fsdb, mti, logname, cliname);
 	name_destroy(&logname);
 	name_destroy(&cliname);
 	if (rc)
@@ -4230,8 +4235,8 @@ static int mgs_write_log_quota(const struct lu_env *env, struct mgs_device *mgs,
 	/* support only 'meta' and 'data' pools so far */
 	if (class_match_param(ptr, QUOTA_METAPOOL_NAME, &tmp) != 0 &&
 	    class_match_param(ptr, QUOTA_DATAPOOL_NAME, &tmp) != 0) {
-		CERROR("parameter quota.%s isn't supported (only quota.mdt "
-		       "& quota.ost are)\n", ptr);
+		CERROR("parameter quota.%s isn't supported (only quota.mdt & quota.ost are)\n",
+		       ptr);
 		return -EINVAL;
 	}
 
@@ -4730,6 +4735,7 @@ static int mgs_write_log_param(const struct lu_env *env,
 	char *logname;
 	char *tmp;
 	int rc = 0;
+
 	ENTRY;
 
 	/* For various parameter settings, we have to figure out which logs
@@ -4932,8 +4938,7 @@ active_err:
 		if ((class_match_param(ptr, PARAM_LLITE, &tmp) == 0) &&
 		    ((memcmp(tmp, "root_squash=", 12) == 0) ||
 		     (memcmp(tmp, "nosquash_nids=", 14) == 0))) {
-			LCONSOLE_ERROR("%s: root squash parameters can only "
-				"be updated through MDT component\n",
+			LCONSOLE_ERROR("%s: root squash parameters can only be updated through MDT component\n",
 				mti->mti_fsname);
 			name_destroy(&cname);
 			GOTO(end, rc = -EINVAL);
@@ -5090,8 +5095,7 @@ active_err:
 		} else {
 			if ((memcmp(tmp, "root_squash=", 12) == 0) ||
 			    (memcmp(tmp, "nosquash_nids=", 14) == 0)) {
-				LCONSOLE_ERROR("%s: root squash parameters "
-					"cannot be applied to a single MDT\n",
+				LCONSOLE_ERROR("%s: root squash parameters cannot be applied to a single MDT\n",
 					mti->mti_fsname);
 				GOTO(end, rc = -EINVAL);
 			}
@@ -5291,6 +5295,7 @@ int mgs_erase_logs(const struct lu_env *env, struct mgs_device *mgs,
 	char *suffix;
 	int count = 0;
 	int rc, len = strlen(fsname);
+
 	ENTRY;
 
 	mutex_lock(&mgs->mgs_mutex);
@@ -5433,6 +5438,7 @@ static int mgs_lcfg_fork_handler(const struct lu_env *env,
 	__u32 cnt = o_lcfg->lcfg_bufcount;
 	int rc;
 	int i;
+
 	ENTRY;
 
 	/* buf[0] */
@@ -5456,8 +5462,8 @@ static int mgs_lcfg_fork_handler(const struct lu_env *env,
 		int tgt_namelen;
 
 		if (cnt != 2) {
-			CDEBUG(D_MGS, "Unknown cfg marker entry with %d "
-			       "buffers\n", cnt);
+			CDEBUG(D_MGS, "Unknown cfg marker entry with %d buffers\n",
+			       cnt);
 			RETURN(-EINVAL);
 		}
 
@@ -5500,8 +5506,8 @@ static int mgs_lcfg_fork_handler(const struct lu_env *env,
 	case LCFG_POOL_REM:
 	case LCFG_POOL_DEL: {
 		if (cnt < 3 || cnt > 4) {
-			CDEBUG(D_MGS, "Unknown cfg pool (%x) entry with %d "
-			       "buffers\n", cmd, cnt);
+			CDEBUG(D_MGS, "Unknown cfg pool (%x) entry with %d buffers\n",
+			       cmd, cnt);
 			RETURN(-EINVAL);
 		}
 
@@ -5639,6 +5645,7 @@ static int mgs_lcfg_fork_one(const struct lu_env *env, struct mgs_device *mgs,
 	int new_namelen = strlen(newname);
 	struct obd_uuid cfg_uuid = { .uuid = "config_uuid" };
 	int rc;
+
 	ENTRY;
 
 	name_buflen = mde->mde_len + new_namelen - old_namelen;
@@ -5713,6 +5720,7 @@ int mgs_lcfg_fork(const struct lu_env *env, struct mgs_device *mgs,
 	int nlen = strlen(newname);
 	int count = 0;
 	int rc = 0;
+
 	ENTRY;
 
 	if (unlikely(!oldname || oldname[0] == '\0' ||
@@ -5787,6 +5795,7 @@ int mgs_lcfg_erase(const struct lu_env *env, struct mgs_device *mgs,
 		   const char *fsname)
 {
 	int rc;
+
 	ENTRY;
 
 	if (unlikely(!fsname || fsname[0] == '\0'))
@@ -5938,6 +5947,7 @@ int mgs__mgs_fsdb_setup(const struct lu_env *env, struct mgs_device *mgs)
 {
 	struct fs_db *fsdb = NULL;
 	int rc;
+
 	ENTRY;
 
 	rc = mgs_find_or_make_fsdb(env, mgs, MGSSELF_NAME, &fsdb);
@@ -5954,6 +5964,7 @@ int mgs_params_fsdb_setup(const struct lu_env *env, struct mgs_device *mgs)
 	struct fs_db *fsdb = NULL;
 	struct llog_handle *params_llh = NULL;
 	int rc;
+
 	ENTRY;
 
 	rc = mgs_find_or_make_fsdb(env, mgs, PARAMS_FILENAME, &fsdb);
@@ -6090,8 +6101,8 @@ static int mgs_set_conf_param(const struct lu_env *env, struct mgs_device *mgs,
 
 	if (!test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags) &&
 	    test_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags)) {
-		CERROR("No filesystem targets for %s. cfg_device from lctl "
-		       "is '%s'\n", mti->mti_fsname, mti->mti_svname);
+		CERROR("No filesystem targets for %s. cfg_device from lctl is '%s'\n",
+		       mti->mti_fsname, mti->mti_svname);
 		mgs_unlink_fsdb(mgs, fsdb);
 		GOTO(out, rc = -EINVAL);
 	}
@@ -6376,6 +6387,7 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
 	int label_sz;
 	struct mgs_target_info *mti = NULL;
 	int rc, i;
+
 	ENTRY;
 
 	if ((cmd == LCFG_POOL_REM || cmd == LCFG_POOL_ADD) && !ostname)

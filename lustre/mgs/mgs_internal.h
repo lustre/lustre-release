@@ -68,18 +68,18 @@ struct fs_db;
  */
 struct mgs_fsc {
 	struct fs_db		*mfc_fsdb;
-        /**
-         * Where the fs client comes from.
-         */
+	/**
+	 * Where the fs client comes from.
+	 */
 	struct obd_export	*mfc_export;
-        /**
-         * list of fs clients from the same export,
-         * protected by mgs_export_data->med_lock
-         */
+	/**
+	 * list of fs clients from the same export,
+	 * protected by mgs_export_data->med_lock
+	 */
 	struct list_head	mfc_export_list;
-        /**
-         * list of fs clients in the same fsdb, protected by fsdb->fsdb_mutex
-         */
+	/**
+	 * list of fs clients in the same fsdb, protected by fsdb->fsdb_mutex
+	 */
 	struct list_head	mfc_fsdb_list;
 	unsigned		mfc_ir_capable:1;
 };
@@ -94,9 +94,9 @@ struct mgs_nidtbl {
 };
 
 struct mgs_tgt_srpc_conf {
-        struct mgs_tgt_srpc_conf  *mtsc_next;
-        char                      *mtsc_tgt;
-        struct sptlrpc_rule_set    mtsc_rset;
+	struct mgs_tgt_srpc_conf  *mtsc_next;
+	char                      *mtsc_tgt;
+	struct sptlrpc_rule_set    mtsc_rset;
 };
 
 #define INDEX_MAP_SIZE  8192     /* covers indicies to FFFF */
@@ -130,17 +130,17 @@ struct fs_db {
 	int		  fsdb_barrier_result;
 	time64_t	  fsdb_barrier_latest_create_time;
 
-        /* in-memory copy of the srpc rules, guarded by fsdb_lock */
-        struct sptlrpc_rule_set   fsdb_srpc_gen;
-        struct mgs_tgt_srpc_conf *fsdb_srpc_tgt;
+	/* in-memory copy of the srpc rules, guarded by fsdb_lock */
+	struct sptlrpc_rule_set   fsdb_srpc_gen;
+	struct mgs_tgt_srpc_conf *fsdb_srpc_tgt;
 
-        /* list of fs clients, mgs_fsc. protected by mgs_mutex */
+	/* list of fs clients, mgs_fsc. protected by mgs_mutex */
 	struct list_head     fsdb_clients;
-        int                  fsdb_nonir_clients;
-        int                  fsdb_ir_state;
+	int                  fsdb_nonir_clients;
+	int                  fsdb_ir_state;
 
-        /* Target NIDs Table */
-        struct mgs_nidtbl    fsdb_nidtbl;
+	/* Target NIDs Table */
+	struct mgs_nidtbl    fsdb_nidtbl;
 
 	/* async thread to notify clients */
 	struct mgs_device    *fsdb_mgs;
@@ -226,7 +226,7 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
 
 /* mgs_handler.c */
 int  mgs_get_lock(struct obd_device *obd, struct ldlm_res_id *res,
-                  struct lustre_handle *lockh);
+		  struct lustre_handle *lockh);
 int  mgs_put_lock(struct lustre_handle *lockh);
 void mgs_revoke_lock(struct mgs_device *mgs, struct fs_db *fsdb,
 		     enum mgs_cfg_type type);
@@ -253,7 +253,7 @@ int  mgs_fsc_attach(const struct lu_env *env, struct obd_export *exp,
 
 /* mgs_fs.c */
 int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,
-                          void *localdata);
+			  void *localdata);
 int mgs_client_free(struct obd_export *exp);
 int mgs_fs_setup(const struct lu_env *env, struct mgs_device *m);
 int mgs_fs_cleanup(const struct lu_env *env, struct mgs_device *m);
@@ -270,12 +270,12 @@ int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb);
 
 /* mgs/lproc_mgs.c */
 enum {
-        LPROC_MGS_CONNECT = 0,
-        LPROC_MGS_DISCONNECT,
-        LPROC_MGS_EXCEPTION,
-        LPROC_MGS_TARGET_REG,
-        LPROC_MGS_TARGET_DEL,
-        LPROC_MGS_LAST
+	LPROC_MGS_CONNECT = 0,
+	LPROC_MGS_DISCONNECT,
+	LPROC_MGS_EXCEPTION,
+	LPROC_MGS_TARGET_REG,
+	LPROC_MGS_TARGET_DEL,
+	LPROC_MGS_LAST
 };
 void mgs_counter_incr(struct obd_export *exp, int opcode);
 void mgs_stats_counter_init(struct lprocfs_stats *stats);
@@ -301,7 +301,7 @@ static inline int lu_device_is_mgs(struct lu_device *d)
 	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &mgs_lu_ops);
 }
 
-static inline struct mgs_device* lu2mgs_dev(struct lu_device *d)
+static inline struct mgs_device *lu2mgs_dev(struct lu_device *d)
 {
 	LASSERT(lu_device_is_mgs(d));
 	return container_of_safe(d, struct mgs_device, mgs_dt_dev.dd_lu_dev);

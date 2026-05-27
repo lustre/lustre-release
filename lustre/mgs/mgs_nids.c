@@ -344,7 +344,7 @@ static int nidtbl_update_version(const struct lu_env *env,
 
 	fsdb = local_file_find_or_create(env, mgs->mgs_los, mgs->mgs_nidtbl_dir,
 					 tbl->mn_fsdb->fsdb_name,
-					 S_IFREG | S_IRUGO | S_IWUSR);
+					 S_IFREG | 0644);
 	if (IS_ERR(fsdb))
 		RETURN(PTR_ERR(fsdb));
 
@@ -612,7 +612,7 @@ out:
 	up_write(&tbl->mn_lock);
 	if (rc)
 		CERROR("Write NID table version for file system %s error %d\n",
-                       fsdb->fsdb_name, rc);
+		       fsdb->fsdb_name, rc);
 	return rc;
 }
 
@@ -1064,8 +1064,8 @@ int lprocfs_wr_ir_state(struct file *file, const char __user *buffer,
 			cmdlen = cmd->namelen;
 			if (strncmp(cmd->name, ptr, cmdlen) == 0) {
 				ptr += cmdlen;
-                                rc = cmd->handler(fsdb, ptr);
-                                break;
+				rc = cmd->handler(fsdb, ptr);
+				break;
 			}
 		}
 		if (rc)
@@ -1090,7 +1090,7 @@ int lprocfs_rd_ir_state(struct seq_file *seq, void *data)
 	/* mgs_live_seq_show() already holds fsdb_mutex. */
 	ir_state_graduate(fsdb);
 
-	seq_printf(seq, "\nimperative_recovery_state:\n");
+	seq_puts(seq, "\nimperative_recovery_state:\n");
 	seq_printf(seq,
 		   "    state: %s\n"
 		   "    nonir_clients: %d\n"
@@ -1231,7 +1231,7 @@ void mgs_fsc_cleanup_by_fsdb(struct fs_db *fsdb)
 	struct mgs_fsc *fsc, *tmp;
 
 	list_for_each_entry_safe(fsc, tmp, &fsdb->fsdb_clients,
-                                     mfc_fsdb_list) {
+				     mfc_fsdb_list) {
 		struct mgs_export_data *data = &fsc->mfc_export->u.eu_mgs_data;
 
 		LASSERT(fsdb == fsc->mfc_fsdb);

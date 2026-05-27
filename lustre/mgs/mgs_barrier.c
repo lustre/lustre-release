@@ -42,6 +42,7 @@ static int mgs_barrier_gl_interpret_reply(const struct lu_env *env,
 	struct ldlm_cb_async_args *ca = data;
 	struct fs_db *fsdb = ca->ca_set_arg->gl_interpret_data;
 	struct barrier_lvb *lvb;
+
 	ENTRY;
 
 	if (rc) {
@@ -108,6 +109,7 @@ static int mgs_barrier_glimpse_lock(const struct lu_env *env,
 	struct list_head *pos;
 	int i;
 	int rc;
+
 	ENTRY;
 
 	LASSERT(fsdb->fsdb_mdt_count > 0);
@@ -302,6 +304,7 @@ static int mgs_barrier_freeze(const struct lu_env *env,
 	time64_t left;
 	bool phase1 = true;
 	bool dirty = false;
+
 	ENTRY;
 
 	snprintf(name, sizeof(mgs_env_info(env)->mgi_fsname) - 1, "%s-%s",
@@ -457,6 +460,7 @@ static int mgs_barrier_thaw(const struct lu_env *env,
 	char *name = mgs_env_info(env)->mgi_fsname;
 	struct fs_db *fsdb;
 	int rc = 0;
+
 	ENTRY;
 
 	snprintf(name, sizeof(mgs_env_info(env)->mgi_fsname) - 1, "%s-%s",
@@ -569,6 +573,7 @@ static int mgs_barrier_stat(const struct lu_env *env,
 {
 	char *name = mgs_env_info(env)->mgi_fsname;
 	struct fs_db *fsdb;
+
 	ENTRY;
 
 	snprintf(name, sizeof(mgs_env_info(env)->mgi_fsname) - 1, "%s-%s",
@@ -614,6 +619,7 @@ static int mgs_barrier_rescan(const struct lu_env *env,
 	struct fs_db *b_fsdb;
 	struct fs_db *c_fsdb;
 	int rc = 0;
+
 	ENTRY;
 
 	down_write(&mgs->mgs_barrier_rwsem);
@@ -755,6 +761,7 @@ int mgs_iocontrol_barrier(const struct lu_env *env,
 {
 	struct barrier_ctl *bc = (struct barrier_ctl *)(data->ioc_inlbuf1);
 	int rc;
+
 	ENTRY;
 
 	if (unlikely(bc->bc_version != BARRIER_VERSION_V1))

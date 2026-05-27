@@ -141,8 +141,7 @@ int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
 						     mgs->mgs_los);
 	dt_object_put(env, nm_config_file_obj);
 	if (IS_ERR(nm_config_file)) {
-		CERROR("%s: error loading nodemap config file, file must be "
-		       "removed via ldiskfs: rc = %ld\n",
+		CERROR("%s: error loading nodemap config file, file must be removed via ldiskfs: rc = %ld\n",
 		       mgs->mgs_obd->obd_name, PTR_ERR(nm_config_file));
 		GOTO(out_configs, rc = PTR_ERR(nm_config_file));
 	}
