@@ -1231,7 +1231,7 @@ lfsck_layout_lastid_create(const struct lu_env *env,
 		return 0;
 
 	memset(la, 0, sizeof(*la));
-	la->la_mode = S_IFREG |  S_IRUGO | S_IWUSR;
+	la->la_mode = S_IFREG |  0644;
 	la->la_valid = LA_MODE | LA_UID | LA_GID;
 	memset(dof, 0, sizeof(*dof));
 	dof->dof_type = dt_mode_to_dft(S_IFREG);
@@ -2099,9 +2099,6 @@ static int lfsck_layout_add_comp(const struct lu_env *env,
 				       lmm, objs, LU_XATTR_REPLACE, ost_idx,
 				       le32_to_cpu(lcm->lcm_size));
 
-	CERROR("%s: Five five five five five  five file Hello "DFID" and "DFID"d: rc = %d\n",
-	       "five", PFID(cfid), PFID(cfid), 0);
-
 	CDEBUG(D_LFSCK,
 	       "%s: layout LFSCK assistant add new COMP for "DFID": parent "DFID", OST-index %u, stripe-index %u, stripe_size %u, stripe_count %u, comp_id %u, comp_start %llu, comp_end %llu, layout version %u, range %u, %s LOV EA hole: rc = %d\n",
 	       lfsck_lfsck2name(lfsck), PFID(cfid), PFID(lfsck_dto2fid(parent)),
@@ -2470,7 +2467,7 @@ static int lfsck_layout_recreate_parent(const struct lu_env *env,
 	memset(la, 0, sizeof(*la));
 	la->la_uid = rec->lor_rec.lor_uid;
 	la->la_gid = rec->lor_rec.lor_gid;
-	la->la_mode = S_IFREG | S_IRUSR;
+	la->la_mode = S_IFREG | 0400;
 	la->la_valid = LA_MODE | LA_UID | LA_GID;
 
 	memset(dof, 0, sizeof(*dof));
@@ -4413,7 +4410,7 @@ further:
 			 * For remote MDT-object, the local MDT may not know
 			 * whether it has been removed or not.  Try checking
 			 * for a non-existent xattr to check if this object
-			 * has been been removed or not.
+			 * has been removed or not.
 			 */
 			rc = dt_xattr_get(env, tobj, &LU_BUF_NULL,
 					  XATTR_NAME_DUMMY);
@@ -7138,7 +7135,7 @@ int lfsck_layout_setup(const struct lu_env *env, struct lfsck_instance *lfsck)
 
 	obj = local_file_find_or_create(env, lfsck->li_los, root,
 					LFSCK_LAYOUT,
-					S_IFREG | S_IRUGO | S_IWUSR);
+					S_IFREG | 0644);
 	if (IS_ERR(obj))
 		GOTO(out, rc = PTR_ERR(obj));
 

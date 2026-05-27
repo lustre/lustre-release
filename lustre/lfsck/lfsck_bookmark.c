@@ -159,7 +159,7 @@ int lfsck_bookmark_setup(const struct lu_env *env,
 
 	obj = local_file_find_or_create(env, lfsck->li_los, root,
 					LFSCK_BOOKMARK,
-					S_IFREG | S_IRUGO | S_IWUSR);
+					S_IFREG | 0644);
 	lfsck_object_put(env, root);
 	if (IS_ERR(obj))
 		RETURN(PTR_ERR(obj));

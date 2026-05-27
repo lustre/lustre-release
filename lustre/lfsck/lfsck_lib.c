@@ -453,7 +453,7 @@ int lfsck_remote_lookup_lock(const struct lu_env *env,
 }
 
 /**
- * lfsck_ibits_unlock() - Release the the specified ibits lock.
+ * lfsck_ibits_unlock() - Release the specified ibits lock.
  * @lh: pointer to the lock handle
  * @mode: the mode for the ldlm lock to be released
  *
@@ -542,7 +542,7 @@ int lfsck_lock(const struct lu_env *env, struct lfsck_instance *lfsck,
 }
 
 /**
- * lfsck_unlock() - Release the the compound ibits locks.
+ * lfsck_unlock() - Release the compound ibits locks.
  *
  * @llh: pointer to the lfsck_lock_handle to be released
  */
@@ -1088,7 +1088,7 @@ static int lfsck_create_lpf(const struct lu_env *env,
 
 	memset(la, 0, sizeof(*la));
 	la->la_atime = la->la_mtime = la->la_ctime = ktime_get_real_seconds();
-	la->la_mode = S_IFDIR | S_IRWXU;
+	la->la_mode = S_IFDIR | 0700;
 	la->la_valid = LA_ATIME | LA_MTIME | LA_CTIME | LA_MODE |
 		       LA_UID | LA_GID | LA_TYPE;
 	memset(dof, 0, sizeof(*dof));
@@ -2696,7 +2696,7 @@ unlink:
 	}
 
 	obj = local_index_find_or_create(env, lfsck->li_los, parent, name,
-					 S_IFREG | S_IRUGO | S_IWUSR, ft);
+					 S_IFREG | 0644, ft);
 	if (IS_ERR(obj))
 		RETURN(PTR_ERR(obj));
 
@@ -3727,7 +3727,7 @@ int lfsck_register(const struct lu_env *env, struct dt_device *key,
 
 	lfsck->li_obj_oit = obj;
 	obj = local_file_find_or_create(env, lfsck->li_los, root, LFSCK_DIR,
-					S_IFDIR | S_IRUGO | S_IWUSR);
+					S_IFDIR | 0644);
 	if (IS_ERR(obj))
 		GOTO(out, rc = PTR_ERR(obj));
 

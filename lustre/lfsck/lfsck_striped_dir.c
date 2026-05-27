@@ -82,7 +82,7 @@
  *
  * 5.1) The slave claims slave LMV EA by wrong, means that the parent was not
  *	a striped directory, but its sub-directory has a wrong slave LMV EA.
- *	It is very very race case, similar as the 1), can be ignored.
+ *	It is extreme rare case, similar as the 1), can be ignored.
  *
  * 5.2) The parent directory is a striped directory, but the master LMV EA
  *	is lost or crashed. Then the LFSCK needs to re-generate the master
