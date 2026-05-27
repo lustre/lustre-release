@@ -264,7 +264,7 @@ struct lod_object {
 		/* directory stripe (LMV) */
 		struct {
 			/* Slave stripe count for striped directory. */
-			__u16		ldo_dir_stripe_count;
+			__s16		ldo_dir_stripe_count;
 			/* How many stripes allocated for a striped directory */
 			__u16		ldo_dir_stripes_allocated;
 			__u32		ldo_dir_stripe_offset;

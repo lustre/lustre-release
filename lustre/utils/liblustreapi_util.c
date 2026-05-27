@@ -374,7 +374,7 @@ int llapi_direntry_remove(char *dname)
 	if (ioctl(fd, LL_IOC_REMOVE_ENTRY, filename))
 		llapi_error(LLAPI_MSG_ERROR, errno,
 			    "error on ioctl %#lx for '%s' (%d)",
-			    (long)LL_IOC_LMV_SETSTRIPE, filename, fd);
+			    (long)LL_IOC_REMOVE_ENTRY, filename, fd);
 	close(fd);
 out:
 	free(namepath);

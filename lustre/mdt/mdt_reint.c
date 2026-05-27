@@ -563,11 +563,19 @@ static int mdt_create(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 			if (!mdt->mdt_enable_foreign_dir)
 				RETURN(-EPERM);
 		} else if (le32_to_cpu(lum->lum_stripe_count) > 1) {
+			s32 stripe_count = le32_to_cpu(lum->lum_stripe_count);
+
 			if (!mdt_is_striped_client(exp))
 				RETURN(-ENOTSUPP);
 
 			if (!mdt->mdt_enable_striped_dir)
 				RETURN(-EPERM);
+			if (stripe_count > LMV_MAX_STRIPE_COUNT ||
+			    stripe_count < LMV_OVERSTRIPE_COUNT_MAX) {
+				CDEBUG(D_INFO, "bad stripe count %d\n",
+				       stripe_count);
+				RETURN(-EOVERFLOW);
+			}
 		} else if (!mdt->mdt_enable_remote_dir) {
 			RETURN(-EPERM);
 		}

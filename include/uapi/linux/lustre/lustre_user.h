@@ -1346,7 +1346,7 @@ extern struct lustre_foreign_type lu_foreign_types[];
 #define lmv_user_md lmv_user_md_v1
 struct lmv_user_md_v1 {
 	__u32	lum_magic;	   /* must be the first field */
-	__u32	lum_stripe_count;  /* dirstripe count */
+	__s32	lum_stripe_count;  /* dirstripe count */
 	__u32	lum_stripe_offset; /* MDT idx for default dirstripe */
 	__u32	lum_hash_type;     /* Dir stripe policy */
 	__u32	lum_type;	   /* LMV type: default */

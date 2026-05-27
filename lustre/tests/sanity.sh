@@ -1634,6 +1634,19 @@ test_24H() {
 }
 run_test 24H "repeat FLD_QUERY rpc"
 
+test_24I() {
+	(( $MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+
+	# LMV_MAX_STRIPE_COUNT = 2000 should be verified
+	$LFS mkdir -C 2001 $DIR/$tdir-2001 && error "mkdir 2001-stripe worked"
+	$LFS mkdir -C 2000 $DIR/$tdir-2000 || error "mkdir 2000-stripe failed"
+	local stripes=$($LFS getdirstripe -c $DIR/$tdir-2000)
+	# LMV_OVERSTRIPE_COUNT_MAX = 5 limits actual stripe count
+	(( $stripes >= $MDSCOUNT * 5)) ||
+		error "mkdir stripes $stripes < $MDSCOUNT * 5"
+}
+run_test 24I "large striped mkdir with limit check"
+
 test_25a() {
 	echo '== symlink sanity ============================================='
 

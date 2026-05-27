@@ -1545,6 +1545,8 @@ void ll_dir_finish_open(struct inode *inode, struct ptlrpc_request *req);
 /* Compute expected user md size when passing in a md from user space */
 static inline ssize_t ll_lov_user_md_size(const struct lov_user_md *lum)
 {
+	ssize_t lumlen;
+
 	switch (lum->lmm_magic) {
 	case LOV_USER_MAGIC_V1:
 		return sizeof(struct lov_user_md_v1);
@@ -1557,9 +1559,19 @@ static inline ssize_t ll_lov_user_md_size(const struct lov_user_md *lum)
 		return lov_user_md_size(lum->lmm_stripe_count,
 					LOV_USER_MAGIC_SPECIFIC);
 	case LOV_USER_MAGIC_COMP_V1:
-		return ((struct lov_comp_md_v1 *)lum)->lcm_size;
+		lumlen = ((struct lov_comp_md_v1 *)lum)->lcm_size;
+		if (unlikely(lumlen <= 0))
+			return -EINVAL;
+		if (unlikely(lumlen > XATTR_SIZE_MAX))
+			return -EOVERFLOW;
+		return lumlen;
 	case LOV_USER_MAGIC_FOREIGN:
-		return lov_foreign_size(lum);
+		lumlen = lov_foreign_size(lum);
+		if (unlikely(lumlen <= 0))
+			return -EINVAL;
+		if (unlikely(lumlen > XATTR_SIZE_MAX))
+			return -EOVERFLOW;
+		return lumlen;
 	}
 
 	return -EINVAL;

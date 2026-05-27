@@ -1840,23 +1840,27 @@ static int mdt_migrate_unpack(struct mdt_thread_info *info)
 
 	/* lustre version > 2.11 migration packs lum */
 	if (req_capsule_has_field(pill, &RMF_EADATA, RCL_CLIENT)) {
-		if (req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
-			rr->rr_eadatalen = req_capsule_get_size(pill,
-								&RMF_EADATA,
-								RCL_CLIENT);
-
-			if (rr->rr_eadatalen > 0) {
-				struct lmv_user_md_v1 *lmu;
-
-				lmu = req_capsule_client_get(pill, &RMF_EADATA);
-				rr->rr_eadata = lmu;
-				spec->u.sp_ea.eadatalen = rr->rr_eadatalen;
-				spec->u.sp_ea.eadata = rr->rr_eadata;
-				spec->sp_cr_flags |= MDS_OPEN_HAS_EA;
-			}
-		} else {
+		if (!req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT))
 			/* old client doesn't provide lum. */
 			RETURN(-EOPNOTSUPP);
+
+		rr->rr_eadatalen = req_capsule_get_size(pill, &RMF_EADATA,
+							RCL_CLIENT);
+
+		if (rr->rr_eadatalen > 0) {
+			struct lmv_user_md_v1 *lum;
+			s32 stripe_count;
+
+			lum = req_capsule_client_get(pill, &RMF_EADATA);
+			stripe_count = le32_to_cpu(lum->lum_stripe_count);
+			if (rr->rr_eadatalen > XATTR_SIZE_MAX ||
+			    stripe_count > LMV_MAX_STRIPE_COUNT ||
+			    stripe_count < LMV_OVERSTRIPE_COUNT_MAX)
+				RETURN(-EOVERFLOW);
+
+			spec->u.sp_ea.eadatalen = rr->rr_eadatalen;
+			spec->u.sp_ea.eadata = rr->rr_eadata = lum;
+			spec->sp_cr_flags |= MDS_OPEN_HAS_EA;
 		}
 	}
 

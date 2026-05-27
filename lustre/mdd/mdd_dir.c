@@ -2559,12 +2559,14 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 	    unlikely(spec != NULL && spec->sp_cr_flags & MDS_OPEN_HAS_EA) &&
 	    spec->u.sp_ea.eadata != NULL && spec->u.sp_ea.eadatalen > 0) {
 		const struct lmv_user_md *lum = spec->u.sp_ea.eadata;
+		s32 stripe_count;
 
 		if (!lmv_user_magic_supported(le32_to_cpu(lum->lum_magic)) &&
 		    !(spec->sp_replay &&
 		      lum->lum_magic == cpu_to_le32(LMV_MAGIC_V1))) {
 			rc = -EINVAL;
-			CERROR("%s: invalid lmv_user_md: magic=%x hash=%x stripe_offset=%d stripe_count=%u: rc = %d\n",
+out_err:
+			CERROR("%s: invalid lmv_user_md: magic=%x hash=%x stripe_offset=%d stripe_count=%d: rc = %d\n",
 			       mdd2obd_dev(m)->obd_name,
 			       le32_to_cpu(lum->lum_magic),
 			       le32_to_cpu(lum->lum_hash_type),
@@ -2572,6 +2574,10 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 			       le32_to_cpu(lum->lum_stripe_count), rc);
 			RETURN(rc);
 		}
+		stripe_count = le32_to_cpu(lum->lum_stripe_count);
+		if (stripe_count > LMV_MAX_STRIPE_COUNT ||
+		    stripe_count < LMV_OVERSTRIPE_COUNT_MAX)
+			GOTO(out_err, rc = -EOVERFLOW);
 	}
 
 	rc = mdd_may_create(env, obj, pattr, NULL, check_perm);
@@ -4857,7 +4863,7 @@ static int mdd_migrate_cmd_check(const struct lu_env *env, struct mdd_device *md
 				 size_t lum_len, const struct lu_name *lname)
 {
 	struct mdd_thread_info *info = mdd_env_info(env);
-	__u32 lum_stripe_count = lum->lum_stripe_count;
+	__s32 lum_stripe_count = lum->lum_stripe_count;
 	__u32 lum_hash_type = lum->lum_hash_type &
 			      cpu_to_le32(LMV_HASH_TYPE_MASK);
 	struct md_layout_change *mlc = &info->mdi_mlc;
@@ -4867,6 +4873,9 @@ static int mdd_migrate_cmd_check(const struct lu_env *env, struct mdd_device *md
 
 	if (lmv && !lmv_is_sane(lmv))
 		RETURN(-EBADF);
+
+	if (lum_stripe_count > LMV_MAX_STRIPE_COUNT)
+		RETURN(-EOVERFLOW);
 
 	/* If stripe_count unspecified, set to 1 */
 	if (!lum_stripe_count)
