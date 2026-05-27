@@ -33,6 +33,7 @@ int seq_server_set_cli(const struct lu_env *env, struct lu_server_seq *seq,
 		       struct lu_client_seq *cli)
 {
 	int rc = 0;
+
 	ENTRY;
 
 	/*
@@ -99,6 +100,7 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
 {
 	struct lu_seq_range *space = &seq->lss_space;
 	int rc;
+
 	ENTRY;
 
 	LASSERT(lu_seq_range_is_sane(space));
@@ -124,6 +126,7 @@ int seq_server_alloc_super(struct lu_server_seq *seq,
 			   const struct lu_env *env)
 {
 	int rc;
+
 	ENTRY;
 
 	mutex_lock(&seq->lss_mutex);
@@ -139,6 +142,7 @@ int seq_server_alloc_spec(struct lu_server_seq *seq,
 {
 	struct lu_seq_range *space = &seq->lss_space;
 	int rc = -ENOSPC;
+
 	ENTRY;
 
 	/*
@@ -160,7 +164,7 @@ int seq_server_alloc_spec(struct lu_server_seq *seq,
 		space->lsr_start = spec->lsr_end;
 		rc = seq_store_update(env, seq, spec, 1 /* sync */);
 
-		LCONSOLE_INFO("%s: "DRANGE" sequences allocated: rc = %d \n",
+		LCONSOLE_INFO("%s: "DRANGE" sequences allocated: rc = %d\n",
 			      seq->lss_name, PRANGE(spec), rc);
 	}
 	mutex_unlock(&seq->lss_mutex);
@@ -371,6 +375,7 @@ int seq_server_alloc_meta(struct lu_server_seq *seq,
 			  const struct lu_env *env)
 {
 	int rc;
+
 	ENTRY;
 
 	mutex_lock(&seq->lss_mutex);
@@ -388,6 +393,7 @@ static int seq_server_handle(struct lu_site *site,
 	int rc;
 	struct seq_server_site *ss_site;
 	struct dt_device *dev;
+
 	ENTRY;
 
 	ss_site = lu_site2seq(site);
@@ -501,6 +507,7 @@ int seq_server_init(const struct lu_env *env, struct lu_server_seq *seq,
 		    bool set_batch_width)
 {
 	int rc, is_srv = (type == LUSTRE_SEQ_SERVER);
+
 	ENTRY;
 
 	LASSERT(dev != NULL);

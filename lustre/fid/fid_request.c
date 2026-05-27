@@ -40,6 +40,7 @@ static int seq_client_rpc(struct lu_client_seq *seq,
 	__u32                 *op;
 	unsigned int           debug_mask;
 	int                    rc;
+
 	ENTRY;
 
 	LASSERT(exp != NULL && !IS_ERR(exp));
@@ -131,6 +132,7 @@ int seq_client_alloc_super(struct lu_client_seq *seq,
 			   const struct lu_env *env)
 {
 	int rc;
+
 	ENTRY;
 
 	mutex_lock(&seq->lcs_mutex);
@@ -164,6 +166,7 @@ static int seq_client_alloc_meta(const struct lu_env *env,
 				 struct lu_client_seq *seq)
 {
 	int rc;
+
 	ENTRY;
 
 	if (seq->lcs_srv) {
@@ -201,6 +204,7 @@ static int seq_client_alloc_seq(const struct lu_env *env,
 				struct lu_client_seq *seq, u64 *seqnr)
 {
 	int rc;
+
 	ENTRY;
 
 	LASSERT(lu_seq_range_is_sane(&seq->lcs_space));
@@ -291,6 +295,7 @@ int seq_client_alloc_fid(const struct lu_env *env,
 			 struct lu_client_seq *seq, struct lu_fid *fid)
 {
 	int rc;
+
 	ENTRY;
 
 	LASSERT(seq != NULL);
@@ -426,6 +431,7 @@ int client_fid_init(struct obd_device *obd,
 	struct client_obd *cli = &obd->u.cli;
 	char *prefix;
 	int rc = 0;
+
 	ENTRY;
 
 	down_write(&cli->cl_seq_rwsem);
@@ -457,6 +463,7 @@ EXPORT_SYMBOL(client_fid_init);
 int client_fid_fini(struct obd_device *obd)
 {
 	struct client_obd *cli = &obd->u.cli;
+
 	ENTRY;
 
 	down_write(&cli->cl_seq_rwsem);

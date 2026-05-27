@@ -153,6 +153,7 @@ int seq_store_read(struct lu_server_seq *seq,
 	struct seq_thread_info *info;
 	loff_t pos = 0;
 	int rc;
+
 	ENTRY;
 
 	info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
@@ -186,6 +187,7 @@ int seq_store_init(struct lu_server_seq *seq,
 	struct dt_object_format dof;
 	const char *name;
 	int rc;
+
 	ENTRY;
 
 	name = seq->lss_type == LUSTRE_SEQ_SERVER ?

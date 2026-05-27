@@ -104,6 +104,7 @@ static int
 ldebugfs_server_fid_space_seq_show(struct seq_file *m, void *unused)
 {
 	struct lu_server_seq *seq = (struct lu_server_seq *)m->private;
+
 	ENTRY;
 
 	mutex_lock(&seq->lss_mutex);
@@ -118,6 +119,7 @@ ldebugfs_server_fid_server_seq_show(struct seq_file *m, void *unused)
 {
 	struct lu_server_seq *seq = (struct lu_server_seq *)m->private;
 	struct client_obd *cli;
+
 	ENTRY;
 
 	if (seq->lss_cli) {
@@ -405,6 +407,7 @@ static ssize_t fldb_seq_write(struct file *file, const char __user *buf,
 	char			 _buffer[MAX_FID_RANGE_STRLEN];
 	char			*buffer = _buffer;
 	char *tmp;
+
 	ENTRY;
 
 	param = seq->private;
@@ -581,6 +584,7 @@ ldebugfs_client_fid_server_seq_show(struct seq_file *m, void *unused)
 {
 	struct lu_client_seq *seq = (struct lu_client_seq *)m->private;
 	struct client_obd *cli;
+
 	ENTRY;
 
 	if (seq->lcs_exp) {
