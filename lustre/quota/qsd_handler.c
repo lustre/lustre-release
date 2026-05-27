@@ -34,6 +34,7 @@ static int qsd_ready(struct lquota_entry *lqe, struct lustre_handle *lockh)
 	struct qsd_instance	*qsd = qqi->qqi_qsd;
 	struct obd_import	*imp = NULL;
 	struct ldlm_lock	*lock;
+
 	ENTRY;
 
 	read_lock(&qsd->qsd_lock);
@@ -63,8 +64,7 @@ static int qsd_ready(struct lquota_entry *lqe, struct lustre_handle *lockh)
 	 * re-trigger it here as well. */
 	if (!qqi->qqi_glb_uptodate || !qqi->qqi_slv_uptodate) {
 		read_unlock(&qsd->qsd_lock);
-		LQUOTA_DEBUG(lqe, "not up-to-date, dropping request and "
-			     "kicking off reintegration");
+		LQUOTA_DEBUG(lqe, "not up-to-date, dropping request and kicking off reintegration");
 		qsd_start_reint_thread(qqi);
 		RETURN(-EINPROGRESS);
 	}
@@ -105,6 +105,7 @@ static int qsd_ready(struct lquota_entry *lqe, struct lustre_handle *lockh)
 static bool qsd_calc_adjust(struct lquota_entry *lqe, struct quota_body *qbody)
 {
 	__u64	usage, granted;
+
 	ENTRY;
 
 	usage   = lqe->lqe_usage;
@@ -139,16 +140,14 @@ static bool qsd_calc_adjust(struct lquota_entry *lqe, struct quota_body *qbody)
 			/* no on-disk usage and no outstanding activity, release
 			 * space */
 			if (granted != 0) {
-				LQUOTA_DEBUG(lqe, "no usage, releasing all "
-					     "space");
+				LQUOTA_DEBUG(lqe, "no usage, releasing all space");
 				if (qbody != NULL) {
 					qbody->qb_count = granted;
 					qbody->qb_flags = QUOTA_DQACQ_FL_REL;
 				}
 				RETURN(true);
 			}
-			LQUOTA_DEBUG(lqe, "no usage + no granted, nothing to "
-				     "do");
+			LQUOTA_DEBUG(lqe, "no usage + no granted, nothing to do");
 			RETURN(false);
 		}
 
@@ -269,6 +268,7 @@ void qsd_req_completion(const struct lu_env *env, struct qsd_qtype_info *qqi,
 	struct qsd_thread_info	*qti;
 	int			 rc;
 	bool			 adjust = false, cancel = false;
+
 	ENTRY;
 
 	LASSERT(qqi != NULL && lqe != NULL);
@@ -319,8 +319,7 @@ void qsd_req_completion(const struct lu_env *env, struct qsd_qtype_info *qqi,
 			lqe->lqe_granted = 0;
 		} else if (req_is_rel(reqbody->qb_flags)) {
 			if (lqe->lqe_granted < repbody->qb_count) {
-				LQUOTA_ERROR(lqe, "can't release more space "
-					     "than owned %llu<%llu",
+				LQUOTA_ERROR(lqe, "can't release more space than owned %llu<%llu",
 					     lqe->lqe_granted,
 					     repbody->qb_count);
 				lqe->lqe_granted = 0;
@@ -386,7 +385,7 @@ out_noadjust:
 		else if (CFS_FAIL_CHECK(OBD_FAIL_QUOTA_DROP_VER_UPDATE) ||
 			 qqi->qqi_last_version_update_time <
 			 (ktime_get_seconds() -
-			  		qqi->qqi_qsd->qsd_ver_reint_timeout)) {
+					qqi->qqi_qsd->qsd_ver_reint_timeout)) {
 			qqi->qqi_glb_uptodate = 0;
 			qsd_start_reint_thread(qqi);
 		}
@@ -420,6 +419,7 @@ static int qsd_acquire_local(struct lquota_entry *lqe, __u64 space)
 {
 	__u64	usage;
 	int	rc;
+
 	ENTRY;
 
 	if (!lqe->lqe_enforced)
@@ -444,7 +444,7 @@ static int qsd_acquire_local(struct lquota_entry *lqe, __u64 space)
 	} else if (lqe->lqe_edquot &&
 		   (lqe->lqe_edquot_time > ktime_get_seconds() - 5)) {
 		rc = -EDQUOT;
-	}else {
+	} else {
 		rc = -EAGAIN;
 	}
 	lqe_write_unlock(lqe);
@@ -513,6 +513,7 @@ static int qsd_acquire_remote(const struct lu_env *env,
 	struct qsd_instance	*qsd;
 	struct qsd_qtype_info	*qqi;
 	int			 rc;
+
 	ENTRY;
 
 	memset(qbody, 0, sizeof(*qbody));
@@ -633,7 +634,7 @@ again:
 		if (rc != -EAGAIN)
 			/* rc == 0, Wouhou! enough local quota space
 			 * rc < 0, something bad happened */
-			 break;
+			break;
 		/*
 		 * There might be a window that commit transaction
 		 * have updated usage but pending write doesn't change
@@ -840,6 +841,7 @@ int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 {
 	int	i, rc;
 	bool	found = false;
+
 	ENTRY;
 
 	/* fast path, ignore quota enforcement request for root owned files */
@@ -889,8 +891,8 @@ int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 
 	if (!found) {
 		if (unlikely(i >= QUOTA_MAX_TRANSIDS)) {
-			CERROR("%s: more than %d qids enforced for a "
-			       "transaction?\n", qsd->qsd_svname, i);
+			CERROR("%s: more than %d qids enforced for a transaction?\n",
+			       qsd->qsd_svname, i);
 			RETURN(-EINVAL);
 		}
 
@@ -928,6 +930,7 @@ int qsd_adjust(const struct lu_env *env, struct lquota_entry *lqe)
 	struct qsd_qtype_info	*qqi;
 	int			 rc;
 	bool			 intent = false;
+
 	ENTRY;
 
 	memset(qbody, 0, sizeof(*qbody));
@@ -1045,6 +1048,7 @@ static void qsd_op_end0(const struct lu_env *env, struct qsd_qtype_info *qqi,
 {
 	struct lquota_entry	*lqe;
 	bool			 adjust;
+
 	ENTRY;
 
 	lqe = qid->lqi_qentry;
@@ -1102,6 +1106,7 @@ void qsd_op_end(const struct lu_env *env, struct qsd_instance *qsd,
 		struct lquota_trans *trans)
 {
 	int i;
+
 	ENTRY;
 
 	if (unlikely(qsd == NULL))
@@ -1223,6 +1228,7 @@ void qsd_op_adjust(const struct lu_env *env, struct qsd_instance *qsd,
 	struct lquota_entry    *lqe;
 	struct qsd_qtype_info  *qqi;
 	bool			adjust;
+
 	ENTRY;
 
 	if (unlikely(qsd == NULL))

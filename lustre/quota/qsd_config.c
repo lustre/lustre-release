@@ -56,6 +56,7 @@ void qsd_put_fsinfo(struct qsd_fsinfo *qfs)
 struct qsd_fsinfo *qsd_get_fsinfo(char *name, bool create)
 {
 	struct qsd_fsinfo	*qfs, *new = NULL;
+
 	ENTRY;
 
 	if (name == NULL ||  strlen(name) >= MTI_NAME_MAXLEN)
@@ -159,12 +160,9 @@ int qsd_config(char *valstr, char *fsname, int pool)
 					continue;
 
 				if (qqi->qqi_acct_failed) {
-					LCONSOLE_ERROR("%s: can't enable quota "
-						       "enforcement since space "
-						       "accounting isn't functional. "
-						       "Please run tunefs.lustre "
-						       "--quota on an unmounted "
-						       "filesystem if not done already"
+					LCONSOLE_ERROR("%s: can't enable quota enforcement since space "
+						       "accounting isn't functional. Please run tunefs.lustre "
+						       "--quota on an unmounted filesystem if not done already"
 						       "\n", qsd->qsd_svname);
 					continue;
 				}

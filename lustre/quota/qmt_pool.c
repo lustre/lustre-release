@@ -107,6 +107,7 @@ LPROC_SEQ_FOPS_RO(qpi_state);
 static int qpi_soft_least_qunit_seq_show(struct seq_file *m, void *data)
 {
 	struct qmt_pool_info	*pool = m->private;
+
 	LASSERT(pool != NULL);
 	if (unlikely(!test_bit(QPI_FLAG_STATE_INITED, &pool->qpi_flags)))
 		return -ENOENT;
@@ -175,6 +176,7 @@ static int qmt_pool_alloc(const struct lu_env *env, struct qmt_device *qmt,
 	struct qmt_thread_info	*qti = qmt_info(env);
 	struct qmt_pool_info	*pool;
 	int			 rc = 0;
+
 	ENTRY;
 
 	OBD_ALLOC_PTR(pool);
@@ -247,6 +249,7 @@ void qmt_pool_free(const struct lu_env *env, struct qmt_pool_info *pool)
 	struct qmt_lqa_range *range, *temp;
 	struct rb_root *rbroot = &pool->qpi_lqa_rbroot;
 	int qtype;
+
 	ENTRY;
 
 	/* remove from list */
@@ -401,6 +404,7 @@ struct qmt_pool_info *qmt_pool_lookup(const struct lu_env *env,
 {
 	struct qmt_pool_info	*pos, *pool;
 	int rc = 0;
+
 	ENTRY;
 
 	down_read(&qmt->qmt_pool_lock);
@@ -486,6 +490,7 @@ out_err:
 void qmt_pool_fini(const struct lu_env *env, struct qmt_device *qmt)
 {
 	struct qmt_pool_info *pool, *tmp;
+
 	ENTRY;
 
 	/* parse list of pool and destroy each element */
@@ -514,6 +519,7 @@ void qmt_pool_fini(const struct lu_env *env, struct qmt_device *qmt)
 int qmt_pool_init(const struct lu_env *env, struct qmt_device *qmt)
 {
 	int	res, rc = 0;
+
 	ENTRY;
 
 	INIT_LIST_HEAD(&qmt->qmt_pool_list);
@@ -590,6 +596,7 @@ int qmt_pool_prepare(const struct lu_env *env, struct qmt_device *qmt,
 	dt_obj_version_t version;
 	struct list_head *pos;
 	int rc = 0, i, qtype;
+
 	ENTRY;
 
 	/* iterate over each pool in the list and allocate a quota site for each
@@ -858,8 +865,8 @@ int qmt_pool_new_conn(const struct lu_env *env, struct qmt_device *qmt,
 	}
 	if (IS_ERR(slv_obj)) {
 		rc = PTR_ERR(slv_obj);
-		CERROR("%s: failed to create quota slave index file for %s (%d)"
-		       "\n", qmt->qmt_svname, obd_uuid2str(uuid), rc);
+		CERROR("%s: failed to create quota slave index file for %s (%d)\n",
+		       qmt->qmt_svname, obd_uuid2str(uuid), rc);
 		GOTO(out, rc);
 	}
 
@@ -958,6 +965,7 @@ struct lquota_entry *qmt_pool_lqe_lookup_lqa(const struct lu_env *env,
 {
 	struct qmt_pool_info	*pool;
 	struct lquota_entry	*lqe;
+
 	ENTRY;
 
 	/* look-up pool responsible for this global index FID */
@@ -992,6 +1000,7 @@ int qmt_pool_lqes_lookup(const struct lu_env *env,
 	struct qmt_pool_info	*pool;
 	struct lquota_entry	*lqe;
 	int rc, i;
+
 	ENTRY;
 
 	qti_pools_init(env);
@@ -1041,6 +1050,7 @@ void qmt_lqes_sort(const struct lu_env *env)
 	/* global lqe was moved during sorting */
 	if (!qti_lqes_glbl(env)->lqe_is_global) {
 		int i;
+
 		for (i = 0; i < qti_lqes_cnt(env); i++) {
 			if (qti_lqes(env)[i]->lqe_is_global) {
 				qti_glbl_lqe_idx(env) = i;
@@ -1121,6 +1131,7 @@ int qmt_pool_create(struct obd_device *obd, enum lquota_res_type rtype,
 	struct qmt_pool_info *qpi;
 	struct lu_env env;
 	int rc;
+
 	ENTRY;
 
 	if (strnlen(poolname, LOV_MAXPOOLNAME + 1) > LOV_MAXPOOLNAME)
@@ -1199,6 +1210,7 @@ qmt_obj_recalc(const struct lu_env *env, struct dt_object *obj,
 	struct dt_it *it;
 	__u64 granted;
 	int rc;
+
 	ENTRY;
 
 	iops = &obj->do_index_ops->dio_it;
@@ -1345,6 +1357,7 @@ static struct obd_device *qmt_get_mgc(struct qmt_device *qmt)
 	struct lustre_mount_info *lmi;
 	struct obd_device *obd;
 	int rc;
+
 	ENTRY;
 
 	rc = server_name2fsname(qmt->qmt_svname, mdt_name, NULL);
@@ -1375,6 +1388,7 @@ static int qmt_pool_recalc(void *args)
 	struct lu_env env;
 	int i, rc, qtype, slaves_cnt;
 	bool sem = false;
+
 	ENTRY;
 
 	pool = args;
@@ -1592,6 +1606,7 @@ static int qmt_pool_add_rem(struct obd_device *obd, char *poolname,
 	struct qmt_pool_info	*qpi;
 	struct lu_env		 env;
 	int			 rc, idx;
+
 	ENTRY;
 
 	if (qmt->qmt_stopping)
@@ -1692,6 +1707,7 @@ int qmt_pool_destroy(struct obd_device *obd, enum lquota_res_type rtype,
 	struct lu_env		 env;
 	int			 rc;
 	int			 qtype;
+
 	ENTRY;
 
 	if (strnlen(poolname, LOV_MAXPOOLNAME + 1) > LOV_MAXPOOLNAME)

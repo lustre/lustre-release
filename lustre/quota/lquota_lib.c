@@ -73,6 +73,7 @@ struct dt_object *acct_obj_lookup(const struct lu_env *env,
 {
 	struct lquota_thread_info	*qti = lquota_info(env);
 	struct dt_object		*obj = NULL;
+
 	ENTRY;
 
 	lu_local_obj_fid(&qti->qti_fid, qtype2acct_oid(type));
@@ -93,8 +94,7 @@ struct dt_object *acct_obj_lookup(const struct lu_env *env,
 		/* set up indexing operations */
 		rc = obj->do_ops->do_index_try(env, obj, &dt_acct_features);
 		if (rc) {
-			CERROR("%s: failed to set up indexing operations for %s"
-			       " acct object rc:%d\n",
+			CERROR("%s: failed to set up indexing operations for %s acct object rc:%d\n",
 			       dev->dd_lu_dev.ld_obd->obd_name,
 			       qtype_name(type), rc);
 			dt_object_put(env, obj);
@@ -121,6 +121,7 @@ static struct dt_object *quota_obj_lookup(const struct lu_env *env,
 	struct lquota_thread_info	*qti = lquota_info(env);
 	struct dt_object		*obj = NULL;
 	int				 is_md;
+
 	ENTRY;
 
 	is_md = lu_device_is_md(dev->dd_lu_dev.ld_site->ls_top_dev);
@@ -150,8 +151,7 @@ static struct dt_object *quota_obj_lookup(const struct lu_env *env,
 		rc = obj->do_ops->do_index_try(env, obj,
 					       &dt_quota_slv_features);
 		if (rc) {
-			CERROR("%s: failed to set up indexing operations for %s"
-			       " slave index object rc:%d\n",
+			CERROR("%s: failed to set up indexing operations for %s slave index object rc:%d\n",
 			       dev->dd_lu_dev.ld_obd->obd_name,
 			       qtype_name(type), rc);
 			dt_object_put(env, obj);
@@ -371,6 +371,7 @@ int lquotactl_slv(const struct lu_env *env, struct dt_device *dev,
 	int size = buffer == NULL ? 0 : LQUOTA_ITER_BUFLEN;
 	__u64 key;
 	int rc;
+
 	ENTRY;
 
 	if (oqctl->qc_cmd != Q_GETOQUOTA &&
@@ -537,6 +538,7 @@ int lquota_extract_fid(const struct lu_fid *fid,
 		       enum lquota_type *quota_type)
 {
 	unsigned int lqtype;
+
 	ENTRY;
 
 	if (fid->f_seq != FID_SEQ_QUOTA_GLB)
@@ -564,6 +566,7 @@ int lquota_extract_fid(const struct lu_fid *fid,
 static int __init lquota_init(void)
 {
 	int	rc;
+
 	ENTRY;
 
 	rc = libcfs_setup();

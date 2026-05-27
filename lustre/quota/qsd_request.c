@@ -44,6 +44,7 @@ static int qsd_dqacq_interpret(const struct lu_env *env,
 {
 	struct quota_body     *rep_qbody = NULL, *req_qbody;
 	struct qsd_async_args *aa = (struct qsd_async_args *)arg;
+
 	ENTRY;
 
 	req_qbody = req_capsule_client_get(&req->rq_pill, &RMF_QUOTA_BODY);
@@ -79,6 +80,7 @@ int qsd_send_dqacq(const struct lu_env *env, struct obd_export *exp,
 	struct quota_body	*req_qbody;
 	struct qsd_async_args	*aa;
 	int			 rc;
+
 	ENTRY;
 
 	LASSERT(exp);
@@ -213,6 +215,7 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 	struct quota_body	*req_qbody;
 	__u64			 flags = LDLM_FL_HAS_INTENT;
 	int			 rc;
+
 	ENTRY;
 
 	LASSERT(exp != NULL);
@@ -243,7 +246,7 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 			     sizeof(*lvb));
 	ptlrpc_request_set_replen(req);
 
-	switch(it_op) {
+	switch (it_op) {
 	case IT_QUOTA_CONN:
 		/* build resource name associated with global index */
 		fid_build_reg_res_name(&qbody->qb_fid, &qti->qti_resid);
@@ -278,7 +281,7 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 	}
 
 	/* grab reference on backend structure for the new lock */
-	switch(it_op) {
+	switch (it_op) {
 	case IT_QUOTA_CONN:
 		/* grab reference on qqi for new lock */
 		qqi_getref(qqi);
@@ -341,6 +344,7 @@ int qsd_fetch_index(const struct lu_env *env, struct obd_export *exp,
 	struct idx_info *req_ii;
 	struct ptlrpc_bulk_desc *desc;
 	int rc, i;
+
 	ENTRY;
 
 	LASSERT(exp);

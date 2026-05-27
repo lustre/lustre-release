@@ -222,6 +222,7 @@ LPROC_SEQ_FOPS_WR_ONLY(qsd, force_reint);
 static int qsd_timeout_seq_show(struct seq_file *m, void *data)
 {
 	struct qsd_instance *qsd = m->private;
+
 	LASSERT(qsd != NULL);
 
 	seq_printf(m, "%d\n", qsd_wait_timeout(qsd));
@@ -253,6 +254,7 @@ LPROC_SEQ_FOPS(qsd_timeout);
 static int qsd_ver_reint_timeout_seq_show(struct seq_file *m, void *data)
 {
 	struct qsd_instance *qsd = m->private;
+
 	LASSERT(qsd != NULL);
 
 	seq_printf(m, "%d\n", qsd->qsd_ver_reint_timeout);
@@ -337,6 +339,7 @@ static int qsd_conn_callback(void *data)
 {
 	struct qsd_instance *qsd = (struct qsd_instance *)data;
 	int                  type;
+
 	ENTRY;
 
 	/* qsd_exp should now be valid */
@@ -388,6 +391,7 @@ static void qsd_qtype_fini(const struct lu_env *env, struct qsd_instance *qsd,
 {
 	struct qsd_qtype_info	*qqi;
 	int repeat = 0;
+
 	ENTRY;
 
 	if (qsd->qsd_type_array[qtype] == NULL)
@@ -508,6 +512,7 @@ static int qsd_qtype_init(const struct lu_env *env, struct qsd_instance *qsd,
 	struct qsd_qtype_info	*qqi;
 	int			 rc;
 	struct obd_uuid		 uuid;
+
 	ENTRY;
 
 	LASSERT(qsd->qsd_type_array[qtype] == NULL);
@@ -616,6 +621,7 @@ out:
 void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 {
 	int	qtype;
+
 	ENTRY;
 
 	if (unlikely(qsd == NULL))
@@ -703,6 +709,7 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 	struct qsd_thread_info	*qti = qsd_info(env);
 	struct qsd_instance	*qsd;
 	int			 rc, type, idx;
+
 	ENTRY;
 
 	/* only configure qsd for MDT & OST */
@@ -775,7 +782,7 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 		CERROR("%s: fail to create quota slave proc entry (%d)\n",
 		       svname, rc);
 		GOTO(out, rc);
-        }
+	}
 	EXIT;
 out:
 	if (rc) {
@@ -805,6 +812,7 @@ int qsd_prepare(const struct lu_env *env, struct qsd_instance *qsd)
 {
 	struct qsd_thread_info	*qti = qsd_info(env);
 	int			 qtype, rc = 0;
+
 	ENTRY;
 
 	if (unlikely(qsd == NULL))
@@ -858,10 +866,8 @@ int qsd_prepare(const struct lu_env *env, struct qsd_instance *qsd)
 
 		if (qsd_type_enabled(qsd, qtype) &&
 		    qqi->qqi_acct_failed) {
-			LCONSOLE_ERROR("%s: can't enable quota enforcement "
-				       "since space accounting isn't functional"
-				       ". Please run tunefs.lustre --quota on "
-				       "an unmounted filesystem if not done "
+			LCONSOLE_ERROR("%s: can't enable quota enforcement since space accounting isn't functional"
+				       ". Please run tunefs.lustre --quota on an unmounted filesystem if not done "
 				       "already\n", qsd->qsd_svname);
 			continue;
 		}
@@ -917,6 +923,7 @@ EXPORT_SYMBOL(qsd_prepare);
 int qsd_start(const struct lu_env *env, struct qsd_instance *qsd)
 {
 	int	type, rc = 0;
+
 	ENTRY;
 
 	if (unlikely(qsd == NULL))
@@ -924,8 +931,8 @@ int qsd_start(const struct lu_env *env, struct qsd_instance *qsd)
 
 	write_lock(&qsd->qsd_lock);
 	if (!qsd->qsd_prepared) {
-		CERROR("%s: can't start qsd instance since it wasn't properly "
-		       "initialized\n", qsd->qsd_svname);
+		CERROR("%s: can't start qsd instance since it wasn't properly initialized\n",
+		       qsd->qsd_svname);
 		rc = -EFAULT;
 	} else if (qsd->qsd_started) {
 		CERROR("%s: qsd instance already started\n", qsd->qsd_svname);

@@ -59,7 +59,7 @@ static int qsd_lqe_read(const struct lu_env *env, struct lquota_entry *lqe,
 	rc = lquota_disk_read(env, qqi->qqi_glb_obj, &lqe->lqe_id,
 			      (struct dt_rec *)&qti->qti_glb_rec);
 
-	switch(rc) {
+	switch (rc) {
 	case -ENOENT:
 		/* no such entry, assume quota isn't enforced for this user */
 		lqe->lqe_enforced = false;
@@ -87,8 +87,8 @@ static int qsd_lqe_read(const struct lu_env *env, struct lquota_entry *lqe,
 			lqe->lqe_enforced = false;
 		break;
 	default:
-		LQUOTA_ERROR(lqe, "failed to read quota entry from global "
-			     "index copy, rc:%d", rc);
+		LQUOTA_ERROR(lqe, "failed to read quota entry from global index copy, rc:%d",
+			     rc);
 		return rc;
 	}
 
@@ -119,7 +119,7 @@ static int qsd_lqe_read(const struct lu_env *env, struct lquota_entry *lqe,
 	 * currently owned by this slave */
 	rc = lquota_disk_read(env, qqi->qqi_slv_obj, &lqe->lqe_id,
 			      (struct dt_rec *)&qti->qti_slv_rec);
-	switch(rc) {
+	switch (rc) {
 	case -ENOENT:
 		lqe->lqe_granted = 0;
 		break;
@@ -127,8 +127,8 @@ static int qsd_lqe_read(const struct lu_env *env, struct lquota_entry *lqe,
 		lqe->lqe_granted = qti->qti_slv_rec.qsr_granted;
 		break;
 	default:
-		LQUOTA_ERROR(lqe, "failed to read quota entry from slave "
-			     "index copy, rc:%d", rc);
+		LQUOTA_ERROR(lqe, "failed to read quota entry from slave index copy, rc:%d",
+			     rc);
 		return rc;
 	}
 
@@ -159,10 +159,8 @@ static void qsd_lqe_debug(struct lquota_entry *lqe, void *arg,
 	struct qsd_qtype_info	*qqi = (struct qsd_qtype_info *)arg;
 
 	libcfs_debug_msg(msgdata,
-			 "%pV qsd:%s qtype:%s lqe: %p "
-			  "id:%llu enforced:%d granted: %llu pending:%llu "
-			  "waiting:%llu req:%d usage: %llu qunit:%llu qtune:%llu "
-			  "edquot:%d default:%s revoke:%d\n",
+			 "%pV qsd:%s qtype:%s lqe: %p id:%llu enforced:%d granted: %llu pending:%llu "
+			  "waiting:%llu req:%d usage: %llu qunit:%llu qtune:%llu edquot:%d default:%s revoke:%d\n",
 			 vaf,
 			 qqi->qqi_qsd->qsd_svname, qtype_name(qqi->qqi_qtype), lqe,
 			 lqe->lqe_id.qid_uid, lqe->lqe_enforced,
@@ -189,6 +187,7 @@ int qsd_write_version(const struct lu_env *env, struct qsd_qtype_info *qqi,
 	struct dt_object    *obj = global ? qqi->qqi_glb_obj :
 					    qqi->qqi_slv_obj;
 	int		     rc;
+
 	ENTRY;
 
 	rc = lquota_disk_update_ver(env, qsd->qsd_dev, obj, ver);
@@ -213,6 +212,7 @@ int qsd_refresh_usage(const struct lu_env *env, struct lquota_entry *lqe)
 	struct lquota_acct_rec	*rec = &qti->qti_acct_rec;
 	struct qsd_qtype_info	*qqi = lqe2qqi(lqe);
 	int			 rc = 0;
+
 	ENTRY;
 
 	LASSERT(qqi->qqi_acct_obj);
@@ -220,7 +220,7 @@ int qsd_refresh_usage(const struct lu_env *env, struct lquota_entry *lqe)
 	/* read disk usage */
 	rc = lquota_disk_read(env, qqi->qqi_acct_obj, &lqe->lqe_id,
 			      (struct dt_rec *)rec);
-	switch(rc) {
+	switch (rc) {
 	case -ENOENT:
 		lqe->lqe_usage = 0;
 		rc = 0;
@@ -264,6 +264,7 @@ int qsd_update_index(const struct lu_env *env, struct qsd_qtype_info *qqi,
 	__u64			*new_verp = NULL;
 	int			 flags = 0;
 	int			 rc;
+
 	ENTRY;
 
 	obj = global ? qqi->qqi_glb_obj : qqi->qqi_slv_obj;
@@ -287,16 +288,15 @@ int qsd_update_index(const struct lu_env *env, struct qsd_qtype_info *qqi,
 		/* Update record in global index copy */
 		struct lquota_glb_rec *glb_rec = (struct lquota_glb_rec *)rec;
 
-		CDEBUG(D_QUOTA, "%s: updating global index hardlimit: %llu, "
-		       "softlimit: %llu for id %llu\n",
+		CDEBUG(D_QUOTA, "%s: updating global index hardlimit: %llu, softlimit: %llu for id %llu\n",
 		       qqi->qqi_qsd->qsd_svname, glb_rec->qbr_hardlimit,
 		       glb_rec->qbr_softlimit, qid->qid_uid);
 	} else {
 		/* Update record in slave index copy */
 		struct lquota_slv_rec *slv_rec = (struct lquota_slv_rec *)rec;
 
-		CDEBUG(D_QUOTA, "%s: update granted to %llu for id %llu"
-		       "\n", qqi->qqi_qsd->qsd_svname, slv_rec->qsr_granted,
+		CDEBUG(D_QUOTA, "%s: update granted to %llu for id %llu\n",
+		       qqi->qqi_qsd->qsd_svname, slv_rec->qsr_granted,
 		       qid->qid_uid);
 	}
 
@@ -350,8 +350,7 @@ int qsd_update_lqe(const struct lu_env *env, struct lquota_entry *lqe,
 		    glb_rec->qbr_hardlimit == 0 && glb_rec->qbr_softlimit == 0)
 			RETURN(0);
 
-		LQUOTA_DEBUG(lqe, "the ID has been set quota, so clear the"
-			     " default quota flag");
+		LQUOTA_DEBUG(lqe, "the ID has been set quota, so clear the default quota flag");
 		lqe->lqe_is_default = false;
 
 		/* change enforcement status based on new hard/soft limit */
@@ -361,8 +360,8 @@ int qsd_update_lqe(const struct lu_env *env, struct lquota_entry *lqe,
 		else
 			lqe->lqe_enforced = false;
 
-		LQUOTA_DEBUG(lqe, "updating global index hardlimit: %llu, "
-			     "softlimit: %llu", glb_rec->qbr_hardlimit,
+		LQUOTA_DEBUG(lqe, "updating global index hardlimit: %llu, softlimit: %llu",
+			     glb_rec->qbr_hardlimit,
 			     glb_rec->qbr_softlimit);
 	} else {
 		struct lquota_slv_rec *slv_rec = (struct lquota_slv_rec *)rec;

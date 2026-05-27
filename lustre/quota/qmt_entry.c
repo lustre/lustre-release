@@ -92,8 +92,8 @@ int qmt_lqe_set_default(const struct lu_env *env, struct qmt_pool_info *pool,
 				      QIF_TIMES, true, false);
 
 		if (rc != 0)
-			LQUOTA_ERROR(lqe, "failed to create the global quota"
-				     " record: %d", rc);
+			LQUOTA_ERROR(lqe, "failed to create the global quota record: %d",
+				     rc);
 	}
 
 	if (lqe->lqe_hardlimit == 0 && lqe->lqe_softlimit == 0)
@@ -119,6 +119,7 @@ static int qmt_lqe_read(const struct lu_env *env, struct lquota_entry *lqe,
 	struct qmt_thread_info	*qti = qmt_info(env);
 	struct qmt_pool_info	*pool = (struct qmt_pool_info *)arg;
 	int			 rc;
+
 	ENTRY;
 
 	LASSERT(lqe_is_master(lqe));
@@ -225,6 +226,7 @@ struct thandle *qmt_trans_start_with_slv(const struct lu_env *env,
 	struct lquota_entry	**lqes;
 	struct qmt_lqe_restore	*restore;
 	int			 rc, i, lqes_cnt;
+
 	ENTRY;
 
 	restore = qti_lqes_rstr(env);
@@ -345,6 +347,7 @@ int qmt_glb_write(const struct lu_env *env, struct thandle *th,
 	struct qmt_thread_info	*qti = qmt_info(env);
 	struct lquota_glb_rec	*rec;
 	int			 rc;
+
 	ENTRY;
 
 	LASSERT(lqe != NULL);
@@ -412,6 +415,7 @@ int qmt_slv_read(const struct lu_env *env, union lquota_id *qid,
 	struct qmt_thread_info	*qti = qmt_info(env);
 	struct lquota_slv_rec	*slv_rec = &qti->qti_slv_rec;
 	int			 rc;
+
 	ENTRY;
 
 	CDEBUG(D_QUOTA, "read id:%llu form slv "DFID"\n",
@@ -461,6 +465,7 @@ int qmt_slv_write(const struct lu_env *env, struct thandle *th,
 	struct qmt_thread_info	*qti = qmt_info(env);
 	struct lquota_slv_rec	*rec;
 	int			 rc;
+
 	ENTRY;
 
 	LASSERT(lqe != NULL);
@@ -518,6 +523,7 @@ int qmt_validate_limits(struct lquota_entry *lqe, __u64 hard, __u64 soft)
 bool qmt_adjust_edquot(struct lquota_entry *lqe, __u64 now)
 {
 	struct qmt_pool_info	*pool = lqe2qpi(lqe);
+
 	ENTRY;
 
 	if (!lqe->lqe_enforced || lqe->lqe_id.qid_uid == 0)
@@ -641,6 +647,7 @@ __u64 qmt_alloc_expand(struct lquota_entry *lqe, __u64 granted, __u64 spare)
 	/* See comment in qmt_adjust_qunit(). LU-4139. */
 	if (lqe->lqe_softlimit != 0) {
 		bool oversoft;
+
 		remaining = qmt_calc_softlimit(lqe, &oversoft);
 		if (remaining == 0)
 			remaining = lqe->lqe_granted +
@@ -720,6 +727,7 @@ bool qmt_adjust_qunit(const struct lu_env *env, struct lquota_entry *lqe)
 	bool			 need_reseed = false;
 	int			 slv_cnt;
 	__u64			 qunit, limit, qunit2 = 0;
+
 	ENTRY;
 
 	LASSERT(lqe_is_locked(lqe));
@@ -758,8 +766,7 @@ bool qmt_adjust_qunit(const struct lu_env *env, struct lquota_entry *lqe)
 	} else if (lqe->lqe_hardlimit != 0) {
 		limit = lqe->lqe_hardlimit;
 	} else {
-		LQUOTA_ERROR(lqe, "enforced bit set, but neither hard nor soft "
-			     "limit are set");
+		LQUOTA_ERROR(lqe, "enforced bit set, but neither hard nor soft limit are set");
 		RETURN(need_reseed);
 	}
 
@@ -970,6 +977,7 @@ int qti_lqes_add(const struct lu_env *env, struct lquota_entry *lqe)
 
 	if (qti->qti_lqes_cnt >= qti->qti_lqes_num) {
 		struct lquota_entry	**lqes;
+
 		lqes = qti->qti_lqes;
 		OBD_ALLOC(lqes, sizeof(lqe) * qti->qti_lqes_num * 2);
 		if (!lqes)
@@ -1175,6 +1183,7 @@ void qmt_seed_glbe_all(const struct lu_env *env, struct lqe_glbl_data *lgd,
 {
 	struct qmt_pool_info *qpi;
 	int i, j;
+
 	ENTRY;
 
 	if (!qti_lqes_cnt(env))

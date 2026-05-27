@@ -35,6 +35,7 @@ static int qmt_get(const struct lu_env *env, struct qmt_device *qmt,
 		   char *lqa_name)
 {
 	struct lquota_entry	*lqe;
+
 	ENTRY;
 
 	LASSERT(!is_default || id->qid_uid == 0);
@@ -142,6 +143,7 @@ int qmt_set_with_lqe(const struct lu_env *env, struct qmt_device *qmt,
 	bool dirtied = false;
 	int rc = 0;
 	bool need_id_notify = false;
+
 	ENTRY;
 
 	/* need to write back to global quota file? */
@@ -225,8 +227,7 @@ quota_set:
 	}
 
 	if (!is_default && lqe->lqe_is_default) {
-		LQUOTA_DEBUG(lqe, "the qid %llu has been set quota"
-			     " explicitly, clear the default flag",
+		LQUOTA_DEBUG(lqe, "the qid %llu has been set quota explicitly, clear the default flag",
 			     lqe->lqe_id.qid_uid);
 
 		qmt_lqe_clear_default(lqe);
@@ -315,6 +316,7 @@ static int qmt_set(const struct lu_env *env, struct qmt_device *qmt,
 {
 	struct lquota_entry *lqe;
 	int rc;
+
 	ENTRY;
 
 	/* look-up quota entry associated with this ID */
@@ -576,6 +578,7 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 	int size = buffer == NULL ? 0 : LQUOTA_ITER_BUFLEN;
 	bool is_default = false;
 	bool is_first_iter = false;
+
 	ENTRY;
 
 	LASSERT(qmt != NULL);
@@ -969,6 +972,7 @@ int qmt_dqacq0(const struct lu_env *env, struct qmt_device *qmt,
 	struct thandle		*th = NULL;
 	int			 rc, ret;
 	struct lquota_entry *lqe = qti_lqes_glbl(env);
+
 	ENTRY;
 
 	LASSERT(uuid != NULL);
@@ -1006,8 +1010,8 @@ int qmt_dqacq0(const struct lu_env *env, struct qmt_device *qmt,
 
 	qti_lqes_write_lock(env);
 
-	LQUOTA_DEBUG_LQES(env, "dqacq starts uuid:%s flags:0x%x wanted:%llu"
-		     " usage:%llu", obd_uuid2str(uuid), qb_flags, qb_count,
+	LQUOTA_DEBUG_LQES(env, "dqacq starts uuid:%s flags:0x%x wanted:%llu usage:%llu",
+		     obd_uuid2str(uuid), qb_flags, qb_count,
 		     qb_usage);
 
 	/* Legal race, limits have been removed on master, but slave didn't
@@ -1160,8 +1164,8 @@ out_write:
 		ret = qmt_slv_write(env, th, lqe, slv_obj, 0, NULL,
 				    slv_granted_bck);
 		if (ret) {
-			LQUOTA_ERROR(lqe, "failed to restore initial slave "
-				     "value rc:%d ret%d", rc, ret);
+			LQUOTA_ERROR(lqe, "failed to restore initial slave value rc:%d ret%d",
+				     rc, ret);
 			LBUG();
 		}
 		qmt_adjust_edquot_notify(env, qmt, now, qb_flags);
@@ -1318,8 +1322,8 @@ static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 
 	if (req_is_rel(qbody->qb_flags) + req_is_acq(qbody->qb_flags) +
 	    req_is_preacq(qbody->qb_flags) > 1) {
-		CERROR("%s: malformed quota request with conflicting flags set "
-		       "(%x) from slave %s\n", qmt->qmt_svname,
+		CERROR("%s: malformed quota request with conflicting flags set (%x) from slave %s\n",
+		       qmt->qmt_svname,
 		       qbody->qb_flags, obd_uuid2str(uuid));
 		RETURN(-EPROTO);
 	}

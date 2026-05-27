@@ -369,11 +369,11 @@ struct lquota_thread_info *lquota_info(const struct lu_env *env)
 	    ((libcfs_debug & (mask)) != 0 &&                            \
 	     (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))          \
 		lquota_lqe_debug0(lqe, msgdata, fmt, ##a);              \
-} while(0)
+} while (0)
 
 void lquota_lqe_debug0(struct lquota_entry *lqe,
 		       struct libcfs_debug_msg_data *data, const char *fmt, ...)
-	__attribute__ ((format (printf, 3, 4)));
+	__printf(3, 4);
 
 #define LQUOTA_DEBUG_LIMIT(mask, lqe, fmt, a...) do {                          \
 	static struct cfs_debug_limit_state _lquota_cdls;		       \

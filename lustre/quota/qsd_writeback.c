@@ -103,12 +103,11 @@ static void qsd_add_deferred(struct qsd_instance *qsd, struct list_head *list,
 		 * case. */
 		if (upd->qur_ver == tmp->qur_ver) {
 			if (tmp->qur_lqe)
-				LQUOTA_WARN(tmp->qur_lqe, "Found a conflict "
-					    "record with ver:%llu",
+				LQUOTA_WARN(tmp->qur_lqe, "Found a conflict record with ver:%llu",
 					    tmp->qur_ver);
 			else
-				CWARN("%s: Found a conflict record with ver: "
-				      "%llu\n", qsd->qsd_svname, tmp->qur_ver);
+				CWARN("%s: Found a conflict record with ver: %llu\n",
+				      qsd->qsd_svname, tmp->qur_ver);
 
 			list_del_init(&tmp->qur_link);
 			qsd_upd_free(tmp);
@@ -127,6 +126,7 @@ static void qsd_kickoff_deferred(struct qsd_qtype_info *qqi,
 				 struct list_head *list, __u64 ver)
 {
 	struct qsd_upd_rec	*upd, *tmp;
+
 	ENTRY;
 
 	/* Get the first update record in the list, which has the smallest
@@ -136,8 +136,7 @@ static void qsd_kickoff_deferred(struct qsd_qtype_info *qqi,
 		if (upd->qur_ver <= ver) {
 			/* drop this update */
 			list_del_init(&upd->qur_link);
-			CDEBUG(D_QUOTA, "%s: skipping deferred update ver:"
-			       "%llu/%llu, global:%d, qid:%llu\n",
+			CDEBUG(D_QUOTA, "%s: skipping deferred update ver:%llu/%llu, global:%d, qid:%llu\n",
 			       qqi->qqi_qsd->qsd_svname, upd->qur_ver, ver,
 			       upd->qur_global, upd->qur_qid.qid_uid);
 			qsd_upd_free(upd);
@@ -150,8 +149,7 @@ static void qsd_kickoff_deferred(struct qsd_qtype_info *qqi,
 	if (list_empty(list))
 		RETURN_EXIT;
 
-	CDEBUG(D_QUOTA, "%s: found deferred update record. "
-	       "version:%llu/%llu, global:%d, qid:%llu\n",
+	CDEBUG(D_QUOTA, "%s: found deferred update record. version:%llu/%llu, global:%d, qid:%llu\n",
 	       qqi->qqi_qsd->qsd_svname, upd->qur_ver, ver,
 	       upd->qur_global, upd->qur_qid.qid_uid);
 
@@ -209,6 +207,7 @@ void qsd_upd_schedule(struct qsd_qtype_info *qqi, struct lquota_entry *lqe,
 	struct qsd_instance	*qsd = qqi->qqi_qsd;
 	__u64			 cur_ver;
 	bool			 need_to_trigger_reint = false;
+
 	ENTRY;
 
 	CDEBUG(D_QUOTA, "%s: schedule update. global:%s, version:%llu\n",
@@ -235,12 +234,11 @@ void qsd_upd_schedule(struct qsd_qtype_info *qqi, struct lquota_entry *lqe,
 		if (global)
 			/* legitimate race between glimpse AST and
 			 * reintegration */
-			CDEBUG(D_QUOTA, "%s: discarding glb update from glimpse"
-			       " ver:%llu local ver:%llu\n",
+			CDEBUG(D_QUOTA, "%s: discarding glb update from glimpse ver:%llu local ver:%llu\n",
 			       qsd->qsd_svname, ver, cur_ver);
 		else
-			CERROR("%s: discard slv update, ver:%llu local ver:"
-			       "%llu\n", qsd->qsd_svname, ver, cur_ver);
+			CERROR("%s: discard slv update, ver:%llu local ver:%llu\n",
+			       qsd->qsd_svname, ver, cur_ver);
 		qsd_upd_free(upd);
 	} else if ((ver == cur_ver + 1) && qqi->qqi_glb_uptodate &&
 		   qqi->qqi_slv_uptodate) {
@@ -279,6 +277,7 @@ static int qsd_process_upd(const struct lu_env *env, struct qsd_upd_rec *upd)
 	struct qsd_qtype_info	*qqi = upd->qur_qqi;
 	struct qsd_instance     *qsd = qqi->qqi_qsd;
 	int			 rc;
+
 	ENTRY;
 
 	if (qsd->qsd_exclusive) { /* It could be deadlock running with reint */
@@ -472,6 +471,7 @@ static bool qsd_job_pending(struct qsd_instance *qsd, struct list_head *upd,
 	spin_lock(&qsd->qsd_adjust_lock);
 	if (!list_empty(&qsd->qsd_adjust_list)) {
 		struct lquota_entry *lqe;
+
 		lqe = list_first_entry(&qsd->qsd_adjust_list,
 				       struct lquota_entry, lqe_link);
 		if (ktime_get_seconds() >= lqe->lqe_adjust_time)
@@ -549,6 +549,7 @@ static int qsd_upd_thread(void *_args)
 	bool			 uptodate;
 	struct lquota_entry	*lqe;
 	time64_t cur_time;
+
 	ENTRY;
 
 	complete(args->qua_started);
@@ -573,8 +574,7 @@ static int qsd_upd_thread(void *_args)
 			if (count % 7 == 0) {
 				n = list_first_entry(&queue, struct qsd_upd_rec,
 						     qur_link);
-				CWARN("%s: The reintegration thread [%d] "
-				      "blocked more than %ld seconds\n",
+				CWARN("%s: The reintegration thread [%d] blocked more than %ld seconds\n",
 				      n->qur_qqi->qqi_qsd->qsd_svname,
 				      n->qur_qqi->qqi_qtype, count *
 				      cfs_time_seconds(QSD_WB_INTERVAL) / 10);
@@ -684,6 +684,7 @@ int qsd_start_upd_thread(struct qsd_instance *qsd)
 	struct task_struct *task;
 	DECLARE_COMPLETION_ONSTACK(started);
 	int rc;
+
 	ENTRY;
 
 	OBD_ALLOC_PTR(args);
@@ -732,8 +733,8 @@ static void qsd_cleanup_deferred(struct qsd_instance *qsd)
 		write_lock(&qsd->qsd_lock);
 		list_for_each_entry_safe(upd, tmp, &qqi->qqi_deferred_glb,
 					 qur_link) {
-			CWARN("%s: Free global deferred upd: ID:%llu, "
-			      "ver:%llu/%llu\n", qsd->qsd_svname,
+			CWARN("%s: Free global deferred upd: ID:%llu, ver:%llu/%llu\n",
+			      qsd->qsd_svname,
 			      upd->qur_qid.qid_uid, upd->qur_ver,
 			      qqi->qqi_glb_ver);
 			list_del_init(&upd->qur_link);
@@ -741,8 +742,8 @@ static void qsd_cleanup_deferred(struct qsd_instance *qsd)
 		}
 		list_for_each_entry_safe(upd, tmp, &qqi->qqi_deferred_slv,
 					 qur_link) {
-			CWARN("%s: Free slave deferred upd: ID:%llu, "
-			      "ver:%llu/%llu\n", qsd->qsd_svname,
+			CWARN("%s: Free slave deferred upd: ID:%llu, ver:%llu/%llu\n",
+			      qsd->qsd_svname,
 			      upd->qur_qid.qid_uid, upd->qur_ver,
 			      qqi->qqi_slv_ver);
 			list_del_init(&upd->qur_link);

@@ -30,6 +30,7 @@ static void qsd_reint_completion(const struct lu_env *env,
 	struct qsd_instance	*qsd = qqi->qqi_qsd;
 	__u64			*slv_ver = (__u64 *)arg;
 	struct obd_import	*imp = class_exp2cliimp(qsd->qsd_exp);
+
 	ENTRY;
 
 	if (rc) {
@@ -41,8 +42,8 @@ static void qsd_reint_completion(const struct lu_env *env,
 		RETURN_EXIT;
 	}
 
-	CDEBUG(D_QUOTA, "%s: global quota lock successfully acquired, glb "
-	       "fid:"DFID", glb ver:%llu, slv fid:"DFID", slv ver:%llu\n",
+	CDEBUG(D_QUOTA, "%s: global quota lock successfully acquired, glb fid:"
+	       DFID", glb ver:%llu, slv fid:"DFID", slv ver:%llu\n",
 	       qsd->qsd_svname, PFID(&req_qbody->qb_fid),
 	       lvb->lvb_glb_ver, PFID(&rep_qbody->qb_slv_fid),
 	       rep_qbody->qb_slv_ver);
@@ -59,6 +60,7 @@ static int qsd_reint_qid(const struct lu_env *env, struct qsd_qtype_info *qqi,
 {
 	struct lquota_entry	*lqe;
 	int			 rc;
+
 	ENTRY;
 
 	lqe = lqe_locate(env, qqi->qqi_site, qid);
@@ -76,6 +78,7 @@ out:
 
 	if (global && qid->qid_uid == 0) {
 		struct lquota_glb_rec *glb_rec = (struct lquota_glb_rec *)rec;
+
 		qsd_update_default_quota(qqi, glb_rec->qbr_hardlimit,
 					 glb_rec->qbr_softlimit,
 					 glb_rec->qbr_time);
@@ -96,6 +99,7 @@ static int qsd_reint_entries(const struct lu_env *env,
 	union lquota_id *qid = &qti->qti_id;
 	int i, j, k, size;
 	int rc = 0;
+
 	ENTRY;
 
 	CDEBUG(D_QUOTA, "%s: processing %d pages for %s index\n",
@@ -122,16 +126,15 @@ static int qsd_reint_entries(const struct lu_env *env,
 				lustre_swab_lip_header(&lip->lp_idx);
 
 			if (lip->lp_idx.lip_magic != LIP_MAGIC) {
-				CERROR("%s: invalid magic (%x != %x) for page "
-				       "%d/%d while transferring %s index\n",
+				CERROR("%s: invalid magic (%x != %x) for page %d/%d while transferring %s index\n",
 				       qsd->qsd_svname, lip->lp_idx.lip_magic,
 				       LIP_MAGIC, i + 1, nfolios,
 				       global ? "global" : "slave");
 				GOTO(out, rc = -EINVAL);
 			}
 
-			CDEBUG(D_QUOTA, "%s: processing page %d/%d with %d "
-			       "entries for %s index\n", qsd->qsd_svname, i + 1,
+			CDEBUG(D_QUOTA, "%s: processing page %d/%d with %d entries for %s index\n",
+			       qsd->qsd_svname, i + 1,
 			       nfolios, lip->lp_idx.lip_nr,
 			       global ? "global" : "slave");
 
@@ -183,6 +186,7 @@ static int qsd_reint_index(const struct lu_env *env, struct qsd_qtype_info *qqi,
 	__u64 start_hash = 0, ver = 0;
 	bool need_swab = false;
 	int i, rc;
+
 	ENTRY;
 
 	fid = global ? &qqi->qqi_fid : &qqi->qqi_slv_fid;
@@ -235,17 +239,17 @@ repeat:
 		CWARN("%s: II_FL_NONUNQ is set on index transfer for fid "DFID
 		      ", it shouldn't be\n", qsd->qsd_svname, PFID(fid));
 	if (ii->ii_keysize != sizeof(__u64)) {
-		CERROR("%s: invalid key size reported on index transfer for "
-		       "fid "DFID", %u != %u\n", qsd->qsd_svname, PFID(fid),
+		CERROR("%s: invalid key size reported on index transfer for fid "
+		       DFID", %u != %u\n", qsd->qsd_svname, PFID(fid),
 		       ii->ii_keysize, (int)sizeof(__u64));
 		GOTO(out, rc = -EPROTO);
 	}
 	if (ii->ii_version == 0 && ii->ii_count != 0)
-		CWARN("%s: index version for fid "DFID" is 0, but index isn't "
-		      "empty (%d)\n", qsd->qsd_svname, PFID(fid), ii->ii_count);
+		CWARN("%s: index version for fid "DFID" is 0, but index isn't empty (%d)\n",
+		      qsd->qsd_svname, PFID(fid), ii->ii_count);
 
-	CDEBUG(D_QUOTA, "%s: reintegration process for fid "DFID" successfully "
-	       "fetched %s index, count = %d\n", qsd->qsd_svname,
+	CDEBUG(D_QUOTA, "%s: reintegration process for fid "DFID" successfully fetched %s index, count = %d\n",
+	       qsd->qsd_svname,
 	       PFID(fid), global ? "global" : "slave", ii->ii_count);
 
 	if (start_hash == 0)
@@ -256,8 +260,8 @@ repeat:
 	lu_pgs >>= PAGE_SHIFT - LU_PAGE_SHIFT;
 
 	if (lu_pgs > nfolios) {
-		CERROR("%s: master returned more pages than expected, %u > %u"
-		       "\n", qsd->qsd_svname, lu_pgs, nfolios);
+		CERROR("%s: master returned more pages than expected, %u > %u\n",
+		       qsd->qsd_svname, lu_pgs, nfolios);
 		lu_pgs = nfolios;
 	}
 
@@ -299,6 +303,7 @@ static int qsd_reconciliation(const struct lu_env *env,
 	struct lquota_entry	*lqe;
 	union lquota_id		*qid = &qti->qti_id;
 	int			 rc;
+
 	ENTRY;
 
 	LASSERT(qqi->qqi_glb_obj != NULL);
@@ -419,6 +424,7 @@ static int qsd_reint_main(void *_args)
 	struct qsd_qtype_info	*qqi = args->qra_qqi;
 	struct qsd_instance	*qsd = qqi->qqi_qsd;
 	int			 rc;
+
 	ENTRY;
 
 	CDEBUG(D_QUOTA, "%s: Starting reintegration thread for "DFID"\n",
@@ -469,8 +475,8 @@ static int qsd_reint_main(void *_args)
 		if (rc)
 			GOTO(out_env_init, rc);
 
-		CDEBUG(D_QUOTA, "%s: glb_ver:%llu/%llu,slv_ver:%llu/"
-		       "%llu\n", qsd->qsd_svname,
+		CDEBUG(D_QUOTA, "%s: glb_ver:%llu/%llu,slv_ver:%llu/%llu\n",
+		       qsd->qsd_svname,
 		       qti->qti_lvb.lvb_glb_ver, qqi->qqi_glb_ver,
 		       qti->qti_slv_ver, qqi->qqi_slv_ver);
 	}
@@ -572,6 +578,7 @@ static bool qqi_reint_delayed(struct qsd_qtype_info *qqi)
 	struct lquota_entry	*lqe, *n;
 	int			 warn = 1, dqacq = 0;
 	bool			 delay = false;
+
 	ENTRY;
 
 	/* any pending quota adjust? */
@@ -622,8 +629,7 @@ out_lock:
 	write_unlock(&qsd->qsd_lock);
 out:
 	if (warn)
-		CERROR("%s: Delaying reintegration for qtype:%d until pending "
-		       "updates are flushed.\n",
+		CERROR("%s: Delaying reintegration for qtype:%d until pending updates are flushed.\n",
 		       qsd->qsd_svname, qqi->qqi_qtype);
 	return delay;
 }
@@ -635,6 +641,7 @@ int qsd_start_reint_thread(struct qsd_qtype_info *qqi)
 	struct qsd_reint_args	*args;
 	DECLARE_COMPLETION_ONSTACK(started);
 	int			 rc;
+
 	ENTRY;
 
 	/* do not try to start a new thread as this can lead to a deadlock */

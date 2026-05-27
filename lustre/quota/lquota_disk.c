@@ -33,7 +33,7 @@
 #include <obd_class.h>
 #include "lquota_internal.h"
 
-#define LQUOTA_MODE (S_IFREG | S_IRUGO | S_IWUSR)
+#define LQUOTA_MODE (S_IFREG | 0644)
 
 /*
  * Helper function looking up & creating if not found an index file with a
@@ -49,6 +49,7 @@ lquota_disk_find_create(const struct lu_env *env, struct dt_device *dev,
 	struct dt_object *obj;
 	struct local_oid_storage *los;
 	int rc;
+
 	ENTRY;
 
 	/* Set up local storage */
@@ -99,8 +100,8 @@ static inline int lquota_disk_slv_filename(const struct lu_fid *glb_fid,
 	if (name == NULL) {
 		name = strrchr(uuid_str, ':');
 		if (name == NULL) {
-			CERROR("Failed to extract extract filesystem "
-			       "name from UUID %s\n", uuid_str);
+			CERROR("Failed to extract extract filesystem name from UUID %s\n",
+			       uuid_str);
 			if (uuid_str != uuid->uuid)
 				OBD_FREE(uuid_str, sizeof(*uuid));
 			return -EINVAL;
@@ -145,6 +146,7 @@ struct dt_object *lquota_disk_dir_find_create(const struct lu_env *env,
 	struct dt_object		*qt_dir = NULL;
 	struct local_oid_storage	*los = NULL;
 	int				 rc;
+
 	ENTRY;
 
 	/* Set up local storage to create the quota directory.
@@ -170,7 +172,7 @@ struct dt_object *lquota_disk_dir_find_create(const struct lu_env *env,
 
 	/* create quota directory to be used for all quota index files */
 	qt_dir = local_file_find_or_create(env, los, parent, name, S_IFDIR |
-					   S_IRUGO | S_IWUSR | S_IXUGO);
+					   0755);
 	if (IS_ERR(qt_dir))
 		GOTO(out, rc = PTR_ERR(qt_dir));
 
@@ -220,6 +222,7 @@ struct dt_object *lquota_disk_glb_find_create(const struct lu_env *env,
 	struct lquota_thread_info	*qti = lquota_info(env);
 	struct dt_object		*glb_idx;
 	const struct dt_index_features	*idx_feat;
+
 	ENTRY;
 
 	CDEBUG(D_QUOTA, "look-up/create %sglobal idx file ("DFID")\n",
@@ -247,8 +250,8 @@ struct dt_object *lquota_disk_glb_find_create(const struct lu_env *env,
 	}
 
 	if (IS_ERR(glb_idx)) {
-		CERROR("%s: failed to look-up/create idx file "DFID" rc:%ld "
-		       "local:%d\n", dev->dd_lu_dev.ld_obd->obd_name,
+		CERROR("%s: failed to look-up/create idx file "DFID" rc:%ld local:%d\n",
+		       dev->dd_lu_dev.ld_obd->obd_name,
 		       PFID(fid), PTR_ERR(glb_idx), local);
 		RETURN(glb_idx);
 	}
@@ -293,6 +296,7 @@ struct dt_object *lquota_disk_slv_find(const struct lu_env *env,
 	struct lquota_thread_info	*qti = lquota_info(env);
 	struct dt_object		*slv_idx;
 	int				 rc;
+
 	ENTRY;
 
 	LASSERT(uuid != NULL);
@@ -308,7 +312,7 @@ struct dt_object *lquota_disk_slv_find(const struct lu_env *env,
 	/* lookup slave index file */
 	rc = dt_lookup_dir(env, parent, qti->qti_buf, &qti->qti_fid);
 	if (rc)
-                RETURN(ERR_PTR(rc));
+		RETURN(ERR_PTR(rc));
 
 	/* name is found, get the object */
 	slv_idx = dt_locate(env, dev, &qti->qti_fid);
@@ -319,8 +323,8 @@ struct dt_object *lquota_disk_slv_find(const struct lu_env *env,
 		rc = slv_idx->do_ops->do_index_try(env, slv_idx,
 						   &dt_quota_slv_features);
 		if (rc) {
-			CERROR("%s: failed to setup slave index operations for "
-			       "%s, rc:%d\n", dev->dd_lu_dev.ld_obd->obd_name,
+			CERROR("%s: failed to setup slave index operations for %s, rc:%d\n",
+			       dev->dd_lu_dev.ld_obd->obd_name,
 			       obd_uuid2str(uuid), rc);
 			dt_object_put(env, slv_idx);
 			slv_idx = ERR_PTR(rc);
@@ -362,6 +366,7 @@ struct dt_object *lquota_disk_slv_find_create(const struct lu_env *env,
 	struct lquota_thread_info	*qti = lquota_info(env);
 	struct dt_object		*slv_idx;
 	int				 rc, type;
+
 	ENTRY;
 
 	LASSERT(uuid != NULL);
@@ -457,6 +462,7 @@ int lquota_disk_for_each_slv(const struct lu_env *env, struct dt_object *parent,
 	const struct dt_it_ops		*iops;
 	char				*name;
 	int				 rc;
+
 	ENTRY;
 
 	OBD_ALLOC(name, LQUOTA_NAME_MAX);
@@ -553,6 +559,7 @@ int lquota_disk_read(const struct lu_env *env, struct dt_object *obj,
 		     union lquota_id *id, struct dt_rec *rec)
 {
 	int	rc;
+
 	ENTRY;
 
 	LASSERT(dt_object_exists(obj));
@@ -582,6 +589,7 @@ int lquota_disk_declare_write(const struct lu_env *env, struct thandle *th,
 	struct lquota_thread_info	*qti = lquota_info(env);
 	struct dt_key			*key = (struct dt_key *)&id->qid_uid;
 	int				 rc;
+
 	ENTRY;
 
 	LASSERT(dt_object_exists(obj));
@@ -627,6 +635,7 @@ int lquota_disk_write(const struct lu_env *env, struct thandle *th,
 	struct lquota_thread_info	*qti = lquota_info(env);
 	struct dt_key			*key = (struct dt_key *)&id->qid_uid;
 	int				 rc;
+
 	ENTRY;
 
 	LASSERT(dt_object_exists(obj));
@@ -656,8 +665,8 @@ int lquota_disk_write(const struct lu_env *env, struct thandle *th,
 			/* try to insert the old one */
 			rc = dt_insert(env, obj, (struct dt_rec *)&qti->qti_rec,
 				       key, th);
-			LASSERTF(rc == 0, "failed to insert record in quota "
-				 "index "DFID"\n",
+			LASSERTF(rc == 0, "failed to insert record in quota index "
+				 DFID"\n",
 				 PFID(lu_object_fid(&obj->do_lu)));
 			GOTO(out, rc);
 		}
@@ -725,6 +734,7 @@ int lquota_disk_update_ver(const struct lu_env *env, struct dt_device *dev,
 {
 	struct thandle	*th;
 	int		 rc;
+
 	ENTRY;
 
 	th = dt_trans_create(env, dev);
@@ -762,6 +772,7 @@ int lquota_disk_write_glb(const struct lu_env *env, struct dt_object *obj,
 	struct thandle		*th;
 	struct dt_key		*key = (struct dt_key *)&id;
 	int			 rc;
+
 	ENTRY;
 
 	th = dt_trans_create(env, dev);

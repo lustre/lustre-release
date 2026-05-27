@@ -30,6 +30,7 @@ lqe64_hash_hash(struct cfs_hash *hs, const void *key, const unsigned int bits)
 static void *lqe64_hash_key(struct hlist_node *hnode)
 {
 	struct lquota_entry *lqe;
+
 	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
 	return &lqe->lqe_id.qid_uid;
 }
@@ -37,8 +38,9 @@ static void *lqe64_hash_key(struct hlist_node *hnode)
 static int lqe64_hash_keycmp(const void *key, struct hlist_node *hnode)
 {
 	struct lquota_entry *lqe;
+
 	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
-	return (lqe->lqe_id.qid_uid == *((__u64*)key));
+	return (lqe->lqe_id.qid_uid == *((__u64 *)key));
 }
 
 static void *lqe_hash_object(struct hlist_node *hnode)
@@ -49,6 +51,7 @@ static void *lqe_hash_object(struct hlist_node *hnode)
 static void lqe_hash_get(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct lquota_entry *lqe;
+
 	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
 	lqe_getref(lqe);
 }
@@ -56,6 +59,7 @@ static void lqe_hash_get(struct cfs_hash *hs, struct hlist_node *hnode)
 static void lqe_hash_put_locked(struct cfs_hash *hs, struct hlist_node *hnode)
 {
 	struct lquota_entry *lqe;
+
 	lqe = hlist_entry(hnode, struct lquota_entry, lqe_hash);
 	lqe_putref(lqe);
 }
@@ -141,6 +145,7 @@ static void lqe_cleanup(struct cfs_hash *hash, bool free_all)
 {
 	struct lqe_iter_data	d;
 	int			repeat = 0;
+
 	ENTRY;
 retry:
 	memset(&d, 0, sizeof(d));
@@ -154,8 +159,8 @@ retry:
 	 * If the per-fs quota updating thread is still holding
 	 * some entries, we just wait for it's finished. */
 	if (free_all && d.lid_inuse) {
-		CDEBUG(D_QUOTA, "Hash:%p has entries inuse: inuse:%lu, "
-			"freed:%lu, repeat:%u\n", hash,
+		CDEBUG(D_QUOTA, "Hash:%p has entries inuse: inuse:%lu, freed:%lu, repeat:%u\n",
+			hash,
 			d.lid_inuse, d.lid_freed, repeat);
 		repeat++;
 		schedule_timeout_interruptible(cfs_time_seconds(1));
@@ -184,6 +189,7 @@ struct lquota_site *lquota_site_alloc(const struct lu_env *env, void *parent,
 {
 	struct lquota_site	*site;
 	char			 hashname[15];
+
 	ENTRY;
 
 	if (qtype >= LL_MAXQUOTAS)
@@ -202,7 +208,7 @@ struct lquota_site *lquota_site_alloc(const struct lu_env *env, void *parent,
 	/* allocate hash table */
 	memset(hashname, 0, sizeof(hashname));
 	snprintf(hashname, sizeof(hashname), "LQUOTA_HASH%hu", qtype);
-	site->lqs_hash= cfs_hash_create(hashname, hash_lqs_cur_bits,
+	site->lqs_hash = cfs_hash_create(hashname, hash_lqs_cur_bits,
 					HASH_LQE_MAX_BITS,
 					min(hash_lqs_cur_bits,
 					    HASH_LQE_BKT_BITS),
@@ -247,6 +253,7 @@ void lquota_site_free(const struct lu_env *env, struct lquota_site *site)
 static void lqe_init(struct lquota_entry *lqe)
 {
 	struct lquota_site *site;
+
 	ENTRY;
 
 	LASSERT(lqe != NULL);
@@ -275,6 +282,7 @@ static int lqe_read(const struct lu_env *env,
 {
 	struct lquota_site	*site;
 	int			 rc;
+
 	ENTRY;
 
 	LASSERT(lqe != NULL);
@@ -309,6 +317,7 @@ struct lquota_entry *lqe_locate_find(const struct lu_env *env,
 {
 	struct lquota_entry	*lqe, *new = NULL;
 	int			 rc = 0;
+
 	ENTRY;
 
 	lqe = cfs_hash_lookup(site->lqs_hash, (void *)&qid->qid_uid);
@@ -319,8 +328,8 @@ struct lquota_entry *lqe_locate_find(const struct lu_env *env,
 
 	OBD_SLAB_ALLOC_PTR_GFP(new, lqe_kmem, GFP_NOFS);
 	if (new == NULL) {
-		CERROR("Fail to allocate lqe for id:%llu, "
-			"hash:%s\n", qid->qid_uid, site->lqs_hash->hs_name);
+		CERROR("Fail to allocate lqe for id:%llu, hash:%s\n",
+			qid->qid_uid, site->lqs_hash->hs_name);
 		RETURN(ERR_PTR(-ENOMEM));
 	}
 
