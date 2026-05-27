@@ -36,7 +36,7 @@ void cfs_tracefile_exit(void);
 
 
 int cfs_trace_copyout_string(char __user *usr_buffer, int usr_buffer_nob,
-                             const char *knl_str, char *append);
+			     const char *knl_str, char *append);
 int cfs_trace_dump_debug_buffer_usrstr(void __user *usr_str, int usr_str_nob);
 int cfs_trace_daemon_command(char *str);
 int cfs_trace_daemon_command_usrstr(void __user *usr_str, int usr_str_nob);
@@ -146,10 +146,10 @@ struct cfs_trace_page {
 };
 
 int cfs_tcd_owns_tage(struct cfs_trace_cpu_data *tcd,
-                      struct cfs_trace_page *tage);
+		      struct cfs_trace_page *tage);
 
 extern void cfs_trace_assertion_failed(const char *str,
-                                       struct libcfs_debug_msg_data *m);
+				       struct libcfs_debug_msg_data *m);
 
 /* ASSERTION that is safe to use within the debug system */
 #define __LASSERT(cond)							\

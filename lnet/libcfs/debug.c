@@ -342,7 +342,7 @@ int cfs_str2mask(const char *str, const char *(*bit2str)(int bit),
 			    strncasecmp(str, debugstr, len) == 0) {
 				if (op == '-')
 					newmask &= ~BIT(i);
-			       else
+				else
 					newmask |= BIT(i);
 				found = 1;
 				break;
@@ -644,7 +644,7 @@ int libcfs_debug_clear_buffer(void)
 }
 EXPORT_SYMBOL(libcfs_debug_clear_buffer);
 
-/* Debug markers, although printed by S_LNET should not be be marked as such. */
+/* Debug markers, although printed by S_LNET should not be marked as such. */
 #undef DEBUG_SUBSYSTEM
 #define DEBUG_SUBSYSTEM S_UNDEFINED
 int libcfs_debug_mark_buffer(const char *text)

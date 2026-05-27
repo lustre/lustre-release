@@ -779,15 +779,15 @@ static void collect_pages(struct page_collection *pc)
 
 static void put_pages_back_on_all_cpus(struct page_collection *pc)
 {
-        struct cfs_trace_cpu_data *tcd;
+	struct cfs_trace_cpu_data *tcd;
 	struct list_head *cur_head;
-        struct cfs_trace_page *tage;
-        struct cfs_trace_page *tmp;
-        int i, cpu;
+	struct cfs_trace_page *tage;
+	struct cfs_trace_page *tmp;
+	int i, cpu;
 
 	for_each_possible_cpu(cpu) {
-                cfs_tcd_for_each_type_lock(tcd, i, cpu) {
-                        cur_head = tcd->tcd_pages.next;
+		cfs_tcd_for_each_type_lock(tcd, i, cpu) {
+			cur_head = tcd->tcd_pages.next;
 
 			list_for_each_entry_safe(tage, tmp, &pc->pc_pages,
 						 linkage) {
@@ -806,8 +806,8 @@ static void put_pages_back_on_all_cpus(struct page_collection *pc)
 
 static void put_pages_back(struct page_collection *pc)
 {
-        if (!libcfs_panic_in_progress)
-                put_pages_back_on_all_cpus(pc);
+	if (!libcfs_panic_in_progress)
+		put_pages_back_on_all_cpus(pc);
 }
 
 #ifdef LNET_DUMP_ON_PANIC
@@ -972,27 +972,27 @@ void cfs_trace_flush_pages(void)
 }
 
 int cfs_trace_copyout_string(char __user *usr_buffer, int usr_buffer_nob,
-                             const char *knl_buffer, char *append)
+			     const char *knl_buffer, char *append)
 {
-        /* NB if 'append' != NULL, it's a single character to append to the
-         * copied out string - usually "\n", for /proc entries and "" (i.e. a
-         * terminating zero byte) for sysctl entries */
-        int   nob = strlen(knl_buffer);
+	/* NB if 'append' != NULL, it's a single character to append to the
+	 * copied out string - usually "\n", for /proc entries and "" (i.e. a
+	 * terminating zero byte) for sysctl entries */
+	int   nob = strlen(knl_buffer);
 
-        if (nob > usr_buffer_nob)
-                nob = usr_buffer_nob;
+	if (nob > usr_buffer_nob)
+		nob = usr_buffer_nob;
 
 	if (copy_to_user(usr_buffer, knl_buffer, nob))
-                return -EFAULT;
+		return -EFAULT;
 
-        if (append != NULL && nob < usr_buffer_nob) {
+	if (append != NULL && nob < usr_buffer_nob) {
 		if (copy_to_user(usr_buffer + nob, append, 1))
-                        return -EFAULT;
+			return -EFAULT;
 
-                nob++;
-        }
+		nob++;
+	}
 
-        return nob;
+	return nob;
 }
 EXPORT_SYMBOL(cfs_trace_copyout_string);
 
@@ -1020,15 +1020,15 @@ int cfs_trace_dump_debug_buffer_usrstr(void __user *usr_str, int usr_str_nob)
 
 int cfs_trace_daemon_command(char *str)
 {
-        int       rc = 0;
+	int       rc = 0;
 
 	down_write(&cfs_tracefile_sem);
 
-        if (strcmp(str, "stop") == 0) {
+	if (strcmp(str, "stop") == 0) {
 		up_write(&cfs_tracefile_sem);
-                cfs_trace_stop_thread();
+		cfs_trace_stop_thread();
 		down_write(&cfs_tracefile_sem);
-                memset(cfs_tracefile, 0, sizeof(cfs_tracefile));
+		memset(cfs_tracefile, 0, sizeof(cfs_tracefile));
 
 	} else if (strncmp(str, "size=", 5) == 0) {
 		unsigned long tmp;
@@ -1040,21 +1040,21 @@ int cfs_trace_daemon_command(char *str)
 			else
 				cfs_tracefile_size = tmp << 20;
 		}
-        } else if (strlen(str) >= sizeof(cfs_tracefile)) {
-                rc = -ENAMETOOLONG;
-        } else if (str[0] != '/') {
-                rc = -EINVAL;
-        } else {
+	} else if (strlen(str) >= sizeof(cfs_tracefile)) {
+		rc = -ENAMETOOLONG;
+	} else if (str[0] != '/') {
+		rc = -EINVAL;
+	} else {
 		strcpy(cfs_tracefile, str);
 
 		pr_info("Lustre: debug daemon will attempt to start writing to %s (%lukB max)\n",
 			cfs_tracefile, (long)(cfs_tracefile_size >> 10));
 
 		cfs_trace_start_thread();
-        }
+	}
 
 	up_write(&cfs_tracefile_sem);
-        return rc;
+	return rc;
 }
 
 int cfs_trace_daemon_command_usrstr(void __user *usr_str, int usr_str_nob)
@@ -1111,15 +1111,15 @@ int cfs_trace_set_debug_mb(int mb)
 
 int cfs_trace_get_debug_mb(void)
 {
-        int i;
-        int j;
-        struct cfs_trace_cpu_data *tcd;
-        int total_pages = 0;
+	int i;
+	int j;
+	struct cfs_trace_cpu_data *tcd;
+	int total_pages = 0;
 
 	down_read(&cfs_tracefile_sem);
 
-        cfs_tcd_for_each(tcd, i, j)
-                total_pages += tcd->tcd_max_pages;
+	cfs_tcd_for_each(tcd, i, j)
+		total_pages += tcd->tcd_max_pages;
 
 	up_read(&cfs_tracefile_sem);
 
@@ -1142,6 +1142,7 @@ static int tracefiled(void *arg)
 	while (!last_loop) {
 		LIST_HEAD(for_daemon_pages);
 		int for_daemon_pages_count = 0;
+
 		schedule_timeout_interruptible(cfs_time_seconds(1));
 		if (kthread_should_stop())
 			last_loop = 1;
@@ -1302,7 +1303,7 @@ int cfs_tracefile_init(int max_pages)
 		 * are used in different interrupt contexts, lockdep
 		 * would otherwise think that the usage would conflict.
 		 */
-		switch(i) {
+		switch (i) {
 		case CFS_TCD_TYPE_PROC:
 			spin_lock_init(&tcd->tcd_lock);
 			break;
