@@ -570,7 +570,7 @@ echo_md_root_get(const struct lu_env *env, struct echo_md_device *emd,
 		rc = echo_md_local_file_create(env, emd, ed->ed_los,
 					       &emd->emd_local_root_fid,
 					       echo_md_root_dir_name, S_IFDIR |
-					       S_IRUGO | S_IWUSR | S_IXUGO,
+					       0755,
 					       &fid);
 		if (rc != 0) {
 			CERROR("%s: create md echo root fid failed: rc = %d\n",
