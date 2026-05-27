@@ -65,7 +65,7 @@ static int ksocknal_ip2index(struct sockaddr *addr, struct lnet_ni *ni,
 		case AF_INET6: {
 			struct inet6_dev *in6_dev;
 			const struct inet6_ifaddr *ifa6;
-			struct sockaddr_in6 *addr6 = (struct sockaddr_in6*)addr;
+			struct sockaddr_in6 *addr6 = (struct sockaddr_in6 *)addr;
 
 			in6_dev = __in6_dev_get(dev);
 			if (!in6_dev)
@@ -795,7 +795,7 @@ ksocknal_nl_get(int cmd, struct sk_buff *msg, int type, void *data,
 	if (!ni || !msg)
 		return -EINVAL;
 
-	 if (cmd != LNET_CMD_NETS || type != LNET_NET_LOCAL_NI_ATTR_LND_TUNABLES)
+	if (cmd != LNET_CMD_NETS || type != LNET_NET_LOCAL_NI_ATTR_LND_TUNABLES)
 		return -EOPNOTSUPP;
 
 	tun = &ni->ni_lnd_tunables;
@@ -1176,8 +1176,7 @@ ksocknal_create_conn(struct lnet_ni *ni, struct ksock_conn_cb *conn_cb,
 	 *        socket callbacks.
 	 */
 
-	CDEBUG(D_NET, "New conn %s p %d.x %pISc -> %pIScp"
-	       " incarnation:%lld sched[%d]\n",
+	CDEBUG(D_NET, "New conn %s p %d.x %pISc -> %pIScp incarnation:%lld sched[%d]\n",
 	       libcfs_idstr(&peerid), conn->ksnc_proto->pro_version,
 	       &conn->ksnc_myaddr, &conn->ksnc_peeraddr,
 	       incarnation, cpt);
@@ -2149,7 +2148,7 @@ static int ksocknal_device_event(struct notifier_block *unused,
 
 	operstate = dev->operstate;
 
-	CDEBUG(D_NET, "devevent: status=%s, iface=%s ifindex %d state %u ns %p \n",
+	CDEBUG(D_NET, "devevent: status=%s, iface=%s ifindex %d state %u ns %p\n",
 	       netdev_cmd_to_name(event), dev->name, dev->ifindex, operstate,
 	       dev_netns);
 
