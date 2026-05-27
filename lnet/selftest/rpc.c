@@ -157,6 +157,7 @@ srpc_init_bulk(struct srpc_bulk *bk, unsigned int bulk_off,
 		unsigned int bulk_len, int sink)
 {
 	int i;
+
 	ENTRY;
 
 	CDEBUG(D_INFO, "bulk %p o %u l %u s %u\n",
@@ -172,7 +173,7 @@ srpc_init_bulk(struct srpc_bulk *bk, unsigned int bulk_off,
 
 		LASSERT(bk->bk_iovs[i].bv_page != NULL);
 
-		nob = min_t(unsigned, bulk_off + bulk_len, PAGE_SIZE) -
+		nob = min_t(unsigned int, bulk_off + bulk_len, PAGE_SIZE) -
 		      bulk_off;
 
 		srpc_init_bulk_page(bk, i, bulk_off, nob);
@@ -185,7 +186,7 @@ srpc_init_bulk(struct srpc_bulk *bk, unsigned int bulk_off,
 }
 
 static inline __u64
-srpc_next_id (void)
+srpc_next_id(void)
 {
 	return atomic64_inc_return(&srpc_data.rpc_matchbits);
 }
@@ -1080,7 +1081,7 @@ static void srpc_handle_rpc(struct swi_workitem *wi)
 }
 
 static void
-srpc_client_rpc_expired (void *data)
+srpc_client_rpc_expired(void *data)
 {
 	struct srpc_client_rpc *rpc = data;
 
@@ -1605,7 +1606,7 @@ srpc_lnet_ev_handler(struct lnet_event *ev)
 
 
 int
-srpc_startup (void)
+srpc_startup(void)
 {
 	int rc;
 
@@ -1647,7 +1648,7 @@ srpc_startup (void)
 }
 
 void
-srpc_shutdown (void)
+srpc_shutdown(void)
 {
 	int i;
 	int rc;

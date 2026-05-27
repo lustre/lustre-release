@@ -59,9 +59,9 @@ struct lstcon_rpc_trans {
 	/* operation code of transaction */
 	int			tas_opc;
 	/* features mask is uptodate */
-	unsigned		tas_feats_updated;
+	unsigned int tas_feats_updated;
 	/* test features mask */
-	unsigned		tas_features;
+	unsigned int tas_features;
 	wait_queue_head_t	tas_waitq;	/* wait queue head */
 	atomic_t		tas_remaining;	/* # of un-scheduled rpcs */
 	struct list_head	tas_rpcs_list;	/* queued requests */
@@ -91,11 +91,11 @@ int  lstcon_sesrpc_prep(struct lstcon_node *nd, int transop,
 			unsigned int version, struct lstcon_rpc **crpc);
 int  lstcon_dbgrpc_prep(struct lstcon_node *nd,
 			unsigned int version, struct lstcon_rpc **crpc);
-int  lstcon_batrpc_prep(struct lstcon_node *nd, int transop, unsigned version,
+int  lstcon_batrpc_prep(struct lstcon_node *nd, int transop, unsigned int version,
 			struct lstcon_tsb_hdr *tsb, struct lstcon_rpc **crpc);
-int  lstcon_testrpc_prep(struct lstcon_node *nd, int transop, unsigned version,
+int  lstcon_testrpc_prep(struct lstcon_node *nd, int transop, unsigned int version,
 			 struct lstcon_test *test, struct lstcon_rpc **crpc);
-int  lstcon_statrpc_prep(struct lstcon_node *nd, unsigned version,
+int  lstcon_statrpc_prep(struct lstcon_node *nd, unsigned int version,
 			 struct lstcon_rpc **crpc);
 void lstcon_rpc_put(struct lstcon_rpc *crpc);
 int  lstcon_rpc_trans_prep(struct list_head *translist,

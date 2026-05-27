@@ -255,7 +255,7 @@ sfw_session_expired(void *data)
 
 static inline void
 sfw_init_session(struct sfw_session *sn, struct lst_sid sid,
-		 unsigned features, const char *name)
+		 unsigned int features, const char *name)
 {
 	struct stt_timer *timer = &sn->sn_timer;
 
@@ -303,8 +303,7 @@ sfw_client_rpc_fini(struct srpc_client_rpc *rpc)
 	LASSERT(rpc->crpc_bulk.bk_niov == 0);
 	LASSERT(list_empty(&rpc->crpc_list));
 
-	CDEBUG(D_NET, "Outgoing framework RPC done: "
-	       "service %d, peer %s, status %s:%d:%d\n",
+	CDEBUG(D_NET, "Outgoing framework RPC done: service %d, peer %s, status %s:%d:%d\n",
 	       rpc->crpc_service, libcfs_idstr(&rpc->crpc_dest),
 	       swi_state2str(rpc->crpc_wi.swi_state),
 	       rpc->crpc_aborted, rpc->crpc_status);
@@ -588,8 +587,8 @@ sfw_load_test(struct sfw_test_instance *tsi)
 
 	rc = srpc_service_add_buffers(svc, nbuf);
 	if (rc != 0) {
-		CWARN("Failed to reserve enough buffers: "
-		      "service %s, %d needed: %d\n", svc->sv_name, nbuf, rc);
+		CWARN("Failed to reserve enough buffers: service %s, %d needed: %d\n",
+		      svc->sv_name, nbuf, rc);
 		/* NB: this error handler is not strictly correct, because
 		 * it may release more buffers than already allocated,
 		 * but it doesn't matter because request portal should
@@ -912,7 +911,7 @@ sfw_test_rpc_done(struct srpc_client_rpc *rpc)
 
 int
 sfw_create_test_rpc(struct sfw_test_unit *tsu, struct lnet_processid *peer,
-		    unsigned features, int nblk, int blklen,
+		    unsigned int features, int nblk, int blklen,
 		    struct srpc_client_rpc **rpcpp)
 {
 	struct srpc_client_rpc *rpc = NULL;
@@ -1238,7 +1237,7 @@ sfw_handle_server_rpc(struct srpc_server_rpc *rpc)
 	struct srpc_service	*sv = rpc->srpc_scd->scd_svc;
 	struct srpc_msg     *reply	= &rpc->srpc_replymsg;
 	struct srpc_msg     *request	= &rpc->srpc_reqstbuf->buf_msg;
-	unsigned	features = LST_FEATS_MASK;
+	unsigned int features = LST_FEATS_MASK;
 	int		rc = 0;
 
 	LASSERT(sfw_data.fw_active_srpc == NULL);
@@ -1388,7 +1387,7 @@ sfw_bulk_ready(struct srpc_server_rpc *rpc, int status)
 
 struct srpc_client_rpc *
 sfw_create_rpc(struct lnet_processid *peer, int service,
-	       unsigned features, int nbulkiov, int bulklen,
+	       unsigned int features, int nbulkiov, int bulklen,
 	       void (*done)(struct srpc_client_rpc *), void *priv)
 {
 	struct srpc_client_rpc *rpc = NULL;
