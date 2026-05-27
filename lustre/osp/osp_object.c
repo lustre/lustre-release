@@ -566,6 +566,7 @@ int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 	struct object_update_reply	*reply;
 	struct ptlrpc_request		*req = NULL;
 	int				invalidated, cache = 0, rc = 0;
+
 	ENTRY;
 
 	if (is_ost_obj(&dt->do_lu) && obj->opo_non_exist)
@@ -744,6 +745,7 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 {
 	struct osp_object	*o = dt2osp_obj(dt);
 	int			 rc = 0;
+
 	ENTRY;
 
 	/* we're interested in uid/gid/projid/layout version changes,
@@ -991,6 +993,7 @@ int osp_xattr_get(const struct lu_env *env, struct dt_object *dt,
 	struct osp_xattr_entry	*oxe	= NULL;
 	const char *dname = osp_dto2name(obj);
 	int invalidated, rc = 0;
+
 	ENTRY;
 
 	LASSERT(buf != NULL);
@@ -1148,8 +1151,8 @@ unlock:
 	if (!oxe) {
 		oxe = osp_oac_xattr_find_or_add(obj, name, rbuf->lb_len);
 		if (!oxe) {
-			CWARN("%s: Fail to add xattr (%s) to "
-			      "cache for "DFID" (2): rc = %d\n",
+			CWARN("%s: Fail to add xattr (%s) to cache for "
+			      DFID" (2): rc = %d\n",
 			      dname, name, PFID(lu_object_fid(&dt->do_lu)), rc);
 
 			GOTO(out, rc);
@@ -1246,6 +1249,7 @@ int osp_xattr_set(const struct lu_env *env, struct dt_object *dt,
 	struct osp_update_request *update;
 	struct osp_xattr_entry *oxe;
 	int rc;
+
 	ENTRY;
 
 	update = thandle_to_osp_update_request(th);
@@ -1391,6 +1395,7 @@ void osp_obj_invalidate_cache(struct osp_object *obj)
 int osp_invalidate(const struct lu_env *env, struct dt_object *dt)
 {
 	struct osp_object *obj = dt2osp_obj(dt);
+
 	ENTRY;
 
 	CDEBUG(D_HA, "Invalidate osp_object "DFID"\n",
@@ -1812,10 +1817,11 @@ static int osp_it_fetch(const struct lu_env *env, struct osp_it *it)
 	struct folio		**folios;
 	struct ptlrpc_request	 *req	= NULL;
 	struct ptlrpc_bulk_desc  *desc;
-	struct idx_info 	 *ii;
+	struct idx_info	 *ii;
 	int			  npages;
 	int			  rc;
 	int			  i;
+
 	ENTRY;
 
 	/* 1MB bulk */
@@ -1944,6 +1950,7 @@ int osp_it_next_page(const struct lu_env *env, struct dt_it *di)
 	struct folio		**folios;
 	int			rc;
 	int			i;
+
 	ENTRY;
 
 process_idxpage:
@@ -1971,8 +1978,7 @@ process_page:
 				struct osp_device *osp =
 					lu2osp_dev(it->ooi_obj->do_lu.lo_dev);
 
-				CERROR("%s: invalid magic (%x != %x) for page "
-				       "%d/%d while read layout orphan index\n",
+				CERROR("%s: invalid magic (%x != %x) for page %d/%d while read layout orphan index\n",
 				       osp->opd_obd->obd_name,
 				       it->ooi_cur_idxpage->lip_magic,
 				       LIP_MAGIC, it->ooi_pos_page,
@@ -2044,6 +2050,7 @@ static int osp_orphan_it_next(const struct lu_env *env, struct dt_it *di)
 	struct osp_it		*it = (struct osp_it *)di;
 	struct lu_idxpage	*idxpage;
 	int			rc;
+
 	ENTRY;
 
 again:

@@ -234,13 +234,12 @@ object_update_request_dump(const struct object_update_request *ourq,
 
 		update = object_update_request_get(ourq, i, &size);
 		LASSERT(update != NULL);
-		CDEBUG(mask, "i = %u fid = "DFID" op = %s "
-		       "params = %d batchid = %llu size = %zu repsize %u\n",
+		CDEBUG(mask, "i = %u fid = "DFID" op = %s params = %d batchid = %llu size = %zu repsize %u\n",
 		       i, PFID(&update->ou_fid),
 		       update_op_str(update->ou_type),
 		       update->ou_params_count,
 		       update->ou_batchid, size,
-		       (unsigned)update->ou_result_size);
+		       (unsigned int)update->ou_result_size);
 
 		total_size += size;
 	}
@@ -331,6 +330,7 @@ int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 	struct object_update_reply	*reply;
 	int				rc, i;
 	int				total = 0;
+
 	ENTRY;
 
 	list_for_each_entry(ours, &our->our_req_list, ours_list) {
@@ -454,6 +454,7 @@ int osp_remote_sync(const struct lu_env *env, struct osp_device *osp,
 	struct obd_import	*imp = osp->opd_obd->u.cli.cl_import;
 	struct ptlrpc_request	*req = NULL;
 	int			rc;
+
 	ENTRY;
 
 	rc = osp_prep_update_req(env, imp, our, &req);
@@ -616,6 +617,7 @@ static int osp_update_interpret(const struct lu_env *env,
 
 	if (req->rq_intr && req->rq_nr_resend != 0) {
 		struct osp_update_request_sub	*ours;
+
 		DEBUG_REQ(D_HA, req, "dumping out request\n");
 		list_for_each_entry(ours, &our->our_req_list, ours_list) {
 			object_update_request_dump(ours->ours_req, D_HA);
@@ -844,6 +846,7 @@ int osp_insert_async_request(const struct lu_env *env, enum update_type op,
 	struct object_update_request	*ureq;
 	struct osp_update_request_sub	*ours;
 	int				rc = 0;
+
 	ENTRY;
 
 	osp = lu2osp_dev(osp2lu_obj(obj)->lo_dev);
@@ -952,6 +955,7 @@ struct thandle *osp_trans_create(const struct lu_env *env, struct dt_device *d)
 {
 	struct osp_thandle		*oth;
 	struct thandle			*th = NULL;
+
 	ENTRY;
 
 	OBD_ALLOC_PTR(oth);
@@ -1015,6 +1019,7 @@ static void osp_request_commit_cb(struct ptlrpc_request *req)
 	struct osp_thandle	*oth;
 	__u64			last_committed_transno = 0;
 	int			result = req->rq_status;
+
 	ENTRY;
 
 	if (th == NULL)
@@ -1102,6 +1107,7 @@ static int osp_send_update_req(const struct lu_env *env,
 	struct osp_thandle	*oth = our->our_th;
 	struct osp_updates	*ou = osp->opd_update;
 	int	rc = 0;
+
 	ENTRY;
 
 	LASSERT(oth != NULL);
@@ -1362,6 +1368,7 @@ void osp_invalidate_request(struct osp_device *osp)
 	struct osp_update_request *tmp;
 	LIST_HEAD(list);
 	int			rc;
+
 	ENTRY;
 
 	if (ou == NULL)
@@ -1440,6 +1447,7 @@ int osp_send_update_thread(void *arg)
 	struct osp_updates	*ou = osp->opd_update;
 	struct osp_update_request *our = NULL;
 	int			rc;
+
 	ENTRY;
 
 	LASSERT(ou != NULL);
@@ -1552,6 +1560,7 @@ int osp_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	struct osp_update_request *our = oth->ot_our;
 	struct osp_device	 *osp = dt2osp_dev(dt);
 	int			 rc = 0;
+
 	ENTRY;
 
 	/* For remote transaction, if there is local storage thandle,

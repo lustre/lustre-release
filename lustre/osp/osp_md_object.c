@@ -367,7 +367,7 @@ int osp_md_attr_set(const struct lu_env *env, struct dt_object *dt,
  * which relies on the LDLM lock.
  */
 static void osp_md_read_lock(const struct lu_env *env, struct dt_object *dt,
-			     unsigned role)
+			     unsigned int role)
 {
 	struct osp_object  *obj = dt2osp_obj(dt);
 
@@ -386,7 +386,7 @@ static void osp_md_read_lock(const struct lu_env *env, struct dt_object *dt,
  * Lock the remote object in write mode.
  */
 static void osp_md_write_lock(const struct lu_env *env, struct dt_object *dt,
-			      unsigned role)
+			      unsigned int role)
 {
 	struct osp_object *obj = dt2osp_obj(dt);
 
@@ -469,6 +469,7 @@ static int osp_md_index_lookup(const struct lu_env *env, struct dt_object *dt,
 	struct ptlrpc_request	   *req = NULL;
 	struct lu_fid		   *fid;
 	int			   rc;
+
 	ENTRY;
 
 	/* Because it needs send the update buffer right away,
@@ -952,6 +953,7 @@ static int osp_md_object_lock(const struct lu_env *env,
 	struct ptlrpc_request	*req;
 	int			rc = 0;
 	__u64			flags = LDLM_FL_NO_LRU;
+
 	ENTRY;
 
 	res_id = einfo->ei_res_id;
@@ -1051,6 +1053,7 @@ static int osp_md_destroy(const struct lu_env *env, struct dt_object *dt,
 	struct osp_update_request *update;
 	struct osp_thandle *oth = thandle_to_osp_thandle(th);
 	int rc = 0;
+
 	ENTRY;
 
 	o->opo_non_exist = 1;
@@ -1200,6 +1203,7 @@ static ssize_t osp_md_write(const struct lu_env *env, struct dt_object *dt,
 	struct osp_update_request  *update;
 	struct osp_thandle	  *oth = thandle_to_osp_thandle(th);
 	ssize_t			  rc;
+
 	ENTRY;
 
 	if (obj->opo_destroyed)
@@ -1279,6 +1283,7 @@ static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 	struct object_update_reply *reply;
 	int pages;
 	int rc;
+
 	ENTRY;
 
 	if (dt2osp_obj(dt)->opo_destroyed)
@@ -1342,8 +1347,8 @@ static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 					     OUT_UPDATE_REPLY_SIZE);
 
 	if (reply->ourp_magic != UPDATE_REPLY_MAGIC) {
-		CERROR("%s: invalid update reply magic %x expected %x:"
-		       " rc = %d\n", dt_dev->dd_lu_dev.ld_obd->obd_name,
+		CERROR("%s: invalid update reply magic %x expected %x: rc = %d\n",
+		       dt_dev->dd_lu_dev.ld_obd->obd_name,
 		       reply->ourp_magic, UPDATE_REPLY_MAGIC, -EPROTO);
 		GOTO(out, rc = -EPROTO);
 	}

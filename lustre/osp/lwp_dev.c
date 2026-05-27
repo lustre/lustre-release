@@ -204,6 +204,7 @@ static int lwp_process_config(const struct lu_env *env,
 {
 	struct lwp_device		*d = lu2lwp_dev(dev);
 	int				 rc;
+
 	ENTRY;
 
 	switch (lcfg->lcfg_command) {
@@ -244,6 +245,7 @@ static int lwp_init0(const struct lu_env *env, struct lwp_device *lwp,
 		     struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
 	int			   rc;
+
 	ENTRY;
 
 	lwp->lpd_obd = class_name2obd(lustre_cfg_string(cfg, 0));
@@ -308,6 +310,7 @@ static struct lu_device *lwp_device_free(const struct lu_env *env,
 					 struct lu_device *lu)
 {
 	struct lwp_device *m = lu2lwp_dev(lu);
+
 	ENTRY;
 
 	lu_site_print(env, lu->ld_site, &lu->ld_ref, D_ERROR,
@@ -563,6 +566,7 @@ static int lwp_obd_disconnect(struct obd_export *exp)
 	struct obd_device *obd = exp->exp_obd;
 	struct lwp_device *lwp = lu2lwp_dev(obd->obd_lu_dev);
 	int                rc;
+
 	ENTRY;
 
 	LASSERT(lwp->lpd_connects == 1);

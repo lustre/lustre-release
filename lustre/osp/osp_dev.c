@@ -153,6 +153,7 @@ static struct dt_object
 	struct dt_object_format dof = { 0 };
 	struct dt_object       *dto;
 	int		     rc;
+
 	ENTRY;
 
 	lu_local_obj_fid(&osi->osi_fid, reg_id);
@@ -238,6 +239,7 @@ static int osp_init_last_objid(const struct lu_env *env, struct osp_device *osp)
 	struct lu_fid		*fid = &osp->opd_last_used_fid;
 	struct dt_object	*dto;
 	int			rc = -EFAULT;
+
 	ENTRY;
 
 	dto = osp_find_or_create_local_file(env, osp, &osi->osi_attr,
@@ -298,6 +300,7 @@ static int osp_init_last_seq(const struct lu_env *env, struct osp_device *osp)
 	struct lu_fid		*fid = &osp->opd_last_used_fid;
 	struct dt_object	*dto;
 	int			rc = -EFAULT;
+
 	ENTRY;
 
 	dto = osp_find_or_create_local_file(env, osp, &osi->osi_attr,
@@ -353,6 +356,7 @@ static int osp_last_used_init(const struct lu_env *env, struct osp_device *osp)
 {
 	struct osp_thread_info *osi = osp_env_info(env);
 	int		     rc;
+
 	ENTRY;
 
 	fid_zero(&osp->opd_last_used_fid);
@@ -448,6 +452,7 @@ static int osp_disconnect(struct osp_device *d)
 	struct obd_device *obd = d->opd_obd;
 	struct obd_import *imp;
 	int rc = 0;
+
 	ENTRY;
 
 	imp = obd->u.cli.cl_import;
@@ -602,6 +607,7 @@ static int osp_shutdown(const struct lu_env *env, struct osp_device *d)
 	struct obd_device *obd = d->opd_obd;
 	struct obd_import *imp = obd->u.cli.cl_import;
 	int  rc = 0;
+
 	ENTRY;
 
 	LASSERT(env);
@@ -1490,6 +1496,7 @@ static int osp_obd_disconnect(struct obd_export *exp)
 {
 	struct obd_device *obd = exp->exp_obd;
 	int                rc;
+
 	ENTRY;
 
 	rc = class_disconnect(exp);
@@ -1879,7 +1886,7 @@ static const struct obd_ops osp_obd_device_ops = {
  *
  * Register device types OSP and Light Weight Proxy (LWP) (see lwp_dev.c)
  * in obd_types (see class_obd.c).  Initialize procfs for the
- * the OSP device.  Note: OSP was called OSC before Lustre 2.4,
+ * OSP device.  Note: OSP was called OSC before Lustre 2.4,
  * so for compatibility it still uses the name "osc" in procfs.
  * This is called at module load time.
  *

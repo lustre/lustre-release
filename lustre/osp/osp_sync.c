@@ -368,7 +368,7 @@ static void osp_sync_llog_health_check(struct osp_device *d,
 	int diff;
 
 	if (likely(now - d->opd_sync_llog_checked_at <=
-	           OSP_SYNC_HEALTH_CHECK_PERIOD))
+		   OSP_SYNC_HEALTH_CHECK_PERIOD))
 		return;
 
 	if (!mutex_trylock(&d->opd_sync_health_mutex))
@@ -848,6 +848,7 @@ static int osp_sync_new_setattr_job(struct osp_device *d,
 	body->oa.o_valid = OBD_MD_FLGROUP | OBD_MD_FLID;
 	if (h->lrh_len > sizeof(struct llog_setattr64_rec)) {
 		struct llog_setattr64_rec_v2 *rec_v2 = (typeof(rec_v2))rec;
+
 		body->oa.o_projid = rec_v2->lsr_projid;
 		body->oa.o_layout_version = rec_v2->lsr_layout_version;
 	}
@@ -1104,8 +1105,8 @@ static void osp_sync_process_record(const struct lu_env *env,
 	if (rc == 1) {
 		rc = llog_cat_cancel_records(env, cathandle, 1, &cookie);
 		if (rc != 0)
-			CERROR("%s: can't delete invalid record: "
-			       "fid = "DFID", rec_id = %u, rc = %d\n",
+			CERROR("%s: can't delete invalid record: fid = "
+			       DFID", rec_id = %u, rc = %d\n",
 			       d->opd_obd->obd_name,
 			       PFID(lu_object_fid(&cathandle->lgh_obj->do_lu)),
 			       rec->lrh_id, rc);
@@ -1241,8 +1242,7 @@ static void osp_sync_process_committed(const struct lu_env *env,
 
 	LASSERT(atomic_read(&d->opd_sync_rpcs_in_progress) >= done);
 	atomic_sub(done, &d->opd_sync_rpcs_in_progress);
-	CDEBUG((done > 2 ? D_HA : D_OTHER), "%s: %u changes, %u in progress,"
-				     " %u in flight, %u done\n",
+	CDEBUG((done > 2 ? D_HA : D_OTHER), "%s: %u changes, %u in progress, %u in flight, %u done\n",
 				     d->opd_obd->obd_name,
 				     atomic_read(&d->opd_sync_changes),
 				     atomic_read(&d->opd_sync_rpcs_in_progress),
@@ -1474,8 +1474,8 @@ next:
 			goto again;
 		}
 
-		CERROR("%s: llog process with osp_sync_process_queues "
-		       "failed: %d\n", d->opd_obd->obd_name, rc);
+		CERROR("%s: llog process with osp_sync_process_queues failed: %d\n",
+		       d->opd_obd->obd_name, rc);
 		GOTO(wait, rc);
 	}
 	LASSERTF(rc == 0 || rc == LLOG_PROC_BREAK,

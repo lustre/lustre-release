@@ -358,6 +358,7 @@ int osp_write_last_oid_seq_files(struct lu_env *env, struct osp_device *osp,
 	loff_t		   oseq_off;
 	struct thandle	  *th;
 	int		      rc;
+
 	ENTRY;
 
 	if (osp->opd_storage->dd_rdonly)
@@ -452,6 +453,7 @@ static int osp_precreate_rollover_new_seq(struct lu_env *env,
 	struct lu_fid	*fid = &osp_env_info(env)->osi_fid;
 	struct lu_fid	*last_fid = &osp->opd_last_used_fid;
 	int		rc;
+
 	ENTRY;
 
 	rc = seq_client_get_seq(env, osp->opd_obd->u.cli.cl_seq, &fid->f_seq);
@@ -578,6 +580,7 @@ static int osp_precreate_send(const struct lu_env *env, struct osp_device *d)
 	struct ost_body		*body;
 	int			 rc, grow, diff;
 	struct lu_fid		*fid = &oti->osi_fid;
+
 	ENTRY;
 
 	/* don't precreate new objects till OST healthy and has free space */
@@ -735,6 +738,7 @@ static int osp_get_lastfid_from_ost(const struct lu_env *env,
 	struct lu_fid		*last_fid;
 	char			*tmp;
 	int			rc;
+
 	ENTRY;
 
 	imp = d->opd_obd->u.cli.cl_import;
@@ -852,7 +856,7 @@ static int osp_precreate_cleanup_orphans(struct lu_env *env,
 	}
 	/*
 	 * wait for local recovery to finish, so we can cleanup orphans
-	 * orphans are all objects since "last used" (assigned), but
+	 * are all objects since "last used" (assigned), but
 	 * there might be objects reserved and in some cases they won't
 	 * be used. we can't cleanup them till we're sure they won't be
 	 * used. also can't we allow new reservations because they may
@@ -1351,8 +1355,7 @@ static int osp_precreate_thread(void *_args)
 				 * failed device. */
 				if (rc < 0 && rc != -ENOSPC &&
 				    rc != -ETIMEDOUT && rc != -ENOTCONN)
-					CERROR("%s: cannot precreate objects:"
-					       " rc = %d\n",
+					CERROR("%s: cannot precreate objects: rc = %d\n",
 					       d->opd_obd->obd_name, rc);
 			}
 		}
@@ -1548,8 +1551,7 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d,
 			    osp_precreate_ready_condition(env, d),
 			    cfs_time_seconds(obd_timeout)) == 0) {
 			CDEBUG(D_HA,
-			       "%s: slow creates, last="DFID", next="DFID", "
-			       "reserved=%llu, sync_changes=%u, "
+			       "%s: slow creates, last="DFID", next="DFID", reserved=%llu, sync_changes=%u, "
 			       "sync_rpcs_in_progress=%d, status=%d\n",
 			       d->opd_obd->obd_name,
 			       PFID(&d->opd_pre_last_created_fid),
@@ -1727,8 +1729,7 @@ int osp_object_truncate(const struct lu_env *env, struct dt_object *dt,
 		 */
 		if (rc == -EAGAIN) {
 			rc = -EINPROGRESS;
-			CDEBUG(D_HA, "returning -EINPROGRESS instead of "
-			       "-EWOULDBLOCK/-EAGAIN to allow Client to "
+			CDEBUG(D_HA, "returning -EINPROGRESS instead of -EWOULDBLOCK/-EAGAIN to allow Client to "
 			       "resend\n");
 		} else {
 			CERROR("can't punch object: %d\n", rc);
@@ -1863,6 +1864,7 @@ int osp_init_statfs(struct osp_device *d)
 void osp_statfs_fini(struct osp_device *d)
 {
 	struct task_struct *task = d->opd_pre_task;
+
 	ENTRY;
 
 	timer_delete(&d->opd_statfs_timer);
