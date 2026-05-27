@@ -370,7 +370,7 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 	lu_last_id_fid(&info->fti_fid, seq, ofd->ofd_lut.lut_lsd.lsd_osd_index);
 	memset(&info->fti_attr, 0, sizeof(info->fti_attr));
 	info->fti_attr.la_valid = LA_MODE;
-	info->fti_attr.la_mode = S_IFREG |  S_IRUGO | S_IWUSR;
+	info->fti_attr.la_mode = S_IFREG |  0644;
 	info->fti_dof.dof_type = dt_mode_to_dft(S_IFREG);
 
 	/* create object tracking per-seq last created
@@ -707,7 +707,7 @@ int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 	lu_local_obj_fid(&info->fti_fid, OFD_HEALTH_CHECK_OID);
 	memset(&info->fti_attr, 0, sizeof(info->fti_attr));
 	info->fti_attr.la_valid = LA_MODE;
-	info->fti_attr.la_mode = S_IFREG | S_IRUGO | S_IWUSR;
+	info->fti_attr.la_mode = S_IFREG | 0644;
 	info->fti_dof.dof_type = dt_mode_to_dft(S_IFREG);
 
 	fo = dt_find_or_create(env, ofd->ofd_osd, &info->fti_fid,

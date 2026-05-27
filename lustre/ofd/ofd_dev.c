@@ -97,6 +97,7 @@ static int ofd_connect_to_next(const struct lu_env *env, struct ofd_device *m,
 	struct obd_connect_data *data = NULL;
 	struct obd_device	*obd;
 	int			 rc;
+
 	ENTRY;
 
 	OBD_ALLOC_PTR(data);
@@ -255,6 +256,7 @@ static void ofd_stack_pre_fini(const struct lu_env *env, struct ofd_device *m,
 {
 	struct lustre_cfg_bufs bufs;
 	struct lustre_cfg *lcfg;
+
 	ENTRY;
 
 	LASSERT(top);
@@ -356,8 +358,8 @@ static int ofd_process_config(const struct lu_env *env, struct lu_device *d,
 		if (ptr != NULL) {
 			if (ptr->new_param == NULL) {
 				rc = 0;
-				CWARN("For interoperability, skip this %s."
-				      " It is obsolete.\n", ptr->old_param);
+				CWARN("For interoperability, skip this %s. It is obsolete.\n",
+				      ptr->old_param);
 				break;
 			}
 
@@ -555,8 +557,7 @@ static int ofd_lfsck_out_notify(const struct lu_env *env, void *data,
 
 	switch (event) {
 	case LE_LASTID_REBUILDING:
-		CWARN("%s: Found crashed LAST_ID, deny creating new OST-object "
-		      "on the device until the LAST_ID rebuilt successfully.\n",
+		CWARN("%s: Found crashed LAST_ID, deny creating new OST-object on the device until the LAST_ID rebuilt successfully.\n",
 		      obd->obd_name);
 		down_write(&ofd->ofd_lastid_rwsem);
 		ofd->ofd_lastid_rebuilding = 1;
@@ -1601,8 +1602,8 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 	    (oa->o_flags & OBD_FL_RECREATE_OBJS)) {
 		if (!test_bit(OBDF_RECOVERING, ofd_obd(ofd)->obd_flags) ||
 		    oid > ofd_seq_last_oid(oseq)) {
-			CERROR("%s: recreate objid "DOSTID" > last id %llu"
-			       "\n", ofd_name(ofd), POSTID(&oa->o_oi),
+			CERROR("%s: recreate objid "DOSTID" > last id %llu\n",
+			       ofd_name(ofd), POSTID(&oa->o_oi),
 			       ofd_seq_last_oid(oseq));
 			GOTO(out_nolock, rc = -EINVAL);
 		}
@@ -1638,8 +1639,8 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 		CDEBUG(D_HA, "ofd_last_id() = %llu -> diff = %lld\n",
 		       ofd_seq_last_oid(oseq), diff);
 		if (-diff > OST_MAX_PRECREATE) {
-			LCONSOLE(D_INFO, "%s: too large difference between MDS "
-				 "LAST_ID "DFID" (%llu) and OST LAST_ID "DFID" "
+			LCONSOLE(D_INFO, "%s: too large difference between MDS LAST_ID "
+				 DFID" (%llu) and OST LAST_ID "DFID" "
 				 "(%llu), trust the OST\n",
 				 ofd_name(ofd), PFID(&oa->o_oi.oi_fid), oid,
 				 PFID(&oseq->os_oi.oi_fid),
@@ -1730,8 +1731,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 			if (granted < 0) {
 				rc = granted;
 				granted = 0;
-				CDEBUG(D_HA, "%s: failed to acquire grant "
-				       "space for precreate (%lld): rc = %d\n",
+				CDEBUG(D_HA, "%s: failed to acquire grant space for precreate (%lld): rc = %d\n",
 				       ofd_name(ofd), diff, rc);
 				diff = 0;
 			}
@@ -1742,14 +1742,13 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 			next_id = ofd_seq_last_oid(oseq) + 1;
 			count = ofd_precreate_batch(ofd, (int)diff);
 
-			CDEBUG(D_HA, "%s: reserve %d objects in group %#llx"
-			       " at %llu\n", ofd_name(ofd),
+			CDEBUG(D_HA, "%s: reserve %d objects in group %#llx at %llu\n",
+			       ofd_name(ofd),
 			       count, seq, next_id);
 
 			if (!(lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
 			    && ktime_get_seconds() > enough_time) {
-				CDEBUG(D_HA, "%s: Slow creates, %d/%lld objects"
-				      " created at a rate of %d/s\n",
+				CDEBUG(D_HA, "%s: Slow creates, %d/%lld objects created at a rate of %d/s\n",
 				      ofd_name(ofd), created, diff + created,
 				      created / DISK_TIMEOUT);
 				break;
@@ -1768,8 +1767,7 @@ static int ofd_create_hdl(struct tgt_session_info *tsi)
 
 		if (diff > 0 &&
 		    lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
-			LCONSOLE_WARN("%s: can't create the same count of"
-				      " objects when replaying the request"
+			LCONSOLE_WARN("%s: can't create the same count of objects when replaying the request"
 				      " (diff is %lld). see LU-4621\n",
 				      ofd_name(ofd), diff);
 
@@ -2209,8 +2207,8 @@ static int ofd_punch_hdl(struct tgt_session_info *tsi)
 			RETURN(rc);
 	}
 
-	CDEBUG(D_INODE, "calling punch for object "DFID", valid = %#llx"
-	       ", start = %lld, end = %lld\n", PFID(&tsi->tsi_fid),
+	CDEBUG(D_INODE, "calling punch for object "DFID", valid = %#llx, start = %lld, end = %lld\n",
+	       PFID(&tsi->tsi_fid),
 	       oa->o_valid, start, end);
 
 	fo = ofd_object_find_exists(tsi->tsi_env, ofd_exp(tsi->tsi_exp),
@@ -2345,6 +2343,7 @@ static int ofd_ladvise_hdl(struct tgt_session_info *tsi)
 	__u64 start;
 	__u64 end;
 	int rc = 0;
+
 	ENTRY;
 
 	CFS_FAIL_TIMEOUT(OBD_FAIL_OST_LADVISE_PAUSE, cfs_fail_val);
@@ -2460,6 +2459,7 @@ static int ofd_quotactl(struct tgt_session_info *tsi)
 	char *buffer = NULL;
 	int id;
 	int rc;
+
 	ENTRY;
 
 	oqctl = req_capsule_client_get(tsi->tsi_pill, &RMF_OBD_QUOTACTL);
@@ -2559,8 +2559,8 @@ static void ofd_prolong_extent_locks(struct tgt_session_info *tsi,
 	data->lpa_export = tsi->tsi_exp;
 	data->lpa_resid = tsi->tsi_resid;
 
-	CDEBUG(D_RPCTRACE, "Prolong locks for req %p with x%llu"
-	       " ext(%llu->%llu)\n", tgt_ses_req(tsi),
+	CDEBUG(D_RPCTRACE, "Prolong locks for req %p with x%llu ext(%llu->%llu)\n",
+	       tgt_ses_req(tsi),
 	       tgt_ses_req(tsi)->rq_xid, data->lpa_extent.start,
 	       data->lpa_extent.end);
 
@@ -3023,7 +3023,7 @@ static void ofd_key_exit(const struct lu_context *ctx,
 	info->fti_xid = 0;
 	info->fti_pre_version = 0;
 
-	memset(&info->fti_attr, 0, sizeof info->fti_attr);
+	memset(&info->fti_attr, 0, sizeof(info->fti_attr));
 }
 
 struct lu_context_key ofd_thread_key = {

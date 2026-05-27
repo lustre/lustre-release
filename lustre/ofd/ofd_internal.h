@@ -362,7 +362,7 @@ int ofd_verify_ff(const struct lu_env *env, struct ofd_object *fo,
 		  struct obdo *oa);
 int ofd_verify_layout_version(const struct lu_env *env,
 			      struct ofd_object *fo, const struct obdo *oa);
-int ofd_preprw(const struct lu_env *env,int cmd, struct obd_export *exp,
+int ofd_preprw(const struct lu_env *env, int cmd, struct obd_export *exp,
 	       struct obdo *oa, int objcount, struct obd_ioobj *obj,
 	       struct niobuf_remote *rnb, int *nr_local,
 	       struct niobuf_local *lnb);

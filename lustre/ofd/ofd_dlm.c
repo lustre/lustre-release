@@ -192,6 +192,7 @@ int ofd_intent_policy(const struct lu_env *env, struct ldlm_namespace *ns,
 		[DLM_REPLY_REC_OFF]   = sizeof(*reply_lvb)
 	};
 	struct ldlm_glimpse_work *pos, *tmp;
+
 	ENTRY;
 
 	/* update stats for intent in intent policy */
@@ -241,6 +242,7 @@ int ofd_intent_policy(const struct lu_env *env, struct ldlm_namespace *ns,
 		rc = LDLM_ITER_CONTINUE;
 	} else {
 		__u64 tmpflags = 0;
+
 		rc = policy(lock, &tmpflags, LDLM_PROCESS_RESCAN, &err, NULL);
 		check_res_locked(res);
 	}

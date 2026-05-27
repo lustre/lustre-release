@@ -59,7 +59,7 @@ static int ofd_version_get_check(struct ofd_thread_info *info,
 		spin_lock(&info->fti_exp->exp_lock);
 		info->fti_exp->exp_vbr_failed = 1;
 		spin_unlock(&info->fti_exp->exp_lock);
-		RETURN (-EOVERFLOW);
+		RETURN(-EOVERFLOW);
 	}
 	info->fti_pre_version = curr_version;
 	RETURN(0);
@@ -451,8 +451,8 @@ int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
 				      &info->fti_buf, &info->fti_off, th);
 		dt_write_unlock(env, oseq->os_lastid_obj);
 		if (rc1 != 0)
-			CERROR("%s: fail to reset the LAST_ID for seq (%#llx"
-			       ") from %llu to %llu\n", ofd_name(ofd),
+			CERROR("%s: fail to reset the LAST_ID for seq (%#llx) from %llu to %llu\n",
+			       ofd_name(ofd),
 			       ostid_seq(&oseq->os_oi), id + nr - 1,
 			       ofd_seq_last_oid(oseq));
 	}

@@ -66,8 +66,8 @@ static void ofd_inconsistency_verify_one(const struct lu_env *env,
 		LASSERT(rc <= 0);
 
 		if (rc < 0)
-			CDEBUG(D_LFSCK, "%s: fail to verify OST local stored "
-			       "PFID xattr for "DFID", the client given PFID "
+			CDEBUG(D_LFSCK, "%s: fail to verify OST local stored PFID xattr for "
+			       DFID", the client given PFID "
 			       DFID", OST local stored PFID "DFID": rc = %d\n",
 			       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
 			       PFID(&client_ff->ff_parent),
@@ -80,15 +80,14 @@ static void ofd_inconsistency_verify_one(const struct lu_env *env,
 
 		ofd->ofd_inconsistency_self_detected++;
 		if (rc < 0)
-			CDEBUG(D_LFSCK, "%s: fail to verify the client given "
-			       "PFID for "DFID", the client given PFID "DFID
+			CDEBUG(D_LFSCK, "%s: fail to verify the client given PFID for "
+			       DFID", the client given PFID "DFID
 			       ", local stored PFID "DFID": rc = %d\n",
 			       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
 			       PFID(&client_ff->ff_parent),
 			       PFID(&local_ff->ff_parent), rc);
 		else
-			CDEBUG(D_LFSCK, "%s: both the client given PFID and "
-			       "the OST local stored PFID are stale for the "
+			CDEBUG(D_LFSCK, "%s: both the client given PFID and the OST local stored PFID are stale for the "
 			       "OST-object "DFID", client given PFID is "DFID
 			       ", local stored PFID is "DFID"\n",
 			       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
@@ -99,15 +98,15 @@ static void ofd_inconsistency_verify_one(const struct lu_env *env,
 		ofd->ofd_inconsistency_self_detected++;
 		if (rc == 0) {
 			ofd->ofd_inconsistency_self_repaired++;
-			CDEBUG(D_LFSCK, "%s: fixed the staled OST PFID xattr "
-			       "for "DFID", with the client given PFID "DFID
+			CDEBUG(D_LFSCK, "%s: fixed the staled OST PFID xattr for "
+			       DFID", with the client given PFID "DFID
 			       ", the old stored PFID "DFID"\n",
 			       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
 			       PFID(&client_ff->ff_parent),
 			       PFID(&local_ff->ff_parent));
 		} else if (rc < 0) {
-			CDEBUG(D_LFSCK, "%s: fail to fix the OST PFID xattr "
-			       "for "DFID", client given PFID "DFID", local "
+			CDEBUG(D_LFSCK, "%s: fail to fix the OST PFID xattr for "
+			       DFID", client given PFID "DFID", local "
 			       "stored PFID "DFID": rc = %d\n",
 			       ofd_name(ofd), PFID(&fo->ofo_header.loh_fid),
 			       PFID(&client_ff->ff_parent),
@@ -155,6 +154,7 @@ static int ofd_inconsistency_verification_main(void *_args)
 	struct ofd_device *ofd = args->od_ofd;
 	struct ofd_inconsistency_item *oii;
 	struct lfsck_req_local *lrl = &args->od_lrl;
+
 	ENTRY;
 
 	lrl->lrl_event = LEL_PAIRS_VERIFY_LOCAL;
@@ -369,6 +369,7 @@ int ofd_verify_ff(const struct lu_env *env, struct ofd_object *fo,
 {
 	struct lu_fid *pfid = &fo->ofo_ff.ff_parent;
 	int rc = 0;
+
 	ENTRY;
 
 	if (fid_is_sane(pfid)) {
@@ -541,7 +542,7 @@ trans:
 	if (rc)
 		GOTO(out_tx, rc);
 
-	rc = dt_trans_start_local(env, ofd->ofd_osd , th);
+	rc = dt_trans_start_local(env, ofd->ofd_osd, th);
 	if (rc) {
 		CERROR("%s: cannot start transaction: rc = %d\n",
 		       ofd_name(ofd), rc);
@@ -1072,7 +1073,7 @@ ofd_write_attr_set(const struct lu_env *env, struct ofd_device *ofd,
 	}
 	/* We don't need a transno for this operation which will be re-executed
 	 * anyway when the OST_WRITE (with a transno assigned) is replayed */
-	rc = dt_trans_start_local(env, ofd->ofd_osd , th);
+	rc = dt_trans_start_local(env, ofd->ofd_osd, th);
 	if (rc)
 		GOTO(out_tx, rc);
 
