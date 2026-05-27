@@ -404,7 +404,7 @@ static int osd_mkdir(const struct lu_env *env, struct osd_object *obj,
 		     struct dt_object_format *dof,
 		     struct thandle *th)
 {
-	__u32 mode = (attr->la_mode & (S_IFMT | S_IRWXUGO | S_ISVTX | S_ISGID));
+	__u32 mode = (attr->la_mode & (S_IFMT | 0777 | S_ISVTX | S_ISGID));
 
 	LASSERT(S_ISDIR(attr->la_mode));
 

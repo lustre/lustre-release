@@ -74,7 +74,7 @@ struct osd_it_dirent {
 	unsigned short  oitd_namelen;
 	unsigned int    oitd_type;
 	char            oitd_name[];
-} __attribute__((packed));
+} __packed;
 
 /*
  * As @osd_it_dirent (in memory dirent struct for osd) is greater
