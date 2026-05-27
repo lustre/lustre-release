@@ -5028,6 +5028,60 @@ test_255()
 }
 run_test 255 "Copytool registration wakes the coordinator up"
 
+test_256() {
+	(( MDSCOUNT >= 2 )) || skip "needs DNE (>= 2 MDTs)"
+
+	# Pick a victim client other than the test runner. The bug crashes the
+	# kernel on whichever node runs the copytool register; running it on a
+	# separate node lets us detect the panic from the runner.
+	local victim=${CLIENT2:-}
+	[[ -n "$victim" ]] || skip "needs a second client to safely panic-test"
+
+	do_node $victim "command -v lhsmtool_posix >/dev/null" ||
+		skip "lhsmtool_posix not on $victim"
+
+	# Drive ENXIO on MDT0001 by shutting down its coordinator while
+	# MDT0000 stays enabled. On a buggy build, lmv_hsm_ct_register's error
+	# path double-fputs the kuc pipe and the victim panics on the next
+	# close().  hsm_control=disabled is *not* sufficient to trigger the
+	# bug — shutdown (no coordinator service running) is what makes the
+	# per-MDT register ioctl return -ENXIO.
+	local saved
+	saved=$(do_facet mds2 "$LCTL get_param -n \
+		mdt.$FSNAME-MDT0001.hsm_control")
+	stack_trap "do_facet mds2 $LCTL set_param \
+		mdt.$FSNAME-MDT0001.hsm_control=$saved" EXIT
+
+	do_facet mds1 "$LCTL set_param \
+		mdt.$FSNAME-MDT0000.hsm_control=enabled"
+	do_facet mds2 "$LCTL set_param \
+		mdt.$FSNAME-MDT0001.hsm_control=shutdown"
+
+	# PID 1's birth time resets on reboot, so we can detect a panic+reboot
+	# from the runner without needing kdump.
+	local boot_before
+	boot_before=$(do_node $victim "stat -c %Y /proc/1")
+
+	local archive=/tmp/sanity-hsm-256-$$
+	do_node $victim "mkdir -p $archive; \
+		timeout 5 lhsmtool_posix --archive=1 --hsm-root $archive \
+			$MOUNT >/dev/null 2>&1 ; \
+		rm -rf $archive" || true
+
+	# Give any panic+reboot time to take effect (panic=10 on the kernel
+	# command line means the panic itself takes 10s before init reboot).
+	sleep 20
+
+	local boot_after
+	boot_after=$(do_node $victim "stat -c %Y /proc/1" 2>/dev/null ||
+		echo "unreachable")
+
+	[[ "$boot_before" == "$boot_after" ]] ||
+		error "$victim rebooted ($boot_before -> $boot_after) — \
+lmv_hsm_ct_register kuc pipe double-fput (LU-20311)"
+}
+run_test 256 "HSM copytool register on DNE with stopped MDT must not panic"
+
 # tests 260[a-c] rely on the parsing of the copytool's log file, they might
 # break in the future because of that.
 test_260a()

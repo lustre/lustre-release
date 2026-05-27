@@ -1208,7 +1208,7 @@ int libcfs_kkuc_group_add(struct file *filp, const struct obd_uuid *uuid,
 		return -ENOMEM;
 
 	reg->kr_uuid = *uuid;
-	reg->kr_fp = filp;
+	reg->kr_fp = get_file(filp);
 	reg->kr_uid = uid;
 	memcpy(reg->kr_data, data, data_len);
 

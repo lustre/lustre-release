@@ -905,10 +905,9 @@ static int lmv_hsm_ct_register(struct obd_device *obd, unsigned int cmd,
 		/* no registration done: return error */
 		GOTO(err_kkuc_rem, rc = -ENOTCONN);
 
-	RETURN(0);
-
 err_kkuc_rem:
-	libcfs_kkuc_group_rem(&obd->obd_uuid, lk->lk_uid, lk->lk_group);
+	if (rc)
+		libcfs_kkuc_group_rem(&obd->obd_uuid, lk->lk_uid, lk->lk_group);
 
 err_fput:
 	fput(filp);
