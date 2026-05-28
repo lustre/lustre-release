@@ -22,8 +22,6 @@ ALWAYS_EXCEPT="$SANITYN_EXCEPT "
 	always_except LU-10870	40a
 
 if [ $mds1_FSTYPE = "zfs" ]; then
-	# bug number:    LU-15757 (test_102() causes crash in umount later)
-	ALWAYS_EXCEPT+=" 102"
 	# LU-2829 / LU-2887 - make allowances for ZFS slowness
 	TEST33_NFILES=${TEST33_NFILES:-1000}
 fi
