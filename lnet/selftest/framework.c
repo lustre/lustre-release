@@ -1777,7 +1777,7 @@ static struct srpc_service sfw_services[] = {
 	{ .sv_id = 0, } };
 #endif
 
-int
+int __init
 sfw_startup(void)
 {
 	struct srpc_service *sv;

@@ -67,7 +67,7 @@ lnet_selftest_exit(void)
 	}
 }
 
-static void
+static void __init
 lnet_selftest_structure_assertion(void)
 {
 	BUILD_BUG_ON(sizeof(struct srpc_msg) != 160);

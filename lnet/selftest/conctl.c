@@ -1395,7 +1395,7 @@ static struct genl_family lst_family = {
 #endif
 };
 
-int lstcon_init_netlink(void)
+int __init lstcon_init_netlink(void)
 {
 	return genl_register_family(&lst_family);
 }

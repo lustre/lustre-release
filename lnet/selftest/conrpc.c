@@ -1446,7 +1446,7 @@ lstcon_rpc_cleanup_wait(bool drain_forever)
 	return 0;
 }
 
-int
+int __init
 lstcon_rpc_module_init(void)
 {
 	INIT_LIST_HEAD(&console_session.ses_ping_timer.stt_list);

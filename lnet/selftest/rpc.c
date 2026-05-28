@@ -1669,7 +1669,7 @@ srpc_lnet_ev_handler(struct lnet_event *ev)
 }
 
 
-int
+int __init
 srpc_startup(void)
 {
 	int rc;

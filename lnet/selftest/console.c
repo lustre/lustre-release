@@ -1947,7 +1947,7 @@ out:
 
 static struct srpc_service lstcon_acceptor_service;
 
-static void lstcon_init_acceptor_service(void)
+static void __init lstcon_init_acceptor_service(void)
 {
 	/* initialize selftest console acceptor service table */
 	lstcon_acceptor_service.sv_name    = "join session";
@@ -1961,7 +1961,7 @@ static struct notifier_block lstcon_ioctl_handler = {
 };
 
 /* initialize console */
-int
+int __init
 lstcon_console_init(void)
 {
 	int i;
