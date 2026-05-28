@@ -33640,7 +33640,8 @@ test_403() {
 
 	# 30 sec OBD_TIMEOUT in ll_getattr()
 	# right before populating st_nlink
-	$LCTL set_param fail_loc=0x80001409
+	#define OBD_FAIL_GETATTR_DELAY	0x141a
+	$LCTL set_param fail_loc=0x8000141a
 	stat -c %h $file1 > $tfile &
 
 	# create an alias, drop all locks and reclaim the dentry
