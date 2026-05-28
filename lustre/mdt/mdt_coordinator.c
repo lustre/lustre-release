@@ -1102,6 +1102,7 @@ int hsm_init_ucred(struct lu_ucred *uc)
 	uc->uc_rbac_lqa_quota_ops = 1;
 	uc->uc_rbac_projid_set = 1;
 	uc->uc_rbac_foreign_ops = 1;
+	uc->uc_rbac_immutable_flags = 1;
 
 	RETURN(0);
 }

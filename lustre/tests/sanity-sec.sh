@@ -6648,6 +6648,15 @@ setup_local_client_nodemap() {
 	wait_ssk
 }
 
+set_nodemap_rbac() {
+	local nm_name=$1
+	local rbac=$2
+
+	do_facet mgs $LCTL nodemap_modify --name $nm_name --property rbac \
+		--value $rbac || error "setting $nm_name rbac $rbac failed"
+	wait_nm_sync $nm_name rbac
+}
+
 cleanup_local_client_nodemap() {
 	local nm_name=${1:-"c0"}
 	local needremount2=false
@@ -8920,6 +8929,63 @@ test_64k() {
 		error "$tdir-gd created for root with $param=0 rbac=$rbac"
 }
 run_test 64k "Nodemap enforces foreign_ops RBAC roles"
+
+test_64l() {
+	local t_with=$DIR/$tdir/$tfile.with_immutable_flags
+	local t_without=$DIR/$tdir/$tfile.without_immutable_flags
+	local rbac
+	local flag
+
+	(( MDS1_VERSION >= $(version_code 2.17.53) )) ||
+		skip "Need MDS >= 2.17.53 for immutable_flags RBAC role"
+
+	# Probe default nodemap before setup: rbac property (LU-19975) and
+	# immutable_flags role support, to avoid costly nodemap configuration.
+	do_facet mgs $LCTL get_param -n nodemap.default.rbac ||
+		skip "server does not support rbac on default nodemap"
+	rbac=$(do_facet mgs $LCTL get_param -n nodemap.default.rbac)
+	[[ "$rbac" =~ "immutable_flags" ]] ||
+		skip "server does not support 'immutable_flags' rbac role"
+
+	stack_trap cleanup_local_client_nodemap EXIT
+	rm -rf "$DIR/$tdir"
+	stack_trap "chattr -i -a $t_with $t_without 2>/dev/null || true; \
+		rm -rf $DIR/$tdir" EXIT
+	mkdir -p $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	touch $t_with $t_without || error "touch $t_with $t_without failed"
+	setup_local_client_nodemap "c0" 1 1
+
+	# Verify c0 nodemap has immutable_flags (inherited from default).
+	rbac=$(do_facet mgs $LCTL get_param -n nodemap.c0.rbac)
+	[[ "$rbac" =~ "immutable_flags" ]] ||
+		error "c0 nodemap does not have 'immutable_flags' rbac role"
+
+	# +/-i/a should succeed with the role present. Re-apply each flag on
+	# t_with afterwards so both flags remain set for the deny test below
+	# (RBAC is only checked when the flag changes).
+	for flag in i a; do
+		chattr +$flag $t_with ||
+			error "(0) chattr +$flag failed with immutable_flags"
+		chattr -$flag $t_with ||
+			error "(1) chattr -$flag failed with immutable_flags"
+		chattr +$flag $t_with ||
+			error "(2) chattr +$flag failed with immutable_flags"
+	done
+
+	# immutable_flags absent: +flag on a clean file (t_without) and -flag on
+	# t_with (flags preloaded above) should both fail, even for root.
+	stack_trap 'set_nodemap_rbac c0 "file_perms,immutable_flags"' EXIT
+	set_nodemap_rbac c0 "file_perms"
+	for flag in i a; do
+		chattr +$flag $t_without &&
+			error "(3) chattr +$flag should fail w/o immutable_flags"
+		chattr -$flag $t_with &&
+			error "(4) chattr -$flag should fail w/o immutable_flags"
+	done
+
+	return 0
+}
+run_test 64l "Nodemap enforces immutable_flags RBAC role"
 
 look_for_files() {
 	local pattern=$1

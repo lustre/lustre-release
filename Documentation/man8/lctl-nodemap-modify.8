@@ -160,15 +160,15 @@ allow changing file permissions and owners (e.g.
 .BR chmod (1),
 .BR chown (1)).
 .br
+.RB - foreign_ops ,
+create foreign dirs (e.g.
+.RB ' "lfs setdirstripe --foreign" ').
+.br
 .RB - fscrypt_admin ,
 allow fscrypt related admin tasks (create or modify protectors/policies).
 Note that even without this role,
 it is still possible to lock or unlock encrypted directories,
 as these operations only need read access to fscrypt metadata.
-.br
-.RB - foreign_ops ,
-create foreign dirs (e.g.
-.RB ' "lfs setdirstripe --foreign" ').
 .br
 .RB - hsm_ops ,
 allow client HSM operations (e.g.
@@ -177,16 +177,17 @@ allow client HSM operations (e.g.
 .RB - ignore_root_prjquota ,
 project quota not enforced for root user.
 .br
+.RB - immutable_flags ,
+allow setting and clearing the immutable and append-only flags on
+files (e.g.
+.BR chattr "(1) " +/-i/a ).
+.br
 .RB - local_admin ,
 allow mapped root file operations, unless squashed (e.g.
 .BR chown (1),
 .BR chgrp (1)).
 Unavailable on default nodemap, as there are id mappings or offsets
 possible on the default nodemap.
-.br
-.RB - quota_ops ,
-allow UID/GID/ProjID quota changes (e.g.
-.BR lfs-setquota (1)).
 .br
 .RB - lqa_quota_ops ,
 to allow LQA quota modifications (e.g.
@@ -200,6 +201,10 @@ allow pool quota changes (e.g.
 to allow setting project ID on files and directories (e.g..
 .BR lfs-project (1),
 .BR chattr (1)).
+.br
+.RB - quota_ops ,
+allow UID/GID/ProjID quota changes (e.g.
+.BR lfs-setquota (1)).
 .br
 .RB - server_upcall ,
 to define which identity upcall to use (see
@@ -242,6 +247,7 @@ Commands illustrating how to modify nodemap properties:
 .B # lctl nodemap_modify --name remotesite --property map_mode --value uid
 .B # lctl nodemap_modify --name remotesite --property rbac=all
 .B # lctl nodemap_modify --name remotesite --property rbac=+hsm_ops,-file_perms
+.B # lctl nodemap_modify --name remotesite --property rbac=-immutable_flags
 .B # lctl nodemap_modify --name othersite --property squash_uid --value 101
 .EE
 .SH AVAILABILITY

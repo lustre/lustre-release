@@ -43,6 +43,7 @@ static const struct nodemap_rbac_name {
 	{ NODEMAP_RBAC_SERVER_UPCALL,	"server_upcall"		 },
 	{ NODEMAP_RBAC_IGN_ROOT_PRJQUOTA, "ignore_root_prjquota" },
 	{ NODEMAP_RBAC_HSM_OPS,		"hsm_ops"		 },
+	{ NODEMAP_RBAC_IMMUTABLE_FLAGS,	"immutable_flags"	 },
 	{ NODEMAP_RBAC_LOCAL_ADMIN,	"local_admin"		 },
 	{ NODEMAP_RBAC_POOL_QUOTA_OPS,	"pool_quota_ops"	 },
 	{ NODEMAP_RBAC_LQA_QUOTA_OPS,	"lqa_quota_ops"		 },

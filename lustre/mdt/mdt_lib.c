@@ -194,6 +194,7 @@ static void ucred_set_rbac_roles(struct mdt_thread_info *info,
 	uc->uc_rbac_lqa_quota_ops = !!(rbac & NODEMAP_RBAC_LQA_QUOTA_OPS);
 	uc->uc_rbac_projid_set = !!(rbac & NODEMAP_RBAC_PROJID_SET);
 	uc->uc_rbac_foreign_ops = !!(rbac & NODEMAP_RBAC_FOREIGN_OPS);
+	uc->uc_rbac_immutable_flags = !!(rbac & NODEMAP_RBAC_IMMUTABLE_FLAGS);
 }
 
 static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,

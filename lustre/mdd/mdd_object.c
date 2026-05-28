@@ -738,6 +738,13 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 				(LUSTRE_IMMUTABLE_FL | LUSTRE_APPEND_FL);
 		unsigned int newflags = la->la_flags &
 				(LUSTRE_IMMUTABLE_FL | LUSTRE_APPEND_FL);
+		unsigned int changed = oldflags ^ newflags;
+
+		/* we want rbac roles to have precedence over any other
+		 * permission or capability checks
+		 */
+		if (changed && !uc->uc_rbac_immutable_flags)
+			RETURN(-EPERM);
 
 		if ((uc->uc_fsuid != oattr->la_uid) &&
 		    !cap_raised(uc->uc_cap, CAP_FOWNER))
@@ -746,8 +753,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 		/* The IMMUTABLE and APPEND_ONLY flags can
 		 * only be changed by the relevant capability.
 		 */
-		if ((oldflags ^ newflags) &&
-		    !cap_raised(uc->uc_cap, CAP_LINUX_IMMUTABLE))
+		if (changed && !cap_raised(uc->uc_cap, CAP_LINUX_IMMUTABLE))
 			RETURN(-EPERM);
 
 		if (!S_ISDIR(oattr->la_mode)) {

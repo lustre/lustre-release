@@ -928,6 +928,7 @@ int mdt_restriper_start(struct mdt_device *mdt)
 	uc->uc_rbac_lqa_quota_ops = 1;
 	uc->uc_rbac_projid_set = 1;
 	uc->uc_rbac_foreign_ops = 1;
+	uc->uc_rbac_immutable_flags = 1;
 
 	task = kthread_create(mdt_restriper_main, info, "mdt_restriper_%03d",
 			      mdt_seq_site(mdt)->ss_node_id);

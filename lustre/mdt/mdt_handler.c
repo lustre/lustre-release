@@ -7336,6 +7336,7 @@ static int mdt_ctxt_add_dirty_flag(struct lu_env *env,
 	mdt_ucred(info)->uc_rbac_lqa_quota_ops = 1;
 	mdt_ucred(info)->uc_rbac_projid_set = 1;
 	mdt_ucred(info)->uc_rbac_foreign_ops = 1;
+	mdt_ucred(info)->uc_rbac_immutable_flags = 1;
 	rc = mdt_add_dirty_flag(info, mfd->mfd_object, &info->mti_attr);
 
 	lu_context_exit(&ses);
