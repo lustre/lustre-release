@@ -17,6 +17,7 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <linux/libcfs/libcfs.h>
+#include <linux/lnet/lib-cpt.h>
 
 int cpu_npartitions;
 EXPORT_SYMBOL(cpu_npartitions);
