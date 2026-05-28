@@ -1423,7 +1423,7 @@ void cfs_cpu_fini(void)
 #endif /* CONFIG_HOTPLUG_CPU */
 }
 
-int cfs_cpu_init(void)
+int __init cfs_cpu_init(void)
 {
 	int ret;
 

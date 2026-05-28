@@ -992,7 +992,7 @@ void lnet_router_debugfs_fini(void)
 {
 	lnet_remove_debugfs(lnet_table);
 }
-void lnet_router_exit(void)
+void __exit lnet_router_exit(void)
 {
 	lnet_debugfs_fini(&debugfs_state);
 }

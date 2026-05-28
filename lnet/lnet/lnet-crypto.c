@@ -433,7 +433,7 @@ static int adler32;
  *
  * Return %0 always
  */
-int cfs_crypto_register(void)
+int __init cfs_crypto_register(void)
 {
 	request_module("crc32c");
 
