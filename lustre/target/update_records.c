@@ -1183,7 +1183,7 @@ LU_CONTEXT_KEY_DEFINE(update, LCT_MD_THREAD | LCT_MG_THREAD |
 EXPORT_SYMBOL(update_thread_key);
 LU_KEY_INIT_GENERIC(update);
 
-void update_info_init(void)
+void __init update_info_init(void)
 {
 	update_key_init_generic(&update_thread_key, NULL);
 	lu_context_key_register(&update_thread_key);

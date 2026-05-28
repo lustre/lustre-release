@@ -259,10 +259,10 @@ int top_trans_create_tmt(const struct lu_env *env,
 			 struct top_thandle *top_th);
 
 void tgt_cancel_slc_locks(struct lu_target *tgt, __u64 transno);
-int lustre_tgt_register_fs(void);
-void lustre_tgt_unregister_fs(void);
 void barrier_init(void);
 void barrier_fini(void);
+
+extern struct file_system_type lustre_tgt_fstype;
 
 /* FMD tracking data */
 struct tgt_fmd_data {

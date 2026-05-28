@@ -2798,7 +2798,7 @@ static int lustre_tgt_init_fs_context(struct fs_context *fc)
  *
  * The long-term goal is to disentangle the client and server mount code.
  */
-static struct file_system_type lustre_tgt_fstype = {
+struct file_system_type lustre_tgt_fstype = {
 	.owner			= THIS_MODULE,
 	.name			= "lustre_tgt",
 	.init_fs_context	= lustre_tgt_init_fs_context,
@@ -2806,13 +2806,3 @@ static struct file_system_type lustre_tgt_fstype = {
 	.fs_flags		= FS_REQUIRES_DEV | FS_RENAME_DOES_D_MOVE,
 };
 MODULE_ALIAS_FS("lustre_tgt");
-
-int lustre_tgt_register_fs(void)
-{
-	return register_filesystem(&lustre_tgt_fstype);
-}
-
-void lustre_tgt_unregister_fs(void)
-{
-	unregister_filesystem(&lustre_tgt_fstype);
-}

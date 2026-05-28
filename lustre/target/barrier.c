@@ -222,7 +222,7 @@ static int barrier_freeze(const struct lu_env *env,
 	RETURN(0);
 }
 
-void barrier_init(void)
+void __init barrier_init(void)
 {
 }
 

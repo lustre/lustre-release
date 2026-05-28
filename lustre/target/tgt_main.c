@@ -809,7 +809,7 @@ LU_KEY_INIT_GENERIC(tgt_ses);
  */
 struct folio *tgt_page_to_corrupt;
 
-int tgt_mod_init(void)
+int __init tgt_mod_init(void)
 {
 	int	result;
 
@@ -819,8 +819,8 @@ int tgt_mod_init(void)
 	if (result != 0)
 		RETURN(result);
 
-	result = lustre_tgt_register_fs();
-	if (result != 0) {
+	result = register_filesystem(&lustre_tgt_fstype);
+	if (result) {
 		lu_kmem_fini(tgt_caches);
 		RETURN(result);
 	}
@@ -851,8 +851,7 @@ void tgt_mod_exit(void)
 	lu_context_key_degister(&tgt_session_key);
 	update_info_fini();
 
-	lustre_tgt_unregister_fs();
+	unregister_filesystem(&lustre_tgt_fstype);
 
 	lu_kmem_fini(tgt_caches);
 }
-
