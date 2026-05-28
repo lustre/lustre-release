@@ -2121,6 +2121,73 @@ void lustre_assert_wire_constants(void)
 	BUILD_BUG_ON(LMV_HASH_FLAG_MIGRATION != 0x80000000);
 	BUILD_BUG_ON(LMV_CRUSH_PG_COUNT != 4096);
 
+	/* Checks for struct lmv_user_md_v1 */
+	LASSERTF((int)sizeof(struct lmv_user_md_v1) == 48, "found %lld\n",
+		 (long long)(int)sizeof(struct lmv_user_md_v1));
+	LASSERTF((int)offsetof(struct lmv_user_md_v1, lum_magic) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_user_md_v1, lum_magic));
+	LASSERTF((int)sizeof(((struct lmv_user_md_v1 *)0)->lum_magic) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_user_md_v1 *)0)->lum_magic));
+	LASSERTF((int)offsetof(struct lmv_user_md_v1, lum_stripe_count) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_user_md_v1, lum_stripe_count));
+	LASSERTF((int)sizeof(((struct lmv_user_md_v1 *)0)->lum_stripe_count) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_user_md_v1 *)0)->lum_stripe_count));
+	LASSERTF((int)offsetof(struct lmv_user_md_v1, lum_stripe_offset) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_user_md_v1, lum_stripe_offset));
+	LASSERTF((int)sizeof(((struct lmv_user_md_v1 *)0)->lum_stripe_offset) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_user_md_v1 *)0)->lum_stripe_offset));
+	LASSERTF((int)offsetof(struct lmv_user_md_v1, lum_hash_type) == 12, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_user_md_v1, lum_hash_type));
+	LASSERTF((int)sizeof(((struct lmv_user_md_v1 *)0)->lum_hash_type) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_user_md_v1 *)0)->lum_hash_type));
+	LASSERTF((int)offsetof(struct lmv_user_md_v1, lum_type) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_user_md_v1, lum_type));
+	LASSERTF((int)sizeof(((struct lmv_user_md_v1 *)0)->lum_type) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_user_md_v1 *)0)->lum_type));
+	LASSERTF((int)offsetof(struct lmv_user_md_v1, lum_max_inherit) == 20, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_user_md_v1, lum_max_inherit));
+	LASSERTF((int)sizeof(((struct lmv_user_md_v1 *)0)->lum_max_inherit) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_user_md_v1 *)0)->lum_max_inherit));
+	LASSERTF((int)offsetof(struct lmv_user_md_v1, lum_max_inherit_rr) == 21, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_user_md_v1, lum_max_inherit_rr));
+	LASSERTF((int)sizeof(((struct lmv_user_md_v1 *)0)->lum_max_inherit_rr) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_user_md_v1 *)0)->lum_max_inherit_rr));
+	LASSERTF((int)offsetof(struct lmv_user_md_v1, lum_padding1) == 22, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_user_md_v1, lum_padding1));
+	LASSERTF((int)sizeof(((struct lmv_user_md_v1 *)0)->lum_padding1) == 2, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_user_md_v1 *)0)->lum_padding1));
+	LASSERTF((int)offsetof(struct lmv_user_md_v1, lum_padding2) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_user_md_v1, lum_padding2));
+	LASSERTF((int)sizeof(((struct lmv_user_md_v1 *)0)->lum_padding2) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_user_md_v1 *)0)->lum_padding2));
+	LASSERTF((int)offsetof(struct lmv_user_md_v1, lum_padding3) == 28, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_user_md_v1, lum_padding3));
+	LASSERTF((int)sizeof(((struct lmv_user_md_v1 *)0)->lum_padding3) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_user_md_v1 *)0)->lum_padding3));
+	LASSERTF((int)offsetof(struct lmv_user_md_v1, lum_pool_name[15 + 1]) == 48, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_user_md_v1, lum_pool_name[15 + 1]));
+	LASSERTF((int)sizeof(((struct lmv_user_md_v1 *)0)->lum_pool_name[15 + 1]) == 1, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_user_md_v1 *)0)->lum_pool_name[15 + 1]));
+	LASSERTF((int)offsetof(struct lmv_user_md_v1, lum_objects[0]) == 48, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_user_md_v1, lum_objects[0]));
+	LASSERTF((int)sizeof(((struct lmv_user_md_v1 *)0)->lum_objects[0]) == 24, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_user_md_v1 *)0)->lum_objects[0]));
+	/* Checks for struct lmv_user_mds_data */
+	LASSERTF((int)sizeof(struct lmv_user_mds_data) == 24, "found %lld\n",
+		 (long long)(int)sizeof(struct lmv_user_mds_data));
+	LASSERTF((int)offsetof(struct lmv_user_mds_data, lum_fid) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_user_mds_data, lum_fid));
+	LASSERTF((int)sizeof(((struct lmv_user_mds_data *)0)->lum_fid) == 16, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_user_mds_data *)0)->lum_fid));
+	LASSERTF((int)offsetof(struct lmv_user_mds_data, lum_padding) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_user_mds_data, lum_padding));
+	LASSERTF((int)sizeof(((struct lmv_user_mds_data *)0)->lum_padding) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_user_mds_data *)0)->lum_padding));
+	LASSERTF((int)offsetof(struct lmv_user_mds_data, lum_mds) == 20, "found %lld\n",
+		 (long long)(int)offsetof(struct lmv_user_mds_data, lum_mds));
+	LASSERTF((int)sizeof(((struct lmv_user_mds_data *)0)->lum_mds) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lmv_user_mds_data *)0)->lum_mds));
+
 	/* Checks for struct obd_statfs */
 	LASSERTF((int)sizeof(struct obd_statfs) == 144, "found %lld\n",
 		 (long long)(int)sizeof(struct obd_statfs));
