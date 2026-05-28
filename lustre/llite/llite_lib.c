@@ -2722,7 +2722,7 @@ static int ll_statfs_project(struct inode *inode, struct kstatfs *sfs)
 	 */
 	if (unlikely(sfs->f_bsize == 0)) {
 		sfs->f_bsize = 4096;
-		CDEBUG(D_SUPER, "%s: f_bsize=0 sub-MDT opd_statfs uninitialized, corrected to %u\n",
+		CDEBUG(D_SUPER, "%s: f_bsize=0 sub-MDT opd_statfs uninitialized, corrected to %lu\n",
 			ll_i2sbi(inode)->ll_fsname, sfs->f_bsize);
 	}
 
