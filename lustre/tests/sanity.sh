@@ -31698,12 +31698,12 @@ test_398u() { # LU-19536
 	# calls.  fail_val=5 skips 5, fails the 6th — at which
 	# point tot_bytes > 0 (one iteration succeeded in this
 	# call), so drain+retry fires.
-	dd if=/dev/zero of=$DIR/$tfile bs=4608 count=10 \
+	dd if=/dev/zero of=$DIR/$tfile bs=$((PAGE_SIZE+512)) count=10 \
 		oflag=direct || error "dd with drain retry failed"
 	$LCTL set_param fail_loc=0
 
 	local sz=$(stat -c %s $DIR/$tfile)
-	(( sz == 10 * 4608 )) ||
+	(( sz == $((10 * (PAGE_SIZE+512))) )) ||
 		error "file size $sz != expected $((10 * 4608))"
 }
 run_test 398u "DIO pool ENOMEM triggers drain and retry"
