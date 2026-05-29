@@ -56,7 +56,12 @@ static int print_only;
 static int erase_all;
 #endif
 
+enum mkfs_options {
+	MKFS_OPT_SKIPMMP = 1000,
+};
+
 static struct option long_opts[] = {
+	{.val = MKFS_OPT_SKIPMMP, .name = "skipmmp", .has_arg = no_argument},
 	{.val = 'B', .name = "backfs-mount-opts",
 	 .has_arg = required_argument},
 	{.val = 'f', .name = "failnode", .has_arg = required_argument},
@@ -110,9 +115,11 @@ static char *short_opts = "B:f:Ghi:L:m:nNo:p:qRs:t:u:UvV"
 static void usage(FILE *out)
 {
 	if (backfs_mount_type_loaded(LDD_MT_LDISKFS)) {
-		fprintf(out, "usage: %s <target type> --backfstype=ldiskfs "
-			"--fsname=<filesystem name>\n"
-			"\t--index=<target index> [options] <device>\n\n",
+		fprintf(out,
+			"usage: %s <target type> --backfstype=ldiskfs --fsname=<filesystem name>\n"
+			"\t--index=<target index> [options] <device>\n"
+			"\t--skipmmp: don't add Multi-Mount Protection when failover is configured.\n"
+			"\tUse with caution - only if alternate mount protection is in place\n\n",
 			progname);
 	}
 
@@ -450,6 +457,9 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 	while ((opt = getopt_long(argc, argv, short_opts, long_opts,
 				  &longidx)) != EOF) {
 		switch (opt) {
+		case MKFS_OPT_SKIPMMP:
+			mop->mo_flags |= MO_SKIPMMP;
+			break;
 		case 'B':
 			mop->mo_mountopts = optarg;
 			break;
@@ -748,6 +758,13 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			}
 			return EINVAL;
 		}
+	}
+
+	if (mop->mo_flags & MO_FAILOVER && mop->mo_flags & MO_SKIPMMP) {
+		fprintf(stderr,
+			"Disabling Multi-Mount Protection on the failover-configured target.\n"
+			"It may allow simultaneous mounts from multiple nodes, and could cause data\n"
+			"corruption. Only use --skipmmp if there is alternative mount protection\n");
 	}
 
 	if (ldd->ldd_mount_type == LDD_MT_ZFS &&

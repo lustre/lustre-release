@@ -87,6 +87,15 @@ Set the NID(s) of the MGS node, required for all targets other than the MGS.
 .B --nomgs
 Remove a configuration management service to this target.
 .TP
+.B --skipmmp
+Disable Multi-Mount Protection (MMP) feature even when failover nodes are
+configured. By default, MMP is automatically enabled when failover is
+configured. Use this option only if you have alternative mount protection
+mechanisms in place. This will remove the MMP feature from the filesystem
+if it was previously enabled.
+.B WARNING:
+Disabling MMP without alternative protection may lead to filesystem corruption.
+.TP
 .BI --param " KEY" = VALUE
 Set permanent parameter
 .I KEY

@@ -293,8 +293,11 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 	if (retval)
 		return translate_error(retval);
 
-	/* Multiple mount protection enabled if failover node specified */
-	if (mop->mo_flags & MO_FAILOVER &&
+	/*
+	 * Multiple mount protection enabled if failover node specified,
+	 * unless explicitly disabled with --nommp option.
+	 */
+	if ((mop->mo_flags & MO_FAILOVER) && !(mop->mo_flags & MO_SKIPMMP) &&
 	    !ext2fs_has_feature_mmp(backfs->super)) {
 		retval = ext2fs_mmp_init(backfs);
 		if (!retval) {
@@ -632,7 +635,7 @@ static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 		append_unique(anchor, ",", "dirdata", NULL, maxbuflen);
 
 	/* Multiple mount protection enabled only if failover node specified */
-	if (mop->mo_flags & MO_FAILOVER) {
+	if ((mop->mo_flags & MO_FAILOVER) && !(mop->mo_flags & MO_SKIPMMP)) {
 		if (is_e2fsprogs_feature_supp("-O mmp"))
 			append_unique(anchor, ",", "mmp", NULL, maxbuflen);
 		else

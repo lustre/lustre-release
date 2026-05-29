@@ -141,6 +141,16 @@ Use these options for mounting backing fs while mkfs.lustre is working.
 .BI --network= NET,...
 Network(s) to restrict this OST/MDT to. This option can be repeated as desired.
 .TP
+.B --skipmmp
+Disable Multi-Mount Protection (MMP) feature when failover nodes are
+configured. By default, MMP is automatically enabled when
+.B --failnode
+or
+.B --servicenode
+is specified to prevent simultaneous mounts. Use this option only if you have
+alternative mount protection mechanisms in place,  and improper use may lead to
+filesystem corruption.
+.TP
 .BI --mgsnode= NID,...
 Set the NID(s) of the MGS node, required for all targets other than the MGS.
 .TP
