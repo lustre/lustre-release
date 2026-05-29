@@ -1995,9 +1995,25 @@ struct mdt_body {
 	__u64	mbo_dom_size; /* size of DOM component */
 	__u64	mbo_dom_blocks; /* blocks consumed by DOM component */
 	__u64	mbo_btime;
-	__u64	mbo_padding_9; /* also fix lustre_swab_mdt_body */
+	__u64	mbo_xattr_absent; /* MBO_XA_* bitmask of absent xattrs */
 	__u64	mbo_padding_10;
 }; /* 216 */
+
+/* Bit numbers for mbo_xattr_absent: each bit indicates a system
+ * xattr was looked up on the MDS and confirmed absent on the inode.
+ */
+enum mdt_xattr_negative {
+	MBO_XA_SEC_SELINUX	= 0, /* security.selinux */
+	MBO_XA_SEC_SMACK	= 1, /* security.SMACK64 */
+};
+
+#define MBO_XA_KNOWN ((1ULL << MBO_XA_SEC_SELINUX) | \
+		      (1ULL << MBO_XA_SEC_SMACK))
+
+#define MBO_XA_NAMES {						\
+	[MBO_XA_SEC_SELINUX] = XATTR_SECURITY_PREFIX "selinux",	\
+	[MBO_XA_SEC_SMACK]   = XATTR_SECURITY_PREFIX "SMACK64",	\
+}
 
 struct mdt_ioepoch {
 	struct lustre_handle mio_open_handle;

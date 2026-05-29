@@ -1762,6 +1762,8 @@ void lustre_assert_wire_constants(void)
 		 OBD_MD_FLLAZYBLOCKS);
 	LASSERTF(OBD_MD_ENCCTX == (0x2000000000000000ULL), "found 0x%.16llxULL\n",
 		 OBD_MD_ENCCTX);
+	BUILD_BUG_ON(MBO_XA_SEC_SELINUX != 0);
+	BUILD_BUG_ON(MBO_XA_SEC_SMACK != 1);
 	BUILD_BUG_ON(OBD_FL_INLINEDATA != 0x00000001);
 	BUILD_BUG_ON(OBD_FL_OBDMDEXISTS != 0x00000002);
 	BUILD_BUG_ON(OBD_FL_DELORPHAN != 0x00000004);
@@ -2841,10 +2843,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mdt_body, mbo_btime));
 	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_btime) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_btime));
-	LASSERTF((int)offsetof(struct mdt_body, mbo_padding_9) == 200, "found %lld\n",
-		 (long long)(int)offsetof(struct mdt_body, mbo_padding_9));
-	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_padding_9) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_padding_9));
+	LASSERTF((int)offsetof(struct mdt_body, mbo_xattr_absent) == 200, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_body, mbo_xattr_absent));
+	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_xattr_absent) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_body *)0)->mbo_xattr_absent));
 	LASSERTF((int)offsetof(struct mdt_body, mbo_padding_10) == 208, "found %lld\n",
 		 (long long)(int)offsetof(struct mdt_body, mbo_padding_10));
 	LASSERTF((int)sizeof(((struct mdt_body *)0)->mbo_padding_10) == 8, "found %lld\n",
