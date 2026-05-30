@@ -599,6 +599,51 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
 	RETURN(rc);
 }
 
+/*
+ * ldiskfs can leave a page cache folio dirty with data that is not on disk
+ * yet, such as a partial block it zeroed.  The IO prep would read the block
+ * from disk over that data, so write the folio out before it is used.
+ * Unless it returns 0, the folio has been unlocked and released.
+ */
+static int osd_folio_clean(const struct lu_env *env, struct dt_object *dt,
+			   struct folio *folio, bool *flushed)
+{
+	struct inode *inode = osd_dt_obj(dt)->oo_inode;
+	loff_t pos = folio_pos(folio);
+	bool locked;
+	int rc;
+
+	folio_wait_writeback(folio);
+	if (likely(!folio_test_dirty(folio)))
+		return 0;
+
+	folio_unlock(folio);
+	folio_put(folio);
+
+	if (*flushed) {
+		rc = -EIO;
+		CERROR("%s: "DFID" page at %lld still dirty after writeout: rc = %d\n",
+		       osd_name(osd_obj2dev(osd_dt_obj(dt))),
+		       PFID(lu_object_fid(&dt->do_lu)), pos, rc);
+		return rc;
+	}
+
+	/* Writeback can start a transaction, which must precede DT locks. */
+	locked = !dt_thread_no_locks(env);
+	CDEBUG_LIMIT(D_WARNING, "%s: "DFID" page at %lld dirty, %s\n",
+		     osd_name(osd_obj2dev(osd_dt_obj(dt))),
+		     PFID(lu_object_fid(&dt->do_lu)), pos,
+		     locked ? "not writing it under DT lock" : "writing it");
+	if (locked)
+		return -EAGAIN;
+
+	*flushed = true;
+	rc = filemap_fdatawrite_range(inode->i_mapping, pos,
+				      pos + PAGE_SIZE - 1);
+
+	return rc ?: -EAGAIN;
+}
+
 static struct folio *osd_get_folio(const struct lu_env *env,
 				  struct dt_object *dt, loff_t offset,
 				  gfp_t gfp_mask, bool cache)
@@ -607,22 +652,26 @@ static struct folio *osd_get_folio(const struct lu_env *env,
 	struct inode *inode = osd_dt_obj(dt)->oo_inode;
 	struct osd_device *d = osd_obj2dev(osd_dt_obj(dt));
 	struct folio *folio;
+	bool flushed = false;
 	int cur;
+	int rc;
 
 	LASSERT(inode);
 
+retry:
 	if (cache) {
 		folio = get_folio_create(inode->i_mapping, offset >> PAGE_SHIFT,
 					 FGP_LOCK | FGP_ACCESSED | FGP_CREAT,
 					 gfp_mask);
-		if (!IS_ERR_OR_NULL(folio)) {
-			LASSERT(!folio_test_private_2(folio));
-			folio_wait_writeback(folio);
-		} else {
+		if (IS_ERR_OR_NULL(folio)) {
 			lprocfs_counter_add(d->od_stats, LPROC_OSD_NO_FOLIO, 1);
-			folio = NULL;
+			return NULL;
 		}
-		return folio;
+		LASSERT(!folio_test_private_2(folio));
+		rc = osd_folio_clean(env, dt, folio, &flushed);
+		if (rc == -EAGAIN && flushed)
+			goto retry;
+		return rc ? ERR_PTR(rc) : folio;
 	}
 
 	if (inode->i_mapping->nrpages) {
@@ -631,8 +680,10 @@ static struct folio *osd_get_folio(const struct lu_env *env,
 		folio = get_folio_lock(inode->i_mapping, offset >> PAGE_SHIFT,
 					FGP_LOCK, gfp_mask);
 		if (!IS_ERR_OR_NULL(folio)) {
-			folio_wait_writeback(folio);
-			return folio;
+			rc = osd_folio_clean(env, dt, folio, &flushed);
+			if (rc == -EAGAIN && flushed)
+				goto retry;
+			return rc ? ERR_PTR(rc) : folio;
 		}
 	}
 
@@ -722,8 +773,6 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 		lnb[i].lnb_fpgno = 0;
 	}
 
-	LASSERTF(oti->oti_dio_pages_used == 0, "%d\n", oti->oti_dio_pages_used);
-
 	/* Release any partial folio_batch */
 	folio_batch_release(&fbatch);
 
@@ -738,10 +787,8 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
  *
  * DLM locking protects us from write and truncate competing for same region,
  * but partial-page truncate can leave dirty pages in the cache for ldiskfs.
- * It's possible the writeout on a such a page is in progress when we access
- * it. It's also possible that during this writeout we put new (partial) data
- * into the page, but won't be able to proceed in filter_commitrw_write().
- * Therefore, just wait for writeout completion as it should be rare enough.
+ * Wait for any writeout in progress, then write out a dirty folio before
+ * using it for IO. Fail the IO if writeout fails or the folio stays dirty.
  *
  * \param env		thread execution environment
  * \param dt		dt object undergoing IO (OSD object + methods)
@@ -753,6 +800,8 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
  *
  * \retval pages	(zero or more) loaded successfully
  * \retval -ENOMEM	on memory/page allocation error
+ * \retval -EAGAIN	if a dirty page was found under a DT object lock
+ * \retval negative	if a dirty page could not be written out
  */
 static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 			loff_t pos, ssize_t len, struct niobuf_local *lnb,
@@ -827,8 +876,11 @@ bypass_checks:
 	for (i = 0; i < npages; i++, lnb++) {
 		lnb->lnb_folio = osd_get_folio(env, dt, lnb->lnb_file_offset,
 					      gfp_mask, cache);
-		if (lnb->lnb_folio == NULL)
-			GOTO(cleanup, rc = -ENOMEM);
+		if (IS_ERR_OR_NULL(lnb->lnb_folio)) {
+			rc = lnb->lnb_folio ? PTR_ERR(lnb->lnb_folio) : -ENOMEM;
+			lnb->lnb_folio = NULL;
+			GOTO(cleanup, rc);
+		}
 
 		/* FUTURE: deal with multi-order folios */
 		LASSERT(folio_nr_pages(lnb->lnb_folio) == 1);
@@ -1525,11 +1577,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		LASSERT(folio_test_locked(lnb[i].lnb_folio));
 		LASSERT(!folio_test_writeback(lnb[i].lnb_folio));
 
-		/*
-		 * Since write and truncate are serialized by dd_sem, even
-		 * partial-page truncate should not leave dirty pages in the
-		 * page cache.
-		 */
+		/* osd_bufs_get() cleaned the folio and kept it locked */
 		LASSERT(!folio_test_dirty(lnb[i].lnb_folio));
 
 		folio_mark_uptodate(lnb[i].lnb_folio);
