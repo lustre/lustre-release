@@ -198,6 +198,8 @@ srpc_init_server_rpc_workitem(struct srpc_server_rpc *rpc,
 {
 	swi_init_workitem(&rpc->srpc_wi, srpc_handle_rpc,
 			  srpc_serv_is_framework(scd->scd_svc) ?
+			  CFS_CPT_ANY : scd->scd_cpt,
+			  srpc_serv_is_framework(scd->scd_svc) ?
 			  lst_serial_wq : lst_test_wq[scd->scd_cpt]);
 	rpc->srpc_scd      = scd;
 }
@@ -319,7 +321,7 @@ srpc_service_init(struct srpc_service *svc)
 		/* NB: don't use lst_serial_wq for adding buffer,
 		 * see details in srpc_service_add_buffers() */
 		swi_init_workitem(&scd->scd_buf_wi,
-				  srpc_add_buffer, lst_test_wq[i]);
+				  srpc_add_buffer, i, lst_test_wq[i]);
 
 		if (i != 0 && srpc_serv_is_framework(svc)) {
 			/* NB: framework service only needs srpc_service_cd for

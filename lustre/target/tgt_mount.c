@@ -1626,7 +1626,7 @@ static int tgt_import_active_cb(struct obd_device *host,
 		RETURN(-ENOMEM);
 
 	INIT_DELAYED_WORK(dw, tgt_import_update);
-	queue_delayed_work(tgt_nu_wq, dw, 0);
+	cfs_cpt_queue_delayed_work(cfs_cpt_tab, CFS_CPT_ANY, tgt_nu_wq, dw, 0);
 
 	return 0;
 }
@@ -1681,7 +1681,8 @@ static int tgt_nid_update_cb(void *data, struct nid_update_info *nui)
 				 MTN_NIDSTR_SIZE - 1);
 	}
 
-	queue_delayed_work(tgt_nu_wq, &tnw->tnw_work, 0);
+	cfs_cpt_queue_delayed_work(cfs_cpt_tab, CFS_CPT_ANY, tgt_nu_wq,
+				   &tnw->tnw_work, 0);
 
 	return 0;
 }

@@ -304,8 +304,8 @@ static void ptlrpc_pinger_main(struct work_struct *ws)
 		       time_to_next_wake, this_ping + PING_INTERVAL);
 	} while (time_to_next_wake <= 0);
 
-	queue_delayed_work(pinger_wq, &ping_work,
-			   cfs_time_seconds(max(time_to_next_wake, 1)));
+	cfs_cpt_queue_delayed_work(cfs_cpt_tab, CFS_CPT_ANY, pinger_wq, &ping_work,
+				   cfs_time_seconds(max(time_to_next_wake, 1)));
 }
 
 int ptlrpc_start_pinger(void)
@@ -321,7 +321,8 @@ int ptlrpc_start_pinger(void)
 		return PTR_ERR(pinger_wq);
 	}
 
-	queue_delayed_work(pinger_wq, &ping_work, 0);
+	cfs_cpt_queue_delayed_work(cfs_cpt_tab, CFS_CPT_ANY, pinger_wq,
+				   &ping_work, 0);
 
 	if (suppress_pings)
 		CWARN("Pings will be suppressed at the request of the administrator. The configuration shall meet the additional requirements described in the manual. (Search for the \"suppress_pings\" kernel module parameter.)\n");
@@ -407,7 +408,8 @@ EXPORT_SYMBOL(ptlrpc_pinger_del_import);
 void ptlrpc_pinger_wake_up(void)
 {
 #ifdef CONFIG_LUSTRE_FS_PINGER
-	mod_delayed_work(pinger_wq, &ping_work, 0);
+	cfs_cpt_mod_delayed_work(cfs_cpt_tab, CFS_CPT_ANY, pinger_wq,
+				 &ping_work, 0);
 #endif
 }
 

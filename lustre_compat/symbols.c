@@ -61,38 +61,6 @@ static int find_kallsyms_lookup_name(void)
 }
 #endif
 
-static struct workqueue_attrs *(*__alloc_workqueue_attrs)(void);
-
-struct workqueue_attrs *compat_alloc_workqueue_attrs(void)
-{
-	return __alloc_workqueue_attrs();
-}
-EXPORT_SYMBOL(compat_alloc_workqueue_attrs);
-
-static void (*__free_workqueue_attrs)(struct workqueue_attrs *attrs);
-
-void compat_free_workqueue_attrs(struct workqueue_attrs *attrs)
-{
-	return __free_workqueue_attrs(attrs);
-}
-EXPORT_SYMBOL(compat_free_workqueue_attrs);
-
-static int (*__apply_workqueue_attrs)(struct workqueue_struct *wq,
-				      const struct workqueue_attrs *attrs);
-
-int compat_apply_workqueue_attrs(struct workqueue_struct *wq,
-				  const struct workqueue_attrs *attrs)
-{
-	return __apply_workqueue_attrs(wq, attrs);
-}
-EXPORT_SYMBOL(compat_apply_workqueue_attrs);
-
-#ifdef alloc_workqueue_attrs
-# define ALLOC_WQ_ATTRS_FUNC	"alloc_workqueue_attrs_noprof"
-#else
-# define ALLOC_WQ_ATTRS_FUNC	"alloc_workqueue_attrs"
-#endif
-
 #if defined(CONFIG_MEMCG) && !defined(HAVE_FOLIO_MEMCG_LOCK_STATIC) \
  && defined(HAVE_FOLIO_MEMCG_LOCK) && !defined(FOLIO_MEMCG_LOCK_EXPORTED)
 static void (*__folio_memcg_lock)(struct folio *folio);
@@ -150,18 +118,6 @@ int __init lustre_symbols_init(void)
 		return rc;
 
 	if (!cfs_kallsyms_lookup_name("kallsyms_lookup_name"))
-		return -EINVAL;
-
-	__alloc_workqueue_attrs = cfs_kallsyms_lookup_name(ALLOC_WQ_ATTRS_FUNC);
-	if (!__alloc_workqueue_attrs)
-		return -EINVAL;
-
-	__free_workqueue_attrs = cfs_kallsyms_lookup_name("free_workqueue_attrs");
-	if (!__free_workqueue_attrs)
-		return -EINVAL;
-
-	__apply_workqueue_attrs = cfs_kallsyms_lookup_name("apply_workqueue_attrs");
-	if (!__apply_workqueue_attrs)
 		return -EINVAL;
 
 #if defined(CONFIG_MEMCG) && !defined(HAVE_FOLIO_MEMCG_LOCK_STATIC) \

@@ -562,8 +562,9 @@ static void ll_readahead_work_add(struct inode *inode,
 				  struct ll_readahead_work *work)
 {
 	INIT_WORK(&work->lrw_readahead_work, ll_readahead_handle_work);
-	queue_work(ll_i2sbi(inode)->ll_ra_info.ll_readahead_wq,
-		   &work->lrw_readahead_work);
+	cfs_cpt_queue_work(cfs_cpt_tab, CFS_CPT_ANY,
+			   ll_i2sbi(inode)->ll_ra_info.ll_readahead_wq,
+			   &work->lrw_readahead_work);
 }
 
 static int ll_readahead_file_kms(const struct lu_env *env,

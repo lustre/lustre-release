@@ -1866,7 +1866,8 @@ static void obd_zombie_export_add(struct obd_export *exp)
 	LASSERT(!list_empty(&exp->exp_obd_chain));
 	list_del_init(&exp->exp_obd_chain);
 	spin_unlock(&exp->exp_obd->obd_dev_lock);
-	queue_work(zombie_wq, &exp->exp_zombie_work);
+	cfs_cpt_queue_work(cfs_cpt_tab, CFS_CPT_ANY, zombie_wq,
+			   &exp->exp_zombie_work);
 }
 
 /* Add import to the obd_zombe thread and notify it. */
@@ -1874,7 +1875,8 @@ static void obd_zombie_import_add(struct obd_import *imp)
 {
 	LASSERT(imp->imp_sec == NULL);
 
-	queue_work(zombie_wq, &imp->imp_zombie_work);
+	cfs_cpt_queue_work(cfs_cpt_tab, CFS_CPT_ANY, zombie_wq,
+			   &imp->imp_zombie_work);
 }
 
 /* wait when obd_zombie import/export queues become empty */
