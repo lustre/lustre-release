@@ -1090,7 +1090,7 @@ sfw_run_batch(struct sfw_batch *tsb)
 			atomic_inc(&tsi->tsi_nactive);
 			tsu->tsu_loop = tsi->tsi_loop;
 			wi = &tsu->tsu_worker;
-			swi_init_workitem(wi, sfw_run_test, lst_test_wq[cpt]);
+			swi_init_workitem(wi, sfw_run_test, cpt, lst_test_wq[cpt]);
 			swi_schedule_workitem(wi);
 		}
 	}

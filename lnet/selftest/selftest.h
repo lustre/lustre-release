@@ -227,6 +227,7 @@ typedef void (*swi_action_t)(struct swi_workitem *);
 
 struct swi_workitem {
 	struct workqueue_struct	*swi_wq;
+	int			swi_cpt;
 	struct work_struct	swi_work;
 	swi_action_t		swi_action;
 	enum lsr_swi_state	swi_state;
@@ -545,10 +546,11 @@ swi_wi_action(struct work_struct *wi)
 }
 
 static inline void
-swi_init_workitem(struct swi_workitem *swi,
-		  swi_action_t action, struct workqueue_struct *wq)
+swi_init_workitem(struct swi_workitem *swi, swi_action_t action,
+		  int cpt, struct workqueue_struct *wq)
 {
 	swi->swi_wq = wq;
+	swi->swi_cpt = cpt;
 	swi->swi_action = action;
 	swi->swi_state  = SWI_STATE_NEWBORN;
 	INIT_WORK(&swi->swi_work, swi_wi_action);
@@ -557,7 +559,13 @@ swi_init_workitem(struct swi_workitem *swi,
 static inline void
 swi_schedule_workitem(struct swi_workitem *wi)
 {
-	queue_work(wi->swi_wq, &wi->swi_work);
+	/*
+	 * The per-CPT test workqueues are bound (per-CPU), so steer the work
+	 * to a CPU inside its partition to keep it CPT-affine. CFS_CPT_ANY
+	 * items (e.g. the serial/framework workqueue) are left to the core.
+	 */
+	cfs_cpt_queue_work(lnet_cpt_table(), wi->swi_cpt, wi->swi_wq,
+			   &wi->swi_work);
 }
 
 static inline int
@@ -600,7 +608,7 @@ srpc_init_client_rpc(struct srpc_client_rpc *rpc, struct lnet_processid *peer,
 				crpc_bulk.bk_iovs[nbulkiov]));
 
 	INIT_LIST_HEAD(&rpc->crpc_list);
-	swi_init_workitem(&rpc->crpc_wi, srpc_send_rpc, lst_test_wq[cpt]);
+	swi_init_workitem(&rpc->crpc_wi, srpc_send_rpc, cpt, lst_test_wq[cpt]);
 	spin_lock_init(&rpc->crpc_lock);
 	kref_init(&rpc->crpc_refcount); /* 1 ref for caller */
 

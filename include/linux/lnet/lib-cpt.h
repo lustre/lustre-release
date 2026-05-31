@@ -324,29 +324,75 @@ struct workqueue_struct *cfs_cpt_bind_workqueue(const char *wq_name,
 						struct cfs_cpt_table *tbl,
 						int flags, int cpt, int nthrs)
 {
-	cpumask_var_t *mask = cfs_cpt_cpumask(tbl, cpt);
-	struct workqueue_attrs *attrs;
 	struct workqueue_struct *wq;
 
-	attrs = alloc_workqueue_attrs();
-	if (!attrs)
+	/*
+	 * Create a bound (per-CPU) workqueue rather than an unbound one.
+	 *
+	 * Confining an unbound workqueue's worker pool to a partition's
+	 * cpumask would require apply_workqueue_attrs() and friends, which
+	 * the kernel does not export. Instead the workqueue is left bound
+	 * and work items are steered to a CPU inside the partition at queue
+	 * time via cfs_cpt_queue_work() and friends (queue_work_on()). For a
+	 * bound workqueue queue_work_on() pins execution to the chosen CPU,
+	 * which keeps the work inside the partition even when Lustre is
+	 * restricted to a subset of the machine's CPUs. The @tbl/@cpt the
+	 * caller binds to here must match what it later passes to
+	 * cfs_cpt_queue_work().
+	 */
+	wq = alloc_workqueue("%s", flags, nthrs, wq_name);
+	if (!wq)
 		return ERR_PTR(-ENOMEM);
-
-	wq = alloc_workqueue("%s", WQ_UNBOUND | flags, nthrs, wq_name);
-	if (!wq) {
-		free_workqueue_attrs(attrs);
-		return ERR_PTR(-ENOMEM);
-	}
-
-	if (mask) {
-		cpumask_copy(attrs->cpumask, *mask);
-		cpus_read_lock();
-		apply_workqueue_attrs(wq, attrs);
-		cpus_read_unlock();
-	}
-	free_workqueue_attrs(attrs);
 
 	return wq;
+}
+
+/*
+ * Pick an online CPU inside partition @cpt to run a work item on. Prefer the
+ * CPU we are queueing from when it already belongs to the partition (keeps the
+ * work cache-local), otherwise fall back to any online CPU in the partition.
+ * Returns WORK_CPU_UNBOUND if the partition has no usable CPU, which leaves
+ * placement to the workqueue core.
+ */
+static inline int cfs_cpt_wq_cpu(struct cfs_cpt_table *tbl, int cpt)
+{
+	cpumask_var_t *mask = cfs_cpt_cpumask(tbl, cpt);
+	int cpu = raw_smp_processor_id();
+
+	if (!mask)
+		return WORK_CPU_UNBOUND;
+
+	if (cpumask_test_cpu(cpu, *mask))
+		return cpu;
+
+	cpu = cpumask_any_and(*mask, cpu_online_mask);
+	if (cpu >= nr_cpu_ids)
+		return WORK_CPU_UNBOUND;
+
+	return cpu;
+}
+
+static inline bool
+cfs_cpt_queue_work(struct cfs_cpt_table *tbl, int cpt,
+		   struct workqueue_struct *wq, struct work_struct *work)
+{
+	return queue_work_on(cfs_cpt_wq_cpu(tbl, cpt), wq, work);
+}
+
+static inline bool
+cfs_cpt_queue_delayed_work(struct cfs_cpt_table *tbl, int cpt,
+			   struct workqueue_struct *wq,
+			   struct delayed_work *dwork, unsigned long delay)
+{
+	return queue_delayed_work_on(cfs_cpt_wq_cpu(tbl, cpt), wq, dwork, delay);
+}
+
+static inline bool
+cfs_cpt_mod_delayed_work(struct cfs_cpt_table *tbl, int cpt,
+			 struct workqueue_struct *wq,
+			 struct delayed_work *dwork, unsigned long delay)
+{
+	return mod_delayed_work_on(cfs_cpt_wq_cpu(tbl, cpt), wq, dwork, delay);
 }
 
 /* allocate per-cpu-partition data, returned value is an array of pointers,
