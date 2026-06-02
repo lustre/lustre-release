@@ -728,15 +728,21 @@ static int kiblnd_setup_rd_kiov(struct lnet_ni *ni, struct kib_tx *tx,
 		fragnob = min((int)(kiov->bv_len - offset), nob);
 
 		/*
-		 * We're allowed to start at a non-aligned page offset in
-		 * the first fragment and end at a non-aligned page offset
-		 * in the last fragment.
+		 * We're allowed to start at a non-aligned page offset in the
+		 * first fragment and end at a non-aligned page offset in the
+		 * last fragment. Every interior fragment boundary, however,
+		 * must be page-aligned: otherwise ib_map_mr_sg() (see
+		 * ib_sg_to_pages()) detects a gap and short-maps the
+		 * scatterlist, which fails the FastReg with -EINVAL. A gap
+		 * therefore exists when a non-first fragment starts mid-page
+		 * or a non-last fragment ends mid-page.
 		 */
-		if ((fragnob < (int)(kiov->bv_len - offset)) &&
-		    nkiov < max_nkiov && nob > fragnob) {
-			CDEBUG(D_NET, "fragnob %d < available page %d: with remaining %d kiovs with %d nob left\n",
-			       fragnob, (int)(kiov->bv_len - offset), nkiov,
-			       nob);
+		if ((nkiov < max_nkiov &&
+		     ((kiov->bv_offset + offset) & ~PAGE_MASK)) ||
+		    (nob > fragnob &&
+		     ((kiov->bv_offset + offset + fragnob) & ~PAGE_MASK))) {
+			CDEBUG(D_NET, "tx_gaps: nkiov %d/%d offset %d fragnob %d nob %d\n",
+			       nkiov, max_nkiov, offset, fragnob, nob);
 			tx->tx_gaps = true;
 		}
 
