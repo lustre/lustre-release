@@ -1702,8 +1702,8 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		rd = &ibmsg->ibm_u.get.ibgm_rd;
 		tx->tx_gpu = gpu;
 		rc = kiblnd_setup_rd_kiov(ni, tx, rd,
-					  payload_niov, payload_kiov,
-					  payload_offset, payload_nob);
+					  msg_md->md_niov, msg_md->md_kiov,
+					  0, msg_md->md_length);
 		if (rc != 0) {
 			CERROR("Can't setup GET sink %s: rc = %d\n",
 			       libcfs_nidstr(&target->nid), rc);
