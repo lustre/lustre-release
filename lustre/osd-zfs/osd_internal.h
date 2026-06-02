@@ -32,9 +32,7 @@
 #endif
 #include <sys/arc.h>
 #include <sys/nvpair.h>
-#ifdef HAVE_ZFS_REFCOUNT_HEADER
 #include <sys/zfs_refcount.h>
-#endif
 #include <sys/zfs_znode.h>
 #include <sys/zap.h>
 #include <sys/dbuf.h>
@@ -86,12 +84,6 @@
 
 /* Default FatZAP leaf block shift: 2^13 = 8K */
 #define OSD_FZAP_BLOCKSHIFT_DEFAULT	13
-
-#ifndef HAVE_ZFS_REFCOUNT_HEADER
-#ifndef HAVE_ZFS_REFCOUNT_ADD
-#define zfs_refcount_add	refcount_add
-#endif
-#endif
 
 extern const struct dt_body_operations osd_body_scrub_ops;
 extern const struct dt_body_operations osd_body_ops;
@@ -943,11 +935,7 @@ static inline uint64_t osd_db_dirty_txg(dmu_buf_impl_t *db)
 	uint64_t txg = 0;
 
 	mutex_enter(&db->db_mtx);
-#ifdef HAVE_DB_DIRTY_RECORDS_LIST
 	dr = list_head(&db->db_dirty_records);
-#else
-	dr = db->db_last_dirty;
-#endif
 	if (dr != NULL)
 		txg = dr->dr_txg;
 	mutex_exit(&db->db_mtx);
@@ -1034,22 +1022,6 @@ static inline int osd_dmu_read(struct osd_device *osd, dnode_t *dn,
 	return -dmu_read_by_dnode(dn, offset, size, buf, flags);
 }
 
-#ifdef HAVE_DMU_OBJSET_OWN_6ARG
-#define osd_dmu_objset_own(name, type, ronly, decrypt, tag, os)	\
-	dmu_objset_own((name), (type), (ronly), (decrypt), (tag), (os))
-#else
-#define osd_dmu_objset_own(name, type, ronly, decrypt, tag, os)	\
-	dmu_objset_own((name), (type), (ronly), (tag), (os))
-#endif
-
-#ifdef HAVE_DMU_OBJSET_DISOWN_3ARG
-#define osd_dmu_objset_disown(os, decrypt, tag)	\
-	dmu_objset_disown((os), (decrypt), (tag))
-#else
-#define osd_dmu_objset_disown(os, decrypt, tag)	\
-	dmu_objset_disown((os), (tag))
-#endif
-
 static inline int
 osd_index_register(struct osd_device *osd, const struct lu_fid *fid,
 		   __u32 keysize, __u32 recsize)
@@ -1076,14 +1048,6 @@ osd_index_backup(const struct lu_env *env, struct osd_device *osd, bool backup)
 			    &osd->od_index_backup_list, &osd->od_lock,
 			    &osd->od_index_backup_stop, backup);
 }
-
-#ifndef HAVE_DMU_TX_MARK_NETFREE
-#define dmu_tx_mark_netfree(tx)
-#endif
-
-#ifndef HAVE_ZFS_INODE_TIMESPEC
-#define inode_timespec_t timestruc_t
-#endif
 
 #ifdef HAVE_DMU_OFFSET_NEXT
 #define osd_dmu_offset_next(os, obj, hole, res) \

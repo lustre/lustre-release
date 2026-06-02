@@ -651,18 +651,6 @@ static inline arc_buf_t *osd_request_arcbuf(dnode_t *dn, size_t bs)
 	if (unlikely(!abuf))
 		return ERR_PTR(-ENOMEM);
 
-#if ZFS_VERSION_CODE < OBD_OCD_VERSION(0, 7, 0, 0)
-	/**
-	 * ZFS prior to 0.7.0 doesn't guarantee PAGE_SIZE alignment for zio
-	 * blocks smaller than (PAGE_SIZE << 2). This poses a problem of
-	 * setting up page array for RDMA transfer. See LU-9305.
-	 */
-	if ((unsigned long)abuf->b_data & ~PAGE_MASK) {
-		dmu_return_arcbuf(abuf);
-		return NULL;
-	}
-#endif
-
 	return abuf;
 }
 

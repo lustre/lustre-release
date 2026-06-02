@@ -1,9 +1,7 @@
-# SPDX-License-Identifier: NOASSERTION
+# SPDX-License-Identifier: GPL-2.0
 
 #
 # This file is part of Lustre, http://www.lustre.org/
-#
-# config/lustre-build-zfs.m4
 #
 # openZFS OSD related configuration
 #
@@ -47,155 +45,6 @@
 #                   is detected incorrectly it can be explicitly
 #                   specified using this option.
 #
-# --without-spl   - Disable spl support.
-# --with-spl=no
-#
-# --with-spl      - Enable spl support and attempt to autodetect the spl
-# --with-spl=yes    headers in one of the following places in this order:
-#                   * /var/lib/dkms/spl/${VERSION}/source
-#                   * /usr/src/spl-${VERSION}/${LINUXRELEASE}
-#                   * /usr/src/spl-${VERSION}
-#                   * ../spl/
-#                   * $LINUX/spl
-#
-# --with-spl=path - Enable spl support and use the spl headers in the
-#                   provided path.  No autodetection is performed.
-#
-# --with-spl-obj  - When spl support is enabled the object directory
-#                   will be based on the --with-spl directory.  If this
-#                   is detected incorrectly it can be explicitly
-#                   specified using this option.
-#
-
-#
-# LB_SPL
-#
-AC_DEFUN([LB_SPL], [
-	AC_ARG_WITH([spl],
-		AS_HELP_STRING([--with-spl=PATH],
-		[Path to spl source]),
-		[splsrc="$withval"])
-
-	AC_ARG_WITH([spl-obj],
-		AS_HELP_STRING([--with-spl-obj=PATH],
-		[Path to spl build objects]),
-		[splobj="$withval"])
-
-	#
-	# The existence of spl.release[.in] is used to identify a valid
-	# source directory.  In order of preference:
-	#
-	splver=$(ls -1 /usr/src/ | grep ^spl- | cut -f2 -d'-' |
-		 sort -V | head -n1)
-	spldkms="/var/lib/dkms/spl/${splver}"
-	splsrc1="/usr/src/spl-${splver}/${LINUXRELEASE}"
-	splsrc2="/usr/src/spl-${splver}"
-	splsrc3="../spl/"
-	splsrc4="$LINUX/spl"
-
-	AC_MSG_CHECKING([spl source directory])
-	AS_IF([test -z "${splsrc}"], [
-		AS_IF([test -e "${spldkms}/source/spl.release.in"], [
-			splsrc=${spldkms}/source
-		], [test -e "${splsrc1}/spl.release.in"], [
-			splsrc=${splsrc1}
-		], [test -e "${splsrc2}/spl.release.in"], [
-			splsrc=${splsrc2}
-		], [test -e "${splsrc3}/spl.release.in"], [
-			splsrc=$(readlink -f "${splsrc3}")
-		], [test -e "${splsrc4}/spl.release.in"], [
-			splsrc=${splsrc4}
-		], [
-			splsrc="[Not found]"
-		])
-	])
-	AC_MSG_RESULT([$splsrc])
-
-	AS_IF([test ! -e "$splsrc/spl.release" &&
-	    test ! -e "$splsrc/spl.release.in"], [
-		enable_zfs=no
-	])
-
-	#
-	# The existence of the spl_config.h is used to identify a valid
-	# spl object directory.  In many cases the object and source
-	# directory are the same, however the objects may also reside
-	# is a subdirectory named after the kernel version.  When
-	# weak modules are used, the kernel version may not be the
-	# same as the LINUXRELEASE against which we are building lustre.
-	#
-	AC_MSG_CHECKING([spl build directory])
-	AS_IF([test -z "$splobj"], [
-		last_spl_obj_dir=$(ls -d ${splsrc}/[[0-9]]*/  2> /dev/null | tail -n 1 | sed 's|/$||')
-		AS_IF([test "${splsrc}" = "${spldkms}/source"], [
-			AS_IF([test -e "${spldkms}/${LINUXRELEASE}/${target_cpu}/spl_config.h"], [
-				splobj=${spldkms}/${LINUXRELEASE}/${target_cpu}
-			], [
-				splobj="[Not found]"
-			])
-		],[test -e "${splsrc}/${LINUXRELEASE}/spl_config.h"], [
-			splobj="${splsrc}/${LINUXRELEASE}"
-		], [test -e "${splsrc}/spl_config.h"], [
-			splobj="${splsrc}"
-		], [test -e "${last_spl_obj_dir}/spl_config.h"], [
-			splobj="${last_spl_obj_dir}"
-		], [
-			splobj="[Not found]"
-		])
-	])
-	AC_MSG_RESULT([$splobj])
-
-	AS_IF([test ! -e "$splobj/spl_config.h"], [
-		enable_zfs=no
-	])
-
-	#
-	# Verify the source version using SPL_META_VERSION in spl_config.h
-	#
-	AS_IF([test x$enable_zfs = xyes], [
-		AC_MSG_CHECKING([spl source version])
-		AS_IF([grep -F -q SPL_META_VERSION $splobj/spl_config.h], [
-			splver=$((echo "#include <spl_config.h>";
-			    echo "splver=SPL_META_VERSION-SPL_META_RELEASE") |
-			    cpp -I $splobj |
-			    grep "^splver=" | tr -d \" | cut -d= -f2)
-		], [
-			splver="[Not found]"
-			enable_zfs=no
-		])
-		AC_MSG_RESULT([$splver])
-	])
-
-	#
-	# Verify the modules systems exist by the expect name.
-	#
-	AS_IF([test x$enable_zfs = xyes], [
-		AC_MSG_CHECKING([spl file name for module symbols])
-		AS_IF([test -r $splobj/$SYMVERFILE], [
-			splsym=$SYMVERFILE
-			EXTRA_SYMBOLS="$EXTRA_SYMBOLS $splobj/$SYMVERFILE"
-		], [test -r $splobj/module/$SYMVERFILE], [
-			splsym=$SYMVERFILE
-			EXTRA_SYMBOLS="$EXTRA_SYMBOLS $splobj/module/$SYMVERFILE"
-		], [
-			splsym="[Not found]"
-			enable_zfs=no
-		])
-		AC_MSG_RESULT([$splsym])
-	])
-
-	AS_IF([test x$enable_zfs = xyes], [
-		SPL=${splsrc}
-		SPL_OBJ=${splobj}
-		SPL_VERSION=${splver}
-
-		AC_SUBST(SPL)
-		AC_SUBST(SPL_OBJ)
-		AC_SUBST(SPL_VERSION)
-		AC_SUBST(EXTRA_SYMBOLS)
-	])
-
-]) # LB_SPL
 
 #
 # LB_ZFS
@@ -471,26 +320,21 @@ AC_DEFUN([LB_CONFIG_ZFS], [
 		[AS_HELP_STRING([--with-zfs=PATH], [Path to zfs source])],
 		[
 			AS_IF([test x$withval = xno], [
-				enable_spl=no
 				enable_zfs=no
 				require_zfs=no
 			], [test x$withval = xyes], [
-				enable_spl=yes
 				enable_zfs=yes
 				require_zfs=yes
 			], [
-				enable_spl=yes
 				enable_zfs=yes
 				require_zfs=yes
 				zfssrc="$withval"
 			])
 		], [
 			AS_IF([test x$enable_server != xno], [
-				enable_spl=yes
 				require_zfs=no
 				enable_zfs=yes
 			], [
-				enable_spl=no
 				require_zfs=no
 				enable_zfs=no
 			])
@@ -521,18 +365,8 @@ AC_DEFUN([LB_CONFIG_ZFS], [
 		AC_DEFINE_UNQUOTED([ZFS_FIX],   [$ZFS_FIX],   [zfs fix version])
 
 		#
-		# SPL is only needed if ZFS is prior to 0.8.0
-		#
-		AS_IF([test x$enable_modules = xyes && test -n "$ZFS_MAJOR" &&
-			    test $ZFS_MAJOR -eq 0 && test $ZFS_MINOR -lt 8], [
-			LB_SPL
-		],[
-			enable_spl=no
-		])
-
-		#
-		# enable_zfs will be set to no in LB_SPL or LB_ZFS if
-		# one of more of the build requirements is not met.
+		# enable_zfs will be set to no in LB_ZFS if one of more
+		# of the build requirements is not met.
 		#
 		AS_IF([test x$enable_zfs = xyes], [
 			AC_DEFINE(HAVE_ZFS_OSD, 1, Enable zfs osd)
@@ -564,7 +398,17 @@ your distribution.
 		AC_SUBST(ENABLE_ZFS, no)
 	])
 	AM_CONDITIONAL(ZFS_ENABLED, [test "x$enable_zfs" = xyes])
-	AM_CONDITIONAL(SPL_ENABLED, [test "x$enable_spl" = xyes])
+
+	#
+	# For all versions Lustre supports, SPL is bundled with ZFS.
+	#
+	# FIXME: The substitutions below are kept empty for the
+	# build infrastructure that still references them. They
+	# should be removed eventually.
+	#
+	AC_SUBST(SPL, [])
+	AC_SUBST(SPL_OBJ, [])
+	AM_CONDITIONAL(SPL_ENABLED, [false])
 ]) # LB_CONFIG_ZFS
 
 AC_DEFUN([LZ_ZFS_KABI_SERIAL], [
@@ -632,257 +476,6 @@ AC_DEFUN([LZ_ZFS_KABI_SERIAL], [
 		AC_DEFINE(HAVE_VDEV_OP_MIN_ALLOC, 1,
 			[Have vdev_op_min_alloc in ZFS])
 	])
-
-	#
-	# ZFS 0.7.x adds support for large dnodes.  This
-	# allows Lustre to optionally specify the size of a
-	# dnode which ZFS will then use to store metadata such
-	# as xattrs. The default dnode size specified by the
-	# 'dnodesize' dataset property will be used unless a
-	# specific value is provided.
-	#
-	LB_CHECK_COMPILE([if zfs defines dmu_object_alloc_dnsize],
-	dmu_object_alloc_dnsize, [
-		#include <sys/dmu.h>
-		#include <sys/dnode.h>
-	],[
-		objset_t *os = NULL;
-		dmu_object_type_t objtype = DMU_OT_NONE;
-		int blocksize = 0;
-		dmu_object_type_t bonustype = DMU_OT_SA;
-		int dnodesize = DNODE_MIN_SIZE;
-		dmu_tx_t *tx = NULL;
-		uint64_t id;
-
-		id = dmu_object_alloc_dnsize(os, objtype, blocksize,
-					     bonustype,
-					     DN_BONUS_SIZE(dnodesize),
-					     dnodesize, tx);
-	],[
-		AC_DEFINE(HAVE_DMU_OBJECT_ALLOC_DNSIZE, 1,
-			[Have dmu_object_alloc_dnsize in ZFS])
-	],[
-		AC_MSG_ERROR([dmu_object_alloc_dnsize does not exist])
-	])
-
-	#
-	# ZFS 0.7.x extended dmu_prefetch() to take an additional
-	# 'level' and 'priority' argument.  Use a level of 0 and a
-	# priority of ZIO_PRIORITY_SYNC_READ to replicate the
-	# behavior of the four argument version.
-	#
-	LB_CHECK_COMPILE([if ZFS has 'dmu_prefetch' with 6 args],
-	dmu_prefetch, [
-		#include <sys/dmu.h>
-	],[
-		objset_t *os = NULL;
-		uint64_t object = 0;
-		int64_t level = 0;
-		uint64_t offset = 0;
-		uint64_t len = 0;
-		enum zio_priority pri = ZIO_PRIORITY_SYNC_READ;
-
-		dmu_prefetch(os, object, level, offset, len, pri);
-	],[
-		AC_DEFINE(HAVE_DMU_PREFETCH_6ARG, 1,
-			[Have 6 argument dmu_pretch in ZFS])
-	],[
-		AC_MSG_ERROR([6 argument dmu_pretch does not exist])
-	])
-	#
-	# ZFS 0.7.0 feature: SPA_FEATURE_USEROBJ_ACCOUNTING
-	#
-	LB_CHECK_COMPILE([if ZFS has native dnode accounting supported],
-	dmu_objset_userobjused_enabled, [
-		#include <sys/dmu_objset.h>
-	],[
-		dmu_objset_userobjused_enabled(NULL);
-	],[
-		AC_DEFINE(HAVE_DMU_USEROBJ_ACCOUNTING, 1,
-			[Have native dnode accounting in ZFS])
-	],[
-		AC_MSG_ERROR([native dnode accounting does not exist])
-	])
-	#
-	# ZFS 0.7.0 feature: MULTIHOST
-	#
-	LB_CHECK_COMPILE([if ZFS has multihost protection],
-	spa_multihost, [
-		#include <sys/fs/zfs.h>
-	],[
-		zpool_prop_t prop = ZPOOL_PROP_MULTIHOST;
-
-		(void)prop;
-	],[
-		AC_DEFINE(HAVE_ZFS_MULTIHOST, 1,
-			[Have multihost protection in ZFS])
-	],[
-		AC_MSG_ERROR([multihost protection does not exist])
-	])
-	#
-	# ZFS 0.7.x adds new method zap_lookup_by_dnode
-	#
-	LB_CHECK_COMPILE([if ZFS has 'zap_lookup_by_dnode'],
-	zap_lookup_by_dnode, [
-		#include <sys/zap.h>
-		#include <sys/dnode.h>
-	],[
-		dnode_t *dn = NULL;
-		zap_lookup_by_dnode(dn, NULL, 1, 1, NULL);
-	],[
-		AC_DEFINE(HAVE_ZAP_LOOKUP_BY_DNODE, 1,
-			[Have zap_lookup_by_dnode() in ZFS])
-	],[
-		AC_MSG_ERROR([zap_lookup_by_dnode does not exist])
-	])
-	#
-	# ZFS 0.7.x adds new method zap_add_by_dnode
-	#
-	LB_CHECK_COMPILE([if ZFS has 'zap_add_by_dnode'],
-	zap_add_by_dnode, [
-		#include <sys/zap.h>
-		#include <sys/dnode.h>
-	],[
-		dnode_t *dn = NULL;
-		zap_add_by_dnode(dn, NULL, 1, 1, NULL, NULL);
-	],[
-		AC_DEFINE(HAVE_ZAP_ADD_BY_DNODE, 1,
-			[Have zap_add_by_dnode() in ZFS])
-	],[
-		AC_MSG_ERROR([zap_add_by_dnode does not exist])
-	])
-	#
-	# ZFS 0.7.x adds new method zap_remove_by_dnode
-	#
-	LB_CHECK_COMPILE([if ZFS has 'zap_remove_by_dnode'],
-	zap_remove_by_dnode, [
-		#include <sys/zap.h>
-		#include <sys/dnode.h>
-	],[
-		dnode_t *dn = NULL;
-		zap_remove_by_dnode(dn, NULL, NULL);
-	],[
-		AC_DEFINE(HAVE_ZAP_REMOVE_ADD_BY_DNODE, 1,
-			[Have zap_remove_by_dnode() in ZFS])
-	],[
-		AC_MSG_ERROR([zap_remove_by_dnode does not exist])
-	])
-	#
-	# ZFS 0.7.x adds new method dmu_tx_hold_zap_by_dnode
-	#
-	LB_CHECK_COMPILE([if ZFS has 'dmu_tx_hold_zap_by_dnode'],
-	dmu_tx_hold_zap_by_dnode, [
-		#include <sys/zap.h>
-		#include <sys/dnode.h>
-	],[
-		dnode_t *dn = NULL;
-		dmu_tx_hold_zap_by_dnode(NULL, dn, TRUE, NULL);
-	],[
-		AC_DEFINE(HAVE_DMU_TX_HOLD_ZAP_BY_DNODE, 1,
-			[Have dmu_tx_hold_zap_by_dnode() in ZFS])
-	],[
-		AC_MSG_ERROR([dmu_tx_hold_zap_by_dnode does not exist])
-	])
-	#
-	# ZFS 0.7.x adds new method dmu_tx_hold_write_by_dnode
-	#
-	LB_CHECK_COMPILE([if ZFS has 'dmu_tx_hold_write_by_dnode'],
-	dmu_tx_hold_write_by_dnode, [
-		#include <sys/zap.h>
-		#include <sys/dnode.h>
-	],[
-		dnode_t *dn = NULL;
-		dmu_tx_hold_write_by_dnode(NULL, dn, 0, 0);
-	],[
-		AC_DEFINE(HAVE_DMU_TX_HOLD_WRITE_BY_DNODE, 1,
-			[Have dmu_tx_hold_write_by_dnode() in ZFS])
-	],[
-		AC_MSG_ERROR([dmu_tx_hold_write_by_dnode does not exist])
-	])
-	#
-	# ZFS 0.7.x adds new method dmu_read_by_dnode
-	#
-	LB_CHECK_COMPILE([if ZFS has 'dmu_read_by_dnode'],
-	dmu_read_by_dnode, [
-		#include <sys/zap.h>
-		#include <sys/dnode.h>
-	],[
-		dnode_t *dn = NULL;
-		dmu_read_by_dnode(dn, 0, 0, NULL, 0);
-	],[
-		AC_DEFINE(HAVE_DMU_READ_BY_DNODE, 1,
-			[Have dmu_read_by_dnode() in ZFS])
-	],[
-		AC_MSG_ERROR([dmu_read_by_dnode does not exist])
-	])
-	#
-	# ZFS 0.7.2 adds new method dmu_tx_mark_netfree
-	#
-	LB_CHECK_COMPILE([if ZFS has 'dmu_tx_mark_netfree'],
-	dmu_tx_mark_netfree, [
-		#include <sys/dmu.h>
-	],[
-		dmu_tx_t *tx = NULL;
-		dmu_tx_mark_netfree(tx);
-	],[
-		AC_DEFINE(HAVE_DMU_TX_MARK_NETFREE, 1,
-			[Have dmu_tx_mark_netfree])
-	])
-	#
-	# ZFS 0.7.10 changes timestruc_t to inode_timespec_t
-	#
-	LB_CHECK_COMPILE([if SPL has 'inode_timespec_t'],
-	zfs_have_inode_timespec, [
-		#include <sys/fs/zfs.h>
-	],[
-		inode_timespec_t now;
-		gethrestime(&now);
-	],[
-		AC_DEFINE(HAVE_ZFS_INODE_TIMESPEC, 1,
-			[Have inode_timespec_t])
-	])
-	# ZFS 0.7.12/0.8.x uses zfs_refcount_add() instead of
-	# refcount_add().  ZFS 2.0 renamed sys/refcount.h to
-	# sys/zfs_refcount.h, rather the add another check to
-	# determine the correct header name include it
-	# indirectly through sys/dnode.h.
-	#
-	LB_CHECK_COMPILE([if ZFS has 'zfs_refcount_add'],
-	zfs_refcount_add, [
-		#include <sys/dnode.h>
-	],[
-		zfs_refcount_add((zfs_refcount_t *) NULL, NULL);
-	],[
-		AC_DEFINE(HAVE_ZFS_REFCOUNT_ADD, 1,
-			[Have zfs_refcount_add])
-	])
-	#
-	# ZFS 0.8.x changes dmu_objset_own for encryption
-	#
-	LB_CHECK_COMPILE([if ZFS has 'dmu_objset_own' with 6 args],
-	dmu_objset_own, [
-		#include <sys/dmu_objset.h>
-	],[
-		objset_t *os = NULL;
-		dmu_objset_type_t type = DMU_OST_ANY;
-		dmu_objset_own(NULL, type, B_FALSE, B_TRUE, FTAG, &os);
-	],[
-		AC_DEFINE(HAVE_DMU_OBJSET_OWN_6ARG, 1,
-			[Have dmu_objset_own() with 6 args])
-	])
-	#
-	# ZFS 0.8.x changes dmu_objset_disown for encryption
-	#
-	LB_CHECK_COMPILE([if ZFS has 'dmu_objset_disown' with 3 args],
-	dmu_objset_disown, [
-		#include <sys/dmu_objset.h>
-	],[
-		objset_t *os = NULL;
-		dmu_objset_disown(os, B_TRUE, FTAG);
-	],[
-		AC_DEFINE(HAVE_DMU_OBJSET_DISOWN_3ARG, 1,
-			[Have dmu_objset_disown() with 3 args])
-	])
 	#
 	# ZFS exports dmu_offet_next
 	#
@@ -895,34 +488,6 @@ AC_DEFUN([LZ_ZFS_KABI_SERIAL], [
 	AS_IF([test "x$lb_cv_dmu_offset_next" = "xyes"], [
 		AC_DEFINE(HAVE_DMU_OFFSET_NEXT, 1,
 			[Have dmu_offset_next() exported])
-	])
-	#
-	# ZFS 2.0 replaced .db_last_dirty / .dr_next with a list_t
-	# and list_node_t named .db_dirty_records / .dr_dbuf_node.
-	#
-	LB_CHECK_COMPILE([if ZFS has 'db_dirty_records' list_t],
-	db_dirty_records, [
-		#include <sys/dbuf.h>
-	],[
-		dmu_buf_impl_t db;
-		dbuf_dirty_record_t *dr;
-		dr = list_head(&db.db_dirty_records);
-	],[
-		AC_DEFINE(HAVE_DB_DIRTY_RECORDS_LIST, 1,
-			[Have db_dirty_records list_t])
-	])
-	#
-	# ZFS 2.0 renamed sys/refcount.h to zfs_refcount.h
-	# This build issue shows up with ZFS 2.0.7 and Lustre 2.12 LTS
-	#
-	LB_CHECK_COMPILE([if ZFS renamed sys/refcount to zfs_refcount.h],
-	zfs_zfs_refcount, [
-		#include <sys/zfs_refcount.h>
-	],[
-		zfs_refcount_add((zfs_refcount_t *) NULL, NULL);
-	],[
-		AC_DEFINE(HAVE_ZFS_REFCOUNT_HEADER, 1,
-			[Have zfs_refcount.h])
 	])
 	#
 	# zfs-2.3.99-237-gf69631992
