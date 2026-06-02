@@ -51,7 +51,15 @@ static int lod_lookup(const struct lu_env *env, struct dt_object *dt,
 		      struct dt_rec *rec, const struct dt_key *key)
 {
 	struct dt_object *next = dt_object_child(dt);
-	return next->do_index_ops->dio_lookup(env, next, rec, key);
+	int rc;
+
+	rc = dt_lookup(env, next, rec, key);
+	if (rc == 0)
+		rc = 1;
+	else if (rc == -ENOENT)
+		rc = 0;
+
+	return rc;
 }
 
 /*
@@ -341,6 +349,7 @@ static int lod_striped_lookup(const struct lu_env *env, struct dt_object *dt,
 	struct lod_object *lo = lod_dt_obj(dt);
 	struct dt_object *next;
 	const char *name = (const char *)key;
+	int rc;
 
 	LASSERT(lo->ldo_dir_stripe_count > 0);
 
@@ -369,7 +378,13 @@ static int lod_striped_lookup(const struct lu_env *env, struct dt_object *dt,
 			return -ENODEV;
 	}
 
-	return next->do_index_ops->dio_lookup(env, next, rec, key);
+	rc = dt_lookup(env, next, rec, key);
+	if (rc == 0)
+		rc = 1;
+	else if (rc == -ENOENT)
+		rc = 0;
+
+	return rc;
 }
 
 /*

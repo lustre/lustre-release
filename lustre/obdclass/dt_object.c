@@ -19,6 +19,7 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <linux/list.h>
+#include <linux/module.h>
 #include <obd_class.h>
 #include <dt_object.h>
 /* fid_be_to_cpu() */
@@ -149,6 +150,20 @@ void dt_object_fini(struct dt_object *obj)
 }
 EXPORT_SYMBOL(dt_object_fini);
 
+int dt_object_sync(const struct lu_env *env, struct dt_object *o,
+		   u64 start, u64 end)
+{
+	int rc;
+
+	LASSERT(o);
+	LASSERT(o->do_ops);
+	LASSERT(o->do_ops->do_object_sync);
+	rc = o->do_ops->do_object_sync(env, o, start, end);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_object_sync);
+
 /**
  * dt_try_as_dir() - Set directory .do_index_ops.
  * @env: current lustre environment
@@ -215,6 +230,30 @@ enum dt_format_type dt_mode_to_dft(__u32 mode)
 }
 EXPORT_SYMBOL(dt_mode_to_dft);
 
+int dt_lookup(const struct lu_env *env, struct dt_object *dt,
+	      struct dt_rec *rec, const struct dt_key *key)
+{
+	int ret;
+
+	LASSERT(dt);
+	LASSERT(dt->do_index_ops);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_LOOKUP))
+		return cfs_fail_err;
+
+	if (!dt->do_index_ops->dio_lookup)
+		return -EOPNOTSUPP;
+
+	ret = dt->do_index_ops->dio_lookup(env, dt, rec, key);
+	if (ret > 0)
+		ret = 0;
+	else if (ret == 0)
+		ret = -ENOENT;
+
+	return ret;
+}
+EXPORT_SYMBOL(dt_lookup);
+
 /**
  * dt_lookup_dir() - lookup fid for object named @name in directory @dir.
  * @env: current lustre environment
@@ -235,6 +274,113 @@ int dt_lookup_dir(const struct lu_env *env, struct dt_object *dir,
 	return -ENOTDIR;
 }
 EXPORT_SYMBOL(dt_lookup_dir);
+
+int dt_trans_start(const struct lu_env *env,
+		   struct dt_device *d, struct thandle *th)
+{
+	int rc;
+
+	LASSERT(d->dd_ops->dt_trans_start);
+	rc = d->dd_ops->dt_trans_start(env, d, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_trans_start);
+
+int dt_declare_record_write(const struct lu_env *env, struct dt_object *dt,
+			    const struct lu_buf *buf, loff_t pos,
+			    struct thandle *th)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_body_ops);
+	LASSERT(th);
+
+	if (!dt->do_body_ops->dbo_declare_write)
+		return 0;
+
+	rc = dt->do_body_ops->dbo_declare_write(env, dt, buf, pos, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_declare_record_write);
+
+int dt_declare_create(const struct lu_env *env, struct dt_object *dt,
+		      struct lu_attr *attr,
+		      struct dt_allocation_hint *hint,
+		      struct dt_object_format *dof,
+		      struct thandle *th)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_CREATE))
+		return cfs_fail_err;
+
+	if (!dt->do_ops->do_declare_create)
+		return 0;
+
+	rc = dt->do_ops->do_declare_create(env, dt, attr, hint, dof, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_declare_create);
+
+int dt_create(const struct lu_env *env, struct dt_object *dt,
+	      struct lu_attr *attr, struct dt_allocation_hint *hint,
+	      struct dt_object_format *dof, struct thandle *th)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_create);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_CREATE))
+		return cfs_fail_err;
+
+	rc = dt->do_ops->do_create(env, dt, attr, hint, dof, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_create);
+
+int dt_declare_destroy(const struct lu_env *env, struct dt_object *dt,
+		       struct thandle *th)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_DESTROY))
+		return cfs_fail_err;
+
+	if (!dt->do_ops->do_declare_destroy)
+		return 0;
+
+	rc = dt->do_ops->do_declare_destroy(env, dt, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_declare_destroy);
+
+int dt_destroy(const struct lu_env *env, struct dt_object *dt,
+	       struct thandle *th)
+{
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_destroy);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DESTROY))
+		return cfs_fail_err;
+
+	return dt->do_ops->do_destroy(env, dt, th);
+}
+EXPORT_SYMBOL(dt_destroy);
 
 /*
  * this differs from dt_locate by top_dev as parameter
@@ -825,6 +971,83 @@ void rdpg_page_put(const struct lu_rdpg *rdpg, unsigned int index, void *kaddr)
 }
 EXPORT_SYMBOL(rdpg_page_put);
 
+void dt_read_lock(const struct lu_env *env, struct dt_object *dt,
+		  unsigned int role)
+{
+	struct dt_thread_info *info = dt_info(env);
+
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->dd_owner != env);
+
+	if (dt->do_ops->do_read_lock)
+		dt->do_ops->do_read_lock(env, dt, role);
+	else
+		down_read_nested(&dt->dd_sem, role);
+
+	LASSERT(!dt->dd_owner);
+	info->dti_r_locks++;
+}
+EXPORT_SYMBOL(dt_read_lock);
+
+void dt_write_lock(const struct lu_env *env, struct dt_object *dt,
+		   unsigned int role)
+{
+	struct dt_thread_info *info = dt_info(env);
+
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->dd_owner != env);
+
+	if (dt->do_ops->do_write_lock)
+		dt->do_ops->do_write_lock(env, dt, role);
+	else
+		down_write_nested(&dt->dd_sem, role);
+
+	LASSERT(!dt->dd_owner);
+	info->dti_w_locks++;
+
+	/* TODO: Cleanup usage of const */
+	dt->dd_owner = (struct lu_env *)env;
+}
+EXPORT_SYMBOL(dt_write_lock);
+
+bool dt_write_locked(const struct lu_env *env, struct dt_object *dt)
+{
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+
+	if (dt->do_ops->do_write_locked)
+		return dt->do_ops->do_write_locked(env, dt);
+
+	return dt->dd_owner == env;
+}
+EXPORT_SYMBOL(dt_write_locked);
+
+bool dt_object_stale(struct dt_object *dt)
+{
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+
+	if (!dt->do_ops->do_check_stale)
+		return false;
+
+	return dt->do_ops->do_check_stale(dt);
+}
+EXPORT_SYMBOL(dt_object_stale);
+
+bool dt_change_stale(struct dt_object *dt, bool val)
+{
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+
+	if (!dt->do_ops->do_change_stale)
+		return false;
+
+	return dt->do_ops->do_change_stale(dt, val);
+}
+EXPORT_SYMBOL(dt_change_stale);
+
 /*
  * Walk index and fill lu_page containers with key/record pairs
  *
@@ -1074,6 +1297,539 @@ void dt_index_page_adjust(struct folio **folios, const u32 npages,
 #endif
 EXPORT_SYMBOL(dt_index_page_adjust);
 
+int dt_declare_attr_get(const struct lu_env *env, struct dt_object *dt)
+{
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_declare_attr_get);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_ATTR_GET))
+		return cfs_fail_err;
+
+	return dt->do_ops->do_declare_attr_get(env, dt);
+}
+EXPORT_SYMBOL(dt_declare_attr_get);
+
+int dt_attr_get(const struct lu_env *env, struct dt_object *dt,
+		struct lu_attr *la)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_attr_get);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_ATTR_GET))
+		return cfs_fail_err;
+
+	rc = dt->do_ops->do_attr_get(env, dt, la);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_attr_get);
+
+int dt_declare_ref_add(const struct lu_env *env, struct dt_object *dt,
+		       struct thandle *th)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_REF_ADD))
+		return cfs_fail_err;
+
+	if (!dt->do_ops->do_declare_ref_add)
+		return 0;
+
+	rc = dt->do_ops->do_declare_ref_add(env, dt, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_declare_ref_add);
+
+int dt_ref_add(const struct lu_env *env, struct dt_object *dt,
+	       struct thandle *th)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_ref_add);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_REF_ADD))
+		return cfs_fail_err;
+
+	rc = dt->do_ops->do_ref_add(env, dt, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_ref_add);
+
+int dt_declare_ref_del(const struct lu_env *env, struct dt_object *dt,
+		       struct thandle *th)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_REF_DEL))
+		return cfs_fail_err;
+
+	if (!dt->do_ops->do_declare_ref_del)
+		return 0;
+
+	rc = dt->do_ops->do_declare_ref_del(env, dt, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_declare_ref_del);
+
+int dt_ref_del(const struct lu_env *env, struct dt_object *dt,
+	       struct thandle *th)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_ref_del);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_REF_DEL))
+		return cfs_fail_err;
+
+	rc = dt->do_ops->do_ref_del(env, dt, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_ref_del);
+
+int dt_bufs_get(const struct lu_env *env, struct dt_object *d,
+		struct niobuf_remote *rnb, struct niobuf_local *lnb,
+		int maxlnb, enum dt_bufs_type rw)
+{
+	int rc;
+
+	LASSERT(d);
+	LASSERT(d->do_body_ops);
+	LASSERT(d->do_body_ops->dbo_bufs_get);
+	rc = d->do_body_ops->dbo_bufs_get(env, d, rnb->rnb_offset,
+					  rnb->rnb_len, lnb, maxlnb, rw);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_bufs_get);
+
+int dt_read_prep(const struct lu_env *env, struct dt_object *d,
+		 struct niobuf_local *lnb, int n)
+{
+	int rc;
+
+	LASSERT(d);
+	LASSERT(d->do_body_ops);
+	LASSERT(d->do_body_ops->dbo_read_prep);
+
+	rc = d->do_body_ops->dbo_read_prep(env, d, lnb, n);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_read_prep);
+
+int dt_write_prep(const struct lu_env *env, struct dt_object *d,
+		  struct niobuf_local *lnb, int n)
+{
+	int rc;
+
+	LASSERT(d);
+	LASSERT(d->do_body_ops);
+	LASSERT(d->do_body_ops->dbo_write_prep);
+
+	rc = d->do_body_ops->dbo_write_prep(env, d, lnb, n);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_write_prep);
+
+int dt_write_commit(const struct lu_env *env, struct dt_object *d,
+		    struct niobuf_local *lnb, int n, struct thandle *th,
+		    u64 size)
+{
+	int rc;
+
+	LASSERT(d);
+	LASSERT(d->do_body_ops);
+	LASSERT(d->do_body_ops->dbo_write_commit);
+
+	rc = d->do_body_ops->dbo_write_commit(env, d, lnb, n, th, size);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_write_commit);
+
+int dt_declare_write(const struct lu_env *env, struct dt_object *dt,
+		     const struct lu_buf *buf, loff_t pos, struct thandle *th)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_body_ops);
+
+	if (!dt->do_body_ops->dbo_declare_write)
+		return 0;
+
+	rc = dt->do_body_ops->dbo_declare_write(env, dt, buf, pos, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_declare_write);
+
+ssize_t dt_write(const struct lu_env *env, struct dt_object *dt,
+		 const struct lu_buf *buf, loff_t *pos, struct thandle *th)
+{
+	ssize_t rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_body_ops);
+	LASSERT(dt->do_body_ops->dbo_write);
+
+	rc = dt->do_body_ops->dbo_write(env, dt, buf, pos, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_write);
+
+int dt_declare_punch(const struct lu_env *env, struct dt_object *dt,
+		     u64 start, u64 end, struct thandle *th)
+{
+	ssize_t rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_body_ops);
+	if (!dt->do_body_ops->dbo_declare_punch)
+		return 0;
+
+	rc = dt->do_body_ops->dbo_declare_punch(env, dt, start, end, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_declare_punch);
+
+int dt_punch(const struct lu_env *env, struct dt_object *dt,
+	     u64 start, u64 end, struct thandle *th)
+{
+	ssize_t rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_body_ops);
+	LASSERT(dt->do_body_ops->dbo_punch);
+
+	rc = dt->do_body_ops->dbo_punch(env, dt, start, end, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_punch);
+
+int dt_ladvise(const struct lu_env *env, struct dt_object *dt,
+	       u64 start, u64 end, int advice)
+{
+	LASSERT(dt);
+	LASSERT(dt->do_body_ops);
+
+	if (!dt->do_body_ops->dbo_ladvise)
+		return -EOPNOTSUPP;
+
+	return dt->do_body_ops->dbo_ladvise(env, dt, start, end, advice);
+}
+EXPORT_SYMBOL(dt_ladvise);
+
+int dt_declare_fallocate(const struct lu_env *env, struct dt_object *dt,
+			 struct lu_attr *attr, u64 start, u64 end, int mode,
+			 struct thandle *th, enum dt_fallocate_error_t *error_code)
+{
+	LASSERT(dt);
+
+	if (!dt->do_body_ops)
+		return -EOPNOTSUPP;
+
+	if (!dt->do_body_ops->dbo_declare_fallocate)
+		return -EOPNOTSUPP;
+
+	return dt->do_body_ops->dbo_declare_fallocate(env, dt, attr, start, end,
+						      mode, th, error_code);
+}
+EXPORT_SYMBOL(dt_declare_fallocate);
+
+loff_t dt_lseek(const struct lu_env *env, struct dt_object *d,
+		loff_t offset, int whence)
+{
+	LASSERT(d);
+	if (!d->do_body_ops)
+		return -EPROTO;
+	if (!d->do_body_ops->dbo_lseek)
+		return -EOPNOTSUPP;
+
+	return d->do_body_ops->dbo_lseek(env, d, offset, whence);
+}
+EXPORT_SYMBOL(dt_lseek);
+
+int dt_sync(const struct lu_env *env, struct dt_device *dev)
+{
+	int rc;
+
+	LASSERT(dev);
+	LASSERT(dev->dd_ops);
+	LASSERT(dev->dd_ops->dt_sync);
+
+	rc = dev->dd_ops->dt_sync(env, dev);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_sync);
+
+int dt_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
+			 const struct lu_attr *attr, const struct lu_buf *buf,
+			 const char *name, int fl, struct thandle *th)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_XATTR_SET))
+		return cfs_fail_err;
+
+	if (!dt->do_ops->do_declare_xattr_set)
+		return 0;
+
+	rc = dt->do_ops->do_declare_xattr_set(env, dt, attr, buf, name,
+					      fl, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_declare_xattr_set);
+
+int dt_xattr_set(const struct lu_env *env, struct dt_object *dt,
+		 const struct lu_buf *buf, const char *name, int fl,
+		 struct thandle *th)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_xattr_set);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_XATTR_SET))
+		return cfs_fail_err;
+
+	rc = dt->do_ops->do_xattr_set(env, dt, buf, name, fl, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_xattr_set);
+
+int dt_declare_xattr_del(const struct lu_env *env, struct dt_object *dt,
+			 const char *name, struct thandle *th)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_XATTR_DEL))
+		return cfs_fail_err;
+
+	if (!dt->do_ops->do_declare_xattr_del)
+		return 0;
+
+	rc = dt->do_ops->do_declare_xattr_del(env, dt, name, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_declare_xattr_del);
+
+int dt_xattr_del(const struct lu_env *env, struct dt_object *dt,
+		 const char *name, struct thandle *th)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_xattr_del);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_XATTR_DEL))
+		return cfs_fail_err;
+
+	rc = dt->do_ops->do_xattr_del(env, dt, name, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_xattr_del);
+
+int dt_declare_xattr_get(const struct lu_env *env, struct dt_object *dt,
+			 struct lu_buf *buf, const char *name)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_declare_xattr_get);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_XATTR_GET))
+		return cfs_fail_err;
+
+	rc = dt->do_ops->do_declare_xattr_get(env, dt, buf, name);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_declare_xattr_get);
+
+int dt_xattr_get(const struct lu_env *env, struct dt_object *dt,
+		 struct lu_buf *buf, const char *name)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_xattr_get);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_XATTR_GET))
+		return cfs_fail_err;
+
+	rc = dt->do_ops->do_xattr_get(env, dt, buf, name);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_xattr_get);
+
+int dt_xattr_list(const struct lu_env *env, struct dt_object *dt,
+		  const struct lu_buf *buf)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+	LASSERT(dt->do_ops->do_xattr_list);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_XATTR_LIST))
+		return cfs_fail_err;
+
+	rc = dt->do_ops->do_xattr_list(env, dt, buf);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_xattr_list);
+
+int dt_invalidate(const struct lu_env *env, struct dt_object *dt)
+{
+	LASSERT(dt);
+	LASSERT(dt->do_ops);
+
+	if (!dt->do_ops->do_invalidate)
+		return 0;
+
+	return dt->do_ops->do_invalidate(env, dt);
+}
+EXPORT_SYMBOL(dt_invalidate);
+
+int dt_declare_insert(const struct lu_env *env, struct dt_object *dt,
+		      const struct dt_rec *rec, const struct dt_key *key,
+		      struct thandle *th)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_index_ops);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_INSERT))
+		return cfs_fail_err;
+
+	if (!dt->do_index_ops->dio_declare_insert)
+		return 0;
+
+	rc = dt->do_index_ops->dio_declare_insert(env, dt, rec, key, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_declare_insert);
+
+int dt_insert(const struct lu_env *env, struct dt_object *dt,
+	      const struct dt_rec *rec, const struct dt_key *key,
+	      struct thandle *th)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_index_ops);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_INSERT))
+		return cfs_fail_err;
+
+	if (!dt->do_index_ops->dio_insert)
+		return -EOPNOTSUPP;
+
+	rc = dt->do_index_ops->dio_insert(env, dt, rec, key, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_insert);
+
+int dt_declare_delete(const struct lu_env *env, struct dt_object *dt,
+		      const struct dt_key *key, struct thandle *th)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_index_ops);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_DELETE))
+		return cfs_fail_err;
+
+	if (!dt->do_index_ops->dio_declare_delete)
+		return 0;
+
+	rc = dt->do_index_ops->dio_declare_delete(env, dt, key, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_declare_delete);
+
+int dt_delete(const struct lu_env *env, struct dt_object *dt,
+	      const struct dt_key *key, struct thandle *th)
+{
+	int rc;
+
+	LASSERT(dt);
+	LASSERT(dt->do_index_ops);
+
+	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DELETE))
+		return cfs_fail_err;
+
+	if (!dt->do_index_ops->dio_delete)
+		return -EOPNOTSUPP;
+
+	rc = dt->do_index_ops->dio_delete(env, dt, key, th);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_delete);
+
+int dt_commit_async(const struct lu_env *env, struct dt_device *dev)
+{
+	int rc;
+
+	LASSERT(dev);
+	LASSERT(dev->dd_ops);
+	LASSERT(dev->dd_ops->dt_commit_async);
+
+	rc = dev->dd_ops->dt_commit_async(env, dev);
+
+	return rc;
+}
+EXPORT_SYMBOL(dt_commit_async);
+
+/*
+ * Universal sysfs files for dt objects.
+ */
 static ssize_t uuid_show(struct kobject *kobj, struct attribute *attr,
 			 char *buf)
 {
