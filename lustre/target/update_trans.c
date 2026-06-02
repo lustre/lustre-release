@@ -35,16 +35,14 @@
 #include <lustre_update.h>
 #include <obd.h>
 #include <obd_class.h>
-
 #include "tgt_internal.h"
 
 /**
- * Dump top mulitple thandle
+ * top_multiple_thandle_dump() - Dump top mulitple thandle
+ * @tmt: top_thandle to be dumped
+ * @mask: debug mask
  *
  * Dump top multiple thandle and all of its sub thandle to the debug log.
- *
- * \param[in]mask	debug mask
- * \param[in]top_th	top_thandle to be dumped
  */
 static void top_multiple_thandle_dump(struct top_multiple_thandle *tmt,
 				      __u32 mask)
@@ -76,18 +74,18 @@ static void top_multiple_thandle_dump(struct top_multiple_thandle *tmt,
 }
 
 /**
- * Declare write update to sub device
+ * sub_declare_updates_write() - Declare write update to sub device
+ * @env: execution environment
+ * @record: update records being written
+ * @sub_th: sub transaction handle
+ * @record_size: total update record size
  *
  * Declare Write updates llog records to the sub device during distribute
  * transaction.
  *
- * \param[in] env	execution environment
- * \param[in] record	update records being written
- * \param[in] sub_th	sub transaction handle
- * \param[in] record_size total update record size
- *
- * \retval		0 if writing succeeds
- * \retval		negative errno if writing fails
+ * Return:
+ * * %0 if writing succeeds
+ * * %negative errno if writing fails
  */
 static int sub_declare_updates_write(const struct lu_env *env,
 				     struct llog_update_record *record,
@@ -130,19 +128,18 @@ out_put:
 }
 
 /**
- * write update to sub device
+ * sub_updates_write() - write update to sub device
+ * @env: execution environment
+ * @record: update records being written
+ * @sub_th: sub transaction handle
  *
  * Write llog update record to the sub device during distribute
  * transaction. If it succeeds, llog cookie of the record will be
  * returned by @cookie.
  *
- * \param[in] env	execution environment
- * \param[in] record	update records being written
- * \param[in] sub_th	sub transaction handle
- * \param[out] cookie	llog cookie of the update record.
- *
- * \retval		1 if writing succeeds
- * \retval		negative errno if writing fails
+ * Return:
+ * * %1 if writing succeeds
+ * * %negative errno if writing fails
  */
 static int sub_updates_write(const struct lu_env *env,
 			     struct llog_update_record *record,
@@ -305,7 +302,9 @@ llog_put:
 }
 
 /**
- * Prepare the update records.
+ * prepare_writing_updates() - Prepare the update records.
+ * @env: execution environment
+ * @tmt: top_multiple_thandle for distribute txn
  *
  * Merge params and ops into the update records, then initializing
  * the update buffer.
@@ -315,11 +314,9 @@ llog_put:
  * during transaction stop, it needs to be merged in one buffer,
  * so it will be written in the update log.
  *
- * \param[in] env	execution environment
- * \param[in] tmt	top_multiple_thandle for distribute txn
- *
- * \retval		0 if merging succeeds.
- * \retval		negaitive errno if merging fails.
+ * Return:
+ * * %0 if merging succeeds.
+ * * %negaitive errno if merging fails.
  */
 static int prepare_writing_updates(const struct lu_env *env,
 				   struct top_multiple_thandle *tmt)
@@ -366,11 +363,10 @@ static int prepare_writing_updates(const struct lu_env *env,
 }
 
 /**
- * Top thandle commit callback
+ * top_trans_committed_cb() - Top thandle commit callback
+ * @tmt: top thandle to be committed.
  *
  * This callback will be called when all of sub transactions are committed.
- *
- * \param[in] th	top thandle to be committed.
  */
 static void top_trans_committed_cb(struct top_multiple_thandle *tmt)
 {
@@ -389,6 +385,13 @@ static void top_trans_committed_cb(struct top_multiple_thandle *tmt)
 	RETURN_EXIT;
 }
 
+/**
+ * lookup_sub_thandle() - Search for sub_handle within top handle
+ * @tmt: top_multiple_thandle for lookup
+ * @dt_dev: dt_device involved in the transaction
+ *
+ * Returns sub_handle on success or %NULL on failure
+ */
 struct sub_thandle *lookup_sub_thandle(struct top_multiple_thandle *tmt,
 				       struct dt_device *dt_dev)
 {
@@ -402,6 +405,13 @@ struct sub_thandle *lookup_sub_thandle(struct top_multiple_thandle *tmt,
 }
 EXPORT_SYMBOL(lookup_sub_thandle);
 
+/**
+ * create_sub_thandle() - create sub_handle
+ * @tmt: top_multiple_thandle where sub_handle should be created
+ * @dt_dev: dt_device involved in the transaction
+ *
+ * Returns sub_handle on success or %NULL on failure
+ */
 struct sub_thandle *create_sub_thandle(struct top_multiple_thandle *tmt,
 				       struct dt_device *dt_dev)
 {
@@ -449,15 +459,14 @@ static void sub_trans_commit_cb_internal(struct top_multiple_thandle *tmt,
 }
 
 /**
- * sub thandle commit callback
+ * sub_trans_commit_cb() - sub thandle commit callback
+ * @env: execution environment
+ * @sub_th: sub thandle being committed
+ * @cb: commit callback
+ * @err: trans result
  *
  * Mark the sub thandle to be committed and if all sub thandle are committed
  * notify the top thandle.
- *
- * \param[in] env	execution environment
- * \param[in] sub_th	sub thandle being committed
- * \param[in] cb	commit callback
- * \param[in] err	trans result
  */
 static void sub_trans_commit_cb(struct lu_env *env,
 				struct thandle *sub_th,
@@ -480,13 +489,14 @@ static void sub_thandle_register_commit_cb(struct sub_thandle *st,
 }
 
 /**
- * Sub thandle stop call back
+ * sub_trans_stop_cb() - Sub thandle stop call back
+ * @env: execution environment
+ * @sub_th: sub thandle to be stopped
+ * @cb: per-transaction callback
+ * @err: result of sub trans (@cb)
  *
  * After sub thandle is stopped, it will call this callback to notify
  * the top thandle.
- *
- * \param[in] th	sub thandle to be stopped
- * \param[in] rc	result of sub trans
  */
 static void sub_trans_stop_cb(struct lu_env *env,
 			      struct thandle *sub_th,
@@ -525,16 +535,16 @@ static void sub_thandle_register_stop_cb(struct sub_thandle *st,
 }
 
 /**
- * Create sub thandle
+ * sub_thandle_trans_create() - Create sub thandle
+ * @env: execution environment
+ * @top_th: top thandle
+ * @st: sub_thandle
  *
  * Create transaction handle for sub_thandle
  *
- * \param[in] env	execution environment
- * \param[in] th	top thandle
- * \param[in] st	sub_thandle
- *
- * \retval		0 if creation succeeds.
- * \retval		negative errno if creation fails.
+ * Return:
+ * * %0 if creation succeeds.
+ * * %negative errno if creation fails.
  */
 int sub_thandle_trans_create(const struct lu_env *env,
 			     struct top_thandle *top_th,
@@ -555,16 +565,16 @@ int sub_thandle_trans_create(const struct lu_env *env,
 }
 
 /**
- * Create the top transaction.
+ * top_trans_create() - Create the top transaction.
+ * @env: execution environment
+ * @master_dev: master_dev the top thandle will be created
  *
  * Create the top transaction on the master device. It will create a top
  * thandle and a sub thandle on the master device.
  *
- * \param[in] env		execution environment
- * \param[in] master_dev	master_dev the top thandle will be created
- *
- * \retval			pointer to the created thandle.
- * \retval			ERR_PTR(errno) if creation failed.
+ * Return:
+ * * %pointer to the created thandle.
+ * * %ERR_PTR(errno) if creation failed.
  */
 struct thandle *
 top_trans_create(const struct lu_env *env, struct dt_device *master_dev)
@@ -594,16 +604,16 @@ top_trans_create(const struct lu_env *env, struct dt_device *master_dev)
 EXPORT_SYMBOL(top_trans_create);
 
 /**
- * Declare write update transaction
+ * declare_updates_write() - Declare write update transaction
+ * @env: execution environment
+ * @tmt: top multiple transaction handle
  *
  * Check if there are updates being recorded in this transaction,
  * it will write the record into the disk.
  *
- * \param[in] env	execution environment
- * \param[in] tmt	top multiple transaction handle
- *
- * \retval		0 if writing succeeds
- * \retval		negative errno if writing fails
+ * Return:
+ * * %0 if writing succeeds
+ * * %negative errno if writing fails
  */
 static int declare_updates_write(const struct lu_env *env,
 				 struct top_multiple_thandle *tmt)
@@ -628,11 +638,12 @@ static int declare_updates_write(const struct lu_env *env,
 }
 
 /**
- * Assign batchid to the distribute transaction.
+ * distribute_txn_assign_batchid() - Assign batchid to the distribute
+ *                                   transaction.
+ * @new: the distribute txn for assignment
  *
  * Assign batchid to the distribute transaction
  *
- * \param[in] tmt	distribute transaction
  */
 static void distribute_txn_assign_batchid(struct top_multiple_thandle *new)
 {
@@ -655,11 +666,11 @@ static void distribute_txn_assign_batchid(struct top_multiple_thandle *new)
 }
 
 /**
- * Insert distribute transaction to the distribute txn list.
+ * distribute_txn_insert_by_batchid() - Insert distribute transaction to the
+ *                                      distribute txn list.
+ * @new: the distribute txn to be inserted.
  *
  * Insert distribute transaction to the distribute txn list.
- *
- * \param[in] new	the distribute txn to be inserted.
  */
 void distribute_txn_insert_by_batchid(struct top_multiple_thandle *new)
 {
@@ -699,7 +710,9 @@ void distribute_txn_insert_by_batchid(struct top_multiple_thandle *new)
 }
 
 /**
- * Prepare cross-MDT operation.
+ * prepare_multiple_node_trans() - Prepare cross-MDT operation.
+ * @env: execution environment
+ * @tmt: top transaction handle
  *
  * Create the update record buffer to record updates for cross-MDT operation,
  * add master sub transaction to tt_sub_trans_list, and declare the update
@@ -713,11 +726,9 @@ void distribute_txn_insert_by_batchid(struct top_multiple_thandle *new)
  * And also master thandle will be added to the sub_th list, so it will be
  * easy to track the commit status.
  *
- * \param[in] env	execution environment
- * \param[in] th	top transaction handle
- *
- * \retval		0 if preparation succeeds.
- * \retval		negative errno if preparation fails.
+ * Return:
+ * * %0 if preparation succeeds.
+ * * %negative errno if preparation fails.
  */
 static int prepare_multiple_node_trans(const struct lu_env *env,
 				       struct top_multiple_thandle *tmt)
@@ -743,16 +754,16 @@ static int prepare_multiple_node_trans(const struct lu_env *env,
 }
 
 /**
- * start the top transaction.
+ * top_trans_start() - start the top transaction.
+ * @env: execution environment
+ * @master_dev: master_dev the top thandle will be start
+ * @th: top thandle
  *
  * Start all of its sub transactions, then start master sub transaction.
  *
- * \param[in] env		execution environment
- * \param[in] master_dev	master_dev the top thandle will be start
- * \param[in] th		top thandle
- *
- * \retval			0 if transaction start succeeds.
- * \retval			negative errno if start fails.
+ * Return:
+ * * %0 if transaction start succeeds.
+ * * %negative errno if start fails.
  */
 int top_trans_start(const struct lu_env *env, struct dt_device *master_dev,
 		    struct thandle *th)
@@ -802,17 +813,17 @@ out:
 EXPORT_SYMBOL(top_trans_start);
 
 /**
- * Check whether we need write updates record
+ * top_check_write_updates() - Check whether we need write updates record
+ * @top_th: top thandle.
  *
  * Check if the updates for the top_thandle needs to be writen
  * to all targets. Only if the transaction succeeds and the updates
  * number > 2, it will write the updates,
  *
- * \params [in] top_th	top thandle.
- *
- * \retval		true if it needs to write updates
- * \retval		false if it does not need to write updates
- **/
+ * Return:
+ * * %true if it needs to write updates
+ * * %false if it does not need to write updates
+ */
 static bool top_check_write_updates(struct top_thandle *top_th)
 {
 	struct top_multiple_thandle	*tmt;
@@ -841,15 +852,15 @@ static bool top_check_write_updates(struct top_thandle *top_th)
 }
 
 /**
- * Check if top transaction is stopped
+ * top_trans_is_stopped() - Check if top transaction is stopped
+ * @top_th: top thandle
  *
  * Check if top transaction is stopped, only if all sub transaction
  * is stopped, then the top transaction is stopped.
  *
- * \param [in] top_th	top thandle
- *
- * \retval		true if the top transaction is stopped.
- * \retval		false if the top transaction is not stopped.
+ * Return:
+ * * %true if the top transaction is stopped.
+ * * %false if the top transaction is not stopped.
  */
 static bool top_trans_is_stopped(struct top_thandle *top_th)
 {
@@ -873,13 +884,12 @@ static bool top_trans_is_stopped(struct top_thandle *top_th)
 }
 
 /**
- * Wait result of top transaction
+ * top_trans_wait_result() - Wait result of top transaction
+ * @top_th: top thandle.
  *
  * Wait until all sub transaction get its result.
  *
- * \param [in] top_th	top thandle.
- *
- * \retval		the result of top thandle.
+ * Returns the result of top thandle.
  */
 static int top_trans_wait_result(struct top_thandle *top_th)
 {
@@ -890,17 +900,17 @@ static int top_trans_wait_result(struct top_thandle *top_th)
 }
 
 /**
- * Stop the top transaction.
+ * top_trans_stop() - Stop the top transaction.
+ * @env: execution environment
+ * @master_dev: master_dev the top thandle will be created
+ * @th: top thandle
  *
  * Stop the transaction on the master device first, then stop transactions
  * on other sub devices.
  *
- * \param[in] env		execution environment
- * \param[in] master_dev	master_dev the top thandle will be created
- * \param[in] th		top thandle
- *
- * \retval			0 if stop transaction succeeds.
- * \retval			negative errno if stop transaction fails.
+ * Return:
+ * * %0 if stop transaction succeeds.
+ * * %negative errno if stop transaction fails.
  */
 int top_trans_stop(const struct lu_env *env, struct dt_device *master_dev,
 		   struct thandle *th)
@@ -1086,17 +1096,17 @@ stop_other_trans:
 EXPORT_SYMBOL(top_trans_stop);
 
 /**
- * Create top_multiple_thandle for top_thandle
+ * top_trans_create_tmt() - Create top_multiple_thandle for top_thandle
+ * @env: execution environment
+ * @top_th: the top thandle
  *
  * Create top_mutilple_thandle to manage the mutiple node transaction
  * for top_thandle, and it also needs to add master sub thandle to the
  * sub trans list now.
  *
- * \param[in] env	execution environment
- * \param[in] top_th	the top thandle
- *
- * \retval	0 if creation succeeds
- * \retval	negative errno if creation fails
+ * Return:
+ * * %0 if creation succeeds
+ * * %negative errno if creation fails
  */
 int top_trans_create_tmt(const struct lu_env *env,
 			 struct top_thandle *top_th)
@@ -1139,16 +1149,16 @@ create_sub_thandle_with_thandle(struct top_thandle *top_th,
 }
 
 /**
- * Get sub thandle.
+ * thandle_get_sub_by_dt() - Get sub thandle.
+ * @env: execution environment
+ * @th: thandle on the top layer.
+ * @sub_dt: sub dt_device used to get sub transaction
  *
  * Get sub thandle from the top thandle according to the sub dt_device.
  *
- * \param[in] env	execution environment
- * \param[in] th	thandle on the top layer.
- * \param[in] sub_dt	sub dt_device used to get sub transaction
- *
- * \retval		thandle of sub transaction if succeed
- * \retval		PTR_ERR(errno) if failed
+ * Return:
+ * * %thandle of sub transaction if succeed
+ * * %PTR_ERR(errno) if failed
  */
 struct thandle *thandle_get_sub_by_dt(const struct lu_env *env,
 				      struct thandle *th,
@@ -1223,11 +1233,10 @@ stop_trans:
 EXPORT_SYMBOL(thandle_get_sub_by_dt);
 
 /**
- * Top multiple thandle destroy
+ * top_multiple_thandle_destroy() - Top multiple thandle destroy
+ * @kref: Pointer to struct kref
  *
  * Destroy multiple thandle and all its sub thandle.
- *
- * \param[in] kref	Pointer to struct kref
  */
 void top_multiple_thandle_destroy(struct kref *kref)
 {
@@ -1256,16 +1265,15 @@ void top_multiple_thandle_destroy(struct kref *kref)
 EXPORT_SYMBOL(top_multiple_thandle_destroy);
 
 /**
- * Cancel the update log on MDTs
+ * distribute_txn_cancel_records() - Cancel the update log on MDTs
+ * @env: execution environment
+ * @tmt: the top multiple thandle whose updates records will be cancelled.
  *
  * Cancel the update log on MDTs then destroy the thandle.
  *
- * \param[in] env	execution environment
- * \param[in] tmt	the top multiple thandle whose updates records
- *                      will be cancelled.
- *
- * \retval		0 if cancellation succeeds.
- * \retval		negative errno if cancellation fails.
+ * Return:
+ * * %0 if cancellation succeeds.
+ * * %negative errno if cancellation fails.
  */
 static int distribute_txn_cancel_records(const struct lu_env *env,
 					 struct top_multiple_thandle *tmt)
@@ -1316,15 +1324,14 @@ struct distribute_txn_bid_data {
 };
 
 /**
- * callback of updating commit batchid
+ * distribute_txn_batchid_cb() - callback of updating commit batchid
+ * @env: execution environment
+ * @th: thandle to updating commit batchid
+ * @cb: commit callback
+ * @err: result of thandle
  *
  * Updating commit batchid then wake up the commit thread to cancel the
  * records.
- *
- * \param[in]env	execution environment
- * \param[in]th		thandle to updating commit batchid
- * \param[in]cb		commit callback
- * \param[in]err	result of thandle
  */
 static void distribute_txn_batchid_cb(struct lu_env *env,
 				      struct thandle *th,
@@ -1351,17 +1358,17 @@ static void distribute_txn_batchid_cb(struct lu_env *env,
 }
 
 /**
- * Update the commit batchid in disk
+ * distribute_txn_commit_batchid_update() - Update the commit batchid in disk
+ * @env: execution environment
+ * @tdtd: distribute transaction structure
+ * @batchid: commit batchid to be updated
  *
  * Update commit batchid in the disk, after this is committed, it can start
  * to cancel the update records.
  *
- * \param[in] env	execution environment
- * \param[in] tdtd	distribute transaction structure
- * \param[in] batchid	commit batchid to be updated
- *
- * \retval		0 if update succeeds.
- * \retval		negative errno if update fails.
+ * Return:
+ * * %0 if update succeeds.
+ * * %negative errno if update fails.
  */
 static int
 distribute_txn_commit_batchid_update(const struct lu_env *env,
@@ -1426,16 +1433,17 @@ stop:
 }
 
 /**
- * Init commit batchid for distribute transaction.
+ * distribute_txn_commit_batchid_init() - Init commit batchid for distribute
+ *                                        transaction.
+ * @env: execution environment
+ * @tdtd: distribute transaction whose batchid is initialized.
  *
  * Initialize the batchid object and get commit batchid from the object.
  *
- * \param[in] env	execution environment
- * \param[in] tdtd	distribute transaction whose batchid is initialized.
- *
- * \retval		0 if initialization succeeds.
- * \retval		negative errno if initialization fails.
- **/
+ * Return:
+ * * %0 if initialization succeeds.
+ * * %negative errno if initialization fails.
+ */
 static int
 distribute_txn_commit_batchid_init(const struct lu_env *env,
 				   struct target_distribute_txn_data *tdtd)
@@ -1501,16 +1509,16 @@ out_put:
 #endif
 
 /**
- * manage the distribute transaction thread
+ * distribute_txn_commit_thread() - manage the distribute transaction thread
+ * @_arg: argument for commit thread
  *
  * Distribute transaction are linked to the list, and once the distribute
  * transaction is committed, it will update the last committed batchid first,
  * after it is committed, it will cancel the records.
  *
- * \param[in] _arg	argument for commit thread
- *
- * \retval		0 if thread is running successfully
- * \retval		negative errno if the thread can not be run.
+ * Return:
+ * * %0 if thread is running successfully
+ * * %negative errno if the thread can not be run.
  */
 static int distribute_txn_commit_thread(void *_arg)
 {
@@ -1630,15 +1638,17 @@ static int distribute_txn_commit_thread(void *_arg)
 }
 
 /**
- * Start llog cancel thread
+ * distribute_txn_init() - Start llog cancel thread
+ * @env: Lustre environment
+ * @lut: Lustre target (MDT or OST)
+ * @tdtd: cancel log thread to be started.
+ * @index: Used by kthread_create() as unique thread identifier
  *
  * Start llog cancel(master/slave) thread on LOD
  *
- * \param[in]lclt	cancel log thread to be started.
- *
- * \retval		0 if the thread is started successfully.
- * \retval		negative errno if the thread is not being
- *                      started.
+ * Return:
+ * * %0 if the thread is started successfully.
+ * * %negative errno if the thread is not being started.
  */
 int distribute_txn_init(const struct lu_env *env,
 			struct lu_target *lut,
@@ -1690,12 +1700,12 @@ int distribute_txn_init(const struct lu_env *env,
 EXPORT_SYMBOL(distribute_txn_init);
 
 /**
- * Stop llog cancel thread
+ * distribute_txn_fini() - Stop llog cancel thread
+ * @env: Lustre environment
+ * @tdtd: cancel log thread to be stopped.
  *
  * Stop llog cancel(master/slave) thread on LOD and also destory
  * all of transaction in the list.
- *
- * \param[in]lclt	cancel log thread to be stopped.
  */
 void distribute_txn_fini(const struct lu_env *env,
 			 struct target_distribute_txn_data *tdtd)
