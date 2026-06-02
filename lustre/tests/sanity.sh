@@ -937,8 +937,8 @@ test_17p() {
 run_test 17p "symlink overwrite directory error message"
 
 test_17q() {
-	(( $MDS1_VERSION >= $(version_code 2.14.0-ddn212) )) ||
-		skip "Need MDS >= 2.14.0-ddn212 for symlink xattr"
+	(( $MDS1_VERSION >= $(version_code v2_16_56-96-gd0c75da783) )) ||
+		skip "Need MDS >= 2.16.56.96 for symlink xattr"
 	local mdts=$(mdts_nodes)
 
 	ln -s foo $DIR/$tfile
@@ -3153,8 +3153,9 @@ test_27K() {
 run_test 27K "basic ops on dir with foreign LMV"
 
 test_27Ke() {
-	(( $MDS1_VERSION >= $(version_code 2.17.51.24) )) ||
-		skip "need MDS >= 2.17.51.24 for enable_foreign_dir"
+	(( $MDS1_VERSION >= $(version_code v2_17_52-77-gaec30763f9) )) ||
+		skip "need MDS >= 2.17.52.77 for enable_foreign_dir"
+
 
 	local param=mdt.$FSNAME-*.enable_foreign_dir
 	local param_gid=${param}_gid
