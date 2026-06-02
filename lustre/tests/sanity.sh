@@ -2744,7 +2744,7 @@ test_27D() {
 	(( $MDS1_VERSION >= $(version_code $SEL_VER) )) ||
 		SKIP27D+=" -s 34"
 	(( $MDS1_VERSION >= $(version_code $flr_ec_ver) )) ||
-		SKIP27D+=" -s 52,53,54,56,57,58,63,64,65"
+		SKIP27D+=" -s 52,53,54,56,57,58,63,64,65,67"
 
 	local ec_enable=$($LCTL get_param -n llite.*.enable_erasure_coding)
 	$LCTL set_param llite.*.enable_erasure_coding=1
