@@ -4085,6 +4085,7 @@ run_test 219 "Consolidate peer entries"
 check_route_aliveness() {
 	local node="$1"
 	local expect="$2"
+	local noerror="${3:-false}"
 
 	local lctl_status
 	local lnetctl_status
@@ -4129,13 +4130,17 @@ check_route_aliveness() {
 		waited=$((SECONDS - begin))
 	done
 
-	if ! got_expected; then
+	if ! $got_expected; then
 		echo "lctl shows:"
 		$lctl_cmd
 		echo "lnetctl shows:"
 		$lnetctl_cmd
 		echo "debugfs shows:"
 		$debugfs_cmd
+
+		if ${noerror}; then
+			return 1
+		fi
 
 		[[ $lctl_status == $expect ]] ||
 			error "Wanted '$expect' lctl found '$lctl_status'"
@@ -4197,8 +4202,7 @@ check_router_ni_status() {
 	return 0
 }
 
-
-do_basic_rtr_test() {
+config_routes() {
 	for router in ${!ROUTER_INTERFACES[@]}; do
 		do_node $router "$LNETCTL set routing 1" ||
 			error "Unable to enable routing on $router"
@@ -4227,6 +4231,10 @@ do_basic_rtr_test() {
 		check_route_aliveness "$rpeer" "up" ||
 			return $?
 	done
+}
+
+do_basic_rtr_test() {
+	config_routes || return $?
 
 	for rpeer in ${!RPEER_NIDS[@]}; do
 		local rpeer_nids=( ${RPEER_NIDS[$rpeer]} )
@@ -6565,6 +6573,82 @@ test_502() {
 	cleanup_health_test
 }
 run_test 502 "Verify lnetctl peer set --health (MR)"
+
+test_550() {
+	[[ ${NETTYPE} == tcp* ]] ||
+		skip "Need tcp NETTYPE to fail a single local rail"
+
+	(( ${#INTERFACES[@]} >= 2 )) ||
+		skip "Need at least 2 local interfaces for multi-rail"
+
+	setup_router_test lnet_peer_discovery_disabled=1 || return $?
+
+	# Add a second local NI on the local net so the gateway is reachable
+	# via two local rails (multi-rail).
+	add_net $LOCAL_NET ${INTERFACES[1]} || return $?
+	LNIDS[1]=$($LCTL list_nids | tail -1)
+
+	# Configure this peer as MR, all others stay non-MR
+	local all_nodes=$(comma_list ${ROUTERS[@]} ${RPEERS[@]} $HOSTNAME)
+	do_nodes $all_nodes "$LNETCTL peer add --prim ${LNIDS[0]} --nid ${LNIDS[1]}" ||
+		error "Failed to add peer rc=$?"
+
+	config_routes || error "Failed to configure routes rc=$?"
+
+	local rpeer=${RPEERS[0]}
+	local rpeer_nids=( ${RPEER_NIDS[$rpeer]} )
+	local i
+
+	# Ping via the secondary NI so path selection favors it for rpeer
+	local snid=$($LCTL list_nids | tail -1)
+	do_lnetctl ping --source $snid ${rpeer_nids[0]} ||
+		error "Failed to ping from $snid to ${rpeer_nids[0]}"
+
+	check_route_aliveness "$HOSTNAME" "up" || return $?
+
+	# Drop a marker on the console so we can scope the search for a route
+	# up->down transition to events that happen after we fail the rail.
+	# lnet_set_route_aliveness() logs such transitions via CERROR, which
+	# reaches the console
+	local marker="DDN-6845-${testnum}-${RANDOM}"
+	log "$marker"
+
+	echo "Fail a send via ${INTERFACES[1]}"
+	$LCTL net_drop_add -s ${LNIDS[1]} -d "*@$REMOTE_NET" -e local_error -r 1 ||
+		error "Failed to add $REMOTE_NET drop rule rc=$?"
+	$LCTL net_drop_add -s ${LNIDS[1]} -d "*@$LOCAL_NET" -e local_error -r 1 ||
+		error "Failed to add $LOCAL_NET drop rule rc=$?"
+
+	echo "Set fail_loc to allow disconnect on simulated error"
+
+	#define CFS_FAIL_SOCK_CONN              0xe020
+	$LCTL set_param fail_loc=0x8000e020
+	! do_lnetctl ping ${rpeer_nids[0]} ||
+		error "Ping should have failed"
+
+	check_route_aliveness "$HOSTNAME" "down" true &&
+		error "Route went down after single local-rail failure"
+
+	local downtrans
+	downtrans=$( dmesg | sed -n "/$marker/,\$p" |
+		     grep -c "has gone from up to down")
+	((downtrans == 0)) ||
+		error "route marked down on single local-rail failure $downtrans up->down transition(s)"
+
+	check_route_aliveness "$HOSTNAME" "up" ||
+		error "route down after single local-rail failure"
+
+	# Regression guard: confirm the route goes down when the gateway is
+	# unreachable from all local NIs, not just the failed one.
+	do_node ${ROUTERS[0]} "$LNETCTL lnet unconfigure" ||
+		error "Failed to unconfigure lnet on ${ROUTERS[0]}"
+
+	check_route_aliveness "$HOSTNAME" "down" ||
+		error "route didn't go down"
+
+	cleanup_router_test
+}
+run_test 550 "DD-off: keep route up when gw reachable via another local NI"
 
 test_600() {
 	local actual="$TMP/sanity-lnet-$testnum-actual.yaml"

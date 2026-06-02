@@ -1726,6 +1726,46 @@ lnet_rtrpools_disable(void)
 		      3 * (alive_router_check_interval + router_ping_timeout));
 }
 
+/**
+ * lnet_local_ni_superseded() - Test if path selection prefers another
+ *                               local NI over @ni.
+ * @ni: Local NI to evaluate.
+ *
+ * Uses the same (fatal state, health value) ordering as
+ * lnet_get_best_ni(): a non-fatal NI beats a fatal one; among
+ * equal-fatal NIs, higher ni_healthv wins.
+ *
+ * ni_fatal_error_on alone is not sufficient. Only some LNDs set it,
+ * in narrow cases such as o2iblnd IB_EVENT_PORT_ERR. Connection
+ * failures that decrement ni_healthv do not set it, so a fatal-only
+ * check misses a degraded-but-not-fatal NI.
+ *
+ * Context: Caller must hold a net lock. net_ni_list modifications
+ *          require net_lock/EX, so any net lock makes the traversal
+ *          safe. ni_fatal_error_on and ni_healthv are atomics.
+ * Return: true if another NI on the same net is preferred over @ni,
+ *         false if @ni is the NI path selection would choose.
+ */
+static bool
+lnet_local_ni_superseded(struct lnet_ni *ni)
+{
+	bool ni_fatal = atomic_read(&ni->ni_fatal_error_on);
+	int ni_healthv = atomic_read(&ni->ni_healthv);
+	struct lnet_ni *alt;
+
+	list_for_each_entry(alt, &ni->ni_net->net_ni_list, ni_netlist) {
+		if (alt == ni)
+			continue;
+		if (ni_fatal && !atomic_read(&alt->ni_fatal_error_on))
+			return true;
+		if (atomic_read(&alt->ni_fatal_error_on) == ni_fatal &&
+		    atomic_read(&alt->ni_healthv) > ni_healthv)
+			return true;
+	}
+
+	return false;
+}
+
 /*
  * ni: local NI used to communicate with the peer
  * nid: peer NID
@@ -1820,8 +1860,20 @@ lnet_notify(struct lnet_ni *ni, struct lnet_nid *nid, bool alive, bool reset,
 		 */
 		if (lnet_is_discovery_disabled(lp)) {
 			list_for_each_entry(route, &lp->lp_routes, lr_gwlist) {
-				if (nid_same(&route->lr_nid, &lpni->lpni_nid))
-					lnet_set_route_aliveness(route, alive);
+				if (!nid_same(&route->lr_nid, &lpni->lpni_nid))
+					continue;
+				/*
+				 * When the local NI caused the connection
+				 * failure, the gateway may still be reachable
+				 * via a healthier NI on the same net. Marking
+				 * the route down triggers the router checker
+				 * to revive it over the healthy NI, flapping
+				 * the route and disrupting traffic on that NI.
+				 */
+				if (!alive && ni &&
+				    lnet_local_ni_superseded(ni))
+					continue;
+				lnet_set_route_aliveness(route, alive);
 			}
 		}
 	}

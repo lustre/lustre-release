@@ -545,7 +545,7 @@ simulate_error:
 		ksocknal_uncheck_zc_req(tx);
 
 	/* it's not an error if conn is being closed */
-	if (!error_sim)
+	if (!error_sim || CFS_FAIL_CHECK(CFS_FAIL_SOCK_CONN))
 		ksocknal_close_conn_and_siblings(conn,
 						 (conn->ksnc_closing) ? 0 : rc);
 
