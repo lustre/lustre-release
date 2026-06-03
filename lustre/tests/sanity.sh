@@ -20518,15 +20518,18 @@ test_156() {
 }
 run_test 156 "Verification of tunables"
 
-test_157()
+test_157a()
 {
+	(( $MDS1_VERSION >= $(version_code v2_16_51-30-g84100d7f7d) )) ||
+		skip "Need MDS >= 2.16.52 for lustre.pin support"
+
 	mkdir_on_mdt0 $DIR/$tdir
 	llapi_pool_test -d $DIR/$tdir ||
 		error "llapi_pool_test failed"
 }
-run_test 157 "llapi pool pinning API tests"
+run_test 157a "llapi pool pinning API tests"
 
-test_157a()
+test_157b()
 {
 	[ "$UID" != 0 ] && skip "must run as root"
 	[ -z "$(lctl get_param -n mdc.*-mdc-*.connect_flags | grep xattr)" ] &&
@@ -20535,6 +20538,9 @@ test_157a()
 		skip_env "could not find setfattr"
 	[ -z "$(which getfattr 2>/dev/null)" ] &&
 		skip_env "could not find getfattr"
+
+	(( $MDS1_VERSION >= $(version_code v2_17_53-1-g1bf8713c57) )) ||
+		skip "Need MDS >= 2.17.53 for lustre.pin support"
 
 	local dir=$DIR/$tdir
 	local file=$dir/$tfile
@@ -20567,7 +20573,7 @@ test_157a()
 	[ -z "$noxatrr_file_val" ] ||
 		error "noxatrr_file lustre.pin '$noxatrr_file_val' != ''"
 }
-run_test 157a "lustre.pin inheritance on create"
+run_test 157b "lustre.pin inheritance on create"
 
 test_160a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
