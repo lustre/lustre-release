@@ -980,7 +980,16 @@ static struct {
 };
 
 /**
- * Create and initialize new empty namespace.
+ * ldlm_namespace_new() - Create and initialize new empty namespace.
+ * @obd: OBD device associated with LDLM namespace
+ * @name: Namespace name
+ * @client: LDLM namespace type (server/client)
+ * @apt: LDLM pools in namespace
+ * @ns_type: LDLM namespace type detailed (MGS/OSC)
+ *
+ * Return:
+ * * %valid ldlm_namespace pointer on success
+ * * %error pointer on failure
  */
 struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 					  enum ldlm_side client,
@@ -1118,7 +1127,7 @@ out_ref:
 }
 EXPORT_SYMBOL(ldlm_namespace_new);
 
-/**
+/*
  * Cancel and destroy all locks on a resource.
  *
  * If flags contains FL_LOCAL_ONLY, don't try to tell the server, just
@@ -1233,11 +1242,17 @@ static int ldlm_resource_complain(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 }
 
 /**
- * Cancel and destroy all locks in the namespace.
+ * ldlm_namespace_cleanup() - Cancel and destroy all locks in the namespace.
+ * @ns: Pointer to the LDLM namespace
+ * @flags: Flags related to lock operation
  *
  * Typically used during evictions when server notified client that it was
  * evicted and all of its state needs to be destroyed.
  * Also used during shutdown.
+ *
+ * Return:
+ * * %ELDLM_OK on success
+ * * %negative on error
  */
 int ldlm_namespace_cleanup(struct ldlm_namespace *ns, __u64 flags)
 {
@@ -1254,7 +1269,7 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, __u64 flags)
 }
 EXPORT_SYMBOL(ldlm_namespace_cleanup);
 
-/**
+/*
  * Attempts to free namespace.
  *
  * Only used when namespace goes away, like during an unmount.
@@ -1307,13 +1322,17 @@ force_wait:
 }
 
 /**
- * Performs various cleanups for passed \a ns to make it drop refc and be
- * ready for freeing. Waits for refc == 0.
+ * ldlm_namespace_free_prior() - Performs various cleanups for passed @ns to
+ *                               make it drop refc and be ready for freeing.
+ *                               Waits for refc == 0.
+ * @ns: Pointer to the LDLM namespace
+ * @imp: Import associated with namespace
+ * @force: if %True doesn't return -EINTR. If %False can retry.
  *
  * The following is done:
- * (0) Unregister \a ns from its list to make inaccessible for potential
+ * (0) Unregister @ns from its list to make inaccessible for potential
  * users like pools thread and others;
- * (1) Clear all locks in \a ns.
+ * (1) Clear all locks in @ns.
  */
 void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
 			       struct obd_import *imp, int force)
@@ -1350,9 +1369,12 @@ void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
 EXPORT_SYMBOL(ldlm_namespace_free_prior);
 
 /**
- * Performs freeing memory structures related to \a ns. This is only done
+ * ldlm_namespace_free_post() - Performs freeing memory structures related to @ns
+ * @ns: Pointer to the LDLM namespace
+ *
+ * Performs freeing memory structures related to @ns. This is only done
  * when ldlm_namespce_free_prior() successfully removed all resources
- * referencing \a ns and its refc == 0.
+ * referencing @ns and its refc == 0.
  */
 void ldlm_namespace_free_post(struct ldlm_namespace *ns)
 {
@@ -1386,7 +1408,11 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns)
 EXPORT_SYMBOL(ldlm_namespace_free_post);
 
 /**
- * Cleanup the resource, and free namespace.
+ * ldlm_namespace_free() - Cleanup the resource, and free namespace.
+ * @ns: Pointer to the LDLM namespace
+ * @imp: Import associated with namespace
+ * @force: if %True doesn't return -EINTR. If %False can retry.
+ *
  * bug 12864:
  * Deadlock issue:
  * proc1: destroy import
@@ -1589,10 +1615,20 @@ static void ldlm_resource_free(struct ldlm_resource *res)
 }
 
 /**
- * Return a reference to resource with given name, creating it if necessary.
- * Args: namespace with ns_lock unlocked
- * Locks: takes and releases NS hash-lock and res->lr_lock
- * Returns: referenced, unlocked ldlm_resource or ERR_PTR
+ * ldlm_resource_get() - Return a reference to resource with given name,
+ *                       creating it if necessary.
+ * @ns: Pointer to the LDLM namespace to get resource
+ * @name: Resouce identifier
+ * @type: Resource type
+ * @create: if %0 return already created resource
+ *          if %1 create & return resource
+ * 
+ * Caller Args namespace with ns_lock should not be held (unlocked)
+ * Locks: Takes and releases NS hash-lock and res->lr_lock.
+ *
+ * Returns:
+ * * %valid & unlocked ldlm_resource
+ * * %ERR_PTR on error
  */
 struct ldlm_resource *
 ldlm_resource_get(struct ldlm_namespace *ns, const struct ldlm_res_id *name,
@@ -1785,7 +1821,10 @@ void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
 }
 
 /**
- * Insert a lock into resource before the specified lock.
+ * ldlm_resource_insert_lock_before() - Insert a lock into resource before the
+ *                                      specified lock.
+ * @original: Existing lock
+ * @new: New lock to be inserted
  *
  * IBITS waiting locks are to be inserted to the ibit lists as well, and only
  * the insert-after operation is supported for them, because the set of bits
