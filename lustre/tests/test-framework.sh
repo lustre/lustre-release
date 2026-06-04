@@ -8827,8 +8827,7 @@ run_mdtest () {
 	num_inodes=$(mdsrate_inodes_available)
 
 	if (( num_inodes < num_files )); then
-		log "change the number of files $num_files to the" \
-			"number of available inodes $num_inodes"
+		log "reduce files $num_files to available inodes $num_inodes"
 		num_files=$num_inodes
 	fi
 
@@ -12364,6 +12363,11 @@ is_rmentry_supported() {
 	$LFS rm_entry $DIR/dir/not/exists > /dev/null
 	# is return code ENOENT?
 	(( $? == 2 ))
+}
+
+# version gate until the server advertises the OBD_CONNECT2_COMPRESS connect flag
+compression_supported() {
+	(( MDS1_VERSION >= $(version_code 2.17.53) ))
 }
 
 #

@@ -31,6 +31,9 @@
 
 #include "ptlrpc_internal.h"
 
+int llite_enable_compression;
+EXPORT_SYMBOL(llite_enable_compression);
+
 static inline __u32 lustre_msg_hdr_size_v2(__u32 count)
 {
 	return round_up(offsetof(struct lustre_msg_v2, lm_buflens[count]), 8);
@@ -2475,6 +2478,15 @@ void lustre_print_user_md(unsigned int lvl, struct lov_user_md *lum,
 
 		v1 = (struct lov_user_md *)((char *)comp_v1 +
 				comp_v1->lcm_entries[i].lcme_offset);
+
+		if (v1->lmm_pattern & LOV_PATTERN_COMPRESS) {
+			CDEBUG(lvl, "\tlcme_compr_type: %u\n",
+			       ent->lcme_compr_type);
+			CDEBUG(lvl, "\tlcme_compr_lvl: %u\n",
+			       ent->lcme_compr_lvl);
+			CDEBUG(lvl, "\tlcme_compr_chunk_lum_bits: %u\n",
+			       ent->lcme_compr_chunk_lum_bits);
+		}
 		if (v1->lmm_magic == LOV_MAGIC_FOREIGN)
 			lustre_print_foreign(lvl, (struct lov_foreign_md *)v1,
 					     msg);
@@ -2584,6 +2596,9 @@ void lustre_swab_lov_comp_md_v1(struct lov_comp_md_v1 *lum)
 		__swab32s(&ent->lcme_layout_gen);
 		/* no need to swab lcme_dstripe_count */
 		/* no need to swab lcme_cstripe_count */
+		/* no need to swab lcme_compr_type */
+		/* no need to swab lcme_compr_lvl */
+		/* no need to swab lcme_compr_chunk_lum_bits */
 
 		v1 = (struct lov_user_md_v1 *)((char *)lum + off);
 		if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_FOREIGN) ||

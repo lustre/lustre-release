@@ -2038,7 +2038,7 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_compr_type) == 1, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_compr_type));
 	/* lov_comp_md_entry_v1.lcme_compr_lvl is a bitfield and cannot be checked */
-	/* lov_comp_md_entry_v1.lcme_compr_chunk_log_bits is a bitfield and cannot be checked */
+	/* lov_comp_md_entry_v1.lcme_compr_chunk_lum_bits is a bitfield and cannot be checked */
 	BUILD_BUG_ON(LCME_FL_STALE != 0x00000001);
 	BUILD_BUG_ON(LCME_FL_PREF_RD != 0x00000002);
 	BUILD_BUG_ON(LCME_FL_PREF_WR != 0x00000004);

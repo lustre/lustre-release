@@ -19,6 +19,7 @@
 #include <linux/sort.h>
 
 #include <obd_class.h>
+#include <lustre_lib.h>
 #include "lov_internal.h"
 
 static inline void
@@ -93,6 +94,14 @@ static int lsm_lmm_verify_v1v3(struct lov_mds_md *lmm, size_t lmm_size,
 			      rc);
 			lov_dump_lmm_common(D_WARNING, lmm);
 		}
+		goto out;
+	}
+
+	if ((lov_pattern(pattern) & LOV_PATTERN_COMPRESS) &&
+	    !llite_enable_compression) {
+		rc = -EINVAL;
+		CERROR("lov: file compression not enabled: rc = %d\n", rc);
+		lov_dump_lmm_common(D_WARNING, lmm);
 		goto out;
 	}
 
@@ -642,6 +651,13 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 		lsme->lsme_dstripe_count = lcme->lcme_dstripe_count;
 		lsme->lsme_cstripe_count = lcme->lcme_cstripe_count;
 		lu_extent_le_to_cpu(&lsme->lsme_extent, &lcme->lcme_extent);
+
+		if (lsme->lsme_pattern & LOV_PATTERN_COMPRESS) {
+			lsme->lsme_compr_type = lcme->lcme_compr_type;
+			lsme->lsme_compr_lvl = lcme->lcme_compr_lvl;
+			lsme->lsme_compr_chunk_lum_bits =
+					lcme->lcme_compr_chunk_lum_bits;
+		}
 
 		if (i == entry_count - 1) {
 			lsm->lsm_maxbytes = (loff_t)lsme->lsme_extent.e_start +

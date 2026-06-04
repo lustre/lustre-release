@@ -937,7 +937,7 @@ check_lov_comp_md_entry_v1(void)
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_cstripe_count);
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_compr_type);
 	CHECK_BITFIELD(lov_comp_md_entry_v1, lcme_compr_lvl);
-	CHECK_BITFIELD(lov_comp_md_entry_v1, lcme_compr_chunk_log_bits);
+	CHECK_BITFIELD(lov_comp_md_entry_v1, lcme_compr_chunk_lum_bits);
 
 	CHECK_CVALUE_X(LCME_FL_STALE);
 	CHECK_CVALUE_X(LCME_FL_PREF_RD);

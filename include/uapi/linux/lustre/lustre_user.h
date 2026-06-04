@@ -819,6 +819,7 @@ static inline bool lov_pattern_supported(enum lov_pattern pattern)
 	return pattern_base == LOV_PATTERN_RAID0 ||
 	       pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING) ||
 	       pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_PARITY) ||
+	       pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_COMPRESS) ||
 	       pattern_base == LOV_PATTERN_MDT;
 }
 
@@ -831,6 +832,7 @@ static inline bool lov_pattern_available(enum lov_pattern pattern)
 	return pattern_base == LOV_PATTERN_RAID0 ||
 	       pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_OVERSTRIPING) ||
 	       pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_PARITY) ||
+	       pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_COMPRESS) ||
 	       pattern_base == LOV_PATTERN_MDT;
 }
 
@@ -1035,7 +1037,7 @@ enum lov_comp_md_entry_flags {
 #define LCME_KNOWN_FLAGS	(LCME_FL_NEG | LCME_FL_INIT | LCME_FL_STALE | \
 				 LCME_FL_PREF_RW | LCME_FL_NOSYNC | \
 				 LCME_FL_EXTENSION | LCME_FL_PARITY | \
-				 LCME_FL_IS_LINK_ID)
+				 LCME_FL_NOCOMPR | LCME_FL_IS_LINK_ID)
 
 /* The component flags can be set by users at creation/modification time. */
 #define LCME_USER_COMP_FLAGS	(LCME_FL_PREF_RW | LCME_FL_NOSYNC | \
@@ -1055,7 +1057,8 @@ enum lov_comp_md_entry_flags {
  * from the default/template layout set on a directory.
  */
 #define LCME_TEMPLATE_FLAGS	(LCME_FL_PREF_RW | LCME_FL_NOSYNC | \
-				 LCME_FL_EXTENSION | LCME_FL_PARITY)
+				 LCME_FL_EXTENSION | LCME_FL_PARITY | \
+				 LCME_FL_NOCOMPR)
 
 /* lcme_id can be specified as certain flags, and the first
  * bit of lcme_id is used to indicate that the ID is representing
@@ -1122,8 +1125,8 @@ struct lov_comp_md_entry_v1 {
 							 */
 	__u8			lcme_compr_type;	/* compress type */
 	__u8			lcme_compr_lvl:4;	/* compress level */
-	__u8			lcme_compr_chunk_log_bits:4;
-				     /* chunk_size = 2^(16+chunk_log_bits)
+	__u8			lcme_compr_chunk_lum_bits:4;
+				     /* chunk_size = 2^(16+chunk_lum_bits)
 				      * i.e. power-of-two multiple of 64KiB
 				      */
 } __attribute__((packed));

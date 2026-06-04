@@ -170,6 +170,12 @@ struct lod_layout_component {
 			__u16	llc_mirror_link_id;
 		};
 	};
+	__u8			llc_compr_type;
+	__u8			llc_compr_lvl:4;
+				/* chunk_size =
+				 * 2^(LOV_MIN_STRIPE_BITS + lum_bits)
+				 */
+	__u8			llc_compr_chunk_lum_bits:4;
 	union {
 		struct { /* plain layout V1/V3. */
 			__u32			  llc_pattern;

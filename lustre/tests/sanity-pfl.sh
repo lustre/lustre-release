@@ -2730,6 +2730,33 @@ test_28() { # LU-19519
 }
 run_test 28 "migrate PFL file with uninitialized component on invalid OST"
 
+test_100a() {
+	compression_supported || skip "server does not support data compression"
+
+	local tf=$DIR/$tdir/$tfile
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+
+	test_mkdir $DIR/$tdir
+	save_lustre_params client "llite.*.enable_compression" > $p
+	stack_trap "restore_lustre_params < $p"
+
+	$LCTL set_param llite.*.enable_compression=1
+
+	$LFS setstripe -Eeof --comp-flags=nocompr $tf ||
+		error "set a component with nocompr failed"
+	$LFS setstripe --comp-set -I1 --comp-flags=compress $tf &&
+		error "setstripe should not set compress component flags"
+	$LFS setstripe --comp-set -I1 --comp-flags=partial $tf &&
+		error "setstripe should not set a partial component flag"
+
+	$LFS getstripe $tf
+
+	local comp_flags=$($LFS getstripe -I1 --comp-flags $tf)
+
+	[[ "$comp_flags" =~ "nocompr" ]] || error "$comp_flags missing nocompr"
+}
+run_test 100a "set stripe component with nocompr"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

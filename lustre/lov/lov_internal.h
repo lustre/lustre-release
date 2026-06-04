@@ -37,6 +37,12 @@ struct lov_stripe_md_entry {
 			u16	lsme_mirror_link_id;
 		};
 	};
+	u8			lsme_compr_type;
+	u8			lsme_compr_lvl;
+	u8			lsme_compr_chunk_lum_bits;
+					/* chunk_size =
+					 * 2^(LOV_MIN_STRIPE_BITS + lum_bits)
+					 */
 	union {
 		struct { /* For stripe objects */
 			/* EC info */

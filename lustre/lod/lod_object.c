@@ -3092,6 +3092,12 @@ static int lod_declare_layout_set(const struct lu_env *env,
 							&lo->ldo_layout_mutex);
 						RETURN(-EINVAL);
 					}
+					if (flags & LCME_FL_NOCOMPR &&
+					    lod_comp->llc_compr_type != 0) {
+						mutex_unlock(
+							&lo->ldo_layout_mutex);
+						RETURN(-EINVAL);
+					}
 					lod_comp->llc_flags |= flags;
 				}
 				if (mirror_flag) {

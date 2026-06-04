@@ -2554,6 +2554,29 @@ out_free_kernbuff:
 }
 LDEBUGFS_SEQ_FOPS(ll_pcc);
 
+static int ll_enable_compression_seq_show(struct seq_file *m, void *v)
+{
+	seq_printf(m, "%d\n", llite_enable_compression ? 1 : 0);
+	return 0;
+}
+
+static ssize_t ll_enable_compression_seq_write(struct file *file,
+					       const char __user *buffer,
+					       size_t count, loff_t *off)
+{
+	bool val;
+	int rc;
+
+	rc = kstrtobool_from_user(buffer, count, &val);
+	if (rc < 0)
+		return rc;
+
+	llite_enable_compression = val;
+
+	return count;
+}
+LDEBUGFS_SEQ_FOPS(ll_enable_compression);
+
 struct ldebugfs_vars lprocfs_llite_obd_vars[] = {
 	{ .name	=	"site",
 	  .fops	=	&ll_site_stats_fops			},
@@ -2561,6 +2584,8 @@ struct ldebugfs_vars lprocfs_llite_obd_vars[] = {
 	  .fops	=	&ll_max_cached_mb_fops			},
 	{ .name	=	"unevict_cached_mb",
 	  .fops	=	&ll_unevict_cached_mb_fops		},
+	{ .name =	"enable_compression",
+	  .fops =	&ll_enable_compression_fops,		},
 	{ .name	=	"enable_mlock_pages",
 	  .fops	=	&ll_enable_mlock_pages_fops		},
 	{ .name	=	"statahead_stats",

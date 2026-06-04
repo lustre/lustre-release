@@ -1002,6 +1002,13 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 			cpu_to_le64(lod_comp->llc_extent.e_end);
 		lcme->lcme_offset = cpu_to_le32(offset);
 
+		if (lod_comp->llc_pattern & LOV_PATTERN_COMPRESS) {
+			lcme->lcme_compr_type = lod_comp->llc_compr_type;
+			lcme->lcme_compr_lvl = lod_comp->llc_compr_lvl;
+			lcme->lcme_compr_chunk_lum_bits =
+				lod_comp->llc_compr_chunk_lum_bits;
+		}
+
 		sub_md = (struct lov_mds_md *)((char *)lcm + offset);
 		if (lod_comp->llc_magic == LOV_MAGIC_FOREIGN) {
 			if (!lov_hsm_type_supported(lod_comp->llc_type)) {

@@ -2561,26 +2561,26 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 	for (i = 0; i < comp_cnt; i++) {
 		struct lu_extent *ext;
 		char *pool_name;
+		struct lov_comp_md_entry_v1 *lcme = NULL;
 
 		lod_comp = &lo->ldo_comp_entries[i];
 
 		if (lo->ldo_is_composite) {
-			struct lov_comp_md_entry_v1 *ent =
-				&comp_v1->lcm_entries[i];
+			lcme = &comp_v1->lcm_entries[i];
 			v1 = (struct lov_user_md *)((char *)comp_v1 +
-						    ent->lcme_offset);
-			ext = &ent->lcme_extent;
+						    lcme->lcme_offset);
+			ext = &lcme->lcme_extent;
 			lod_comp->llc_extent = *ext;
-			lod_comp->llc_flags = ent->lcme_flags &
+			lod_comp->llc_flags = lcme->lcme_flags &
 					      LCME_CL_COMP_FLAGS;
 			lod_comp->llc_mirror_link_id =
-				lcme_timestamp_id_unpack(ent->lcme_time_and_id);
+				lcme_timestamp_id_unpack(lcme->lcme_time_and_id);
 
 			if (lod_comp->llc_flags & LCME_FL_PARITY) {
 				lod_comp->llc_dstripe_count =
-					ent->lcme_dstripe_count;
+					lcme->lcme_dstripe_count;
 				lod_comp->llc_cstripe_count =
-					ent->lcme_cstripe_count;
+					lcme->lcme_cstripe_count;
 			}
 		}
 
@@ -2655,6 +2655,14 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 				DIV_ROUND_UP(lod_comp->llc_extent.e_end -
 					     lod_comp->llc_extent.e_start,
 					     lod_comp->llc_stripe_size);
+
+		if ((lov_pattern(lod_comp->llc_pattern) & LOV_PATTERN_COMPRESS) &&
+		    lcme) {
+			lod_comp->llc_compr_type = lcme->lcme_compr_type;
+			lod_comp->llc_compr_lvl = lcme->lcme_compr_lvl;
+			lod_comp->llc_compr_chunk_lum_bits =
+					lcme->lcme_compr_chunk_lum_bits;
+		}
 
 		lod_comp->llc_stripe_offset = v1->lmm_stripe_offset;
 		lod_qos_set_pool(lo, i, pool_name);
