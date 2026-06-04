@@ -38,11 +38,27 @@
 #ifdef CONFIG_LUSTRE_FS_SERVER
 
 /**
- * It should iterate through all waiting locks on a given resource queue and
- * attempt to grant them. An optimization is to check only heads waitintg
- * locks for each inodebit type.
+ * ldlm_reprocess_inodebits_queue() - Iterate through the waiting locks of
+ *                                    @res and attempt to grant them.
+ * @res: LDLM resource
+ * @queue: waiting queue of @res, used directly only for
+ *         %LDLM_PROCESS_RECOVERY
+ * @work_list: list to collect completion AST work for the locks being granted
+ * @intention: %LDLM_PROCESS_RESCAN or %LDLM_PROCESS_RECOVERY
+ * @mask: inodebits hint, only the matching waiting queues are scanned and
+ *        %MDS_INODELOCK_NONE means all of them; ignored for
+ *        %LDLM_PROCESS_RECOVERY
  *
- * Must be called with resource lock held.
+ * An optimization is to check only heads of waiting locks for each
+ * inodebit type.
+ *
+ * Context: Called with the resource lock held (see check_res_locked()).
+ *          It is dropped and retaken around ldlm_run_ast_work(), so the
+ *          resource state may change during the call.
+ *
+ * Return:
+ * * %LDLM_ITER_CONTINUE or %LDLM_ITER_STOP from the last lock processed
+ * * %0 or negative errno if blocking ASTs were sent for conflicting locks
  */
 int ldlm_reprocess_inodebits_queue(struct ldlm_resource *res,
 				   struct list_head *queue,
@@ -141,19 +157,38 @@ static inline bool ldlm_txn_same_server(const struct ldlm_lock *req,
 }
 
 /**
- * Determine if the lock is compatible with all locks on the queue.
+ * ldlm_inodebits_compat_queue() - Determine if the lock is compatible with all
+ *                                 locks on the queue.
+ * @queue: granted or waiting queue of the resource to check @req against;
+ *         try_bits conflicting with @req are cleared on the locks found in it
+ * @req: LDLM lock being enqueued or reprocessed; its try_bits are filtered by
+ *       the locks found in @queue and a GROUP @req may be inserted into the
+ *       resource list
+ * @ldlm_flags: LDLM operation flags, input only, of which just
+ *              %LDLM_FL_BLOCK_NOWAIT is looked at
+ * @work_list: conflicting lock queue (if provided)
  *
- * If \a work_list is provided, conflicting locks are linked there.
- * If \a work_list is not provided, we exit this function on first conflict.
- *
- * \retval 0 if there are conflicting locks in the \a queue
- * \retval 1 if the lock is compatible to all locks in \a queue
+ * If @work_list is provided, conflicting locks are linked there.
+ * If @work_list is not provided, we exit this function on first conflict.
  *
  * IBITS locks in granted queue are organized in bunches of
  * same-mode/same-bits locks called "skip lists". The First lock in the
  * bunch contains a pointer to the end of the bunch.  This allows us to
  * skip an entire bunch when iterating the list in search for conflicting
  * locks if first lock of the bunch is not conflicting with us.
+ *
+ * Context: Called with the resource lock held, asserted by the caller.
+ *
+ * Return:
+ * * %0 if @req cannot be granted from this @queue: conflicting locks were
+ *   found, no bits are left to grant, or @req was queued behind a waiting
+ *   GROUP lock with the same li_gid
+ * * %1 if @req is compatible with every lock ahead of it in @queue, the
+ *   walk stops as soon as it reaches @req itself
+ * * %2 if a granted GROUP lock with the same li_gid was found
+ * * %-EPROTO if a GROUP lock is requested for anything but DOM bits
+ * * %-EWOULDBLOCK if a GROUP lock blocks @req and %LDLM_FL_BLOCK_NOWAIT is
+ *   set
  */
 static int
 ldlm_inodebits_compat_queue(struct list_head *queue, struct ldlm_lock *req,
@@ -323,12 +358,34 @@ skip_work_list:
 }
 
 /**
- * Process a granting attempt for IBITS lock.
- * Must be called with ns lock held
+ * ldlm_process_inodebits_lock() - Process a granting attempt for IBITS lock.
+ * @lock: LDLM lock
+ * @ldlm_flags: Flags related to lock operation, %LDLM_FL_BLOCK_NOWAIT is
+ *              read on entry, then the flags are cleared on the
+ *              %LDLM_PROCESS_RESCAN path and gain %LDLM_FL_LOCK_CHANGED
+ *              when try_bits are granted
+ * @intention: %LDLM_PROCESS_RESCAN, %LDLM_PROCESS_ENQUEUE or
+ *             %LDLM_PROCESS_RECOVERY
+ * @err: LDLM error state, only consulted by the %LDLM_PROCESS_ENQUEUE caller,
+ *       which gets %ELDLM_OK unless the request is left with no bits at all
+ *       (%ELDLM_LOCK_ABORTED) or an error is returned, so it does not tell
+ *       whether @lock was granted
+ * @work_list: list to collect blocking AST work for the conflicting locks
+ *             and, unless @intention is %LDLM_PROCESS_ENQUEUE, completion AST
+ *             work for @lock once it is granted; NULL collects none, as the
+ *             DOM glimpse path does with %LDLM_FL_BLOCK_NOWAIT
  *
- * This function looks for any conflicts for \a lock in the granted or
+ * This function looks for any conflicts for @lock in the granted or
  * waiting queues. The lock is granted if no conflicts are found in
  * either queue.
+ *
+ * Context: Called with the resource lock held (see check_res_locked()).
+ *
+ * Return:
+ * * %LDLM_ITER_CONTINUE when the granting attempt is done; the
+ *   %LDLM_PROCESS_ENQUEUE caller ignores this and acts on @err instead
+ * * %LDLM_ITER_STOP if @lock cannot be granted during %LDLM_PROCESS_RESCAN
+ * * negative errno returned by ldlm_inodebits_compat_queue()
  */
 int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *ldlm_flags,
 				enum ldlm_process_intention intention,
@@ -448,9 +505,9 @@ void ldlm_ibits_policy_wire_to_local(const union ldlm_wire_policy_data *wpolicy,
 	lpolicy->l_inodebits.bits = wpolicy->l_inodebits.bits;
 	lpolicy->l_inodebits.li_initiator_id =
 		wpolicy->l_inodebits.li_initiator_id;
-	/**
+	/*
 	 * try_bits and li_gid are to be handled outside of generic
-	 * write_to_local due to different behavior on a server and client.
+	 * wire_to_local due to different behavior on a server and client.
 	 */
 }
 
@@ -466,11 +523,17 @@ void ldlm_ibits_policy_local_to_wire(const union ldlm_policy_data *lpolicy,
 }
 
 /**
- * Attempt to convert already granted IBITS lock with several bits set to
- * a lock with less bits (downgrade).
+ * ldlm_inodebits_drop() - Attempt to convert already granted IBITS lock with
+ *                         several bits set to a lock with less bits (downgrade)
+ * @lock: LDLM lock
+ * @to_drop: inodebits to remove from the granted lock
  *
  * Such lock conversion is used to keep lock with non-blocking bits instead of
  * cancelling it, introduced for better support of DoM files.
+ *
+ * Context: Called with the resource lock held (see check_res_locked()).
+ *
+ * Return: %0 always, this function cannot fail
  */
 int ldlm_inodebits_drop(struct ldlm_lock *lock, enum mds_ibits_locks to_drop)
 {
