@@ -7289,14 +7289,14 @@ test_56bb() {
 	$LFS getdirstripe -v -D -y $DIR 1> $output_file
 
 	cat $output_file
-	verify_yaml <<<$output_file ||
+	verify_yaml < $output_file ||
 		error "default layout is not valid YAML"
 
 # check non-default 1 stripe case
 	test_mkdir -c 1 $DIR/$tdir
 	$LFS getdirstripe -v -y $DIR 1> $output_file
 	cat $output_file
-	verify_yaml <<<$output_file || error "dir layout not valid YAML"
+	verify_yaml < $output_file || error "dir layout not valid YAML"
 }
 run_test 56bb "check $LFS getdirstripe layout is YAML"
 
@@ -7313,7 +7313,7 @@ test_56bc() {
 		error "failed to getdirstripe --yaml -v"
 
 	cat $yaml_file
-	verify_yaml <<<$yaml_file ||
+	verify_yaml < $yaml_file ||
 		error "striped dir layout is not valid YAML"
 
 	local orig=$(get_dir_layout_param $src_dir)
@@ -9471,7 +9471,6 @@ run_test 56xh "lfs migrate bandwidth limitation support"
 
 test_56xi() {
 	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
-	verify_yaml_available || skip_env "YAML verification not installed"
 
 	local size_mb=5
 	local file1=$DIR/$tfile.1
@@ -9497,10 +9496,8 @@ test_56xi() {
 		error "migrate failed rc = $?"
 
 	cat $output_file
-	cat $output_file | verify_yaml || error "rename_stats is not valid YAML"
-
-	# Clean up file (since it is multiple MB)
-	rm -f $file1 $file2 $file3 $tmp1 $output_file
+	verify_yaml_available || skip_env "YAML verification not installed"
+	verify_yaml < $output_file || error "rename_stats is not valid YAML"
 }
 run_test 56xi "lfs migrate stats support"
 
@@ -9580,7 +9577,6 @@ run_test 56xk "lfs mirror resync bandwidth limitation support"
 
 test_56xl() {
 	(( $OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
-	verify_yaml_available || skip_env "YAML verification not installed"
 
 	local size_mb=5
 	local file1=$DIR/$tfile.1
@@ -9603,7 +9599,8 @@ test_56xl() {
 		error "all components must be sync"
 
 	cat $output_file
-	cat $output_file | verify_yaml || error "stats is not valid YAML"
+	verify_yaml_available || skip_env "YAML verification not installed"
+	verify_yaml < $output_file || error "stats is not valid YAML"
 }
 run_test 56xl "lfs mirror resync stats support"
 
