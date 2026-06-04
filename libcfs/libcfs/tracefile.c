@@ -415,20 +415,6 @@ void debug_format_buffer_free_buffers(void)
 }
 EXPORT_SYMBOL(debug_format_buffer_free_buffers);
 
-bool libcfs_debug_raw_pointers;
-
-bool get_debug_raw_pointers(void)
-{
-	return libcfs_debug_raw_pointers;
-}
-EXPORT_SYMBOL(get_debug_raw_pointers);
-
-void set_debug_raw_pointers(bool value)
-{
-	libcfs_debug_raw_pointers = value;
-}
-EXPORT_SYMBOL(set_debug_raw_pointers);
-
 #ifndef raw_cpu_ptr
 #define raw_cpu_ptr(p)	this_cpu_ptr(p)
 #endif

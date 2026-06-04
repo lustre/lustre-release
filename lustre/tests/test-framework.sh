@@ -1087,7 +1087,7 @@ load_lnet() {
 	# variable to remote nodes
 	unset MODOPTS_LIBCFS
 
-	set_default_debug "neterror net nettrace malloc"
+	set_default_debug
 	if [[ $1 == config_on_load=1 ]]; then
 		load_module ../lnet/lnet/lnet
 	else
