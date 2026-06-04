@@ -25,7 +25,7 @@ Always present on MDS nodes
 .br
 .RB lod.*.mirror_count_max= 16
 .TP
-.B Limits
+.B Valid Range
 .br
 .RB lod.*.mirror_count_max= 0
 .br
@@ -46,7 +46,7 @@ xattr size of 65536 bytes (VFS
 so 256 mirrors is a realistic upper limit today if the stripe count or
 component count is more than 1.
 .PP
-The 
+The
 .I NUM_MIRRORS
 parameter accepts values from 0 (disables FLR mirroring) to
 .B LUSTRE_MIRROR_COUNT_MAX
@@ -63,7 +63,7 @@ filesystem:
 is part of the
 .BR lustre (7)
 filesystem package since release 2.18.0.
-.\" Added in commit 2.17.51.xxx
+.\" Added in commit v2_17_52-72-g0631c80b89
 .SH SEE ALSO
 .BR lfs-mirror-create (1),
 .BR lfs-mirror-extend (1),
