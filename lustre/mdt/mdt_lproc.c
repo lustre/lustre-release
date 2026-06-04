@@ -1455,12 +1455,18 @@ ATTRIBUTE_GROUPS(mdt); /* creates mdt_groups from mdt_attrs */
 
 LDEBUGFS_SEQ_FOPS_RO_TYPE(mdt, recovery_status);
 LDEBUGFS_SEQ_FOPS_RO_TYPE(mdt, recovery_stale_clients);
+LDEBUGFS_SEQ_FOPS_RW_TYPE(mdt, recovery_reconnect_histogram);
+LDEBUGFS_SEQ_FOPS_RW_TYPE(mdt, recovery_reconnect_top);
 
 static struct ldebugfs_vars ldebugfs_mdt_obd_vars[] = {
 	{ .name =	"hash_stats",
 	  .fops =	&mdt_hash_fops				},
 	{ .name =	"nosquash_nids",
 	  .fops =	&mdt_nosquash_nids_fops			},
+	{ .name =	"recovery_reconnect_histogram",
+	  .fops =	&mdt_recovery_reconnect_histogram_fops	},
+	{ .name =	"recovery_reconnect_top",
+	  .fops =	&mdt_recovery_reconnect_top_fops	},
 	{ .name =	"recovery_status",
 	  .fops =	&mdt_recovery_status_fops		},
 	{ .name =	"recovery_stale_clients",

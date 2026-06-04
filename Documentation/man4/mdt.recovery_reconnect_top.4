@@ -1,0 +1,74 @@
+.TH RECOVERY_RECONNECT_TOP 4 2026-05-30 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+recovery_reconnect_top \- slowest clients in the current recovery
+.SH SYNOPSIS
+.SY
+.BI "lctl get_param mdt." TARGET ".recovery_reconnect_top"
+.SY
+.BI "lctl get_param obdfilter." TARGET ".recovery_reconnect_top"
+.SY
+.BI "lctl set_param mdt." TARGET ".recovery_reconnect_top=clear"
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.BR 644 " | " -rw-r--r--
+.TP
+.B Scope
+.br
+Per MDT or OST target device
+.TP
+.B Config
+.br
+Always present
+.SH DESCRIPTION
+The
+.B recovery_reconnect_top
+parameter reports the
+.B N
+filesystem clients that took the longest to reconnect to this target
+during the current recovery window, sorted descending by delay. Output
+is a YAML
+.B client_reconnect_top
+list whose entries each report a client
+.RB ( nid )
+and its reconnect
+.RB ( delay_sec )
+in seconds. The depth
+.B N
+is set by the module parameter
+.BR recovery_reconnect_top_n " (default 10, max 64)."
+The list is reset when recovery begins, and writing any value clears it.
+.PP
+This is the bounded-cardinality companion to
+.BR recovery_reconnect_histogram (4):
+the histogram tells you the per-target distribution, this file tells
+you which specific clients drove the tail.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B mdt.*.recovery_reconnect_top
+.B obdfilter.*.recovery_reconnect_top
+.EE
+.SH EXAMPLES
+Show the slowest clients on an MDT after a recovery:
+.EX
+.RB mds# " lctl get_param mdt.lfs-MDT0000.recovery_reconnect_top"
+client_reconnect_top:
+- { nid:   "192.168.101.7@tcp101", delay_sec:  47 }
+- { nid:   "192.168.102.4@tcp102", delay_sec:   8 }
+- { nid:   "192.168.102.3@tcp102", delay_sec:   7 }
+- { nid:   "192.168.101.2@tcp101", delay_sec:   4 }
+- { nid:   "192.168.102.5@tcp102", delay_sec:   3 }
+.EE
+.SH AVAILABILITY
+.B recovery_reconnect_top
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" commit v2_17_53
+.SH SEE ALSO
+.BR mdt.reconnect_delay (4),
+.BR mdt.recovery_reconnect_histogram (4),
+.BR lctl-get_param (8),
+.BR lctl-set_param (8)

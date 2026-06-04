@@ -1189,6 +1189,8 @@ LUSTRE_RO_ATTR(eviction_count);
 
 LDEBUGFS_SEQ_FOPS_RO_TYPE(ofd, recovery_status);
 LDEBUGFS_SEQ_FOPS_RO_TYPE(ofd, recovery_stale_clients);
+LDEBUGFS_SEQ_FOPS_RW_TYPE(ofd, recovery_reconnect_histogram);
+LDEBUGFS_SEQ_FOPS_RW_TYPE(ofd, recovery_reconnect_top);
 
 static struct ldebugfs_vars ldebugfs_ofd_obd_vars[] = {
 	{ .name =	"last_id",
@@ -1197,6 +1199,10 @@ static struct ldebugfs_vars ldebugfs_ofd_obd_vars[] = {
 	  .fops =	&lfsck_layout_fops		},
 	{ .name	=	"lfsck_verify_pfid",
 	  .fops	=	&lfsck_verify_pfid_fops	},
+	{ .name =	"recovery_reconnect_histogram",
+	  .fops =	&ofd_recovery_reconnect_histogram_fops	},
+	{ .name =	"recovery_reconnect_top",
+	  .fops =	&ofd_recovery_reconnect_top_fops	},
 	{ .name =	"recovery_status",
 	  .fops =	&ofd_recovery_status_fops	},
 	{ .name =	"recovery_stale_clients",

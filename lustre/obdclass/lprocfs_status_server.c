@@ -261,6 +261,44 @@ module_param(expected_clients, uint, 0644);
 MODULE_PARM_DESC(expected_clients,
 	"Order-of-magnitude estimate of client count for parameter tuning");
 
+/* how many of the slowest clients recovery_reconnect_top reports */
+static unsigned int recovery_reconnect_top_n = 10;
+module_param(recovery_reconnect_top_n, uint, 0644);
+MODULE_PARM_DESC(recovery_reconnect_top_n,
+	"Number of slowest clients to report in recovery_reconnect_top (max " __stringify(OBT_RECONNECT_TOP_MAX) ")");
+
+void lprocfs_reconnect_top_clear(struct obd_device_target *obt)
+{
+	spin_lock(&obt->obt_reconnect_hist.oh_lock);
+	memset(obt->obt_reconnect_top, 0, sizeof(obt->obt_reconnect_top));
+	obt->obt_reconnect_top_cursor = 0;
+	spin_unlock(&obt->obt_reconnect_hist.oh_lock);
+}
+EXPORT_SYMBOL(lprocfs_reconnect_top_clear);
+
+/*
+ * Reconnect delays arrive monotonically increasing within a recovery window
+ * (delay = now - recovery_start), so the most recent OBT_RECONNECT_TOP_MAX
+ * entries of this circular buffer are the slowest. delay 0 is never the tail.
+ */
+void lprocfs_reconnect_top_tally(struct obd_device_target *obt,
+				 const struct lnet_nid *nid, timeout_t delay)
+{
+	struct obt_reconnect_entry *ent;
+
+	if (delay < 0)
+		return;
+
+	spin_lock(&obt->obt_reconnect_hist.oh_lock);
+	ent = &obt->obt_reconnect_top[obt->obt_reconnect_top_cursor];
+	ent->ore_nid = *nid;
+	ent->ore_delay = delay;
+	obt->obt_reconnect_top_cursor =
+		(obt->obt_reconnect_top_cursor + 1) % OBT_RECONNECT_TOP_MAX;
+	spin_unlock(&obt->obt_reconnect_hist.oh_lock);
+}
+EXPORT_SYMBOL(lprocfs_reconnect_top_tally);
+
 static DEFINE_SPINLOCK(lustre_client_stats_lock);
 
 int class_expected_clients_update(unsigned int max_clients)
@@ -501,6 +539,19 @@ static int ldebugfs_exp_fmd_count_seq_show(struct seq_file *m, void *data)
 }
 LDEBUGFS_SEQ_FOPS_RO(ldebugfs_exp_fmd_count);
 
+static int ldebugfs_exp_reconnect_delay_seq_show(struct seq_file *m, void *data)
+{
+	struct nid_stat *stats = m->private;
+
+	if (stats->nid_reconnect_delay < 0)
+		seq_puts(m, "never\n");
+	else
+		seq_printf(m, "%d\n", stats->nid_reconnect_delay);
+
+	return 0;
+}
+LDEBUGFS_SEQ_FOPS_RO(ldebugfs_exp_reconnect_delay);
+
 int lprocfs_nid_stats_clear_seq_show(struct seq_file *m, void *data)
 {
 	seq_puts(m, "Write into this file to clear all nid stats and stale nid entries\n");
@@ -638,6 +689,8 @@ static struct ldebugfs_vars ldebugfs_obd_exports_vars[] = {
 	  .fops =	&ldebugfs_exp_hash_fops		},
 	{ .name =	"nodemap",
 	  .fops =	&ldebugfs_exp_nodemap_fops	},
+	{ .name =	"reconnect_delay",
+	  .fops =	&ldebugfs_exp_reconnect_delay_fops },
 	{ .name =	"reply_data",
 	  .fops =	&ldebugfs_exp_replydata_fops	},
 	{ .name	=	"uuid",
@@ -679,6 +732,8 @@ int lprocfs_exp_setup(struct obd_export *exp, struct lnet_nid *nid)
 
 	new_stat->nid = *nid;
 	new_stat->nid_obd = exp->exp_obd;
+	/* -1 = client has not reconnected during a recovery yet */
+	new_stat->nid_reconnect_delay = -1;
 	/* we need set default refcount to 1 to balance obd_disconnect */
 	atomic_set(&new_stat->nid_exp_ref_count, 1);
 
@@ -1196,6 +1251,107 @@ out:
 	return 0;
 }
 EXPORT_SYMBOL(lprocfs_recovery_status_seq_show);
+
+int lprocfs_recovery_reconnect_histogram_seq_show(struct seq_file *m,
+						  void *data)
+{
+	struct obd_device *obd = data;
+	struct obd_histogram *oh = &obd2obt(obd)->obt_reconnect_hist;
+	unsigned long tot, cum = 0;
+	s64 start = 0, finish = 0, elapsed = 0, real_offset;
+	int i;
+
+	real_offset = ktime_get_real_seconds() - ktime_get_seconds();
+	if (obd->obd_recovery_start)
+		start = obd->obd_recovery_start + real_offset;
+	if (obd->obd_recovery_end) {
+		finish = obd->obd_recovery_end + real_offset;
+		if (start)
+			elapsed = finish - start;
+	}
+	seq_printf(m, "recovery_start:  %lld\n", start);
+	seq_printf(m, "recovery_finish: %lld\n", finish);
+	seq_printf(m, "recovery_time:   %lld\n", elapsed);
+
+	spin_lock(&oh->oh_lock);
+	tot = lprocfs_oh_sum(oh);
+	seq_printf(m, "reconnect_delay_seconds_samples: %lu\n", tot);
+	if (tot == 0)
+		goto out;
+
+	seq_puts(m, "client_reconnect_histogram:\n");
+	for (i = 0; i < OBD_HIST_MAX; i++) {
+		unsigned long ncli = oh->oh_buckets[i];
+
+		cum += ncli;
+		if (cum == 0)
+			continue;
+		seq_printf(m,
+			   "- { delay_sec: %3u, clients: %4lu, pct: %3lu, cum_pct: %3lu }\n",
+			   1U << i, ncli, ncli * 100 / tot, cum * 100 / tot);
+		if (cum >= tot)
+			break;
+	}
+out:
+	spin_unlock(&oh->oh_lock);
+
+	return 0;
+}
+EXPORT_SYMBOL(lprocfs_recovery_reconnect_histogram_seq_show);
+
+ssize_t ldebugfs_recovery_reconnect_histogram_seq_write(struct file *file,
+						const char __user *buf,
+						size_t len, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct obd_device *obd = m->private;
+
+	lprocfs_oh_clear(&obd2obt(obd)->obt_reconnect_hist);
+	return len;
+}
+EXPORT_SYMBOL(ldebugfs_recovery_reconnect_histogram_seq_write);
+
+int lprocfs_recovery_reconnect_top_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = data;
+	struct obd_device_target *obt = obd2obt(obd);
+	unsigned int top = READ_ONCE(recovery_reconnect_top_n);
+	unsigned int cursor, i;
+
+	if (top > OBT_RECONNECT_TOP_MAX)
+		top = OBT_RECONNECT_TOP_MAX;
+
+	seq_puts(m, "client_reconnect_top:\n");
+	spin_lock(&obt->obt_reconnect_hist.oh_lock);
+	cursor = obt->obt_reconnect_top_cursor;
+	for (i = 0; i < top; i++) {
+		unsigned int idx = (cursor + OBT_RECONNECT_TOP_MAX - 1 - i) %
+				   OBT_RECONNECT_TOP_MAX;
+		struct obt_reconnect_entry *ent = &obt->obt_reconnect_top[idx];
+		char nidstr[LNET_NIDSTR_SIZE + 1] = "\"";
+
+		if (ent->ore_nid.nid_type == 0)
+			break;
+		libcfs_nidstr_r(&ent->ore_nid, nidstr + 1, sizeof(nidstr) - 1);
+		seq_printf(m, "- { nid: %24s\", delay_sec: %3d }\n",
+			   nidstr, ent->ore_delay);
+	}
+	spin_unlock(&obt->obt_reconnect_hist.oh_lock);
+	return 0;
+}
+EXPORT_SYMBOL(lprocfs_recovery_reconnect_top_seq_show);
+
+ssize_t ldebugfs_recovery_reconnect_top_seq_write(struct file *file,
+						  const char __user *buf,
+						  size_t len, loff_t *off)
+{
+	struct seq_file *m = file->private_data;
+	struct obd_device *obd = m->private;
+
+	lprocfs_reconnect_top_clear(obd2obt(obd));
+	return len;
+}
+EXPORT_SYMBOL(ldebugfs_recovery_reconnect_top_seq_write);
 
 ssize_t ir_factor_show(struct kobject *kobj, struct attribute *attr,
 		       char *buf)

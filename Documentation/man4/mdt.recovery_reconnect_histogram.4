@@ -1,0 +1,90 @@
+.TH RECOVERY_RECONNECT_HISTOGRAM 4 2026-05-30 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+recovery_reconnect_histogram \- reconnect-delay histogram per recovery
+.SH SYNOPSIS
+.SY
+.BI "lctl get_param mdt." TARGET ".recovery_reconnect_histogram"
+.SY
+.BI "lctl get_param obdfilter." TARGET ".recovery_reconnect_histogram"
+.SY
+.BI "lctl set_param mdt." TARGET ".recovery_reconnect_histogram=clear"
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.BR 644 " | " -rw-r--r--
+.TP
+.B Scope
+.br
+Per MDT or OST target device
+.SH DESCRIPTION
+The
+.B recovery_reconnect_histogram
+parameter reports a log2-bucketed histogram of how many seconds each client
+took to reconnect to this target during the current recovery window. The
+histogram is reset when recovery begins, so it always reflects the most
+recent recovery. Writing any value to the parameter also clears it.
+.PP
+Output is YAML. Leading scalars report the recovery window
+.RB ( recovery_start ", " recovery_finish ", " recovery_time " in seconds)"
+and the total sample count, followed by a
+.B client_reconnect_histogram
+list. Each list entry reports a bucket upper bound
+.RB ( delay_sec ),
+the number of clients whose reconnect delay fell into that bucket
+.RB ( clients ),
+that bucket's percentage of the total
+.RB ( pct ),
+and the cumulative percentage
+.RB ( cum_pct ).
+Buckets with zero clients before the first non-zero bucket are elided.
+.PP
+Per-client
+.BR mdt.reconnect_delay (4)
+parameters are also exposed individually under each client mountpoint's
+.BI mdt. TARGET .exports. NID .reconnect_delay
+and
+.BI obdfilter. TARGET .exports. NID .reconnect_delay
+parameter. This is useful for isolating a specific client's recovery delay,
+which is otherwise shown in aggregate form in the full histogram,
+or may not be in the
+.BR mdt.recovery_reconnect_top (4)
+list.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B mdt.*.recovery_reconnect_histogram
+.B obdfilter.*.recovery_reconnect_histogram
+.EE
+.SH EXAMPLES
+Show the histogram for an MDT after a recovery:
+.EX
+.RB mds# " lctl get_param mdt.lfs-MDT0000.recovery_reconnect_histogram"
+recovery_start:  1780002682
+recovery_finish: 1780002729
+recovery_time:   47
+reconnect_delay_seconds_samples: 58
+client_reconnect_histogram:
+- { delay_sec:   1, clients:   45, pct:  77, cum_pct:  77 }
+- { delay_sec:   2, clients:    6, pct:  10, cum_pct:  87 }
+- { delay_sec:   4, clients:    4, pct:   7, cum_pct:  94 }
+- { delay_sec:   8, clients:    2, pct:   3, cum_pct:  97 }
+- { delay_sec:  16, clients:    0, pct:   0, cum_pct:  97 }
+- { delay_sec:  32, clients:    0, pct:   0, cum_pct:  97 }
+- { delay_sec:  64, clients:    1, pct:   3, cum_pct: 100 }
+.EE
+Clear the histogram:
+.EX
+.RB mds# " lctl set_param mdt.lfs-MDT0000.recovery_reconnect_histogram=clear"
+.EE
+.SH AVAILABILITY
+.B recovery_reconnect_histogram
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" commit v2_17_53
+.SH SEE ALSO
+.BR mdt.reconnect_delay (4),
+.BR mdt.recovery_reconnect_top (4),
+.BR lctl-get_param (8),
+.BR lctl-set_param (8)

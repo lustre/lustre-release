@@ -5194,6 +5194,47 @@ test_137c() {
 }
 run_test 137c "DNE: create under striped dir, fail MDT1/MDT2"
 
+test_160() {
+	(( $MDS1_VERSION >= $(version_code 2.17.56) )) ||
+		skip "need MDS >= 2.17.56 for reconnect_histogram"
+
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	replay_barrier $SINGLEMDS
+	fail $SINGLEMDS
+
+	local mdtname=$(mdtname_from_index 0)
+	local hist="mdt.$mdtname.recovery_reconnect_histogram"
+	local top="mdt.$mdtname.recovery_reconnect_top"
+	local histfile=$TMP/$tfile-hist.out
+	local topfile=$TMP/$tfile-top.out
+	local nid
+
+	if remote_mds; then
+		nid=($($LCTL list_nids))
+	else
+		nid="0@lo"
+	fi
+	local delay="mdt.$mdtname.exports.${nid//./\\.}.reconnect_delay"
+
+	stack_trap "rm -f $histfile $topfile"
+
+	do_facet mds1 "$LCTL get_param -n $hist" | tee $histfile
+	do_facet mds1 "$LCTL get_param -n $top" | tee $topfile
+	local delay_out=$(do_facet mds1 "$LCTL get_param $delay")
+	echo $delay_out
+
+	[[ $(cat $topfile) =~ $nid ]] ||
+		error "$top does not contain $nid"
+
+	[[ "${delay_out##*=}" != "never" ]] ||
+		error "$delay should not be 'never' after recovery"
+
+	verify_yaml_available || skip_env "YAML verification not installed"
+	verify_yaml < $histfile || error "$hist is not YAML"
+	verify_yaml < $topfile || error "$top is not YAML"
+}
+run_test 160 "mdt.recovery_reconnect_histogram testing"
+
 test_200() {
 	[[ -z $RCLIENTS ]] && skip "Need remote client"
 

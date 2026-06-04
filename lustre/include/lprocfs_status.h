@@ -26,6 +26,7 @@
 #include <linux/spinlock.h>
 #include <linux/string_helpers.h>
 #include <linux/seq_file.h>
+#include <linux/libcfs/libcfs.h>
 #include <lustre_compat/linux/sysfs.h>
 
 #include <uapi/linux/lustre/lustre_idl.h>
@@ -711,6 +712,21 @@ lprocfs_checksum_dump_seq_write(struct file *file, const char __user *buffer,
 
 /* lprocfs_status.c: recovery status */
 int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data);
+int lprocfs_recovery_reconnect_histogram_seq_show(struct seq_file *m,
+						  void *data);
+ssize_t ldebugfs_recovery_reconnect_histogram_seq_write(struct file *file,
+					const char __user *buf,
+					size_t len, loff_t *off);
+int lprocfs_recovery_reconnect_top_seq_show(struct seq_file *m, void *data);
+ssize_t ldebugfs_recovery_reconnect_top_seq_write(struct file *file,
+					const char __user *buf,
+					size_t len, loff_t *off);
+
+/* lprocfs_status_server.c: top-N reconnect tally */
+struct obd_device_target;
+void lprocfs_reconnect_top_clear(struct obd_device_target *obt);
+void lprocfs_reconnect_top_tally(struct obd_device_target *obt,
+				 const struct lnet_nid *nid, timeout_t delay);
 
 /* lprocfs: display the uuid of stale clients */
 int lprocfs_recovery_stale_clients_seq_show(struct seq_file *m, void *data);

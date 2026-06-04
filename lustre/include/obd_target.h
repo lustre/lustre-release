@@ -14,11 +14,21 @@
 #ifndef __OBD_TARGET_H
 #define __OBD_TARGET_H
 #include <lprocfs_status.h>
+#include <linux/lnet/lnet-idl.h>
 #include <obd.h>
 
 /* server-side individual type definitions */
 
 #define OBT_MAGIC       0xBDDECEAE
+
+/* circular buffer depth; recovery_reconnect_top_n caps how many are reported */
+#define OBT_RECONNECT_TOP_MAX	64
+
+struct obt_reconnect_entry {
+	struct lnet_nid	ore_nid;
+	timeout_t	ore_delay;
+};
+
 /* hold common fields for "target" device */
 struct obd_device_target {
 	__u32			obt_magic;
@@ -27,6 +37,11 @@ struct obd_device_target {
 	__u64			obt_mount_count;
 	struct obd_job_stats	obt_jobstats;
 	struct nm_config_file	*obt_nodemap_config_file;
+	/* client reconnect-delay histogram for current recovery */
+	struct obd_histogram	obt_reconnect_hist;
+	/* recent reconnects (delays arrive ascending); newest at cursor-1 */
+	struct obt_reconnect_entry obt_reconnect_top[OBT_RECONNECT_TOP_MAX];
+	unsigned int		obt_reconnect_top_cursor;
 };
 
 #define OBJ_SUBDIR_COUNT 32 /* set to zero for no subdirs */
@@ -69,6 +84,7 @@ static inline struct obd_device_target *obd_obt_init(struct obd_device *obd)
 	obt = (void *)&obd->u;
 	obt->obt_magic = OBT_MAGIC;
 	obt->obt_instance = 0;
+	spin_lock_init(&obt->obt_reconnect_hist.oh_lock);
 
 	return obt;
 }

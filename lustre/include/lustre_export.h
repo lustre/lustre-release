@@ -132,6 +132,8 @@ struct nid_stat {
 	struct lprocfs_stats    *nid_ldlm_stats;
 	/* for obd_nid_stats_hash exp_nid_stats */
 	atomic_t		 nid_exp_ref_count;
+	/* secs to reconnect in last recovery; -1 = never reconnected */
+	timeout_t		 nid_reconnect_delay;
 };
 
 #define nidstat_getref(nidstat)	\

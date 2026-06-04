@@ -1,0 +1,51 @@
+.TH RECONNECT_DELAY 4 2026-06-04 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+reconnect_delay \- per-client recovery reconnect delay
+.SH SYNOPSIS
+.SY
+.BI "lctl get_param mdt." TARGET ".exports." NID ".reconnect_delay"
+.SY
+.BI "lctl get_param obdfilter." TARGET ".exports." NID ".reconnect_delay"
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.BR 444 " | " -r--r--r--
+.TP
+.B Scope
+.br
+Per MDT or OST target client export
+.SH DESCRIPTION
+The
+.B reconnect_delay
+parameter reports how many seconds a specific client took to reconnect to
+each target during the most recent recovery window.
+The timer is reset when recovery starts and completes when each export first
+connects to the target.
+This is useful for isolating a specific client's recovery delay,
+which is otherwise shown only in aggregate form in the full
+.BR mdt.recovery_reconnect_histogram (4)
+or in limited numbers in
+.BR mdt.recovery_reconnect_top (4).
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B mdt.*.exports.*.reconnect_delay
+.B obdfilter.*.exports.*.reconnect_delay
+.EE
+.SH EXAMPLES
+Show the reconnect delay for a client after a recovery:
+.EX
+.RB mds# " lctl get_param mdt.lfs-MDT0000.exports.192.168.101.7@tcp101.reconnect_delay"
+47
+.EE
+.SH AVAILABILITY
+.B reconnect_delay
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" commit v2_17_53
+.SH SEE ALSO
+.BR mdt.recovery_reconnect_histogram (4),
+.BR mdt.recovery_reconnect_top (4),
+.BR lctl-get_param (8)

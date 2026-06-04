@@ -1689,6 +1689,33 @@ dont_check_exports:
 		if (atomic_inc_return(&target->obd_connected_clients) ==
 		    atomic_read(&target->obd_max_recoverable_clients))
 			wake_up(&target->obd_next_transno_waitq);
+
+		/* record reconnect delay for real filesystem clients only,
+		 * skipping the self-export, server-to-server OSP/MDS-MDS
+		 * connections, and lightweight clients. Use the export's
+		 * saved connect flags so this is correct on reconnect too;
+		 * mds_conn / mds_mds_conn are only set on INITIAL connect.
+		 */
+		if (target->obd_recovery_start &&
+		    target->obd_self_export != export &&
+		    !(exp_connect_flags(export) &
+		      (OBD_CONNECT_MDS | OBD_CONNECT_MDS_MDS |
+		       OBD_CONNECT_LIGHTWEIGHT))) {
+			struct obd_device_target *obt = obd2obt(target);
+			time64_t delay = ktime_get_seconds() -
+					 target->obd_recovery_start;
+
+			if (delay < 0)
+				delay = 0;
+			if (export->exp_nid_stats)
+				export->exp_nid_stats->nid_reconnect_delay =
+					delay;
+			lprocfs_oh_tally_log2(&obt->obt_reconnect_hist,
+					      (unsigned int)delay);
+			lprocfs_reconnect_top_tally(
+				obt, &export->exp_connection->c_peer.nid,
+				delay);
+		}
 	}
 
 	/* Tell the client we're in recovery, when client is involved in it. */
@@ -3054,6 +3081,8 @@ void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
 	obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
 	obd->obd_recovery_start = 0;
 	obd->obd_recovery_end = 0;
+	lprocfs_oh_clear(&obd2obt(obd)->obt_reconnect_hist);
+	lprocfs_reconnect_top_clear(obd2obt(obd));
 	hrtimer_setup(&obd->obd_recovery_timer, target_recovery_expired,
 		      CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
 	target_start_recovery_thread(lut, handler);
