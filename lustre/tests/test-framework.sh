@@ -3230,6 +3230,10 @@ shutdown_node () {
 	local node=$1
 	local uptime_info=$(node_uptime $node)
 
+	if ! power_management_available; then
+		skip "Node shutdown requires power management tools"
+	fi
+
 	echo "shutdown_node: $node uptime: $uptime_info"
 	echo + $POWER_DOWN $node
 	$POWER_DOWN $node
@@ -3238,6 +3242,10 @@ shutdown_node () {
 shutdown_node_hard () {
 	local host=$1
 	local attempts=$SHUTDOWN_ATTEMPTS
+
+	if ! power_management_available; then
+		skip "HARD shutdown requires power management tools"
+	fi
 
 	for i in $(seq $attempts) ; do
 		sleep 1
@@ -3259,6 +3267,10 @@ shutdown_client() {
 
 	echo "shutdown_client: $client uptime: $uptime_info"
 	if [ "$FAILURE_MODE" = HARD ]; then
+		if ! power_management_available; then
+			skip "HARD shutdown requires power management tools"
+		fi
+
 		shutdown_node_hard $client
 	else
 		zconf_umount_clients $client $mnt -f
@@ -3309,6 +3321,10 @@ shutdown_facet() {
 	local affected_facets
 
 	if [[ "$FAILURE_MODE" = HARD ]]; then
+		if ! power_management_available; then
+			skip "HARD failover requires power management tools"
+		fi
+
 		if [[ $(facet_fstype $facet) = ldiskfs ]] &&
 			dm_flakey_supported $facet; then
 			affected_facets=$(affected_facets $facet)
@@ -3317,7 +3333,8 @@ shutdown_facet() {
 			done
 		fi
 
-		shutdown_node_hard $(facet_active_host $facet)
+		shutdown_node_hard $(facet_active_host $facet) ||
+			error "shutdown_node_hard failed"
 	else
 		stop $facet
 	fi
@@ -3325,6 +3342,10 @@ shutdown_facet() {
 
 reboot_node() {
 	local node=$1
+
+	if ! power_management_available; then
+		skip "Node reboot requires power management tools"
+	fi
 
 	echo "=== reboot_node $node start: $(date)"
 	local uptime_info=$(node_uptime $node)
@@ -3347,6 +3368,10 @@ reboot_facet() {
 	local sleep_time=${2:-10}
 
 	if [ "$FAILURE_MODE" = HARD ]; then
+		if ! power_management_available; then
+			skip "HARD facet reboot requires power management tools"
+		fi
+
 		boot_node $node
 	else
 		sleep $sleep_time
@@ -3357,6 +3382,10 @@ boot_node() {
 	local node=$1
 
 	if [ "$FAILURE_MODE" = HARD ]; then
+		if ! power_management_available; then
+			skip "HARD boot requires power management tools"
+		fi
+
 		reboot_node $node
 		wait_for_host $node
 		if $LOAD_MODULES_REMOTE; then
@@ -8221,6 +8250,30 @@ local_mode ()
 {
 	remote_mds_nodsh || remote_ost_nodsh ||
 		$(single_local_node $(comma_list $(nodes_list)))
+}
+
+# Check if power management is available for HARD failover
+power_management_available ()
+{
+	# Extract the command name from POWER_DOWN
+	# (e.g., "powerman" from "powerman --off")
+	local power_cmd=${POWER_DOWN%% *}
+
+	# Check if the command exists
+	command -v "$power_cmd" > /dev/null 2>&1 || return 1
+
+	# Additional checks for specific power management tools
+	case "$power_cmd" in
+	*powerman*)
+		[[ -f /etc/powerman/powerman.conf ]] || return 1
+		grep -q "^device" /etc/powerman/powerman.conf 2>/dev/null ||
+			return 1
+		;;
+	*)
+		;;
+	esac
+
+	return 0
 }
 
 remote_servers () {

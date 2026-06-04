@@ -2886,6 +2886,10 @@ test_136() {
 	[[ "$MDS1_VERSION" -ge $(version_code 2.12.52) ]] ||
 		skip "Need MDS version at least 2.12.52"
 
+	# This test requires HARD failover
+	power_management_available ||
+		skip "Test requires power management for HARD failover"
+
 	local mdts=$(mdts_nodes)
 	local MDT0=$(facet_svc $SINGLEMDS)
 
