@@ -252,14 +252,19 @@ void client_destroy_import(struct obd_import *imp)
 EXPORT_SYMBOL(client_destroy_import);
 
 /**
- * Check whether or not the OSC is on MDT.
+ * osc_on_mdt() - Check whether or not the OSC is on MDT.
+ * @obdname: name of the obd device to check
+ *
  * In the config log,
  * osc on MDT
  *	setup 0:{fsname}-OSTxxxx-osc[-MDTxxxx] 1:lustre-OST0000_UUID 2:NID
  * osc on client
  *	setup 0:{fsname}-OSTxxxx-osc 1:lustre-OST0000_UUID 2:NID
  *
- **/
+ * Return:
+ * * %0 if %False (if the OSC on the MDT)
+ * * %1 if the OSC is on an MDT, %0 otherwise
+ */
 static int osc_on_mdt(char *obdname)
 {
 	char *ptr;
@@ -274,14 +279,18 @@ static int osc_on_mdt(char *obdname)
 	return 0;
 }
 
-/*
- * Configure an RPC client OBD device.
+/**
+ * client_obd_setup() - Configure an RPC client OBD device.
+ * @obd: OBD device to configure (client)
+ * @lcfg: configuration parameters:
+ *        1 - target UUID,
+ *        2 - server/connection UUID,
+ *        3 - inactive-on-startup,
+ *        4 - restrictive net
  *
- * lcfg parameters:
- * 1 - client UUID
- * 2 - server UUID
- * 3 - inactive-on-startup
- * 4 - restrictive net
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
@@ -1017,7 +1026,7 @@ static void
 check_and_start_recovery_timer(struct obd_device *obd,
 			       struct ptlrpc_request *req, int new_client);
 
-/**
+/*
  * update flags for import during reconnect process
  */
 static int rev_import_flags_update(struct obd_import *revimp,
@@ -1048,11 +1057,13 @@ static int rev_import_flags_update(struct obd_import *revimp,
 }
 
 /**
- * Allocate a new reverse import for an export.
+ * rev_import_init() - Allocate a new reverse import for an export.
+ * @export: OBD export (server export to client)
  *
- * \retval -errno in case error hit
- * \retval 0 if reverse import correctly init
- **/
+ * Return:
+ * * %0 on success (reverse import is successfully initialized)
+ * * %-errno on error
+ */
 int rev_import_init(struct obd_export *export)
 {
 	struct obd_device *obd = export->exp_obd;
@@ -1104,13 +1115,13 @@ int rev_import_init(struct obd_export *export)
 EXPORT_SYMBOL(rev_import_init);
 
 /**
- * Handle reconnect for an export.
+ * rev_import_reconnect() - Handle reconnect for an export.
+ * @exp: export to handle reconnect process
+ * @req: client reconnect request
  *
- * \param exp export to handle reconnect process
- * \param req client reconnect request
- *
- * \retval -rc in case securitfy flavor can't be changed
- * \retval 0 in case none problems
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 static int rev_import_reconnect(struct obd_export *exp,
 				struct ptlrpc_request *req)
@@ -2134,7 +2145,11 @@ static void target_start_recovery_timer(struct obd_device *obd)
 }
 
 /**
- * extend recovery window.
+ * extend_recovery_timer() - extend recovery window.
+ * @obd: OBD device to extend recovery
+ * @dr_timeout: recovery timeout value
+ * @extend: if true, extend the window so @dr_timeout remains; otherwise only
+ * ensure the timeout is at least @dr_timeout
  *
  * if @extend is true, extend recovery window to have @dr_timeout remaining
  * at least; otherwise, make sure the recovery timeout value is not less
@@ -2412,9 +2427,18 @@ static int check_update_llog(struct lu_target *lut)
 }
 
 /**
- * wait for recovery events,
- * check its status with help of check_routine
+ * target_recovery_overseer() - wait for recovery events, check status and
+ *                              evict dead clients
+ * @lut: target device
+ * @check_routine: Function to check recovery status
+ * @health_check: Function to check client and evict if dead
+ *
+ * Wait for recovery events, check its status with help of check_routine
  * evict dead clients via health_check
+ *
+ * Return:
+ * * %1 if recovery was aborted and stale exports were evicted
+ * * %0 if recovery can continue
  */
 static int target_recovery_overseer(struct lu_target *lut,
 				    int (*check_routine)(struct lu_target *),
@@ -2712,18 +2736,18 @@ static __u64 get_next_transno(struct lu_target *lut, int *type)
 }
 
 /**
- * drop duplicate replay request
+ * drop_duplicate_replay_req() - drop duplicate replay request
+ * @env: execution environment
+ * @obd: failover obd device
+ * @req: request to be dropped
  *
  * Because the operation has been replayed by update recovery, the request
  * with the same transno will be dropped and also notify the client to send
  * next replay request.
  *
- * \param[in] env	execution environment
- * \param[in] obd	failover obd device
- * \param[in] req	request to be dropped
- *
- * \retval true		duplicate replay update is dropped
- * \retval false	duplicate replay update is not dropped
+ * Return:
+ * * %true duplicate replay update is dropped
+ * * %false duplicate replay update is not dropped
  */
 static bool drop_duplicate_replay_req(struct lu_env *env,
 				      struct obd_device *obd,
@@ -3415,7 +3439,10 @@ void target_committed_to_req(struct ptlrpc_request *req)
 #endif /* CONFIG_LUSTRE_FS_SERVER */
 
 /**
- * Packs current SLV and Limit into \a req.
+ * target_pack_pool_reply() - Packs current SLV and Limit into @req
+ * @req: Request to pack the pool information
+ *
+ * Return: %0 always
  */
 int target_pack_pool_reply(struct ptlrpc_request *req)
 {
@@ -3582,8 +3609,17 @@ enum ldlm_mode lck_compat_array[] = {
 };
 
 /**
+ * ldlm_error2errno() - Map LDLM error code to errno
+ * @error: LDLM error code to be mapped
+ *
  * Rather arbitrary mapping from LDLM error codes to errno values. This should
  * not escape to the user level.
+ *
+ * Return:
+ * * %0 on success (ELDLM_OK, ELDLM_LOCK_MATCHED)
+ * * %negative errno for a known LDLM error code, or an unrecognised negative
+ *   code passed through
+ * * %-EPROTO for an unrecognised positive code
  */
 int ldlm_error2errno(enum ldlm_error error)
 {
