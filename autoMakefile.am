@@ -67,9 +67,6 @@ if MODULES
 	for ko in $$(find lnet/ -name '*.ko' 2>/dev/null); do \
 		$(INSTALL) -m 0644 $${ko} $(DESTDIR)$(modulenetdir)/; \
 	done
-	for ko in $$(find libcfs/ -name '*.ko' 2>/dev/null); do \
-		$(INSTALL) -m 0644 $${ko} $(DESTDIR)$(modulenetdir)/; \
-	done
 endif
 
 if MODULES
@@ -90,8 +87,6 @@ dist-hook:
 	find include/ -type f \( -name "*.h" \) \
 		-exec cp --parents {} $(distdir) \;
 	find lustre/include/ -type f \( -name "*.h" \) \
-		-exec cp --parents {} $(distdir) \;
-	find libcfs/ -type f \( -name "*.c" -o -name "*.h" -o -iname "Makefile" \) \
 		-exec cp --parents {} $(distdir) \;
 	find lustre_compat/ -type f \( -name "*.c" -o -name "*.h" -o -iname "Makefile" \) \
 		-exec cp --parents {} $(distdir) \;

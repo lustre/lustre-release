@@ -953,6 +953,9 @@ load_module() {
 
 	if [[ -f $LUSTRE/$module$ext ]]; then
 		path=$LUSTRE/$module$ext
+	elif [[ "$base" == libcfs ]] &&
+	     [[ -f $LUSTRE/../lnet/libcfs/$base$ext ]]; then
+		path=$LUSTRE/../lnet/libcfs/$base$ext
 	elif [[ "$base" == lnet_selftest ]] &&
 	     [[ -f $LUSTRE/../lnet/selftest/$base$ext ]]; then
 		path=$LUSTRE/../lnet/selftest/$base$ext

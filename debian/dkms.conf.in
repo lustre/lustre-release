@@ -131,7 +131,7 @@ module() {
 }
 
 # Common modules for both Client & Server
-module libcfs        libcfs/libcfs      net/lustre
+module libcfs        lnet/libcfs        net/lustre
 module lnet          lnet/lnet          net/lustre
 module lnet_selftest lnet/selftest      net/lustre
 module ksocklnd      lnet/klnds/socklnd net/lustre

@@ -10,7 +10,7 @@ lsrctree := $(realpath $(dir $(this-makefile)))
 ifdef CONFIG_LUSTRE_FS_LDISKFS
 obj-m += ldiskfs/
 endif
-obj-m += libcfs/ lnet/
+obj-m += lnet/
 obj-m += lustre/
 
 NOSTDINC_FLAGS += -I$(lsrctree)/lnet/include

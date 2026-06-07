@@ -164,7 +164,7 @@ module() {
   STRIP[\${#STRIP[@]}]=\${do_strip}
 }
 # Common modules for both Client & Server
-module libcfs        libcfs/libcfs      lnet
+module libcfs        lnet/libcfs        lnet
 module lnet_selftest lnet/selftest      lnet
 module lnet          lnet/lnet          lnet
 module ksocklnd      lnet/klnds/socklnd lnet
