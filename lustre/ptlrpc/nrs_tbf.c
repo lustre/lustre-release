@@ -16,6 +16,7 @@
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_req_layout.h>
+#include <lustre_nodemap.h>
 #include "ptlrpc_internal.h"
 
 /*
@@ -79,6 +80,12 @@ static int nrs_tbf_projid_str(const struct nrs_tbf_key *key, char *str, int len)
 	return nrs_tbf_id_str(key->tk_id.ti_projid, str, len);
 }
 
+static int nrs_tbf_nodemap_str(const struct nrs_tbf_key *key, char *str,
+			       int len)
+{
+	return nrs_tbf_id_str(key->tk_nmid, str, len);
+}
+
 static const struct nrs_tbf_type nrs_tbf_types[] = {
 	[NRS_TBF_FIELD_JOBID] = {
 		.ntt_name = NRS_TBF_TYPE_JOBID,
@@ -109,6 +116,11 @@ static const struct nrs_tbf_type nrs_tbf_types[] = {
 		.ntt_name = NRS_TBF_TYPE_PROJID,
 		.ntt_flag = NRS_TBF_FLAG_PROJID,
 		.ntt_str = nrs_tbf_projid_str,
+	},
+	[NRS_TBF_FIELD_NODEMAP] = {
+		.ntt_name = NRS_TBF_TYPE_NODEMAP,
+		.ntt_flag = NRS_TBF_FLAG_NODEMAP,
+		.ntt_str = nrs_tbf_nodemap_str,
 	},
 };
 
@@ -224,6 +236,18 @@ static void nrs_tbf_cli_gen_key(struct ptlrpc_request *req,
 		if (jobid == NULL)
 			jobid = NRS_TBF_JOBID_NULL;
 		strscpy(key->tk_jobid, jobid, sizeof(key->tk_jobid));
+	}
+
+	if (valid & NRS_TBF_FLAG_NODEMAP) {
+		struct lu_nodemap *lnm;
+
+		lnm = nodemap_get_from_exp(req->rq_export);
+		if (IS_ERR_OR_NULL(lnm)) {
+			key->tk_nmid = LUSTRE_NODEMAP_MAX_ID;
+		} else {
+			key->tk_nmid = lnm->nm_id;
+			nodemap_putref(lnm);
+		}
 	}
 
 	key->tk_flags = valid;
@@ -1306,6 +1330,17 @@ nrs_tbf_id_list_free(struct list_head *id_list)
 }
 
 static void
+nrs_tbf_nodemap_list_free(struct list_head *nm_list)
+{
+	struct nrs_tbf_nodemap *nodemap, *n;
+
+	list_for_each_entry_safe(nodemap, n, nm_list, ntn_linkage) {
+		list_del_init(&nodemap->ntn_linkage);
+		OBD_FREE_PTR(nodemap);
+	}
+}
+
+static void
 nrs_tbf_expression_free(struct nrs_tbf_expression *expr)
 {
 	LASSERT(expr->te_field >= 0 && expr->te_field < NRS_TBF_FIELD_MAX);
@@ -1323,6 +1358,9 @@ nrs_tbf_expression_free(struct nrs_tbf_expression *expr)
 	case NRS_TBF_FIELD_GID:
 	case NRS_TBF_FIELD_PROJID:
 		nrs_tbf_id_list_free(&expr->te_cond);
+		break;
+	case NRS_TBF_FIELD_NODEMAP:
+		nrs_tbf_nodemap_list_free(&expr->te_cond);
 		break;
 	default:
 		LBUG();
@@ -1367,6 +1405,64 @@ nrs_tbf_opcode_list_parse(char *str, unsigned long **bitmaptr);
 static int
 nrs_tbf_id_list_parse(char *str, struct list_head *id_list,
 		      enum nrs_tbf_flag tif);
+
+static int
+nrs_tbf_nodemap_list_add(char *name, struct list_head *nm_list)
+{
+	struct nrs_tbf_nodemap *nodemap;
+	struct lu_nodemap *lnm;
+
+	ENTRY;
+
+	OBD_ALLOC_PTR(nodemap);
+	if (nodemap == NULL)
+		RETURN(-ENOMEM);
+
+	/*
+	 * If the setting for nodemap and TBF are using Lustre config log,
+	 * it must ensure that nodemap is configured before the TBF.
+	 * Otherwise, the nodemap lookup will return an error and adding
+	 * TBF rule for the nodemap will fail.
+	 */
+	lnm = nodemap_lookup_unlocked(name);
+	if (IS_ERR(lnm)) {
+		OBD_FREE_PTR(nodemap);
+		RETURN(PTR_ERR(lnm));
+	}
+
+	nodemap->ntn_nmid = lnm->nm_id;
+	nodemap_putref(lnm);
+	list_add_tail(&nodemap->ntn_linkage, nm_list);
+	RETURN(0);
+}
+
+static int
+nrs_tbf_nodemap_list_parse(char *orig, struct list_head *nm_list)
+{
+	char *str, *copy;
+	int rc = 0;
+
+	ENTRY;
+
+	copy = kstrdup(orig, GFP_KERNEL);
+	if (!copy)
+		RETURN(-ENOMEM);
+
+	str = copy;
+	INIT_LIST_HEAD(nm_list);
+	while (str && rc == 0) {
+		char *tok = strsep(&str, " ");
+
+		if (*tok)
+			rc = nrs_tbf_nodemap_list_add(tok, nm_list);
+	}
+	if (list_empty(nm_list))
+		rc = -EINVAL;
+	if (rc)
+		nrs_tbf_nodemap_list_free(nm_list);
+	kfree(copy);
+	RETURN(rc);
+}
 
 static int
 nrs_tbf_expression_parse(enum nrs_tbf_flag ntf, char *str,
@@ -1435,6 +1531,12 @@ nrs_tbf_expression_parse(enum nrs_tbf_flag ntf, char *str,
 					  NRS_TBF_FLAG_PROJID) < 0)
 			GOTO(out, rc = -EINVAL);
 		expr->te_field = NRS_TBF_FIELD_PROJID;
+	} else if (strcmp(field, NRS_TBF_TYPE_NODEMAP) == 0) {
+		if (!(ntf & NRS_TBF_FLAG_NODEMAP))
+			GOTO(out, rc = -EINVAL);
+		if (nrs_tbf_nodemap_list_parse(str, &expr->te_cond) < 0)
+			GOTO(out, rc = -EINVAL);
+		expr->te_field = NRS_TBF_FIELD_NODEMAP;
 	} else {
 		GOTO(out, rc = -EINVAL);
 	}
@@ -1500,6 +1602,18 @@ nrs_tbf_id_list_match(struct list_head *id_list, u32 id,
 		      enum nrs_tbf_flag flag);
 
 static int
+nrs_tbf_nodemap_list_match(struct list_head *nm_list, unsigned int nmid)
+{
+	struct nrs_tbf_nodemap *nodemap;
+
+	list_for_each_entry(nodemap, nm_list, ntn_linkage) {
+		if (nodemap->ntn_nmid == nmid)
+			return 1;
+	}
+	return 0;
+}
+
+static int
 nrs_tbf_expression_match(struct nrs_tbf_expression *expr,
 			 struct nrs_tbf_rule *rule,
 			 struct nrs_tbf_client *cli)
@@ -1521,6 +1635,9 @@ nrs_tbf_expression_match(struct nrs_tbf_expression *expr,
 		return nrs_tbf_id_list_match(&expr->te_cond,
 					     cli->tc_id.ti_projid,
 					     NRS_TBF_FLAG_PROJID);
+	case NRS_TBF_FIELD_NODEMAP:
+		return nrs_tbf_nodemap_list_match(&expr->te_cond,
+						  cli->tc_nmid);
 	default:
 		return 0;
 	}

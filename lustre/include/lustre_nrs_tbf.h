@@ -41,6 +41,7 @@ enum nrs_tbf_field {
 	NRS_TBF_FIELD_UID,
 	NRS_TBF_FIELD_GID,
 	NRS_TBF_FIELD_PROJID,
+	NRS_TBF_FIELD_NODEMAP,
 	NRS_TBF_FIELD_MAX,
 };
 
@@ -52,6 +53,7 @@ enum nrs_tbf_flag {
 	NRS_TBF_FLAG_UID	= BIT(NRS_TBF_FIELD_UID),
 	NRS_TBF_FLAG_GID	= BIT(NRS_TBF_FIELD_GID),
 	NRS_TBF_FLAG_PROJID	= BIT(NRS_TBF_FIELD_PROJID),
+	NRS_TBF_FLAG_NODEMAP	= BIT(NRS_TBF_FIELD_NODEMAP),
 	NRS_TBF_FLAG_END	= BIT(NRS_TBF_FIELD_MAX),
 	NRS_TBF_FLAG_ALL	= (NRS_TBF_FLAG_END - 1),
 	NRS_TBF_FLAG_IDS	= NRS_TBF_FLAG_UID | NRS_TBF_FLAG_GID |
@@ -69,11 +71,17 @@ struct nrs_tbf_id {
 	struct list_head	nti_linkage;
 };
 
+struct nrs_tbf_nodemap {
+	unsigned int		ntn_nmid;
+	struct list_head	ntn_linkage;
+};
+
 struct nrs_tbf_key {
 	__u32			tk_flags;
 	struct lnet_nid		tk_nid;
 	__u32			tk_opcode;
-	struct tbf_id		tk_id;	/* UID and GID */
+	struct tbf_id		tk_id;		/* UID and GID */
+	__u32			tk_nmid;	/* Unique nodemap ID */
 	char			tk_jobid[LUSTRE_JOBID_SIZE];
 };
 
@@ -140,6 +148,7 @@ struct nrs_tbf_client {
 #define tc_opcode	tc_key.tk_opcode
 #define tc_id		tc_key.tk_id
 #define tc_jobid	tc_key.tk_jobid
+#define tc_nmid		tc_key.tk_nmid
 
 #define MAX_TBF_NAME (16)
 
@@ -202,6 +211,7 @@ struct nrs_tbf_rule {
 #define NRS_TBF_TYPE_UID	"uid"
 #define NRS_TBF_TYPE_GID	"gid"
 #define NRS_TBF_TYPE_PROJID	"projid"
+#define NRS_TBF_TYPE_NODEMAP	"nodemap"
 #define NRS_TBF_TYPE_UNKNOWN	"unknown"
 #define NRS_TBF_TYPE_MAX_LEN	20
 

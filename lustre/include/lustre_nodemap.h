@@ -27,7 +27,8 @@
 
 #define LUSTRE_NODEMAP_NAME "nodemap"
 
-#define LUSTRE_NODEMAP_DEFAULT_ID 0
+#define LUSTRE_NODEMAP_DEFAULT_ID	0
+#define LUSTRE_NODEMAP_MAX_ID		UINT_MAX
 
 static const struct nodemap_rbac_name {
 	enum nodemap_rbac_roles nrn_mode;

@@ -4549,7 +4549,9 @@ tbf_verify() {
 	local client1=${CLIENT1:-$(hostname)}
 	local myRUNAS="$3"
 	local create_as="$4"
+	local not_under_control=${5:-0}
 
+	echo "not_under_control: $not_under_control"
 	local np=$(check_cpt_number ost1)
 	[ $np -gt 0 ] || error "CPU partitions should not be $np."
 	echo "cpu_npartitions on ost1 is $np"
@@ -4574,8 +4576,13 @@ tbf_verify() {
 	echo "Write runtime is $runtime s, speed is $rate IOPS"
 
 	# verify the write rate does not exceed TBF rate limit
-	[ $(bc <<< "$rate < 1.1 * $np * $1") -eq 1 ] ||
-		error "The write rate ($rate) exceeds 110% of rate limit ($1 * $np)"
+	[ $(bc <<< "$rate < 1.1 * $np * $1") -eq 1 ] || {
+		if (( not_under_control == 1 )); then
+			echo "write rate ($rate) should exceed limit ($1 * $np)"
+		else
+			error "write rate ($rate) exceeds limit ($1 * $np)"
+		fi
+	}
 
 	cancel_lru_locks osc
 
@@ -4588,8 +4595,13 @@ tbf_verify() {
 	echo "Read runtime is $runtime s, speed is $rate IOPS"
 
 	# verify the read rate does not exceed TBF rate limit
-	[ $(bc <<< "$rate < 1.1 * $np * $2") -eq 1 ] ||
-		error "The read rate ($rate) exceeds 110% of rate limit ($2 * $np)"
+	[ $(bc <<< "$rate < 1.1 * $np * $2") -eq 1 ] || {
+		if (( not_under_control == 1 )); then
+			echo "read rate ($rate) should exceed limit ($2 * $np)"
+		else
+			error "read rate ($rate) exceeds limit ($2 * $np)"
+		fi
+	}
 
 	cancel_lru_locks osc
 	cleanup_tbf_verify || error "rm -rf $dir failed"
@@ -5219,6 +5231,96 @@ test_77ki() {
 	cleanup_77k "ext_w ext_r" "fifo"
 }
 run_test 77ki "Add rule with unsupported TBF type should fail for generic TBF"
+
+setup_nodemap_77kj() {
+	local nm=$1
+
+	do_facet mgs $LCTL nodemap_activate 1
+	wait_nm_sync active
+	do_facet mgs $LCTL nodemap_add $nm
+	do_facet mgs $LCTL nodemap_add_range \
+			--name $nm --range $client_nid
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+			--property admin --value 1
+	do_facet mgs $LCTL nodemap_modify --name $nm \
+			--property trusted --value 1
+	wait_nm_sync $nm
+}
+
+cleanup_nodemap_77kj() {
+	local nm=$1
+
+	# tolerate a nodemap already removed by the test body
+	do_facet mgs $LCTL nodemap_del $nm 2>/dev/null
+	wait_nm_sync $nm id ''
+	do_facet mgs $LCTL nodemap_activate 0
+	wait_nm_sync active
+}
+
+# Stop the given TBF rules and restore the default policy. Unlike
+# cleanup_77k() this neither overwrites nor clears the EXIT trap, so it
+# is safe to call both explicitly and from a stack_trap handler.
+cleanup_tbf_77kj() {
+	local osts=$(osts_nodes)
+	local rule
+
+	for rule in $1; do
+		do_nodes $osts $LCTL set_param \
+			ost.OSS.ost_io.nrs_tbf_rule="stop\ $rule" 2>/dev/null
+	done
+	do_nodes $osts $LCTL set_param ost.OSS.ost_io.nrs_policies="fifo"
+	sleep 3
+}
+
+test_77kj() {
+	(( "$OST1_VERSION" >= $(version_code 2.17.53) )) ||
+		skip "Need OST version at least 2.17.53"
+
+	local nm="TBF"
+	local client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
+	local client_nid=$(h2nettype $client_ip)
+	local osts=$(osts_nodes)
+
+	stack_trap "cleanup_nodemap_77kj $nm"
+	setup_nodemap_77kj $nm
+
+	# TBF rule limiting a single nodemap
+	stack_trap "cleanup_tbf_77kj ext_nm_rw"
+	do_nodes $osts \
+		$LCTL set_param ost.OSS.ost_io.nrs_policies="tbf\ nodemap" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_nm_rw\ nodemap={$nm}\ rate=20"
+	nrs_write_read
+	tbf_verify 20 20
+
+	# removing the nodemap lifts the rate limit
+	cleanup_nodemap_77kj $nm
+	nrs_write_read
+	tbf_verify 20 20 "" "" 1
+	cleanup_tbf_77kj "ext_nm_rw"
+
+	# nodemap+opcode rules must fail to start while the nodemap is gone
+	do_nodes $osts \
+		$LCTL set_param ost.OSS.ost_io.nrs_policies="tbf\ nodemap+opcode" ||
+		error "failed to setup NRS TBF policy for nodemap+opcode"
+	stack_trap "cleanup_tbf_77kj 'ext_w ext_r'"
+	do_nodes $osts \
+		$LCTL set_param \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_w\ nodemap={$nm}\&opcode={ost_write}\ rate=20" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_r\ nodemap={$nm}\&opcode={ost_read}\ rate=10" &&
+			error "Start TBF rule should fail as the nodemap does not exist"
+	setup_nodemap_77kj $nm
+	do_nodes $osts \
+		$LCTL set_param \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_w\ nodemap={$nm}\&opcode={ost_write}\ rate=20" \
+			ost.OSS.ost_io.nrs_tbf_rule="start\ ext_r\ nodemap={$nm}\&opcode={ost_read}\ rate=10" ||
+			error "Failed to start NRS TBF rule"
+	nrs_write_read
+	tbf_verify 20 10
+
+	cleanup_tbf_77kj "ext_w ext_r"
+	cleanup_nodemap_77kj $nm
+}
+run_test 77kj "Verify nodemap support for NRS TBF rule"
 
 test_77l() {
 	[[ "$OST1_VERSION" -ge $(version_code 2.10.56) ]] ||
