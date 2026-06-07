@@ -994,10 +994,10 @@ static inline void *kgnilnd_vzalloc(int size)
 {
 	void *ret;
 	if (*kgnilnd_tunables.kgn_vzalloc_noretry)
-		ret = __compat_vmalloc(size, __GFP_HIGHMEM | GFP_NOIO |
+		ret = __compat_vmalloc(size, GFP_NOIO |
 				       __GFP_ZERO | __GFP_NORETRY);
 	else
-		ret = __compat_vmalloc(size, __GFP_HIGHMEM | GFP_NOIO |
+		ret = __compat_vmalloc(size, GFP_NOIO |
 				       __GFP_ZERO);
 
 	LIBCFS_ALLOC_POST(ret, size, "alloc");

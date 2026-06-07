@@ -883,7 +883,7 @@ do {									      \
 #define __OBD_VMALLOC_VERBOSE(ptr, cptab, cpt, size)			      \
 do {									      \
 	(ptr) = cptab == NULL ?						      \
-		__compat_vmalloc(size, GFP_NOFS | __GFP_HIGHMEM | __GFP_ZERO) :\
+		__compat_vmalloc(size, GFP_NOFS | __GFP_ZERO) :		      \
 		cfs_cpt_vzalloc(cptab, cpt, size);			      \
 	if (unlikely((ptr) == NULL)) {                                        \
 		CERROR("vmalloc of '" #ptr "' (%d bytes) failed\n",           \
