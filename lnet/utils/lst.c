@@ -3500,6 +3500,8 @@ lst_get_bulk_param(int argc, char **argv, struct lst_test_bulk_param *bulk)
 {
 	char *tok = NULL;
 	char *end = NULL;
+	int check_seen = 0;
+	int skip_seen = 0;
 	int rc = 0;
 	int i = 0;
 
@@ -3517,10 +3519,21 @@ lst_get_bulk_param(int argc, char **argv, struct lst_test_bulk_param *bulk)
 				bulk->blk_flags = LST_BRW_CHECK_FULL;
 			} else if (strcasecmp(tok, "simple") == 0) {
 				bulk->blk_flags = LST_BRW_CHECK_SIMPLE;
+			} else if (strcasecmp(tok, "discard") == 0) {
+				bulk->blk_flags = LST_BRW_CHECK_DISCARD;
 			} else {
 				fprintf(stderr, "Unknow flag %s\n", tok);
 				return -1;
 			}
+
+			if (skip_seen &&
+			    bulk->blk_flags != LST_BRW_CHECK_DISCARD) {
+				fprintf(stderr,
+					"check=%s conflicts with skip_rx_copy\n",
+					tok);
+				return -1;
+			}
+			check_seen = 1;
 
 		} else if (strcasestr(argv[i], "size=") == argv[i] ||
 			   strcasestr(argv[i], "s=") == argv[i]) {
@@ -3574,6 +3587,17 @@ lst_get_bulk_param(int argc, char **argv, struct lst_test_bulk_param *bulk)
 		} else if (strcasecmp(argv[i], "write") == 0 ||
 			   strcasecmp(argv[i], "w") == 0) {
 			bulk->blk_opc = LST_BRW_WRITE;
+
+		} else if (strcasecmp(argv[i], "skip_rx_copy") == 0 ||
+			   strcasecmp(argv[i], "skip-rx-copy") == 0) {
+			if (check_seen &&
+			    bulk->blk_flags != LST_BRW_CHECK_DISCARD) {
+				fprintf(stderr,
+					"skip_rx_copy conflicts with check=\n");
+				return -1;
+			}
+			bulk->blk_flags = LST_BRW_CHECK_DISCARD;
+			skip_seen = 1;
 
 		} else {
 			fprintf(stderr, "Unknow parameter: %s\n", argv[i]);

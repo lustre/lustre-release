@@ -220,9 +220,16 @@ ksocknal_lib_recv(struct ksock_conn *conn)
 	struct msghdr msg = { .msg_iter = conn->ksnc_rx_to };
 	u32 saved_csum;
 	int rc;
+	int flags = MSG_DONTWAIT;
 
-	rc = sock_recvmsg(conn->ksnc_sock, &msg, MSG_DONTWAIT);
+	if (conn->ksnc_rx_discard)
+		flags |= MSG_TRUNC;
+
+	rc = sock_recvmsg(conn->ksnc_sock, &msg, flags);
 	if (rc <= 0)
+		return rc;
+
+	if (conn->ksnc_rx_discard)
 		return rc;
 
 	saved_csum = conn->ksnc_msg.ksm_csum;

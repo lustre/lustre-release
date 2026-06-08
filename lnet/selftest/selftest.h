@@ -207,6 +207,7 @@ struct srpc_bulk {
 	int			bk_len;  /* len of bulk data */
 	struct lnet_handle_md	bk_mdh;
 	int			bk_sink; /* sink/source */
+	int			bk_discard; /* discard received data? */
 	int			bk_alloc; /* # allocated iov */
 	int			bk_niov; /* # iov in bk_iovs */
 	struct bio_vec		bk_iovs[];

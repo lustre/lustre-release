@@ -420,6 +420,12 @@ struct lnet_md {
 	 * - LNET_MD_NO_TRACK_RESPONSE: Disable response tracking on this MD
 	 *   regardless of the value of the lnet_response_tracking param.
 	 * - LNET_MD_GNILND: Disable warning about exceeding LNET_MAX_IOV.
+	 * - LNET_MD_DISCARD: The payload of incoming requests may be dropped
+	 *   instead of being copied into the memory region. The event still
+	 *   reports the full mlength as received, but the contents of the
+	 *   memory region are undefined afterwards. This is a hint only:
+	 *   socklnd honours it, every other LND ignores it and delivers the
+	 *   data as usual.
 	 *
 	 * Note:
 	 * - LNET_MD_KIOV allows for a scatter/gather capability for memory
@@ -478,6 +484,7 @@ enum lnet_md_options {
 	LNET_MD_NO_TRACK_RESPONSE = 0x0800,
 	LNET_MD_GNILND		= 0x1000,
 	LNET_MD_GPU_ADDR	= 0x2000,
+	LNET_MD_DISCARD		= 0x4000,
 };
 
 /** Infinite threshold on MD operations. See struct lnet_md::threshold */

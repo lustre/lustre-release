@@ -471,9 +471,10 @@ enum lst_brw_type {
 };
 
 enum lst_brw_flags {
-	LST_BRW_CHECK_NONE   = 1,
-	LST_BRW_CHECK_SIMPLE = 2,
-	LST_BRW_CHECK_FULL   = 3
+	LST_BRW_CHECK_NONE    = 1,
+	LST_BRW_CHECK_SIMPLE  = 2,
+	LST_BRW_CHECK_FULL    = 3,
+	LST_BRW_CHECK_DISCARD = 4
 };
 
 struct lst_test_bulk_param {

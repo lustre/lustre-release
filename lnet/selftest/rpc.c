@@ -167,6 +167,7 @@ srpc_init_bulk(struct srpc_bulk *bk, unsigned int bulk_off,
 
 	bk->bk_sink   = sink;
 	bk->bk_len    = bulk_len;
+	bk->bk_discard = 0;
 
 	for (i = 0; bulk_len > 0; i++) {
 		int nob;
@@ -865,6 +866,8 @@ srpc_prepare_bulk(struct srpc_client_rpc *rpc)
 
 	opt = bk->bk_sink ? LNET_MD_OP_PUT : LNET_MD_OP_GET;
 	opt |= LNET_MD_KIOV;
+	if (bk->bk_sink && bk->bk_discard)
+		opt |= LNET_MD_DISCARD;
 
 	ev->ev_fired = 0;
 	ev->ev_data  = rpc;
@@ -895,6 +898,8 @@ srpc_do_bulk(struct srpc_server_rpc *rpc)
 
 	opt = bk->bk_sink ? LNET_MD_OP_GET : LNET_MD_OP_PUT;
 	opt |= LNET_MD_KIOV;
+	if (bk->bk_sink && bk->bk_discard)
+		opt |= LNET_MD_DISCARD;
 
 	ev->ev_fired = 0;
 	ev->ev_data  = rpc;

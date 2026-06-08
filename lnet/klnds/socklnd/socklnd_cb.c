@@ -1017,6 +1017,7 @@ ksocknal_new_packet(struct ksock_conn *conn, int nob_to_skip)
 
 	if (nob_to_skip == 0) {         /* right at next packet boundary now */
 		conn->ksnc_rx_started = 0;
+		conn->ksnc_rx_discard = 0;
 		smp_mb();               /* racing with timeout thread */
 
 		switch (conn->ksnc_proto->pro_version) {
@@ -1239,7 +1240,8 @@ ksocknal_process_receive(struct ksock_conn *conn)
 		/* payload all received */
 		rc = 0;
 
-		if (conn->ksnc_rx_nob_left == 0 &&   /* not truncating */
+		if (!conn->ksnc_rx_discard &&
+		    conn->ksnc_rx_nob_left == 0 &&   /* not truncating */
 		    conn->ksnc_msg.ksm_csum != 0 &&  /* has checksum */
 		    conn->ksnc_msg.ksm_csum != conn->ksnc_rx_csum) {
 			CERROR("%s: Checksum error, wire:0x%08X data:0x%08X\n",
@@ -1303,6 +1305,11 @@ ksocknal_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 
 	conn->ksnc_lnet_msg = msg;
 	conn->ksnc_rx_nob_left = rlen;
+
+	if (msg && msg->msg_md && (msg->msg_md->md_options & LNET_MD_DISCARD))
+		conn->ksnc_rx_discard = 1;
+	else
+		conn->ksnc_rx_discard = 0;
 
 	conn->ksnc_rx_to = *to;
 
