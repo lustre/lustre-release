@@ -567,7 +567,7 @@ AC_DEFUN([LB_LINUX_COMPILE_IFELSE],
 mkdir -p kconftest.dir/
 rm -f kconftest.dir/conftest.o kconftest.dir/conftest.mod.c kconftest.dir/conftest.ko
 echo "obj-m := conftest.o" >> kconftest.dir/Kbuild
-AS_IF([AC_TRY_COMMAND(cp conftest.c kconftest.dir && make -d [$2] LDFLAGS= ${LD:+LD="$LD"} CC="$CC" LINUXINCLUDE="$EXTRA_CHECK_INCLUDE -I$LINUX/arch/$SUBARCH/include -Iinclude -Iarch/$SUBARCH/include/generated -I$LINUX/include -Iinclude2 -I$LINUX/include/uapi -Iinclude/generated -I$LINUX/arch/$SUBARCH/include/uapi -Iarch/$SUBARCH/include/generated/uapi -I$LINUX/include/uapi -Iinclude/generated/uapi -I$LINUX/arch/$SUBARCH/include/generated -I$LINUX/arch/$SUBARCH/include/generated/uapi -I$LINUX/include/generated -I$LINUX/include/generated/uapi -I$LINUX_OBJ/include -I$LINUX_OBJ/include/generated/uapi -I$LINUX_OBJ/arch/$SUBARCH/include/generated -I$LINUX_OBJ/arch/$SUBARCH/include/generated/uapi ${SPL_OBJ:+-include $SPL_OBJ/spl_config.h} ${ZFS_OBJ:+-include $ZFS_OBJ/zfs_config.h} ${SPL:+-I$SPL/include } ${ZFS:+-I$ZFS -I$ZFS/include -I$ZFS/include/os/linux/kernel -I$ZFS/include/os/linux/spl -I$ZFS/include/os/linux/zfs -I${SPL:-$ZFS/include/spl}} -include $LINUX/include/linux/kconfig.h" KBUILD_EXTRA_SYMBOLS="${ZFS_OBJ:+$ZFS_OBJ/Module.symvers} $KBUILD_EXTRA_SYMBOLS" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" M=$PWD/kconftest.dir) >/dev/null && AC_TRY_COMMAND([$3])],
+AS_IF([AC_TRY_COMMAND(cp conftest.c kconftest.dir && make -d [$2] LDFLAGS= ${LD:+LD="$LD"} CC="$CC" LINUXINCLUDE="$EXTRA_CHECK_INCLUDE -I$LINUX/arch/$SUBARCH/include -Iinclude -Iarch/$SUBARCH/include/generated -I$LINUX/include -Iinclude2 -I$LINUX/include/uapi -Iinclude/generated -I$LINUX/arch/$SUBARCH/include/uapi -Iarch/$SUBARCH/include/generated/uapi -I$LINUX/include/uapi -Iinclude/generated/uapi -I$LINUX/arch/$SUBARCH/include/generated -I$LINUX/arch/$SUBARCH/include/generated/uapi -I$LINUX/include/generated -I$LINUX/include/generated/uapi -I$LINUX_OBJ/include -I$LINUX_OBJ/include/generated/uapi -I$LINUX_OBJ/arch/$SUBARCH/include/generated -I$LINUX_OBJ/arch/$SUBARCH/include/generated/uapi ${SPL_OBJ:+-include $SPL_OBJ/spl_config.h} ${ZFS_OBJ:+-include $ZFS_OBJ/zfs_config.h} ${SPL:+-I$SPL/include } ${ZFS:+-I$ZFS -I$ZFS/include -I$ZFS/include/os/linux/kernel -I$ZFS/include/os/linux/spl -I$ZFS/include/os/linux/zfs -I${SPL:-$ZFS/include/spl}} -include $LINUX/include/linux/kconfig.h" KBUILD_EXTRA_SYMBOLS="$EXTRA_SYMBOLS $KBUILD_EXTRA_SYMBOLS" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" M=$PWD/kconftest.dir) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST
 m4_ifvaln([$5],[$5])dnl])
@@ -793,7 +793,7 @@ LINUXINCLUDE += -I\$(ZINC)/include/os/linux/kernel
 endif
 endif
 LINUXINCLUDE += -include $LINUX/include/linux/kconfig.h
-KBUILD_EXTRA_SYMBOLS += ${ZFS_OBJ:+$ZFS_OBJ/Module.symvers}
+KBUILD_EXTRA_SYMBOLS += ${EXTRA_SYMBOLS}
 KBUILD_EXTRA_SYMBOLS += ${XTRA_SYM}
 ifneq (\$(PSYM),)
 KBUILD_EXTRA_SYMBOLS += \$(PSYM)
