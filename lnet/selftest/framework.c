@@ -97,6 +97,8 @@ static struct smoketest_framework {
 	int			fw_shuttingdown;
 	/* running RPC */
 	struct srpc_server_rpc	*fw_active_srpc;
+	/* deferred session reaper */
+	struct work_struct	fw_reap_wi;
 } sfw_data;
 
 static struct srpc_service sfw_services[] = {
@@ -112,6 +114,7 @@ static struct srpc_service sfw_services[] = {
 /* forward ref's */
 static int sfw_stop_batch(struct sfw_batch *tsb, int force);
 static void sfw_destroy_session(struct sfw_session *sn);
+static void sfw_reap_zombie_sessions(struct work_struct *work);
 
 static inline struct sfw_test_case *
 sfw_find_test_case(enum srpc_service_type id)
@@ -188,6 +191,51 @@ sfw_del_session_timer(void)
 	return -EBUSY; /* racing with sfw_session_expired() */
 }
 
+/*
+ * Reap zombie sessions whose batches have all finished. Destroying a
+ * session frees client RPCs, which must never happen from inside a
+ * client RPC work handler: cancel_work_sync() on the currently-running
+ * work item would deadlock, and skipping it would free the work item
+ * out from under itself. Defer the destruction to this work item.
+ */
+static void
+sfw_reap_zombie_sessions(struct work_struct *work)
+{
+	struct sfw_session *sn;
+	struct sfw_session *tmp;
+	struct sfw_batch *tsb;
+	LIST_HEAD(ready);
+
+	spin_lock(&sfw_data.fw_lock);
+	list_for_each_entry_safe(sn, tmp, &sfw_data.fw_zombie_sessions,
+				 sn_list) {
+		int active = 0;
+
+		/* sn is still being examined by the thread that put it
+		 * on this list; come back on the next reaper run.
+		 */
+		if (sn->sn_busy)
+			continue;
+
+		list_for_each_entry(tsb, &sn->sn_batches, bat_list) {
+			if (sfw_batch_active(tsb)) {
+				active = 1;
+				break;
+			}
+		}
+		if (active)
+			continue;
+
+		list_move_tail(&sn->sn_list, &ready);
+	}
+	spin_unlock(&sfw_data.fw_lock);
+
+	list_for_each_entry_safe(sn, tmp, &ready, sn_list) {
+		list_del_init(&sn->sn_list);
+		sfw_destroy_session(sn);
+	}
+}
+
 /* called with sfw_data.fw_lock held */
 static void
 sfw_deactivate_session(void)
@@ -207,6 +255,12 @@ __must_hold(&sfw_data.fw_lock)
 	atomic_inc(&sfw_data.fw_nzombies);
 	list_add(&sn->sn_list, &sfw_data.fw_zombie_sessions);
 
+	/* Pin sn against the reaper while fw_lock is dropped below:
+	 * sn is already reachable on fw_zombie_sessions, and without
+	 * this the reaper could reap and free it out from under us
+	 * before we come back to walk sn->sn_batches.
+	 */
+	sn->sn_busy++;
 	spin_unlock(&sfw_data.fw_lock);
 
 	list_for_each_entry(tsc, &sfw_data.fw_tests, tsc_list) {
@@ -214,6 +268,7 @@ __must_hold(&sfw_data.fw_lock)
 	}
 
 	spin_lock(&sfw_data.fw_lock);
+	sn->sn_busy--;
 
 	list_for_each_entry(tsb, &sn->sn_batches, bat_list) {
 		if (sfw_batch_active(tsb)) {
@@ -225,12 +280,10 @@ __must_hold(&sfw_data.fw_lock)
 	if (nactive != 0)
 		return;	/* wait for active batches to stop */
 
-	list_del_init(&sn->sn_list);
-	spin_unlock(&sfw_data.fw_lock);
-
-	sfw_destroy_session(sn);
-
-	spin_lock(&sfw_data.fw_lock);
+	/* Defer destruction to the reaper work item: it frees client
+	 * RPCs, which must not happen from within a work handler.
+	 */
+	queue_work(lst_serial_wq, &sfw_data.fw_reap_wi);
 }
 
 static void
@@ -869,10 +922,12 @@ sfw_test_unit_done(struct sfw_test_unit *tsu)
 		}
 	}
 
-	list_del_init(&sn->sn_list);
+	/* Leave sn on the zombie list and defer its destruction to the
+	 * reaper work item: sfw_test_unit_done() may be running inside a
+	 * client RPC work handler, which must not free that same RPC.
+	 */
 	spin_unlock(&sfw_data.fw_lock);
-
-	sfw_destroy_session(sn);
+	queue_work(lst_serial_wq, &sfw_data.fw_reap_wi);
 }
 
 static void
@@ -1637,6 +1692,7 @@ sfw_startup(void)
 	INIT_LIST_HEAD(&sfw_data.fw_tests);
 	INIT_LIST_HEAD(&sfw_data.fw_zombie_rpcs);
 	INIT_LIST_HEAD(&sfw_data.fw_zombie_sessions);
+	INIT_WORK(&sfw_data.fw_reap_wi, sfw_reap_zombie_sessions);
 
 	brw_init_test_service();
 	rc = sfw_register_test(&brw_test_service, &brw_test_client);
