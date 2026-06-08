@@ -796,6 +796,10 @@ static inline int mgs_init_export(struct obd_export *exp)
 	if (unlikely(obd_uuid_equals(&exp->exp_obd->obd_uuid,
 				     &exp->exp_client_uuid)))
 		return 0;
+
+	spin_lock_init(&exp->exp_target_data.ted_nodemap_lock);
+	INIT_LIST_HEAD(&exp->exp_target_data.ted_nodemap_member);
+
 	return ldlm_init_export(exp);
 }
 
@@ -1811,7 +1815,9 @@ static int mgs_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 			     struct obd_connect_data *data, void *localdata)
 {
 	struct ptlrpc_request *req = localdata;
+	struct ptlrpc_svc_ctx *svc_ctx = NULL;
 	struct lnet_nid *client_nid = NULL;
+	int rc;
 
 	ENTRY;
 
@@ -1830,8 +1836,20 @@ static int mgs_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 		data->ocd_version = LUSTRE_VERSION_CODE;
 	}
 
-	if (req)
+	if (req) {
+		svc_ctx = req->rq_svc_ctx;
 		client_nid = &req->rq_peer.nid;
+	}
+
+	if (svc_ctx || client_nid) {
+		rc = nodemap_add_member(svc_ctx, client_nid, exp);
+		if (rc != 0 && rc != -EEXIST)
+			RETURN(rc);
+	} else {
+		CDEBUG(D_HA,
+		       "%s: cannot find nodemap for client %s: svc_ctx and nid are null\n",
+		       obd->obd_name, cluuid->uuid);
+	}
 
 	RETURN(mgs_export_stats_init(obd, exp, client_nid));
 }
@@ -1869,6 +1887,7 @@ static int mgs_obd_connect(const struct lu_env *env, struct obd_export **exp,
 
 out_disconnect:
 	class_disconnect(lexp);
+	nodemap_del_member(lexp);
 
 	return rc;
 }
@@ -1876,6 +1895,8 @@ out_disconnect:
 static int mgs_obd_disconnect(struct obd_export *exp)
 {
 	int rc;
+
+	nodemap_del_member(exp);
 
 	ENTRY;
 
