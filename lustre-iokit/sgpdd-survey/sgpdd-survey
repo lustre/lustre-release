@@ -69,15 +69,21 @@ unique () {
 }
 
 split_hostname () {
-    local name=$1
-    case $name in
-    *:*) host=`echo $name | sed 's/:.*$//'`
-	 name=`echo $name | sed 's/[^:]*://'`
-	 ;;
-    *)   host=localhost
-	 ;;
-    esac
-    echo "$host $name"
+	local name=$1
+	local host
+	case $name in
+	*:* )
+		# Split on the last ':' so that IPv6 addresses (with embedded
+		# ':') are preserved as the host portion. The trailing component
+		# is the device/OST name.
+		host=${name%:*}
+		name=${name##*:}
+		;;
+	*)
+		host=localhost
+		;;
+	esac
+	echo "$host $name"
 }
 
 DSH=${DSH:-"ssh"}

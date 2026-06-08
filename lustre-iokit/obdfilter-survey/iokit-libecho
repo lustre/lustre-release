@@ -338,12 +338,18 @@ unique () {
 
 split_hostname () {
 	local name=$1
+	local host
 
 	case $name in
-	*:*) host=$(echo $name | sed 's/:.*$//')
-		name=$(echo $name | sed 's/[^:]*://')
+	*:* )
+		# Split on the last ':' so that IPv6 addresses (with embedded
+		# ':') are preserved as the host portion. The trailing component
+		# is the device/OST name.
+		host=${name%:*}
+		name=${name##*:}
 		;;
-	*)   host=localhost
+	*)
+		host=localhost
 		;;
 	esac
 	echo "$host $name"
