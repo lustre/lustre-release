@@ -22,3 +22,4 @@ subdir-ccflags-y := -include $(lsrctree)/config.h
 subdir-ccflags-y += $(call cc-option, -Wno-format-truncation)
 subdir-ccflags-y += $(call cc-option, -Wno-stringop-truncation)
 subdir-ccflags-y += $(call cc-option, -Wno-stringop-overflow)
+subdir-ccflags-y += $(KMOD_WERROR_FLAG)

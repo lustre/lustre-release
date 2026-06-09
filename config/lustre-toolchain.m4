@@ -57,13 +57,16 @@ AC_DEFUN([LTC_CONFIG_ERROR], [
 AC_ARG_ENABLE([strict-errors],
     AS_HELP_STRING([--disable-strict-errors], [Disable strict error C flags]))
 
+KMOD_WERROR_FLAG=""
 AS_IF([test "x$enable_strict_errors" != "xno"], [
 AS_IF([test $target_cpu == "i686" -o $target_cpu == "x86_64"], [
 CFLAGS="$CFLAGS -Wall -Werror"
+KMOD_WERROR_FLAG="-Wall -Werror"
 ])
 ], [
 CFLAGS="$CFLAGS -Wall -Wno-error -Wno-error=incompatible-function-pointer-types -Wno-error=incompatible-pointer-types"
 ])
+AC_SUBST(KMOD_WERROR_FLAG)
 ]) # LTC_CONFIG_ERROR
 
 #
