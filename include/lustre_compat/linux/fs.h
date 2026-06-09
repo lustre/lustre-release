@@ -11,6 +11,7 @@
 
 #include <linux/fs.h>
 #include <linux/dcache.h>
+#include <lustre_compat/linux/time64.h>
 
 #ifndef HAVE_D_MAKE_PERSISTENT
 /*
@@ -131,5 +132,75 @@ static inline int inode_generic_drop(struct inode *inode)
 #define F_SETLK64	13
 #define F_SETLKW64	14
 #endif
+
+#ifndef HAVE_INODE_GET_CTIME
+#define inode_get_ctime(i)		((i)->i_ctime)
+#define inode_set_ctime_to_ts(i, ts)	((i)->i_ctime = ts)
+#define inode_set_ctime_current(i) \
+	inode_set_ctime_to_ts((i), current_time((i)))
+
+static inline struct timespec64 inode_set_ctime(struct inode *inode,
+						time64_t sec, long nsec)
+{
+	struct timespec64 ts = { .tv_sec  = sec,
+				 .tv_nsec = nsec };
+
+	return inode_set_ctime_to_ts(inode, ts);
+}
+#endif /* !HAVE_INODE_GET_CTIME */
+
+#ifndef HAVE_INODE_GET_MTIME_SEC
+
+#define inode_get_ctime_sec(i)		(inode_get_ctime((i)).tv_sec)
+
+#define inode_get_atime(i)		((i)->i_atime)
+#define inode_get_atime_sec(i)		((i)->i_atime.tv_sec)
+#define inode_set_atime_to_ts(i, ts)	((i)->i_atime = ts)
+
+static inline struct timespec64 inode_set_atime(struct inode *inode,
+						time64_t sec, long nsec)
+{
+	struct timespec64 ts = { .tv_sec  = sec,
+				 .tv_nsec = nsec };
+	return inode_set_atime_to_ts(inode, ts);
+}
+
+#define inode_get_mtime(i)		((i)->i_mtime)
+#define inode_get_mtime_sec(i)		((i)->i_mtime.tv_sec)
+#define inode_set_mtime_to_ts(i, ts)	((i)->i_mtime = ts)
+
+static inline struct timespec64 inode_set_mtime(struct inode *inode,
+						time64_t sec, long nsec)
+{
+	struct timespec64 ts = { .tv_sec  = sec,
+				 .tv_nsec = nsec };
+	return inode_set_mtime_to_ts(inode, ts);
+}
+#endif  /* !HAVE_INODE_GET_MTIME_SEC */
+
+/* Inode timestamp helpers returning nanoseconds since epoch */
+static inline s64 inode_get_atime_ns(struct inode *inode)
+{
+	struct timespec64 ts;
+
+	ts = inode_get_atime(inode);
+	return timespec64_to_ns(&ts);
+}
+
+static inline s64 inode_get_mtime_ns(struct inode *inode)
+{
+	struct timespec64 ts;
+
+	ts = inode_get_mtime(inode);
+	return timespec64_to_ns(&ts);
+}
+
+static inline s64 inode_get_ctime_ns(struct inode *inode)
+{
+	struct timespec64 ts;
+
+	ts = inode_get_ctime(inode);
+	return timespec64_to_ns(&ts);
+}
 
 #endif /* __LIBCFS_LINUX_CFS_FS_H__ */
