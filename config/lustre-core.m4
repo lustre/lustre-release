@@ -3687,6 +3687,7 @@ AC_DEFUN([LC_HAVE_D_MAKE_PERSISTENT],[
 #
 AC_DEFUN([LC_SRC_HAVE_POSIX_ACL_TO_XATTR_ALLOC_BUFFER],[
 	LB2_LINUX_TEST_SRC([posix_acl_to_xattr], [
+		#include <linux/fs.h>
 		#include <linux/posix_acl_xattr.h>
 	],[
 		struct posix_acl *acl = NULL;
