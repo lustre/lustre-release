@@ -126,4 +126,10 @@ static inline int inode_generic_drop(struct inode *inode)
 	ilookup5_nowait((sb), (hash), (fn), (data))
 #endif
 
+#ifndef F_GETLK64
+#define F_GETLK64	12	/*  using 'struct flock64' */
+#define F_SETLK64	13
+#define F_SETLKW64	14
+#endif
+
 #endif /* __LIBCFS_LINUX_CFS_FS_H__ */
