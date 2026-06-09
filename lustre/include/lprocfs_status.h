@@ -777,20 +777,7 @@ ssize_t ir_factor_store(struct kobject *kobj, struct attribute *attr,
 #define __LDEBUGFS_SEQ_FOPS(name, custom_seq_write)			\
 static int name##_single_open(struct inode *inode, struct file *file)	\
 {									\
-	int rc;								\
-	/* pin this entry till close to prevent races with umount */	\
-	rc = debugfs_file_get(file->f_path.dentry);			\
-	if (rc)								\
-		return rc;						\
-	rc = single_open(file, name##_seq_show, inode->i_private);	\
-	if (rc)								\
-		debugfs_file_put(file->f_path.dentry);			\
-	return rc;							\
-}									\
-static int name##_single_release(struct inode *inode, struct file *file)\
-{									\
-	debugfs_file_put(file->f_path.dentry);				\
-	return single_release(inode, file);				\
+	return single_open(file, name##_seq_show, inode->i_private);	\
 }									\
 static const struct file_operations name##_fops = {			\
 	.owner	 = THIS_MODULE,						\
@@ -798,7 +785,7 @@ static const struct file_operations name##_fops = {			\
 	.read	 = seq_read,						\
 	.write	 = custom_seq_write,					\
 	.llseek	 = seq_lseek,						\
-	.release = name##_single_release,				\
+	.release = single_release,					\
 }
 
 #define LDEBUGFS_SEQ_FOPS_RO(name)	__LDEBUGFS_SEQ_FOPS(name, NULL)
@@ -845,25 +832,12 @@ static const struct file_operations name##_fops = {			\
 	static int name##_##type##_open(struct inode *inode,		\
 					struct file *file)		\
 	{								\
-		int rc;							\
-		rc = debugfs_file_get(file->f_path.dentry);		\
-		if (rc)							\
-			return rc;					\
-		rc = single_open(file, NULL, inode->i_private);		\
-		if (rc)							\
-			debugfs_file_put(file->f_path.dentry);		\
-		return rc;						\
-	}								\
-	static int name##_##type##_release(struct inode *inode,		\
-					struct file *file)		\
-	{								\
-		debugfs_file_put(file->f_path.dentry);			\
-  		return single_release(inode, file);		\
+		return single_open(file, NULL, inode->i_private);	\
 	}								\
 	static const struct file_operations name##_##type##_fops = {	\
 		.open	 = name##_##type##_open,			\
 		.write	 = name##_##type##_write,			\
-		.release = name##_##type##_release,			\
+		.release = single_release,				\
 	};
 
 /* write the name##_seq_show function, call LPROC_SEQ_FOPS_RO for read-only
