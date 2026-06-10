@@ -283,12 +283,6 @@
 #define MDS_RDPG_NTHRS_MAX	MDS_MAX_OTHR_THREADS
 #define MDS_RDPG_NTHRS_BASE	min(48, MDS_RDPG_NTHRS_MAX)
 
-/* these should be removed when we remove setattr service in the future */
-#define MDS_SETA_THR_FACTOR	4
-#define MDS_SETA_NTHRS_INIT	PTLRPC_NTHRS_INIT
-#define MDS_SETA_NTHRS_MAX	MDS_MAX_OTHR_THREADS
-#define MDS_SETA_NTHRS_BASE	min(48, MDS_SETA_NTHRS_MAX)
-
 /* non-affinity threads */
 #define MDS_OTHR_NTHRS_INIT	PTLRPC_NTHRS_INIT
 #define MDS_OTHR_NTHRS_MAX	MDS_MAX_OTHR_THREADS
