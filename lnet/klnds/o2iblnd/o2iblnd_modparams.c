@@ -91,6 +91,72 @@ static int use_fastreg_gaps;
 module_param(use_fastreg_gaps, int, 0444);
 MODULE_PARM_DESC(use_fastreg_gaps, "Enable discontiguous fastreg fragment support. Expect performance drop");
 
+/* NIC-local bounce pool: stage an inbound bulk read whose sink is NUMA-remote
+ * from the HCA through HCA-local pages, paying a CPU copy for the last hop.
+ */
+static int bounce_enable;
+
+/* Writable so an operator can disable bouncing on a running client. Enabling
+ * takes effect at the next device bringup (a module load or a dev_failover
+ * sweep), since the per-HCA pool is allocated there.
+ *
+ * Validate before the store, not after, so a concurrent reader never observes
+ * a value outside the tri-state.
+ *
+ * Return: -EINVAL on a value outside the tri-state, with the tunable
+ * unchanged, so every read site sees a valid tri-state and a typo is visible
+ * to whoever wrote it.
+ */
+static int
+kiblnd_bounce_enable_set(const char *val, const struct kernel_param *kp)
+{
+	int v;
+	int rc;
+
+	rc = kstrtoint(val, 0, &v);
+	if (rc != 0)
+		return rc;
+	if (v < KIBLND_BOUNCE_OFF || v > KIBLND_BOUNCE_FORCE) {
+		CWARN("o2iblnd: bounce_enable=%d is not one of 0=off, 1=auto, 2=force: rc = %d\n",
+		      v, -EINVAL);
+		return -EINVAL;
+	}
+	*(int *)kp->arg = v;
+	return 0;
+}
+
+static const struct kernel_param_ops kiblnd_bounce_enable_ops = {
+	.set = kiblnd_bounce_enable_set,
+	.get = param_get_int,
+};
+module_param_cb(bounce_enable, &kiblnd_bounce_enable_ops, &bounce_enable, 0644);
+MODULE_PARM_DESC(bounce_enable,
+		 "NIC-local bounce pool: 0=off (default), 1=auto (on when the sink is a NUMA hop from the HCA), 2=force (always on, allocate even on single-socket). A write to 0 disables bouncing at once. Enabling, or raising auto to force, takes effect at the next device bringup: a module load, or a dev_failover sweep.");
+
+static int bounce_pool_mb = 64;
+module_param(bounce_pool_mb, int, 0444);
+MODULE_PARM_DESC(bounce_pool_mb,
+		 "bounce pool size per o2ib interface, MiB (a card with two configured interfaces gets one pool each)");
+
+static int bounce_min_nob = 65536;
+module_param(bounce_min_nob, int, 0644);
+MODULE_PARM_DESC(bounce_min_nob,
+		 "min transfer size to consider bouncing, bytes (below this a copy + FastReg costs more than the cross-socket DMA it replaces)");
+
+static int bounce_scrub = 1;
+module_param(bounce_scrub, int, 0644);
+MODULE_PARM_DESC(bounce_scrub,
+		 "zero bounce slots between transfers so a short-writing peer can't read residual (default on; disable only on a trusted fabric). A slot parked while it was off keeps its contents; turning it back on scrubs each such slot before the pool hands it out again.");
+
+/* max_active of the per-HCA-CPT copy-out workqueue. One cross-socket memcpy
+ * per core saturates the slot at a low concurrency, so the default is small;
+ * the workqueues are built at NI bringup, so a change takes effect on reload.
+ */
+static int bounce_copyout_max_active = 2;
+module_param(bounce_copyout_max_active, int, 0444);
+MODULE_PARM_DESC(bounce_copyout_max_active,
+		 "concurrent copy-out workers per HCA CPT (default 2; 1 serializes)");
+
 /* For modern kernels we default map_on_demand to 1 and not allow
  * it to be set to 0, since there is no longer support for global memory
  * regions. Behavior:
@@ -166,6 +232,11 @@ struct kib_tunables kiblnd_tunables = {
 	.kib_nscheds		= &nscheds,
 	.kib_wrq_sge		= &wrq_sge,
 	.kib_use_fastreg_gaps	= &use_fastreg_gaps,
+	.kib_bounce_enable	= &bounce_enable,
+	.kib_bounce_pool_mb	= &bounce_pool_mb,
+	.kib_bounce_min_nob	= &bounce_min_nob,
+	.kib_bounce_scrub	= &bounce_scrub,
+	.kib_bounce_copyout_max_active = &bounce_copyout_max_active,
 };
 
 struct lnet_ioctl_config_o2iblnd_tunables kib_default_tunables;

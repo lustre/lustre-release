@@ -6380,6 +6380,194 @@ test_312() {
 }
 run_test 312 "TAG_RX_OK is possible after TX_FAIL"
 
+BOUNCE_STATS="/sys/kernel/debug/lnet/o2iblnd_bounce_stats"
+
+# Read one counter out of the o2iblnd_bounce_stats line, which reads
+# "engaged N exhausted N inflight N fallback N bytes N"
+bounce_stat() {
+	local name="$1"
+
+	awk -v n="$name" '{ for (i = 1; i < NF; i += 2)
+				if ($i == n) { print $(i + 1); exit } }' \
+		$BOUNCE_STATS
+}
+
+# The pool announces itself once per allocation, so the count of those lines is
+# the number of times the pool has been built on this node
+bounce_pool_builds() {
+	dmesg | grep -c "bounce pool on node"
+}
+
+# Bring up an o2ib net on this node and one remote node, with the bounce pool
+# forced on so it is allocated and every eligible read is staged whatever the
+# NUMA topology of the test nodes. bounce_enable is read at device bringup, so
+# it has to be set before the net comes up. Sets BOUNCE_RPEER, BOUNCE_LNID and
+# BOUNCE_RNID for the caller. Set BOUNCE_MODOPTS first to add ko2iblnd options.
+BOUNCE_RPEER=""
+BOUNCE_LNID=""
+BOUNCE_RNID=""
+BOUNCE_MODOPTS=""
+setup_bounce_test() {
+	local rnodes=( $(remote_nodes_list | tr ',' ' ') )
+
+	(( ${#rnodes[@]} > 0 )) || skip "Need at least 1 remote node"
+
+	BOUNCE_RPEER=${rnodes[0]}
+
+	cleanup_lnet || error "Failed to cleanup LNet"
+	do_node $BOUNCE_RPEER $LUSTRE_RMMOD ||
+		error "Failed to unload modules on $BOUNCE_RPEER"
+
+	export MODOPTS_KO2IBLND="bounce_enable=2 $BOUNCE_MODOPTS"
+
+	do_rpc_nodes $HOSTNAME,$BOUNCE_RPEER load_lnet ||
+		error "Failed to load LNet"
+
+	do_lnetctl lnet configure $LNET_CONFIG_INIT_OPT ||
+		error "Failed to configure LNet rc = $?"
+	do_node $BOUNCE_RPEER "$LNETCTL lnet configure $LNET_CONFIG_INIT_OPT" ||
+		error "Failed to configure LNet on $BOUNCE_RPEER rc = $?"
+
+	[[ -f $BOUNCE_STATS ]] || skip "Need bounce pool support"
+
+	do_rpc_nodes $HOSTNAME,$BOUNCE_RPEER load_module \
+		../lnet/selftest/lnet_selftest ||
+			error "Failed to load lnet-selftest module"
+
+	# Name both NIDs so the traffic cannot land on another net either node
+	# happens to have configured
+	BOUNCE_LNID=$($LCTL list_nids | grep "@${NETTYPE}$" | head -n 1)
+	BOUNCE_RNID=$(do_node $BOUNCE_RPEER "$LCTL list_nids" |
+		      grep "@${NETTYPE}$" | head -n 1)
+
+	[[ -n $BOUNCE_LNID && -n $BOUNCE_RNID ]] ||
+		error "Failed to find a ${NETTYPE} NID"
+
+	do_lnetctl ping $BOUNCE_RNID ||
+		error "Failed to ping $BOUNCE_RNID rc = $?"
+
+	echo 0 > $BOUNCE_STATS
+}
+
+cleanup_bounce_test() {
+	$LCTL set_param fail_loc=0
+	unset MODOPTS_KO2IBLND
+	BOUNCE_MODOPTS=""
+	# unset when setup_bounce_test skipped before it chose a peer
+	if [[ -n $BOUNCE_RPEER ]]; then
+		do_node $BOUNCE_RPEER $LUSTRE_RMMOD
+		BOUNCE_RPEER=""
+	fi
+	cleanup_lnet
+}
+
+test_313() {
+	[[ $NETTYPE == o2ib* ]] || skip "Need o2ib network type"
+
+	setup_bounce_test
+
+	# This node is the client group, so it reads and its NI is the PUT
+	# sink that stages through the pool. -C validates the data, which is
+	# what proves the copy-out delivered the transfer intact.
+	$LSTSH -f "$BOUNCE_LNID" -t "$BOUNCE_RNID" -m read -C simple ||
+		error "LST read failed rc = $?"
+
+	local engaged=$(bounce_stat engaged)
+	local fallback=$(bounce_stat fallback)
+	local inflight=$(bounce_stat inflight)
+
+	cleanup_bounce_test || error "cleanup failed rc=$?"
+
+	(( engaged > 0 )) ||
+		error "Bounce did not engage: $(cat $BOUNCE_STATS)"
+	(( fallback == 0 )) ||
+		error "Unexpected fallback: $(cat $BOUNCE_STATS)"
+	(( inflight == 0 )) ||
+		error "Slots still held after test: $(cat $BOUNCE_STATS)"
+}
+run_test 313 "Bounce pool stages an o2ib read intact"
+
+test_314() {
+	[[ $NETTYPE == o2ib* ]] || skip "Need o2ib network type"
+
+	setup_bounce_test
+
+	# A slot whose sink rd-build fails must abandon the bounce and run the
+	# transfer direct, delivering the same bytes
+#define CFS_FAIL_O2IBLND_BOUNCE_RD	0xf202
+	$LCTL set_param fail_loc=0xf202
+
+	$LSTSH -f "$BOUNCE_LNID" -t "$BOUNCE_RNID" -m read -C simple ||
+		error "LST read failed with rd-build failure injected rc = $?"
+
+	$LCTL set_param fail_loc=0
+
+	local fallback=$(bounce_stat fallback)
+	local inflight=$(bounce_stat inflight)
+
+	cleanup_bounce_test || error "cleanup failed rc=$?"
+
+	(( fallback > 0 )) ||
+		error "Bounce did not fall back: $(cat $BOUNCE_STATS)"
+	(( inflight == 0 )) ||
+		error "Slots still held after test: $(cat $BOUNCE_STATS)"
+}
+run_test 314 "Bounce falls back to direct when the sink rd-build fails"
+
+test_315() {
+	[[ $NETTYPE == o2ib* ]] || skip "Need o2ib network type"
+
+	# dev_failover=2 makes the failover thread rebuild the HCA on every
+	# sweep, whatever the interface is, so the pool is torn down and rebuilt
+	# under load without a bond to break. Each superseded pool stays pinned
+	# until the last connection holding one of its slots goes away, so keep
+	# the arena small.
+	BOUNCE_MODOPTS="dev_failover=2 bounce_pool_mb=16"
+
+	setup_bounce_test
+
+	local before=$(bounce_pool_builds)
+
+	# Drop a marker on the console so the leak search below sees only the
+	# pool teardowns of this run. kiblnd_bounce_pool_destroy() logs a leak
+	# via CWARN, which reaches the console and stays in the ring buffer
+	# across the module reloads each subtest does.
+	local marker="bounce-failover-${testnum}-${RANDOM}"
+
+	log "$marker"
+
+	# The sweep is on a 10s timer, so run long enough to span several
+	local rc=0
+
+	$LSTSH -f "$BOUNCE_LNID" -t "$BOUNCE_RNID" -m read -C simple \
+	       -n 4 -D 10 || rc=$?
+
+	# Sample the counters while the modules are still loaded. Cleanup
+	# unloads them and $BOUNCE_STATS goes with them.
+	local after=$(bounce_pool_builds)
+	local engaged=$(bounce_stat engaged)
+	local inflight=$(bounce_stat inflight)
+	local stats=$(cat $BOUNCE_STATS)
+
+	cleanup_bounce_test || error "cleanup failed rc=$?"
+
+	(( rc == 0 )) || error "LST read failed across failover rc = $rc"
+
+	(( after > before )) ||
+		error "Pool not rebuilt: $before build(s) before, $after after"
+	(( engaged > 0 )) || error "Bounce did not engage: $stats"
+	(( inflight == 0 )) || error "Slots still held after test: $stats"
+
+	# A pool must not be freed while one of its slots is checked out. This
+	# is what shows the worker of a superseded pool drained before the pool
+	# it drains went away.
+	if dmesg | sed -n "/$marker/,\$p" |
+	   grep -q "still inflight at destroy"; then
+		error "Pool freed with slots still checked out"
+	fi
+}
+run_test 315 "Bounce pool and its worker follow an HCA failover"
+
 test_350() {
 	reinit_dlc || return $?
 

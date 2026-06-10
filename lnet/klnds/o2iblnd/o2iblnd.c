@@ -1363,7 +1363,7 @@ kiblnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 	return rc;
 }
 
-static void
+void
 kiblnd_free_pages(struct kib_pages *p)
 {
 	int	npages = p->ibp_npages;
@@ -1377,8 +1377,26 @@ kiblnd_free_pages(struct kib_pages *p)
 	LIBCFS_FREE(p, offsetof(struct kib_pages, ibp_pages[npages]));
 }
 
-int
-kiblnd_alloc_pages(struct kib_pages **pp, int cpt, int npages)
+/**
+ * kiblnd_alloc_pages_gfp() - Allocate a page array with a placement policy.
+ * @pp: receives the page array.
+ * @cpt: CPT the descriptor and, for NUMA_NO_NODE, the pages come from.
+ * @node: NUMA node every page must come from, or NUMA_NO_NODE to spread the
+ *        pages over the nodes of @cpt.
+ * @npages: number of pages.
+ * @gfp: allocation flags for the pages.
+ *
+ * cfs_page_cpt_alloc() rotates over every node in the CPT's node mask, so it
+ * cannot place a page on a chosen node when a CPT spans more than one. A
+ * caller that needs the pages on one node names it in @node, and must pass
+ * __GFP_THISNODE in @gfp: alloc_pages_node() only *prefers* @node, and falls
+ * back to any other node once @node is tight.
+ *
+ * Return: 0 on success, -ENOMEM if any allocation fails.
+ */
+static int
+kiblnd_alloc_pages_gfp(struct kib_pages **pp, int cpt, int node, int npages,
+		       gfp_t gfp)
 {
 	struct kib_pages *p;
 	int i;
@@ -1394,8 +1412,9 @@ kiblnd_alloc_pages(struct kib_pages **pp, int cpt, int npages)
 	p->ibp_npages = npages;
 
 	for (i = 0; i < npages; i++) {
-		p->ibp_pages[i] = cfs_page_cpt_alloc(lnet_cpt_table(), cpt,
-						     GFP_NOFS);
+		p->ibp_pages[i] = (node == NUMA_NO_NODE) ?
+			cfs_page_cpt_alloc(lnet_cpt_table(), cpt, gfp) :
+			alloc_pages_node(node, gfp, 0);
 		if (p->ibp_pages[i] == NULL) {
 			CERROR("Can't allocate page %d of %d\n", i, npages);
 			kiblnd_free_pages(p);
@@ -1405,6 +1424,34 @@ kiblnd_alloc_pages(struct kib_pages **pp, int cpt, int npages)
 
 	*pp = p;
 	return 0;
+}
+
+int
+kiblnd_alloc_pages(struct kib_pages **pp, int cpt, int npages)
+{
+	return kiblnd_alloc_pages_gfp(pp, cpt, NUMA_NO_NODE, npages, GFP_NOFS);
+}
+
+/**
+ * kiblnd_alloc_pages_node() - Allocate zeroed pages pinned to one NUMA node.
+ * @pp: receives the page array.
+ * @cpt: CPT the descriptor comes from.
+ * @node: NUMA node every page comes from.
+ * @npages: number of pages.
+ *
+ * __GFP_THISNODE makes the placement binding rather than advisory, so a caller
+ * whose only reason to allocate is locality gets pages on @node or nothing.
+ * __GFP_NOWARN keeps a large best-effort request from dumping an allocation
+ * warning per page; the caller reports the failure itself.
+ *
+ * Return: 0 on success, -ENOMEM if any allocation fails.
+ */
+int
+kiblnd_alloc_pages_node(struct kib_pages **pp, int cpt, int node, int npages)
+{
+	return kiblnd_alloc_pages_gfp(pp, cpt, node, npages,
+				      GFP_NOFS | __GFP_ZERO | __GFP_THISNODE |
+				      __GFP_NOWARN);
 }
 
 void
@@ -2768,6 +2815,8 @@ kiblnd_hdev_destroy(struct kib_hca_dev *hdev)
 	if (hdev->ibh_event_handler.device != NULL)
 		ib_unregister_event_handler(&hdev->ibh_event_handler);
 
+	kiblnd_bounce_pool_destroy(hdev);
+
 	if (hdev->ibh_pd != NULL)
 		ib_dealloc_pd(hdev->ibh_pd);
 
@@ -2956,6 +3005,11 @@ kiblnd_dev_failover(struct kib_dev *dev, struct net *ns)
 		CERROR("Can't get device attributes: %d\n", rc);
 		goto out;
 	}
+
+	/* best-effort: never fails device bringup (disables the feature on
+	 * error), so it returns void
+	 */
+	kiblnd_bounce_pool_create(hdev);
 
 	INIT_IB_EVENT_HANDLER(&hdev->ibh_event_handler,
 				hdev->ibh_ibdev, kiblnd_event_handler);
@@ -3391,6 +3445,12 @@ kiblnd_shutdown(struct lnet_ni *ni)
 				       "%s: waiting for %d conns to clean\n",
 				       libcfs_nidstr(&ni->ni_nid),
 				       atomic_read(&net->ibn_nconns));
+		/* A deferred copy-out holds a tx from these pools, so the
+		 * pools must outlive it. The nconns==0 wait above covers
+		 * that: the copy-out takes a connection reference of its own
+		 * and drops it only after the tx is back in its pool and the
+		 * lnet_msg is finalized.
+		 */
 		kiblnd_net_fini_pools(net);
 		fallthrough;
 
@@ -3958,6 +4018,7 @@ static void ko2inlnd_assert_wire_constants(void)
 static void __exit ko2iblnd_exit(void)
 {
 	lnet_unregister_lnd(&the_o2iblnd);
+	kiblnd_bounce_debugfs_fini();
 }
 
 static int __init ko2iblnd_init(void)
@@ -3973,6 +4034,8 @@ static int __init ko2iblnd_init(void)
 	rc = libcfs_setup();
 	if (rc)
 		return rc;
+
+	kiblnd_bounce_debugfs_init();
 
 	lnet_register_lnd(&the_o2iblnd);
 

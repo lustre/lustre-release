@@ -30,11 +30,13 @@ static void kiblnd_queue_tx(struct kib_tx *tx, struct kib_conn *conn);
 
 static void kiblnd_unmap_tx(struct kib_tx *tx);
 static void kiblnd_check_sends_locked(struct kib_conn *conn);
+static void kiblnd_bounce_copyout_worker(struct work_struct *work);
 
 static void
 kiblnd_tx_done(struct kib_tx *tx)
 {
 	struct lnet_msg *lntmsg[2];
+	bool zeroed = false;
 	int rc;
 	int i;
 
@@ -44,7 +46,63 @@ kiblnd_tx_done(struct kib_tx *tx)
 	LASSERT(!tx->tx_waiting);     /* mustn't be awaiting peer_ni response */
 	LASSERT(tx->tx_pool != NULL);
 
+	/* A bounced read's copy-out must run off the CQ poller. On the first
+	 * entry for a successful bounced tx, hand the finalize to the HCA-local
+	 * copy workqueue (bound to the pool's CPT, the HCA node, not the
+	 * peer-hashed scheduler CPT) and return; the worker re-enters with
+	 * tx_bounce_deferred set and runs the rest. Deferring from this one
+	 * funnel makes it immune to which CQ event is drained last. An error tx
+	 * must not copy slot residual into the application buffer, so it skips
+	 * the defer and copies nothing. With no worker the copy runs inline,
+	 * correct but cross-socket.
+	 *
+	 * The worker comes from the slot's own pool, so it is always the one on
+	 * that slot's node, whatever the HCA has failed over to since.
+	 *
+	 * Take a second reference on the connection for the worker, dropped
+	 * only once its kiblnd_tx_done() has returned. The tx's own reference
+	 * goes below, ahead of the tx pool release and the finalize, so it
+	 * cannot keep the net alive across them. The extra one can, and every
+	 * lifetime the deferred pass depends on hangs off it: the net's pools
+	 * through ibn_nconns, and the slot's pool and worker through the HCA
+	 * the connection holds.
+	 */
+	if (tx->tx_bounce_slot != NULL && !tx->tx_bounce_deferred &&
+	    tx->tx_status == 0 && tx->tx_conn != NULL) {
+		struct kib_bounce_pool *pool = tx->tx_bounce_slot->bps_pool;
+		struct workqueue_struct *wq = pool->bp_wq;
+
+		if (wq != NULL) {
+			tx->tx_bounce_deferred = 1;
+			kiblnd_conn_addref(tx->tx_conn);
+			INIT_WORK(&tx->tx_bounce_work,
+				  kiblnd_bounce_copyout_worker);
+			queue_work(wq, &tx->tx_bounce_work);
+			return;
+		}
+	}
+
 	kiblnd_unmap_tx(tx);
+
+	/* Copy the slot out to the application buffer once the unmap has synced
+	 * it to the CPU. Skipped on error, so no residual is delivered.
+	 */
+	if (tx->tx_bounce_slot != NULL && tx->tx_status == 0) {
+		zeroed = kiblnd_bounce_copy_out(tx->tx_bounce_slot,
+						tx->tx_bounce_kiov,
+						tx->tx_bounce_niov,
+						tx->tx_bounce_offset,
+						tx->tx_bounce_nob);
+	}
+
+	/* Release the slot once the DMA is unmapped. Where the copy-out above
+	 * scrubbed the bytes it read, put() skips the full scrub; every other
+	 * release scrubs in put().
+	 */
+	if (tx->tx_bounce_slot != NULL) {
+		kiblnd_bounce_put(tx->tx_bounce_slot, zeroed);
+		tx->tx_bounce_slot = NULL;
+	}
 
 	/* tx may have up to 2 lnet msgs to finalise */
 	lntmsg[0] = tx->tx_lntmsg[0]; tx->tx_lntmsg[0] = NULL;
@@ -72,6 +130,29 @@ kiblnd_tx_done(struct kib_tx *tx)
 
 		lnet_finalize(lntmsg[i], rc);
 	}
+}
+
+/**
+ * kiblnd_bounce_copyout_worker() - Re-enter tx_done() off the CQ poller.
+ * @work: tx_bounce_work embedded in the deferred tx.
+ *
+ * tx_bounce_deferred is set, so this pass runs the unmap, copy-out,
+ * slot-release and finalize. The tx, its lntmsg and its slot outlive the
+ * worker, and finalize is the last act, so the sink kiov stays valid across
+ * the copy.
+ *
+ * kiblnd_tx_done() consumes the tx, so sample the connection first. Releasing
+ * the deferring reference is the last act of the whole copy-out, which is what
+ * lets a shutdown that waits on ibn_nconns wait for this worker.
+ */
+static void
+kiblnd_bounce_copyout_worker(struct work_struct *work)
+{
+	struct kib_tx *tx = container_of(work, struct kib_tx, tx_bounce_work);
+	struct kib_conn *conn = tx->tx_conn;
+
+	kiblnd_tx_done(tx);
+	kiblnd_conn_decref(conn);
 }
 
 void
@@ -119,6 +200,15 @@ kiblnd_get_idle_tx(struct lnet_ni *ni, struct lnet_nid *target)
 
 	tx->tx_p2p = 0;
 	tx->tx_gaps = false;
+	tx->tx_bounce_slot = NULL;
+	tx->tx_bounce_deferred = 0;
+	/* tx_bounce_slot gates the copy-out fields, but clear them too so a
+	 * recycled tx never carries a stale app pointer or length.
+	 */
+	tx->tx_bounce_kiov = NULL;
+	tx->tx_bounce_niov = 0;
+	tx->tx_bounce_offset = 0;
+	tx->tx_bounce_nob = 0;
 	tx->tx_hstatus = LNET_MSG_STATUS_OK;
 
 	return tx;
@@ -717,12 +807,7 @@ static int kiblnd_setup_rd_kiov(struct lnet_ni *ni, struct kib_tx *tx,
 	LASSERT(nkiov > 0);
 	LASSERT(net != NULL);
 
-	while (offset >= kiov->bv_len) {
-		offset -= kiov->bv_len;
-		nkiov--;
-		kiov++;
-		LASSERT(nkiov > 0);
-	}
+	kiblnd_kiov_skip(&kiov, &nkiov, &offset);
 
 	max_nkiov = nkiov;
 
@@ -766,6 +851,65 @@ static int kiblnd_setup_rd_kiov(struct lnet_ni *ni, struct kib_tx *tx,
 		nkiov--;
 		nob -= fragnob;
 	} while (nob > 0);
+
+	return kiblnd_map_tx(ni, tx, rd, sg_count);
+}
+
+/**
+ * kiblnd_setup_rd_slot() - Build the PUT-sink rd from a bounce slot's pages.
+ * @ni: NI the transfer runs on.
+ * @tx: tx being built.
+ * @slot: slot to advertise as the sink.
+ * @rd: putack rd to fill. It is not tx->tx_rd, so kiblnd_map_tx() maps
+ *      DMA_FROM_DEVICE and advertises the slot's REMOTE_WRITE rkey to the peer.
+ * @nob: bytes the peer will write.
+ *
+ * The slot pages are sequential but not physically contiguous, so this emits
+ * one sg entry per page; kiblnd_map_tx() then FastReg-maps them into a single
+ * MR, just as the direct path maps the application buffer, so the slot's
+ * scatter is invisible on the wire. pool_create() fixes the slot at LNET_MTU,
+ * keeping the page count within IBLND_MAX_RDMA_FRAGS so tx_frags[] can't
+ * overflow. The caller guarantees nob <= slot size.
+ *
+ * Return: 0 on success, or a negative errno (the caller falls back to direct).
+ */
+static int
+kiblnd_setup_rd_slot(struct lnet_ni *ni, struct kib_tx *tx,
+		     struct kib_bounce_slot *slot, struct kib_rdma_desc *rd,
+		     int nob)
+{
+	struct kib_bounce_pool *pool = slot->bps_pool;
+	struct page **pages = &pool->bp_pages->ibp_pages[slot->bps_index *
+							 pool->bp_slot_pages];
+	struct scatterlist *sg = tx->tx_frags;
+	int sg_count = 0;
+	int resid = nob;
+	int i = 0;
+
+	LASSERT(nob > 0);
+	LASSERT(nob <= pool->bp_slot_size);
+
+	/* Simulate an rd-build failure so the bounced->direct fallback in
+	 * kiblnd_recv_build_sink() is testable. It fires before any mapping, so
+	 * the caller's kiblnd_unmap_tx() is a no-op.
+	 */
+	if (CFS_FAIL_CHECK(CFS_FAIL_O2IBLND_BOUNCE_RD))
+		return -EMSGSIZE;
+
+	while (resid > 0) {
+		int fragnob = min_t(int, PAGE_SIZE, resid);
+
+		if (!sg) {
+			CERROR("lacking enough sg entries to map bounce slot: rc = %d\n",
+			       -EFAULT);
+			return -EFAULT;
+		}
+		sg_set_page(sg, pages[i], fragnob, 0);
+		sg = sg_next(sg);
+		sg_count++;
+		i++;
+		resid -= fragnob;
+	}
 
 	return kiblnd_map_tx(ni, tx, rd, sg_count);
 }
@@ -1911,6 +2055,66 @@ kiblnd_get_dev_prio(struct lnet_ni *ni, struct lnet_device_id *dev_id)
 
 }
 
+/**
+ * kiblnd_recv_build_sink() - Build the PUT-sink rd for kiblnd_recv().
+ * @ni: NI the receive runs on.
+ * @conn: connection the PUT arrived on.
+ * @tx: tx carrying the PUT_ACK.
+ * @rd: putack rd to fill.
+ * @niov: number of @kiov entries.
+ * @kiov: application sink buffer.
+ * @offset: starting byte offset into @kiov.
+ * @nob: bytes the peer will write.
+ *
+ * When the sink is NUMA-remote, acquire a slot, advertise it as the sink and
+ * stash the application buffer for copy-out at completion. The peer RDMA-writes
+ * the slot; kiblnd_tx_done() copies it out off the CQ poller and only then
+ * finalizes, so the matched MD's kiov stays valid across the copy. A pool
+ * exhaustion or an rd-build failure falls back to a direct sink, so a bounced
+ * read never fails an I/O the direct path could serve.
+ *
+ * Return: 0 ready to send the PUT_ACK, or a negative errno.
+ */
+static int
+kiblnd_recv_build_sink(struct lnet_ni *ni, struct kib_conn *conn,
+		       struct kib_tx *tx, struct kib_rdma_desc *rd,
+		       int niov, const struct bio_vec *kiov, int offset,
+		       int nob)
+{
+	int rc;
+
+	if (kiblnd_should_bounce(conn->ibc_hdev, kiov, niov, offset, nob,
+				 tx->tx_p2p)) {
+		struct kib_bounce_slot *slot =
+			kiblnd_bounce_get(conn->ibc_hdev->ibh_bounce_pool);
+
+		if (slot != NULL) {
+			rc = kiblnd_setup_rd_slot(ni, tx, slot, rd, nob);
+			if (rc == 0) {
+				tx->tx_bounce_slot = slot;
+				tx->tx_bounce_kiov = kiov;
+				tx->tx_bounce_niov = niov;
+				tx->tx_bounce_offset = offset;
+				tx->tx_bounce_nob = nob;
+				return 0;
+			}
+
+			CDEBUG(D_NET,
+			       "bounce PUT-sink failed for %s, using direct sink: rc = %d\n",
+			       libcfs_nidstr(&conn->ibc_peer->ibp_nid), rc);
+			kiblnd_bounce_fallback_inc();
+			/* Undo the slot's map before recycle, since the scrub
+			 * in kiblnd_bounce_put() must run on CPU-owned pages.
+			 */
+			kiblnd_unmap_tx(tx);
+			kiblnd_bounce_put(slot, false);
+		}
+		/* slot NULL: pool exhausted, so use the direct sink below */
+	}
+
+	return kiblnd_setup_rd_kiov(ni, tx, rd, niov, kiov, offset, nob);
+}
+
 int
 kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 	    int delayed, struct iov_iter *to, unsigned int rlen)
@@ -1987,10 +2191,9 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 
 		txmsg = tx->tx_msg;
 		rd = &txmsg->ibm_u.putack.ibpam_rd;
-		rc = kiblnd_setup_rd_kiov(ni, tx, rd,
-					  to->nr_segs, to->bvec,
-					  to->iov_offset,
-					  wanted);
+		rc = kiblnd_recv_build_sink(ni, conn, tx, rd,
+					    to->nr_segs, to->bvec,
+					    to->iov_offset, wanted);
 		if (rc != 0) {
 			CERROR("Can't setup PUT sink for %s: rc = %d\n",
 			       libcfs_nidstr(&conn->ibc_peer->ibp_nid), rc);

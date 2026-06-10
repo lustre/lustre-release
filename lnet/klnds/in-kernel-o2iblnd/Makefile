@@ -6,10 +6,11 @@
 
 obj-m += ko2iblnd.o
 
-ko2iblnd-objs := o2iblnd.o o2iblnd_cb.o o2iblnd_modparams.o
+ko2iblnd-objs := o2iblnd.o o2iblnd_cb.o o2iblnd_modparams.o o2iblnd_bounce.o
 
 in-kernel-ko2iblnd_headers := o2iblnd.h o2iblnd-idl.h
-in-kernel-ko2iblnd_sources := o2iblnd.c o2iblnd_cb.c o2iblnd_modparams.c
+in-kernel-ko2iblnd_sources := o2iblnd.c o2iblnd_cb.c o2iblnd_modparams.c \
+			      o2iblnd_bounce.c
 
 sources: $(in-kernel-ko2iblnd_headers) $(in-kernel-ko2iblnd_sources)
 
@@ -29,6 +30,9 @@ o2iblnd_cb.c: ../o2iblnd/o2iblnd_cb.c
 	sed $(strip $(o2ib_sed_flags)) $< > $@
 
 o2iblnd_modparams.c: ../o2iblnd/o2iblnd_modparams.c
+	sed $(strip $(o2ib_sed_flags)) $< > $@
+
+o2iblnd_bounce.c: ../o2iblnd/o2iblnd_bounce.c
 	sed $(strip $(o2ib_sed_flags)) $< > $@
 
 ifdef CONFIG_GCOV_PROFILE_LNET

@@ -10,7 +10,7 @@ obj-m += ko2iblnd.o
 
 endif
 
-ko2iblnd-objs := o2iblnd.o o2iblnd_cb.o o2iblnd_modparams.o
+ko2iblnd-objs := o2iblnd.o o2iblnd_cb.o o2iblnd_modparams.o o2iblnd_bounce.o
 
 ccflags-y += $(EXTRA_KCFLAGS)
 

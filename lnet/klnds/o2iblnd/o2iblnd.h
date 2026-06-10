@@ -29,6 +29,7 @@
 #include <linux/errno.h>
 #include <linux/unistd.h>
 #include <linux/uio.h>
+#include <linux/topology.h>
 
 #include <asm/uaccess.h>
 #include <asm/io.h>
@@ -99,6 +100,15 @@ struct kib_tunables {
 	int		 *kib_nscheds;
 	int		 *kib_wrq_sge;		/* # sg elements per wrq */
 	int		 *kib_use_fastreg_gaps; /* enable discontiguous fastreg fragment support */
+	/* NIC-local bounce pool (o2iblnd_bounce.c) */
+	int		 *kib_bounce_enable;	/* off/auto/force tri-state */
+	int		 *kib_bounce_pool_mb;	/* pool size per o2ib
+						 * interface, MiB
+						 */
+	int		 *kib_bounce_min_nob;	/* min transfer to consider */
+	int		 *kib_bounce_scrub;	/* scrub slots between uses */
+	/* copy-out wq concurrency */
+	int		 *kib_bounce_copyout_max_active;
 };
 
 extern struct kib_tunables  kiblnd_tunables;
@@ -177,6 +187,8 @@ struct kib_dev {
 	enum kib_dev_caps	ibd_dev_caps;
 };
 
+struct kib_bounce_pool;			/* fwd: o2iblnd_bounce.c */
+
 struct kib_hca_dev {
 	struct rdma_cm_id   *ibh_cmid;          /* listener cmid */
 	struct ib_device    *ibh_ibdev;         /* IB device */
@@ -195,6 +207,7 @@ struct kib_hca_dev {
 #define IBLND_DEV_FATAL         2
 	struct kib_dev           *ibh_dev;           /* owner */
 	atomic_t             ibh_ref;           /* refcount */
+	struct kib_bounce_pool *ibh_bounce_pool;/* NIC-local bounce pool */
 };
 
 /** # of seconds to keep pool alive */
@@ -205,6 +218,73 @@ struct kib_hca_dev {
 struct kib_pages {
 	int                     ibp_npages;             /* # pages */
 	struct page            *ibp_pages[];            /* page array */
+};
+
+/* bounce_enable tri-state, default off:
+ *   OFF   - feature disabled, zero footprint.
+ *   AUTO  - engage when the sink buffer is a NUMA hop from the HCA; allocate
+ *           only on a multi-node NUMA box.
+ *   FORCE - engage unconditionally, and allocate even on a single-socket box
+ *           so the fail_loc path is testable anywhere.
+ */
+#define KIBLND_BOUNCE_OFF	0
+#define KIBLND_BOUNCE_AUTO	1
+#define KIBLND_BOUNCE_FORCE	2
+
+/* HCA-local pages carved into fixed-size slots. An inbound bulk whose sink
+ * buffer is NUMA-remote from the HCA is staged through a slot so the device
+ * DMAs locally. Sizes are in bytes, so the code is page-size agnostic.
+ */
+struct kib_bounce_slot {
+	struct list_head	bps_list;	/* free-list linkage */
+	struct kib_bounce_pool *bps_pool;	/* owning pool */
+	int			bps_index;	/* slot # within pool */
+	bool			bps_dirty;	/* pages hold residue of an
+						 * earlier transfer, because
+						 * bounce_scrub was off at
+						 * release. Owner-only field:
+						 * touched between get() and
+						 * put(), never while the slot
+						 * is on bp_free.
+						 */
+};
+
+struct kib_bounce_pool {
+	struct kib_hca_dev     *bp_hdev;	/* owning HCA */
+	spinlock_t		bp_lock;	/* protects bp_free */
+	struct list_head	bp_free;	/* free slots */
+	struct kib_pages       *bp_pages;	/* HCA-local backing pages */
+	struct kib_bounce_slot *bp_slots;	/* slot array [bp_nslots] */
+	int			bp_node;	/* NUMA node pages are on */
+	bool			bp_node_known;	/* whether bp_node is the HCA's
+						 * own node, not a fallback.
+						 * AUTO must not run its
+						 * distance test against a
+						 * fallback.
+						 */
+	int			bp_cpt;		/* CPT of bp_node. Sources the
+						 * pool structures and binds
+						 * bp_wq; the arena pages come
+						 * from bp_node itself.
+						 */
+	struct workqueue_struct *bp_wq;		/* copy-out worker, bound to
+						 * bp_cpt. NULL where it could
+						 * not be built, and the
+						 * consumer copies out inline.
+						 */
+	int			bp_slot_size;	/* bytes per slot */
+	int			bp_slot_pages;	/* pages per slot */
+	int			bp_nslots;	/* total slots */
+	atomic_t		bp_inflight;	/* slots out of this pool; the
+						 * destroy leak check binds to
+						 * this pool, not a sibling, on
+						 * a multi-HCA client
+						 */
+	bool			bp_warned;	/* one-shot: logged the first
+						 * exhaustion-fallback for this
+						 * pool (don't spam the hot miss
+						 * path).
+						 */
 };
 
 struct kib_pool;
@@ -446,7 +526,12 @@ struct kib_tx {					/* transmit message */
 	/* waiting for peer_ni */
 				tx_waiting:1,
 	/* force RDMA */
-				tx_p2p:1;
+				tx_p2p:1,
+	/* kiblnd_tx_done() has been re-entered from the copy workqueue, so it
+	 * runs the unmap, copy-out and finalize inline instead of deferring
+	 * again.
+	 */
+				tx_bounce_deferred:1;
 	/* LNET completion status */
 	int			tx_status;
 	/* health status of the transmit */
@@ -485,6 +570,23 @@ struct kib_tx {					/* transmit message */
 	struct kib_fmr		tx_fmr;
 				/* dma direction */
 	int			tx_dmadir;
+	/* slot staging this tx's inbound bulk, or NULL for a direct transfer.
+	 * Published once the slot's rd is built, and from then on it is the
+	 * only reference: released and cleared in kiblnd_tx_done().
+	 */
+	struct kib_bounce_slot *tx_bounce_slot;
+	/* copy-out destination: the application sink kiov saved at sink-build
+	 * time. It is the matched MD's kiov, which lnet_finalize() frees, so
+	 * deferring finalize until after the copy keeps it valid.
+	 */
+	const struct bio_vec	*tx_bounce_kiov;
+	int			tx_bounce_niov;
+	int			tx_bounce_offset;
+	int			tx_bounce_nob;
+	/* embedded work item kiblnd_tx_done() uses to defer the copy-out to the
+	 * HCA-local workqueue, off the CQ poller.
+	 */
+	struct work_struct	tx_bounce_work;
 };
 
 struct kib_connvars {
@@ -878,6 +980,7 @@ kiblnd_queue2str(struct kib_conn *conn, struct list_head *q)
 /* CFS_FAIL_O2IBLND range 0xF200 - 0xF2FF. */
 #define CFS_FAIL_O2IBLND			0xf200
 #define CFS_FAIL_O2IBLND_FMR_MAP_SHORT		0xf201
+#define CFS_FAIL_O2IBLND_BOUNCE_RD		0xf202
 
 static inline __u64
 kiblnd_ptr2wreqid(void *ptr, int type)
@@ -1107,6 +1210,41 @@ int kiblnd_scheduler(void *arg);
 int kiblnd_failover_thread(void *arg);
 
 int kiblnd_alloc_pages(struct kib_pages **pp, int cpt, int npages);
+int kiblnd_alloc_pages_node(struct kib_pages **pp, int cpt, int node,
+			    int npages);
+void kiblnd_free_pages(struct kib_pages *p);
+
+/* o2iblnd_bounce.c - NIC-local bounce pool */
+void kiblnd_bounce_pool_create(struct kib_hca_dev *hdev);
+void kiblnd_bounce_pool_destroy(struct kib_hca_dev *hdev);
+struct kib_bounce_slot *kiblnd_bounce_get(struct kib_bounce_pool *pool);
+void kiblnd_bounce_put(struct kib_bounce_slot *slot, bool already_zeroed);
+bool kiblnd_should_bounce(struct kib_hca_dev *hdev, const struct bio_vec *kiov,
+			  int niov, int offset, int nob, bool is_p2p);
+void kiblnd_bounce_fallback_inc(void);
+bool kiblnd_bounce_copy_out(struct kib_bounce_slot *slot,
+			    const struct bio_vec *kiov,
+			    int niov, int offset, int nob);
+void kiblnd_bounce_debugfs_init(void);
+void kiblnd_bounce_debugfs_fini(void);
+
+/* Advance (*kiov, *niov, *offset) past whole kiov entries that precede *offset,
+ * leaving *offset within the first transferred entry. Callers on the rd-build
+ * (kiblnd_setup_rd_kiov) and copy-out (kiblnd_bounce_copy_out) paths guarantee
+ * offset < total length, so the LASSERT here catches only a violated contract.
+ * kiblnd_bounce_first_page() does the same walk crash-safely for the predicate;
+ * the two are not interchangeable.
+ */
+static inline void
+kiblnd_kiov_skip(const struct bio_vec **kiov, int *niov, int *offset)
+{
+	while (*offset >= (*kiov)->bv_len) {
+		*offset -= (*kiov)->bv_len;
+		(*kiov)++;
+		(*niov)--;
+		LASSERT(*niov > 0);
+	}
+}
 
 int kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event);
 int kiblnd_translate_mtu(int value);
