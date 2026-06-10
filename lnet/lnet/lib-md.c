@@ -165,6 +165,9 @@ lnet_md_build(const struct lnet_md *umd, int unlink)
 			/* We take the page pointer on trust */
 			if (lmd->md_kiov[i].bv_offset +
 			    lmd->md_kiov[i].bv_len > PAGE_SIZE) {
+				CERROR("Invalid kiov[%d]: offset %u + length %u goes beyond PAGE_SIZE: rc = %d\n",
+				       i, lmd->md_kiov[i].bv_offset,
+				       lmd->md_kiov[i].bv_len, -EINVAL);
 				lnet_md_free(lmd);
 				return ERR_PTR(-EINVAL); /* invalid length */
 			}
@@ -177,6 +180,8 @@ lnet_md_build(const struct lnet_md *umd, int unlink)
 		if ((umd->umd_options & LNET_MD_MAX_SIZE) && /* max size used */
 		    (umd->umd_max_size < 0 ||
 		     umd->umd_max_size > total_length)) { /* illegal max_size */
+			CERROR("Invalid max_size %d: must be 0 to %d: rc = %d\n",
+			       umd->umd_max_size, total_length, -EINVAL);
 			lnet_md_free(lmd);
 			return ERR_PTR(-EINVAL);
 		}
@@ -211,6 +216,8 @@ lnet_md_build(const struct lnet_md *umd, int unlink)
 		if ((umd->umd_options & LNET_MD_MAX_SIZE) && /* max size used */
 		    (umd->umd_max_size < 0 ||
 		     umd->umd_max_size > (int)umd->umd_length)) {
+			CERROR("Invalid max_size %d: must be 0 to %u: rc = %d\n",
+			       umd->umd_max_size, umd->umd_length, -EINVAL);
 			lnet_md_free(lmd);
 			return ERR_PTR(-EINVAL);
 		}
