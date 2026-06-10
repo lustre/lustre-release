@@ -22185,6 +22185,26 @@ test_160w() {
 }
 run_test 160w "lfs changelog --user --mask"
 
+test_160x() {
+	(( $MDS1_VERSION >= $(version_code 2.17.54) )) ||
+		skip "Need MGS version at least 2.17.54"
+
+	changelog_chmask "ALL"
+	changelog_register || error "changelog_register failed"
+	changelog_register || error "changelog_register failed"
+	changelog_register || error "changelog_register failed"
+	createmany -o $DIR/f- 1000 || error "can't create"
+	before=$(changelog_users $SINGLEMDS|grep ^cl|wc -l)
+	__changelog_clear $SINGLEMDS cl1 200
+	__changelog_clear $SINGLEMDS cl1 100
+	after=$(changelog_users $SINGLEMDS|grep ^cl|wc -l)
+	(( before == after )) || {
+		changelog_users $SINGLEMDS
+		error "$before != $after: lost changelog user"
+	}
+}
+run_test 160x "changelog users do not disappear"
+
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 

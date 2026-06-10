@@ -2123,12 +2123,12 @@ static int mdd_changelog_clear_cb(const struct lu_env *env,
 	mdd_chlg_username(rec, mcuc->mcuc_name, sizeof(mcuc->mcuc_name));
 	/* cur_endrec is the oldest purgeable record, make sure we're newer */
 	if (rec->cur_endrec > mcuc->mcuc_endrec) {
-		rc = -EINVAL;
+		/* nothing bad if user uses too small value by mistake */
 		CDEBUG(D_IOCTL,
-		       "%s: request %llu < endrec %llu for user %s: rc = %d\n",
+		       "%s: request %llu < endrec %llu for user %s\n",
 		       mdd2obd_dev(mdd)->obd_name, mcuc->mcuc_endrec,
-		       rec->cur_endrec, mcuc->mcuc_name, rc);
-		RETURN(rc);
+		       rec->cur_endrec, mcuc->mcuc_name);
+		RETURN(0);
 	}
 
 	/*
