@@ -2708,6 +2708,151 @@ EOF
 }
 run_test 162 "Check ip2nets import failure with non-matching IPv6"
 
+test_163() {
+	[[ $NETTYPE == tcp* ]] || skip "Need tcp nettype"
+
+	cleanup_lnet || error "Failed to unload modules before test execution"
+	cleanup_netns || error "Failed to cleanup netns before test execution"
+	setup_fakeif || error "Failed to add fake IF"
+	$FAKE_IF_HAS_IPV6 || {
+		cleanup_fakeif
+		skip "$FAKE_IF has no IPv6"
+	}
+	reinit_dlc || return $?
+
+	local lnet_yaml="$TMP/sanity-lnet-$testnum-expected.yaml"
+
+	cat > $lnet_yaml << EOF
+net:
+-     net type: ${NETTYPE}
+      local NI(s):
+      -     nid: ${FAKE_IPV6}@${NETTYPE}
+            interfaces:
+                  0: ${FAKE_IF}
+-     net type: ${NETTYPE}1
+      local NI(s):
+      -     nid: ${FAKE_IP}@${NETTYPE}1
+            interfaces:
+                  0: ${FAKE_IF}
+EOF
+	do_lnetctl import $lnet_yaml ||
+		error "Import failed with rc = $?"
+
+	$LNETCTL net show --net ${NETTYPE} | grep -q "nid: ${FAKE_IPV6}@${NETTYPE}" ||
+		error "Expected IPv6 NID ${FAKE_IPV6}@${NETTYPE} not found after import"
+
+	$LNETCTL net show --net ${NETTYPE}1 | grep -q "nid: ${FAKE_IP}@${NETTYPE}1" ||
+		error "Expected IPv4 NID ${FAKE_IP}@${NETTYPE}1 not found after import"
+
+	cleanup_lnet
+}
+run_test 163 "Check import of net with mixed IPv6/IPv4 explicit NIDs"
+
+test_164() {
+	[[ ${NETTYPE} == tcp* ]] || skip "Test written for tcp"
+
+	cleanup_lnet || error "Failed to unload modules before test execution"
+	cleanup_netns || error "Failed to cleanup netns before test execution"
+	setup_fakeif || error "Failed to add fake IF"
+	reinit_dlc || return $?
+
+	local IMPORT="do_lnetctl import"
+	local lnet_yaml="$TMP/sanity-lnet-$testnum-expected.yaml"
+
+	local ip0="$(ip -o -4 a s ${INTERFACES[0]} | awk '{print $4}' |
+			sed 's/\/.*//')"
+	local ip1="$(ip -o -4 a s ${FAKE_IF} | awk '{print $4}' |
+			sed 's/\/.*//')"
+
+	log "Check malformed nid fails"
+	cat > $lnet_yaml << EOF
+net:
+-     net type: tcp1
+      local NI(s):
+      -     nid: $ip0
+EOF
+	$IMPORT < ${lnet_yaml} && error "Bad nid imported"
+	reinit_dlc
+
+	log "Check wrong net in nid fails"
+	cat > $lnet_yaml << EOF
+net:
+-     net type: tcp1
+      local NI(s):
+      -     nid: $ip0@tcp2
+EOF
+	$IMPORT < ${lnet_yaml} && error "Wrong net imported"
+	reinit_dlc
+
+	if [[ "$ip0" != "$ip1" ]]; then
+		echo "Check mismatching between nid and inteface fails"
+		cat > $lnet_yaml << EOF
+net:
+-     net type: tcp1
+      local NI(s):
+      -     nid: $ip0@tcp1
+            interfaces:
+                  0: ${FAKE_IF}
+EOF
+		$IMPORT < ${lnet_yaml} && error "Wrong interface imported"
+		reinit_dlc
+	fi
+
+	log "Check 'nid' cannot be used in ip2nets"
+	cat > $lnet_yaml << EOF
+ip2nets:
+  - net-spec: tcp
+    nid: $ip0@tcp
+    interfaces:
+        0: ${INTERFACES[0]}
+    ip-range:
+        0: "*.*.*.*"
+EOF
+	$IMPORT < ${lnet_yaml} && error "nid shouldn't work with ip2nets"
+	reinit_dlc
+
+	log "Check MR works"
+	local nid0="${ip0}@tcp"
+	local nid1="${ip1}@tcp"
+	cat > $lnet_yaml << EOF
+net:
+-     net type: tcp
+      local NI(s):
+      -     nid: ${nid0}
+            interfaces:
+                  0: ${INTERFACES[0]}
+      -     nid: ${nid1}
+            interfaces:
+                  0: ${FAKE_IF}
+EOF
+	$IMPORT < ${lnet_yaml} ||
+		error "Import of multi-rail net failed rc=$?"
+	# Both NIs must be configured, each keeping its own nid
+	$LNETCTL net show --net tcp | grep -q "nid: ${nid0}" ||
+		error "Expected NID ${nid0} not found after import"
+	$LNETCTL net show --net tcp | grep -q "nid: ${nid1}" ||
+		error "Expected NID ${nid1} not found after import"
+	reinit_dlc
+
+	log "Check nid/interfaces order doesn't matter"
+	cat > $lnet_yaml << EOF
+net:
+-     net type: tcp
+      local NI(s):
+      -     interfaces:
+                  0: ${INTERFACES[0]}
+            nid: ${ip0}@tcp
+EOF
+	$IMPORT < ${lnet_yaml} ||
+		error "Import with interfaces then nid failed rc=$?"
+	do_lnetctl net show --net tcp | grep -q "nid: ${nid0}" ||
+		error "Expected NID ${nid0} not found after import"
+	reinit_dlc
+
+	cleanup_lnet
+}
+run_test 164 "Check no issue when reading 'nid' in all scenarios"
+
 check_tunable_warning() {
 	dmesg | tac | sed '/LNet: Added LNI/q' | \
 		grep -q "All tunables of NIs of a net should be the same"

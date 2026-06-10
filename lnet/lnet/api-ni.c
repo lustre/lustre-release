@@ -4157,6 +4157,21 @@ int lnet_dyn_add_ni(struct lnet_ioctl_config_ni *conf, u32 net_id,
 		return -ENOENT;
 	}
 
+	/* Validate that NID network type matches the configured net_id.
+	 * This catches configuration errors where the NID specifies a different
+	 * network type than the network being configured (e.g., nid: IP@tcp2
+	 * with net type: tcp1).
+	 */
+	if (!LNET_NID_IS_ANY(nid) && nid_addr_is_set(nid)) {
+		u32 nid_net = LNET_NID_NET(nid);
+
+		if (nid_net != net_id) {
+			CERROR("NID network %s does not match configured network %s\n",
+			       libcfs_net2str(nid_net), libcfs_net2str(net_id));
+			return -EINVAL;
+		}
+	}
+
 	net = lnet_net_alloc(net_id, NULL);
 	if (!net)
 		return -ENOMEM;
@@ -6653,6 +6668,7 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 	}
 
 	conf->lic_ncpts = 0;
+	conf->lic_ni_intf[0] = '\0';
 
 	nla_for_each_nested(settings, entry, rem3) {
 		if (nla_type(settings) != LN_SCALAR_ATTR_VALUE)
@@ -6864,6 +6880,10 @@ lnet_genl_parse_local_ni(struct nlattr *entry, struct genl_info *info,
 		case -ENOENT:
 			GENL_SET_ERR_MSG(info,
 					 "cannot parse net");
+			break;
+		case -EINVAL:
+			GENL_SET_ERR_MSG(info,
+					 "invalid configuration");
 			break;
 		case -ERANGE:
 			GENL_SET_ERR_MSG(info,

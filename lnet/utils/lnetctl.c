@@ -2306,6 +2306,168 @@ out_free_expr:
 	return rc;
 }
 
+static bool is_nid_intf(struct lnet_dlc_intf_descr *intf, int flags)
+{
+	return strchr(intf->intf_name, '@') ||
+		(strcmp(intf->intf_name, "<?>") == 0 &&
+		     flags == NLM_F_REPLACE);
+}
+
+/* Emit a single local NI mapping, pairing an optional nid with an optional
+ * interface. Returns 1 on success, 0 on emitter error.
+ */
+static int yaml_lnet_emit_ni(yaml_emitter_t *output,
+			     const struct lnet_dlc_intf_descr *nid_intf,
+			     const struct lnet_dlc_intf_descr *real_intf,
+			     struct lnet_ioctl_config_lnd_tunables *tunables,
+			     struct lnet_dlc_network_descr *nw_descr,
+			     int healthv, struct cfs_expr_list *global_cpts,
+			     int flags)
+{
+	struct cfs_expr_list *cpt_expr = NULL;
+	yaml_event_t event;
+	int rc;
+
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_ANY_MAPPING_STYLE);
+	rc = yaml_emitter_emit(output, &event);
+	if (rc == 0)
+		return 0;
+
+	if (nid_intf) {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"nid",
+					     strlen("nid"), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			return 0;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)nid_intf->intf_name,
+					     strlen(nid_intf->intf_name), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			return 0;
+	}
+
+	if (real_intf) {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"interfaces",
+					     strlen("interfaces"), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			return 0;
+
+		yaml_mapping_start_event_initialize(&event, NULL,
+						    (yaml_char_t *)YAML_MAP_TAG,
+						    1, YAML_ANY_MAPPING_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			return 0;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"0",
+					     strlen("0"), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			return 0;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)real_intf->intf_name,
+					     strlen(real_intf->intf_name), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			return 0;
+
+		yaml_mapping_end_event_initialize(&event);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			return 0;
+	}
+
+	if (tunables) {
+		rc = yaml_add_ni_tunables(output, tunables, nw_descr);
+		if (rc == 0)
+			return 0;
+	}
+
+	if (flags == NLM_F_REPLACE && healthv > -1) {
+		char health[INT_STRING_LEN];
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"health stats",
+					     strlen("health stats"), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			return 0;
+
+		/* Setup all mappings for data related to the 'health stats' */
+		yaml_mapping_start_event_initialize(&event, NULL,
+						    (yaml_char_t *)YAML_MAP_TAG,
+						    1, YAML_BLOCK_MAPPING_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			return 0;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"health value",
+					     strlen("health value"), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			return 0;
+
+		snprintf(health, sizeof(health), "%d", healthv);
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_INT_TAG,
+					     (yaml_char_t *)health,
+					     strlen(health), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			return 0;
+
+		yaml_mapping_end_event_initialize(&event);
+		rc = yaml_emitter_emit(output, &event);
+		if (rc == 0)
+			return 0;
+	}
+
+	if (real_intf && real_intf->cpt_expr)
+		cpt_expr = real_intf->cpt_expr;
+	else if (nid_intf && nid_intf->cpt_expr)
+		cpt_expr = nid_intf->cpt_expr;
+	else if (global_cpts)
+		cpt_expr = global_cpts;
+
+	if (cpt_expr) {
+		rc = lnet_yaml_emit_cpt_sequence(output, cpt_expr);
+		if (rc == 0)
+			return 0;
+	}
+
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(output, &event);
+	if (rc == 0)
+		return 0;
+
+	return 1;
+}
+
 static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 			       struct lnet_dlc_network_descr *nw_descr,
 			       struct lnet_ioctl_config_lnd_tunables *tunables,
@@ -2315,6 +2477,8 @@ static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 	struct lnet_dlc_intf_descr *intf;
 	struct nl_sock *sk = NULL;
 	const char *msg = NULL;
+	const struct lnet_dlc_intf_descr *pending_nid = NULL;
+	const struct lnet_dlc_intf_descr *pending_real = NULL;
 	yaml_emitter_t output;
 	yaml_parser_t reply;
 	yaml_event_t event;
@@ -2456,143 +2620,76 @@ static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 	if (rc == 0)
 		goto emitter_error;
 
-	list_for_each_entry(intf, &nw_descr->nw_intflist,
-			    intf_on_network) {
-		struct cfs_expr_list *cpt_expr = NULL;
+	/* Emit one NI mapping per "local NI(s)" entry. The interface list may
+	 * hold descriptors for several NIs, each with an optional 'nid:' and an
+	 * optional interface in either order.
+	 */
+	list_for_each_entry(intf, &nw_descr->nw_intflist, intf_on_network) {
+		if (is_nid_intf(intf, flags)) {
+			/* nid listed after its own interface: pair them. */
+			if (pending_real) {
+				rc = yaml_lnet_emit_ni(&output, intf,
+						       pending_real, tunables,
+						       nw_descr, healthv,
+						       global_cpts, flags);
+				if (rc == 0)
+					goto emitter_error;
+				pending_real = NULL;
+				continue;
+			}
+			/* A nid with no interface yet. Flush any previous
+			 * unpaired nid before starting a new one.
+			 */
+			if (pending_nid) {
+				rc = yaml_lnet_emit_ni(&output, pending_nid,
+						       NULL, tunables, nw_descr,
+						       healthv, global_cpts,
+						       flags);
+				if (rc == 0)
+					goto emitter_error;
+			}
+			pending_nid = intf;
+			continue;
+		}
 
-		yaml_mapping_start_event_initialize(&event, NULL,
-						    (yaml_char_t *)YAML_MAP_TAG,
-						    1, YAML_ANY_MAPPING_STYLE);
-		rc = yaml_emitter_emit(&output, &event);
+		/* Real interface: pair it with the nid of its own NI entry
+		 * (a preceding 'nid:'), if any.
+		 */
+		if (pending_nid) {
+			rc = yaml_lnet_emit_ni(&output, pending_nid, intf,
+					       tunables, nw_descr, healthv,
+					       global_cpts, flags);
+			if (rc == 0)
+				goto emitter_error;
+			pending_nid = NULL;
+			continue;
+		}
+
+		/* No nid yet; defer in case this NI's nid follows. Flush any
+		 * previously deferred interface first.
+		 */
+		if (pending_real) {
+			rc = yaml_lnet_emit_ni(&output, NULL, pending_real,
+					       tunables, nw_descr, healthv,
+					       global_cpts, flags);
+			if (rc == 0)
+				goto emitter_error;
+		}
+		pending_real = intf;
+	}
+
+	/* Flush any trailing unpaired nid or interface (e.g.
+	 * "net add --nid a@tcp").
+	 */
+	if (pending_nid) {
+		rc = yaml_lnet_emit_ni(&output, pending_nid, NULL, tunables,
+				       nw_descr, healthv, global_cpts, flags);
 		if (rc == 0)
 			goto emitter_error;
-
-		/* Use NI addresses instead of interface */
-		if (strchr(intf->intf_name, '@') ||
-		    (strcmp(intf->intf_name, "<?>") == 0 &&
-		     flags == NLM_F_REPLACE)) {
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)"nid",
-						     strlen("nid"), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)intf->intf_name,
-						     strlen(intf->intf_name), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-		} else {
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)"interfaces",
-						     strlen("interfaces"), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_mapping_start_event_initialize(&event, NULL,
-							    (yaml_char_t *)YAML_MAP_TAG,
-							    1, YAML_ANY_MAPPING_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)"0",
-						     strlen("0"), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)intf->intf_name,
-						     strlen(intf->intf_name), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_mapping_end_event_initialize(&event);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-		}
-
-		if (tunables) {
-			rc = yaml_add_ni_tunables(&output, tunables, nw_descr);
-			if (rc == 0)
-				goto emitter_error;
-		}
-
-		if (flags == NLM_F_REPLACE && healthv > -1) {
-			char health[INT_STRING_LEN];
-
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)"health stats",
-						     strlen("health stats"), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			/* Setup all mappings for data related to the 'health stats' */
-			yaml_mapping_start_event_initialize(&event, NULL,
-							    (yaml_char_t *)YAML_MAP_TAG,
-							    1, YAML_BLOCK_MAPPING_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_STR_TAG,
-						     (yaml_char_t *)"health value",
-						     strlen("health value"), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			snprintf(health, sizeof(health), "%d", healthv);
-			yaml_scalar_event_initialize(&event, NULL,
-						     (yaml_char_t *)YAML_INT_TAG,
-						     (yaml_char_t *)health,
-						     strlen(health), 1, 0,
-						     YAML_PLAIN_SCALAR_STYLE);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-
-			yaml_mapping_end_event_initialize(&event);
-			rc = yaml_emitter_emit(&output, &event);
-			if (rc == 0)
-				goto emitter_error;
-		}
-
-		if (intf->cpt_expr)
-			cpt_expr = intf->cpt_expr;
-		else if (global_cpts)
-			cpt_expr = global_cpts;
-
-		if (cpt_expr) {
-			rc = lnet_yaml_emit_cpt_sequence(&output, cpt_expr);
-			if (rc == 0)
-				goto emitter_error;
-		}
-
-		yaml_mapping_end_event_initialize(&event);
-		rc = yaml_emitter_emit(&output, &event);
+	}
+	if (pending_real) {
+		rc = yaml_lnet_emit_ni(&output, NULL, pending_real, tunables,
+				       nw_descr, healthv, global_cpts, flags);
 		if (rc == 0)
 			goto emitter_error;
 	}
@@ -5327,19 +5424,20 @@ yaml_parser_error:
  *
  * net:
  *  - net type: <net>[NUM]
- *    interfaces:
- *        0: <intf name>['['<expr>']']
- *        1: <intf name>['['<expr>']']
- *    tunables:
- *          peer_timeout: <NUM>
- *          peer_credits: <NUM>
- *          peer_buffer_credits: <NUM>
- *          credits: <NUM>
- *    lnd tunables:
- *          <lnd_param1>: <val>
- *          <lnd_param2>: <val>
- *          <...>
- *    CPT: "[<expr]"
+ *    local NI(s): <- either nid or interfaces
+ *      - nid: <nid>
+ *        interfaces:
+ *              0: <intf name>['['<expr>']']
+ *        tunables:
+ *              peer_timeout: <NUM>
+ *              ...
+ *        lnd tunables:
+ *              <lnd_param1>: <val>
+ *        CPT: "[<expr]"
+ *      - nid: <nid>
+ *              ...
+ *    tunables:       <- net-level, applies to all NIs lacking per-NI tunables
+ *          ...
  */
 static int
 handle_net_config_sequence(yaml_parser_t *setup, int flags,
@@ -5354,6 +5452,7 @@ handle_net_config_sequence(yaml_parser_t *setup, int flags,
 	char errmsg[LNET_MAX_STR_LEN];
 	bool tunables_set = false;
 	bool lnd_tunables_set = false;
+	bool nid_specified = false;
 	/* Track configured networks to ensure uniqueness for ip2nets */
 	__u32 *configured_nets = NULL;
 	size_t nets_cnt = 0;
@@ -5412,23 +5511,28 @@ handle_net_config_sequence(yaml_parser_t *setup, int flags,
 			size_t i;
 			__u32 *tmp;
 
-			rc = lustre_lnet_resolve_ip2nets_rule(&ip2nets, &nids,
-							      &nnids, errmsg,
-							      sizeof(errmsg));
-			if (nids)
-				free(nids);
-
-			/* NO_MATCH is okay for ip2nets, but anything else is
-			 * an error
+			/* When an explicit 'nid:' was supplied, the NI address
+			 * is already known: skip ip2nets resolution
 			 */
-			if (rc != LUSTRE_CFG_RC_NO_ERR &&
-			    !(is_ip2nets_sequence &&
-			      rc == LUSTRE_CFG_RC_NO_MATCH))
-				goto print_error;
+			if (!nid_specified) {
+				rc = lustre_lnet_resolve_ip2nets_rule(
+					&ip2nets, &nids, &nnids, errmsg,
+					sizeof(errmsg));
+				if (nids)
+					free(nids);
 
-			/* Skip configuration if resolution failed */
-			if (rc != LUSTRE_CFG_RC_NO_ERR)
-				goto cleanup_block;
+				/* NO_MATCH is okay for ip2nets, but anything
+				 * else is an error
+				 */
+				if (rc != LUSTRE_CFG_RC_NO_ERR &&
+				    !(is_ip2nets_sequence &&
+				      rc == LUSTRE_CFG_RC_NO_MATCH))
+					goto print_error;
+
+				/* Skip configuration if resolution failed */
+				if (rc != LUSTRE_CFG_RC_NO_ERR)
+					goto cleanup_block;
+			}
 
 			/* Check for duplicate networks in ip2nets sequences */
 			for (i = 0; i < nets_cnt; i++) {
@@ -5480,6 +5584,7 @@ cleanup_block:
 				cfs_expr_list_free(global_cpts);
 			global_cpts = NULL;
 			tunables_set = lnd_tunables_set = false;
+			nid_specified = false;
 		}
 
 		/* Skip other events we do not care about */
@@ -5541,6 +5646,60 @@ cleanup_block:
 			} else if (!rc) {
 				goto yaml_parser_error;
 			}
+		} else if (!strcmp(value, "nid")) {
+			__u32 saved_net_id;
+
+			if (is_ip2nets_sequence) {
+				snprintf(errmsg, LNET_MAX_STR_LEN,
+					 "'nid' not valid for ip2nets");
+				rc = -EINVAL;
+				goto print_error;
+			}
+
+			yaml_event_delete(&event);
+
+			rc = yaml_parser_parse(setup, &event);
+			if (!rc)
+				goto yaml_parser_error;
+
+			if (event.type != YAML_SCALAR_EVENT) {
+				snprintf(errmsg, LNET_MAX_STR_LEN,
+					 "Missing value for 'nid'");
+				rc = -EINVAL;
+				goto print_error;
+			}
+
+			value = (char *)event.data.scalar.value;
+			if (!strchr(value, '@')) {
+				snprintf(errmsg, LNET_MAX_STR_LEN,
+					 "Invalid NID '%s'", value);
+				rc = -EINVAL;
+				goto print_error;
+			}
+
+			/* Parse as '--nid' option does for "net add": keep the
+			 * full NID string (with '@') as the interface
+			 * descriptor so yaml_lnet_config_ni() emits it as a
+			 * 'nid:' netlink event, preserving the explicit address
+			 * family.
+			 *
+			 * lustre_lnet_parse_interfaces() also derives nw_id from
+			 * the NID's '@net' suffix. Preserve the net set by
+			 * 'net type:' so a mismatched NID (e.g. 'nid: IP@tcp2'
+			 * under 'net type: tcp1') is emitted unchanged and
+			 * rejected by the kernel instead of silently switching
+			 * the NI to the net named in the NID.
+			 */
+			saved_net_id = nw_descr->nw_id;
+			rc = lustre_lnet_parse_interfaces(value, nw_descr);
+			if (rc != LUSTRE_CFG_RC_NO_ERR) {
+				snprintf(errmsg, LNET_MAX_STR_LEN,
+					 "Failed to parse NID '%s'", value);
+				rc = -EINVAL;
+				goto print_error;
+			}
+			nw_descr->nw_id = saved_net_id;
+			nid_specified = true;
 		} else if (!strcmp(value, "local NI(s)")) {
 			if (is_ip2nets_sequence) {
 				snprintf(errmsg, LNET_MAX_STR_LEN,
