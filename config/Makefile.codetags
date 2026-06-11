@@ -1,0 +1,35 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+
+FIND_TAG_FILES_CMD = find . \
+		     -path ./ldiskfs/linux-stage \
+		     -prune -false -o -type f -name '*.[hc]'
+TAGS: etags
+tags: ctags etags
+
+
+etags:
+	$(RM) TAGS
+	ETAGSF=`etags --version | grep -iq exuberant && \
+		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
+	$(FIND_TAG_FILES_CMD) | xargs etags $$ETAGSF -a
+
+
+ctags:
+	$(RM) tags
+	CTAGSF=`ctags --version | grep -iq exuberant && \
+		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
+	$(FIND_TAG_FILES_CMD) | xargs ctags $$CTAGSF -a
+
+
+cscope:
+	$(RM) cscope*.out cscope.files
+	$(FIND_TAG_FILES_CMD) > cscope.files
+	cscope -bRq
+
+
+mkid:
+	$(FIND_TAG_FILES_CMD) | xargs mkid

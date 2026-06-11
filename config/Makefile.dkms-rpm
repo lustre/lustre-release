@@ -1,0 +1,87 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+
+ifeq ($(ENABLE_SERVER),yes)
+dkms-srpm: $(PACKAGE)-dkms.spec dist Makefile
+	@rpmbuilddir=$$(mktemp -t $${BUILDDIR:+-p $$BUILDDIR} -d rpmbuild-$(PACKAGE)-$$USER-XXXXXXXX)
+	$(MAKE) rpmbuilddir="$$rpmbuilddir" rpm-local || exit 1
+	$(RPMBUILD) \
+		--define "_tmppath $$rpmbuilddir/TMP" \
+		--define "_topdir $$rpmbuilddir" \
+		--define "_sourcedir ." \
+		--with servers --with zfs -without ldiskfs \
+		--bs $(PACKAGE)-dkms.spec || exit 1
+	$(RPMBUILD) \
+		--define "_tmppath $$rpmbuilddir/TMP" \
+		--define "_topdir $$rpmbuilddir" \
+		--define "_sourcedir ." \
+		--with servers --without zfs --with ldiskfs \
+		--bs $(PACKAGE)-dkms.spec || exit 1
+	$(RPMBUILD) \
+		--define "_tmppath $$rpmbuilddir/TMP" \
+		--define "_topdir $$rpmbuilddir" \
+		--define "_sourcedir ." \
+		--with servers --with zfs --with ldiskfs \
+		--bs $(PACKAGE)-dkms.spec || exit 1
+	cp $$rpmbuilddir/SRPMS/*.src.rpm . || exit 1
+	rm -rf $$rpmbuilddir
+
+
+dkms-rpm: dkms-srpm
+	@rpmbuilddir=$$(mktemp -t $${BUILDDIR:+-p $$BUILDDIR} -d rpmbuild-$(PACKAGE)-$$USER-XXXXXXXX)
+	$(RPMBUILD) \
+		--define "_tmppath $$rpmbuilddir/TMP" \
+		--define "_topdir $$rpmbuilddir" \
+		$(RPMBUILD_BINARY_ARGS) \
+		--with servers --with zfs --without ldiskfs \
+		--rebuild $(PACKAGE)-zfs-dkms-*.src.rpm || exit 1
+	$(RPMBUILD) \
+		--define "_tmppath $$rpmbuilddir/TMP" \
+		--define "_topdir $$rpmbuilddir" \
+		$(RPMBUILD_BINARY_ARGS) \
+		--with servers --without zfs --with ldiskfs \
+		--rebuild $(PACKAGE)-ldiskfs-dkms-*.src.rpm || exit 1
+	$(RPMBUILD) \
+		--define "_tmppath $$rpmbuilddir/TMP" \
+		--define "_topdir $$rpmbuilddir" \
+		$(RPMBUILD_BINARY_ARGS) \
+		--with servers --with zfs --with ldiskfs \
+		--rebuild $(PACKAGE)-all-dkms-*.src.rpm || exit 1
+	cp $$rpmbuilddir/RPMS/*/*.rpm . || exit 1
+	rm -rf $$rpmbuilddir
+
+
+else
+
+
+dkms-srpm: $(PACKAGE)-dkms.spec dist Makefile
+	@rpmbuilddir=$$(mktemp -t $${BUILDDIR:+-p $$BUILDDIR} -d rpmbuild-$(PACKAGE)-$$USER-XXXXXXXX)
+	$(MAKE) rpmbuilddir="$$rpmbuilddir" rpm-local || exit 1
+	$(RPMBUILD) \
+		--define "_tmppath $$rpmbuilddir/TMP" \
+		--define "_topdir $$rpmbuilddir" \
+		--define "_sourcedir ." \
+		--without servers \
+		--bs $(PACKAGE)-dkms.spec || exit 1
+	cp $$rpmbuilddir/SRPMS/*.src.rpm . || exit 1
+	rm -rf $$rpmbuilddir
+
+
+dkms-rpm: dkms-srpm
+	@rpmbuilddir=$$(mktemp -t $${BUILDDIR:+-p $$BUILDDIR} -d rpmbuild-$(PACKAGE)-$$USER-XXXXXXXX)
+	$(RPMBUILD) \
+		--define "_tmppath $$rpmbuilddir/TMP" \
+		--define "_topdir $$rpmbuilddir" \
+		$(RPMBUILD_BINARY_ARGS) \
+		--without servers \
+		--rebuild $(PACKAGE)-client-dkms-*.src.rpm || exit 1
+	cp $$rpmbuilddir/RPMS/*/*.rpm . || exit 1
+	rm -rf $$rpmbuilddir
+endif
+
+
+dkms-srpms: dkms-srpm
+dkms-rpms: dkms-rpm

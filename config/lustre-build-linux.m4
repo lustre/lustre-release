@@ -4,64 +4,7 @@
 # Set things accordingly for a linux kernel
 #
 AC_DEFUN([LB_LINUX_VERSION], [
-makerule="$PWD/build"
-AC_CACHE_CHECK([for external module build target], lb_cv_module_target,
-[
-	lb_cv_module_target=""
-	rm -f kconftest.dir/conftest.i
-	MODULE_TARGET="M"
-	makerule="$PWD/kconftest.dir"
-	LB_LINUX_TRY_MAKE([], [],
-		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
-		[test -s kconftest.dir/conftest.i],
-		[lb_cv_module_target="M54"], [
-	MODULE_TARGET="M"
-	makerule="_module_$PWDkconftest.dir"
-	LB_LINUX_TRY_MAKE([], [],
-		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
-		[test -skconftest.dir/conftest.i],
-		[lb_cv_module_target="M"], [
-	MODULE_TARGET="M"
-	makerule=""
-	LB_LINUX_TRY_MAKE([], [],
-		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
-		[test -s kconftest.dir/conftest.i],
-		[lb_cv_module_target="M58"], [
-	makerule=""
-	lb_cv_dequote_CC_VERSION_TEXT=yes
-	LB_LINUX_TRY_MAKE([], [],
-		[$makerule LUSTRE_KERNEL_TEST=conftest.i],
-		[test -s kconftest.dir/conftest.i],
-		[lb_cv_module_target="M517"], [
-			AC_MSG_ERROR([kernel module make failed; check config.log for details])
-	])])])])
-])
-# Linux commit v5.16-rc3-26-g129ab0d2d9f3
-#  added quotes around "$(CONFIG_CC_VERSION_TEXT)", however .config stores
-#  CONFIG_CC_VERSION_TEXT with quotes thus breaking the GNU make Makefile
-#  for external modules.
-#  Workaround by providing a non-quoted value to override the value in .config
-unset lb_cv_dequote_CC_VERSION_TEXT
-AC_CACHE_CHECK([for compiler version text], lb_cv_dequote_CC_VERSION_TEXT, [
-	AS_IF([test "x$lb_cv_module_target" = "xM517"],
-		[lb_cv_dequote_CC_VERSION_TEXT=yes],
-		[lb_cv_dequote_CC_VERSION_TEXT=yes])
-])
-AS_IF([test -z "$lb_cv_module_target"],
-	[AC_MSG_ERROR([unknown external module build target])],
-[test "x$lb_cv_module_target" = "xM54"],
-	[makerule="$PWD/kconftest.dir"
-	lb_cv_module_target="M"],
-[test "x$lb_cv_module_target" = "xM58"],
-	[makerule=""
-	lb_cv_module_target="M"],
-[test "x$lb_cv_module_target" = "xM517"],
-	[makerule=""
-	lb_cv_module_target="M"],
-[test "x$lb_cv_module_target" = "xM"],
-	[makerule="_module_$PWD/kconftest.dir"])
-MODULE_TARGET=$lb_cv_module_target
-AC_SUBST(MODULE_TARGET)
+makerule="_module_$PWD/kconftest.dir"
 ])
 
 #
@@ -349,26 +292,11 @@ AS_IF([test ${LINUX} == ${LINUX_OBJ} -a ${LINUX} == $(realpath ${LINUX})],[
 	])
 AC_SUBST(LINUX)
 AC_SUBST(LINUX_OBJ)
-# -------- check for .config --------
+# -------- check for .config (deprecated) --------
 AC_ARG_WITH([linux-config],
 	[AS_HELP_STRING([--with-linux-config=path],
-			[set path to Linux .conf (default=$LINUX_OBJ/.config)])],
-	[LB_ARG_CANON_PATH([linux-config], [LINUX_CONFIG])],
-	[LINUX_CONFIG=$LINUX_OBJ/.config])
-
-# -------- check if .config exists --
-LB_CHECK_FILE([$LINUX_CONFIG], [],
-	[KVER=$(basename $LINUX_OBJ | sed 's/^build$//' | sed 's/^linux-//')
-	 AS_IF([test -z "$KVER"], [KVER=$(uname -r)])
-	 LB_CHECK_FILE([/boot/config-$KVER],
-		[LINUX_CONFIG=/boot/config-$KVER],
-		[AC_MSG_ERROR([
-
-Kernel config could not be found.
-])
-	])
-])
-AC_SUBST(LINUX_CONFIG)
+			[DEPRECATED: this option is ignored])],
+	[AC_MSG_WARN([--with-linux-config is deprecated and will be ignored])])
 
 LB_CHECK_FILE([/boot/kernel.h],
 	[KERNEL_SOURCE_HEADER='/boot/kernel.h'],
@@ -398,14 +326,6 @@ LB_CHECK_FILE([$LINUX_OBJ/include/linux/version.h],
 		[AC_MSG_ERROR([Run make config in $LINUX.])])])
 AC_SUBST(VERSION_HDIR)
 
-# ----------- kconfig.h exists ---------------
-# kernel 3.1, $LINUX/include/linux/kconfig.h is added
-# see kernel commit 2a11c8ea20bf850b3a2c60db8c2e7497d28aba99
-#
-LB_CHECK_FILE([$LINUX/include/linux/kconfig.h],
-	      [CONFIG_INCLUDE=$LINUX/include/linux/kconfig.h],
-              [CONFIG_INCLUDE=include/$AUTOCONF_HDIR/autoconf.h])
-AC_SUBST(CONFIG_INCLUDE)
 
 # ------------ rhconfig.h includes runtime-generated bits --
 # RedHat kernel-source checks
@@ -441,11 +361,6 @@ Consult build/README.kernel-source for details.
 # this is needed before we can build modules
 LB_LINUX_VERSION
 
-# --- Parallel config for kernel v5.17+
-AS_IF([test "x$lb_cv_dequote_CC_VERSION_TEXT" = "xyes"], [
-	CC_VERSION_TEXT=$($CC --version | head -n1 | tr ' ()' '.')
-	MAKE_KMOD_ENV="CONFIG_CC_VERSION_TEXT='$CC_VERSION_TEXT'"])
-
 # --- check that we can build modules at all
 LB_CHECK_COMPILE([that modules can be built at all], build_modules,
 	[], [], [], [
@@ -465,24 +380,10 @@ LB_LINUX_RELEASE
 # LC_MODULE_LOADING
 #
 # after 2.6.28 CONFIG_KMOD is removed, and only CONFIG_MODULES remains
-# so we test if request_module is implemented or not
+# request_module() is a macro when CONFIG_MODULES is set, so it does not
+# appear in preprocessed output; check CONFIG_MODULES directly instead.
 AC_DEFUN([LC_MODULE_LOADING], [
-AC_CACHE_CHECK([if Linux kernel module loading is possible], lb_cv_module_loading, [
-LB_LINUX_TRY_MAKE([
-	#include <linux/kmod.h>
-], [
-	int myretval=ENOSYS ;
-	return myretval;
-], [
-	$makerule LUSTRE_KERNEL_TEST=conftest.i
-], [dnl
-	grep request_module kconftest.dir/conftest.i |dnl
-		grep -v `grep "int myretval=" kconftest.dir/conftest.i |dnl
-			cut -d= -f2 | cut -d" "  -f1`dnl
-		>/dev/null dnl
-], [lb_cv_module_loading="yes"], [lb_cv_module_loading="no"])
-])
-AS_IF([test "$lb_cv_module_loading" = yes],
+LB_CHECK_CONFIG([MODULES],
 	[AC_DEFINE(HAVE_MODULE_LOADING_SUPPORT, 1,
 		[kernel module loading is possible])],
 	[AC_MSG_WARN([
@@ -665,8 +566,8 @@ AC_DEFUN([LB_LINUX_COMPILE_IFELSE],
 [m4_ifvaln([$1], [AC_LANG_CONFTEST([AC_LANG_SOURCE([$1])])])dnl
 mkdir -p kconftest.dir/
 rm -f kconftest.dir/conftest.o kconftest.dir/conftest.mod.c kconftest.dir/conftest.ko
-cp config/Kbuild kconftest.dir/
-AS_IF([AC_TRY_COMMAND(cp conftest.c kconftest.dir && make -d [$2] DEQUOTE_CC_VERSION_TEXT=$lb_cv_dequote_CC_VERSION_TEXT LDFLAGS= ${LD:+LD="$LD"} CC="$CC" -f $PWD/kconftest.dir/Kbuild LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_CHECK_INCLUDE -I$LINUX/arch/$SUBARCH/include -Iinclude -Iarch/$SUBARCH/include/generated -I$LINUX/include -Iinclude2 -I$LINUX/include/uapi -Iinclude/generated -I$LINUX/arch/$SUBARCH/include/uapi -Iarch/$SUBARCH/include/generated/uapi -I$LINUX/include/uapi -Iinclude/generated/uapi -I$LINUX/arch/$SUBARCH/include/generated -I$LINUX/arch/$SUBARCH/include/generated/uapi -I$LINUX/include/generated -I$LINUX/include/generated/uapi -I$LINUX_OBJ/include -I$LINUX_OBJ/include/generated/uapi -I$LINUX_OBJ/arch/$SUBARCH/include/generated -I$LINUX_OBJ/arch/$SUBARCH/include/generated/uapi ${SPL_OBJ:+-include $SPL_OBJ/spl_config.h} ${ZFS_OBJ:+-include $ZFS_OBJ/zfs_config.h} ${SPL:+-I$SPL/include } ${ZFS:+-I$ZFS -I$ZFS/include -I$ZFS/include/os/linux/kernel -I$ZFS/include/os/linux/spl -I$ZFS/include/os/linux/zfs -I${SPL:-$ZFS/include/spl}} -include $CONFIG_INCLUDE" KBUILD_EXTRA_SYMBOLS="${ZFS_OBJ:+$ZFS_OBJ/Module.symvers} $KBUILD_EXTRA_SYMBOLS" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $MODULE_TARGET=$PWD/kconftest.dir) >/dev/null && AC_TRY_COMMAND([$3])],
+echo "obj-m := conftest.o" >> kconftest.dir/Kbuild
+AS_IF([AC_TRY_COMMAND(cp conftest.c kconftest.dir && make -d [$2] LDFLAGS= ${LD:+LD="$LD"} CC="$CC" LINUXINCLUDE="$EXTRA_CHECK_INCLUDE -I$LINUX/arch/$SUBARCH/include -Iinclude -Iarch/$SUBARCH/include/generated -I$LINUX/include -Iinclude2 -I$LINUX/include/uapi -Iinclude/generated -I$LINUX/arch/$SUBARCH/include/uapi -Iarch/$SUBARCH/include/generated/uapi -I$LINUX/include/uapi -Iinclude/generated/uapi -I$LINUX/arch/$SUBARCH/include/generated -I$LINUX/arch/$SUBARCH/include/generated/uapi -I$LINUX/include/generated -I$LINUX/include/generated/uapi -I$LINUX_OBJ/include -I$LINUX_OBJ/include/generated/uapi -I$LINUX_OBJ/arch/$SUBARCH/include/generated -I$LINUX_OBJ/arch/$SUBARCH/include/generated/uapi ${SPL_OBJ:+-include $SPL_OBJ/spl_config.h} ${ZFS_OBJ:+-include $ZFS_OBJ/zfs_config.h} ${SPL:+-I$SPL/include } ${ZFS:+-I$ZFS -I$ZFS/include -I$ZFS/include/os/linux/kernel -I$ZFS/include/os/linux/spl -I$ZFS/include/os/linux/zfs -I${SPL:-$ZFS/include/spl}} -include $LINUX/include/linux/kconfig.h" KBUILD_EXTRA_SYMBOLS="${ZFS_OBJ:+$ZFS_OBJ/Module.symvers} $KBUILD_EXTRA_SYMBOLS" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" M=$PWD/kconftest.dir) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST
 m4_ifvaln([$5],[$5])dnl])
@@ -891,7 +792,7 @@ LINUXINCLUDE += -I\$(ZINC)/include/os/linux/zfs
 LINUXINCLUDE += -I\$(ZINC)/include/os/linux/kernel
 endif
 endif
-LINUXINCLUDE += -include $CONFIG_INCLUDE
+LINUXINCLUDE += -include $LINUX/include/linux/kconfig.h
 KBUILD_EXTRA_SYMBOLS += ${ZFS_OBJ:+$ZFS_OBJ/Module.symvers}
 KBUILD_EXTRA_SYMBOLS += ${XTRA_SYM}
 ifneq (\$(PSYM),)

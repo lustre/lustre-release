@@ -340,20 +340,10 @@ AC_MSG_RESULT([$enable_manpages])
 #
 AC_DEFUN([LB_CONFIG_HEADERS], [
 AC_CONFIG_HEADERS([config.h])
-CPPFLAGS="-include $PWD/undef.h -include $PWD/config.h $CPPFLAGS"
-EXTRA_KCFLAGS="-include $PWD/undef.h -include $PWD/config.h $EXTRA_KCFLAGS"
+CPPFLAGS="-include $PWD/config.h $CPPFLAGS"
+EXTRA_KCFLAGS="-include $PWD/config.h $EXTRA_KCFLAGS"
 AC_SUBST(EXTRA_KCFLAGS)
 ]) # LB_CONFIG_HEADERS
-
-#
-# LB_INCLUDE_RULES
-#
-# defines for including the toplevel Rules
-#
-AC_DEFUN([LB_INCLUDE_RULES], [
-INCLUDE_RULES="include $PWD/Rules"
-AC_SUBST(INCLUDE_RULES)
-]) # LB_INCLUDE_RULES
 
 #
 # LB_PATH_DEFAULTS
@@ -394,7 +384,6 @@ AM_CONDITIONAL([USE_QUILT], [test x$use_quilt = xyes])
 AM_CONDITIONAL([RHEL], [test -f /etc/redhat-release -o -f /etc/openEuler-release])
 AM_CONDITIONAL([SUSE], [test -f /etc/SUSE-brand -o -f /etc/SuSE-release])
 AM_CONDITIONAL([UBUNTU], [test x$UBUNTU_KERNEL = xyes])
-AM_CONDITIONAL([DEQUOTE_CC_VERSION_TEXT], [test x$lb_cv_dequote_CC_VERSION_TEXT = xyes])
 
 LN_CONDITIONALS
 LC_CONDITIONALS
@@ -406,11 +395,10 @@ LC_CONDITIONALS
 # build-specific config files
 #
 AC_DEFUN([LB_CONFIG_FILES], [
-	AC_CONFIG_FILES([
-		Makefile
-		autoMakefile]
+	AC_CONFIG_FILES(
+		[config/Makefile.exports]
+		autoMakefile
 		config/Makefile
-		[Rules:config/Rules.in]
 		AC_PACKAGE_TARNAME[.spec]
 		AC_PACKAGE_TARNAME[-dkms.spec]
 		ldiskfs/Makefile
@@ -659,8 +647,6 @@ LB_CONFIG_DIST
 
 LB_DOWNSTREAM_RELEASE
 LB_USES_DPKG
-
-LB_INCLUDE_RULES
 
 LB_PATH_DEFAULTS
 

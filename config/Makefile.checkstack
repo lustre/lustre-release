@@ -1,0 +1,24 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+
+CSTK=/tmp/checkstack
+CSTKO=/tmp/checkstack.orig
+
+
+checkstack:
+	[ -f ${CSTK} -a ! -s ${CSTKO} ] && mv -f ${CSTK} ${CSTKO} || true
+	{ for MOD in $$(find . -name "*.ko"); do			     \
+		objdump -d $$MOD | perl contrib/scripts/checkstack.pl;	     \
+	  done } | grep -v " bug " | sort -nr | uniq > ${CSTK}
+	[ -f ${CSTKO} ] && ! diff -u ${CSTKO} ${CSTK} || head -n 30 ${CSTK}
+
+
+checkstack-update:
+	[ -f ${CSTK} ] && mv -f ${CSTK} ${CSTKO}
+
+
+checkstack-clean:
+	rm -f ${CSTK} ${CSTKO}

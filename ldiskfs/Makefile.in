@@ -17,11 +17,19 @@ backfs_sources := $(filter-out %.mod.c $(backfs_unit_tests), $(wildcard @EXT4_SR
 new_sources := mmp.c htree_lock.c critical_encode.h encdata.h
 new_headers :=
 
+ifeq ($(PATCHLEVEL),)
+
+-include autoMakefile
+
+else
+
 ldiskfs_patched_sources := $(notdir $(backfs_sources) $(backfs_headers)) $(new_sources) $(new_headers)
 ldiskfs_sources := $(filter-out @EXT4_CRYPTO@ @EXT4_VERITY@, $(ldiskfs_patched_sources))
 
 ldiskfs-objs := $(filter %.o, $(ldiskfs_sources:.c=.o))
 
-EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@abs_top_srcdir@/ldiskfs
+ccflags-y += -I@LINUX@/fs -I@abs_top_srcdir@/ldiskfs
 
-@INCLUDE_RULES@
+obj-m += ldiskfs.o
+
+endif

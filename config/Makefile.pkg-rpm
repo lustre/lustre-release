@@ -1,0 +1,49 @@
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+
+rpm-local:
+	@if test -z "$(RPMBUILD)"; then
+		echo ""
+		echo "*** Required util 'rpmbuild' missing. Please install the"
+		echo "*** package for your distribution which provides 'rpmbuild',"
+		echo "*** re-run configure, and try again."
+		echo ""
+		exit 1
+	fi
+	mkdir -p $(rpmbuilddir)/TMP
+	mkdir -p $(rpmbuilddir)/BUILD
+	mkdir -p $(rpmbuilddir)/RPMS
+	mkdir -p $(rpmbuilddir)/SRPMS
+	mkdir -p $(rpmbuilddir)/SPECS
+	mkdir -p $(rpmbuilddir)/SOURCES
+
+
+rpms: srpm
+	@rpmbuilddir=$$(mktemp -t $${BUILDDIR:+-p $$BUILDDIR} -d rpmbuild-$(PACKAGE)-$$USER-XXXXXXXX)
+	if test "x$(CONFIG_CACHE_FILE)" != "x"; then
+		export CONFIG_CACHE_FILE="$(CONFIG_CACHE_FILE)"
+	fi
+	$(MAKE) rpmbuilddir="$$rpmbuilddir" rpm-local || exit 1
+	$(RPMBUILD) \
+		--define "_tmppath $$rpmbuilddir/TMP" \
+		--define "_topdir $$rpmbuilddir" \
+		$(RPMBUILD_BINARY_ARGS) \
+		--rebuild $(PACKAGE_TARNAME)-$(VERSION)-*.src.rpm || exit 1
+	cp $$rpmbuilddir/RPMS/*/*.rpm . || exit 1
+	rm -rf $$rpmbuilddir
+
+
+srpm: $(PACKAGE_TARNAME).spec dist Makefile
+	@rpmbuilddir=$$(mktemp -t $${BUILDDIR:+-p $$BUILDDIR} -d rpmbuild-$(PACKAGE)-$$USER-XXXXXXXX)
+	$(MAKE) rpmbuilddir="$$rpmbuilddir" rpm-local || exit 1
+	cp rpm/* .
+	$(RPMBUILD) \
+		--define "_tmppath $$rpmbuilddir/TMP" \
+		--define "_topdir $$rpmbuilddir" \
+		--define "dist %{nil}" \
+		-ts $(PACKAGE_TARNAME)-$(VERSION).tar.gz || exit 1
+	cp $$rpmbuilddir/SRPMS/$(PACKAGE_TARNAME)-$(VERSION)-*.src.rpm . || exit 1
+	rm -rf $$rpmbuilddir

@@ -6,4 +6,4 @@
 
 default: all
 
-@INCLUDE_RULES@
+-include autoMakefile

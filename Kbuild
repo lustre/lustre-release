@@ -3,28 +3,22 @@
 #
 # This file is part of Lustre, http://www.lustre.org/
 #
-# Makefile.in
-#
-# Template to generate top-level Makefile
-#
 
 this-makefile := $(lastword $(MAKEFILE_LIST))
 lsrctree := $(realpath $(dir $(this-makefile)))
 
-ifneq (@LDISKFS_SUBDIR@,)
-obj-m += @LDISKFS_SUBDIR@/
+ifdef CONFIG_LUSTRE_FS_LDISKFS
+obj-m += ldiskfs/
 endif
 obj-m += libcfs/ lnet/
 obj-m += lustre/
 
-subdir-ccflags-y := -include $(lsrctree)/undef.h
-subdir-ccflags-y += -include $(lsrctree)/config.h
-subdir-ccflags-y += -I$(lsrctree)/lnet/include
-subdir-ccflags-y += -I$(lsrctree)/lustre/include
-subdir-ccflags-y += -I$(lsrctree)/include/uapi
-subdir-ccflags-y += -I$(lsrctree)/include
+NOSTDINC_FLAGS += -I$(lsrctree)/lnet/include
+NOSTDINC_FLAGS += -I$(lsrctree)/lustre/include
+NOSTDINC_FLAGS += -I$(lsrctree)/include/uapi
+NOSTDINC_FLAGS += -I$(lsrctree)/include
+
+subdir-ccflags-y := -include $(lsrctree)/config.h
 subdir-ccflags-y += $(call cc-option, -Wno-format-truncation)
 subdir-ccflags-y += $(call cc-option, -Wno-stringop-truncation)
 subdir-ccflags-y += $(call cc-option, -Wno-stringop-overflow)
-
-@INCLUDE_RULES@
