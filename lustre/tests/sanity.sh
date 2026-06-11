@@ -1675,14 +1675,23 @@ run_test 24H "repeat FLD_QUERY rpc"
 
 test_24I() {
 	(( $MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
+	local expect=$((MDSCOUNT * 5))
+	local op="-C"
+
+	# older MDS does not support directory overstriping
+	if (( MDS1_VERSION < $(version_code v2_16_50-164-g11dab05d8b) )); then
+		op="-c"
+		expect=$MDSCOUNT
+	fi
 
 	# LMV_MAX_STRIPE_COUNT = 2000 should be verified
 	$LFS mkdir -C 2001 $DIR/$tdir-2001 && error "mkdir 2001-stripe worked"
-	$LFS mkdir -C 2000 $DIR/$tdir-2000 || error "mkdir 2000-stripe failed"
+
+	$LFS mkdir $op 2000 $DIR/$tdir-2000 ||
+		error "mkdir 2000-stripe failed"
 	local stripes=$($LFS getdirstripe -c $DIR/$tdir-2000)
-	# LMV_OVERSTRIPE_COUNT_MAX = 5 limits actual stripe count
-	(( $stripes >= $MDSCOUNT * 5)) ||
-		error "mkdir stripes $stripes < $MDSCOUNT * 5"
+	(( $stripes >= $expect)) ||
+		error "mkdir stripes $stripes < $expect"
 }
 run_test 24I "large striped mkdir with limit check"
 
@@ -31205,8 +31214,8 @@ run_test 300ui "overstripe is not supported on one MDT system"
 
 test_300uj() {
 	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
-	(( MDS1_VERSION >= $(version_code 2.16.0) )) ||
-		skip "need MDS >= 2.16.0 for llog timestamps"
+	(( MDS1_VERSION >= $(version_code v2_16_50-164-g11dab05d8b) )) ||
+		skip "need MDS >= 2.16.50.164 for overstriped directories"
 
 	local setcount=-2
 	local expected_count=$((MDSCOUNT * 2))
