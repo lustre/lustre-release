@@ -191,16 +191,27 @@ static int write_data_with_error_handling(int fd, const void *data,
 					  const char *data_type)
 {
 	ssize_t rc;
+	int retry = 10;
 
+retry_write:
 	rc = write(fd, data, expected_size);
 	if (rc < 0) {
-		fprintf(stderr, "error: writing %s to '%s': %s\n",
-			data_type, output_file, strerror(errno));
+		fprintf(stderr, "error: writing %zu %s bytes to '%s': %s\n",
+			expected_size, data_type, output_file, strerror(errno));
 		return -errno;
 	} else if (rc != expected_size) {
-		fprintf(stderr, "error: short write to '%s'\n", output_file);
+		/* short write: advance past the bytes written and retry */
+		if (--retry > 0) {
+			data += rc;
+			expected_size -= rc;
+			goto retry_write;
+		}
+		fprintf(stderr,
+			"error: short write of %s to '%s' (%zd/%zu bytes)\n",
+			data_type, output_file, rc, expected_size);
 		return -ENOSPC;
 	}
+
 	return 0;
 }
 
@@ -225,6 +236,8 @@ int write_config_file(char *output_file, struct sk_keyfile_config *config,
 
 	if (!overwrite)
 		flags |= O_EXCL;
+	else
+		flags |= O_TRUNC | O_SYNC;
 
 	sk_config_cpu_to_disk(config);
 

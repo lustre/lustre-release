@@ -12332,7 +12332,7 @@ clear_client_keyring() {
 
 cleanup_100() {
 	local orig_sk_path="$1"
-	local test_key="$orig_sk_path/$FSNAME-test100.key"
+	local test_key="$orig_sk_path/$FSNAME-test100*.key"
 
 	# Restore original SK_PATH
 	export SK_PATH="$orig_sk_path"
@@ -12360,23 +12360,21 @@ cleanup_100() {
 	wait_ssk
 }
 
-test_100() {
-	local test_key="$SK_PATH/$FSNAME-test100.key"
-	local orig_sk_path=$SK_PATH
-
-	$SHARED_KEY || skip "Need shared key feature for this test"
-
-	local_mode && skip "in local mode."
-
-	stack_trap "cleanup_100 $orig_sk_path" EXIT
-
-	# Create test file at start to verify filesystem continuity throughout
-	test_mkdir $DIR/$tdir
-	touch $DIR/$tdir/$tfile || error "failed to create initial test file"
+do_test_100() {
+	local fmt="$1"
+	local orig_sk_path="$2"
+	local test_key="$orig_sk_path/$FSNAME-test100${fmt:+-ascii}.key"
 
 	# Generate key: Create a new server-type SSK key for testing
-	$LGSS_SK -t server -f $FSNAME -w $test_key -d /dev/urandom -p 512 ||
-		error "failed to create server key"
+	$LGSS_SK -t server -f $FSNAME $fmt -w $test_key \
+		-d /dev/urandom -p 512 ||
+		error "failed to create server key (fmt='$fmt')"
+
+	# An ASCII key must carry the 'Lustre SSK v1.0' format header
+	if [[ "$fmt" == "-a" ]]; then
+		head -n1 $test_key | grep -q "^Lustre SSK v1.0" ||
+			error "ASCII key missing 'Lustre SSK v1.0' header"
+	fi
 
 	# Verify key was created as server type (no client, no prime)
 	local key_type=$($LGSS_SK -r $test_key | awk '/Type:/ {print $0}')
@@ -12426,12 +12424,16 @@ test_100() {
 			"$LGSS_SK -l $orig_sk_path/$FSNAME.key >/dev/null 2>&1" ||
 				true
 		export SK_PATH="$orig_sk_path"
-		error "mount failed with server key: $mount_output"
+		error "mount failed with server key (fmt='$fmt'): $mount_output"
 	fi
 
 	# Verify the mount succeeded and prime generation occurred
 	echo "$mount_output" | grep -q "Generating DH parameters" ||
 		error "prime generation message not found in mount output"
+
+	# The on-the-fly rewrite must leave a complete client key on disk;
+	$LGSS_SK -r $test_key ||
+		error "rewritten key is incomplete after mount (fmt='$fmt')"
 
 	# Verify the key file was modified to client type with prime
 	local new_key_type=$($LGSS_SK -r $test_key | awk '/Type:/ {print $0}')
@@ -12449,7 +12451,28 @@ test_100() {
 	[[ -f $DIR/$tdir/$tfile ]] ||
 		error "file not found after remount with auto-generated prime"
 }
-run_test 100 "SSK automatic prime generation when mounting with server key"
+
+test_100() {
+	local orig_sk_path=$SK_PATH
+	local fmt
+
+	$SHARED_KEY || skip "Need shared key feature for this test"
+
+	local_mode && skip "in local mode."
+
+	stack_trap "cleanup_100 $orig_sk_path" EXIT
+
+	# Create test file at start to verify filesystem continuity throughout
+	test_mkdir $DIR/$tdir
+	touch $DIR/$tdir/$tfile || error "failed to create initial test file"
+
+	# Run the mount-time prime-generation + key-rewrite path for both a
+	# binary and an ASCII server key.
+	for fmt in "" "-a"; do
+		do_test_100 "$fmt" "$orig_sk_path"
+	done
+}
+run_test 100 "SSK automatic prime generation, binary/ASCII server keys"
 
 clear_keyring_101() {
 	# clear lustre keys from client keyring
