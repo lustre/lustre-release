@@ -937,8 +937,13 @@ int main(int argc, char *const argv[])
 		goto out;
 	}
 
-	/* Don't write anything when there is no change */
-	if (memcmp(&prev_mop, &mop, sizeof(prev_mop)) == 0) {
+	/*
+	 * Skip the no-change shortcut when -o/--mountfsoptions was given:
+	 * @mountopts is only copied into ldd_mount_opts further below, so
+	 * the change is not yet visible in @mop here.
+	 */
+	if (mountopts == NULL &&
+	    memcmp(&prev_mop, &mop, sizeof(prev_mop)) == 0) {
 		if (verbose > 0)
 			fprintf(stdout,
 				"exiting because there is no change.\n");

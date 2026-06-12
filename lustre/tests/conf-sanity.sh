@@ -7960,7 +7960,33 @@ test_87() { #LU-6544
 }
 run_test 87 "check if MDT inode can hold EAs with N stripes properly"
 
-test_88() {
+test_88a() { # LU-20360
+	[[ "$mds1_FSTYPE" == zfs ]] &&
+		skip "LU-6662: no implementation for ZFS"
+
+	local mdsdev=$(mdsdevname 1)
+	local saved newopts
+
+	stopall
+
+	saved=$(do_facet mds1 "$TUNEFS --dryrun $mdsdev" |
+		sed -n 's/.*Persistent mount opts: //p')
+	[[ -n "$saved" ]] || error "could not read current mount opts"
+	stack_trap "do_facet mds1 \"$TUNEFS --mountfsoptions=$saved $mdsdev\""
+
+	newopts="user_xattr,errors=panic"
+	[[ "$saved" == "$newopts" ]] &&
+		newopts="user_xattr,errors=remount-ro"
+
+	do_facet mds1 "$TUNEFS --mountfsoptions=$newopts $mdsdev" ||
+		error "tunefs --mountfsoptions=$newopts failed"
+	do_facet mds1 "$TUNEFS --dryrun $mdsdev |
+		grep 'Persistent mount opts: $newopts'" ||
+		error "lone --mountfsoptions not persisted"
+}
+run_test 88a "tunefs.lustre persists a --mountfsoptions-only change"
+
+test_88b() {
 	[ "$mds1_FSTYPE" == zfs ] &&
 		skip "LU-6662: no implementation for ZFS"
 
@@ -7981,7 +8007,7 @@ test_88() {
 		grep -e \".*opts:.*errors=panic.*\"" ||
 		error "user can't override default mount options"
 }
-run_test 88 "check the default mount options can be overridden"
+run_test 88b "check the default mount options can be overridden"
 
 test_89() { # LU-7131
 	[[ "$MDS1_VERSION" -ge $(version_code 2.9.54) ]] ||
