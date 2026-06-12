@@ -2574,7 +2574,8 @@ static ssize_t ll_file_read_iter(struct kiocb *iocb, struct iov_iter *iter)
  * We limit these to < PAGE_SIZE because PAGE_SIZE writes are relatively common
  * and are unlikely to be to already dirty pages.
  *
- * Attribute updates are important here, we do them in ll_tiny_write_end.
+ * Attribute updates are important here: ll_tiny_write_end() updates the
+ * OSC-layer attributes, and they are merged into the inode below.
  */
 static ssize_t ll_do_tiny_write(struct kiocb *iocb, struct iov_iter *iter)
 {
@@ -2609,6 +2610,15 @@ static ssize_t ll_do_tiny_write(struct kiocb *iocb, struct iov_iter *iter)
 		result = 0;
 
 	if (result > 0) {
+		struct lu_env *env;
+		__u16 refcheck;
+
+		env = cl_env_get(&refcheck);
+		if (!IS_ERR(env)) {
+			ll_merge_attr(env, inode);
+			cl_env_put(env, &refcheck);
+		}
+
 		ll_heat_add(inode, CIT_WRITE, result);
 		set_bit(LLIF_DATA_MODIFIED, &ll_i2info(inode)->lli_flags);
 	}
