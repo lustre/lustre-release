@@ -135,7 +135,7 @@ unsigned int compat_account_page_dirtied(struct page *page,
 EXPORT_SYMBOL(compat_account_page_dirtied);
 #endif
 
-int lustre_symbols_init(void)
+int __init lustre_symbols_init(void)
 {
 	int rc;
 

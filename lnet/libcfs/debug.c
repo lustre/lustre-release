@@ -627,7 +627,7 @@ int libcfs_debug_init(unsigned long bufsize)
 	return rc;
 }
 
-int libcfs_debug_cleanup(void)
+int __exit libcfs_debug_cleanup(void)
 {
 	libcfs_unregister_panic_notifier();
 	kernel_param_lock(THIS_MODULE);

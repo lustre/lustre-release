@@ -617,7 +617,7 @@ fail:
 /**
  * llcrypt_exit() - Clean up for fs encryption.
  */
-void __exit llcrypt_exit(void)
+void llcrypt_exit(void)
 {
 	llcrypt_exit_keyring();
 

@@ -1002,7 +1002,7 @@ err_unregister_llcrypt:
 	return err;
 }
 
-void __exit llcrypt_exit_keyring(void)
+void llcrypt_exit_keyring(void)
 {
 	unregister_key_type(&key_type_llcrypt_user);
 	unregister_key_type(&key_type_llcrypt);

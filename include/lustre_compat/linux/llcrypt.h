@@ -142,7 +142,7 @@ static inline void folio_bounce_private(struct folio *dst, s32 dstpg,
 
 /* crypto.c */
 extern int __init llcrypt_init(void);
-extern void __exit llcrypt_exit(void);
+extern void llcrypt_exit(void);
 extern void llcrypt_enqueue_decrypt_work(struct work_struct *);
 extern struct llcrypt_ctx *llcrypt_get_ctx(gfp_t);
 extern void llcrypt_release_ctx(struct llcrypt_ctx *);

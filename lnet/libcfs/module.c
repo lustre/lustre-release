@@ -562,7 +562,7 @@ void lnet_debugfs_fini(void **state)
 }
 EXPORT_SYMBOL_GPL(lnet_debugfs_fini);
 
-static void lnet_insert_debugfs_links(
+static void __init lnet_insert_debugfs_links(
 		const struct lnet_debugfs_symlink_def *symlinks)
 {
 	for (; symlinks && symlinks->name; symlinks++)
@@ -610,7 +610,7 @@ cleanup_lock:
 }
 EXPORT_SYMBOL(libcfs_setup);
 
-int debug_module_init(void)
+static int __init debug_module_init(void)
 {
 	int rc;
 
@@ -629,7 +629,7 @@ int debug_module_init(void)
 	return 0;
 }
 
-void debug_module_exit(void)
+static void __exit debug_module_exit(void)
 {
 	int rc;
 

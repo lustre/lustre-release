@@ -3,7 +3,7 @@
 /* This file is part of Lustre, http://www.lustre.org/ */
 
 #ifndef __LIBCFS_LINUX_INETDEVICE_H__
-#define __LIBCFS_LINUX_INETDEIVCE_H__
+#define __LIBCFS_LINUX_INETDEVICE_H__
 
 #include <linux/inetdevice.h>
 

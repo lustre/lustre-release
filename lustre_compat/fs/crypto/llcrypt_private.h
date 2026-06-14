@@ -462,7 +462,7 @@ extern int llcrypt_verify_key_added(struct super_block *sb,
 
 extern int __init llcrypt_init_keyring(void);
 
-extern void __exit llcrypt_exit_keyring(void);
+extern void llcrypt_exit_keyring(void);
 
 /* keysetup.c */
 

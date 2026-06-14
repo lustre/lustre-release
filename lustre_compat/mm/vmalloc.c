@@ -33,7 +33,7 @@ static void free_work(struct work_struct *w)
 		vfree((void *)llnode);
 }
 
-void init_compat_vfree_atomic(void)
+void __init init_compat_vfree_atomic(void)
 {
 	int i;
 
