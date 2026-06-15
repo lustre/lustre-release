@@ -13237,6 +13237,45 @@ test_200() {
 }
 run_test 200 "sk_load_key broadens SSK key perms without @u linked"
 
+test_201() {
+	local nid=$($LCTL get_param -n mdc.*-MDT0000-mdc-*.import 2>/dev/null |
+		awk -F'"' '/current_connection:/ {print $2; exit}')
+	local net=${nid#*@}
+
+	$SHARED_KEY || skip "Need shared key feature for this test"
+
+	# A per-network sptlrpc rule is only consulted for connections over a
+	# real LND, in local mode all traffic loops back over 0@lo
+	local_mode && skip "in local mode."
+
+	(( MDS1_VERSION >= $(version_code 2.17.58) )) ||
+		skip "Need MDS >= 2.17.58 for per-network sptlrpc rule matching"
+
+	[[ -n "$net" && "$net" != "lo" ]] ||
+		skip "per-network sptlrpc rules need a real (non-lo) network"
+
+	stack_trap restore_to_default_flavor EXIT
+
+	# 1. Enforce skn with per-network rule when default flavor is null
+	remove_flavor_all
+	set_rule $FSNAME any cli2mdt null
+	wait_flavor cli2mdt null || error "could not set default null rule"
+
+	set_rule $FSNAME $net cli2mdt skn
+	wait_flavor cli2mdt skn ||
+		error "per-network ($net) cli2mdt did not become skn"
+
+	# 2. Disable skn with per-network rule when default flavor is skn
+	remove_flavor_all
+	set_rule $FSNAME any cli2mdt skn
+	wait_flavor cli2mdt skn || error "could not set default skn rule"
+
+	set_rule $FSNAME $net cli2mdt null
+	wait_flavor cli2mdt null ||
+		error "per-network ($net) cli2mdt did not become null"
+}
+run_test 201 "per-network sptlrpc flavor rule overrides default"
+
 test_300() {
 	local principal="mock_iam_test"
 	local mount_opts=$(csa_add "$MOUNT_OPTS" "" "user_principal=$principal")

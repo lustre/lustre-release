@@ -386,7 +386,7 @@ int sptlrpc_rule_set_choose(struct sptlrpc_rule_set *rset,
 
 		if (!LNET_NID_IS_ANY(nid) &&
 		    r->sr_netid != LNET_NET_ANY &&
-		    __be16_to_cpu(nid->nid_num) != r->sr_netid)
+		    LNET_NID_NET(nid) != r->sr_netid)
 			continue;
 
 		if (from != LUSTRE_SP_ANY && r->sr_from != LUSTRE_SP_ANY &&
