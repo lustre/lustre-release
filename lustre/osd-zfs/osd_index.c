@@ -1541,8 +1541,9 @@ static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
 		RETURN(-EIO);
 	}
 
-	rc = osd_zap_lookup(osd, it->ozi_zc->zc_zapobj, it->ozi_obj->oo_dn,
-			    za->za_name, za->za_integer_length, 3, zde);
+	rc = osd_zap_lookup(osd, it->ozi_obj->oo_dn->dn_object,
+			    it->ozi_obj->oo_dn, za->za_name,
+			    za->za_integer_length, 3, zde);
 	if (rc)
 		RETURN(rc);
 
@@ -1596,7 +1597,7 @@ static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
 	fid_cpu_to_le(&lde->lde_fid, fid);
 	lde->lde_attrs = LUDA_FID;
 	zde->lzd_fid = *fid;
-	rc = osd_dirent_update(env, osd, it->ozi_zc->zc_zapobj,
+	rc = osd_dirent_update(env, osd, it->ozi_obj->oo_dn->dn_object,
 			       za->za_name, zde);
 	if (rc) {
 		lde->lde_attrs |= LUDA_UNKNOWN;

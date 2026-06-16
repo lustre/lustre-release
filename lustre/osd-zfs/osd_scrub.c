@@ -1926,7 +1926,7 @@ static int osd_scan_dir(const struct lu_env *env, struct osd_device *dev,
 			break;
 		}
 
-		rc = osd_zap_lookup(dev, it->ozi_zc->zc_zapobj, NULL,
+		rc = osd_zap_lookup(dev, id, NULL,
 				    za->za_name, za->za_integer_length,
 				    sizeof(*zde) / za->za_integer_length, zde);
 		if (rc)
