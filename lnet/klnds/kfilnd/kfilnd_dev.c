@@ -209,6 +209,19 @@ struct kfilnd_dev *kfilnd_dev_alloc(struct lnet_ni *ni,
 		goto err_free_sep;
 	}
 
+	/*
+	 * The device is now open, so its hardware NUMA node is known. Bind
+	 * the NI to the local CPTs (if not explicitly configured) before
+	 * the per-CPT endpoints below are created against ni->ni_cpts.
+	 */
+	if (dev->device)
+		ni->ni_dev_cpt = cfs_cpt_of_node(lnet_cpt_table(),
+						 dev_to_node(dev->device));
+
+	rc = lnet_ni_set_default_cpts(ni);
+	if (rc)
+		goto err_free_sep;
+
 	/* Allocate an array to store all the KFI LND endpoints. */
 	LIBCFS_ALLOC_GFP(dev->kfd_endpoints,
 			 ni->ni_ncpts * sizeof(*dev->kfd_endpoints),

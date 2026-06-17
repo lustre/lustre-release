@@ -463,6 +463,8 @@ lnet_ni_alloc_common(struct lnet_net *net, struct lnet_nid *nid, char *iface)
 
 	ni->ni_state = LNET_NI_STATE_INIT;
 	ni->ni_sel_priority = LNET_MAX_SELECTION_PRIORITY;
+	/* set by the LND at startup; CFS_CPT_ANY means device CPT unknown */
+	ni->ni_dev_cpt = CFS_CPT_ANY;
 	list_add_tail(&ni->ni_netlist, &net->net_ni_added);
 
 	/*
@@ -479,6 +481,91 @@ failed:
 	return NULL;
 }
 
+/*
+ * Bind an NI whose CPTs were not explicitly configured to the CPTs local to
+ * the NUMA node of its underlying hardware device.
+ *
+ * Each LND records the CPT of its device in ni_dev_cpt during startup (e.g.
+ * derived from dev_to_node()), so the device's NUMA node is taken from there
+ * rather than re-resolved here. This must be called after the LND has started
+ * the NI (lnet_startup_lndni). LNDs without a backing device leave ni_dev_cpt
+ * as CFS_CPT_ANY and the NI is left associated with all CPTs.
+ *
+ * Also finalizes the net's CPT set (deferred in lnet_ni_alloc() for default
+ * NIs). Returns 0 on success or a negative errno on failure.
+ */
+int lnet_ni_set_default_cpts(struct lnet_ni *ni)
+{
+	struct cfs_cpt_table *cptab = lnet_cpt_table();
+	int dev_cpt = ni->ni_dev_cpt;
+	nodemask_t *dev_mask;
+	int ncpts = 0;
+	int *cpts = NULL;
+	int i;
+	int rc;
+
+	/*
+	 * Only auto-bind NIs whose CPTs were not explicitly configured.
+	 * The LNDs call us unconditionally once they have determined the
+	 * device's NUMA node; the flag is cleared on success so the
+	 * fallback call from lnet_startup_lndni() becomes a no-op.
+	 */
+	if (!ni->ni_cpts_default)
+		return 0;
+
+	if (dev_cpt == CFS_CPT_ANY)
+		goto use_all;
+
+	/* the NUMA node(s) the device's CPT belongs to */
+	dev_mask = cfs_cpt_nodemask(cptab, dev_cpt);
+
+	for (i = 0; i < cfs_cpt_number(cptab); i++) {
+		if (nodes_intersects(*cfs_cpt_nodemask(cptab, i), *dev_mask))
+			ncpts++;
+	}
+
+	/*
+	 * If the device's NUMA node(s) cover all CPTs (e.g. a single-NUMA
+	 * system), leave ni_cpts NULL so the datapath keeps using the
+	 * lock-free fast path in lnet_nid2cpt() instead of an explicit
+	 * all-CPT array.
+	 */
+	if (ncpts == 0 || ncpts == LNET_CPT_NUMBER)
+		goto use_all;
+
+	CFS_ALLOC_PTR_ARRAY(cpts, ncpts);
+	if (!cpts) {
+		CWARN("%s: Failed to allocate CPT array for device CPT %d\n",
+		      libcfs_nidstr(&ni->ni_nid), dev_cpt);
+		goto use_all;
+	}
+
+	ncpts = 0;
+	for (i = 0; i < cfs_cpt_number(cptab); i++) {
+		if (nodes_intersects(*cfs_cpt_nodemask(cptab, i), *dev_mask)) {
+			cpts[ncpts] = i;
+			ncpts++;
+		}
+	}
+
+	ni->ni_cpts = cpts;
+	ni->ni_ncpts = ncpts;
+
+	CDEBUG(D_NET, "%s: Auto-bound NI to CPTs local to device CPT %d\n",
+	       libcfs_nidstr(&ni->ni_nid), dev_cpt);
+	goto append;
+
+use_all:
+	ni->ni_cpts  = NULL;
+	ni->ni_ncpts = LNET_CPT_NUMBER;
+append:
+	rc = lnet_net_append_cpts(ni->ni_cpts, ni->ni_ncpts, ni->ni_net);
+	if (rc == 0)
+		ni->ni_cpts_default = false;
+	return rc;
+}
+EXPORT_SYMBOL(lnet_ni_set_default_cpts);
+
 /* allocate and add to the provided network */
 struct lnet_ni *
 lnet_ni_alloc(struct lnet_net *net, struct cfs_expr_list *el, char *iface)
@@ -491,8 +578,15 @@ lnet_ni_alloc(struct lnet_net *net, struct cfs_expr_list *el, char *iface)
 		return NULL;
 
 	if (!el) {
-		ni->ni_cpts  = NULL;
+		/*
+		 * CPTs were not specified. Defer binding to the local NUMA
+		 * node until lnet_startup_lndni(), once the LND is known and
+		 * can report the NI's hardware NUMA node. Until then, leave
+		 * the NI associated with all CPTs.
+		 */
+		ni->ni_cpts = NULL;
 		ni->ni_ncpts = LNET_CPT_NUMBER;
+		ni->ni_cpts_default = true;
 	} else {
 		rc = cfs_expr_list_values(el, LNET_CPT_NUMBER, &ni->ni_cpts);
 		if (rc <= 0) {
@@ -511,9 +605,15 @@ lnet_ni_alloc(struct lnet_net *net, struct cfs_expr_list *el, char *iface)
 		ni->ni_ncpts = rc;
 	}
 
-	rc = lnet_net_append_cpts(ni->ni_cpts, ni->ni_ncpts, net);
-	if (rc != 0)
-		goto failed;
+	/*
+	 * For default NIs the net's CPT set is finalized in
+	 * lnet_startup_lndni() after NUMA binding.
+	 */
+	if (!ni->ni_cpts_default) {
+		rc = lnet_net_append_cpts(ni->ni_cpts, ni->ni_ncpts, net);
+		if (rc != 0)
+			goto failed;
+	}
 
 	return ni;
 failed:
@@ -532,10 +632,16 @@ lnet_ni_alloc_w_cpt_array(struct lnet_net *net, struct lnet_nid *nid,
 	if (!ni)
 		return NULL;
 
-	if (ncpts == 0 || ncpts == LNET_CPT_NUMBER) {
-		/* No restriction, or all CPTs specified - use NULL for fast
-		 * path.
+	if (ncpts == 0) {
+		/*
+		 * CPTs unspecified: defer NUMA binding to lnet_startup_lndni().
+		 * Leave the NI on all CPTs until then.
 		 */
+		ni->ni_cpts  = NULL;
+		ni->ni_ncpts = LNET_CPT_NUMBER;
+		ni->ni_cpts_default = true;
+	} else if (ncpts == LNET_CPT_NUMBER) {
+		/* All CPTs specified - use NULL for fast path. */
 		ni->ni_cpts  = NULL;
 		ni->ni_ncpts = LNET_CPT_NUMBER;
 	} else {
@@ -548,9 +654,15 @@ lnet_ni_alloc_w_cpt_array(struct lnet_net *net, struct lnet_nid *nid,
 		ni->ni_ncpts = ncpts;
 	}
 
-	rc = lnet_net_append_cpts(ni->ni_cpts, ni->ni_ncpts, net);
-	if (rc != 0)
-		goto failed;
+	/*
+	 * For default NIs the net's CPT set is finalized in
+	 * lnet_startup_lndni() after NUMA binding.
+	 */
+	if (!ni->ni_cpts_default) {
+		rc = lnet_net_append_cpts(ni->ni_cpts, ni->ni_ncpts, net);
+		if (rc != 0)
+			goto failed;
+	}
 
 	return ni;
 failed:

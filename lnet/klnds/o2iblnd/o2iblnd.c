@@ -3657,6 +3657,15 @@ kiblnd_startup(struct lnet_ni *ni)
 	}
 	ni->ni_dev_cpt = ifaces[i].li_cpt;
 
+	/* Bind the NI to the device's local CPTs (if not explicitly
+	 * configured) before starting schedulers and allocating pools
+	 * below, so those resources match the bound CPT set and ni_cpts
+	 * is finalized before the NI is published.
+	 */
+	rc = lnet_ni_set_default_cpts(ni);
+	if (rc != 0)
+		goto failed;
+
 	rc = kiblnd_dev_start_threads(ibdev, newdev, ni->ni_cpts, ni->ni_ncpts);
 	if (rc != 0)
 		goto failed;

@@ -1254,6 +1254,9 @@ struct lnet_ni {
 	/* lnd tunables set explicitly */
 	bool ni_lnd_tunables_set;
 
+	/* CPTs were not specified; bind to the local NUMA node at startup */
+	bool ni_cpts_default;
+
 	/* NI statistics */
 	struct lnet_element_stats ni_stats;
 	struct lnet_health_local_stats ni_hstats;

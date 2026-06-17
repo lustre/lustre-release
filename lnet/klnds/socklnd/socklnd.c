@@ -2685,6 +2685,15 @@ ksocknal_startup(struct lnet_ni *ni)
 	}
 	strscpy(ksi->ksni_name, ifaces[if_idx].li_name, sizeof(ksi->ksni_name));
 
+	/* Bind the NI to the device's local CPTs (if not explicitly
+	 * configured) before starting the schedulers below, so they are
+	 * created against the bound CPT set and ni_cpts is finalized
+	 * before the NI is published.
+	 */
+	rc = lnet_ni_set_default_cpts(ni);
+	if (rc != 0)
+		goto out_net;
+
 	/* call it before add it to ksocknal_data.ksnd_nets */
 	rc = ksocknal_net_start_threads(net, ni->ni_cpts, ni->ni_ncpts);
 	if (rc != 0)

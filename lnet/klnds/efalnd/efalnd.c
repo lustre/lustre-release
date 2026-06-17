@@ -3122,6 +3122,14 @@ kefalnd_startup(struct lnet_ni *ni)
 	efa_ni->efa_dev = efa_dev;
 	ni->ni_dev_cpt = efa_dev->cpt;
 
+	/* Bind the NI to the device's local CPTs (if not explicitly
+	 * configured) now that the device's NUMA node is known and before
+	 * the NI is published.
+	 */
+	rc = lnet_ni_set_default_cpts(ni);
+	if (rc != 0)
+		goto failed;
+
 	kefalnd_create_efa_nid(efa_ni);
 	if (nid_is_nid4(&ni->ni_nid)) {
 		efa_ni->self_peer_ni =

@@ -468,6 +468,7 @@ lnet_ni_alloc(struct lnet_net *net, struct cfs_expr_list *el,
 struct lnet_ni *
 lnet_ni_alloc_w_cpt_array(struct lnet_net *net, struct lnet_nid *nid,
 			  u32 *cpts, u32 ncpts, char *iface);
+int lnet_ni_set_default_cpts(struct lnet_ni *ni);
 int lnet_ni_add_interface(struct lnet_ni *ni, char *iface);
 
 static inline int

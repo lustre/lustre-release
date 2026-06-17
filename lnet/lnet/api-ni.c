@@ -2704,6 +2704,23 @@ lnet_startup_lndni(struct lnet_ni *ni, struct lnet_lnd_tunables *tun)
 	}
 	lnet_net_unlock(0);
 
+	/*
+	 * Fallback for NIs whose CPTs were not explicitly configured and
+	 * whose LND did not bind them during startup (e.g. the loopback
+	 * NI). The device LNDs call lnet_ni_set_default_cpts() themselves,
+	 * before allocating their per-CPT scheduler threads and memory
+	 * pools, so that those resources match the bound CPT set and
+	 * ni_cpts is finalized before the NI goes live; for those this
+	 * call is a no-op. The helper self-gates on ni_cpts_default.
+	 */
+	rc = lnet_ni_set_default_cpts(ni);
+	if (rc != 0) {
+		LCONSOLE_ERROR("Error %d setting CPTs for LNI %s\n",
+			       rc, libcfs_lnd2str(net->net_lnd->lnd_type));
+		lnet_shutdown_lndni(ni);
+		return rc;
+	}
+
 	/* We keep a reference on the loopback net through the loopback NI */
 	if (net->net_lnd->lnd_type == LOLND) {
 		lnet_ni_addref(ni);
