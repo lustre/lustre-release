@@ -2327,7 +2327,7 @@ int sptlrpc_target_export_check(struct obd_export *exp,
 	return -EACCES;
 
 nm_switch:
-#ifdef HAVE_SERVER_SUPPORT
+#ifdef CONFIG_LUSTRE_FS_SERVER
 	if (!rc && req->rq_svc_ctx && req->rq_svc_ctx->sc_nodemap) {
 		struct ptlrpc_sec *sec;
 

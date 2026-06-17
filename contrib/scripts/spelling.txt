@@ -39,6 +39,7 @@ ft_nob||ft_bytes
 f_dentry||f_path.dentry
 [^_]get_seconds||ktime_get_real_seconds
 GPL[vV]3||Using GPLv3 is usually wrong
+HAVE_SERVER_SUPPORT||CONFIG_LUSTRE_FS_SERVER
 HZ||cfs_time_seconds
 imp_connect_tried||IMPF_CONNECT_TRIED
 imp_deactive||IMPF_DEACTIVE
