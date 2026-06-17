@@ -139,3 +139,9 @@ ec_init_tables(int k, int rows, unsigned char *a, unsigned char *g_tbls)
 #endif
 	ec_init_tables_base(k, rows, a, g_tbls);
 }
+
+void
+gf_vect_mul_init(unsigned char c, unsigned char *gftbl)
+{
+	gf_vect_mul_init_base(c, gftbl);
+}

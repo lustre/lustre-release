@@ -9,8 +9,6 @@ ec-objs := ec_kmod.o
 
 lobj := ec_base.o ec_base_aliases.o
 
-ec_base_o_CPPFLAGS = -I . -DGF_LARGE_TABLES
-
 ec-objs += $(lobj)
 
 ifdef CONFIG_GCOV_PROFILE_LUSTRE

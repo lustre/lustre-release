@@ -45,8 +45,10 @@
  *  coefficients.
  *  Multiple versions of dot product are supplied to calculate 1-6 output
  *  vectors in one pass.
- *  Base GF multiply and divide functions can be sped up by defining
- *  GF_LARGE_TABLES at the expense of memory size.
+ *  Base GF multiply uses branch-free log/antilog tables, 1.5 KB rather
+ *  than a full 64 KB product table; gf_inv() keeps a zero test.  The
+ *  multiply itself is slower than a direct lookup; the per-coefficient
+ *  region table in ec_base.c is what recovers that in the hot loops.
  *
  */
 
