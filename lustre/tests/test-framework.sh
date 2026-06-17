@@ -168,7 +168,11 @@ reset_lustre() {
 }
 
 setup_if_needed() {
-	! ${do_setup} && return
+	if ! ${do_setup}; then
+		is_mounted $MOUNT && init_facets_vars
+		return 0
+	fi
+
 	nfs_client_mode && return
 	AUSTER_CLEANUP=false
 
@@ -6579,7 +6583,10 @@ set_pools_quota () {
 
 do_check_and_setup_lustre() {
 	# If auster does not want us to setup, then don't.
-	! ${do_setup} && return
+	if ! ${do_setup}; then
+		is_mounted $MOUNT && init_facets_vars
+		return 0
+	fi
 
 	log "=== $TESTSUITE: start setup $(date +'%H:%M:%S (%s)') ==="
 
