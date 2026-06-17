@@ -586,6 +586,66 @@ out:
 	return rc;
 }
 
+/**
+ * lnet_peer_ni_clr_local_net_locked() - Detach a peer_ni from its local net.
+ * @lpni: The peer_ni whose local net is going away.
+ *
+ * The inverse of lnet_peer_net_added(): the local NI is going away, but the
+ * peer_ni is still a valid remote address, so move it back onto the remote
+ * peer_ni list (mirroring lnet_peer_ni_alloc()) instead of freeing it. The
+ * peer_ni stays in the peer table hash and attached to its peer, so it
+ * remains findable, and the net can be re-bound by lnet_peer_net_added() if
+ * it is configured again.
+ *
+ * Context: Caller must hold lnet_net_lock/EX.
+ */
+static void
+lnet_peer_ni_clr_local_net_locked(struct lnet_peer_ni *lpni)
+{
+	spin_lock(&lpni->lpni_lock);
+	lpni->lpni_net = NULL;
+	lpni->lpni_txcredits = 0;
+	lpni->lpni_mintxcredits = 0;
+	lpni->lpni_rtrcredits = 0;
+	lpni->lpni_minrtrcredits = 0;
+	spin_unlock(&lpni->lpni_lock);
+
+	if (list_empty(&lpni->lpni_on_remote_peer_ni_list)) {
+		kref_get(&lpni->lpni_kref);
+		list_add_tail(&lpni->lpni_on_remote_peer_ni_list,
+			      &the_lnet.ln_remote_peer_ni_list);
+	}
+
+	CDEBUG(D_NET, "%p nid %s detached from local net\n",
+	       lpni, libcfs_nidstr(&lpni->lpni_nid));
+}
+
+/**
+ * lnet_peer_get_reachable_ni_locked() - Find a peer_ni on a surviving net.
+ * @lp: The peer to search.
+ * @net: The local net being torn down.
+ *
+ * Used to decide whether a peer must be destroyed when one of its local nets
+ * is torn down.
+ *
+ * Context: Caller must hold lnet_net_lock/EX.
+ * Return: A peer_ni of @lp that is reachable over a local net other than
+ * @net, or NULL if removing @net would leave the peer with no locally
+ * reachable rail.
+ */
+static struct lnet_peer_ni *
+lnet_peer_get_reachable_ni_locked(struct lnet_peer *lp, struct lnet_net *net)
+{
+	struct lnet_peer_ni *lpni = NULL;
+
+	while ((lpni = lnet_get_next_peer_ni_locked(lp, NULL, lpni)) != NULL) {
+		if (lpni->lpni_net != NULL && lpni->lpni_net != net)
+			return lpni;
+	}
+
+	return NULL;
+}
+
 static void
 lnet_peer_table_cleanup_locked(struct lnet_net *net,
 			       struct lnet_peer_table *ptable)
@@ -593,6 +653,7 @@ lnet_peer_table_cleanup_locked(struct lnet_net *net,
 	int			 i;
 	struct lnet_peer_ni	*next;
 	struct lnet_peer_ni	*lpni;
+	struct lnet_peer_ni	*keep;
 	struct lnet_peer	*peer;
 
 	for (i = 0; i < LNET_PEER_HASH_SIZE; i++) {
@@ -602,6 +663,30 @@ lnet_peer_table_cleanup_locked(struct lnet_net *net,
 				continue;
 
 			peer = lpni->lpni_peer_net->lpn_peer;
+
+			/*
+			 * Tearing down a local net must not discard a peer
+			 * that is still reachable over another local net.
+			 * Destroying a multi-rail peer here would throw away
+			 * its NIDs on the surviving nets and strand any
+			 * PtlRPC connection whose cached destination NID is
+			 * the one being removed. If the peer keeps a rail on
+			 * a different local net, re-home its primary NID onto
+			 * a survivor (unless it is locked) and demote this NI
+			 * to the remote peer_ni list instead of deleting it.
+			 */
+			keep = (net != NULL) ?
+				lnet_peer_get_reachable_ni_locked(peer, net) :
+				NULL;
+			if (keep != NULL) {
+				if (nid_same(&peer->lp_primary_nid,
+					     &lpni->lpni_nid) &&
+				    !(peer->lp_state & LNET_PEER_LOCK_PRIMARY))
+					peer->lp_primary_nid = keep->lpni_nid;
+				lnet_peer_ni_clr_local_net_locked(lpni);
+				continue;
+			}
+
 			if (!nid_same(&peer->lp_primary_nid,
 				       &lpni->lpni_nid)) {
 				lnet_peer_ni_del_locked(lpni, false);

@@ -6690,6 +6690,31 @@ test_502() {
 }
 run_test 502 "Verify lnetctl peer set --health (MR)"
 
+test_525() {
+	reinit_dlc || return $?
+
+	add_net ${NETTYPE} ${INTERFACES[0]} || return $?
+	add_net ${NETTYPE}2 ${INTERFACES[0]} || return $?
+
+	local nid1=$($LCTL list_nids | head -1)
+	local nid2=$($LCTL list_nids | tail -1)
+
+	do_lnetctl discover ${nid1} ||
+		error "discover $nid1 failed rc=$?"
+
+	$LNETCTL peer show --nid $nid1 | grep -q $nid1 ||
+		error "peer missing $nid1"
+	$LNETCTL peer show --nid $nid1 | grep -q $nid2 ||
+		error "peer missing $nid2"
+
+	do_lnetctl net del --net ${NETTYPE} ||
+		error "Failed to delete ${NETTYPE} rc=$?"
+
+	$LNETCTL peer show --nid $nid2 ||
+		error "$nid2 peer missing rc=$?"
+}
+run_test 525 "keep reachable peer on local net delete"
+
 test_550() {
 	[[ ${NETTYPE} == tcp* ]] ||
 		skip "Need tcp NETTYPE to fail a single local rail"
