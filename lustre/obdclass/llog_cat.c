@@ -95,6 +95,8 @@ static int llog_cat_new_log(const struct lu_env *env,
 
 	if (th == NULL) {
 		dt = lu2dt_dev(cathandle->lgh_obj->do_lu.lo_dev);
+		if (IS_ERR(dt))
+			RETURN(PTR_ERR(dt));
 
 		handle = dt_trans_create(env, dt);
 		if (IS_ERR(handle))
@@ -174,6 +176,9 @@ static int llog_cat_new_log(const struct lu_env *env,
 	/* 2MB for the cases when free space hasn't been learned yet */
 	loghandle->lgh_max_size = 2 << 20;
 	dt = lu2dt_dev(cathandle->lgh_obj->do_lu.lo_dev);
+	if (IS_ERR(dt))
+		GOTO(out_destroy, rc = PTR_ERR(dt));
+
 	rc = dt_statfs(env, dt, &lgi->lgi_statfs);
 	if (rc == 0 && lgi->lgi_statfs.os_bfree > 0) {
 		__u64 freespace = (lgi->lgi_statfs.os_bfree *
@@ -714,6 +719,8 @@ int llog_cat_add(const struct lu_env *env, struct llog_handle *cathandle,
 
 	LASSERT(cathandle->lgh_obj != NULL);
 	dt = lu2dt_dev(cathandle->lgh_obj->do_lu.lo_dev);
+	if (IS_ERR(dt))
+		RETURN(PTR_ERR(dt));
 
 	th = dt_trans_create(env, dt);
 	if (IS_ERR(th))

@@ -1191,7 +1191,8 @@ static int llog_fill_bytes(const struct lu_env *env, struct dt_object *o,
 
 	LASSERT(o);
 	d = lu2dt_dev(o->do_lu.lo_dev);
-	LASSERT(d);
+	if (IS_ERR(d))
+		GOTO(free, rc = PTR_ERR(d));
 
 	rc = dt_attr_get(env, o, &la);
 	if (rc)
@@ -1586,6 +1587,8 @@ static int llog_test_10(const struct lu_env *env, struct obd_device *obd)
 
 	cat_logid = cath->lgh_id;
 	dt = lu2dt_dev(cath->lgh_obj->do_lu.lo_dev);
+	if (IS_ERR(dt))
+		GOTO(out, rc = PTR_ERR(dt));
 
 	/*
 	 * sync device to commit all recent LLOG changes to disk and avoid
@@ -2290,8 +2293,8 @@ static int llog_obj_truncate(const struct lu_env *env,
 
 	LASSERT(obj);
 	dd = lu2dt_dev(obj->do_lu.lo_dev);
-	if (IS_ERR_OR_NULL(dd))
-		GOTO(attr_free, rc = -EINVAL);
+	if (IS_ERR(dd))
+		GOTO(attr_free, rc = PTR_ERR(dd));
 
 	attr->la_size = size;
 	attr->la_valid = LA_SIZE;
@@ -2784,6 +2787,7 @@ static int llog_test_device_init(const struct lu_env *env, struct lu_device *lu,
 	struct obd_device *obd = lu->ld_obd;
 	struct obd_device *tgt;
 	struct llog_ctxt *ctxt;
+	struct dt_device *dt;
 	struct dt_object *o;
 	struct lu_env _env;
 	int rc;
@@ -2805,7 +2809,10 @@ static int llog_test_device_init(const struct lu_env *env, struct lu_device *lu,
 	      lldev->llog_target_name);
 
 	OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
-	obd->obd_lvfs_ctxt.dt = lu2dt_dev(tgt->obd_lu_dev);
+	dt = lu2dt_dev(tgt->obd_lu_dev);
+	if (IS_ERR(dt))
+		GOTO(cleanup_env, rc = PTR_ERR(dt));
+	obd->obd_lvfs_ctxt.dt = dt;
 
 	rc = llog_setup(&_env, tgt, &tgt->obd_olg, LLOG_TEST_ORIG_CTXT, tgt,
 			&llog_osd_ops);

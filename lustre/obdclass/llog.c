@@ -165,6 +165,8 @@ int llog_destroy(const struct lu_env *env, struct llog_handle *handle)
 		RETURN(0);
 
 	dt = lu2dt_dev(handle->lgh_obj->do_lu.lo_dev);
+	if (IS_ERR(dt))
+		RETURN(PTR_ERR(dt));
 
 	if (unlikely(unlikely(dt->dd_rdonly)))
 		RETURN(-EROFS);
@@ -172,6 +174,7 @@ int llog_destroy(const struct lu_env *env, struct llog_handle *handle)
 	th = dt_trans_create(env, dt);
 	if (IS_ERR(th))
 		RETURN(PTR_ERR(th));
+
 	th->th_wait_submit = 1;
 
 	rc = llog_declare_destroy(env, handle, th);
@@ -217,6 +220,8 @@ int llog_cancel_arr_rec(const struct lu_env *env, struct llog_handle *loghandle,
 	       num, index[0], PLOGID(&loghandle->lgh_id));
 
 	dt = lu2dt_dev(loghandle->lgh_obj->do_lu.lo_dev);
+	if (IS_ERR(dt))
+		RETURN(PTR_ERR(dt));
 
 	if (unlikely(unlikely(dt->dd_rdonly)))
 		RETURN(0);
@@ -1330,6 +1335,8 @@ int llog_open_create(const struct lu_env *env, struct llog_ctxt *ctxt,
 	LASSERT((*res)->lgh_obj != NULL);
 
 	d = lu2dt_dev((*res)->lgh_obj->do_lu.lo_dev);
+	if (IS_ERR(d))
+		GOTO(out, rc = PTR_ERR(d));
 
 	if (unlikely(unlikely(d->dd_rdonly)))
 		GOTO(out, rc = -EROFS);
@@ -1453,6 +1460,8 @@ int llog_write_cookie(const struct lu_env *env, struct llog_handle *loghandle,
 	LASSERT(loghandle->lgh_obj != NULL);
 
 	dt = lu2dt_dev(loghandle->lgh_obj->do_lu.lo_dev);
+	if (IS_ERR(dt))
+		RETURN(PTR_ERR(dt));
 
 	if (unlikely(unlikely(dt->dd_rdonly)))
 		RETURN(-EROFS);
@@ -1766,13 +1775,17 @@ EXPORT_SYMBOL(llog_size);
 int llog_retain(const struct lu_env *env, struct llog_handle *log)
 {
 	struct dt_object *dto = log->lgh_obj;
-	struct dt_device *dt = lu2dt_dev(log->lgh_obj->do_lu.lo_dev);
+	struct dt_device *dt;
 	struct lu_attr la = { 0 };
 	struct thandle *th;
 	int rc;
 
 	la.la_ctime = ktime_get_real_seconds();
 	la.la_valid = LA_CTIME;
+
+	dt = lu2dt_dev(log->lgh_obj->do_lu.lo_dev);
+	if (IS_ERR(dt))
+		RETURN(PTR_ERR(dt));
 
 	th = dt_trans_create(env, dt);
 	if (IS_ERR(th))

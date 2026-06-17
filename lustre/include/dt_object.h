@@ -1909,8 +1909,11 @@ static inline int lu_device_is_dt(const struct lu_device *d)
 
 static inline struct dt_device *lu2dt_dev(struct lu_device *l)
 {
+	struct dt_device *dt;
+
 	LASSERT(lu_device_is_dt(l));
-	return container_of_safe(l, struct dt_device, dd_lu_dev);
+	dt = container_of_safe(l, struct dt_device, dd_lu_dev);
+	return dt ? dt : ERR_PTR(-ENODATA);
 }
 
 struct dt_object {
