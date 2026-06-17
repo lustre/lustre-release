@@ -15737,10 +15737,18 @@ test_119j()
 	dd if=/dev/urandom of=$DIR/$tfile bs=$iosize count=1 ||
 		error "(0) dd $iosize failed"
 	sync
+
+	# Warm the page cache and let any first-touch readahead RPC settle
+	# before resetting the stats.  Otherwise an async readahead RPC from
+	# the first read can race the measured read below and be miscounted
+	# as a cache miss (seen as "(3) 1 != 0" on large-page clients).
+	dd if=$DIR/$tfile of=/dev/null bs=$iosize count=1 ||
+		error "(1) dd $iosize warmup failed"
+
 	$LCTL set_param -n osc.*.rpc_stats=0
 	# Read from page cache, does not generate an rpc
 	dd if=$DIR/$tfile of=/dev/null bs=$iosize count=1 ||
-		error "(1) dd $iosize failed"
+		error "(2) dd $iosize failed"
 	$LCTL get_param osc.*.rpc_stats
 	rpcs=($($LCTL get_param -n 'osc.*.rpc_stats' |
 		sed -n '/pages per rpc/,/^$/p' |
@@ -15753,8 +15761,13 @@ test_119j()
 	# This forces an RPC to the server
 	#define OBD_FAIL_LLITE_FORCE_BIO_AS_DIO	0x1429
 	$LCTL set_param fail_loc=0x1429
-	# Drop the cache so this IO is not done by fast read
-	sysctl -w vm.drop_caches=3
+	# Drop the cache so this IO is not done by fast read.  Fast read runs
+	# before the BIO->DIO switch, so unless the cached pages are gone it
+	# will serve the read and no RPC is sent ("(5) 0 != 1").  vm.drop_caches
+	# is best-effort and does not reliably evict pages pinned by OSC DLM
+	# locks (racy on large-page clients), so cancel the locks instead to
+	# deterministically invalidate this file's cached pages.
+	cancel_lru_locks osc
 	dd if=$DIR/$tfile of=/dev/null bs=8 count=1 || error "(4) dd failed"
 	$LCTL get_param osc.*.rpc_stats
 	rpcs=($($LCTL get_param -n 'osc.*.rpc_stats' |
@@ -15769,13 +15782,15 @@ test_119j()
 	#NB: We do not check for 0 write RPCs in the BIO case because that
 	# would make the test racey vs cache flushing
 	# but the DIO case is guaranteed to generate 1 write RPC
+	cancel_lru_locks osc
 	dd if=/dev/zero of=$DIR/$tfile bs=8 count=1 || error "(6) dd failed"
 	$LCTL get_param osc.*.rpc_stats
 	rpcs=($($LCTL get_param -n 'osc.*.rpc_stats' |
 		sed -n '/pages per rpc/,/^$/p' |
 		awk '/'$pages':/ { reads += $2; writes += $6 }; \
 		END { print reads,writes }'))
-	(( ${rpcs[1]} == $pages )) || error "(7) ${rpcs[1]} != $pages read RPCs"
+	(( ${rpcs[1]} == $pages )) ||
+		error "(7) ${rpcs[1]} != $pages write RPCs"
 }
 run_test 119j "basic tests of hybrid IO switching"
 
