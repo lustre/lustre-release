@@ -5717,10 +5717,6 @@ int llapi_ec_resync_many_params(int fd, struct llapi_layout *layout,
 			goto out;
 		}
 
-		/* Skip resyncing parity if data component has NOSYNC flag */
-		if (data_comp->llc_flags & LCME_FL_NOSYNC)
-			continue;
-
 		rc = llapi_ec_check_comp_match(data_comp, ec_comp);
 		if (rc)
 			goto out;
