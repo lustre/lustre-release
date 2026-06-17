@@ -263,25 +263,6 @@ struct obd_import {
 	 */
 	atomic_t		  imp_waiting;
 	/* flags */
-	unsigned long		  /* don't run recovery (timeout instead) */
-				  imp_dlm_fake:1,
-				  /* use 1/2 timeout on MDS' OSCs */
-				  imp_server_timeout:1,
-				  /* force an immidiate ping */
-				  imp_force_verify:1,
-				  /* force a scheduled ping */
-				  imp_force_next_verify:1,
-				  /* import must be reconnected instead of
-				   * chouse new connection
-				   */
-				  imp_force_reconnect:1,
-				  /* connected but not FULL yet */
-				  imp_connected:1,
-				  /* grant shrink disabled */
-				  imp_grant_shrink_disabled:1,
-				  /* to supress LCONSOLE() at conn.restore */
-				  imp_was_idle:1,
-				  imp_no_cached_data:1;
 	DECLARE_BITMAP(imp_flags, IMPF_NUM_FLAGS);
 	u32			  imp_connect_op;
 	u32			  imp_idle_timeout;

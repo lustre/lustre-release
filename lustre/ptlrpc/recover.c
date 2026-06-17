@@ -320,7 +320,7 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid, int async)
 	/* Check if reconnect is already in progress */
 	spin_lock(&imp->imp_lock);
 	if (imp->imp_state != LUSTRE_IMP_DISCON) {
-		imp->imp_force_verify = 1;
+		set_bit(IMPF_FORCE_VERIFY, imp->imp_flags);
 		rc = -EALREADY;
 	}
 	spin_unlock(&imp->imp_lock);

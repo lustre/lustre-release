@@ -50,7 +50,7 @@ int null_ctx_sign(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 {
 	req->rq_reqbuf->lm_secflvr = SPTLRPC_FLVR_NULL;
 
-	if (!req->rq_import->imp_dlm_fake) {
+	if (!test_bit(IMPF_DLM_FAKE, req->rq_import->imp_flags)) {
 		struct obd_device *obd = req->rq_import->imp_obd;
 
 		null_encode_sec_part(req->rq_reqbuf,

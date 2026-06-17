@@ -196,9 +196,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 					   OBD_CONNECT_FULL20 |
 					   OBD_CONNECT_LFSCK |
 					   OBD_CONNECT_BULK_MBITS;
-		spin_lock(&imp->imp_lock);
-		imp->imp_server_timeout = 1;
-		spin_unlock(&imp->imp_lock);
+		set_bit(IMPF_SERVER_TIMEOUT, imp->imp_flags);
 		imp->imp_client->cli_request_portal = OUT_PORTAL;
 		CDEBUG(D_OTHER, "%s: Set 'mds' portal and timeout\n",
 		      obd->obd_name);

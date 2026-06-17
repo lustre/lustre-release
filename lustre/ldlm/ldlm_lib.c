@@ -1056,7 +1056,7 @@ int rev_import_init(struct obd_export *export)
 
 	revimp->imp_remote_handle.cookie = 0ULL;
 	revimp->imp_client = &obd->obd_ldlm_client;
-	revimp->imp_dlm_fake = 1;
+	set_bit(IMPF_DLM_FAKE, revimp->imp_flags);
 
 	/* it is safe to connect import in new state as no sends possible */
 	spin_lock(&export->exp_lock);

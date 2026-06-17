@@ -42,14 +42,23 @@ GPL[vV]3||Using GPLv3 is usually wrong
 HAVE_SERVER_SUPPORT||CONFIG_LUSTRE_FS_SERVER
 HZ||cfs_time_seconds
 imp_connect_tried||IMPF_CONNECT_TRIED
+imp_connected||IMPF_CONNECTED
 imp_deactive||IMPF_DEACTIVE
 imp_delayed_recovery||IMPF_DELAYED_RECOVERY
+imp_dlm_fake||IMPF_DLM_FAKE
+imp_force_verify||IMPF_FORCE_VERIFY
+imp_force_next_verify||IMPF_FORCE_NEXT_VERIFY
+imp_force_reconnect||IMPF_FORCE_RECONNECT
+imp_grant_shrink_disabled||IMPF_GRANT_SHRINK_DISABLED
 imp_invalid||IMPF_INVALID
+imp_no_cached_data||IMPF_NO_CACHED_DATA
 imp_no_pinger_recover||IMPF_NO_PINGER_RECOVER
 imp_pingable||IMPF_PINGABLE
 imp_replayable||IMPF_REPLAYABLE
 imp_resend_replay||IMPF_RESEND_REPLAY
+imp_server_timeout||IMPF_SERVER_TIMEOUT
 imp_vbr_failed||IMPF_VBR_FAILED
+imp_was_idle||IMPF_WAS_IDLE
 it_flags||it_open_flags
 kmem_cache_alloc.*GFP_ZERO||kmem_cache_zalloc
 LASSERT||Try to replace assertions with error handling

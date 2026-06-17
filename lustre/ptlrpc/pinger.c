@@ -206,21 +206,19 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
 	spin_lock(&imp->imp_lock);
 
 	level = imp->imp_state;
-	force = imp->imp_force_verify;
-	force_next = imp->imp_force_next_verify;
 	/*
 	 * This will be used below only if the import is "FULL".
 	 */
 	suppress = ir_up && OCD_HAS_FLAG(&imp->imp_connect_data, PINGLESS);
 
-	imp->imp_force_verify = 0;
+	force = test_and_clear_bit(IMPF_FORCE_VERIFY, imp->imp_flags);
 
 	if (imp->imp_next_ping - 5 >= this_ping && !force) {
 		spin_unlock(&imp->imp_lock);
 		return;
 	}
 
-	imp->imp_force_next_verify = 0;
+	force_next = test_and_clear_bit(IMPF_FORCE_NEXT_VERIFY, imp->imp_flags);
 
 	CDEBUG((level == LUSTRE_IMP_FULL || level == LUSTRE_IMP_IDLE) ?
 		D_INFO : D_HA,
@@ -248,7 +246,7 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
 		       imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd),
 		       ptlrpc_import_state_name(level));
 		if (force)
-			imp->imp_force_verify = 1;
+			set_bit(IMPF_FORCE_VERIFY, imp->imp_flags);
 		spin_unlock(&imp->imp_lock);
 	} else if ((test_bit(IMPF_PINGABLE, imp->imp_flags) && !suppress) ||
 		   force_next || force) {
@@ -361,7 +359,7 @@ void ptlrpc_pinger_commit_expected(struct obd_import *imp)
 	 */
 	if (imp->imp_state != LUSTRE_IMP_FULL ||
 	    OCD_HAS_FLAG(&imp->imp_connect_data, PINGLESS))
-		imp->imp_force_next_verify = 1;
+		set_bit(IMPF_FORCE_NEXT_VERIFY, imp->imp_flags);
 }
 
 int ptlrpc_pinger_add_import(struct obd_import *imp)

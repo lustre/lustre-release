@@ -626,7 +626,7 @@ static ssize_t grant_shrink_show(struct kobject *kobj, struct attribute *attr,
 
 	with_imp_locked(obd, imp, len)
 		len = scnprintf(buf, PAGE_SIZE, "%d\n",
-				!imp->imp_grant_shrink_disabled &&
+				!test_bit(IMPF_GRANT_SHRINK_DISABLED, imp->imp_flags) &&
 				OCD_HAS_FLAG(&imp->imp_connect_data,
 					     GRANT_SHRINK));
 
@@ -650,9 +650,11 @@ static ssize_t grant_shrink_store(struct kobject *kobj, struct attribute *attr,
 		return rc;
 
 	with_imp_locked(obd, imp, rc) {
-		spin_lock(&imp->imp_lock);
-		imp->imp_grant_shrink_disabled = !val;
-		spin_unlock(&imp->imp_lock);
+		if (val)
+			clear_bit(IMPF_GRANT_SHRINK_DISABLED, imp->imp_flags);
+		else
+			set_bit(IMPF_GRANT_SHRINK_DISABLED, imp->imp_flags);
+		smp_mb__after_atomic();
 	}
 
 	return rc ?: count;

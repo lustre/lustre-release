@@ -890,7 +890,7 @@ static int osc_should_shrink_grant(struct client_obd *client)
 		return 0;
 
 	if (!OCD_HAS_FLAG(&client->cl_import->imp_connect_data, GRANT_SHRINK) ||
-	    client->cl_import->imp_grant_shrink_disabled) {
+	    test_bit(IMPF_GRANT_SHRINK_DISABLED, client->cl_import->imp_flags)) {
 		osc_update_next_shrink(client);
 		return 0;
 	}
