@@ -2024,6 +2024,7 @@ ksocknal_connect(struct ksock_conn_cb *conn_cb)
  * be updated if failed to create, so caller wouldn't keep try while
  * running out of resource.
  */
+__must_hold(&ksocknal_data.ksnd_connd_lock)
 static void ksocknal_connd_check_start(time64_t sec, long *timeout)
 {
 	int rc;
@@ -2332,7 +2333,7 @@ ksocknal_flush_stale_txs(struct ksock_peer_ni *peer_ni)
 
 static int
 ksocknal_send_keepalive_locked(struct ksock_peer_ni *peer_ni)
-__must_hold(&ksocknal_data.ksnd_global_lock)
+__must_hold_shared(&ksocknal_data.ksnd_global_lock)
 {
 	struct ksock_sched *sched;
 	struct ksock_conn *conn;

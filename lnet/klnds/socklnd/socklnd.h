@@ -43,6 +43,7 @@
 #include <linux/hashtable.h>
 #include <lustre_compat/net/sock.h>
 #include <lustre_compat/net/tcp.h>
+#include <lustre_compat/linux/compiler-context-analysis.h>
 
 #include <linux/libcfs/libcfs.h>
 #include <linux/lnet/lib-lnet.h>
