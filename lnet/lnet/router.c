@@ -138,9 +138,8 @@ rtr_sensitivity_set(const char *val, const struct kernel_param *kp)
 	return 0;
 }
 
-void
-lnet_move_route(struct lnet_route *route, struct lnet_peer *lp,
-		struct list_head *rt_list)
+void lnet_move_route(struct lnet_route *route, struct lnet_peer *lp,
+		     struct list_head *rt_list)
 __must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_remotenet *rnet;
@@ -184,8 +183,9 @@ __must_hold(&the_lnet.ln_api_mutex)
 	}
 }
 
-void
-lnet_rtr_transfer_to_peer(struct lnet_peer *src, struct lnet_peer *target)
+void lnet_rtr_transfer_to_peer(struct lnet_peer *src,
+			       struct lnet_peer *target)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_route *route;
 	struct lnet_route *tmp, *tmp2;
@@ -773,8 +773,7 @@ lnet_del_route_from_rnet(struct lnet_nid *gw_nid,
 	}
 }
 
-int
-lnet_del_route(__u32 net, struct lnet_nid *gw)
+int lnet_del_route(__u32 net, struct lnet_nid *gw)
 __must_hold(&the_lnet.ln_api_mutex)
 {
 	LIST_HEAD(rnet_zombies);
@@ -865,8 +864,8 @@ delete_zombies:
 	return 0;
 }
 
-void
-lnet_destroy_routes(void)
+void lnet_destroy_routes(void)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	lnet_del_route(LNET_NET_ANY, NULL);
 }

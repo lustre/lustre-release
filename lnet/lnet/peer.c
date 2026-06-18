@@ -510,9 +510,9 @@ lnet_peer_del(struct lnet_peer *peer)
  *  -ECHILD: The lnet_peer_ni isn't connected to the peer.
  *  -EBUSY:  The lnet_peer_ni is the primary, and not the only peer_ni.
  */
-static int
-lnet_peer_del_nid(struct lnet_peer *lp, struct lnet_nid *nid,
-		  unsigned int flags)
+static int lnet_peer_del_nid(struct lnet_peer *lp, struct lnet_nid *nid,
+			     unsigned int flags)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_peer_ni *lpni;
 	struct lnet_nid primary_nid = lp->lp_primary_nid;
@@ -1004,19 +1004,17 @@ lnet_peer_clr_pref_rtrs(struct lnet_peer_ni *lpni)
 	}
 }
 
-int
-lnet_peer_add_pref_rtr(struct lnet_peer_ni *lpni,
-		       struct lnet_nid *gw_nid)
+/* This function is called with api_mutex held. When the api_mutex
+ * is held the list can not be modified, as it is only modified as
+ * a result of applying a UDSP and that happens under api_mutex
+ * lock.
+ */
+int lnet_peer_add_pref_rtr(struct lnet_peer_ni *lpni,
+			   struct lnet_nid *gw_nid)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	int cpt = lpni->lpni_cpt;
 	struct lnet_nid_list *ne = NULL;
-
-	/* This function is called with api_mutex held. When the api_mutex
-	 * is held the list can not be modified, as it is only modified as
-	 * a result of applying a UDSP and that happens under api_mutex
-	 * lock.
-	 */
-	__must_hold(&the_lnet.ln_api_mutex);
 
 	list_for_each_entry(ne, &lpni->lpni_rtr_pref_nids, nl_list) {
 		if (nid_same(&ne->nl_nid, gw_nid))
@@ -1834,9 +1832,9 @@ out:
  *  -ENOTUNIQ: Adding a second peer NID on a single network on a
  *             non-multi-rail peer.
  */
-static int
-lnet_peer_add_nid(struct lnet_peer *lp, struct lnet_nid *nid,
-		  unsigned int flags)
+static int lnet_peer_add_nid(struct lnet_peer *lp, struct lnet_nid *nid,
+			     unsigned int flags)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_peer_net *lpn;
 	struct lnet_peer_ni *lpni;
@@ -1998,12 +1996,11 @@ out_locked:
 
 /*
  * Update the primary NID of a peer, if possible.
- *
- * Call with the lnet_api_mutex held.
  */
-static int
-lnet_peer_set_primary_nid(struct lnet_peer *lp, struct lnet_nid *nid,
-			  unsigned int flags)
+static int lnet_peer_set_primary_nid(struct lnet_peer *lp,
+				     struct lnet_nid *nid,
+				     unsigned int flags)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_nid old = lp->lp_primary_nid;
 	int rc = 0;
@@ -2045,8 +2042,8 @@ out:
  * Callers must hold ln_api_mutex
  * Ref taken on lnet_peer_ni returned by this function
  */
-static struct lnet_peer_ni *
-lnet_peer_ni_traffic_add(struct lnet_nid *nid, struct lnet_nid *pref)
+static struct lnet_peer_ni *lnet_peer_ni_traffic_add(struct lnet_nid *nid,
+						     struct lnet_nid *pref)
 __must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_peer *lp = NULL;
@@ -2113,9 +2110,8 @@ out:
  * The caller must hold ln_api_mutex. This prevents the peer from
  * being created/modified/deleted by a different thread.
  */
-static int
-lnet_add_peer_ni(struct lnet_nid *prim_nid, struct lnet_nid *nid, bool mr,
-		 unsigned int flags)
+static int lnet_add_peer_ni(struct lnet_nid *prim_nid, struct lnet_nid *nid,
+			    bool mr, unsigned int flags)
 __must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_peer *lp = NULL;
@@ -2184,14 +2180,15 @@ out:
 
 int lnet_user_add_peer_ni(struct lnet_nid *prim_nid, struct lnet_nid *nid,
 			  bool mr, bool lock_prim)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	int fl = LNET_PEER_CONFIGURED | (LNET_PEER_LOCK_PRIMARY * lock_prim);
 
 	return lnet_add_peer_ni(prim_nid, nid, mr, fl);
 }
 
-static int
-lnet_reset_peer(struct lnet_peer *lp)
+static int lnet_reset_peer(struct lnet_peer *lp)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_peer_net *lpn, *lpntmp;
 	struct lnet_peer_ni *lpni, *lpnitmp;
@@ -2239,9 +2236,9 @@ lnet_reset_peer(struct lnet_peer *lp)
  * The caller must hold ln_api_mutex. This prevents the peer from
  * being modified/deleted by a different thread.
  */
-int
-lnet_del_peer_ni(struct lnet_nid *prim_nid, struct lnet_nid *nid,
-		 int force)
+int lnet_del_peer_ni(struct lnet_nid *prim_nid, struct lnet_nid *nid,
+		     int force)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_peer *lp;
 	struct lnet_peer_ni *lpni;
@@ -3352,6 +3349,7 @@ static inline void handle_disc_lpni_health(struct lnet_peer_ni *lpni,
  */
 static int lnet_peer_merge_data(struct lnet_peer *lp,
 				struct lnet_ping_buffer *pbuf)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_peer_net *lpn;
 	struct lnet_peer_ni *lpni;
@@ -3556,8 +3554,9 @@ out:
  * The data in pbuf says lp is its primary peer, but the data was
  * received by a different peer. Try to update lp with the data.
  */
-static int
-lnet_peer_set_primary_data(struct lnet_peer *lp, struct lnet_ping_buffer *pbuf)
+static int lnet_peer_set_primary_data(struct lnet_peer *lp,
+				      struct lnet_ping_buffer *pbuf)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_handle_md mdh;
 
@@ -4373,8 +4372,8 @@ int lnet_peer_discovery_start(void)
 	return rc;
 }
 
-/* ln_api_mutex is held on entry. */
 void lnet_peer_discovery_stop(void)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	if (the_lnet.ln_dc_state == LNET_DC_STATE_SHUTDOWN)
 		return;

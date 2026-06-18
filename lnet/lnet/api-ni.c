@@ -2175,9 +2175,8 @@ lnet_ping_target_install_locked(struct lnet_ping_buffer *pbuf)
 		atomic_inc_return(&the_lnet.ln_ping_target_seqno);
 }
 
-static void
-lnet_ping_target_update(struct lnet_ping_buffer *pbuf,
-			struct lnet_handle_md ping_mdh)
+static void lnet_ping_target_update(struct lnet_ping_buffer *pbuf,
+				    struct lnet_handle_md ping_mdh)
 __must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_ping_buffer *old_pbuf = NULL;
@@ -2431,8 +2430,8 @@ lnet_ni_unlink_locked(struct lnet_ni *ni)
 	lnet_ni_decref_locked(ni, 0);
 }
 
-static void
-lnet_clear_zombies_nis_locked(struct lnet_net *net)
+static void lnet_clear_zombies_nis_locked(struct lnet_net *net)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct list_head *zombie_list = &net->net_ni_zombie;
 	enum lnet_ni_state state;
@@ -2515,8 +2514,8 @@ lnet_clear_zombies_nis_locked(struct lnet_net *net)
 }
 
 /* shutdown down the NI and release refcount */
-static void
-lnet_shutdown_lndni(struct lnet_ni *ni)
+static void lnet_shutdown_lndni(struct lnet_ni *ni)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	int i;
 	struct lnet_net *net = ni->ni_net;
@@ -2538,8 +2537,8 @@ lnet_shutdown_lndni(struct lnet_ni *ni)
 	lnet_net_unlock(LNET_LOCK_EX);
 }
 
-static void
-lnet_shutdown_lndnet(struct lnet_net *net)
+static void lnet_shutdown_lndnet(struct lnet_net *net)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_ni *ni;
 
@@ -2563,8 +2562,8 @@ lnet_shutdown_lndnet(struct lnet_net *net)
 	lnet_net_free(net);
 }
 
-static void
-lnet_shutdown_lndnet_start(struct lnet_net *net)
+static void lnet_shutdown_lndnet_start(struct lnet_net *net)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_ni *ni;
 
@@ -2581,8 +2580,8 @@ lnet_shutdown_lndnet_start(struct lnet_net *net)
 	lnet_net_unlock(LNET_LOCK_EX);
 }
 
-static void
-lnet_shutdown_lndnet_finish(struct lnet_net *net)
+static void lnet_shutdown_lndnet_finish(struct lnet_net *net)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_ni *ni;
 
@@ -2606,8 +2605,8 @@ lnet_shutdown_lndnet_finish(struct lnet_net *net)
 	lnet_net_free(net);
 }
 
-static void
-lnet_shutdown_lndnets(void)
+static void lnet_shutdown_lndnets(void)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_net *net;
 	struct lnet_net *net_tmp;
@@ -2665,8 +2664,8 @@ lnet_shutdown_lndnets(void)
 	lnet_net_unlock(LNET_LOCK_EX);
 }
 
-static int
-lnet_startup_lndni(struct lnet_ni *ni, struct lnet_lnd_tunables *tun)
+static int lnet_startup_lndni(struct lnet_ni *ni, struct lnet_lnd_tunables *tun)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	int			rc = -EINVAL;
 	struct lnet_tx_queue	*tq;
@@ -2808,8 +2807,9 @@ static const struct lnet_lnd *lnet_load_lnd(u32 lnd_type)
 	return lnd;
 }
 
-static int
-lnet_startup_lndnet(struct lnet_net *net, struct lnet_lnd_tunables *tun)
+static int lnet_startup_lndnet(struct lnet_net *net,
+			       struct lnet_lnd_tunables *tun)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_ni *ni;
 	struct lnet_net *net_l = NULL;
@@ -2965,8 +2965,8 @@ failed0:
 	return rc;
 }
 
-static int
-lnet_startup_lndnets(struct list_head *netlist)
+static int lnet_startup_lndnets(struct list_head *netlist)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_net		*net;
 	int			rc;
@@ -3910,6 +3910,7 @@ static void lnet_notify_net_update(struct lnet_net *net, bool delete)
 
 static int lnet_add_net_common(struct lnet_net *net,
 			       struct lnet_ioctl_config_lnd_tunables *tun)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_handle_md ping_mdh;
 	struct lnet_ping_buffer *pbuf;
@@ -6792,10 +6793,10 @@ out:
 	return rc;
 }
 
-/* Called with ln_api_mutex */
 static int lnet_parse_peer_nis(struct nlattr *rlist, struct genl_info *info,
 			       struct lnet_nid *pnid, bool mr,
 			       bool *create_some)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_nid snid = LNET_ANY_NID;
 	struct nlattr *props;

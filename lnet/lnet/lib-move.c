@@ -4140,6 +4140,7 @@ clean_queues:
 }
 
 void lnet_monitor_thr_stop(void)
+__must_hold(&the_lnet.ln_api_mutex)
 {
 	if (the_lnet.ln_mt_state == LNET_MT_STATE_SHUTDOWN)
 		return;
