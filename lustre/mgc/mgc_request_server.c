@@ -202,7 +202,7 @@ static int mgc_target_register(struct obd_export *exp,
 	if (!req)
 		RETURN(-ENOMEM);
 
-	if (large_nids || nidlist) {
+	if (large_nids) {
 		bufsize = MGS_MAXREQSIZE - sizeof(struct ptlrpc_body) -
 			  sizeof(*mti) - sizeof(*mtn);
 		avail = bufsize / MTN_NIDSTR_SIZE;
@@ -210,7 +210,7 @@ static int mgc_target_register(struct obd_export *exp,
 		nidlist_size = 0;
 	}
 
-	if (nidlist) {
+	if (nidlist && large_nids) {
 		if (mti->mti_nid_count <= avail) { /* inline buffer */
 			req_capsule_set_size(&req->rq_pill,
 					     &RMF_MGS_TARGET_NIDLIST,
@@ -270,7 +270,7 @@ static int mgc_target_register(struct obd_export *exp,
 		}
 		desc->bd_frag_ops->add_iov_frag(desc, mti->mti_nidlist,
 						nidlist_size);
-	} else if (nidlist) {
+	} else if (nidlist && large_nids) {
 		mtn->mtn_nids = mti->mti_nid_count;
 		memcpy(mtn->mtn_inline_list, mti->mti_nidlist, nidlist_size);
 	} else if (large_nids) {
