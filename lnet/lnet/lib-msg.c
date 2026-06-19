@@ -126,7 +126,7 @@ lnet_build_msg_event(struct lnet_msg *msg, enum lnet_event_kind ev_type)
  *   If the LND did not implement the lnd_get_timeout() function or the LNDT
  *   was set to zero, fall back to default global LTT implementation.
  */
-static ktime_t get_msg_deadline(struct lnet_ni *msg_ni)
+static ktime_t get_msg_deadline(struct lnet_ni *msg_ni, ktime_t now)
 {
 	unsigned int msg_timeout = lnet_transaction_timeout;
 
@@ -136,7 +136,7 @@ static ktime_t get_msg_deadline(struct lnet_ni *msg_ni)
 		if (lnd_timeout > 0)
 			msg_timeout = lnd_timeout * (lnet_retry_count + 1) + 1;
 	}
-	return ktime_add_ns(ktime_get(), msg_timeout * NSEC_PER_SEC);
+	return ktime_add_ns(now, msg_timeout * NSEC_PER_SEC);
 }
 
 void
@@ -144,15 +144,21 @@ lnet_msg_commit(struct lnet_msg *msg, int cpt)
 {
 	struct lnet_msg_container *container = the_lnet.ln_msg_containers[cpt];
 	struct lnet_counters_common *common;
+	/* One clock read serves both the deadline and the latency start
+	 * stamp, so latency tracking costs no extra read here.
+	 */
+	ktime_t now = ktime_get();
 
 	/* A routed message can be committed for both receiving and sending */
 	LASSERT(!msg->msg_tx_committed);
+
+	msg->msg_t_start = now;
 
 	if (msg->msg_sending) {
 		LASSERT(!msg->msg_receiving);
 
 		/* Set the message deadline using msg send NI */
-		msg->msg_deadline = get_msg_deadline(msg->msg_txni);
+		msg->msg_deadline = get_msg_deadline(msg->msg_txni, now);
 		msg->msg_tx_cpt = cpt;
 		msg->msg_tx_committed = 1;
 		if (msg->msg_rx_committed) { /* routed message REPLY */
@@ -163,7 +169,7 @@ lnet_msg_commit(struct lnet_msg *msg, int cpt)
 		LASSERT(!msg->msg_sending);
 
 		/* Set the message deadline using msg recv NI */
-		msg->msg_deadline = get_msg_deadline(msg->msg_rxni);
+		msg->msg_deadline = get_msg_deadline(msg->msg_rxni, now);
 		msg->msg_rx_cpt = cpt;
 		msg->msg_rx_committed = 1;
 	}
@@ -177,6 +183,57 @@ lnet_msg_commit(struct lnet_msg *msg, int cpt)
 	common->lcc_msgs_alloc++;
 	if (common->lcc_msgs_alloc > common->lcc_msgs_max)
 		common->lcc_msgs_max = common->lcc_msgs_alloc;
+}
+
+/**
+ * lnet_record_op_latency() - Record one latency sample for an operation.
+ * @lpni: Peer NI to attribute the sample to, or NULL.
+ * @ni: Local NI to attribute the sample to, or NULL.
+ * @op: Which operation's accumulator to update.
+ * @ns: Measured latency in nanoseconds.
+ */
+static void lnet_record_op_latency(struct lnet_peer_ni *lpni,
+				   struct lnet_ni *ni,
+				   enum lnet_latency_op op, s64 ns)
+{
+	if (lpni)
+		lnet_record_latency(&lpni->lpni_latency[op], ns);
+	if (ni)
+		lnet_record_latency(&ni->ni_latency[op], ns);
+}
+
+/**
+ * lnet_record_response_latency() - Time a GET or acked PUT round trip.
+ * @msg: The REPLY or ACK message that completes the operation.
+ * @md: The originating MD, which carries the response tracker.
+ *
+ * The response tracker stamped the request send time, so the round trip is
+ * the delta to this completion. A tracker whose handle the monitor thread
+ * has invalidated belongs to an operation that already timed out, and is
+ * skipped so a late response is not counted.
+ */
+static void lnet_record_response_latency(struct lnet_msg *msg,
+					 struct lnet_libmd *md)
+{
+	struct lnet_rsp_tracker *rspt = md->md_rspt_ptr;
+	enum lnet_latency_op op;
+	s64 rtt_ns;
+
+	if (!rspt)
+		return;
+
+	if (msg->msg_ev.status != 0 || LNetMDHandleIsInvalid(rspt->rspt_mdh))
+		return;
+
+	if (msg->msg_ev.type == LNET_EVENT_REPLY)
+		op = LNET_LATENCY_GET_RTT;
+	else if (msg->msg_ev.type == LNET_EVENT_ACK)
+		op = LNET_LATENCY_PUT_ACK_RTT;
+	else
+		return;
+
+	rtt_ns = ktime_to_ns(ktime_sub(msg->msg_t_end, rspt->rspt_start));
+	lnet_record_op_latency(msg->msg_rxpeer, msg->msg_rxni, op, rtt_ns);
 }
 
 static void
@@ -234,6 +291,20 @@ incr_stats:
 		lnet_incr_stats(&msg->msg_txni->ni_stats,
 				msg->msg_type,
 				LNET_STATS_TYPE_SEND);
+
+	/* Record PUT egress latency: commit to local send completion at
+	 * LNET_EVENT_SEND. GET and acked PUT round trips are timed off their
+	 * response instead. Resends are skipped so retry wait does not inflate
+	 * the metric.
+	 */
+	if (ev->type == LNET_EVENT_SEND && msg->msg_type == LNET_MSG_PUT &&
+	    msg->msg_retry_count == 0) {
+		s64 lat_ns = ktime_to_ns(ktime_sub(msg->msg_t_end,
+						   msg->msg_t_start));
+
+		lnet_record_op_latency(msg->msg_txpeer, msg->msg_txni,
+				       LNET_LATENCY_PUT_EGRESS, lat_ns);
+	}
  out:
 	lnet_return_tx_credits_locked(msg);
 	msg->msg_tx_committed = 0;
@@ -990,8 +1061,10 @@ lnet_msg_detach_md(struct lnet_msg *msg, int status)
 	}
 
 	if (unlink || (md->md_refcount == 0 &&
-		       md->md_threshold == LNET_MD_THRESH_INF))
+		       md->md_threshold == LNET_MD_THRESH_INF)) {
+		lnet_record_response_latency(msg, md);
 		lnet_detach_rsp_tracker(md, cpt);
+	}
 
 	msg->msg_md = NULL;
 	if (unlink)
@@ -1120,6 +1193,11 @@ lnet_finalize(struct lnet_msg *msg, int status)
 		return;
 
 	msg->msg_ev.status = status;
+
+	/* lnet_finalize() is the single completion point for every message,
+	 * so it is where the latency window closes.
+	 */
+	msg->msg_t_end = ktime_get();
 
 	if (lnet_is_health_check(msg)) {
 		/*

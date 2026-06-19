@@ -5655,8 +5655,149 @@ static const struct ln_key_list local_ni_stats_list = {
 			.lkp_value	= "drop_count",
 			.lkp_data_type	= NLA_U32
 		},
+		[LNET_NET_LOCAL_NI_STATS_ATTR_PUT_EGRESS_SAMPLES] = {
+			.lkp_value	= "put_egress_samples",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_LOCAL_NI_STATS_ATTR_PUT_EGRESS_MIN_NSEC] = {
+			.lkp_value	= "put_egress_min_nsec",
+			.lkp_data_type	= NLA_U64
+		},
+		[LNET_NET_LOCAL_NI_STATS_ATTR_PUT_EGRESS_MAX_NSEC] = {
+			.lkp_value	= "put_egress_max_nsec",
+			.lkp_data_type	= NLA_U64
+		},
+		[LNET_NET_LOCAL_NI_STATS_ATTR_PUT_EGRESS_AVG_NSEC] = {
+			.lkp_value	= "put_egress_avg_nsec",
+			.lkp_data_type	= NLA_U64
+		},
+		[LNET_NET_LOCAL_NI_STATS_ATTR_GET_RTT_SAMPLES] = {
+			.lkp_value	= "get_rtt_samples",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_LOCAL_NI_STATS_ATTR_GET_RTT_MIN_NSEC] = {
+			.lkp_value	= "get_rtt_min_nsec",
+			.lkp_data_type	= NLA_U64
+		},
+		[LNET_NET_LOCAL_NI_STATS_ATTR_GET_RTT_MAX_NSEC] = {
+			.lkp_value	= "get_rtt_max_nsec",
+			.lkp_data_type	= NLA_U64
+		},
+		[LNET_NET_LOCAL_NI_STATS_ATTR_GET_RTT_AVG_NSEC] = {
+			.lkp_value	= "get_rtt_avg_nsec",
+			.lkp_data_type	= NLA_U64
+		},
+		[LNET_NET_LOCAL_NI_STATS_ATTR_PUT_ACK_SAMPLES] = {
+			.lkp_value	= "put_ack_samples",
+			.lkp_data_type	= NLA_U32
+		},
+		[LNET_NET_LOCAL_NI_STATS_ATTR_PUT_ACK_MIN_NSEC] = {
+			.lkp_value	= "put_ack_min_nsec",
+			.lkp_data_type	= NLA_U64
+		},
+		[LNET_NET_LOCAL_NI_STATS_ATTR_PUT_ACK_MAX_NSEC] = {
+			.lkp_value	= "put_ack_max_nsec",
+			.lkp_data_type	= NLA_U64
+		},
+		[LNET_NET_LOCAL_NI_STATS_ATTR_PUT_ACK_AVG_NSEC] = {
+			.lkp_value	= "put_ack_avg_nsec",
+			.lkp_data_type	= NLA_U64
+		},
 	},
 };
+
+/* Netlink attribute ids for one operation's latency fields, in
+ * enum lnet_latency_op order. The peer NI and local NI dumps share the
+ * shape under different attribute namespaces. Min, max and average are
+ * reported in nanoseconds so a sub-microsecond egress is not truncated to
+ * zero.
+ */
+struct lnet_nl_latency_keys {
+	int samples;
+	int min_nsec;
+	int max_nsec;
+	int avg_nsec;
+	int pad;
+};
+
+static const struct lnet_nl_latency_keys
+lnet_peer_ni_latency_keys[LNET_LATENCY_NR] = {
+	[LNET_LATENCY_PUT_EGRESS] = {
+		LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_EGRESS_SAMPLES,
+		LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_EGRESS_MIN_NSEC,
+		LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_EGRESS_MAX_NSEC,
+		LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_EGRESS_AVG_NSEC,
+		LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PAD,
+	},
+	[LNET_LATENCY_GET_RTT] = {
+		LNET_PEER_NI_LIST_STATS_COUNT_ATTR_GET_RTT_SAMPLES,
+		LNET_PEER_NI_LIST_STATS_COUNT_ATTR_GET_RTT_MIN_NSEC,
+		LNET_PEER_NI_LIST_STATS_COUNT_ATTR_GET_RTT_MAX_NSEC,
+		LNET_PEER_NI_LIST_STATS_COUNT_ATTR_GET_RTT_AVG_NSEC,
+		LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PAD,
+	},
+	[LNET_LATENCY_PUT_ACK_RTT] = {
+		LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_ACK_SAMPLES,
+		LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_ACK_MIN_NSEC,
+		LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_ACK_MAX_NSEC,
+		LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_ACK_AVG_NSEC,
+		LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PAD,
+	},
+};
+
+static const struct lnet_nl_latency_keys
+lnet_local_ni_latency_keys[LNET_LATENCY_NR] = {
+	[LNET_LATENCY_PUT_EGRESS] = {
+		LNET_NET_LOCAL_NI_STATS_ATTR_PUT_EGRESS_SAMPLES,
+		LNET_NET_LOCAL_NI_STATS_ATTR_PUT_EGRESS_MIN_NSEC,
+		LNET_NET_LOCAL_NI_STATS_ATTR_PUT_EGRESS_MAX_NSEC,
+		LNET_NET_LOCAL_NI_STATS_ATTR_PUT_EGRESS_AVG_NSEC,
+		LNET_NET_LOCAL_NI_STATS_ATTR_PAD,
+	},
+	[LNET_LATENCY_GET_RTT] = {
+		LNET_NET_LOCAL_NI_STATS_ATTR_GET_RTT_SAMPLES,
+		LNET_NET_LOCAL_NI_STATS_ATTR_GET_RTT_MIN_NSEC,
+		LNET_NET_LOCAL_NI_STATS_ATTR_GET_RTT_MAX_NSEC,
+		LNET_NET_LOCAL_NI_STATS_ATTR_GET_RTT_AVG_NSEC,
+		LNET_NET_LOCAL_NI_STATS_ATTR_PAD,
+	},
+	[LNET_LATENCY_PUT_ACK_RTT] = {
+		LNET_NET_LOCAL_NI_STATS_ATTR_PUT_ACK_SAMPLES,
+		LNET_NET_LOCAL_NI_STATS_ATTR_PUT_ACK_MIN_NSEC,
+		LNET_NET_LOCAL_NI_STATS_ATTR_PUT_ACK_MAX_NSEC,
+		LNET_NET_LOCAL_NI_STATS_ATTR_PUT_ACK_AVG_NSEC,
+		LNET_NET_LOCAL_NI_STATS_ATTR_PAD,
+	},
+};
+
+/**
+ * lnet_nl_put_latency() - Emit per-operation latency fields into a dump.
+ * @msg: Netlink skb with a "statistics" mapping open.
+ * @latency: The LNET_LATENCY_NR accumulators to report.
+ * @keys: Attribute ids to emit under, peer NI or local NI namespace.
+ *
+ * A zero sample count reports zeros rather than an unseeded min/max.
+ */
+static void lnet_nl_put_latency(struct sk_buff *msg,
+				struct lnet_latency_stats *latency,
+				const struct lnet_nl_latency_keys *keys)
+{
+	enum lnet_latency_op op;
+
+	for (op = 0; op < LNET_LATENCY_NR; op++) {
+		struct lnet_latency_summary sum;
+
+		lnet_latency_stats_summary(&latency[op], &sum);
+
+		nla_put_u32(msg, keys[op].samples, sum.lat_samples);
+		nla_put_u64_64bit(msg, keys[op].min_nsec, sum.lat_min_ns,
+				  keys[op].pad);
+		nla_put_u64_64bit(msg, keys[op].max_nsec, sum.lat_max_ns,
+				  keys[op].pad);
+		nla_put_u64_64bit(msg, keys[op].avg_nsec, sum.lat_avg_ns,
+				  keys[op].pad);
+	}
+}
 
 static const struct ln_key_list local_ni_msg_stats_list = {
 	.lkl_maxattr			= LNET_NET_LOCAL_NI_MSG_STATS_ATTR_MAX,
@@ -6030,6 +6171,8 @@ static int lnet_net_show_dump(struct sk_buff *msg,
 					    stats.iel_recv_count);
 				nla_put_u32(msg, LNET_NET_LOCAL_NI_STATS_ATTR_DROP_COUNT,
 					    stats.iel_drop_count);
+				lnet_nl_put_latency(msg, ni->ni_latency,
+						    lnet_local_ni_latency_keys);
 				nla_nest_end(msg, ni_stats);
 				nla_nest_end(msg, stats_attr);
 
@@ -7710,6 +7853,54 @@ static const struct ln_key_list lnet_peer_ni_list_stats_count = {
 			.lkp_value				= "drop_count",
 			.lkp_data_type				= NLA_U32,
 		},
+		[LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_EGRESS_SAMPLES] = {
+			.lkp_value		= "put_egress_samples",
+			.lkp_data_type		= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_EGRESS_MIN_NSEC] = {
+			.lkp_value		= "put_egress_min_nsec",
+			.lkp_data_type		= NLA_U64,
+		},
+		[LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_EGRESS_MAX_NSEC] = {
+			.lkp_value		= "put_egress_max_nsec",
+			.lkp_data_type		= NLA_U64,
+		},
+		[LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_EGRESS_AVG_NSEC] = {
+			.lkp_value		= "put_egress_avg_nsec",
+			.lkp_data_type		= NLA_U64,
+		},
+		[LNET_PEER_NI_LIST_STATS_COUNT_ATTR_GET_RTT_SAMPLES] = {
+			.lkp_value		= "get_rtt_samples",
+			.lkp_data_type		= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_STATS_COUNT_ATTR_GET_RTT_MIN_NSEC] = {
+			.lkp_value		= "get_rtt_min_nsec",
+			.lkp_data_type		= NLA_U64,
+		},
+		[LNET_PEER_NI_LIST_STATS_COUNT_ATTR_GET_RTT_MAX_NSEC] = {
+			.lkp_value		= "get_rtt_max_nsec",
+			.lkp_data_type		= NLA_U64,
+		},
+		[LNET_PEER_NI_LIST_STATS_COUNT_ATTR_GET_RTT_AVG_NSEC] = {
+			.lkp_value		= "get_rtt_avg_nsec",
+			.lkp_data_type		= NLA_U64,
+		},
+		[LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_ACK_SAMPLES] = {
+			.lkp_value		= "put_ack_samples",
+			.lkp_data_type		= NLA_U32,
+		},
+		[LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_ACK_MIN_NSEC] = {
+			.lkp_value		= "put_ack_min_nsec",
+			.lkp_data_type		= NLA_U64,
+		},
+		[LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_ACK_MAX_NSEC] = {
+			.lkp_value		= "put_ack_max_nsec",
+			.lkp_data_type		= NLA_U64,
+		},
+		[LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_ACK_AVG_NSEC] = {
+			.lkp_value		= "put_ack_avg_nsec",
+			.lkp_data_type		= NLA_U64,
+		},
 	},
 };
 
@@ -7947,6 +8138,8 @@ skip_state:
 				nla_put_u32(msg,
 					    LNET_PEER_NI_LIST_STATS_COUNT_ATTR_DROP_COUNT,
 					    stats.iel_drop_count);
+				lnet_nl_put_latency(msg, lpni->lpni_latency,
+						    lnet_peer_ni_latency_keys);
 				nla_nest_end(msg, ni_stats);
 				nla_nest_end(msg, stats_attr);
 

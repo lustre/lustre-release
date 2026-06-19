@@ -102,6 +102,8 @@ struct lnet_rsp_tracker {
 	struct lnet_nid rspt_next_hop_nid;
 	/* deadline of the REPLY/ACK */
 	ktime_t rspt_deadline;
+	/* when the tracked request was sent, for round-trip latency */
+	ktime_t rspt_start;
 	/* parent MD */
 	struct lnet_handle_md rspt_mdh;
 };
@@ -129,6 +131,10 @@ struct lnet_msg {
 	 * has not completed.
 	 */
 	ktime_t			msg_deadline;
+
+	/* Latency window: start stamped at commit, end at lnet_finalize(). */
+	ktime_t			msg_t_start;
+	ktime_t			msg_t_end;
 
 	/* The message health status. */
 	enum lnet_msg_hstatus	msg_health_status;
@@ -403,6 +409,37 @@ struct lnet_element_stats {
 	struct lnet_comm_count el_drop_stats;
 };
 
+/* The operations we time separately, since each answers a different
+ * question. PUT egress is the time to local send completion. The round
+ * trips are request to response and need the response tracker, so they are
+ * only recorded when lnet_response_tracking covers the operation.
+ */
+enum lnet_latency_op {
+	LNET_LATENCY_PUT_EGRESS,
+	LNET_LATENCY_GET_RTT,
+	LNET_LATENCY_PUT_ACK_RTT,
+	LNET_LATENCY_NR,
+};
+
+/* Per-peer-NI / per-NI operation latency accumulator. Self-initializing
+ * from zeroed memory so allocation and reset need no special handling: the
+ * first sample seeds lls_min_ns and lls_max_ns.
+ */
+struct lnet_latency_stats {
+	atomic_t	lls_samples;	/* timed completions */
+	atomic64_t	lls_sum_ns;	/* sum of latencies (ns) */
+	atomic64_t	lls_min_ns;	/* min latency (ns) */
+	atomic64_t	lls_max_ns;	/* max latency (ns) */
+};
+
+/* Reduced snapshot of a lnet_latency_stats accumulator for reporting. */
+struct lnet_latency_summary {
+	u32		lat_samples;
+	u64		lat_min_ns;
+	u64		lat_max_ns;
+	u64		lat_avg_ns;
+};
+
 struct lnet_health_local_stats {
 	atomic_t hlt_local_interrupt;
 	atomic_t hlt_local_dropped;
@@ -611,13 +648,38 @@ enum lnet_net_local_ni_intf_attrs {
  *						(NLA_U32)
  * @LNET_NET_LOCAL_NI_STATS_ATTR_DROP_COUNT:	Number of dropped messages
  *						(NLA_U32)
+ * @LNET_NET_LOCAL_NI_STATS_ATTR_PUT_EGRESS_SAMPLES: sample count
+ * @LNET_NET_LOCAL_NI_STATS_ATTR_PUT_EGRESS_MIN_NSEC: min (ns)
+ * @LNET_NET_LOCAL_NI_STATS_ATTR_PUT_EGRESS_MAX_NSEC: max (ns)
+ * @LNET_NET_LOCAL_NI_STATS_ATTR_PUT_EGRESS_AVG_NSEC: mean (ns)
+ * @LNET_NET_LOCAL_NI_STATS_ATTR_GET_RTT_SAMPLES: sample count
+ * @LNET_NET_LOCAL_NI_STATS_ATTR_GET_RTT_MIN_NSEC: min (ns)
+ * @LNET_NET_LOCAL_NI_STATS_ATTR_GET_RTT_MAX_NSEC: max (ns)
+ * @LNET_NET_LOCAL_NI_STATS_ATTR_GET_RTT_AVG_NSEC: mean (ns)
+ * @LNET_NET_LOCAL_NI_STATS_ATTR_PUT_ACK_SAMPLES: sample count
+ * @LNET_NET_LOCAL_NI_STATS_ATTR_PUT_ACK_MIN_NSEC: min (ns)
+ * @LNET_NET_LOCAL_NI_STATS_ATTR_PUT_ACK_MAX_NSEC: max (ns)
+ * @LNET_NET_LOCAL_NI_STATS_ATTR_PUT_ACK_AVG_NSEC: mean (ns)
  */
 enum lnet_net_local_ni_stats_attrs {
 	LNET_NET_LOCAL_NI_STATS_ATTR_UNSPEC = 0,
+	LNET_NET_LOCAL_NI_STATS_ATTR_PAD = LNET_NET_LOCAL_NI_STATS_ATTR_UNSPEC,
 
 	LNET_NET_LOCAL_NI_STATS_ATTR_SEND_COUNT,
 	LNET_NET_LOCAL_NI_STATS_ATTR_RECV_COUNT,
 	LNET_NET_LOCAL_NI_STATS_ATTR_DROP_COUNT,
+	LNET_NET_LOCAL_NI_STATS_ATTR_PUT_EGRESS_SAMPLES,
+	LNET_NET_LOCAL_NI_STATS_ATTR_PUT_EGRESS_MIN_NSEC,
+	LNET_NET_LOCAL_NI_STATS_ATTR_PUT_EGRESS_MAX_NSEC,
+	LNET_NET_LOCAL_NI_STATS_ATTR_PUT_EGRESS_AVG_NSEC,
+	LNET_NET_LOCAL_NI_STATS_ATTR_GET_RTT_SAMPLES,
+	LNET_NET_LOCAL_NI_STATS_ATTR_GET_RTT_MIN_NSEC,
+	LNET_NET_LOCAL_NI_STATS_ATTR_GET_RTT_MAX_NSEC,
+	LNET_NET_LOCAL_NI_STATS_ATTR_GET_RTT_AVG_NSEC,
+	LNET_NET_LOCAL_NI_STATS_ATTR_PUT_ACK_SAMPLES,
+	LNET_NET_LOCAL_NI_STATS_ATTR_PUT_ACK_MIN_NSEC,
+	LNET_NET_LOCAL_NI_STATS_ATTR_PUT_ACK_MAX_NSEC,
+	LNET_NET_LOCAL_NI_STATS_ATTR_PUT_ACK_AVG_NSEC,
 	__LNET_NET_LOCAL_NI_STATS_ATTR_MAX_PLUS_ONE,
 };
 
@@ -890,13 +952,39 @@ enum lnet_peer_ni_list_attr {
  *							for remote peer (NLA_U32)
  * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_DROP_COUNT:	Number of dropped packets
  *							for remote peer (NLA_U32)
+ * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_EGRESS_SAMPLES: sample count
+ * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_EGRESS_MIN_NSEC: min (ns)
+ * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_EGRESS_MAX_NSEC: max (ns)
+ * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_EGRESS_AVG_NSEC: mean (ns)
+ * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_GET_RTT_SAMPLES: sample count
+ * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_GET_RTT_MIN_NSEC: min (ns)
+ * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_GET_RTT_MAX_NSEC: max (ns)
+ * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_GET_RTT_AVG_NSEC: mean (ns)
+ * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_ACK_SAMPLES: sample count
+ * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_ACK_MIN_NSEC: min (ns)
+ * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_ACK_MAX_NSEC: max (ns)
+ * @LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_ACK_AVG_NSEC: mean (ns)
  */
 enum lnet_peer_ni_list_stats_count {
 	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_UNSPEC = 0,
+	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PAD =
+		LNET_PEER_NI_LIST_STATS_COUNT_ATTR_UNSPEC,
 
 	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_SEND_COUNT,
 	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_RECV_COUNT,
 	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_DROP_COUNT,
+	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_EGRESS_SAMPLES,
+	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_EGRESS_MIN_NSEC,
+	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_EGRESS_MAX_NSEC,
+	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_EGRESS_AVG_NSEC,
+	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_GET_RTT_SAMPLES,
+	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_GET_RTT_MIN_NSEC,
+	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_GET_RTT_MAX_NSEC,
+	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_GET_RTT_AVG_NSEC,
+	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_ACK_SAMPLES,
+	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_ACK_MIN_NSEC,
+	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_ACK_MAX_NSEC,
+	LNET_PEER_NI_LIST_STATS_COUNT_ATTR_PUT_ACK_AVG_NSEC,
 	__LNET_PEER_NI_LIST_STATS_COUNT_ATTR_MAX_PLUS_ONE,
 };
 
@@ -1260,6 +1348,8 @@ struct lnet_ni {
 	/* NI statistics */
 	struct lnet_element_stats ni_stats;
 	struct lnet_health_local_stats ni_hstats;
+	/* per-operation latency, indexed by enum lnet_latency_op */
+	struct lnet_latency_stats ni_latency[LNET_LATENCY_NR];
 
 	/* physical device CPT */
 	int			ni_dev_cpt;
@@ -1380,6 +1470,8 @@ struct lnet_peer_ni {
 	/* statistics kept on each peer NI */
 	struct lnet_element_stats lpni_stats;
 	struct lnet_health_remote_stats lpni_hstats;
+	/* per-operation latency, indexed by enum lnet_latency_op */
+	struct lnet_latency_stats lpni_latency[LNET_LATENCY_NR];
 	/* spin lock protecting credits and lpni_txq */
 	spinlock_t		lpni_lock;
 	/* # tx credits available */

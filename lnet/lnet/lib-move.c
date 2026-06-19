@@ -136,6 +136,62 @@ __u32 lnet_sum_stats(struct lnet_element_stats *stats,
 		atomic_read(&counts->co_hello_count));
 }
 
+/**
+ * lnet_record_latency() - Accumulate one operation-latency sample.
+ * @stats: Latency accumulator to update.
+ * @ns: Measured latency in nanoseconds; ignored unless positive.
+ *
+ * The min and max updates are not serialized against concurrent callers. A
+ * lost extreme under a race is acceptable for telemetry and saves a lock on
+ * the completion path.
+ *
+ * Context: Any context; takes no locks.
+ */
+void lnet_record_latency(struct lnet_latency_stats *stats, s64 ns)
+{
+	s64 cur;
+
+	if (ns <= 0)
+		return;
+
+	atomic64_add(ns, &stats->lls_sum_ns);
+	if (atomic_inc_return(&stats->lls_samples) == 1) {
+		atomic64_set(&stats->lls_min_ns, ns);
+		atomic64_set(&stats->lls_max_ns, ns);
+		return;
+	}
+
+	cur = atomic64_read(&stats->lls_min_ns);
+	if (ns < cur)
+		atomic64_set(&stats->lls_min_ns, ns);
+
+	cur = atomic64_read(&stats->lls_max_ns);
+	if (ns > cur)
+		atomic64_set(&stats->lls_max_ns, ns);
+}
+
+/**
+ * lnet_latency_stats_summary() - Reduce a latency accumulator to a snapshot.
+ * @stats: Latency accumulator to read.
+ * @out: Filled with the sample count and the min, max and mean in nanoseconds.
+ *
+ * With no samples recorded the extremes and mean read back as zero rather
+ * than the unseeded accumulator contents.
+ *
+ * Context: Any context; takes no locks.
+ */
+void lnet_latency_stats_summary(struct lnet_latency_stats *stats,
+				struct lnet_latency_summary *out)
+{
+	u32 samples = atomic_read(&stats->lls_samples);
+	u64 sum_ns = atomic64_read(&stats->lls_sum_ns);
+
+	out->lat_samples = samples;
+	out->lat_min_ns = samples ? atomic64_read(&stats->lls_min_ns) : 0;
+	out->lat_max_ns = samples ? atomic64_read(&stats->lls_max_ns) : 0;
+	out->lat_avg_ns = samples ? sum_ns / samples : 0;
+}
+
 static inline void assign_stats(struct lnet_ioctl_comm_count *msg_stats,
 				struct lnet_comm_count *counts)
 {
@@ -4925,6 +4981,7 @@ lnet_attach_rsp_tracker(struct lnet_rsp_tracker *rspt, int cpt,
 {
 	s64 timeout_ns;
 	struct lnet_rsp_tracker *local_rspt;
+	ktime_t now;
 
 	/*
 	 * MD has a refcount taken by message so it's not going away.
@@ -4934,6 +4991,7 @@ lnet_attach_rsp_tracker(struct lnet_rsp_tracker *rspt, int cpt,
 	 * added to the list.
 	 */
 
+	now = ktime_get();
 	lnet_res_lock(cpt);
 	local_rspt = md->md_rspt_ptr;
 	timeout_ns = lnet_transaction_timeout * NSEC_PER_SEC;
@@ -4949,9 +5007,10 @@ lnet_attach_rsp_tracker(struct lnet_rsp_tracker *rspt, int cpt,
 		rspt->rspt_cpt = cpt;
 		/* store the rspt so we can access it when we get the REPLY */
 		md->md_rspt_ptr = rspt;
+		rspt->rspt_start = now;
 		local_rspt = rspt;
 	}
-	local_rspt->rspt_deadline = ktime_add_ns(ktime_get(), timeout_ns);
+	local_rspt->rspt_deadline = ktime_add_ns(now, timeout_ns);
 
 	/*
 	 * add to the list of tracked responses. It's added to tail of the
