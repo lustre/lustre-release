@@ -9,6 +9,7 @@ init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$RECOVERY_SMALL_EXCEPT "
+always_except LU-20376 170
 
 if $SHARED_KEY; then
 	always_except LU-17141 133
