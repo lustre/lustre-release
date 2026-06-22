@@ -10,7 +10,7 @@ dkms-debs: debs_common
 	lversion=$$(echo $(VERSION) | tr '_' '-')
 	cversion=$$(sed -ne '1s/^lustre (\(.*\)-[0-9][0-9]*).*$$/\1/p' debian/changelog)
 	if [ "$$lversion" != "$$cversion" ]; then
-		echo -e "1i\nlustre ($$lversion-1) unstable; urgency=low\n\n  * Automated changelog entry update\n\n -- Brian J. Murrell <brian@interlinx.bc.ca>  $$(date -R)\n\n.\nwq" | ed debian/changelog
+		sed -i "1i lustre ($$lversion-1) unstable; urgency=low\n\n  * Automated changelog entry update\n\n -- Brian J. Murrell <brian@interlinx.bc.ca>  $$(date -R)\n" debian/changelog
 	fi
 	rm -rf debs
 	export DEB_BUILD_PROFILES="client"
@@ -19,6 +19,9 @@ dkms-debs: debs_common
 	if test "x$(systemdsystemunitdir)" != "x"; then
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} systemd"
 		export SYSTEMD_OPTIONS="--with-systemdsystemunitdir=$(systemdsystemunitdir)"
+	fi
+	if test "x$(DPKG_INT_O2IB)" != "x"; then
+		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} int_o2ib"
 	fi
 	echo "Enabled Build Profiles: $${DEB_BUILD_PROFILES}"
 	tmpprofiles=`tr ' ' ',' <<< $$DEB_BUILD_PROFILES`
