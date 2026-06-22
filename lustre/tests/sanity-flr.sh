@@ -250,12 +250,12 @@ verify_comp_attr_with_default() {
 		stripe-size)
 			opt="-S"
 			expected=$($LCTL get_param -n \
-				   lov.$FSNAME-clilov-*.stripesize)
+				   lov.$FSNAME-clilov-*.stripesize | head -n1)
 			;;
 		stripe-count)
 			opt="-c"
 			expected=$($LCTL get_param -n \
-				   lov.$FSNAME-clilov-*.stripecount)
+				   lov.$FSNAME-clilov-*.stripecount | head -n1)
 			[[ $expected = -1 ]] && expected=$OSTCOUNT
 			;;
 		*) error "invalid attribute $attr";;
