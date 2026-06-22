@@ -78,15 +78,16 @@ static inline bool ldlm_lock_reclaimable(struct ldlm_lock *lock)
 }
 
 /**
- * Callback function for revoking locks from certain resource.
+ * ldlm_reclaim_lock_cb() - Callback function for revoking locks from certain
+ *                          resource.
+ * @hs: ns_rs_hash
+ * @bd: current bucket of ns_rs_hash
+ * @hnode: hnode of the resource
+ * @arg: opaque data
  *
- * \param [in] hs	ns_rs_hash
- * \param [in] bd	current bucket of ns_rsh_hash
- * \param [in] hnode	hnode of the resource
- * \param [in] arg	opaque data
- *
- * \retval 0		continue the scan
- * \retval 1		stop the iteration
+ * Return:
+ * * %0 continue the scan
+ * * %1 stop the iteration
  */
 static int ldlm_reclaim_lock_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 				struct hlist_node *hnode, void *arg)
@@ -150,16 +151,14 @@ static int ldlm_reclaim_lock_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 }
 
 /**
- * Revoke locks from the resources of a namespace in a roundrobin
- * manner.
- *
- * \param[in] ns	namespace to do the lock revoke on
- * \param[in] count	count of lock to be revoked
- * \param[in] age	only revoke locks older than the 'age'
- * \param[in] skip	scan from the first lock on resource if the
- *			'skip' is false, otherwise, continue scan
- *			from the last scanned position
- * \param[out] count	count of lock still to be revoked
+ * ldlm_reclaim_res() - Revoke locks from the resources of a namespace in a
+ *                      roundrobin manner.
+ * @ns: namespace to do the lock revoke on
+ * @count: [in,out] count of locks to be revoked; on return, count of locks
+ * still to be revoked
+ * @age_ns: only revoke locks idle for longer than @age_ns nanoseconds
+ * @skip: false scans each hash bucket from its first resource, true resumes
+ * from the last scanned resource
  */
 static void ldlm_reclaim_res(struct ldlm_namespace *ns, int *count,
 			     s64 age_ns, bool skip)
@@ -231,9 +230,10 @@ static inline s64 ldlm_reclaim_age(void)
 }
 
 /**
- * Revoke certain amount of locks from all the server namespaces
- * in a roundrobin manner. Lock age is used to avoid reclaim on
- * the non-aged locks.
+ * ldlm_reclaim_ns() - Revoke certain amount of locks from all the server
+ *                     namespaces in a roundrobin manner.
+ *
+ * Lock age is used to avoid reclaim on the non-aged locks.
  */
 static void ldlm_reclaim_ns(void)
 {
@@ -303,13 +303,14 @@ void ldlm_reclaim_del(struct ldlm_lock *lock)
 }
 
 /**
- * Check on the total granted locks: return true if it reaches the
- * high watermark (ldlm_lock_limit), otherwise return false; It also
- * triggers lock reclaim if the low watermark (ldlm_reclaim_threshold)
+ * ldlm_reclaim_full() - Check on the total granted locks
+ *
+ * Also triggers lock reclaim if the low watermark (ldlm_reclaim_threshold)
  * is reached.
  *
- * \retval true		high watermark reached.
- * \retval false	high watermark not reached.
+ * Return:
+ * * %true high watermark (ldlm_lock_limit) reached.
+ * * %false high watermark not reached.
  */
 bool ldlm_reclaim_full(void)
 {
