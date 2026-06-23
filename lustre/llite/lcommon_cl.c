@@ -76,9 +76,9 @@ int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
 	if (attr->ia_valid & ATTR_SIZE) {
 		io->u.ci_setattr.sa_subtype = CL_SETATTR_TRUNC;
 		io->u.ci_setattr.sa_attr_uid =
-			from_kuid(&init_user_ns, current_uid());
+			from_kuid(&init_user_ns, inode->i_uid);
 		io->u.ci_setattr.sa_attr_gid =
-			from_kgid(&init_user_ns, current_gid());
+			from_kgid(&init_user_ns, inode->i_gid);
 		io->u.ci_setattr.sa_attr_projid = ll_i2info(inode)->lli_projid;
 	}
 again:

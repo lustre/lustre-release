@@ -10434,11 +10434,15 @@ test_75() {
 	local testdir_projid=42
 	local testfile_projid=43
 	local have_ost_punch_ids=false
+	local have_ost_punch_id_fix=false # LU-20420
 
 	# prior to 2.16.53 OST_PUNCH did not set OST IDs
 	(( $OST1_VERSION >= $(version_code 2.16.53) &&
 		$CLIENT_VERSION >= $(version_code 2.16.53) )) &&
 		have_ost_punch_ids=true
+
+	(( $CLIENT_VERSION >= $(version_code 2.17.54) )) &&
+		have_ost_punch_id_fix=true
 
 	[[ "$ost1_FSTYPE" == ldiskfs ]] ||
 		skip "ldiskfs only test (using debugfs)"
@@ -10467,10 +10471,19 @@ test_75() {
 		error "dd for file $tfile_write2 failed"
 
 	if $have_ost_punch_ids; then
-		# OST_PUNCH RPC (truncate)
+		local truncate_user=$ID0
+
 		$RUNAS_CMD -u $ID0 $LFS setstripe -c 1 -i 0 $tfile_trunc ||
 			error "setstripe for file $tfile_trunc failed"
-		$RUNAS_CMD -u $ID0 $TRUNCATE $tfile_trunc 1048576 ||
+
+		# OST_PUNCH RPC (truncate)
+		if $have_ost_punch_id_fix; then
+			truncate_user=$ID1
+			$RUNAS_CMD -u $ID0 chmod 666 $tfile_trunc ||
+				error "chmod failed for $tfile_trunc"
+		fi
+
+		$RUNAS_CMD -u $truncate_user $TRUNCATE $tfile_trunc 1048576 ||
 			error "truncate for file $tfile_trunc failed"
 	fi
 
