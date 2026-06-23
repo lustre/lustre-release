@@ -1532,7 +1532,7 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 	}
 
 	if (ll_i2info(inode)->lli_clob == NULL ||
-	    (inode_state_read(inode) & I_FREEING))
+	    (inode_state_read_once(inode) & I_FREEING))
 		RETURN(0);
 
 	/* for directio, it would call writepages() to evict cached pages

@@ -106,10 +106,10 @@ int mdc_set_lock_data(struct obd_export *exp, const struct lustre_handle *lockh,
 	    lock->l_resource->lr_lvb_inode != data) {
 		struct inode *old_inode = lock->l_resource->lr_lvb_inode;
 
-		LASSERTF(inode_state_read(old_inode) & I_FREEING,
+		LASSERTF(inode_state_read_once(old_inode) & I_FREEING,
 			 "Found existing inode %px/%lu/%u state %lu in lock: setting data to %px/%lu/%u\n",
 			 old_inode, old_inode->i_ino, old_inode->i_generation,
-			 (unsigned long)inode_state_read(old_inode),
+			 (unsigned long)inode_state_read_once(old_inode),
 			 new_inode, new_inode->i_ino, new_inode->i_generation);
 	}
 	lock->l_resource->lr_lvb_inode = new_inode;

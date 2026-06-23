@@ -155,7 +155,7 @@ int cl_file_inode_init(struct inode *inode, struct lustre_md *md)
 		 * unnecessary to perform lookup-alloc-lookup-insert, just
 		 * alloc and insert directly.
 		 */
-		if (!(inode_state_read(inode) & I_NEW)) {
+		if (!(inode_state_read_once(inode) & I_NEW)) {
 			result = -EIO;
 			CERROR("%s: unexpected not-NEW inode "DFID": rc = %d\n",
 			       ll_i2sbi(inode)->ll_fsname, PFID(fid), result);

@@ -3886,7 +3886,7 @@ static int __osd_create(struct osd_thread_info *info, struct osd_object *obj,
 	result = osd_create_type_f(dof->dof_type)(info, obj, attr, hint, dof,
 						  th);
 	if (likely(obj->oo_inode != NULL)) {
-		LASSERT(inode_state_read(obj->oo_inode) & I_NEW);
+		LASSERT(inode_state_read_once(obj->oo_inode) & I_NEW);
 
 		/*
 		 * Unlock the inode before attr initialization to avoid

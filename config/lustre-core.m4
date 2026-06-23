@@ -3551,6 +3551,8 @@ AC_DEFUN([LC_HAVE_INODE_STATE_READ],[
 	], [
 		AC_DEFINE([inode_state_read(inode)], [((inode)->i_state)],
 			  [inode_state_read() does not exist, provide one])
+		AC_DEFINE([inode_state_read_once(inode)], [((inode)->i_state)],
+			  [inode_state_read_once() does not exist, provide one])
 	])
 ]) # LC_HAVE_INODE_STATE_READ
 

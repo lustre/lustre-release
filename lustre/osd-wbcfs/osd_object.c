@@ -591,7 +591,7 @@ static int __osd_create(const struct lu_env *env, struct osd_object *obj,
 	result = osd_create_type_f(dof->dof_type)(env, obj, attr, hint, dof,
 						  th);
 	if (likely(obj->oo_inode && result == 0)) {
-		LASSERT(inode_state_read(obj->oo_inode) & I_NEW);
+		LASSERT(inode_state_read_once(obj->oo_inode) & I_NEW);
 
 		/*
 		 * Unlock the inode before attr initialization to avoid
