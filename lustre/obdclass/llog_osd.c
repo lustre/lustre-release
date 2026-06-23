@@ -1990,7 +1990,7 @@ static int llog_osd_destroy(const struct lu_env *env,
 	o = loghandle->lgh_obj;
 	LASSERT(o != NULL);
 
-	dt_write_lock(env, o, 0);
+	dt_write_lock(env, o, DT_TGT_CHILD);
 	if (!llog_osd_exist(loghandle))
 		GOTO(out_unlock, rc = 0);
 
@@ -1999,7 +1999,7 @@ static int llog_osd_destroy(const struct lu_env *env,
 		if (IS_ERR(llog_dir))
 			GOTO(out_unlock, rc = PTR_ERR(llog_dir));
 
-		dt_read_lock(env, llog_dir, 0);
+		dt_read_lock(env, llog_dir, DT_TGT_PARENT);
 		rc = dt_delete(env, llog_dir,
 			       (struct dt_key *)loghandle->lgh_name,
 			       th);
