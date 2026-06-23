@@ -146,8 +146,15 @@ AC_DEFUN([LB_CONFIG_MODULES], [
 AC_MSG_CHECKING([whether to build Linux kernel modules])
 AC_ARG_ENABLE([modules],
 	AS_HELP_STRING([--disable-modules],
-		[disable building of Lustre kernel modules]),
-	[ AC_DEFINE(HAVE_NATIVE_LINUX_CLIENT, 1, [support native Linux client])], [
+		[disable building of Lustre kernel modules (defaults to --enable-modules)]),
+	[
+		enable_modules="$enableval"
+
+		AS_IF([test "x$enable_modules" = xno], [
+			AC_DEFINE(HAVE_NATIVE_LINUX_CLIENT, 1,
+				[support native Linux client])
+		])
+	], [
 		LC_TARGET_SUPPORTED([enable_modules="yes"],
 				    [enable_modules="no"])
 	])
