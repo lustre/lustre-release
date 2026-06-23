@@ -1727,9 +1727,8 @@ int gss_kt_instantiate(struct key *key, struct key_preparsed_payload *prep)
 
 	/* At this point we are dealing with keys for root */
 	keyring = get_session_keyring(current_cred());
-	lockdep_off();
+
 	rc = key_link(keyring, key);
-	lockdep_on();
 	if (unlikely(rc))
 		CERROR("failed to link key %08x to keyring %08x: %d\n",
 		       key->serial, keyring->serial, rc);
