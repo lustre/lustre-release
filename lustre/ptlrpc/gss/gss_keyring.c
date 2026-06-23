@@ -616,13 +616,6 @@ static inline int user_is_root(struct ptlrpc_sec *sec, struct vfs_cred *vcred)
                 return 0;
 }
 
-/*
- * When lookup_user_key is available use the kernel API rather than directly
- * accessing the uid_keyring and session_keyring via the current process
- * credentials.
- */
-#ifdef HAVE_LOOKUP_USER_KEY
-
 #ifdef HAVE_KEY_NEED_UNLINK
 /* from Linux security/keys/internal.h: */
 #  ifndef KEY_LOOKUP_PARTIAL
@@ -661,22 +654,6 @@ static inline struct key *get_session_keyring(const struct cred *cred)
 {
 	return _user_key(KEY_SPEC_SESSION_KEYRING);
 }
-#else
-static inline struct key *get_user_session_keyring(const struct cred *cred)
-{
-	return key_get(cred->user->session_keyring);
-}
-
-static inline struct key *get_user_keyring(const struct cred *cred)
-{
-	return key_get(cred->user->uid_keyring);
-}
-
-static inline struct key *get_session_keyring(const struct cred *cred)
-{
-	return key_get(cred->session_keyring);
-}
-#endif
 
 /*
  * Get the appropriate destination keyring for the request.

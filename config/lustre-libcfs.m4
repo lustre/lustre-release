@@ -96,28 +96,6 @@ AC_DEFUN([LIBCFS_KOBJ_TYPE_DEFAULT_GROUPS],[
 ]) # LIBCFS_KOBJ_TYPE_DEFAULT_GROUPS
 
 #
-# LIBCFS_LOOKUP_USER_KEY
-#
-# kernel 5.3 commit 3cf5d076fb4d48979f382bc9452765bf8b79e740
-# signal: Remove task parameter from force_sig
-#
-AC_DEFUN([LIBCFS_SRC_LOOKUP_USER_KEY], [
-	LB2_LINUX_TEST_SRC([lookup_user_key_exported], [
-		#include <linux/key.h>
-		#include <linux/keyctl.h>
-	],[
-		lookup_user_key(KEY_SPEC_USER_KEYRING, 0, 0);
-	],[-Werror])
-])
-AC_DEFUN([LIBCFS_LOOKUP_USER_KEY], [
-	LB2_MSG_LINUX_TEST_RESULT([if lookup_user_key() is available],
-	[lookup_user_key_exported], [
-		AC_DEFINE(HAVE_LOOKUP_USER_KEY, 1,
-			[lookup_user_key() is available])
-	])
-]) # LIBCFS_LOOKUP_USER_KEY
-
-#
 # LIBCFS_CACHE_DETAIL_WRITERS
 #
 # kernel v5.3-rc2-1-g64a38e840ce5
@@ -912,7 +890,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	LIBCFS_SRC_KOBJ_TYPE_DEFAULT_GROUPS
 	LIBCFS_SRC_USER_UID_KEYRING
 	# 5.3
-	LIBCFS_SRC_LOOKUP_USER_KEY
 	LIBCFS_SRC_CACHE_DETAIL_WRITERS
 	# 5.4
 	LIBCFS_SRC_GENL_DUMPIT_INFO_FAMILY
@@ -966,7 +943,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	LIBCFS_KOBJ_TYPE_DEFAULT_GROUPS
 	LIBCFS_USER_UID_KEYRING
 	# 5.3
-	LIBCFS_LOOKUP_USER_KEY
 	LIBCFS_CACHE_DETAIL_WRITERS
 	# 5.4
 	LIBCFS_GENL_DUMPIT_INFO_FAMILY
@@ -1095,4 +1071,3 @@ AS_IF([test "x$enable_libpthread" = xyes], [
 ])
 AC_SUBST(PTHREAD_LIBS)
 ]) # LIBCFS_CONFIGURE
-
