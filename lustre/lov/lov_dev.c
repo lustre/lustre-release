@@ -471,9 +471,7 @@ static int lov_add_mdc_target(const struct lu_env *env, struct lu_device *d,
 			if ((strncmp(lmv_obd->obd_type->typ_name,
 				     LUSTRE_LMV_NAME,
 				     strlen(LUSTRE_LMV_NAME)) == 0)) {
-				spin_lock(&lmv_obd->obd_dev_lock);
 				class_incref(lmv_obd, "lov", ld);
-				spin_unlock(&lmv_obd->obd_dev_lock);
 				break;
 			}
 		}
