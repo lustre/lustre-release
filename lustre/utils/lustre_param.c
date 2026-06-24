@@ -127,7 +127,7 @@ static int sp_parse_param_value(int argc, char **argv, char **param,
 static char *format_param(const char *filename, struct stat *st,
 			  struct param_opts *popt)
 {
-	size_t suffix_len;
+	size_t param_len;
 	char *suffix = NULL;
 	char *param_name;
 	const char *tmp;
@@ -152,26 +152,19 @@ static char *format_param(const char *filename, struct stat *st,
 	else
 		tmp = filename;
 
-	/* Allocate return string */
-	param_name = strdup(tmp);
+	/* Allocate space for modified string to be returned */
+	param_len = strlen(tmp) + (popt->po_show_type && suffix ? 1 : 0);
+	param_name = malloc(param_len + 1);
 	if (!param_name)
 		return NULL;
-
+	strcpy(param_name, tmp);
 	/* replace '/' with '.' to match conf_param and sysctl */
 	for (p = strchr(param_name, '/'); p != NULL; p = strchr(p, '/'))
 		*p = '.';
 
 	/* Append the indicator to entries if needed. */
-	if (popt->po_show_type && suffix != NULL) {
-		suffix_len = strlen(suffix);
-
-		p = realloc(param_name, suffix_len + strlen(param_name) + 1);
-		if (p) {
-			param_name = p;
-			strncat(param_name, suffix,
-				strlen(param_name) + suffix_len);
-		}
-	}
+	if (popt->po_show_type && suffix)
+		strcat(param_name, suffix);
 
 	return param_name;
 }

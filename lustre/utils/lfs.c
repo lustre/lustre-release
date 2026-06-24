@@ -9036,8 +9036,6 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 	int fd;
 	int rc = 0;
 	int rc2;
-	int total_field_count = 0;
-	enum showdf_fields temp_fields;
 	bool show_headers;
 	bool only_summary;
 
@@ -9083,16 +9081,6 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 			field_order[field_count++] = SHOWDF_MNTDIR;
 			field_order[field_count++] = SHOWDF_STATE;
 		}
-	}
-
-	/* Count number of fields for header decision */
-	total_field_count = 0;
-	temp_fields = fields;
-
-	while (temp_fields) {
-		if (temp_fields & 1)
-			total_field_count++;
-		temp_fields >>= 1;
 	}
 
 	/* Print headers based on --output usage:

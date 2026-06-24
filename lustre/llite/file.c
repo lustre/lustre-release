@@ -685,11 +685,11 @@ void ll_dir_finish_open(struct inode *inode, struct ptlrpc_request *req)
 	unsigned int nfolios;
 	unsigned int rd_pgs;
 	unsigned int lu_pgs;
-	int 		is_hash64;
+	int is_hash64;
 	struct lu_dirpage *dp;
-	int 		rc;
+	int rc = 0;
 	unsigned long   offset;
-	__u64		hash;
+	__u64 hash;
 	gfp_t gfp;
 
 	ENTRY;

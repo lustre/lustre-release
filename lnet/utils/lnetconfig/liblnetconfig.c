@@ -3157,7 +3157,6 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 	char *pos;
 	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
 	bool exist = false, new_net = true;
-	int net_num = 0;
 	size_t buf_size = sizeof(*ni_data) + sizeof(*lnd) + sizeof(*stats);
 
 	buf = calloc(1, buf_size);
@@ -3226,7 +3225,6 @@ int lustre_lnet_show_net(char *nw, int detail, int seq_no,
 		if (rc_net != prev_net) {
 			prev_net = rc_net;
 			new_net = true;
-			net_num++;
 		}
 
 		if (new_net) {
