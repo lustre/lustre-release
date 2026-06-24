@@ -38,7 +38,7 @@ static spinlock_t jobid_hash_lock;
 char obd_jobid_var[JOBSTATS_JOBID_VAR_MAX_LEN + 1] = JOBSTATS_DISABLE;
 char obd_jobid_name[LUSTRE_JOBID_SIZE] = "%e.%u";
 
-/**
+/*
  * Structure to store a single PID->JobID mapping
  */
 struct jobid_pid_map {
@@ -917,7 +917,10 @@ static struct cfs_hash_ops jobid_hash_ops = {
 };
 
 /**
- * Generate the job identifier string for this process for tracking purposes.
+ * lustre_get_jobid() - Generate the job identifier string for this process for
+ *                      tracking purposes.
+ * @jobid: Buffer for jobid string [out]
+ * @joblen: length of @jobid
  *
  * Fill in @jobid string based on the value of obd_jobid_var:
  * JOBSTATS_DISABLE:      none
@@ -927,7 +930,7 @@ static struct cfs_hash_ops jobid_hash_ops = {
  *                            /sys/fs/lustre/jobid_this_session
  * anything else:         look up obd_jobid_var in the processes environment
  *
- * Return -ve error number, 0 on success.
+ * Return: %0 on success, %-errno on error
  */
 int lustre_get_jobid(char *jobid, size_t joblen)
 {
