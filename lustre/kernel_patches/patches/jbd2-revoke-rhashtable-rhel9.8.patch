@@ -1,0 +1,202 @@
+commit c3bb2b778d6b40a5cecb01993b55fcc107305b4a
+Author:     Alex Zhuravlev <bzzz@whamcloud.com>
+AuthorDate: Tue Oct 11 14:59:48 2022 +0300
+Commit:     Oleg Drokin <green@whamcloud.com>
+CommitDate: Wed Mar 8 03:27:42 2023 +0000
+
+    LU-14958 kernel: use rhashtable for revoke records in jbd2
+
+    resizable hashtable should improve journal replay time when
+    the latter has got million of revoke records. notice that
+    rhashtable is used during replay only as removal with list_del()
+    is less expensive and it's used a lot during regular processing.
+
+    before:
+    1048576 records - 95 seconds
+    2097152 records - 580 seconds
+
+    after:
+    1048576 records - 2 seconds
+    2097152 records - 3 seconds
+    4194304 records - 7 seconds
+
+    Signed-off-by: Alex Zhuravlev <bzzz@whamcloud.com>
+    Change-Id: I9a9e3801223fa9e36cbf6d2ef5ddbad5dff3e19d
+    Reviewed-on: https://review.whamcloud.com/c/fs/lustre-release/+/45122
+    Tested-by: jenkins <devops@whamcloud.com>
+    Tested-by: Maloo <maloo@whamcloud.com>
+    Reviewed-by: jsimmons <jsimmons@infradead.org>
+    Reviewed-by: Oleg Drokin <green@whamcloud.com>
+    Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+    Reviewed-by: Andrew Perepechko <andrew.perepechko@hpe.com>
+Index: linux-5.14.0-687.5.1.el9/fs/jbd2/recovery.c
+===================================================================
+--- linux-5.14.0-687.5.1.el9.orig/fs/jbd2/recovery.c
++++ linux-5.14.0-687.5.1.el9/fs/jbd2/recovery.c
+@@ -19,6 +19,7 @@
+ #include <linux/errno.h>
+ #include <linux/crc32.h>
+ #include <linux/blkdev.h>
++#include <linux/rhashtable.h>
+ #endif
+
+ /*
+@@ -289,6 +290,10 @@ int jbd2_journal_recover(journal_t *jour
+
+ 	memset(&info, 0, sizeof(info));
+
++	err = jbd2_journal_init_recovery_revoke(journal);
++	if (err)
++		return err;
++
+ 	/*
+ 	 * The journal superblock's s_start field (the current log head)
+ 	 * is always zero if, and only if, the journal was cleanly
+Index: linux-4.18.0-425.3.1.el8/fs/jbd2/revoke.c
+===================================================================
+--- linux-4.18.0-425.3.1.el8.orig/fs/jbd2/revoke.c
++++ linux-4.18.0-425.3.1.el8/fs/jbd2/revoke.c
+@@ -90,6 +90,7 @@
+ #include <linux/bio.h>
+ #include <linux/log2.h>
+ #include <linux/hash.h>
++#include <linux/rhashtable.h>
+ #endif
+
+ static struct kmem_cache *jbd2_revoke_record_cache;
+@@ -101,7 +102,10 @@ static struct kmem_cache *jbd2_revoke_ta
+
+ struct jbd2_revoke_record_s
+ {
+-	struct list_head  hash;
++	union {
++		struct list_head  hash;
++		struct rhash_head linkage;
++	};
+ 	tid_t		  sequence;	/* Used for recovery only */
+ 	unsigned long long	  blocknr;
+ };
+@@ -680,13 +684,21 @@ static void flush_descriptor(journal_t *
+  * single block.
+  */
+
++static const struct rhashtable_params revoke_rhashtable_params = {
++	.key_len     = sizeof(unsigned long long),
++	.key_offset  = offsetof(struct jbd2_revoke_record_s, blocknr),
++	.head_offset = offsetof(struct jbd2_revoke_record_s, linkage),
++};
++
+ int jbd2_journal_set_revoke(journal_t *journal,
+ 		       unsigned long long blocknr,
+ 		       tid_t sequence)
+ {
+-	struct jbd2_revoke_record_s *record;
++	struct jbd2_revoke_record_s *record, *old;
++	gfp_t gfp_mask = GFP_NOFS;
+
+-	record = find_revoke_record(journal, blocknr);
++	record = rhashtable_lookup(&journal->j_revoke_rhtable, &blocknr,
++				revoke_rhashtable_params);
+ 	if (record) {
+ 		/* If we have multiple occurrences, only record the
+ 		 * latest sequence number in the hashed record */
+@@ -694,7 +706,24 @@ int jbd2_journal_set_revoke(journal_t *j
+ 			record->sequence = sequence;
+ 		return 0;
+ 	}
+-	return insert_revoke_hash(journal, blocknr, sequence);
++
++	if (journal_oom_retry)
++		gfp_mask |= __GFP_NOFAIL;
++	record = kmem_cache_alloc(jbd2_revoke_record_cache, gfp_mask);
++	if (!record)
++		return -ENOMEM;
++
++	record->sequence = sequence;
++	record->blocknr = blocknr;
++	old = rhashtable_lookup_get_insert_fast(&journal->j_revoke_rhtable,
++				 &record->linkage, revoke_rhashtable_params);
++	if (IS_ERR(old)) {
++		kmem_cache_free(jbd2_revoke_record_cache, record);
++		return PTR_ERR(old);
++	}
++	BUG_ON(old != NULL);
++
++	return 0;
+ }
+
+ /*
+@@ -710,7 +739,8 @@ int jbd2_journal_test_revoke(journal_t *
+ {
+ 	struct jbd2_revoke_record_s *record;
+
+-	record = find_revoke_record(journal, blocknr);
++	record = rhashtable_lookup(&journal->j_revoke_rhtable, &blocknr,
++				revoke_rhashtable_params);
+ 	if (!record)
+ 		return 0;
+ 	if (tid_gt(sequence, record->sequence))
+@@ -718,6 +748,17 @@ int jbd2_journal_test_revoke(journal_t *
+ 	return 1;
+ }
+
++int jbd2_journal_init_recovery_revoke(journal_t *journal)
++{
++	return rhashtable_init(&journal->j_revoke_rhtable,
++				&revoke_rhashtable_params);
++}
++
++static void jbd2_revoke_record_free(void *ptr, void *arg)
++{
++	kmem_cache_free(jbd2_revoke_record_cache, ptr);
++}
++
+ /*
+  * Finally, once recovery is over, we need to clear the revoke table so
+  * that it can be reused by the running filesystem.
+@@ -725,19 +766,6 @@ int jbd2_journal_test_revoke(journal_t *
+
+ void jbd2_journal_clear_revoke(journal_t *journal)
+ {
+-	int i;
+-	struct list_head *hash_list;
+-	struct jbd2_revoke_record_s *record;
+-	struct jbd2_revoke_table_s *revoke;
+-
+-	revoke = journal->j_revoke;
+-
+-	for (i = 0; i < revoke->hash_size; i++) {
+-		hash_list = &revoke->hash_table[i];
+-		while (!list_empty(hash_list)) {
+-			record = (struct jbd2_revoke_record_s*) hash_list->next;
+-			list_del(&record->hash);
+-			kmem_cache_free(jbd2_revoke_record_cache, record);
+-		}
+-	}
++	rhashtable_free_and_destroy(&journal->j_revoke_rhtable,
++					jbd2_revoke_record_free, NULL);
+ }
+Index: linux-4.18.0-425.3.1.el8/include/linux/jbd2.h
+===================================================================
+--- linux-4.18.0-425.3.1.el8.orig/include/linux/jbd2.h
++++ linux-4.18.0-425.3.1.el8/include/linux/jbd2.h
+@@ -1084,6 +1084,11 @@ struct journal_s
+ 	struct jbd2_revoke_table_s *j_revoke_table[2];
+
+ 	/**
++	 * @j_revoke_rhtable:	rhashtable for revoke records during recovery
++	 */
++	struct rhashtable	j_revoke_rhtable;
++
++	/**
+ 	 * @j_wbuf: Array of bhs for jbd2_journal_commit_transaction.
+ 	 */
+ 	struct buffer_head	**j_wbuf;
+@@ -1508,6 +1513,7 @@ extern void	   jbd2_journal_write_revoke
+ /* Recovery revoke support */
+ extern int	jbd2_journal_set_revoke(journal_t *, unsigned long long, tid_t);
+ extern int	jbd2_journal_test_revoke(journal_t *, unsigned long long, tid_t);
++extern int	jbd2_journal_init_recovery_revoke(journal_t *);
+ extern void	jbd2_journal_clear_revoke(journal_t *);
+ extern void	jbd2_journal_switch_revoke_table(journal_t *journal);
+ extern void	jbd2_clear_buffer_revoked_flags(journal_t *journal);
