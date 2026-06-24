@@ -16963,7 +16963,7 @@ test_123h_base() {
 	$LCTL set_param llite.*.statahead_max=1024
 	$LCTL set_param llite.*.statahead_batch_max=1024
 	lctl get_param -n llite.*.statahead_stats
-	du -a $dir > /dev/null
+	sorted_readdir $dir > /dev/null || error "sorted_readdir $dir failed"
 	echo "Wait statahead thread (ll_sa_xxx) to exit..."
 	wait_update_facet client "pgrep ll_sa" "" 35 ||
 		error "ll_sa statahead thread does not quit in 35s"
@@ -17005,7 +17005,7 @@ test_123h() {
 	echo "Scan a directory with zeroed padding number regularized fname"
 	test_123h_base "000000..010000" 10000
 }
-run_test 123h "Verify statahead work with the fname pattern via du"
+run_test 123h "Verify statahead work with the fname pattern"
 
 test_123i_base() {
 	local fmt=$1
