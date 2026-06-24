@@ -1332,9 +1332,9 @@ failed:
 }
 
 /**
- * lmd_parse() - Parse mount line options
- * @options: string passed to the mount
- * @lmd: struct lustre_mount_data populated based on @options [out]
+ * lustre_parse_monolithic() - Parse mount line options
+ * @fc: FS context (all mount state & data)
+ * @lmd2_data: string passed to the mount
  *
  * e.g. mount -v -t lustre -o abort_recov uml1:uml2:/lustre-client /mnt/lustre
  * dev is passed as device=uml1:/lustre by mount.lustre_tgt
