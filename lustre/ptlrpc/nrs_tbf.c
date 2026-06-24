@@ -1290,7 +1290,7 @@ try_again:
 		goto out;
 
 	if (cli2 && !refcount_inc_not_zero(&cli2->tc_ref)) {
-		cli2 = nrs_tbf_lru_tryhit(head, cli);
+		cli2 = nrs_tbf_lru_tryhit(head, cli2);
 		if (!cli2) {
 			/* lost race -> retry */
 			rcu_read_unlock();
