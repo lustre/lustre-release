@@ -44,12 +44,18 @@ static struct {
 	struct socket		*pta_sock;
 	struct completion	pta_signal;
 	struct net		*pta_ns;
-	wait_queue_head_t	pta_waitq;
 	atomic_t		pta_ready;
 	void			(*pta_odata)(struct sock *s);
 } lnet_acceptor_state = {
 	.pta_shutdown = 1
 };
+
+/*
+ * Statically initialized so a listener socket's data_ready callback
+ * (lnet_acceptor_ready) can safely wake_up() it before the acceptor
+ * thread starts.
+ */
+static DECLARE_WAIT_QUEUE_HEAD(lnet_acceptor_waitq);
 
 extern void sock_def_readable(struct sock *sk);
 
@@ -141,7 +147,7 @@ static void lnet_acceptor_ready(struct sock *sk)
 	lnet_acceptor_state.pta_odata(sk);
 
 	atomic_set(&lnet_acceptor_state.pta_ready, 1);
-	wake_up_interruptible(&lnet_acceptor_state.pta_waitq);
+	wake_up_interruptible(&lnet_acceptor_waitq);
 }
 
 static int lnet_acceptor_add_socket(const char *iface, struct sockaddr *addr,
@@ -204,7 +210,7 @@ static int lnet_acceptor_add_socket(const char *iface, struct sockaddr *addr,
 
 
 	if (!lnet_acceptor_state.pta_shutdown)
-		wake_up(&lnet_acceptor_state.pta_waitq);
+		wake_up(&lnet_acceptor_waitq);
 	return 0;
 }
 
@@ -514,14 +520,12 @@ lnet_acceptor(void *arg)
 
 	LASSERT(lnet_acceptor_state.pta_sock == NULL);
 
-	init_waitqueue_head(&lnet_acceptor_state.pta_waitq);
-
 	/* set init status and unblock parent */
 	lnet_acceptor_state.pta_shutdown = rc;
 	complete(&lnet_acceptor_state.pta_signal);
 
 	while (!lnet_acceptor_state.pta_shutdown) {
-		wait_event_interruptible(lnet_acceptor_state.pta_waitq,
+		wait_event_interruptible(lnet_acceptor_waitq,
 				lnet_acceptor_state.pta_shutdown ||
 				atomic_read(&lnet_acceptor_state.pta_ready));
 
@@ -730,7 +734,7 @@ lnet_acceptor_stop(void)
 		return;
 
 	lnet_acceptor_state.pta_shutdown = 1;
-	wake_up(&lnet_acceptor_state.pta_waitq);
+	wake_up(&lnet_acceptor_waitq);
 
 	/* block until acceptor signals exit */
 	wait_for_completion(&lnet_acceptor_state.pta_signal);
