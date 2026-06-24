@@ -18,11 +18,11 @@
 #include <md_object.h>
 
 /**
- * Initialize new \a lma. Only fid is stored.
- *
- * \param lma - is the new LMA structure to be initialized
- * \param fid - is the FID of the object this LMA belongs to
- * \param incompat - features that MDS must understand to access object
+ * lustre_lma_init() - Initialize new @lma.
+ * @lma: is the new LMA structure to be initialized
+ * @fid: is the FID of the object this LMA belongs to
+ * @compat: featores that MDS can ignore
+ * @incompat: features that MDS must understand to access object
  */
 void lustre_lma_init(struct lustre_mdt_attrs *lma, const struct lu_fid *fid,
 		     __u32 compat, __u32 incompat)
@@ -40,9 +40,9 @@ void lustre_lma_init(struct lustre_mdt_attrs *lma, const struct lu_fid *fid,
 EXPORT_SYMBOL(lustre_lma_init);
 
 /**
- * Swab, if needed, LMA structure which is stored on-disk in little-endian order.
- *
- * \param lma - is a pointer to the LMA structure to be swabbed.
+ * lustre_lma_swab() - Swab, if needed, LMA structure which is stored on-disk
+ *                     in little-endian order.
+ * @lma: pointer to the LMA structure to be swabbed.
  */
 void lustre_lma_swab(struct lustre_mdt_attrs *lma)
 {
@@ -65,11 +65,12 @@ void lustre_loa_init(struct lustre_ost_attrs *loa, const struct lu_fid *fid,
 EXPORT_SYMBOL(lustre_loa_init);
 
 /**
- * Swab, if needed, LOA (for OST-object only) structure with LMA EA and PFID EA
- * combined together are stored on-disk in little-endian order.
+ * lustre_loa_swab() - Swab, if needed, LOA (for OST-object only) structure
+ *                     with LMA EA and PFID EA combined together are stored
+ *                     on-disk in little-endian order.
  *
- * \param[in] loa	- the pointer to the LOA structure to be swabbed.
- * \param[in] to_cpu	- to indicate swab for CPU order or not.
+ * @loa: the pointer to the LOA structure to be swabbed.
+ * @to_cpu: to indicate swab for CPU order or not.
  */
 void lustre_loa_swab(struct lustre_ost_attrs *loa, bool to_cpu)
 {
@@ -97,10 +98,9 @@ void lustre_loa_swab(struct lustre_ost_attrs *loa, bool to_cpu)
 EXPORT_SYMBOL(lustre_loa_swab);
 
 /**
- * Swab, if needed, SOM structure which is stored on-disk in little-endian
- * order.
- *
- * \param attrs - is a pointer to the SOM structure to be swabbed.
+ * lustre_som_swab() - Swab, if needed, SOM structure which is stored on-disk
+ *                     in little-endian order.
+ * @attrs: is a pointer to the SOM structure to be swabbed.
  */
 void lustre_som_swab(struct lustre_som_attrs *attrs)
 {
@@ -113,10 +113,9 @@ void lustre_som_swab(struct lustre_som_attrs *attrs)
 EXPORT_SYMBOL(lustre_som_swab);
 
 /**
- * Swab, if needed, HSM structure which is stored on-disk in little-endian
- * order.
- *
- * \param attrs - is a pointer to the HSM structure to be swabbed.
+ * lustre_hsm_swab() - Swab, if needed, HSM structure which is stored on-disk
+ *                     in little-endian order.
+ * @attrs: is a pointer to the HSM structure to be swabbed.
  */
 void lustre_hsm_swab(struct hsm_attrs *attrs)
 {
@@ -128,12 +127,15 @@ void lustre_hsm_swab(struct hsm_attrs *attrs)
 #endif
 }
 
-/*
- * Swab and extract HSM attributes from on-disk xattr.
+/**
+ * lustre_buf2hsm() - Swab and extract HSM attributes from on-disk xattr.
+ * @buf: is a buffer containing the on-disk HSM extended attribute.
+ * @rc: is the size of the HSM xattr stored in @buf
+ * @mh: the md_hsm structure where to extract HSM attributes.
  *
- * \param buf - is a buffer containing the on-disk HSM extended attribute.
- * \param rc  - is the HSM xattr stored in \a buf
- * \param mh  - is the md_hsm structure where to extract HSM attributes.
+ * Return:
+ * * %0 on success
+ * * %negative on failure
  */
 int lustre_buf2hsm(void *buf, int rc, struct md_hsm *mh)
 {
@@ -162,11 +164,10 @@ int lustre_buf2hsm(void *buf, int rc, struct md_hsm *mh)
 }
 EXPORT_SYMBOL(lustre_buf2hsm);
 
-/*
- * Pack HSM attributes.
- *
- * \param buf - is the output buffer where to pack the on-disk HSM xattr.
- * \param mh  - is the md_hsm structure to pack.
+/**
+ * lustre_hsm2buf() - Pack HSM attributes.
+ * @buf: is the output buffer where to pack the on-disk HSM xattr.
+ * @mh: is the md_hsm structure to pack.
  */
 void lustre_hsm2buf(void *buf, const struct md_hsm *mh)
 {
