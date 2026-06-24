@@ -5240,6 +5240,7 @@ static loff_t ll_lseek(struct file *file, loff_t offset, int whence)
 	__u16 refcheck;
 	int rc;
 	loff_t retval;
+	bool glimpsed = false;
 
 	ENTRY;
 	env = cl_env_get(&refcheck);
@@ -5255,19 +5256,36 @@ static loff_t ll_lseek(struct file *file, loff_t offset, int whence)
 	lsio->ls_whence = whence;
 	lsio->ls_result = -ENXIO;
 
-	do {
-		rc = cl_io_init(env, io, CIT_LSEEK, io->ci_obj);
-		if (!rc) {
-			struct vvp_io *vio = vvp_env_io(env);
+again:
+	rc = cl_io_init(env, io, CIT_LSEEK, io->ci_obj);
+	if (!rc) {
+		struct vvp_io *vio = vvp_env_io(env);
 
-			vio->vui_fd = file->private_data;
-			rc = cl_io_loop(env, io);
-		} else {
-			rc = io->ci_result;
+		/*
+		 * Parity lseek derives ci_parity_eof from i_size, but
+		 * its locks cover parity stripes only and cannot refresh
+		 * data size - glimpse once and re-init so mirror init
+		 * recomputes ci_parity_eof from a current i_size.
+		 */
+		if (io->ci_parity_io && !glimpsed) {
+			cl_io_fini(env, io);
+			rc = ll_glimpse_size(inode);
+			if (rc != 0) {
+				cl_env_put(env, &refcheck);
+				RETURN(rc);
+			}
+			glimpsed = true;
+			goto again;
 		}
-		retval = rc ? : lsio->ls_result;
-		cl_io_fini(env, io);
-	} while (unlikely(io->ci_need_restart));
+		vio->vui_fd = file->private_data;
+		rc = cl_io_loop(env, io);
+	} else {
+		rc = io->ci_result;
+	}
+	retval = rc ? : lsio->ls_result;
+	cl_io_fini(env, io);
+	if (unlikely(io->ci_need_restart))
+		goto again;
 
 	cl_env_put(env, &refcheck);
 

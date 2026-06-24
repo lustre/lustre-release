@@ -706,9 +706,10 @@ static int lov_io_mirror_init(const struct lu_env *env, struct lov_io *lio,
 		if (lre->lre_foreign)
 			continue;
 
-		/* skip parity mirrors for read IOs unless designated */
+		/* skip parity for read/fault/lseek unless designated */
 		if (lre->lre_parity &&
-		    (io->ci_type == CIT_READ || io->ci_type == CIT_FAULT) &&
+		    (io->ci_type == CIT_READ || io->ci_type == CIT_FAULT ||
+		     io->ci_type == CIT_LSEEK) &&
 		    !io->ci_designated_mirror) {
 			skipped_parity = true;
 			continue;
@@ -735,7 +736,7 @@ static int lov_io_mirror_init(const struct lu_env *env, struct lov_io *lio,
 	if (i == comp->lo_mirror_count) {
 		/* If we only skipped parity mirrors, return EINVAL */
 		if (skipped_parity) {
-			CERROR(DFID": only parity mirrors available for read I/O at %llu\n",
+			CERROR(DFID": only parity mirrors available at %llu\n",
 			       PFID(lu_object_fid(lov2lu(obj))), lio->lis_pos);
 			RETURN(-EINVAL);
 		}

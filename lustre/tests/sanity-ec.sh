@@ -328,6 +328,25 @@ identify_ec_mirrors() {
 	done
 }
 
+#
+# lseek on a designated mirror; compare result to @expected.
+# Usage: check_mirror_lseek <-l|-d> <file> <mirror_id> <offset> <expected>
+#
+check_mirror_lseek() {
+	local opt=$1
+	local file=$2
+	local mirror_id=$3
+	local offset=$4
+	local expected=$5
+	local got
+
+	got=$($LUSTRE/tests/lseek_test $opt $offset -m $mirror_id $file 2>&1) ||
+		error "mirror lseek $opt at $offset on mirror $mirror_id failed: $got"
+
+	(( got == expected )) ||
+		error "mirror $mirror_id lseek $opt at $offset: $expected != $got"
+}
+
 test_1a() {
 	enable_ec
 	local tf=$DIR/$tfile
@@ -2705,11 +2724,12 @@ test_12c() {
 	local parity_mirror_id=$($LFS getstripe $tf |
 		grep -B1 "lcme_flags.*parity" |
 		grep "lcme_mirror_id" | awk '{print $2}')
-	# expect_zeros: no = parity data present, yes = punched (all zeros)
-	check_parity_read $tf $parity_mirror_id 0 no
-	check_parity_read $tf $parity_mirror_id $ec_set_size yes
-	check_parity_read $tf $parity_mirror_id $((2 * ec_set_size)) yes
-	check_parity_read $tf $parity_mirror_id $((3 * ec_set_size)) no
+	# Parity: [0, ec_set_size) and [3*ec_set_size, ...) have data;
+	# [ec_set_size, 3*ec_set_size) is holed for stripe sets 1 and 2.
+	check_mirror_lseek -d $tf $parity_mirror_id 0 0
+	check_mirror_lseek -l $tf $parity_mirror_id 0 $ec_set_size
+	check_mirror_lseek -d $tf $parity_mirror_id $ec_set_size \
+		$((3 * ec_set_size))
 
 	$LFS mirror verify $tf || error "mirror verify failed after resync"
 }
@@ -2756,10 +2776,18 @@ test_12d() {
 	local parity_mirror_id=$($LFS getstripe $tf |
 		grep -B1 "lcme_flags.*parity" |
 		grep "lcme_mirror_id" | awk '{print $2}')
-	# expect_zeros: no = parity data present, yes = punched (all zeros)
-	check_parity_read $tf $parity_mirror_id 0 no
-	check_parity_read $tf $parity_mirror_id $ec_raidset_size yes
-	check_parity_read $tf $parity_mirror_id $((2 * ec_raidset_size)) no
+	# Parity: [0, ec_raidset_size) and [2*ec_raidset_size, ...) have data;
+	# [ec_raidset_size, 2*ec_raidset_size) is holed for raidset 1.
+	# osd-zfs has no hole-punch, so resync zero-fills that range and
+	# SEEK_HOLE/DATA no longer match true sparseness; mirror verify
+	# already accepts hole-or-zero content (LU-20435). Drop the zfs
+	# guard once osd-zfs hole-punch is implemented.
+	if [[ "$ost1_FSTYPE" != "zfs" ]]; then
+		check_mirror_lseek -d $tf $parity_mirror_id 0 0
+		check_mirror_lseek -l $tf $parity_mirror_id 0 $ec_raidset_size
+		check_mirror_lseek -d $tf $parity_mirror_id $ec_raidset_size \
+			$((2 * ec_raidset_size))
+	fi
 
 	$LFS mirror verify $tf || error "mirror verify failed after resync"
 }
@@ -2794,8 +2822,8 @@ test_12e() {
 		grep -B1 "lcme_flags.*parity" |
 		grep "lcme_mirror_id" | awk '{print $2}')
 
-	check_parity_read $tf $parity_mirror_id 0 no
-	check_parity_read $tf $parity_mirror_id $stripe_size yes
+	check_mirror_lseek -d $tf $parity_mirror_id 0 0
+	check_mirror_lseek -l $tf $parity_mirror_id 0 $stripe_size
 
 	# Punch data0 [4k, 16k) and data1 [8k, 20k); overlap is [8k, 16k).
 	local fallocate_out
@@ -2813,9 +2841,10 @@ test_12e() {
 		error "stale component after resync following punch"
 
 	# Parity: [0, 8k) and [16k, ...) have data; [8k, 16k) is a hole.
-	check_parity_read $tf $parity_mirror_id 0 no
-	check_parity_read $tf $parity_mirror_id $((8 * 1024)) yes
-	check_parity_read $tf $parity_mirror_id $((16 * 1024)) no
+	check_mirror_lseek -d $tf $parity_mirror_id 0 0
+	check_mirror_lseek -l $tf $parity_mirror_id 0 $((8 * 1024))
+	check_mirror_lseek -d $tf $parity_mirror_id $((8 * 1024)) \
+		$((16 * 1024))
 
 	$LFS mirror verify $tf || error "mirror verify failed after punch resync"
 }
@@ -2848,8 +2877,17 @@ test_12f() {
 		grep -B1 "lcme_flags.*parity" |
 		grep "lcme_mirror_id" | awk '{print $2}')
 
-	check_parity_read $tf $parity_mirror_id 0 no
-	check_parity_read $tf $parity_mirror_id $parity_len yes
+	# osd-zfs has no hole-punch, so resync zero-fills the whole parity
+	# stripe [0, stripe_size) before writing [0, 4k); SEEK_HOLE then
+	# reports stripe_size instead of 4k. Keep SEEK_DATA checks (incl.
+	# past i_size) and rely on mirror verify for hole-or-zero (LU-20435).
+	# Drop the zfs guard once osd-zfs hole-punch is implemented.
+	check_mirror_lseek -d $tf $parity_mirror_id 0 0
+	if [[ "$ost1_FSTYPE" != "zfs" ]]; then
+		check_mirror_lseek -l $tf $parity_mirror_id 0 $parity_len
+	fi
+	# SEEK_DATA from i_size: exercises skipping the i_size fast-fail
+	check_mirror_lseek -d $tf $parity_mirror_id $write_len $write_len
 
 	$LFS mirror verify $tf || error "mirror verify failed after resync"
 }

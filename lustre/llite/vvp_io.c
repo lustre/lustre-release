@@ -1886,17 +1886,21 @@ static int vvp_io_lseek_start(const struct lu_env *env,
 {
 	struct cl_io *io = ios->cis_io;
 	struct inode *inode = vvp_object_inode(io->ci_obj);
-	__u64 start = io->u.ci_lseek.ls_start;
+	struct cl_lseek_io *lsio = &io->u.ci_lseek;
+	loff_t eof;
 
 	inode_lock(inode);
 	inode_dio_wait(inode);
 
-	/* At the moment we have DLM lock so just update inode
-	 * to know the file size.
+	/*
+	 * Merge attrs under DLM locks. Data lseek uses i_size (refreshed
+	 * from stripe LVBs). Designated parity lseek uses ci_parity_eof
+	 * from lov_io_mirror_init() after glimpse of data size.
 	 */
 	ll_merge_attr(env, inode);
-	if (start >= i_size_read(inode)) {
-		io->u.ci_lseek.ls_result = -ENXIO;
+	eof = io->ci_parity_io ? io->ci_parity_eof : i_size_read(inode);
+	if (lsio->ls_start >= eof) {
+		lsio->ls_result = -ENXIO;
 		return -ENXIO;
 	}
 	return 0;
@@ -1907,8 +1911,10 @@ static void vvp_io_lseek_end(const struct lu_env *env,
 {
 	struct cl_io *io = ios->cis_io;
 	struct inode *inode = vvp_object_inode(io->ci_obj);
+	loff_t eof;
 
-	if (io->u.ci_lseek.ls_result > i_size_read(inode))
+	eof = (io->ci_parity_io) ? io->ci_parity_eof : i_size_read(inode);
+	if (io->u.ci_lseek.ls_result > eof)
 		io->u.ci_lseek.ls_result = -ENXIO;
 
 	inode_unlock(inode);

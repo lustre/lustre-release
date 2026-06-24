@@ -131,6 +131,7 @@ flocks_test_LDADD = $(LIBLUSTREAPI) $(PTHREAD_LIBS)
 createmany_LDADD=$(LIBLUSTREAPI)
 create_foreign_dir_LDADD = $(LIBLUSTREAPI)
 check_fallocate_LDADD = $(LIBLUSTREAPI)
+lseek_test_LDADD = $(LIBLUSTREAPI)
 fsx_LDADD = $(LIBLUSTREAPI)
 test_parity_read_LDADD = $(LIBLUSTREAPI)
 checkfiemap_LDADD = -lpthread
