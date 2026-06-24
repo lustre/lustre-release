@@ -3,7 +3,7 @@ TBD Whamcloud
        * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
          for currently supported client and server kernel versions.
        * Server primary kernels built and tested during release cycle:
-         6.12.0-124.56.1.el10 (RHEL 10.1)
+         6.12.0-124.56.1.el10 (RHEL10.1)
          5.14.0-687.17.1.el9  (RHEL9.8)
          5.14.0-611.55.1.el9  (RHEL9.7)
          4.18.0-553.137.1.el8 (RHEL8.10)
@@ -38,7 +38,8 @@ TBD Whamcloud
          5.10.0-153.19.0.95.oe2203sp2 (openEuler 22.03 LTS SP2)
        * ldiskfs needs an ldiskfs patch series for that kernel, ZFS does not
        * Client primary kernels built and tested during release cycle:
-         6.12.0-124.56.1.el10 (RHEL 10.1)
+         6.12.0-211.26.1.el10 (RHEL10.2)
+         6.12.0-124.56.1.el10 (RHEL10.1)
          6.12.0-55.43.1.el10  (RHEL10.0)
          5.14.0-687.17.1.el9  (RHEL9.8)
          5.14.0-611.55.1.el9  (RHEL9.7)

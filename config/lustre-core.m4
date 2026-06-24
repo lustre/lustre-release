@@ -4511,6 +4511,7 @@ AC_DEFUN([LC_CONFIG_FILES],
 [AC_CONFIG_FILES([
 lustre/conf/Makefile
 lustre/conf/resource/Makefile
+lustre/kernel_patches/targets/6.12-rhel10.2.target
 lustre/kernel_patches/targets/6.12-rhel10.1.target
 lustre/kernel_patches/targets/6.12-rhel10.0.target
 lustre/kernel_patches/targets/5.14-rhel9.8.target
