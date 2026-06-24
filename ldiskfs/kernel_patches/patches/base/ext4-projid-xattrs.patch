@@ -242,7 +242,7 @@ Index: linux-4.18.0-348.2.1.el8_5/fs/ext4/xattr.c
 +
 +			handle = ext4_journal_start(inode, EXT4_HT_INODE, 1);
 +			if (IS_ERR(handle))
-+				error = PTR_ERR(handle);
++				return PTR_ERR(handle);
 +			att_val &= EXT4_FL_USER_MODIFIABLE;
 +			EXT4_I(inode)->i_flags |= att_val;
 +			error = ext4_mark_inode_dirty(handle, inode);
