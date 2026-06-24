@@ -6499,6 +6499,58 @@ EOF
 }
 run_test 450 "Check import of multiple interfaces"
 
+# Sum a latency statistics field across every NI in a show output.
+sum_lat_field() {
+	local output="$1"
+	awk -v key="$2:" '$1 == key { sum += $2 } END { print sum + 0 }' \
+		<<< "$output"
+}
+
+test_475() {
+	local nid out samples max i
+
+	reinit_dlc || return $?
+	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
+
+	nid=$($LCTL list_nids | head -n 1)
+	[[ -n $nid ]] || error "No local NID"
+
+	# Latency stats are on by default. Start from a known-zero baseline.
+	do_lnetctl stats reset || error "stats reset failed"
+
+	# Pinging ourselves drives a GET round trip on the local NI and the
+	# self peer NI, so get_rtt should accumulate samples on both.
+	for i in $(seq 1 10); do
+		do_lnetctl ping $nid > /dev/null || error "ping $nid failed"
+	done
+
+	out=$($LNETCTL peer show -v 4 --nid $nid)
+	samples=$(sum_lat_field "$out" get_rtt_samples)
+	max=$(sum_lat_field "$out" get_rtt_max_nsec)
+	((samples > 0)) ||
+		error "peer NI get_rtt_samples is $samples, expected > 0"
+	((max > 0)) ||
+		error "peer NI get_rtt_max_nsec is $max, expected > 0"
+
+	out=$($LNETCTL net show -v 4)
+	samples=$(sum_lat_field "$out" get_rtt_samples)
+	((samples > 0)) ||
+		error "local NI get_rtt_samples is $samples, expected > 0"
+
+	do_lnetctl stats reset || error "stats reset failed"
+
+	out=$($LNETCTL peer show -v 4 --nid $nid)
+	samples=$(sum_lat_field "$out" get_rtt_samples)
+	((samples == 0)) ||
+		error "peer NI get_rtt_samples is $samples after reset"
+
+	out=$($LNETCTL net show -v 4)
+	samples=$(sum_lat_field "$out" get_rtt_samples)
+	((samples == 0)) ||
+		error "local NI get_rtt_samples is $samples after reset"
+}
+run_test 475 "per-operation latency stats populate and reset"
+
 test_500() {
 	reinit_dlc || return $?
 

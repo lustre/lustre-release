@@ -1099,6 +1099,60 @@ avoid_reset:
 	lnet_net_unlock(LNET_LOCK_EX);
 }
 
+static void
+lnet_obj_stats_reset(struct lnet_element_stats *es,
+		     struct lnet_latency_stats *lat)
+{
+	int op;
+
+	lnet_reset_element_stats(es);
+	for (op = 0; op < LNET_LATENCY_NR; op++)
+		lnet_latency_stats_reset(&lat[op]);
+}
+
+/**
+ * lnet_iface_stats_reset() - Zero per-NI and per-peer-NI statistics.
+ *
+ * The global counters aside, the send, receive and drop counts and the
+ * latency accumulators are kept on each local NI and peer NI and otherwise
+ * only clear when the interface or peer is torn down. Clear them here so a
+ * "lnetctl stats reset" gives those figures a fresh start too. Concurrent
+ * data-path updates race benignly; the values are telemetry.
+ */
+static void
+lnet_iface_stats_reset(void)
+{
+	struct lnet_peer_table *ptable;
+	struct lnet_peer_ni *lpni;
+	struct lnet_peer *lp;
+	struct lnet_net *net;
+	struct lnet_ni *ni;
+	int lncpt, cpt;
+
+	lnet_net_lock(LNET_LOCK_EX);
+	if (the_lnet.ln_state != LNET_STATE_RUNNING)
+		goto out_net_unlock;
+
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list)
+		list_for_each_entry(ni, &net->net_ni_list, ni_netlist)
+			lnet_obj_stats_reset(&ni->ni_stats, ni->ni_latency);
+
+	lncpt = cfs_percpt_number(the_lnet.ln_peer_tables);
+	for (cpt = 0; cpt < lncpt; cpt++) {
+		ptable = the_lnet.ln_peer_tables[cpt];
+		list_for_each_entry(lp, &ptable->pt_peer_list, lp_peer_list) {
+			lpni = NULL;
+			while ((lpni = lnet_get_next_peer_ni_locked(lp, NULL,
+								    lpni)))
+				lnet_obj_stats_reset(&lpni->lpni_stats,
+						     lpni->lpni_latency);
+		}
+	}
+
+out_net_unlock:
+	lnet_net_unlock(LNET_LOCK_EX);
+}
+
 static char *
 lnet_res_type2str(int type)
 {
@@ -4679,6 +4733,7 @@ LNetCtl(unsigned int cmd, void *arg)
 	{
 		mutex_lock(&the_lnet.ln_api_mutex);
 		lnet_counters_reset();
+		lnet_iface_stats_reset();
 		mutex_unlock(&the_lnet.ln_api_mutex);
 		return 0;
 	}

@@ -138,6 +138,26 @@ __u32 lnet_sum_stats(struct lnet_element_stats *stats,
 		atomic_read(&counts->co_hello_count));
 }
 
+static void lnet_comm_count_reset(struct lnet_comm_count *counts)
+{
+	atomic_set(&counts->co_get_count, 0);
+	atomic_set(&counts->co_put_count, 0);
+	atomic_set(&counts->co_reply_count, 0);
+	atomic_set(&counts->co_ack_count, 0);
+	atomic_set(&counts->co_hello_count, 0);
+}
+
+/**
+ * lnet_reset_element_stats() - Zero the send, receive and drop counts.
+ * @stats: Element statistics to clear.
+ */
+void lnet_reset_element_stats(struct lnet_element_stats *stats)
+{
+	lnet_comm_count_reset(&stats->el_send_stats);
+	lnet_comm_count_reset(&stats->el_recv_stats);
+	lnet_comm_count_reset(&stats->el_drop_stats);
+}
+
 /**
  * lnet_record_latency() - Accumulate one operation-latency sample.
  * @stats: Latency accumulator to update.
@@ -192,6 +212,21 @@ void lnet_latency_stats_summary(struct lnet_latency_stats *stats,
 	out->lat_min_ns = samples ? atomic64_read(&stats->lls_min_ns) : 0;
 	out->lat_max_ns = samples ? atomic64_read(&stats->lls_max_ns) : 0;
 	out->lat_avg_ns = samples ? sum_ns / samples : 0;
+}
+
+/**
+ * lnet_latency_stats_reset() - Clear a latency accumulator.
+ * @stats: Latency accumulator to zero.
+ *
+ * Returns the accumulator to its initial state, so the next sample seeds
+ * the extremes afresh.
+ */
+void lnet_latency_stats_reset(struct lnet_latency_stats *stats)
+{
+	atomic_set(&stats->lls_samples, 0);
+	atomic64_set(&stats->lls_sum_ns, 0);
+	atomic64_set(&stats->lls_min_ns, 0);
+	atomic64_set(&stats->lls_max_ns, 0);
 }
 
 static inline void assign_stats(struct lnet_ioctl_comm_count *msg_stats,

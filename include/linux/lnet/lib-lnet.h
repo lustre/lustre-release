@@ -1256,6 +1256,8 @@ __u32 lnet_sum_stats(struct lnet_element_stats *stats,
 void lnet_record_latency(struct lnet_latency_stats *stats, s64 ns);
 void lnet_latency_stats_summary(struct lnet_latency_stats *stats,
 				struct lnet_latency_summary *out);
+void lnet_latency_stats_reset(struct lnet_latency_stats *stats);
+void lnet_reset_element_stats(struct lnet_element_stats *stats);
 
 void lnet_usr_translate_stats(struct lnet_ioctl_element_msg_stats *msg_stats,
 			      struct lnet_element_stats *stats);
