@@ -20156,6 +20156,22 @@ test_154d() {
 }
 run_test 154d "Verify open file fid"
 
+test_154db() {
+	[[ "$mds1_FSTYPE" == "ldiskfs" ]] || skip_env "ldiskfs only test"
+
+	local td=$DIR/$tdir
+	test_mkdir -c1 -i0 $td || error "can't mkdir"
+	stack_trap "rm -rf $td || true"
+	createmany -o $td/f 100 || error "can't createmany"
+	ls -l $td >&/dev/null || error "can't ls"
+	do_facet $SINGLEMDS \
+		"dmesg | awk '/test.*154db/{p=1}{if(p==1){print}}'" |
+		grep "unexpected packed fid size" &&
+		error "no fids in dir entries"
+	return 0
+}
+run_test 154db "fid is stored in dir entries"
+
 test_154e()
 {
 	[[ $MDS1_VERSION -lt $(version_code 2.6.50) ]] &&
