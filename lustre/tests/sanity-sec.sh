@@ -6638,7 +6638,7 @@ test_54() {
 	# server local client incompatible with SSK keys installed
 	if [ "$SHARED_KEY" != true ]; then
 		mount_mds_client
-		stack_trap umount_mds_client EXIT
+		stack_trap "umount_mds_client || true" EXIT
 		do_facet $SINGLEMDS touch $DIR2/$tdir/newfile
 		mdsscrambledfile=$(do_facet $SINGLEMDS find $testdir2/ \
 					-maxdepth 1 -type f | head -n1)
@@ -6660,6 +6660,7 @@ test_54() {
 		do_facet $SINGLEMDS mrename "$mdsscrambledfile" $testdir2/fB &&
 			error "mrename $mdsscrambledfile should fail on MDS"
 		do_facet $SINGLEMDS rm -f $DIR2/$tdir/newfile
+		umount_mds_client
 	fi
 
 	echo mypass | $RUNAS fscrypt unlock --verbose $testdir ||
@@ -6728,7 +6729,8 @@ test_54() {
 	mount_client $MOUNT ${MOUNT_OPTS} || error "remount failed (2)"
 	export FILESET=""
 	wait_ssk
-	ls -laR $MOUNT
+	ls -laR $MOUNT || error "ls -laR $MOUNT failed (1)"
+	ls -l $MOUNT/.fscrypt || error "cannot see .fscrypt in subdir mount"
 	fid2=$(path2fid $MOUNT/.fscrypt)
 	echo "With FILESET $tdir/vault, .fscrypt FID is $fid2"
 	[ "$fid1" == "$fid2" ] || error "fid1 $fid1 != fid2 $fid2 (1)"
@@ -6740,6 +6742,13 @@ test_54() {
 
 	ls -laR $MOUNT
 	[ $(cat $MOUNT/encfile) == "abc" ] || error "cat encfile failed"
+
+	# check .fscrypt directory is present, and mount dir can be locked
+	ls -l $MOUNT/.fscrypt || error "cannot see .fscrypt after unlock"
+	$RUNAS fscrypt lock $MOUNT || error "fscrypt lock $MOUNT failed"
+	ls -laR $MOUNT || error "ls -laR $MOUNT failed (2)"
+	$RUNAS cat $MOUNT/encfile &&
+		error "reading encfile should fail after lock"
 
 	# remount client without subdir mount
 	umount_client $MOUNT || error "umount $MOUNT failed (3)"

@@ -680,7 +680,9 @@ static void evict_dentries_for_decrypted_inodes(struct llcrypt_master_key *mk)
 static int check_for_busy_inodes(struct super_block *sb,
 				 struct llcrypt_master_key *mk)
 {
-	struct list_head *pos;
+	struct inode *root_inode = sb->s_root ? d_inode(sb->s_root) : NULL;
+	struct inode *busy_inode = NULL;
+	struct llcrypt_info *ci;
 	size_t busy_count = 0;
 	unsigned long ino;
 	struct dentry *dentry;
@@ -689,23 +691,36 @@ static int check_for_busy_inodes(struct super_block *sb,
 
 	spin_lock(&mk->mk_decrypted_inodes_lock);
 
-	list_for_each(pos, &mk->mk_decrypted_inodes)
+	/*
+	 * On a subdirectory mount whose root is the encrypted directory, the
+	 * mount root inode is pinned by sb->s_root for the lifetime of the
+	 * mount and can never be evicted while mounted. So it must not be
+	 * counted as a busy (still open) file - otherwise 'fscrypt lock' on
+	 * such a mount would always fail with -EBUSY.
+	 * Every other inode unlocked with this key is evicted as usual, so no
+	 * file contents remain accessible; the limitation is that the names of
+	 * the entries directly below the mount root stay readable in clear
+	 * until the filesystem is unmounted.
+	 */
+	list_for_each_entry(ci, &mk->mk_decrypted_inodes, ci_master_key_link) {
+		if (ci->ci_inode == root_inode) {
+			llcrypt_warn(root_inode,
+				     "mount root inode cannot be evicted while mounted, names of the entries directly below it remain readable until umount");
+			continue;
+		}
+		if (!busy_inode)
+			busy_inode = ci->ci_inode;
 		busy_count++;
+	}
 
 	if (busy_count == 0) {
 		spin_unlock(&mk->mk_decrypted_inodes_lock);
 		return 0;
 	}
 
-	{
-		/* select an example file to show for debugging purposes */
-		struct inode *inode =
-			list_first_entry(&mk->mk_decrypted_inodes,
-					 struct llcrypt_info,
-					 ci_master_key_link)->ci_inode;
-		ino = inode->i_ino;
-		dentry = d_find_alias(inode);
-	}
+	/* select an example file to show for debugging purposes */
+	ino = busy_inode->i_ino;
+	dentry = d_find_alias(busy_inode);
 	spin_unlock(&mk->mk_decrypted_inodes_lock);
 
 	if (dentry) {

@@ -263,6 +263,44 @@ out_free:
 }
 
 /**
+ * ll_setup_plaintext_name() - handle names that bypass llcrypt
+ * @dir: the directory the name belongs to
+ * @iname: the filename being looked up
+ * @fname: the filename information to be filled in
+ *
+ * Some names must be passed to the server as-is instead of being encrypted:
+ * - volatile names, which matter for server side, so that migration or
+ *   mirroring without the encryption key works;
+ * - the ".fscrypt" directory, which lives at the real fs root with a plaintext
+ *   name. On a subdir mount of an encrypted directory it is presented through
+ *   the lu_root_fid redirect (see ll_prep_md_op_data()), and it must be
+ *   resolved by its plaintext name even once the mounted directory's
+ *   encryption key is available: otherwise llcrypt would encrypt the
+ *   ".fscrypt" name and it would become unreachable (e.g. 'fscrypt
+ *   lock/unlock' failing with -ENOENT) after the first unlock.
+ *
+ *  Return:
+ * * %true: @fname has been filled in with the plaintext name
+ * * %false: @iname has to go through llcrypt
+ */
+static bool ll_setup_plaintext_name(struct inode *dir,
+				    const struct qstr *iname,
+				    struct llcrypt_name *fname)
+{
+	if (likely(!filename_is_volatile(iname->name, iname->len, NULL)) &&
+	    likely(!(is_root_inode(dir) &&
+		     iname->len == strlen(dot_fscrypt_name) &&
+		     strncmp(iname->name, dot_fscrypt_name, iname->len) == 0)))
+		return false;
+
+	memset(fname, 0, sizeof(struct llcrypt_name));
+	fname->disk_name.name = (unsigned char *)iname->name;
+	fname->disk_name.len = iname->len;
+
+	return true;
+}
+
+/**
  * ll_prepare_lookup() - overlay to __llcrypt_prepare_lookup
  * @dir: the directory that will be searched
  * @de: the dentry contain the user-provided filename being searched for
@@ -308,12 +346,7 @@ int ll_prepare_lookup(struct inode *dir, struct dentry *de,
 		fid->f_oid = 0;
 		fid->f_ver = 0;
 	}
-	if (unlikely(filename_is_volatile(iname.name,
-					  iname.len, NULL))) {
-		/* keep volatile name as-is, matters for server side */
-		memset(fname, 0, sizeof(struct llcrypt_name));
-		fname->disk_name.name = (unsigned char *)iname.name;
-		fname->disk_name.len = iname.len;
+	if (ll_setup_plaintext_name(dir, &iname, fname)) {
 		rc = 0;
 	} else {
 		/* We should use __llcrypt_prepare_lookup() but Lustre handles
@@ -332,27 +365,12 @@ int ll_prepare_lookup(struct inode *dir, struct dentry *de,
 			spin_unlock(&de->d_lock);
 		}
 	}
-	if (rc == -ENOENT) {
-		if (((is_root_inode(dir) &&
-		     iname.len == strlen(dot_fscrypt_name) &&
-		     strncmp(iname.name, dot_fscrypt_name, iname.len) == 0) ||
-		     (!llcrypt_has_encryption_key(dir) &&
-		      unlikely(filename_is_volatile(iname.name,
-						    iname.len, NULL))))) {
-			/* In case of subdir mount of an encrypted directory,
-			 * we allow lookup of /.fscrypt directory.
-			 */
-			/* For purpose of migration or mirroring without enc key
-			 * we allow lookup of volatile file without enc context.
-			 */
-			memset(fname, 0, sizeof(struct llcrypt_name));
-			fname->disk_name.name = (unsigned char *)iname.name;
-			fname->disk_name.len = iname.len;
-			rc = 0;
-		} else if (!llcrypt_has_encryption_key(dir)) {
-			rc = -ENOKEY;
-		}
-	}
+	/* Without the key, a name that is not a valid no-key encoding cannot
+	 * be resolved; report it as such. The /.fscrypt and volatile names are
+	 * already handled as plaintext above, regardless of key availability.
+	 */
+	if (rc == -ENOENT && !llcrypt_has_encryption_key(dir))
+		rc = -ENOKEY;
 	if (rc)
 		return rc;
 
@@ -366,6 +384,8 @@ int ll_prepare_lookup(struct inode *dir, struct dentry *de,
  * @lookup: 1 if we're allowed to proceed without the key because it's
  *	->lookup() or we're finding the dir_entry for deletion; 0 if we cannot
  *	proceed without the key because we're going to create the dir_entry.
+ *	@lookup is not taken into account for the volatile and ".fscrypt"
+ *	names, always handled as plaintext, see ll_setup_plaintext_name().
  * @fname: the filename information to be filled in
  * @fid: fid retrieved from user-provided filename
  *
@@ -411,37 +431,16 @@ int ll_setup_filename(struct inode *dir, const struct qstr *iname,
 		fid->f_oid = 0;
 		fid->f_ver = 0;
 	}
-	if (unlikely(filename_is_volatile(iname->name,
-					  iname->len, NULL))) {
-		/* keep volatile name as-is, matters for server side */
-		memset(fname, 0, sizeof(struct llcrypt_name));
-		fname->disk_name.name = (unsigned char *)iname->name;
-		fname->disk_name.len = iname->len;
+	if (ll_setup_plaintext_name(dir, iname, fname))
 		rc = 0;
-	} else {
+	else
 		rc = llcrypt_setup_filename(dir, &dname, lookup, fname);
-	}
-	if (rc == -ENOENT && lookup) {
-		if (((is_root_inode(dir) &&
-		     iname->len == strlen(dot_fscrypt_name) &&
-		     strncmp(iname->name, dot_fscrypt_name, iname->len) == 0) ||
-		     (!llcrypt_has_encryption_key(dir) &&
-		      unlikely(filename_is_volatile(iname->name,
-						    iname->len, NULL))))) {
-			/* In case of subdir mount of an encrypted directory,
-			 * we allow lookup of /.fscrypt directory.
-			 */
-			/* For purpose of migration or mirroring without enc key
-			 * we allow lookup of volatile file without enc context.
-			 */
-			memset(fname, 0, sizeof(struct llcrypt_name));
-			fname->disk_name.name = (unsigned char *)iname->name;
-			fname->disk_name.len = iname->len;
-			rc = 0;
-		} else if (!llcrypt_has_encryption_key(dir)) {
-			rc = -ENOKEY;
-		}
-	}
+	/* Without the key, a name that is not a valid no-key encoding cannot
+	 * be resolved; report it as such. The /.fscrypt and volatile names are
+	 * already handled as plaintext above, regardless of key availability.
+	 */
+	if (rc == -ENOENT && lookup && !llcrypt_has_encryption_key(dir))
+		rc = -ENOKEY;
 	if (rc)
 		return rc;
 
