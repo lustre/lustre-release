@@ -1752,23 +1752,6 @@ out_close:
 }
 EXPORT_SYMBOL(llog_validate);
 
-/* Get size of llog */
-__u64 llog_size(const struct lu_env *env, struct llog_handle *llh)
-{
-	int rc;
-	struct lu_attr la;
-
-	rc = llh->lgh_obj->do_ops->do_attr_get(env, llh->lgh_obj, &la);
-	if (rc) {
-		CERROR("%s: attr_get failed for "DFID": rc = %d\n",
-		       loghandle2name(llh), PLOGID(&llh->lgh_id), rc);
-		return 0;
-	}
-
-	return la.la_size;
-}
-EXPORT_SYMBOL(llog_size);
-
 /* set llog ctime to current, and set LLOG_F_RM_ON_ERR|LLOG_F_MAX_AGE flag in
  * log header. It will be reclaimed when expired (UPDATE_LOG_MAX_AGE old).
  */

@@ -16,6 +16,14 @@
 
 #include <lustre_log.h>
 
+/**
+ * lockdep markers for nested struct llog_handle::lgh_lock locking.
+ */
+enum {
+	LLOGH_CAT,
+	LLOGH_LOG,
+};
+
 struct llog_process_info {
 	struct llog_handle	*lpi_loghandle;
 	llog_cb_t		 lpi_cb;
@@ -56,26 +64,30 @@ void llog_info_fini(void);
 
 struct llog_handle *llog_handle_get(struct llog_handle *loghandle);
 int llog_handle_put(const struct lu_env *env, struct llog_handle *loghandle);
+int class_config_dump_handler(const struct lu_env *env,
+			      struct llog_handle *handle,
+			      struct llog_rec_hdr *rec, void *data);
+#ifdef CONFIG_LUSTRE_FS_SERVER
 int llog_cat_id2handle(const struct lu_env *env, struct llog_handle *cathandle,
 		       struct llog_handle **res, struct llog_logid *logid);
 void llog_get_marker_cfg_flags(struct llog_rec_hdr *rec,
 			       unsigned int *cfg_flags);
-int class_config_dump_handler(const struct lu_env *env,
-			      struct llog_handle *handle,
-			      struct llog_rec_hdr *rec, void *data);
 int class_config_yaml_output(struct llog_rec_hdr *rec, char *buf, int size,
 			     unsigned int *cfg_flags, bool raw);
-int llog_process_or_fork(const struct lu_env *env,
-			 struct llog_handle *loghandle,
-			 llog_cb_t cb, void *data, void *catdata, bool fork);
+int llog_cat_process_common(const struct lu_env *env,
+			    struct llog_handle *cat_llh,
+			    struct llog_rec_hdr *rec,
+			    struct llog_handle **llhp);
 int llog_cat_cleanup(const struct lu_env *env, struct llog_handle *cathandle,
 		     struct llog_handle *loghandle, int index);
+#endif
+int llog_verify_record(const struct llog_handle *llh, struct llog_rec_hdr *rec);
 
 static inline struct llog_rec_hdr *llog_rec_hdr_next(struct llog_rec_hdr *rec)
 {
 	return (struct llog_rec_hdr *)((char *)rec + rec->lrh_len);
 }
-int llog_verify_record(const struct llog_handle *llh, struct llog_rec_hdr *rec);
+
 static inline char *loghandle2name(const struct llog_handle *lgh)
 {
 	return lgh->lgh_ctxt->loc_obd->obd_name;

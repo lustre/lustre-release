@@ -2152,6 +2152,7 @@ parse_out:
 }
 EXPORT_SYMBOL(class_config_parse_llog);
 
+#ifdef CONFIG_LUSTRE_FS_SERVER
 /*
  * Get marker cfg_flag
  */
@@ -2336,6 +2337,7 @@ out_overflow:
 
 	return rc;
 }
+#endif /* CONFIG_LUSTRE_FS_SERVER */
 
 /*
  * parse config record and output dump in supplied buffer.
