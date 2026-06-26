@@ -675,6 +675,9 @@ AS_IF([test "x$enable_utils" = xyes], [
 	LC_OPENSSL_GETSEPOL
 	LC_CONFIG_GETSEPOL
 	LC_FID2PATH_ANON_UNION
+	AS_IF([test x$enable_modules = xno], [
+		LC_CONFIG_GSS
+	])
 ])
 AS_IF([test "x$enable_tests" = xyes], [
 	LC_HAVE_LIBAIO

@@ -265,9 +265,11 @@ AC_ARG_ENABLE([gss_keyring],
 			enable_gss_keyring="$enable_gss"])])
 AC_MSG_RESULT([$enable_gss_keyring])
 AS_IF([test "x$enable_gss_keyring" != xno], [
-	LB_CHECK_CONFIG_IM([KEYS], [], [
-		gss_keyring_conf_test="fail"
-		AC_MSG_WARN([GSS keyring backend requires that CONFIG_KEYS be enabled in your kernel.])])
+	AS_IF([test x$enable_modules != xno], [
+		LB_CHECK_CONFIG_IM([KEYS], [], [
+			gss_keyring_conf_test="fail"
+			AC_MSG_WARN([GSS keyring backend requires that CONFIG_KEYS be enabled in your kernel.])])
+	])
 
 	AC_CHECK_LIB([keyutils], [keyctl_search], [], [
 		gss_keyring_conf_test="fail"
@@ -352,9 +354,11 @@ AC_SUBST(TEST_DIR)
 AS_IF([test "x$enable_gss" != xno], [
 	LC_CONFIG_GSS_KEYRING
 
-	sunrpc_required=$enable_gss
-	LC_CONFIG_SUNRPC
-	sunrpc_required="no"
+	AS_IF([test x$enable_modules != xno], [
+		sunrpc_required=$enable_gss
+		LC_CONFIG_SUNRPC
+		sunrpc_required="no"
+	])
 
 	require_krb5=$enable_gss
 	AC_KERBEROS_V5

@@ -2418,6 +2418,7 @@ free_reply:
 	return rc == 1 ? 0 : rc;
 }
 
+#ifdef HAVE_KFILND
 static int kfi_intflist2cxi(struct list_head *nw_intflist)
 {
 	struct lnet_dlc_intf_descr *intf;
@@ -2433,6 +2434,7 @@ static int kfi_intflist2cxi(struct list_head *nw_intflist)
 	}
 	return LUSTRE_CFG_RC_NO_ERR;
 }
+#endif
 
 static int jt_add_ni(int argc, char **argv)
 {
