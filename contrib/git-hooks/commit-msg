@@ -17,6 +17,7 @@ init() {
 	readonly ORIGINAL="$1"
 	readonly REVISED="$(mktemp "$ORIGINAL.XXXXXX")"
 	readonly SAVE="$(basename $ORIGINAL).$(date +%Y%m%d.%H%M%S)"
+	readonly ASSISTED="Assisted-by:"
 	readonly BUILD_PARAMS="Build-Parameters:"
 	readonly CHANGEID="Change-Id:"
 	readonly COVERITY="CoverityID:"
@@ -152,6 +153,15 @@ function do_fixes() {
 		error "invalid $FIXES hash, want '<10hex> (\"summary line\")'"
 	[[ "$LINE" =~ \ \(\".*\"\) ]] ||
 		error "invalid $FIXES summary, want '<10hex> (\"summary line\")'"
+}
+
+# Assisted-by uses an AGENT_NAME:MODEL_VERSION value
+#
+function do_assisted() {
+	ck_wrapup
+	# Assisted-by: AGENT_NAME:MODEL_VERSION [TOOL1] [TOOL2]
+	[[ "${LINE#*: }" =~ [^[:space:]]:[^[:space:]] ]] ||
+		error "invalid $ASSISTED, want 'AGENT_NAME:MODEL_VERSION [TOOL...]'"
 }
 
 # All "emails" lines specify a person and email address
@@ -314,6 +324,7 @@ exec 3< "$ORIGINAL" 4> "$REVISED" || exit 1
 while IFS= read -u3 LINE; do
 	((NUM += 1))
 	case "$LINE" in
+	$ASSISTED* )		do_assisted ;;
 	$BUILD_PARAMS* )	do_buildparams ;;
 	$CHANGEID* )		do_changeid ;;
 	$COVERITY* )		do_coverity ;;
