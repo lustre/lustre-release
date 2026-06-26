@@ -45,7 +45,7 @@
  * @LNET_CMD_PEER_FAIL:		command to fail LNet peers
  * @LNET_CMD_DBG_RECOV:		command to print recovery queues
  * @LNET_CMD_FAULT:		command to inject LNet message failures
- * @LNET_CMD_STATS:		command to dump global LNet traffic counters
+ * @LNET_CMD_STATS:		command to show and reset LNet statistics
  */
 enum lnet_commands {
 	LNET_CMD_UNSPEC		= 0,

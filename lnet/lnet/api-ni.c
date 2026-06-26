@@ -10517,6 +10517,55 @@ static int lnet_stats_show_dump(struct sk_buff *msg,
 	RETURN(0);
 }
 
+static int lnet_stats_cmd(struct sk_buff *skb, struct genl_info *info)
+{
+	struct nlmsghdr *nlh = nlmsg_hdr(skb);
+	struct genlmsghdr *gnlh = nlmsg_data(nlh);
+	struct nlattr *params = genlmsg_data(gnlh);
+	struct netlink_ext_ack *extack = info->extack;
+	int msg_len, rem, rc = 0;
+	struct nlattr *entry;
+	bool reset = false;
+
+	ENTRY;
+	msg_len = genlmsg_len(gnlh);
+	if (!msg_len) {
+		GENL_SET_ERR_MSG(info, "no configuration");
+		RETURN(-ENOMSG);
+	}
+
+	if (!(nla_type(params) & LN_SCALAR_ATTR_LIST)) {
+		GENL_SET_ERR_MSG(info, "invalid configuration");
+		RETURN(-EINVAL);
+	}
+
+	nla_for_each_attr(entry, params, msg_len, rem) {
+		u64 tmp;
+
+		if (nla_type(entry) != LN_SCALAR_ATTR_VALUE)
+			continue;
+
+		if (nla_strcmp(entry, "reset") == 0) {
+			rc = nla_extract_val(&entry, &rem,
+					     LN_SCALAR_ATTR_INT_VALUE,
+					     &tmp, sizeof(tmp), extack);
+			if (rc < 0)
+				GOTO(report_error, rc);
+			reset = tmp == 1;
+		}
+	}
+
+	if (reset) {
+		mutex_lock(&the_lnet.ln_api_mutex);
+		lnet_counters_reset();
+		lnet_iface_stats_reset();
+		mutex_unlock(&the_lnet.ln_api_mutex);
+	}
+
+report_error:
+	RETURN(rc);
+}
+
 static const struct genl_multicast_group lnet_mcast_grps[] = {
 	{ .name	=	"ip2net",	},
 	{ .name =	"net",		},
@@ -10620,7 +10669,9 @@ static const struct genl_ops lnet_genl_ops[] = {
 	},
 	{
 		.cmd		= LNET_CMD_STATS,
+		.flags		= GENL_ADMIN_PERM,
 		.dumpit		= lnet_stats_show_dump,
+		.doit		= lnet_stats_cmd,
 	},
 };
 
