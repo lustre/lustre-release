@@ -4864,6 +4864,7 @@ llapi_ec_resync_or_verify_comp(int fd, struct llapi_layout *layout,
 	uint8_t *stripe_ptrs[MAX_STRIPE_POINTERS];
 	size_t data_len, ec_len;
 	off_t data_off, ec_off;
+	ssize_t page_size;
 
 	rc = fstat(fd, &stbuf);
 	if (rc < 0)
@@ -4905,7 +4906,12 @@ llapi_ec_resync_or_verify_comp(int fd, struct llapi_layout *layout,
 		rc = -EINVAL;
 		goto out_free;
 	}
-	rc = posix_memalign((void **)&buf, sysconf(_SC_PAGESIZE),
+	page_size = sysconf(_SC_PAGESIZE);
+	if (page_size < 0) {
+		rc = -errno;
+		goto out_free;
+	}
+	rc = posix_memalign((void **)&buf, page_size,
 			    m * data_comp->llc_stripe_size);
 	if (rc) {
 		rc = -rc;
@@ -5066,7 +5072,7 @@ static int llapi_ec_check_comp_match(struct llapi_layout_comp *data_comp,
 	ec_split_stripes(data_comp->llc_stripe_count,
 			 ec_comp->llc_dstripe_count, &sc);
 	if (data_comp->llc_stripe_count <
-	    (sc.esc_n0 + sc.esc_n1) * ec_comp->llc_cstripe_count) {
+	    (uint64_t)(sc.esc_n0 + sc.esc_n1) * ec_comp->llc_cstripe_count) {
 		llapi_error(LLAPI_MSG_ERROR, -EINVAL, "too many parities");
 		return -EINVAL;
 	}

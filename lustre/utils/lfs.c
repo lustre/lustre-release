@@ -2518,8 +2518,12 @@ static bool is_parity_mirror(struct llapi_layout *layout, uint32_t mirror_id)
 		.mirror_id = mirror_id,
 		.is_parity = false,
 	};
+	int rc;
 
-	llapi_layout_comp_iterate(layout, check_parity_mirror, &d);
+	rc = llapi_layout_comp_iterate(layout, check_parity_mirror, &d);
+	if (rc < 0)
+		return false;
+
 	return d.is_parity;
 }
 
