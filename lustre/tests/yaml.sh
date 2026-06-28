@@ -4,9 +4,9 @@
 #
 
 split_output() {
-	while read line; do
+	while read -r line; do
 		host=${line%%:*};
-		echo $line | sed -E "s/^$host: ?//" >> "$logdir/node.$host.yml"
+		printf '%s\n' "$line" | sed -E "s/^$host: ?//" >> "$logdir/node.$host.yml"
 	done
 }
 
