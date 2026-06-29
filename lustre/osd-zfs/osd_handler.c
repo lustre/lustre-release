@@ -144,9 +144,7 @@ static void osd_trans_commit_cb(void *cb_data, int error)
 	 * we can't provide a suitable environment. It will be performed
 	 * asynchronously by a lquota thread.
 	 */
-	qsd_op_end(NULL, osd->od_quota_slave_dt, &oh->ot_quota_trans);
-	if (osd->od_quota_slave_md != NULL)
-		qsd_op_end(NULL, osd->od_quota_slave_md, &oh->ot_quota_trans);
+	qsd_op_end(NULL, &oh->ot_quota_trans);
 
 	slot = oh->ot_txg & OSD_TXG_MAP_MASK;
 	LASSERT(atomic_read(&osd->od_commit_cb_in_txg[slot]) > 0);
@@ -303,10 +301,7 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 		/* there won't be any commit, release reserved quota space now,
 		 * if any
 		 */
-		qsd_op_end(env, osd->od_quota_slave_dt, &oh->ot_quota_trans);
-		if (osd->od_quota_slave_md != NULL)
-			qsd_op_end(env, osd->od_quota_slave_md,
-				   &oh->ot_quota_trans);
+		qsd_op_end(env, &oh->ot_quota_trans);
 		OBD_FREE_PTR(oh);
 		RETURN(0);
 	}

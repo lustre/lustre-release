@@ -91,6 +91,7 @@ struct qsd_instance {
 
 	/* count of qunit updates during glimpse */
 	int			 qsd_glimpse_refresh;
+	atomic_t		 qsd_trans_count;
 
 	unsigned long		qsd_is_md:1,    /* managing quota for mdt */
 				qsd_started:1,  /* instance is now started */

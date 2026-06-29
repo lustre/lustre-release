@@ -204,8 +204,7 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd);
 int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 		 struct lquota_trans *trans, struct lquota_id_info *lqi,
 		 enum osd_quota_local_flags *flags);
-void qsd_op_end(const struct lu_env *env, struct qsd_instance *qsd,
-		struct lquota_trans *trans);
+void qsd_op_end(const struct lu_env *env, struct lquota_trans *trans);
 void qsd_op_adjust(const struct lu_env *env, struct qsd_instance *qsd,
 		   union lquota_id *id, int i);
 int qsd_transfer(const struct lu_env *env, struct qsd_instance *qsd,

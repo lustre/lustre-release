@@ -2295,7 +2295,6 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	struct osd_thandle *oh;
 	struct osd_iobuf *iobuf = &oti->oti_iobuf;
 	struct osd_device *osd = osd_dt_dev(th->th_dev);
-	struct qsd_instance *qsd = osd_def_qsd(osd);
 	struct lquota_trans *qtrans;
 	LIST_HEAD(truncates);
 	int rc = 0, remove_agents = 0;
@@ -2361,7 +2360,7 @@ static int osd_trans_stop(const struct lu_env *env, struct dt_device *dt,
 	osd_trunc_unlock_all(env, &truncates);
 
 	/* inform the quota slave device that the transaction is stopping */
-	qsd_op_end(env, qsd, qtrans);
+	qsd_op_end(env, qtrans);
 
 	/*
 	 * as we want IO to journal and data IO be concurrent, we don't block
