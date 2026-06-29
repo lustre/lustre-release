@@ -5759,9 +5759,8 @@ void nodemap_test_nid(struct lnet_nid *nid, char *name_buf, size_t name_len)
 	if (IS_ERR(nodemap))
 		return;
 
-	strncpy(name_buf, nodemap->nm_name, name_len);
 	if (name_len > 0)
-		name_buf[name_len - 1] = '\0';
+		strscpy(name_buf, nodemap->nm_name, name_len + 1);
 
 	nodemap_putref(nodemap);
 }

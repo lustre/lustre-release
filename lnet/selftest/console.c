@@ -183,13 +183,12 @@ lstcon_group_alloc(char *name, struct lstcon_group **grpp)
 
 	grp->grp_ref = 1;
 	if (name != NULL) {
-		int rc = strscpy(grp->grp_name, name, sizeof(grp->grp_name));
-
-		if (rc < 0) {
+		if (strlen(name) > sizeof(grp->grp_name)-1) {
 			LIBCFS_FREE(grp, offsetof(struct lstcon_group,
 					  grp_ndl_hash[LST_NODE_HASHSIZE]));
 			return -E2BIG;
 		}
+		strscpy(grp->grp_name, name, sizeof(grp->grp_name));
 	}
 
 	INIT_LIST_HEAD(&grp->grp_link);

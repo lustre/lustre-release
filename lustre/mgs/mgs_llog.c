@@ -2588,6 +2588,7 @@ static
 int mgs_replace_mdtname(char *name, size_t size, char *mdtsrc, char *mdtnew)
 {
 	char *ptr, *src, *new;
+	int new_bytes;
 	size_t n;
 
 	if (!name || !size)
@@ -2606,13 +2607,20 @@ int mgs_replace_mdtname(char *name, size_t size, char *mdtsrc, char *mdtnew)
 	if (name[n] != '-')
 		return -ENOENT;
 
+	new_bytes = strlen(new);
 	n = strlen(src);
 	ptr = strstr(name, src);
 	while (ptr) {
 		char *end = ptr + n;
 
-		if (*end == '\0' || *end == '-' || *end == '_')
-			strncpy(ptr, new, n);
+		if (*end == '\0' || *end == '-' || *end == '_') {
+			if (new_bytes < n)
+				/* copy with nul guarantee */
+				strscpy(ptr, new, n + 1);
+			else
+				/* overwrite with new leave nul as is. */
+				memcpy(ptr, new, n);
+		}
 		ptr = end;
 		ptr = strstr(ptr, src);
 	}
