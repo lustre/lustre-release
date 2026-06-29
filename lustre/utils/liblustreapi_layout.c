@@ -4267,7 +4267,7 @@ out_free:
  * @num_data_stripes: number of data stripes (k)
  * @ec_pos: starting position for EC parity stripes
  * @num_ec_stripes: number of EC parity stripes (p)
- * @ec_id: EC component identifier
+ * @data_id: mirror id of the data component to read from
  * @stripe_size: size of each stripe in bytes
  * @end_pos: end position in file (exclusive)
  * @stripe_ptrs: array of pointers to stripe buffers (data + parity)
@@ -4282,18 +4282,18 @@ out_free:
  *
  * The function reads up to @stripe_size bytes per data stripe, stopping at
  * @end_pos. If the file size changes during the operation (detected by
- * pread() returning 0 before reaching end_pos), the operation fails with
- * -EBUSY.
+ * llapi_mirror_read() returning 0 before reaching end_pos), the operation
+ * fails with -EBUSY.
  *
  * Return:
  * * %0 on success
  * * %-EBUSY if file size changed during operation
- * * %negative error code from pread() on read failure
+ * * %negative error code from llapi_mirror_read() on read failure
  */
 static int llapi_ec_compute_parities(int fd, struct llapi_layout *layout,
 		uint64_t data_pos, int num_data_stripes,
 		uint64_t ec_pos, int num_ec_stripes,
-		uint64_t stripe_size, uint64_t end_pos,
+		int data_id, uint64_t stripe_size, uint64_t end_pos,
 		uint8_t *stripe_ptrs[],
 		uint8_t *encode_matrix, uint8_t *g_tbls)
 {
@@ -4334,7 +4334,8 @@ static int llapi_ec_compute_parities(int fd, struct llapi_layout *layout,
 		if (to_read > stripe_size)
 			to_read = stripe_size;
 		while (to_read) {
-			bytes_read = pread(fd, read_buf, to_read, data_pos);
+			bytes_read = llapi_mirror_read(fd, data_id, read_buf,
+						       to_read, data_pos);
 			/*
 			 * We are careful to not read beyond eof so we can treat
 			 * ==0 as an unrecoverable error.
@@ -4782,6 +4783,7 @@ llapi_ec_resync_or_verify_raidset(int fd, struct llapi_layout *layout,
 	rc = llapi_ec_compute_parities(fd, layout,
 				       data_pos, k,
 				       ec_pos, p,
+				       data_comp->llc_mirror_id,
 				       data_comp->llc_stripe_size, end_pos,
 				       stripe_ptrs, encode_matrix, g_tbls);
 	if (rc)
@@ -4853,12 +4855,15 @@ llapi_ec_resync_or_verify_comp(int fd, struct llapi_layout *layout,
 	struct stat stbuf;
 	struct ec_split_comp sc;
 	uint64_t data_pos, ec_pos, end_pos;
+	uint64_t stripe_set_size, ec_size;
+	uint64_t num_hole_stripe_sets;
+	uint32_t ec_mirror_id = mirror_id_of(ec_comp->llc_id);
 	uint8_t *buf = NULL;
 	uint8_t *encode_matrix = NULL;
 	uint8_t *g_tbls = NULL;
 	uint8_t *stripe_ptrs[MAX_STRIPE_POINTERS];
-	size_t data_len;
-	off_t data_off;
+	size_t data_len, ec_len;
+	off_t data_off, ec_off;
 
 	rc = fstat(fd, &stbuf);
 	if (rc < 0)
@@ -4869,6 +4874,7 @@ llapi_ec_resync_or_verify_comp(int fd, struct llapi_layout *layout,
 		return 0;
 
 	data_pos = data_comp->llc_extent.e_start;
+	data_off = data_pos;
 	ec_pos = ec_comp->llc_extent.e_start;
 
 	/* We only use data until end of extent or eof */
@@ -4922,35 +4928,78 @@ llapi_ec_resync_or_verify_comp(int fd, struct llapi_layout *layout,
 		goto out_free;
 	}
 
- one_more_stripeset:
-	data_off = llapi_data_seek(fd, data_pos, &data_len);
-	if (data_off < 0) {
-		rc = data_off;
-		llapi_error(LLAPI_MSG_ERROR, rc, "failed to SEEK_DATA");
-		goto out_free;
-	}
-	/* No more data in this extent */
-	if (data_off >= end_pos) {
-		rc = 0;
-		goto out_free;
-	}
-	/* skip past holes spanning one or more whole stripe sets */
-	if (data_off > data_pos) {
-		uint64_t stripe_set_size = data_comp->llc_stripe_count *
-					   data_comp->llc_stripe_size;
-		uint64_t ec_size = ec_comp->llc_cstripe_count *
-				   ec_comp->llc_stripe_size *
-				   (sc.esc_n0 + sc.esc_n1);
-		int num_stripe_sets = (data_off - data_pos) / stripe_set_size;
-
-		data_pos += num_stripe_sets * stripe_set_size;
-		ec_pos += num_stripe_sets * ec_size;
-	}
 	if (data_pos >= end_pos) {
 		rc = 0;
 		goto out_free;
 	}
 
+	stripe_set_size = data_comp->llc_stripe_count *
+			  data_comp->llc_stripe_size;
+	ec_size = (uint64_t)(sc.esc_n0 + sc.esc_n1) *
+		  ec_comp->llc_cstripe_count *
+		  ec_comp->llc_stripe_size;
+ one_more_stripeset:
+	data_off = llapi_mirror_data_seek(fd, data_comp->llc_mirror_id,
+					  data_pos, &data_len);
+	if (data_off < 0) {
+		rc = data_off;
+		llapi_error(LLAPI_MSG_ERROR, rc, "failed to SEEK_DATA");
+		goto out_free;
+	}
+	if (data_off == data_pos)
+		goto stripeset_with_data;
+
+	/*
+	 * Punch or verify holes for whole stripe sets only. Anything not
+	 * covered here is left to stripeset_with_data, e.g. partial stripe set.
+	 *
+	 * Floor division counts full stripe sets only. For data_len == 0, it
+	 * means a hole extends to the @end_pos; otherwise @data_off marks
+	 * the next data and we jump to stripeset_with_data if it is still
+	 * inside this stripe set.
+	 */
+	data_off = min_t(uint64_t, (uint64_t)data_off, end_pos);
+	if (data_len == 0) {
+		if (end_pos < data_pos + stripe_set_size)
+			goto stripeset_with_data;
+		num_hole_stripe_sets = (end_pos - data_pos) / stripe_set_size;
+	} else {
+		if (data_off < data_pos + stripe_set_size)
+			goto stripeset_with_data;
+		num_hole_stripe_sets = (data_off - data_pos) / stripe_set_size;
+	}
+	if (is_verify) {
+		/* skip over the same number of stripe sets as the data part */
+		ec_off = llapi_mirror_data_seek(fd, ec_mirror_id, ec_pos,
+						&ec_len);
+		if (ec_off < 0) {
+			rc = ec_off;
+			llapi_error(LLAPI_MSG_ERROR, rc, "failed to SEEK_EC");
+			goto out_free;
+		}
+		if (ec_off < ec_pos + num_hole_stripe_sets * ec_size) {
+			rc = -EINVAL;
+			llapi_error(LLAPI_MSG_ERROR, rc, "parity %d mismatch",
+				    ec_mirror_id);
+			goto out_free;
+		}
+	} else {
+		/* punch on EC parity for the data part that is not written */
+		size_t punch_len = num_hole_stripe_sets * ec_size;
+
+		rc = llapi_mirror_punch(fd, ec_mirror_id, ec_pos, punch_len);
+		if (rc < 0)
+			goto out_free;
+	}
+
+	data_pos += num_hole_stripe_sets * stripe_set_size;
+	ec_pos += num_hole_stripe_sets * ec_size;
+	if (data_pos >= end_pos) {
+		rc = 0;
+		goto out_free;
+	}
+
+stripeset_with_data:
 	for (i = 0, k = sc.esc_k0; i < sc.esc_n0 + sc.esc_n1; i++) {
 		if (i == sc.esc_n0)
 			k = sc.esc_k1;
