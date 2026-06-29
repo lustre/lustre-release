@@ -18,6 +18,7 @@
 #include <yaml.h>
 
 #include <linux/lnet/lnet-nl.h>
+#include <netlink/genl/family.h>
 #include "liblnetconfig.h"
 
 /**
@@ -594,9 +595,12 @@ static void yaml_parse_value_list(struct yaml_netlink_input *data, int *size,
 				start = false;
 
 				/* Update the header's first key */
-				if (next->keys.lkl_list[1].lkp_data_type == NLA_NUL_STRING &&
-				    !keys[i].lkp_value)
+				if (next->keys.lkl_list[1].lkp_data_type ==
+				    NLA_NUL_STRING) {
+					if (keys[i].lkp_value)
+						free(keys[i].lkp_value);
 					keys[i].lkp_value = nla_strdup(nest_info[1]);
+				}
 
 				len = yaml_nested_header(data, size, &indent,
 							 first ? mapping : 0,
@@ -616,15 +620,33 @@ skip_nested_header:
 			/* nested bookend header */
 			if (keys[i].lkp_key_format & LNKF_FLOW) {
 				char *tmp = (char *)data->buffer - 2;
-				char *brace = " }\n";
 
-				if (keys[i].lkp_key_format &
-				    LNKF_SEQUENCE)
-					brace = " ]\n";
+				/* Handle empty flow */
+				if (strncmp(tmp, "[ ", 2) == 0 ||
+				    strncmp(tmp, "{ ", 2) == 0) {
+					if (keys[i].lkp_key_format &
+					    LNKF_SEQUENCE)
+						len = snprintf(data->buffer,
+							       *size, "]\n");
+					else
+						len = snprintf(data->buffer,
+							       *size, "}\n");
+					if (len < 0)
+						goto unwind;
+					data->buffer += len;
+					*size -= len;
+					len = 0;
+				} else {
+					char *brace = " }\n";
 
-				memcpy(tmp, brace, strlen(brace));
-				data->buffer++;
-				*size -= 1;
+					if (keys[i].lkp_key_format &
+					    LNKF_SEQUENCE)
+						brace = " ]\n";
+
+					memcpy(tmp, brace, strlen(brace));
+					data->buffer++;
+					*size -= 1;
+				}
 			}
 			data->cur = old;
 
@@ -676,8 +698,8 @@ not_first:
 			break;
 
 		/* The below is used for a plain scalar or to complete the
-		*  key : value pair.
-		*/
+		 * key : value pair.
+		 */
 		case NLA_STRING:
 			len = snprintf(data->buffer, *size, "%s",
 				       nla_get_string(attr));
@@ -1719,6 +1741,43 @@ yaml_emitter_set_output_netlink(yaml_emitter_t *sender, struct nl_sock *nl,
 	return yaml_emitter_set_streaming_output_netlink(sender, nl, family,
 							 version, cmd, flags,
 							 false);
+}
+
+/**
+ * yaml_emitter_get_output_version() - Retrieve protocol version of emitter
+ *
+ * @request:	emitter object
+ *
+ * Return	Netlink family version level queried from the kernel or
+ *		a negative error code
+ */
+YAML_DECLARE(int)
+yaml_emitter_get_output_version(yaml_emitter_t *request)
+{
+	struct yaml_netlink_output *out = NULL;
+	struct genl_family *family;
+	struct nl_cache *ctrl;
+	int rc;
+
+	if (!request || !request->write_handler_data)
+		return -EINVAL;
+
+	out = request->write_handler_data;
+	rc = genl_ctrl_alloc_cache(out->ctrl, &ctrl);
+	if (rc < 0)
+		return rc;
+
+	family = genl_ctrl_search(ctrl, out->family_id);
+	if (!family) {
+		rc = -ENOENT;
+		goto free_cache;
+	}
+
+	rc = genl_family_get_version(family);
+	genl_family_put(family);
+free_cache:
+	nl_cache_free(ctrl);
+	return rc;
 }
 
 /* Error handling helpers */

@@ -888,6 +888,13 @@ int yaml_emitter_set_streaming_output_netlink(yaml_emitter_t *sender,
 					      bool stream);
 
 /**
+ * yaml_emitter_get_output_version
+ *
+ * Enquire of the kernel what Netlink family protocol version is supported.
+ */
+int yaml_emitter_get_output_version(yaml_emitter_t *request);
+
+/**
  * yaml_parser_set_input_netlink
  *
  *   Special handling to LNet handling into libyaml.
