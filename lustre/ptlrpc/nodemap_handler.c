@@ -550,8 +550,10 @@ int nodemap_parse_range(const char *range_str, struct lnet_nid range[2],
 	/* For large NIDs we interpret range_str as a nidmask */
 	if (!cfs_parse_nidlist(buf, strlen(buf), &nidlist)) {
 		*netmask = cfs_nidmask_get_length(&nidlist);
-		if (!*netmask)
+		if (!*netmask) {
+			cfs_free_nidlist(&nidlist);
 			GOTO(out, rc = -EINVAL);
+		}
 
 		rc = cfs_nidmask_get_base_nidstr(buf, sizeof(buf), &nidlist);
 		if (rc) {
