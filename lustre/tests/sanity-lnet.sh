@@ -1126,6 +1126,67 @@ test_28() {
 }
 run_test 28 "Test peer_list"
 
+add_net() {
+	local net="$1"
+	local if="$2"
+
+	do_lnetctl net add --net ${net} --if ${if} ||
+		error "Failed to add net ${net} on if ${if}"
+}
+
+test_40() {
+	reinit_dlc || return $?
+
+	local lock_prim
+	lock_prim=$(cat /sys/module/lnet/parameters/lock_prim_nid 2>/dev/null)
+	[[ "$lock_prim" == "1" ]] || skip "Need lock_prim_nid=1"
+
+	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
+
+	# A reachable NID. A health monitor pings it before the filesystem
+	# is mounted, so a peer record for it already exists, and is up to
+	# date, by the time the config llog calls LNetAddPeer().
+	local secondary=$($LCTL list_nids | head -n 1)
+
+	# The primary NID from the config. It lives on a network with no
+	# local interface, so it never appears in the secondary's ping
+	# reply, the same as a primary NID whose interface is down.
+	local primary="${secondary%@*}@${NETTYPE}99"
+	local uuid="lnet_add_peer_uuid"
+
+	# Health monitor discovers the reachable NID first.
+	do_lnetctl discover ${secondary} ||
+		error "Failed to discover $secondary"
+
+	(($($LNETCTL peer show --nid ${secondary} |
+	    grep -cFw ${primary}) == 0)) ||
+		error "$primary present before LNetAddPeer"
+
+	# Need Lustre modules for add_uuid
+	load_modules_local ||
+		error "Failed to load modules rc=$?"
+
+	# The config llog associates both NIDs with one peer via
+	# LNetAddPeer(). The primary NID is added first and locked.
+	$LCTL add_uuid ${uuid} ${primary} ||
+		error "add_uuid $primary failed $?"
+	$LCTL add_uuid ${uuid} ${secondary} ||
+		error "add_uuid $secondary failed $?"
+
+	# The pre-existing, up to date peer for the secondary NID must
+	# still be merged into the primary peer.
+	local show="$LNETCTL peer show --nid ${primary} 2>/dev/null"
+	wait_update $HOSTNAME "$show | grep -cFw ${secondary}" "1" "20"
+	local rc=$?
+
+	$LCTL del_uuid ${uuid} || error "del_uuid failed $?"
+
+	((rc == 0)) || error "$secondary was not merged into peer $primary"
+
+	unload_modules_local
+}
+run_test 40 "LNetAddPeer merges a pre-existing non-primary peer NID"
+
 test_50() {
 	reinit_dlc || return $?
 
@@ -1317,14 +1378,6 @@ EOF
 	compare_yaml_files
 }
 run_test 99b "Invalid value for Multi-Rail in yaml import"
-
-add_net() {
-	local net="$1"
-	local if="$2"
-
-	do_lnetctl net add --net ${net} --if ${if} ||
-		error "Failed to add net ${net} on if ${if}"
-}
 
 del_net() {
 	local net="$1"

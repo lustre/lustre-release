@@ -1306,6 +1306,48 @@ lnet_discover_peer_nid(struct lnet_nid *nid)
 	lnet_net_unlock(cpt);
 }
 
+/**
+ * lnet_peer_force_merge() - Absorb a transient peer into a primary.
+ * @nid: The non-primary NID whose peer record should be merged.
+ * @primary_nid: The primary NID to merge @nid's peer into.
+ *
+ * A non-primary NID supplied to LNetAddPeer() may already own a peer
+ * record created by earlier discovery or by traffic. Such a peer is
+ * transient: it carries neither the configured nor the lock-primary
+ * state. Stamp it with @primary_nid and force a fresh round of discovery
+ * so it merges into the primary peer even when it is already up to date.
+ *
+ * A peer that Lustre configured, or whose primary NID is locked, reflects
+ * a deliberate arrangement that may describe a different node. Leave such
+ * a peer untouched so the merge does not fight an existing primary.
+ *
+ * Context: Caller must hold the_lnet.ln_api_mutex.
+ * Return: %true if @nid's peer was queued to merge, %false otherwise.
+ */
+static bool
+lnet_peer_force_merge(struct lnet_nid *nid, struct lnet_nid *primary_nid)
+{
+	struct lnet_peer *lp;
+
+	lp = lnet_find_peer(nid);
+	if (!lp)
+		return false;
+
+	spin_lock(&lp->lp_lock);
+	if (lp->lp_state & (LNET_PEER_CONFIGURED | LNET_PEER_LOCK_PRIMARY)) {
+		spin_unlock(&lp->lp_lock);
+		lnet_peer_decref_locked(lp);
+		return false;
+	}
+	lp->lp_merge_primary_nid = *primary_nid;
+	lp->lp_state &= ~LNET_PEER_NIDS_UPTODATE;
+	lp->lp_state |= LNET_PEER_FORCE_PING;
+	spin_unlock(&lp->lp_lock);
+
+	lnet_peer_decref_locked(lp);
+	return true;
+}
+
 void LNetAddPeer(struct lnet_nid *nids, int num_nids)
 {
 	struct lnet_nid pnid = LNET_ANY_NID;
@@ -1371,17 +1413,20 @@ void LNetAddPeer(struct lnet_nid *nids, int num_nids)
 					      flags);
 		} else if (!nid_same(&pnid, &nids[i])) {
 			rc = lnet_add_peer_ni(&nids[i], &LNET_ANY_NID, true, 0);
+			/* A non-primary NID may already own a transient peer
+			 * created by discovery or traffic, which keeps the
+			 * configured multi-rail peer from forming. Merge such
+			 * a peer into the primary as if it had been created
+			 * here. -EALREADY means the NID is already a member of
+			 * a locked peer, so leave that arrangement alone.
+			 */
 			if (!rc) {
-				if (lock_prim_nid) {
-					struct lnet_peer *lp;
-
-					lp = lnet_find_peer(&nids[i]);
-					if (lp) {
-						lp->lp_merge_primary_nid = pnid;
-						lnet_peer_decref_locked(lp);
-					}
-				}
+				if (lock_prim_nid)
+					lnet_peer_force_merge(&nids[i], &pnid);
 				lnet_discover_peer_nid(&nids[i]);
+			} else if (rc == -EEXIST && lock_prim_nid) {
+				if (lnet_peer_force_merge(&nids[i], &pnid))
+					lnet_discover_peer_nid(&nids[i]);
 			}
 		}
 		if (rc == -EEXIST || rc == -EALREADY)
