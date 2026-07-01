@@ -3481,6 +3481,32 @@ AC_DEFUN([LC_HAVE_INODE_JUST_DROP],[
 ]) # LC_HAVE_INODE_JUST_DROP
 
 #
+# LC_HAVE_VFS_MMAP_PREPARE
+#
+# Linux commit v6.16-rc2-1-g20ca475d9860
+#   mm: rename call_mmap/mmap_prepare to vfs_mmap/mmap_prepare
+# Linux commit v6.16-rc2-3-gb013ed403197
+#   fs: consistently use can_mmap_file() helper
+#
+AC_DEFUN([LC_SRC_HAVE_VFS_MMAP_PREPARE],[
+	LB2_LINUX_TEST_SRC([vfs_mmap_prepare], [
+		#include <linux/fs.h>
+	],[
+		struct file *file = NULL;
+		struct vm_area_desc *desc = NULL;
+		int rc = vfs_mmap_prepare(file, desc);
+		(void)rc;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_VFS_MMAP_PREPARE],[
+	LB2_MSG_LINUX_TEST_RESULT([if vfs_mmap_prepare() exists],
+	[vfs_mmap_prepare], [
+		AC_DEFINE(HAVE_VFS_MMAP_PREPARE, 1,
+			  [vfs_mmap_prepare() exists])
+	])
+]) # LC_HAVE_VFS_MMAP_PREPARE
+
+#
 # LC_HAVE_MEMDESC_FLAGS_T
 #
 # Linux commit v6.17-rc4-147-g53fbef56e07d
@@ -4036,6 +4062,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_WRITE_BEGIN_KIOCB
 	LC_SRC_FS_STRUCT_HAS_SEQLOCK
 	LC_SRC_HAVE_NETIF_GET_FLAGS
+	LC_SRC_HAVE_VFS_MMAP_PREPARE
 
 	# 6.18
 	LC_SRC_HAVE_INODE_JUST_DROP
@@ -4262,6 +4289,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_WRITE_BEGIN_KIOCB
 	LC_FS_STRUCT_HAS_SEQLOCK
 	LC_HAVE_NETIF_GET_FLAGS
+	LC_HAVE_VFS_MMAP_PREPARE
 
 	# 6.18
 	LC_HAVE_INODE_JUST_DROP

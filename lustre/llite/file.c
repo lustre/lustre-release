@@ -1315,6 +1315,7 @@ restart:
 	if (!S_ISREG(inode->i_mode))
 		GOTO(out_och_free, rc);
 	cl_lov_delay_create_clear(&file->f_flags);
+	file->f_mode |= FMODE_CAN_ODIRECT;
 	GOTO(out_och_free, rc);
 
 out_och_free:

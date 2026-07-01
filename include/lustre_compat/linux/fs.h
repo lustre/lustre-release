@@ -238,4 +238,24 @@ static inline s64 inode_get_ctime_ns(struct inode *inode)
 	ll_foreign_symlink_getattr(path, stat, request_mask, flags)
 #endif
 
+#ifndef HAVE_VFS_MMAP_PREPARE
+static inline int vfs_mmap(struct file *file, struct vm_area_struct *vma)
+{
+	return file->f_op->mmap(file, vma);
+}
+
+static inline bool can_mmap_file(struct file *file)
+{
+	return file->f_op->mmap;
+}
+#endif
+
+#ifndef FMODE_CAN_ODIRECT
+/*
+ * FMODE_CAN_ODIRECT added in v5.19; older kernels check
+ * a_ops->direct_IO in do_dentry_open() instead.
+ */
+#define FMODE_CAN_ODIRECT	0
+#endif
+
 #endif /* __LIBCFS_LINUX_CFS_FS_H__ */

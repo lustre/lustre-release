@@ -3093,7 +3093,7 @@ int pcc_file_mmap(struct file *file, struct vm_area_struct *vma,
 	file->f_ra.ra_pages = 0;
 
 	*cached = false;
-	if (!pcc_file || !file_inode(pcc_file)->i_fop->mmap)
+	if (!pcc_file || !can_mmap_file(pcc_file))
 		RETURN(0);
 
 	pcc_inode_lock(inode);
@@ -3126,7 +3126,7 @@ int pcc_file_mmap(struct file *file, struct vm_area_struct *vma,
 
 		pcc_file->f_mapping = file->f_mapping;
 		vma->vm_file = get_file(pcc_file);
-		rc = file_inode(pcc_file)->i_fop->mmap(pcc_file, vma);
+		rc = vfs_mmap(pcc_file, vma);
 		if (rc || vma->vm_private_data) {
 			/*
 			 * Check whether vma->vm_private_data is NULL.
