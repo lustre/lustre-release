@@ -477,15 +477,19 @@ AC_DEFUN([LZ_ZFS_KABI_SERIAL], [
 			[Have vdev_op_min_alloc in ZFS])
 	])
 	#
-	# ZFS exports dmu_offet_next
+	# ZFS exports dmu_offset_next()
 	#
-	AC_CACHE_CHECK([if ZFS exports 'dmu_offset_next'],
-	[lb_cv_dmu_offset_next], [
-	lb_cv_dmu_offset_next="no"
-	AS_IF([grep -q -E "EXPORT_SYMBOL.*\(dmu_offset_next\)" "$zfssrc/module/zfs/dmu.c" 2>/dev/null],
-		[lb_cv_dmu_offset_next="yes"])
-	])
-	AS_IF([test "x$lb_cv_dmu_offset_next" = "xyes"], [
+	LB_CHECK_COMPILE([if ZFS exports 'dmu_offset_next'],
+	dmu_offset_next, [
+		#include <sys/dmu.h>
+	],[
+		objset_t *os = NULL;
+		uint64_t object = 0;
+		uint64_t offset;
+
+		int error = dmu_offset_next(os, object, B_TRUE, &offset);
+		(void) error;
+	],[
 		AC_DEFINE(HAVE_DMU_OFFSET_NEXT, 1,
 			[Have dmu_offset_next() exported])
 	])

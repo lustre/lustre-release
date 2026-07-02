@@ -313,7 +313,7 @@ test_0d() { # LU-3397
 	[ "$exp_val" == "$imp_val" ] ||
 		error "export flags '$exp_val' != import flags '$imp_val'"
 
-	# Compare client versions. 
+	# Compare client versions.
 	exp_client_version=$(awk '/target_version:/ { print $2 }' $temp_exp)
 	exp_val=$(version_code $exp_client_version)
 	imp_client_version=$(lustre_build_version client)
@@ -34393,19 +34393,38 @@ test_429() { # LU-7915 / LU-10948
 }
 run_test 429 "verify if opencache flag on client side does work"
 
+# write data chunks in reverse order to defeat ZFS automatic blocksize
+# growth during appends causing SEEK_HOLE to return unexpected offsets
+dd_reverse() {
+	local of=$1
+	local bs=$2
+	local count=${3##count=}
+	local start=${4##seek=}
+	local end=$((start + count - 1))
+	local dd_opts="if=/dev/urandom $of $bs count=1"
+	local i
+
+	for ((i = end; i >= start; i--)); do
+		dd $dd_opts seek=$i oflag=direct conv=notrunc 2>&1 |
+			grep -v -E "copied|bytes"
+		if (( ${PIPESTATUS[0]} != 0 )); then
+			error "${of##of=}: write $start->$end @$bs failed"
+			return 1
+		fi
+	done
+}
+
 lseek_test_430() {
 	local offset
 	local file=$1
+	local i
 
-	# data at [200K, 400K)
-	dd if=/dev/urandom of=$file bs=256K count=1 seek=1 ||
-		error "256K->512K dd fails"
+	# data at [256K, 512K)
+	dd_reverse of=$file bs=64K count=4 seek=4 || error "256K->512K dd fails"
 	# data at [2M, 3M)
-	dd if=/dev/urandom of=$file bs=1M count=1 seek=2 ||
-		error "2M->3M dd fails"
+	dd_reverse of=$file bs=64K count=16 seek=32 || error "2M->3M dd fails"
 	# data at [4M, 5M)
-	dd if=/dev/urandom of=$file bs=1M count=1 seek=4 ||
-		error "4M->5M dd fails"
+	dd_reverse of=$file bs=64K count=16 seek=64 || error "4M->5M dd fails"
 	echo "Data at 256K...512K, 2M...3M and 4M...5M"
 	# start at first component hole #1
 	printf "Seeking hole from 1000 ... "
@@ -34457,8 +34476,7 @@ lseek_test_430() {
 	echo $offset
 	[[ $offset == 3000000 ]] || error "offset $offset != 3000000"
 
-	dd if=/dev/urandom of=$file bs=640K count=1 seek=1 ||
-		error "2nd dd fails"
+	dd_reverse of=$file bs=64K count=10 seek=10 || error "2nd dd fails"
 	echo "Add data block at 640K...1280K"
 
 	# start at before new data block, in hole
@@ -34493,17 +34511,14 @@ lseek_test_430() {
 
 	# start beyond file end
 	printf "Using offset > filesize ... "
-	lseek_test -l 4000000 $file && error "lseek should fail"
+	lseek_test -l 6000000 $file && error "lseek should fail"
 	printf "Using offset > filesize ... "
-	lseek_test -d 4000000 $file && error "lseek should fail"
+	lseek_test -d 6000000 $file && error "lseek should fail"
 
 	printf "Done\n\n"
 }
 
 test_430a() {
-	$LCTL get_param mdc.*.import | grep -q 'connect_flags:.*seek' ||
-		skip "MDT does not support SEEK_HOLE"
-
 	$LCTL get_param osc.*.import | grep -q 'connect_flags:.*seek' ||
 		skip "OST does not support SEEK_HOLE"
 
@@ -34511,12 +34526,6 @@ test_430a() {
 
 	mkdir -p $DIR/$tdir
 
-	$LFS setstripe -E 1M -L mdt -E eof -c2 $file
-	# OST stripe #1 will have continuous data at [1M, 3M)
-	# OST stripe #2 is empty
-	echo "Component #1: 1M DoM, component #2: EOF, 2 stripes 1M"
-	lseek_test_430 $file
-	rm $file
 	$LFS setstripe -E 1M -c2 -S 64K -E 10M -c2 -S 1M $file
 	echo "Component #1: 1M, 2 stripes 64K, component #2: EOF, 2 stripes 1M"
 	lseek_test_430 $file
@@ -34531,6 +34540,16 @@ test_430a() {
 	echo "Mirrored file:"
 	echo "Component #1: 512K, stripe 64K, component #2: EOF, 2 stripes 512K"
 	echo "Plain 2 stripes 1M"
+	lseek_test_430 $file
+	rm $file
+
+	$LCTL get_param mdc.*.import | grep -q 'connect_flags:.*seek' ||
+		skip "MDT does not support SEEK_HOLE"
+
+	$LFS setstripe -E 1M -L mdt -E eof -c2 $file
+	# OST stripe #1 will have continuous data at [1M, 3M)
+	# OST stripe #2 is empty
+	echo "Component #1: 1M DoM, component #2: EOF, 2 stripes 1M"
 	lseek_test_430 $file
 	rm $file
 }
