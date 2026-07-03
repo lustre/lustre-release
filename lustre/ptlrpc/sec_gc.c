@@ -101,8 +101,9 @@ static void sec_process_ctx_list(void)
 
 		LASSERT(ctx->cc_sec);
 		LASSERT(atomic_read(&ctx->cc_refcount) == 1);
-		CDEBUG(D_SEC, "gc pick up ctx %p(%u->%s)\n",
-		       ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
+		CDEBUG(D_SEC, "gc pick up ctx %p(%u->%s at %s)\n",
+		       ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
+		       sec2nid_str(ctx->cc_sec));
 		sptlrpc_cli_ctx_put(ctx, 1);
 
 		spin_lock(&sec_gc_ctx_list_lock);

@@ -511,10 +511,11 @@ int sptlrpc_req_ctx_switch(struct ptlrpc_request *req,
 	int rc = 0;
 
 	CDEBUG(D_SEC,
-	       "req %p: switch ctx %p(%u->%s) -> %p(%u->%s), switch sec %p(%s) -> %p(%s)\n",
+	       "req %p: switch ctx %p(%u->%s at %s) -> %p(%u->%s at %s), switch sec %p(%s) -> %p(%s)\n",
 	       req, oldctx, oldctx->cc_vcred.vc_uid,
-	       sec2target_str(oldctx->cc_sec), newctx, newctx->cc_vcred.vc_uid,
-	       sec2target_str(newctx->cc_sec), oldctx->cc_sec,
+	       sec2target_str(oldctx->cc_sec), sec2nid_str(oldctx->cc_sec),
+	       newctx, newctx->cc_vcred.vc_uid, sec2target_str(newctx->cc_sec),
+	       sec2nid_str(newctx->cc_sec), oldctx->cc_sec,
 	       oldctx->cc_sec->ps_policy->sp_name, newctx->cc_sec,
 	       newctx->cc_sec->ps_policy->sp_name);
 
@@ -3001,6 +3002,14 @@ const char *sec2target_str(struct ptlrpc_sec *sec)
 	return obd_uuid2str(&sec->ps_import->imp_obd->u.cli.cl_target_uuid);
 }
 EXPORT_SYMBOL(sec2target_str);
+
+const char *sec2nid_str(struct ptlrpc_sec *sec)
+{
+	if (!sec || !sec->ps_import || !sec->ps_import->imp_connection)
+		return "*";
+	return libcfs_nidstr(&sec->ps_import->imp_connection->c_peer.nid);
+}
+EXPORT_SYMBOL(sec2nid_str);
 
 /*
  * return true if the bulk data is protected

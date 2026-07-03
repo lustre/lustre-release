@@ -1329,9 +1329,10 @@ void flush_spec_ctx_cache_kr(struct ptlrpc_sec *sec, uid_t uid, int grace,
 		if (atomic_read(&ctx->cc_refcount) > 2) {
 			if (!force)
 				continue;
-			CWARN("flush busy ctx %p(%u->%s, extra ref %d)\n",
+			CWARN("flush busy ctx %p(%u->%s at %s, extra ref %d)\n",
 			      ctx, ctx->cc_vcred.vc_uid,
 			      sec2target_str(ctx->cc_sec),
+			      sec2nid_str(ctx->cc_sec),
 			      atomic_read(&ctx->cc_refcount) - 2);
 		}
 
@@ -1795,7 +1796,8 @@ int gss_kt_update(struct key *key, struct key_preparsed_payload *prep)
 			goto out;
 		}
 
-		CERROR("negotiation: rpc err %d, gss err %x\n",
+		CERROR("%s at %s: negotiation: rpc err %d, gss err %x\n",
+		       sec2target_str(ctx->cc_sec), sec2nid_str(ctx->cc_sec),
 		       nego_rpc_err, nego_gss_err);
 
 		gctx->gc_gss_err = nego_gss_err;

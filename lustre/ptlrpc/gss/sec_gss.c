@@ -275,9 +275,9 @@ int cli_ctx_expire(struct ptlrpc_cli_ctx *ctx)
 		if (!ctx->cc_early_expire)
 			clear_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
 
-		CDEBUG(D_SEC, "ctx %p(%u->%s) get expired: %lld(%+llds)\n",
+		CDEBUG(D_SEC, "ctx %p(%u->%s at %s) get expired: %lld(%+llds)\n",
 		       ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
-		       ctx->cc_expire,
+		       sec2nid_str(ctx->cc_sec), ctx->cc_expire,
 		       ctx->cc_expire == 0 ? 0 :
 		       ctx->cc_expire - ktime_get_real_seconds());
 
@@ -645,11 +645,12 @@ int gss_cli_ctx_handle_err_notify(struct ptlrpc_cli_ctx *ctx,
 	errhdr = (struct gss_err_header *) ghdr;
 
 	CDEBUG(D_SEC,
-	       "%s: req x%llu/t%llu, ctx %p idx %#llx(%u->%s): %sserver respond (%08x/%08x)\n",
+	       "%s: req x%llu/t%llu, ctx %p idx %#llx(%u->%s at %s): %sserver respond (%08x/%08x)\n",
 	      ctx->cc_sec->ps_import->imp_obd->obd_name,
 	      req->rq_xid, req->rq_transno, ctx,
 	      gss_handle_to_u64(&ctx2gctx(ctx)->gc_handle),
 	      ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
+	      sec2nid_str(ctx->cc_sec),
 	      sec_is_reverse(ctx->cc_sec) ? "reverse " : "",
 	      errhdr->gh_major, errhdr->gh_minor);
 
@@ -1150,9 +1151,10 @@ int gss_cli_ctx_init_common(struct ptlrpc_sec *sec, struct ptlrpc_cli_ctx *ctx,
 	/* statistic only */
 	atomic_inc(&sec->ps_nctx);
 
-	CDEBUG(D_SEC, "%s@%p: create ctx %p(%u->%s)\n",
+	CDEBUG(D_SEC, "%s@%p: create ctx %p(%u->%s at %s)\n",
 	       sec->ps_policy->sp_name, ctx->cc_sec,
-	       ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
+	       ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
+	       sec2nid_str(ctx->cc_sec));
 	return 0;
 }
 
@@ -1197,9 +1199,10 @@ int gss_cli_ctx_fini_common(struct ptlrpc_sec *sec, struct ptlrpc_cli_ctx *ctx)
 		CDEBUG(D_SEC, "reverse sec %p: destroy ctx %p\n",
 		       ctx->cc_sec, ctx);
 	else
-		CDEBUG(D_SEC, "%s@%p: destroy ctx %p(%u->%s)\n",
+		CDEBUG(D_SEC, "%s@%p: destroy ctx %p(%u->%s at %s)\n",
 		       sec->ps_policy->sp_name, ctx->cc_sec,
-		       ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
+		       ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
+		       sec2nid_str(ctx->cc_sec));
 
 	return 0;
 }

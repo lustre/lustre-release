@@ -387,19 +387,21 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
 	LASSERT(atomic_read(&ctx->cc_refcount) > 0);
 
 	if (cli_ctx_is_error(ctx) || !cli_ctx_is_uptodate(ctx)) {
-		CDEBUG(D_SEC, "ctx %p(%u->%s) not uptodate, "
+		CDEBUG(D_SEC, "ctx %p(%u->%s at %s) not uptodate, "
 		       "don't send destroy rpc\n", ctx,
-		       ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
+		       ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
+		       sec2nid_str(ctx->cc_sec));
 		RETURN(0);
 	}
 
 	might_sleep();
 
-	CDEBUG(D_SEC, "%s ctx %p idx %#llx (%u->%s)\n",
+	CDEBUG(D_SEC, "%s ctx %p idx %#llx (%u->%s at %s)\n",
 	       sec_is_reverse(ctx->cc_sec) ?
 	       "server finishing reverse" : "client finishing forward",
 	       ctx, gss_handle_to_u64(&gctx->gc_handle),
-	       ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec));
+	       ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
+	       sec2nid_str(ctx->cc_sec));
 
         gctx->gc_proc = PTLRPC_GSS_PROC_DESTROY;
 
@@ -430,8 +432,9 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
         req->rq_phase = RQ_PHASE_RPC;
         rc = ptl_send_rpc(req, 1);
         if (rc)
-                CWARN("ctx %p(%u->%s): rpc error %d, destroy locally\n", ctx,
-                      ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec), rc);
+		CWARN("ctx %p(%u->%s at %s): rpc error %d, destroy locally\n", ctx,
+		      ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
+		      sec2nid_str(ctx->cc_sec), rc);
 
 out_ref:
 	ptlrpc_req_put(req);
