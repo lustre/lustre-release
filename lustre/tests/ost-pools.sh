@@ -1662,6 +1662,7 @@ test_29() {
 	(( $MDS1_VERSION >= $(version_code 2.14.53) )) ||
 		skip "Need MDS version at least 2.14.53"
 	(( $OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	check_set_fallocate_or_skip
 
 	mkdir_on_mdt0 $DIR/$tdir
@@ -1842,6 +1843,7 @@ test_31() {
 	(( $MDS1_VERSION >= $(version_code 2.14.53) )) ||
 		skip "Need MDS version at least 2.14.53"
 	(( $OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	check_set_fallocate_or_skip
 
 	pool_add $pool1 || error "Pool creation failed"

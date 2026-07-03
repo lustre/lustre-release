@@ -204,6 +204,48 @@ static ssize_t mntdev_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(mntdev);
 
+static ssize_t fallocate_zero_blocks_show(struct kobject *kobj,
+					  struct attribute *attr,
+					  char *buf)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
+
+	LASSERT(osd);
+	if (!osd->od_os)
+		return -EINPROGRESS;
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", osd->od_fallocate_zero_blocks);
+}
+
+static ssize_t fallocate_zero_blocks_store(struct kobject *kobj,
+					   struct attribute *attr,
+					   const char *buffer, size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osd_device *osd = osd_dt_dev(dt);
+	long val;
+	int rc;
+
+	LASSERT(osd);
+	if (!osd->od_os)
+		return -EINPROGRESS;
+
+	rc = kstrtol(buffer, 0, &val);
+	if (rc)
+		return rc;
+
+	if (val < -1 || val > 2)
+		return -EINVAL;
+
+	osd->od_fallocate_zero_blocks = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(fallocate_zero_blocks);
+
 static ssize_t force_sync_store(struct kobject *kobj, struct attribute *attr,
 				const char *buffer, size_t count)
 {
@@ -420,6 +462,7 @@ LUSTRE_RW_ATTR(readcache_max_filesize);
 static struct attribute *zfs_attrs[] = {
 	&lustre_attr_fstype.attr,
 	&lustre_attr_mntdev.attr,
+	&lustre_attr_fallocate_zero_blocks.attr,
 	&lustre_attr_force_sync.attr,
 	&lustre_attr_nonrotational.attr,
 	&lustre_attr_index_backup.attr,

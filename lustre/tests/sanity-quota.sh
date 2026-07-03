@@ -1128,6 +1128,7 @@ test_1h() {
 	local testdir="$DIR/$tdir"
 	local testfile="$DIR/$tdir/$tfile-0"
 
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	check_set_fallocate_or_skip
 
 	setup_quota_test || error "setup quota failed with $?"
@@ -6455,6 +6456,7 @@ test_78A()
 {
 	(( $OST1_VERSION >= $(version_code 2.14.55.173) )) ||
 		skip "need OST >= v2_14_55-173-g789038c97a for fallocate fix"
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	check_set_fallocate_or_skip
 
 	setup_quota_test || error "setup quota failed with $?"
@@ -6498,6 +6500,7 @@ test_78a()
 		skip "need client >= v2_15_50-37-g5fc934eb for falloc proj fix"
 	(( $OST1_VERSION >= $(version_code 2.15.0.37) )) ||
 		skip "need OST >= v2_15_50-37-g5fc934ebbb for falloc proj fix"
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	check_set_fallocate_or_skip
 
 	setup_quota_test || error "setup quota failed with $?"

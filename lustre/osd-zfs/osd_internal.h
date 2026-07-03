@@ -367,6 +367,12 @@ struct osd_device {
 	guid_t			 od_uuid;
 
 	atomic_t		 od_connects;
+	/* od_fallocate_zero_blocks = -1 : Disable all fallocate operations
+	 * od_fallocate_zero_blocks =  0 : Not supported
+	 * od_fallocate_zero_blocks =  1 : Not supported
+	 * od_fallocate_zero_blocks =  2 : Punch enable
+	 */
+	int			 od_fallocate_zero_blocks;
 	int			 od_index;
 	struct lu_site		 od_site;
 

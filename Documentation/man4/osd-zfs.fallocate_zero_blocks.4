@@ -1,0 +1,69 @@
+.TH OSD-ZFS.FALLOCATE_ZERO_BLOCKS 4 2026-07-11 "Lustre" "Lustre Tunable"
+.SH NAME
+osd-zfs.fallocate_zero_blocks \- control ZFS OSD fallocate
+.SH SYNOPSIS
+.SY "lctl set_param"
+.BI osd-zfs. FSNAME -*.fallocate_zero_blocks= MODE
+.YS
+.SY "lctl get_param"
+.BI osd-zfs. FSNAME -*.fallocate_zero_blocks
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.br
+.BR 644 | -rw-r--r--
+.TP
+.B Scope
+.br
+Per-MDT and OST device.
+.TP
+.B Config
+.br
+.B osd-zfs.*.fallocate_zero_blocks
+is always present for MDT and OST devices after 2.18.0
+.TP
+.B Default
+.br
+.RB fallocate_zero_blocks=0
+.TP
+.B Valid Range
+.br
+.RB fallocate_zero_blocks= -1
+.br
+.RB fallocate_zero_blocks= 2
+.br
+.SH DESCRIPTION
+.B fallocate_zero_blocks
+controls fallocate operation for ZFS OSD.
+.PP
+.I MODE
+can be -1, 0, 1 or 2. Where -1 means that all fallocate operation is
+disabled. 0 and 1 is related to generic fallocate alloc operation and for now is
+not supported at all. Setting value of 0 or 1 will always return -EOPNOTSUPP for
+all fallocate operations even though the actual mode passed to fallocate() is
+set to 3. 2 means punch operation is supported.
+.SH EXAMPLES
+.PP
+To disable fallocate under osd-zfs
+.EX
+.RB oss# " lctl set_param osd-zfs.*.fallocate_zero_blocks=-1"
+.EE
+.PP
+To enable fallocate(PUNCH_HOLE) under osd-zfs:
+.EX
+.RB oss# " lctl set_param osd-zfs.testfs-OST0000.fallocate_zero_blocks=2"
+.SH AVAILABILITY
+The
+.B fallocate_zero_blocks
+parameter is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" Added in commit 2.17.56
+.SH SEE ALSO
+.BR zfs (4),
+.BR lustre (7),
+.BR lctl (8),
+.BR lctl-get_param (8),
+.BR lctl-set_param (8),
+.BR zpool (8)

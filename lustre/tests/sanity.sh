@@ -13543,6 +13543,7 @@ test_101m()
 	local size
 	local iosz
 
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	check_set_fallocate_or_skip
 	stack_trap "rm -f $file" EXIT
 
@@ -19471,6 +19472,7 @@ test_150b() {
 run_test 150b "Verify fallocate (prealloc) functionality"
 
 test_150bb() {
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	check_set_fallocate_or_skip
 
 	touch $DIR/$tfile
@@ -19495,6 +19497,7 @@ test_150bb() {
 run_test 150bb "Verify fallocate modes both zero space"
 
 test_150c() {
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	check_set_fallocate_or_skip
 	local striping="-c2"
 
@@ -19527,6 +19530,7 @@ test_150c() {
 run_test 150c "Verify fallocate Size and Blocks"
 
 test_150d() {
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	check_set_fallocate_or_skip
 	local striping="-c2"
 
@@ -19546,6 +19550,7 @@ test_150d() {
 run_test 150d "Verify fallocate Size and Blocks - Non zero start"
 
 test_150e() {
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	check_set_fallocate_or_skip
 
 	echo "df before:"
@@ -19601,16 +19606,16 @@ test_150f() {
 	local want_blocks_before=40 # 512 sized blocks
 	local want_blocks_after=24  # 512 sized blocks
 	local length=$(((want_blocks_before - want_blocks_after) * 512))
+	local subtest_file=$DIR/${tfile}_st1
+	# Variable used only for subtest runs
+	local subtest_size
+	local subtest_blks
 
-	[[ $OST1_VERSION -ge $(version_code 2.14.0) ]] ||
-		skip "need at least 2.14.0 for fallocate punch"
+	check_fallocate_or_skip ost1 punch
+	stack_trap "rm -f $DIR/$tfile*; wait_delete_completed"
 
-	if [ "$ost1_FSTYPE" = "zfs" ] || [ "$mds1_FSTYPE" = "zfs" ]; then
-		skip "LU-14160: punch mode is not implemented on OSD ZFS"
-	fi
-
-	check_set_fallocate_or_skip
-	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
+	# For ZFS OST case, make sure fallocate (punch) mode is set to 2 (enable)
+	[[ "$ost1_FSTYPE" == "zfs" ]] && check_set_fallocate 2
 
 	[[ "x$DOM" == "xyes" ]] &&
 		$LFS setstripe -E1M -L mdt -E eof $DIR/$tfile
@@ -19626,10 +19631,20 @@ test_150f() {
 	size=$(stat -c '%s' $DIR/$tfile)
 	blocks=$(stat -c '%b' $DIR/$tfile)
 
+	#
 	# Verify punch worked.
-	(( blocks == want_blocks_after )) ||
-		error "punch failed: blocks $blocks != $want_blocks_after"
+	#
+	# Note 1: Below verification is not valid for ZFS. ZFS adds extra dnode
+	# calculation overhead and therefore would fail the check. The check
+	# below is only valid for ldiskfs, which just reports blocks used.
+	# Subtest 2, however, verifies that the blocks does get reduced.
+	if [[ "$ost1_FSTYPE" != "zfs" ]]; then
+		(( blocks == want_blocks_after )) ||
+			error "punch failed: blocks $blocks != $want_blocks_after"
+	fi
 
+	# Our best effort in this testcase is to verify "size". Which should
+	# be same for both ZFS and ldiskfs
 	(( size == want_size_before )) ||
 		error "punch failed: size $size != $want_size_before"
 
@@ -19647,18 +19662,27 @@ test_150f() {
 	yes 'A' | dd of=$DIR/$tfile bs=4096 count=5 ||
 		error "dd failed for bs 4096 and count 5"
 
-	# Punch range less than block size will have no change in block count
-	want_blocks_after=40  # 512 sized blocks
-
 	# Punch overlaps two blocks and less than blocksize
 	out=$(fallocate -p --offset 4000 -l 3000 $DIR/$tfile 2>&1) ||
 		skip_eopnotsupp "$out|fallocate: offset 4000 length 3000"
+
+	# Flush writes to ensure valid blocks. Need to be more thorough for
+	# ZFS, since blocks are not allocated/returned to client immediately.
+	sync_all_data
+	for (( i=1; i <= OSTCOUNT; i++ )); do
+		wait_zfs_commit "ost${i}"
+	done
+	cancel_lru_locks osc
+
 	size=$(stat -c '%s' $DIR/$tfile)
 	blocks=$(stat -c '%b' $DIR/$tfile)
 
-	# Verify punch worked.
-	(( blocks == want_blocks_after )) ||
-		error "punch failed: blocks $blocks != $want_blocks_after"
+	# Verify punch worked (only for ldiskfs). Please see "Note 1" above.
+	if [[ "$ost1_FSTYPE" != "zfs" ]]; then
+		want_blocks_after=40  # 512 sized blocks
+		(( blocks == want_blocks_after )) ||
+			error "punch failed: blocks $blocks != $want_blocks_after"
+	fi
 
 	(( size == want_size_before )) ||
 		error "punch failed: size $size != $want_size_before"
@@ -19669,6 +19693,40 @@ test_150f() {
 	cksum=($(md5sum $DIR/$tfile))
 	[[ "${cksum[0]}" == "$expect" ]] ||
 		error "unexpected MD5SUM after punch: ${cksum[0]}"
+
+	# Subtest 2
+	echo "Mostly for ZFS. Verify fallocate -p: Reduces blocks"
+	dd if=/dev/urandom of=$subtest_file bs=1M count=2 ||
+		error "dd failed for bs 1M and count 2"
+
+	# Reflect changes immediately to client
+	cancel_lru_locks
+
+	subtest_size=$(stat -c '%s' $subtest_file)
+	subtest_blks=$(stat -c '%b' $subtest_file)
+
+	out=$(fallocate -p -o0 -l2M $subtest_file 2>&1) ||
+		skip_eopnotsupp "$out|fallocate: offset 0 and length 2M"
+
+	# Flush writes to ensure valid blocks. Need to be more thorough for
+	# ZFS, since blocks are not allocated/returned to client immediately.
+	sync_all_data
+	for (( i=1; i <= OSTCOUNT; i++ )); do
+		wait_zfs_commit "ost${i}"
+	done
+	cancel_lru_locks osc
+
+	# collect client blocks and size
+	size=$(stat -c '%s' $subtest_file)
+	blocks=$(stat -c '%b' $subtest_file)
+
+	# This is heuristic. Blocks in ZFS will never reach 0, due to dnode
+	# overhead and therefore direct comparison cannot be done. But should
+	# reduce to single digit for full file punch.
+	(( size == subtest_size )) ||
+		error "fallocate -p failed: size $size != $subtest_size"
+	(( blocks != subtest_blks && blocks < 10 )) ||
+		error "fallocate -p failed: blocks $blocks sub_blks $subtest_blks"
 }
 run_test 150f "Verify fallocate punch functionality"
 
@@ -19680,14 +19738,11 @@ test_150g() {
 	local size_after
 	local BS=4096 # Block size in bytes
 
-	[[ $OST1_VERSION -ge $(version_code 2.14.0) ]] ||
-		skip "need at least 2.14.0 for fallocate punch"
+	(( $OST1_VERSION >= $(version_code v2_14_51-78-gcb037f305c) )) ||
+		skip "need at least 2.14.51.78 for fallocate punch"
 
-	if [ "$ost1_FSTYPE" = "zfs" ] || [ "$mds1_FSTYPE" = "zfs" ]; then
-		skip "LU-14160: punch mode is not implemented on OSD ZFS"
-	fi
-
-	check_set_fallocate_or_skip
+	check_set_fallocate_or_skip # Enable fallocate then probe
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	stack_trap "rm -f $DIR/$tfile; wait_delete_completed"
 
 	if [[ "x$DOM" == "xyes" ]]; then
@@ -19768,6 +19823,7 @@ test_150h() {
 	local file=$DIR/$tfile
 	local size
 
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	check_set_fallocate_or_skip
 	statx_supported || skip_env "Test must be statx() syscall supported"
 
@@ -28093,6 +28149,7 @@ test_253() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	check_set_fallocate_or_skip
 
 	local ostidx=0
@@ -35340,6 +35397,7 @@ test_600a() {
 	local pcnt=$((size_mb * 1024 * 1024 / PAGE_SIZE))
 
 	which vmtouch || skip_env "This test needs vmtouch utility"
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	check_set_fallocate_or_skip
 	disable_page_cache_shrink
 	enable_mlock_pages_check
@@ -35407,6 +35465,7 @@ test_600b() {
 			      awk '/^max_cached_mb/ { print $2 }')
 
 	which vmtouch || skip_env "This test needs vmtouch utility"
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	check_set_fallocate_or_skip
 	disable_page_cache_shrink
 	enable_mlock_pages_check
@@ -35446,6 +35505,7 @@ test_600c() {
 			      awk '/^max_cached_mb/ { print $2 }')
 
 	which vmtouch || skip_env "This test needs vmtouch utility"
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	check_set_fallocate_or_skip
 	disable_page_cache_shrink
 	enable_mlock_pages_check
@@ -35545,6 +35605,7 @@ test_600d() {
 			      awk '/^max_cached_mb/ { print $2 }')
 
 	which vmtouch || skip_env "This test needs vmtouch utility"
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	check_set_fallocate_or_skip
 	disable_page_cache_shrink
 	enable_mlock_pages_check

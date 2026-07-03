@@ -2921,6 +2921,7 @@ run_test 23b "truncate EC file to larger size"
 
 test_23c() {
 	enable_ec
+	check_fallocate_or_skip ost1 alloc # Probe for feature support
 	check_set_fallocate_or_skip
 
 	local tf=$DIR/$tdir/$tfile

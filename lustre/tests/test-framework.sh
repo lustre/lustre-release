@@ -12511,27 +12511,51 @@ function unlinkmany() {
 function check_fallocate_supported()
 {
 	local facet=${1:-ost1}
-	local supported="FALLOCATE_SUPPORTED_$facet"
+	local op=${2:-alloc}
+	# Each operation get its own cached result based on the $op
+	local supported="FALLOCATE_SUPPORTED_${facet}_${op}"
 	local fstype="${facet}_FSTYPE"
+	local version="${facet^^}_VERSION"
+	local fa_mode="osd-${!fstype}.$(facet_svc $facet).fallocate_zero_blocks"
+	local mode=$(do_facet $facet $LCTL get_param -n $fa_mode 2>/dev/null |
+		     head -n 1)
 
 	if [[ -n "${!supported}" ]]; then
 		echo "${!supported}"
 		return 0
 	fi
+
 	if [[ -z "${!fstype}" ]]; then
 		eval export $fstype=$(facet_fstype $facet)
 	fi
-	if [[ "${!fstype}" != "ldiskfs" ]]; then
+
+	# Applies to all $op
+	if [[ $facet =~ mds ]] &&
+	   ((${!version} < $(version_code v2_14_53-10-g163870a))); then
+		echo "need MDS >= 2.14.53.10 for fallocate $op" 1>&2
+		return 1
+	fi
+
+	if [[ "$op" == "alloc" && "${!fstype}" != "ldiskfs" ]]; then
 		echo "fallocate on ${!fstype} doesn't consume space" 1>&2
 		return 1
 	fi
 
-	local fa_mode="osd-ldiskfs.$(facet_svc $facet).fallocate_zero_blocks"
-	local mode=$(do_facet $facet $LCTL get_param -n $fa_mode 2>/dev/null |
-		     head -n 1)
-	! [[ "$facet" =~ "mds" ]] || # older MDS doesn't support fallocate
-		(( MDS1_VERSION >= $(version_code v2_14_53-10-g163870abfb) )) ||
-			mode=""
+	if [[ "$op" == "punch" ]]; then
+		if [[ $facet =~ ost ]] &&
+		   ((${!version} < $(version_code v2_14_51-78-gcb037f30))); then
+			echo "need OST >= 2.14.51.78 for fallocate $op" 1>&2
+			return 1
+		fi
+
+		# Check for $op feature when fstype=zfs
+		if [[ "${!fstype}" == "zfs" ]]; then
+			if [[ -z "$mode" ]]; then
+				echo "fallocate not supported on $facet for $op" 1>&2
+				return 1
+			fi
+		fi
+	fi
 
 	if [[ -z "$mode" ]]; then
 		echo "fallocate not supported on $facet" 1>&2
@@ -12540,6 +12564,7 @@ function check_fallocate_supported()
 	eval export $supported="$mode"
 
 	echo ${!supported}
+
 	return 0
 }
 
@@ -12549,16 +12574,32 @@ function check_fallocate_or_skip()
 {
 	local facet=$1
 
-	check_fallocate_supported $1 || skip "fallocate not supported"
+	check_fallocate_supported $1 $2 || skip "fallocate not supported"
 }
+
 
 # Check if fallocate supported on OSTs, enable if unset, default mode=0
 # Optionally pass the OST fallocate mode (0=unwritten extents, 1=zero extents)
+#
+# For ZFS OST default fallocate mode is 2. Which is punch only support.
+# Other valid options are -1(Disabled) 1/0 (Not supported).
 function check_set_fallocate()
 {
 	local new_mode="$1"
-	local fa_mode="osd-ldiskfs.*.fallocate_zero_blocks"
-	local old_mode="$(check_fallocate_supported)"
+	local fa_mode_ldiskfs="osd-ldiskfs.*.fallocate_zero_blocks"
+	local fa_mode_zfs="osd-zfs.*.fallocate_zero_blocks"
+	local op=alloc
+	local old_mode
+	local fa_mode
+
+	if [[ "$ost1_FSTYPE" = "zfs" || "$mds1_FSTYPE" = "zfs" ]]; then
+		fa_mode=$fa_mode_zfs
+		op=punch # zfs only have punch for now.
+	else
+		fa_mode=$fa_mode_ldiskfs
+	fi
+
+	old_mode="$(check_fallocate_supported ost1 $op)"
 
 	[[ -n "$old_mode" ]] || { echo "fallocate not supported"; return 1; }
 	[[ -z "$new_mode" && "$old_mode" != "-1" ]] &&

@@ -45,6 +45,11 @@
 
 struct lu_context_key	osd_key;
 
+/* ZFS fallocate mode tunables (-1=disabled, 0/1=Not supported, 2=Punch)
+ * default osd_fallocate_zero_blocks starts with fallocate (only punch) enabled
+ */
+static int osd_fallocate_zero_blocks = 2;
+
 static int osd_txg_sync_delay_us = -1;
 
 /* Slab for OSD object allocation */
@@ -1365,7 +1370,10 @@ static int osd_device_init0(const struct lu_env *env,
 			    struct lustre_cfg *cfg)
 {
 	struct lu_device *l = osd2lu_dev(o);
+	char *svname = lustre_cfg_string(cfg, 4);
 	int rc;
+
+	CDEBUG(D_OTHER, "%s: OSD INIT\n", svname ? svname : "NULL");
 
 	/* if the module was re-loaded, env can loose its keys */
 	rc = lu_env_refill((struct lu_env *) env);
@@ -1383,6 +1391,7 @@ static int osd_device_init0(const struct lu_env *env,
 	 */
 	o->od_nonrotational = 0;
 
+	o->od_fallocate_zero_blocks = osd_fallocate_zero_blocks;
 out:
 	RETURN(rc);
 }
@@ -1695,6 +1704,10 @@ MODULE_PARM_DESC(osd_oi_count, "Number of Object Index containers to be created,
 module_param(osd_txg_sync_delay_us, int, 0644);
 MODULE_PARM_DESC(osd_txg_sync_delay_us,
 		 "When zero or larger delay N usec instead of doing TXG sync");
+
+module_param(osd_fallocate_zero_blocks, int, 0644);
+MODULE_PARM_DESC(osd_fallocate_zero_blocks,
+		 "ZFS fallocate mode (Only Punch) -1 is disabled, 0/1 is not supported currently and 2 is punch");
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Object Storage Device ("LUSTRE_OSD_ZFS_NAME")");

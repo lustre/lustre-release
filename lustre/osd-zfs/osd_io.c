@@ -15,13 +15,16 @@
  */
 
 #define DEBUG_SUBSYSTEM S_OSD
+#include <linux/types.h>
+#include <linux/fs.h>
+#include <linux/falloc.h>
 
-#include <obd_support.h>
-#include <lustre_net.h>
 #include <obd.h>
 #include <obd_class.h>
-#include <lustre_disk.h>
+#include <lustre_net.h>
 #include <lustre_fid.h>
+#include <obd_support.h>
+#include <lustre_disk.h>
 #include <lustre_quota.h>
 
 #include "osd_internal.h"
@@ -1384,6 +1387,170 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 				 0, oh, NULL, OSD_QID_BLK));
 }
 
+/* Get rounded range for LUSTRE_ENCRYPT_FL */
+static void osd_fallocate_range(struct osd_object *obj, __u64 start, __u64 end,
+				__u64 *new_start, __u64 *new_len,
+				__u64 *new_fsize)
+{
+	__u64 fdsize;
+
+	read_lock(&obj->oo_attr_lock);
+	/* New final filesize */
+	*new_fsize = fdsize = obj->oo_attr.la_size;
+
+	/* Encryption rounding - start */
+	if (obj->oo_lma_flags & LUSTRE_ENCRYPT_FL &&
+	    start & ~LUSTRE_ENCRYPTION_MASK) {
+		start = (start & LUSTRE_ENCRYPTION_MASK) +
+			 LUSTRE_ENCRYPTION_UNIT_SIZE;
+	}
+
+	/* Encryption rounding - end */
+	if (obj->oo_lma_flags & LUSTRE_ENCRYPT_FL)
+		end = end & LUSTRE_ENCRYPTION_MASK;
+
+	/* New final start */
+	*new_start = start;
+
+	/* New final len */
+	if (end == OBD_OBJECT_EOF || end >= fdsize)
+		*new_len = DMU_OBJECT_END;
+	/* avoid 'end' less than '*new_start' and wrapping to very large val */
+	else if (end <= *new_start)
+		*new_len = 0;
+	else
+		*new_len = end - *new_start;
+	read_unlock(&obj->oo_attr_lock);
+}
+
+/*
+ * osd_declare_falloate() - Prepare fallocate operation
+ * @env: Lustre environment
+ * @dt: object to be written
+ * @attr: Pointer to struct attribute
+ * @start: Start range (bytes)
+ * @end: End range (bytes)
+ * @mode: Fallocate mode flags (FALLOC_FL_PUNCH_HOLE)
+ * @th: Transaction handle
+ * @error_code: unused currently
+ *
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
+ */
+static int osd_declare_fallocate(const struct lu_env *env,
+				 struct dt_object *dt, struct lu_attr *attr,
+				 __u64 start, __u64 end, int mode,
+				 struct thandle *th,
+				 enum dt_fallocate_error_t *error_code)
+{
+	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *osd = osd_obj2dev(obj);
+	__u64 nstart, nlen, nfdsize = 0;
+	struct osd_thandle *oh;
+	int rc;
+
+	ENTRY;
+
+	LASSERT(th);
+	oh = container_of(th, struct osd_thandle, ot_super);
+
+	/* fallocate is disabled or alloc is not supported. Setting value of 0
+	 * or 1 will always return -EOPNOTSUPP. Please refer man page for more
+	 * details.
+	 */
+	if (osd->od_fallocate_zero_blocks <= 1) {
+		CDEBUG(D_INODE,
+		       "%s: ZB <= 1 start=%lld end=%lld mode=%x osd-fmode=%d\n",
+		       osd->od_svname, (long long)start, (long long)end,
+		       mode, osd->od_fallocate_zero_blocks);
+		RETURN(-EOPNOTSUPP);
+	}
+
+	/* Only PUNCH_HOLE(KEEP_SIZE) is supported now */
+	if (mode != (FALLOC_FL_PUNCH_HOLE | FALLOC_FL_KEEP_SIZE)) {
+		CDEBUG(D_INODE,
+		       "%s: MODE start=%lld end=%lld mode=%x osd-fmode=%d\n",
+		       osd->od_svname, (long long)start, (long long)end,
+		       mode, osd->od_fallocate_zero_blocks);
+		RETURN(-EOPNOTSUPP);
+	}
+
+	/* Get rounded range for LUSTRE_ENCRYPT_FL */
+	osd_fallocate_range(obj, start, end, &nstart, &nlen, &nfdsize);
+
+	/* Only hold/reserve if we are really freeing */
+	if (nstart < nfdsize) {
+		dmu_tx_mark_netfree(oh->ot_tx);
+		dmu_tx_hold_free(oh->ot_tx, obj->oo_dn->dn_object, nstart,
+				 nlen);
+	}
+
+	CDEBUG(D_INODE,
+	       "%s: Declare fallocate start %lld end %lld, mode %x size %lld osd-fmode %d dnode %llu\n",
+	       osd->od_svname, (long long)nstart, (long long)end, mode,
+	       (long long)nfdsize, osd->od_fallocate_zero_blocks,
+	       obj->oo_dn->dn_object);
+
+	rc = osd_declare_quota(env, osd, obj->oo_attr.la_uid,
+			       obj->oo_attr.la_gid, obj->oo_attr.la_projid,
+			       0, oh, NULL, OSD_QID_BLK);
+
+	RETURN(rc);
+}
+
+/*
+ * osd_fallocate() - Implement actual fallocate operation
+ * @env: Lustre environment
+ * @dt: object to be written
+ * @start: Start range (bytes)
+ * @end: End range (bytes)
+ * @mode: Fallocate mode flags (FALLOC_FL_PUNCH_HOLE)
+ * @th: Transaction handle
+ *
+ * Return:
+ * * %0 on success
+ * * %negative error code on failure
+ */
+static int osd_fallocate(const struct lu_env *env, struct dt_object *dt,
+			 __u64 *start, __u64 end, int mode, struct thandle *th)
+{
+	struct osd_object *obj = osd_dt_obj(dt);
+	struct osd_device *osd = osd_obj2dev(obj);
+	__u64 nstart, nlen, nfdsize = 0;
+	struct osd_thandle *oh;
+	int rc = 0;
+
+	ENTRY;
+
+	LASSERT(dt_object_exists(dt));
+	LASSERT(osd_invariant(obj));
+	LASSERT(th);
+
+	/* Get rounded range for LUSTRE_ENCRYPT_FL */
+	osd_fallocate_range(obj, *start, end, &nstart, &nlen, &nfdsize);
+
+	CDEBUG(D_INODE,
+	       "%s: fallocate start=%lld end=%lld, mode %x size %lld dnode %llu\n",
+	       osd->od_svname, (long long)nstart, (long long)end, mode,
+	       (long long)nfdsize, obj->oo_dn->dn_object);
+
+	oh = container_of(th, struct osd_thandle, ot_super);
+
+	down_read(&obj->oo_guard);
+	if (obj->oo_destroyed)
+		GOTO(out, rc = -ENOENT);
+
+	if (nstart < nfdsize && nlen != 0)
+		rc = -dmu_free_range(osd->od_os, obj->oo_dn->dn_object, nstart,
+				     nlen, oh->ot_tx);
+	else
+		rc = 0; /* This is beyond EOF or empty range therefore no-op */
+out:
+	up_read(&obj->oo_guard);
+	RETURN(rc);
+}
+
 static loff_t osd_lseek(const struct lu_env *env, struct dt_object *dt,
 			loff_t offset, int whence)
 {
@@ -1461,6 +1628,8 @@ const struct dt_body_operations osd_body_ops = {
 	.dbo_read_prep			= osd_read_prep,
 	.dbo_declare_punch		= osd_declare_punch,
 	.dbo_punch			= osd_punch,
+	.dbo_declare_fallocate		= osd_declare_fallocate,
+	.dbo_fallocate			= osd_fallocate,
 	.dbo_lseek			= osd_lseek,
 };
 
