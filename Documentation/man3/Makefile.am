@@ -26,6 +26,8 @@ LIBMAN = 					\
 	llapi_fid_parse.3			\
 	llapi_fid_to_handle.3			\
 	llapi_file_create.3			\
+	llapi_find.3				\
+	llapi_find_with_cb.3			\
 	llapi_file_create_foreign.3		\
 	llapi_file_get_stripe.3			\
 	llapi_file_open.3			\

@@ -1,0 +1,927 @@
+.TH LLAPI_FIND 3 2026-07-03 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_find, llapi_find_with_cb \- find files in a Lustre filesystem with
+extensive filtering capabilities
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_find(char *" path ", struct find_param *" param );
+.PP
+.BI "int llapi_find_with_cb(char *" path ", struct find_param *" param ,
+.BI "                       llapi_find_cb_t " cb_init ",
+.BI "                       llapi_find_cb_t " cb_fini );
+.PP
+.BI "typedef int (*llapi_find_cb_t)(char *" path ", int " p ", int *" d ,
+.BI "                               struct find_param *" param ,
+.BI "                               struct dirent64 *" de );
+.fi
+.SH DESCRIPTION
+The
+.BR llapi_find ()
+and
+.BR llapi_find_with_cb ()
+functions traverse a Lustre filesystem directory tree starting at
+.I path
+and identify files and directories matching criteria specified in the
+.I param
+structure. These functions provide programmatic access to file search
+capabilities similar to
+.BR "lfs find" (1)
+command.
+.PP
+.B llapi_find()
+uses default callback functions for file matching and directory processing.
+.PP
+.B llapi_find_with_cb()
+allows custom callback functions to be specified:
+.TP
+.I cb_init
+Callback invoked for each file/directory entry during traversal. If
+.BR NULL ,
+uses the default
+.BR cb_find_init ()
+callback.
+.TP
+.I cb_fini
+Callback invoked after processing a directory's contents. If
+.BR NULL ,
+uses the default
+.BR cb_common_fini ()
+callback.
+.SS Traversal Algorithm
+The traversal algorithm varies depending on whether parallel processing
+is enabled:
+.PP
+.B Single-threaded Mode (fp_thread_count == 0 or 1):
+.PP
+Uses pure depth-first traversal via the internal
+.BR llapi_semantic_traverse ()
+function. For each directory:
+.IP 1. 4
+Call
+.I cb_init
+callback on the directory itself
+.IP 2.
+Read all directory entries
+.IP 3.
+For non-directory entries: call
+.I cb_init
+then
+.I cb_fini
+.IP 4.
+For subdirectories: recursively call
+.BR llapi_semantic_traverse ()
+.IP 5.
+Call
+.I cb_fini
+callback on the directory
+.PP
+.B Parallel Mode (fp_thread_count > 1):
+.PP
+Uses a work-stealing queue architecture with multiple worker threads.
+The traversal is
+.I not
+pure depth-first; instead, subdirectories are added to a shared work queue for
+parallel processing:
+.IP 1. 4
+Main thread initializes a
+.B find_work_queue
+with the starting path
+.IP 2.
+.I N
+worker threads are created (where
+.I N
+=
+.IR fp_thread_count )
+.IP 3.
+Each worker thread:
+.RS 4
+.IP \- 2
+Dequeues a work unit (directory) from the queue head
+.IP \-
+Calls
+.BR llapi_semantic_traverse ()
+on that directory
+.IP \-
+During traversal, when a subdirectory is encountered, instead of recursing
+immediately, a new work unit is created and added to the queue tail.
+.IP \-
+Non-directory files are processed immediately
+.IP \-
+Repeats until queue is empty and all work units complete
+.RE
+.IP 4.
+Main thread waits for
+.I fwq_active_units
+to reach zero before returning
+.PP
+This work-stealing design provides load balancing: idle workers automatically
+pick up work from the shared queue, and directory trees are processed
+in parallel rather than sequentially.
+.PP
+.B Traversal Control Fields:
+.TP
+.I fp_max_depth
+Maximum directory depth to traverse (0 = no limit).
+.TP
+.I fp_min_depth
+Minimum directory depth before processing entries.
+.TP
+.I fp_recursive
+Enable recursive directory descent (default: enabled).
+.TP
+.I fp_thread_count
+Number of parallel worker threads:
+.RS
+.IP \- 2
+0 or 1: Single-threaded depth-first traversal
+.IP \- 2
+>1: Parallel traversal with work-stealing queue
+.RE
+.TP
+.I fp_stop_on_error
+If set, stop entire traversal on first error. In parallel mode, sets
+.I fwq_shutdown
+flag to terminate all workers.
+.SS Internal Traversal Implementation
+Both single-threaded and parallel modes use the internal
+.BR llapi_semantic_traverse ()
+function as the core traversal engine. This function:
+.PP
+.B Opens and processes a single directory:
+.IP 1. 4
+Opens the directory using
+.BR open (2)
+with
+.B O_RDONLY|O_NDELAY|O_DIRECTORY
+flags
+.IP 2.
+Reopens with
+.B O_NOFOLLOW
+to detect foreign symlink directories
+.IP 3.
+Calls
+.I cb_init
+callback on the directory (if provided)
+.IP 4.
+Converts the file descriptor to
+.B DIR*
+using
+.BR fdopendir (3)
+.IP 5.
+Iterates through directory entries using
+.BR readdir (3)
+.PP
+.B For each directory entry:
+.IP \- 2
+Skips "." and ".." entries
+.IP \-
+Appends entry name to path buffer (with '/' separator)
+.IP \-
+For
+.BR DT_DIR " (directories):"
+.RS
+.IP \(bu 2
+In single-threaded mode: recursively calls
+.BR llapi_semantic_traverse ()
+.IP \(bu
+In parallel mode: calls
+.BR work_unit_create_and_add ()
+to enqueue for worker threads
+.RE
+.IP \-
+For other entry types: calls
+.I cb_init
+then
+.I cb_fini
+callbacks
+.IP \-
+Removes entry name from path buffer (restores to parent directory)
+.PP
+.B After processing all entries:
+.IP \- 2
+Calls
+.I cb_fini
+callback on the directory itself
+.IP \-
+Closes directory and file descriptors
+.PP
+.B Path buffer management:
+The path buffer is modified in-place during traversal. The buffer must be sized
+at least 2 * PATH_MAX + 1 bytes to accommodate the deepest possible paths.
+Entry names are appended with '/' separators during descent and removed during
+ascent.
+.PP
+.B Depth tracking:
+The
+.I fp_depth
+field tracks current depth (0 = root). Before descending into a subdirectory, if
+.I fp_depth
+==
+.IR fp_max_depth ,
+the callback returns 1 to skip descent. After incrementing depth, if
+.I fp_depth
+<
+.IR fp_min_depth ,
+callbacks are skipped (but traversal continues).
+.PP
+.B File descriptor optimization:
+Uses
+.BR openat (2)
+when parent directory file descriptor is available, avoiding full path
+resolution overhead. Keeps directory file descriptors open during traversal for
+efficient subdirectory access.
+.SS Work Queue Architecture (Parallel Mode)
+When
+.I fp_thread_count
+> 1, the parallel find uses a
+.B find_work_queue
+structure to coordinate worker threads:
+.PP
+.in +4n
+.EX
+struct find_work_queue {
+    struct find_work_unit *fwq_head;  /* Dequeue from head */
+    struct find_work_unit *fwq_tail;  /* Enqueue to tail */
+    pthread_mutex_t fwq_lock;
+    pthread_cond_t fwq_sleep_cond;
+    atomic_int fwq_active_units;      /* Active work count */
+    bool fwq_shutdown;                /* Shutdown flag */
+    int fwq_error;                    /* First error code */
+    llapi_find_cb_t fwq_cb_init;      /* Init callback */
+    llapi_find_cb_t fwq_cb_fini;      /* Fini callback */
+};
+
+struct find_work_unit {
+    struct find_work_unit *fwu_next;
+    struct find_param *fwu_param;     /* Deep copy */
+    struct dirent64 *fwu_de;
+    char *fwu_path;
+};
+.EE
+.in
+.PP
+.B Queue Operations:
+.TP
+.B Enqueue
+When
+.BR llapi_semantic_traverse ()
+encounters a subdirectory (in parallel mode), it calls
+.BR work_unit_create_and_add ()
+which:
+.RS
+.IP 1. 4
+Creates a work unit with a deep copy of
+.I find_param
+.IP 2.
+Increments
+.I fwq_active_units
+atomically
+.IP 3.
+Adds unit to queue tail (under
+.IR fwq_lock )
+.IP 4.
+Signals
+.I fwq_sleep_cond
+to wake one waiting worker
+.RE
+.TP
+.B Dequeue
+Worker threads dequeue from the queue head:
+.RS
+.IP 1. 4
+Acquire
+.I fwq_lock
+.IP 2.
+Wait on
+.I fwq_sleep_cond
+if queue is empty and not shutting down
+.IP 3.
+Remove unit from head, update
+.I fwq_head
+pointer
+.IP 4.
+Release
+.I fwq_lock
+.IP 5.
+Process the work unit
+.IP 6.
+Decrement
+.I fwq_active_units
+atomically
+.RE
+.TP
+.B Work Stealing
+Idle workers automatically "steal" work from the shared queue. This provides
+dynamic load balancing without requiring work distribution logic.
+.TP
+.B Completion Detection
+Main thread polls
+.I fwq_active_units
+(using atomic read). When it reaches zero, all subdirectories have been
+processed and all workers are idle or waiting.
+.TP
+.B Error Handling
+If any worker encounters an error and
+.I fp_stop_on_error
+is set:
+.RS
+.IP \- 2
+Worker sets
+.I fwq_shutdown
+= true
+.IP \-
+Worker broadcasts
+.I fwq_sleep_cond
+to wake all workers
+.IP \-
+All workers exit their processing loops
+.IP \-
+Main thread detects shutdown and returns error
+.RE
+.SS Callback Interface
+Custom callbacks must conform to the
+.B llapi_find_cb_t
+signature:
+.PP
+.EX
+int callback(char *path, int p, int *d, struct find_param *param,
+             struct dirent64 *de);
+.EE
+.in
+.PP
+Parameters:
+.TP
+.I path
+Full path to the current file/directory being processed.
+.TP
+.I p
+File descriptor of the parent directory (-1 if not available).
+.TP
+.I d
+Pointer to file descriptor of current entry (NULL for non-directories).
+.TP
+.I param
+Pointer to the
+.B find_param
+structure. The
+.I fp_cb_data
+field can be used to pass custom callback data.
+.TP
+.I de
+Directory entry structure (NULL for the root path).
+.PP
+Return values from callbacks:
+.TP
+.B 0
+Continue traversal normally.
+.TP
+.B 1
+Skip descending into this directory (for directories only).
+.TP
+.B -1
+Stop traversal completely.
+.TP
+.B Other
+Error code (negative values).
+.SS Matching Conditions
+The
+.B find_param
+structure supports extensive matching conditions. All conditions must be
+satisfied for a file to match (logical AND). Fields must be initialized to 0
+before use, then set as needed:
+.PP
+.B File Type and Name Matching:
+.TP
+.I fp_type
+File type to match (S_IFREG, S_IFDIR, S_IFLNK, etc.). Set
+.I fp_exclude_type
+to invert the match.
+.TP
+.I fp_pattern
+Filename pattern using
+.BR fnmatch (3)
+syntax. Set
+.I fp_exclude_pattern
+to exclude matching names.
+.PP
+.B Owner and Permissions:
+.TP
+.I fp_uid
+User ID to match. Set
+.I fp_check_uid
+to enable and
+.I fp_exclude_uid
+to invert.
+.TP
+.I fp_gid
+Group ID to match. Set
+.I fp_check_gid
+to enable and
+.I fp_exclude_gid
+to invert.
+.TP
+.I fp_perm
+Permission bits to match. Set
+.I fp_perm_sign
+to one of:
+.BR LFS_FIND_PERM_EXACT " (exact match),"
+.BR LFS_FIND_PERM_ALL " (all bits set),"
+or
+.BR LFS_FIND_PERM_ANY " (any bits set)."
+Set
+.I fp_exclude_perm
+to invert.
+.TP
+.I fp_projid
+Project ID to match. Set
+.I fp_check_projid
+to enable and
+.I fp_exclude_projid
+to invert.
+.PP
+.B Time-based Matching:
+.TP
+.I fp_atime
+Access time to compare (seconds since epoch). Set
+.I fp_asign
+to -1 (older), 0 (exact), or 1 (newer). Set
+.I fp_exclude_atime
+to invert.
+.I fp_time_margin
+specifies tolerance in seconds.
+.TP
+.I fp_mtime
+Modification time. Same semantics as
+.IR fp_atime .
+Use
+.I fp_msign
+and
+.IR fp_exclude_mtime .
+.TP
+.I fp_ctime
+Change time. Same semantics as
+.IR fp_atime .
+Use
+.I fp_csign
+and
+.IR fp_exclude_ctime .
+.TP
+.I fp_btime
+Birth/creation time. Same semantics as
+.IR fp_atime .
+Use
+.I fp_bsign
+and
+.IR fp_exclude_btime .
+.TP
+.I fp_newerxy
+Enable
+.BR --newerXY
+comparison. Uses
+.I fp_newery
+array for reference times indexed by
+.B NEWERXY_ATIME
+(0),
+.B NEWERXY_MTIME
+(1),
+.B NEWERXY_CTIME
+(2),
+.B NEWERXY_BTIME
+(3).
+.PP
+.B Size and Blocks:
+.TP
+.I fp_size
+File size in bytes. Set
+.I fp_check_size
+to enable,
+.I fp_size_sign
+to -1/0/1 (smaller/exact/larger), and
+.I fp_size_units
+for block size units. Set
+.I fp_exclude_size
+to invert.
+.TP
+.I fp_blocks
+Number of blocks. Set
+.I fp_check_blocks
+to enable,
+.I fp_blocks_sign
+to -1/0/1, and
+.I fp_blocks_units
+for units. Set
+.I fp_exclude_blocks
+to invert.
+.PP
+.B Lustre-specific Attributes:
+.TP
+.I fp_stripe_size
+Stripe size in bytes. Set
+.I fp_check_stripe_size
+to enable,
+.I fp_stripe_size_sign
+to -1/0/1, and
+.I fp_stripe_size_units
+for units. Set
+.I fp_exclude_stripe_size
+to invert.
+.TP
+.I fp_stripe_count
+Number of stripes. Set
+.I fp_check_stripe_count
+to enable,
+.I fp_stripe_count_sign
+to -1/0/1. Set
+.I fp_exclude_stripe_count
+to invert.
+.TP
+.I fp_poolname
+OST pool name. Set
+.I fp_check_pool
+to enable and
+.I fp_exclude_pool
+to invert.
+.TP
+.I fp_layout
+Layout pattern (RAID0, MDT, etc.). Set
+.I fp_check_layout
+to enable and
+.I fp_exclude_layout
+to invert.
+.TP
+.I fp_comp_count
+Component count for composite layouts. Set
+.I fp_check_comp_count
+to enable,
+.I fp_comp_count_sign
+to -1/0/1. Set
+.I fp_exclude_comp_count
+to invert.
+.TP
+.I fp_comp_flags
+Component flags to match. Set
+.I fp_check_comp_flags
+to enable. Use
+.I fp_comp_neg_flags
+for flags that must not be set.
+.TP
+.I fp_comp_start
+Component start offset. Set
+.I fp_check_comp_start
+to enable,
+.I fp_comp_start_sign
+to -1/0/1, and
+.I fp_comp_start_units
+for units. Set
+.I fp_exclude_comp_start
+to invert.
+.TP
+.I fp_comp_end
+Component end offset. Set
+.I fp_check_comp_end
+to enable,
+.I fp_comp_end_sign
+to -1/0/1, and
+.I fp_comp_end_units
+for units. Set
+.I fp_exclude_comp_end
+to invert.
+.TP
+.I fp_comp_id
+Component ID to match. Set
+.I fp_check_comp_id
+to enable and
+.I fp_exclude_comp_id
+to invert.
+.TP
+.I fp_mirror_count
+Mirror count for FLR layouts. Set
+.I fp_check_mirror_count
+to enable,
+.I fp_mirror_count_sign
+to -1/0/1. Set
+.I fp_exclude_mirror_count
+to invert.
+.TP
+.I fp_mirror_state
+Mirror state to match. Set
+.I fp_check_mirror_state
+to enable. Use
+.I fp_mirror_neg_state
+for states that must not be set.
+.TP
+.I fp_mirror_id
+Mirror ID to match. Set
+.I fp_check_mirror_id
+to enable and
+.I fp_exclude_mirror_id
+to invert.
+.TP
+.I fp_mirror_index
+Mirror index to match. Set
+.I fp_check_mirror_index
+to enable,
+.I fp_mirror_index_sign
+to -1/0/1. Set
+.I fp_exclude_mirror_index
+to invert.
+.TP
+.I fp_ext_size
+Extension size for PFL layouts. Set
+.I fp_check_ext_size
+to enable,
+.I fp_ext_size_sign
+to -1/0/1, and
+.I fp_ext_size_units
+for units. Set
+.I fp_exclude_ext_size
+to invert.
+.PP
+.B Target Selection:
+.TP
+.I fp_obd_uuid
+Array of OST UUIDs to match. Set
+.I fp_num_obds
+to the number of UUIDs. Alternatively, use
+.I fp_obd_indexes
+array with OST indexes. Set
+.I fp_exclude_obd
+to find files NOT on these OSTs.
+.TP
+.I fp_mdt_uuid
+Array of MDT UUIDs to match. Set
+.I fp_num_mdts
+to the number of UUIDs. Alternatively, use
+.I fp_mdt_indexes
+array with MDT indexes. Set
+.I fp_exclude_mdt
+to find files NOT on these MDTs.
+.TP
+.I fp_mdt_count
+MDT count for striped directories. Set
+.I fp_check_mdt_count
+to enable,
+.I fp_mdt_count_sign
+to -1/0/1. Set
+.I fp_exclude_mdt_count
+to invert.
+.TP
+.I fp_hash_type
+Hash type for striped directories.
+.TP
+.I fp_hash_inflags
+Hash flags that must be set. Set
+.I fp_check_hash_flag
+to enable.
+.TP
+.I fp_hash_exflags
+Hash flags that must not be set. Set
+.I fp_exclude_hash_type
+to enable.
+.PP
+.B Extended Attributes:
+.TP
+.I fp_xattr_match_info
+Extended attribute matching using regular expressions. Configure with
+.B xattr_match_info
+structure for name/value pattern matching.
+.PP
+.B File Attributes:
+.TP
+.I fp_attrs
+File attributes that must be set (statx attributes). Set
+.I fp_exclude_attrs
+to invert.
+.TP
+.I fp_neg_attrs
+File attributes that must not be set.
+.TP
+.I fp_nlink
+Number of hard links. Set
+.I fp_nlink_sign
+to -1/0/1. Set
+.I fp_exclude_nlink
+to invert.
+.PP
+.B Foreign Files:
+.TP
+.I fp_foreign_type
+Foreign file/directory type. Set
+.I fp_check_foreign
+to match foreign files and
+.I fp_exclude_foreign
+to exclude them.
+.PP
+.B Compression (if supported):
+.TP
+.I fp_compr_type
+Compression type. Set
+.I fp_check_compr_type
+to enable and
+.I fp_exclude_compr_type
+to invert.
+.TP
+.I fp_compr_lvl
+Compression level. Set
+.I fp_check_compr_lvl
+to enable,
+.I fp_compr_lvl_sign
+to -1/0/1. Set
+.I fp_exclude_compr_lvl
+to invert.
+.TP
+.I fp_compr_chunk
+Compression chunk size. Set
+.I fp_check_compr_chunk
+to enable,
+.I fp_compr_chunk_sign
+to -1/0/1. Set
+.I fp_exclude_compr_chunk
+to invert.
+.PP
+.B Output Control:
+.TP
+.I fp_verbose
+Verbosity level using
+.B llapi_layout_verbose
+enum values (VERBOSE_DEFAULT, VERBOSE_DETAIL, etc.).
+.TP
+.I fp_quiet
+Suppress output.
+.TP
+.I fp_format_printf_str
+Custom printf-style format string for output (similar to
+.BR "lfs find --printf" ).
+.TP
+.I fp_yaml
+Output layout information in YAML format.
+.PP
+.B Performance and Behavior:
+.TP
+.I fp_lazy
+Use lazy size/block attributes when available.
+.TP
+.I fp_stop_on_error
+Stop traversal on first error instead of continuing.
+.TP
+.I fp_skip_percent
+Percentage of entries to skip (for sampling).
+.SH RETURN VALUES
+.TP
+.B 0
+on success.
+.TP
+.B <0
+negative error code on failure and sets
+.B errno
+appropriately.
+.SH ERRORS
+.TP 15
+.B EINVAL
+Invalid arguments (e.g., path too long, invalid parameters).
+.TP
+.B ENOMEM
+Insufficient memory for traversal or thread pool.
+.TP
+.B ENOENT
+Starting path does not exist.
+.TP
+.B EACCES
+Permission denied accessing files or directories.
+.TP
+.B ENOTDIR
+Path component is not a directory.
+.TP
+.B EOPNOTSUPP
+Operation not supported (e.g., btime on filesystems without support).
+.SH EXAMPLES
+.SS Basic File Search
+.EX
+#include <lustre/lustreapi.h>
+#include <stdio.h>
+#include <string.h>
+
+int main(void)
+{
+    struct find_param param;
+    int rc;
+
+    /* Initialize to zero */
+    memset(&param, 0, sizeof(param));
+
+    /* Find all regular files larger than 1GB */
+    param.fp_type = S_IFREG;
+    param.fp_check_size = 1;
+    param.fp_size = 1ULL << 30;  /* 1GB */
+    param.fp_size_sign = 1;       /* larger than */
+
+    rc = llapi_find("/mnt/lustre", &param);
+    if (rc < 0)
+        fprintf(stderr, "llapi_find failed: %s\\n",
+                strerror(-rc));
+
+    return rc;
+}
+.EE
+.SS Search with Lustre-specific Criteria
+.EX
+struct find_param param;
+
+memset(&param, 0, sizeof(param));
+
+/* Find files with stripe count >= 4 */
+param.fp_check_stripe_count = 1;
+param.fp_stripe_count = 4;
+param.fp_stripe_count_sign = 1;  /* >= */
+
+/* Modified in the last 24 hours */
+param.fp_mtime = time(NULL) - 86400;
+param.fp_msign = 1;  /* newer than */
+
+llapi_find("/mnt/lustre/project", &param);
+.EE
+.SS Parallel Traversal with Custom Callback
+.EX
+#include <lustre/lustreapi.h>
+
+int my_callback(char *path, int p, int *d,
+                struct find_param *param,
+                struct dirent64 *de)
+{
+    /* Custom processing */
+    printf("Found: %s\\n", path);
+    return 0;  /* Continue traversal */
+}
+
+int main(void)
+{
+    struct find_param param;
+
+    memset(&param, 0, sizeof(param));
+    param.fp_thread_count = 8;  /* Use 8 threads */
+    param.fp_max_depth = 3;     /* Max 3 levels deep */
+
+    llapi_find_with_cb("/mnt/lustre", &param,
+                       my_callback, NULL);
+    return 0;
+}
+.EE
+.SH NOTES
+.IP \[bu] 2
+Always initialize the
+.B find_param
+structure to zero before use.
+.IP \[bu]
+The
+.I fp_thread_count
+field enables parallel traversal for improved performance on large directory
+trees. Set to 0 for single-threaded operation.
+.IP \[bu]
+When using custom callbacks with
+.BR llapi_find_with_cb (),
+ensure they are thread-safe if
+.I fp_thread_count
+> 1.
+.IP \[bu]
+The
+.I fp_cb_data
+field can pass custom data to callbacks.
+.IP \[bu]
+Sign fields (-1, 0, 1) indicate "less than", "equal to", or "greater than"
+comparisons.
+.IP \[bu]
+Time comparisons use
+.I fp_time_margin
+for tolerance (in seconds).
+.IP \[bu]
+The traversal is depth-first and respects
+.I fp_max_depth
+and
+.I fp_min_depth
+boundaries.
+.SH AVAILABILITY
+.B llapi_find()
+is part of the
+.BR lustre (7)
+user application interface library.
+.PP
+.B llapi_find_with_cb()
+was added to support custom callbacks and parallel find operations.
+.\" Added in commit related to parallel find implementation
+.SH SEE ALSO
+.BR lfs-find (1),
+.BR llapi_getstripe (3),
+.BR llapi_layout (7),
+.BR lustreapi (7),
+.BR fnmatch (3),
+.BR stat (2),
+.BR statx (2),
+.BR open (2),
+.BR openat (2),
+.BR fdopendir (3),
+.BR readdir (3),
+.BR pthread_create (3),
+.BR pthread_mutex_lock (3),
+.BR pthread_cond_wait (3)
