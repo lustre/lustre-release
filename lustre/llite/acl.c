@@ -70,10 +70,8 @@ ll_get_acl_common(struct inode *inode, int type, bool rcu)
 
 	if (IS_ERR_OR_NULL(acl))
 		goto out;
-	if (type == ACL_TYPE_DEFAULT) {
-		acl = posix_acl_dup(acl);
+	if (type == ACL_TYPE_DEFAULT)
 		goto out;
-	}
 	if (type == ACL_TYPE_ACCESS)
 		lli_replace_acl(lli, acl);
 
