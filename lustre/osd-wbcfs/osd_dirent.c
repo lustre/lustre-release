@@ -158,10 +158,6 @@ static int osd_index_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	inode_inc_iversion(dir);
 	if (nedir_rename) {
 		d_move(dchild, dentry);
-		/* Put the refcount obtained by @d_find_any_alias() */
-		dput(dchild);
-		/* Finally release the @dentry. */
-		dput(dentry);
 	} else {
 		/*
 		 * Pin the dentry in dcache; the matching unpin happens in
@@ -169,9 +165,10 @@ static int osd_index_dir_insert(const struct lu_env *env, struct dt_object *dt,
 		 */
 		d_make_persistent(dentry, inode);
 		ihold(inode);
-		/* Drop the d_alloc() reference; the persistence flag holds it. */
-		dput(dentry);
 	}
+
+	dput(dentry);
+	dput(dchild);
 
 	CDEBUG(D_CACHE,
 	       "%s: Insert dirent "DFID"/%pd@%pK inode@%pK nlink=%d\n",
