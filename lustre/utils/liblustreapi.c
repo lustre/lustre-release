@@ -461,6 +461,109 @@ int llapi_chomp_string(char *buf)
 	return '\n';
 }
 
+/*
+ * Open @name and set @lum on it. When setstripe is restricted, a file
+ * created here is recreated with the default layout, while an existing
+ * file is left untouched and -EEXIST is returned.
+ *
+ * Return the file descriptor or a negative errno. On failure *ioctl_rc
+ * is 0 if open() failed, which the caller reports, and otherwise the
+ * LL_IOC_LOV_SETSTRIPE error, which the caller reports unless -EACCES.
+ */
+static int llapi_open_setstripe(const char *name, int flags, mode_t mode,
+				void *lum, int *ioctl_rc)
+{
+	bool use_default_striping = false;
+	bool keep_file = (flags & O_CREAT) == 0;
+	bool follow_link = false;
+	const char *vol;
+	char real[PATH_MAX];
+	int fd, rc;
+
+retry_open:
+	*ioctl_rc = 0;
+	if (use_default_striping)
+		fd = open(name, flags, mode);
+	else if (keep_file || follow_link)
+		fd = open(name, flags | O_LOV_DELAY_CREATE, mode);
+	else
+		fd = open(name, flags | O_EXCL | O_LOV_DELAY_CREATE, mode);
+	if (fd < 0) {
+		/* Only a file created here may be removed below.  If stat()
+		 * gets ENOENT, @name is a dangling symlink and the reopen
+		 * creates its target.
+		 */
+		if (errno == EEXIST && !keep_file && !follow_link &&
+		    !use_default_striping && !(flags & O_EXCL)) {
+			struct stat st;
+
+			if (stat(name, &st) == 0)
+				keep_file = true;
+			else if (errno == ENOENT)
+				follow_link = true;
+			else
+				return -errno;
+			goto retry_open;
+		}
+		return -errno;
+	}
+
+	if (use_default_striping)
+		return fd;
+
+	if (follow_link) {
+		char proc[32];
+		ssize_t rlen;
+
+		snprintf(proc, sizeof(proc), "/proc/self/fd/%d", fd);
+		rlen = readlink(proc, real, sizeof(real) - 1);
+		real[rlen < 0 ? 0 : rlen] = '\0';
+	}
+
+	if (ioctl(fd, LL_IOC_LOV_SETSTRIPE, lum) == 0)
+		return fd;
+
+	rc = -errno;
+	if (rc == -EACCES && follow_link &&
+	    (fgetxattr(fd, XATTR_LUSTRE_LOV, NULL, 0) >= 0 ||
+	     errno != ENODATA))
+		real[0] = '\0';
+	close(fd);
+	*ioctl_rc = rc;
+	/* the only reason we get EACCES on the ioctl is if setstripe
+	 * has been explicitly restricted, normal permission errors
+	 * happen earlier on open() and we never call ioctl()
+	 */
+	if (rc != -EACCES)
+		return rc;
+
+	if (keep_file) {
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "setstripe error for '%s': %s", name,
+				  "Setstripe is restricted by your administrator, existing file left unchanged");
+		return -EEXIST;
+	}
+	if (follow_link && real[0] == '\0') {
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "setstripe error for '%s': %s", name,
+				  "Setstripe is restricted by your administrator");
+		return rc;
+	}
+
+	vol = strstr(name, LUSTRE_VOLATILE_HDR);
+	llapi_err_noerrno(LLAPI_MSG_WARN, "setstripe warning for '%.*s': %s",
+			  vol ? (int)(vol - name) : (int)strlen(name), name,
+			  "Setstripe is restricted by your administrator, default striping applied");
+	if (remove(follow_link ? real : name) && errno != ENOENT) {
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "setstripe error for '%s': %s",
+				  name, strerror(errno));
+		return rc;
+	}
+	use_default_striping = true;
+	goto retry_open;
+}
+
 /**
  * llapi_file_open_param() - Open a Lustre file.
  * @name: the name of the file to be opened
@@ -476,7 +579,6 @@ int llapi_file_open_param(const char *name, int flags, mode_t mode,
 	char fsname[MAX_OBD_NAME + 1] = { 0 };
 	struct lov_user_md *lum = NULL;
 	const char *pool_name = param->lsp_pool;
-	bool use_default_striping = false;
 	size_t lum_size;
 	int fd, rc = 0;
 
@@ -506,24 +608,6 @@ int llapi_file_open_param(const char *name, int flags, mode_t mode,
 	lum = calloc(1, lum_size);
 	if (lum == NULL)
 		return -ENOMEM;
-
-retry_open:
-	if (!use_default_striping)
-		fd = open(name, flags | O_LOV_DELAY_CREATE, mode);
-	else
-		fd = open(name, flags, mode);
-	if (fd < 0) {
-		if (errno == EISDIR && !(flags & O_DIRECTORY)) {
-			flags = O_DIRECTORY | O_RDONLY;
-			goto retry_open;
-		}
-	}
-
-	if (fd < 0) {
-		fd = -errno;
-		llapi_error(LLAPI_MSG_ERROR, errno, "unable to open '%s'", name);
-		goto out;
-	}
 
 	/*  Initialize IOCTL striping pattern structure */
 	lum->lmm_magic = LOV_USER_MAGIC_V1;
@@ -557,45 +641,28 @@ retry_open:
 			lumv3->lmm_objects[i].l_ost_idx = param->lsp_osts[i];
 	}
 
-	if (!use_default_striping && ioctl(fd, LL_IOC_LOV_SETSTRIPE, lum) != 0) {
-		char errbuf[512] = "stripe already set";
-		char *errmsg = errbuf;
+retry_open:
+	fd = llapi_open_setstripe(name, flags, mode, lum, &rc);
+	if (fd == -EISDIR && !rc && !(flags & O_DIRECTORY)) {
+		flags = O_DIRECTORY | O_RDONLY;
+		goto retry_open;
+	}
 
-		rc = -errno;
+	if (fd < 0 && !rc) {
+		llapi_error(LLAPI_MSG_ERROR, fd, "unable to open '%s'", name);
+	} else if (fd < 0 && rc != -EACCES) {
+		char errbuf[512] = "stripe already set";
+
 		if (rc != -EEXIST && rc != -EALREADY)
-			strncpy(errbuf, strerror(errno), sizeof(errbuf) - 1);
+			strncpy(errbuf, strerror(-rc), sizeof(errbuf) - 1);
 		if (rc == -EREMOTEIO)
 			snprintf(errbuf, sizeof(errbuf),
 				 "inactive OST among your specified %d OST(s)",
 				 param->lsp_stripe_count);
-		close(fd);
-		fd = rc;
-		/* the only reason we get EACESS on the ioctl is if setstripe
-		 * has been explicitly restricted, normal permission errors
-		 * happen earlier on open() and we never call ioctl()
-		 */
-		if (rc == -EACCES) {
-			errmsg = "Setstripe is restricted by your administrator, default striping applied";
-			llapi_err_noerrno(LLAPI_MSG_WARN,
-					  "setstripe warning for '%s': %s",
-					  name, errmsg);
-			rc = remove(name);
-			if (rc) {
-				llapi_err_noerrno(LLAPI_MSG_ERROR,
-						  "setstripe error for '%s': %s",
-						  name, strerror(errno));
-				goto out;
-			}
-			use_default_striping = true;
-			goto retry_open;
-		} else {
-			llapi_err_noerrno(LLAPI_MSG_ERROR,
-					  "setstripe error for '%s': %s", name,
-					  errmsg);
-		}
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "setstripe error for '%s': %s", name, errbuf);
 	}
 
-out:
 	free(lum);
 
 	return fd;
@@ -642,7 +709,6 @@ int llapi_file_create_foreign(const char *name, mode_t mode, __u32 type,
 {
 	size_t len;
 	struct lov_foreign_md *lfm;
-	bool use_default_striping = false;
 	int fd, rc;
 
 	if (foreign_lov == NULL) {
@@ -671,63 +737,28 @@ int llapi_file_create_foreign(const char *name, mode_t mode, __u32 type,
 		goto out_err;
 	}
 
-retry_open:
-	if (!use_default_striping)
-		fd = open(name, O_WRONLY|O_CREAT|O_LOV_DELAY_CREATE, mode);
-	else
-		fd = open(name, O_WRONLY|O_CREAT, mode);
-	if (fd == -1) {
-		fd = -errno;
-		llapi_error(LLAPI_MSG_ERROR, fd, "open '%s' failed", name);
-		goto out_free;
-	}
-
 	lfm->lfm_magic = LOV_USER_MAGIC_FOREIGN;
 	lfm->lfm_length = len;
 	lfm->lfm_type = type;
 	lfm->lfm_flags = flags;
 	memcpy(lfm->lfm_value, foreign_lov, len);
 
-	if (!use_default_striping && ioctl(fd, LL_IOC_LOV_SETSTRIPE, lfm) != 0) {
-		char *errmsg;
+	fd = llapi_open_setstripe(name, O_WRONLY | O_CREAT, mode, lfm, &rc);
+	if (fd < 0 && !rc) {
+		llapi_error(LLAPI_MSG_ERROR, fd, "open '%s' failed", name);
+	} else if (fd < 0 && rc != -EACCES) {
+		const char *errmsg;
 
-		rc = -errno;
-		if (errno == ENOTTY)
+		if (rc == -ENOTTY)
 			errmsg = "not on a Lustre filesystem";
-		else if (errno == EEXIST || errno == EALREADY)
+		else if (rc == -EEXIST || rc == -EALREADY)
 			errmsg = "stripe already set";
-		else if (errno == EACCES)
-			errmsg = "Setstripe is restricted by your administrator, default striping applied";
 		else
-			errmsg = strerror(errno);
-
-		close(fd);
-		fd = rc;
-		/* the only reason we get ENOPERM on the ioctl is if setstripe
-		 * has been explicitly restricted, normal permission errors
-		 * happen earlier on open() and we never call ioctl()
-		 */
-		if (rc == -EACCES) {
-			llapi_err_noerrno(LLAPI_MSG_WARN,
-					  "setstripe warning for '%s': %s",
-					  name, errmsg);
-			rc = remove(name);
-			if (rc) {
-				llapi_err_noerrno(LLAPI_MSG_ERROR,
-						  "setstripe error for '%s': %s",
-						  name, strerror(errno));
-				goto out_free;
-			}
-			use_default_striping = true;
-			goto retry_open;
-		} else {
-			llapi_err_noerrno(LLAPI_MSG_ERROR,
-					  "setstripe error for '%s': %s", name,
-					  errmsg);
-		}
+			errmsg = strerror(-rc);
+		llapi_err_noerrno(LLAPI_MSG_ERROR,
+				  "setstripe error for '%s': %s", name, errmsg);
 	}
 
-out_free:
 	free(lfm);
 
 	return fd;

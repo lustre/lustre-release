@@ -4254,6 +4254,9 @@ test_27W() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	local stripe_count
 	local defcount=4
+	local eexist_rc
+	local out
+	local rc
 
 	# Set back to unrestricted
 	stack_trap "$LCTL set_param llite.$FSNAME-*.enable_setstripe_gid=-1"
@@ -4266,6 +4269,10 @@ test_27W() {
 	chmod a+rw $DIR/$tdir
 	# Verify this works normally
 	$RUNAS $LFS setstripe -c 1 $DIR/$tdir/$tfile || error "(1) failed to setstripe"
+	$RUNAS $LFS setstripe -c 1 $DIR/$tdir/$tfile
+	eexist_rc=$?
+	((eexist_rc != 0)) ||
+		error "(1a) setstripe on an existing file succeeded"
 	rm -f $DIR/$tdir/$tfile
 
 	# Limit to CAP_SYS_RESOURCE
@@ -4295,6 +4302,135 @@ test_27W() {
 	stripe_count=$($LFS getstripe -c $DIR/$tdir/$tfile)
 	((stripe_count == defcount)) ||
 		error "(7) got stripe_count '$stripe_count', expected $defcount"
+	rm -f $DIR/$tdir/$tfile
+
+	$LCTL set_param llite.$FSNAME-*.enable_setstripe_gid=0
+	$RUNAS bash -c "echo -n LU-20451 > $DIR/$tdir/$tfile" ||
+		error "(8) failed to create existing file"
+	local ino_before=$(stat -c %i $DIR/$tdir/$tfile)
+	$RUNAS $LFS setstripe -c 1 $DIR/$tdir/$tfile
+	rc=$?
+	((rc == eexist_rc)) ||
+		error "(9) restricted setstripe got rc=$rc, expected $eexist_rc"
+	[ -f $DIR/$tdir/$tfile ] ||
+		error "(10) restricted setstripe deleted the existing file"
+	[ "$(cat $DIR/$tdir/$tfile)" == "LU-20451" ] ||
+		error "(11) existing file data was lost"
+	((ino_before == $(stat -c %i $DIR/$tdir/$tfile))) ||
+		error "(12) existing file was removed and recreated"
+	rm -f $DIR/$tdir/$tfile
+
+	$RUNAS ln -s $DIR/$tdir/$tfile.tgt $DIR/$tdir/$tfile.lnk ||
+		error "(13) failed to create symlink"
+	$RUNAS $LFS setstripe -c 1 $DIR/$tdir/$tfile.lnk ||
+		error "(14) setstripe through dangling symlink failed"
+	[ -L $DIR/$tdir/$tfile.lnk ] ||
+		error "(15) symlink was replaced by a regular file"
+	stripe_count=$($LFS getstripe -c $DIR/$tdir/$tfile.tgt)
+	((stripe_count == defcount)) ||
+		error "(16) got stripe_count '$stripe_count' expected $defcount"
+	rm -f $DIR/$tdir/$tfile.lnk $DIR/$tdir/$tfile.tgt
+
+	$RUNAS bash -c "echo -n LU-20451 > $DIR/$tdir/$tfile" ||
+		error "(17) failed to create existing file"
+	$RUNAS $LFS setstripe --foreign=none --flags 0xda08 \
+		-x LU-20451 $DIR/$tdir/$tfile
+	rc=$?
+	((rc == eexist_rc)) ||
+		error "(18) foreign setstripe rc=$rc, expected $eexist_rc"
+	[ "$(cat $DIR/$tdir/$tfile)" == "LU-20451" ] ||
+		error "(19) existing file data was lost"
+	rm -f $DIR/$tdir/$tfile
+
+	$RUNAS bash -c "echo -n LU-20451 > $DIR/$tdir/$tfile.tgt" ||
+		error "(20) failed to create symlink target"
+	$RUNAS ln -s $DIR/$tdir/$tfile.tgt $DIR/$tdir/$tfile.lnk ||
+		error "(21) failed to create symlink"
+	$RUNAS $LFS setstripe -c 1 $DIR/$tdir/$tfile.lnk
+	rc=$?
+	((rc == eexist_rc)) ||
+		error "(22) symlink setstripe rc=$rc, expected $eexist_rc"
+	[ -L $DIR/$tdir/$tfile.lnk ] ||
+		error "(23) symlink was replaced by a regular file"
+	[ "$(cat $DIR/$tdir/$tfile.tgt)" == "LU-20451" ] ||
+		error "(24) symlink target data was lost"
+	rm -f $DIR/$tdir/$tfile.lnk $DIR/$tdir/$tfile.tgt
+
+	$RUNAS ln -s $DIR/$tdir/nodir/$tfile $DIR/$tdir/$tfile.lnk ||
+		error "(25) failed to create symlink"
+	$RUNAS $LFS setstripe -c 1 $DIR/$tdir/$tfile.lnk &&
+		error "(26) setstripe into missing directory should fail"
+	[ -L $DIR/$tdir/$tfile.lnk ] && [ ! -e $DIR/$tdir/nodir ] ||
+		error "(27) symlink or missing directory was modified"
+	rm -f $DIR/$tdir/$tfile.lnk
+
+	$RUNAS $LFS setstripe --foreign=none --flags 0xda08 \
+		-x LU-20451 $DIR/$tdir/$tfile ||
+		error "(28) restricted foreign setstripe on new file failed"
+	stripe_count=$($LFS getstripe -c $DIR/$tdir/$tfile)
+	((stripe_count == defcount)) ||
+		error "(29) got stripe_count '$stripe_count' expected $defcount"
+	rm -f $DIR/$tdir/$tfile
+
+	$RUNAS ln -s $DIR/$tdir/$tfile.tgt $DIR/$tdir/$tfile.lnk ||
+		error "(30) failed to create symlink"
+	$RUNAS $LFS setstripe --foreign=none --flags 0xda08 \
+		-x LU-20451 $DIR/$tdir/$tfile.lnk ||
+		error "(31) foreign setstripe through symlink failed"
+	[ -L $DIR/$tdir/$tfile.lnk ] ||
+		error "(32) symlink was replaced by a regular file"
+	stripe_count=$($LFS getstripe -c $DIR/$tdir/$tfile.tgt)
+	((stripe_count == defcount)) ||
+		error "(33) got stripe_count '$stripe_count' expected $defcount"
+	rm -f $DIR/$tdir/$tfile.lnk $DIR/$tdir/$tfile.tgt
+
+	$RUNAS mkdir $DIR/$tdir/subdir ||
+		error "(34) failed to create subdir"
+	$RUNAS $LFS setstripe -c 1 $DIR/$tdir/subdir ||
+		error "(35) setstripe on directory should not be restricted"
+	stripe_count=$($LFS getstripe -c -d $DIR/$tdir/subdir)
+	((stripe_count == 1)) ||
+		error "(36) got stripe_count '$stripe_count' expected 1"
+	rm -rf $DIR/$tdir/subdir
+
+	$LCTL set_param llite.$FSNAME-*.enable_setstripe_gid=$RUNAS_GID
+	$RUNAS ln -s $DIR/$tdir/$tfile.tgt $DIR/$tdir/$tfile.lnk ||
+		error "(37) failed to create symlink"
+	$RUNAS $LFS setstripe -c 1 $DIR/$tdir/$tfile.lnk ||
+		error "(38) allowed setstripe through symlink failed"
+	[ -L $DIR/$tdir/$tfile.lnk ] ||
+		error "(39) symlink was replaced by a regular file"
+	stripe_count=$($LFS getstripe -c $DIR/$tdir/$tfile.tgt)
+	((stripe_count == 1)) ||
+		error "(40) got stripe_count '$stripe_count' expected 1"
+	rm -f $DIR/$tdir/$tfile.lnk $DIR/$tdir/$tfile.tgt
+
+	$LCTL set_param llite.$FSNAME-*.enable_setstripe_gid=0
+	$RUNAS bash -c "echo -n LU-20451 > $DIR/$tdir/$tfile" ||
+		error "(41) failed to create file"
+	out=$($RUNAS $LFS migrate -c 1 $DIR/$tdir/$tfile 2>&1) ||
+		error "(42) restricted migrate failed: $out"
+	[[ ! "$out" =~ VOLATILE ]] ||
+		error "(42) warning shows the volatile name: $out"
+	stripe_count=$($LFS getstripe -c $DIR/$tdir/$tfile)
+	((stripe_count == defcount)) ||
+		error "(43) got stripe_count '$stripe_count' expected $defcount"
+	[ "$(cat $DIR/$tdir/$tfile)" == "LU-20451" ] ||
+		error "(44) migrated file data was lost"
+	rm -f $DIR/$tdir/$tfile
+
+	$LCTL set_param llite.$FSNAME-*.enable_setstripe_gid=-1
+	(( $(sysctl -n fs.protected_regular 2>/dev/null || echo 0) > 0 )) ||
+		return 0
+	mkdir -m 1777 $DIR/$tdir/sticky || error "(45) mkdir sticky failed"
+	$MCREATE $DIR/$tdir/sticky/$tfile || error "(45) mcreate failed"
+	chmod 0666 $DIR/$tdir/sticky/$tfile
+	chown $((RUNAS_ID + 1)) $DIR/$tdir/sticky/$tfile
+	$RUNAS $LFS setstripe -c 1 $DIR/$tdir/sticky/$tfile &&
+		error "(46) setstripe bypassed fs.protected_regular"
+	[[ "$($LFS getstripe -c $DIR/$tdir/sticky/$tfile 2>&1)" =~ \
+	   "no stripe info" ]] || error "(47) layout was set on $tfile"
+	rm -rf $DIR/$tdir/sticky
 }
 run_test 27W "test enable_setstripe_gid"
 
