@@ -20,7 +20,7 @@ always_except LU-19631 12a
 if [[ "$ost1_FSTYPE" == "zfs" ]]; then
 	# test 5b: EC resync hole-punches stale parity, but osd-zfs has no
 	# fallocate hole-punch, so resync fails with EOPNOTSUPP (LU-20435)
-	always_except LU-20435 5b 12b
+	always_except LU-20435 5b 12b 12e
 fi
 
 build_test_filter
@@ -224,16 +224,13 @@ check_parity_read() {
 	local rc
 
 	# test_parity_read returns 0 if all zeros, 1 if non-zero bytes found
-	$LUSTRE/tests/test_parity_read $file $mirror_id $offset \
-		> /dev/null 2>&1
+	$LUSTRE/tests/test_parity_read $file $mirror_id $offset > /dev/null 2>&1
 	rc=$?
 
 	if [[ $expect_zeros == "yes" ]]; then
-		(( rc == 0 )) ||
-			error "offset $offset: expected zeros, got non-zero bytes"
+		(( rc == 0 )) || error "offset $offset: expected zeros"
 	else
-		(( rc == 1 )) ||
-			error "offset $offset: expected parity data, got all zeros"
+		(( rc == 1 )) || error "offset $offset: expected parity data"
 	fi
 }
 
@@ -2192,23 +2189,30 @@ test_12b() {
 
 	# gauge I/O performance so resync can be bounded relative to it later
 	local start=$SECONDS
-	# Write the first 3 stripes with \001, \002 and \003
+	# Sparse file: one stripe at the head and one near 4 TiB, gap in between.
 	tr "\000" "\001" < /dev/zero | dd bs=64k count=64          \
 		iflag=fullblock of=$DIR/$tdir/$tfile 2>/dev/null
-	# Write some data at ~4 TiB
 	tr "\000" "\002" < /dev/zero | dd bs=64k count=64          \
 		seek=64000000  \
 		iflag=fullblock of=$DIR/$tdir/$tfile 2>/dev/null
 	local elapsed=$((SECONDS - start))
+	# SECONDS has 1s resolution; treat sub-second writes as 1s.
+	(( elapsed >= 1 )) || elapsed=1
 
 	# Truncate to 10 TiB to have a hole at the end
 	$TRUNCATE $DIR/$tdir/$tfile 10995116277760 ||
 		error "failed to truncate file to 10 TiB"
 
-	# resync the ec mirror. With holes skipped, this should only touch two
-	# data regions and should finish well within 10x of the initial write
-	# time above. A regression would then hit the timeout instead of running
-	# for hours
+	# Resync the EC mirror. Holes in the sparse file cause stale parity
+	# regions to be punched on resync. When the OST backend lacks fallocate
+	# hole-punch (e.g. osd-zfs), resync falls back to writing zeros; with
+	# holes this large that fallback is rejected as unsupported and resync
+	# fails with EOPNOTSUPP. Keep this test disabled on ZFS until osd-zfs
+	# hole-punch is implemented (LU-20435).
+	#
+	# When holes are skipped correctly, resync should only touch the two
+	# data regions above and finish within 10x of the initial write time.
+	# A regression would hit the timeout instead of running for hours.
 	local timeout=$((elapsed * 10))
 	echo "mirror resync timeout set to $timeout"
 	timeout -k 10 $timeout $LFS mirror resync $DIR/$tdir/$tfile ||
@@ -2221,10 +2225,9 @@ test_12b() {
 run_test 12b "resync huge sparse file (10 TiB)"
 
 test_12c() {
-	# refer to 12b for the test case description
-	[[ "$ost1_FSTYPE" != "zfs" ]] ||
-		skip "LU-14217: lseek holes unreliable on ZFS"
-
+	# Sparse file like 12b: stripe sets 0 and 3 written, 1 and 2 are holes.
+	# Resync must skip holed stripe sets and punch the matching parity
+	# regions instead of rewriting them.
 	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
 	enable_ec
 
@@ -2234,37 +2237,27 @@ test_12c() {
 	local ec_set_size=$((2 * stripe_size))
 
 	test_mkdir $DIR/$tdir
+	stack_trap "rm -f $tf"
 
 	$LFS setstripe -E -1 -S 4M -c 4 --ec 4+2 $tf ||
 		error "setstripe --ec 4+2 failed"
 
-	# Write three full stripe sets, then resync and verify.
-	dd if=/dev/urandom of=$tf bs=$stripe_set_size count=3 2>/dev/null ||
-		error "failed to write three stripe sets"
+	tr "\000" "\001" < /dev/zero | dd bs=$stripe_set_size count=1 \
+		iflag=fullblock of=$tf 2>/dev/null ||
+		error "failed to write stripe set 0"
+	tr "\000" "\001" < /dev/zero | dd bs=$stripe_set_size count=1 seek=3 \
+		iflag=fullblock of=$tf 2>/dev/null ||
+		error "failed to write stripe set 3"
+
+	(( $($LUSTRE/tests/lseek_test -l 0 $tf) == $stripe_set_size )) ||
+		error "expected hole at $stripe_set_size"
+	(( $($LUSTRE/tests/lseek_test -d $stripe_set_size $tf) ==
+		$((3 * stripe_set_size)) )) ||
+		error "expected next data at $((3 * stripe_set_size))"
 
 	$LFS mirror resync $tf || error "failed to resync ec mirror"
 	$LFS getstripe $tf | grep lcme_flags | grep stale &&
-		error "stale component after initial resync"
-	$LFS mirror verify $tf ||
-		error "mirror verify failed after initial resync"
-
-	# Punch out the middle stripe set on the data mirror.
-	local hole_off=$stripe_set_size
-	local fallocate_out=$(fallocate -p --offset $hole_off \
-		-l $stripe_set_size $tf 2>&1) ||
-		skip_eopnotsupp "$fallocate_out|fallocate punch failed"
-
-	(( $($LUSTRE/tests/lseek_test -l 0 $tf) == hole_off )) ||
-		error "expected data hole at $hole_off after punch"
-	(( $($LUSTRE/tests/lseek_test -d $hole_off $tf) == $((2 * stripe_set_size)) )) ||
-		error "expected next data at $((2 * stripe_set_size)) after punch"
-
-	$LFS getstripe $tf | grep lcme_flags | grep stale ||
-		error "parity should be stale after punching data"
-
-	$LFS mirror resync $tf || error "failed to resync after punch"
-	$LFS getstripe $tf | grep lcme_flags | grep stale &&
-		error "stale component after resync following punch"
+		error "stale component after resync"
 
 	#  lcme_id:             131074
 	#  lcme_mirror_id:      2
@@ -2272,15 +2265,155 @@ test_12c() {
 	local parity_mirror_id=$($LFS getstripe $tf |
 		grep -B1 "lcme_flags.*parity" |
 		grep "lcme_mirror_id" | awk '{print $2}')
-	# it's expected that only the parity for the second stripe set is absent
-	check_parity_read $tf $parity_mirror_id 0 "no"
-	check_parity_read $tf $parity_mirror_id $ec_set_size "yes"
-	check_parity_read $tf $parity_mirror_id $((2 * ec_set_size)) "no"
+	# expect_zeros: no = parity data present, yes = punched (all zeros)
+	check_parity_read $tf $parity_mirror_id 0 no
+	check_parity_read $tf $parity_mirror_id $ec_set_size yes
+	check_parity_read $tf $parity_mirror_id $((2 * ec_set_size)) yes
+	check_parity_read $tf $parity_mirror_id $((3 * ec_set_size)) no
 
-	$LFS mirror verify $tf ||
-		error "mirror verify failed after punch resync"
+	$LFS mirror verify $tf || error "mirror verify failed after resync"
 }
 run_test 12c "resync skips holed stripe sets"
+
+test_12d() {
+	# Sparse file at raidset granularity: with 3+2 and -c 6 each stripe
+	# set holds two raidsets (k=3). Raidsets 0, 2, and 3 written; raidset
+	# 1 is a hole. Resync must skip the holed raidset and punch parity.
+	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
+	enable_ec
+
+	local tf=${DIR}/${tdir}/$tfile
+	local stripe_size=$((1024 * 1024))
+	local raidset_size=$((3 * stripe_size))
+	local ec_raidset_size=$((2 * stripe_size))
+
+	test_mkdir $DIR/$tdir
+	stack_trap "rm -f $tf"
+
+	$LFS setstripe -E -1 -S 1M -c 6 --ec 3+2 $tf ||
+		error "setstripe --ec 3+2 failed"
+
+	tr "\000" "\001" < /dev/zero | dd bs=$raidset_size count=1 \
+		iflag=fullblock of=$tf 2>/dev/null ||
+		error "failed to write raidset 0"
+	tr "\000" "\001" < /dev/zero | dd bs=$raidset_size count=1 seek=2 \
+		iflag=fullblock of=$tf 2>/dev/null ||
+		error "failed to write raidset 2"
+
+	(( $($LUSTRE/tests/lseek_test -l 0 $tf) == $raidset_size )) ||
+		error "expected hole at $raidset_size"
+	(( $($LUSTRE/tests/lseek_test -d $raidset_size $tf) ==
+		$((2 * raidset_size)) )) ||
+		error "expected next data at $((2 * raidset_size))"
+
+	$LFS mirror resync $tf || error "failed to resync ec mirror"
+	$LFS getstripe $tf | grep lcme_flags | grep stale &&
+		error "stale component after resync"
+
+	#  lcme_id:             131074
+	#  lcme_mirror_id:      2
+	#  lcme_flags:          init,parity
+	local parity_mirror_id=$($LFS getstripe $tf |
+		grep -B1 "lcme_flags.*parity" |
+		grep "lcme_mirror_id" | awk '{print $2}')
+	# expect_zeros: no = parity data present, yes = punched (all zeros)
+	check_parity_read $tf $parity_mirror_id 0 no
+	check_parity_read $tf $parity_mirror_id $ec_raidset_size yes
+	check_parity_read $tf $parity_mirror_id $((2 * ec_raidset_size)) no
+
+	$LFS mirror verify $tf || error "mirror verify failed after resync"
+}
+run_test 12d "resync skips holed raidsets"
+
+test_12e() {
+	# Punch overlapping holes on both data stripes; the overlap [8k, 16k)
+	# leaves a matching hole in the parity stripe after resync.
+	(( OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs"
+	enable_ec
+
+	local tf=${DIR}/${tdir}/$tfile
+	local stripe_size=$((1024 * 1024))
+	local stripe_set_size=$((2 * stripe_size))
+	local punch_len=$((12 * 1024))
+
+	test_mkdir $DIR/$tdir
+	stack_trap "rm -f $tf"
+
+	$LFS setstripe -E -1 -S 1M -c 2 --ec 2+1 $tf ||
+		error "setstripe --ec 2+1 failed"
+
+	tr "\000" "\001" < /dev/zero | dd bs=$stripe_set_size count=1 \
+		iflag=fullblock of=$tf 2>/dev/null ||
+		error "failed to write one raidset"
+
+	$LFS mirror resync $tf || error "failed to resync ec mirror"
+	$LFS getstripe $tf | grep lcme_flags | grep stale &&
+		error "stale component after initial resync"
+
+	local parity_mirror_id=$($LFS getstripe $tf |
+		grep -B1 "lcme_flags.*parity" |
+		grep "lcme_mirror_id" | awk '{print $2}')
+
+	check_parity_read $tf $parity_mirror_id 0 no
+	check_parity_read $tf $parity_mirror_id $stripe_size yes
+
+	# Punch data0 [4k, 16k) and data1 [8k, 20k); overlap is [8k, 16k).
+	local fallocate_out
+	fallocate_out=$(fallocate -p --offset 4096 -l $punch_len $tf 2>&1) ||
+		skip_eopnotsupp "$fallocate_out|fallocate punch data0 failed"
+	fallocate_out=$(fallocate -p --offset $((stripe_size + 8192)) \
+		-l $punch_len $tf 2>&1) ||
+		skip_eopnotsupp "$fallocate_out|fallocate punch data1 failed"
+
+	$LFS getstripe $tf | grep lcme_flags | grep stale ||
+		error "parity should be stale after punching data stripes"
+
+	$LFS mirror resync $tf || error "failed to resync after punch"
+	$LFS getstripe $tf | grep lcme_flags | grep stale &&
+		error "stale component after resync following punch"
+
+	# Parity: [0, 8k) and [16k, ...) have data; [8k, 16k) is a hole.
+	check_parity_read $tf $parity_mirror_id 0 no
+	check_parity_read $tf $parity_mirror_id $((8 * 1024)) yes
+	check_parity_read $tf $parity_mirror_id $((16 * 1024)) no
+
+	$LFS mirror verify $tf || error "mirror verify failed after punch resync"
+}
+run_test 12e "overlapping data holes punch parity gap verify"
+
+test_12f() {
+	# Write 2k (EOF not 4k-aligned), resync, and verify parity is written
+	# through the enclosing 4k block: data at [0, 4k), hole from 4k on.
+	(( OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs"
+	enable_ec
+
+	local tf=${DIR}/${tdir}/$tfile
+	local write_len=$((2 * 1024))
+	local parity_len=$((4 * 1024))
+
+	test_mkdir $DIR/$tdir
+	stack_trap "rm -f $tf"
+
+	$LFS setstripe -E -1 -S 1M -c 2 --ec 2+1 $tf || error "setstripe failed"
+
+	tr "\000" "\001" < /dev/zero | dd bs=$write_len count=1 \
+		iflag=fullblock of=$tf 2>/dev/null ||
+		error "failed to write $write_len bytes"
+
+	$LFS mirror resync $tf || error "failed to resync ec mirror"
+	$LFS getstripe $tf | grep lcme_flags | grep stale &&
+		error "stale component after resync"
+
+	local parity_mirror_id=$($LFS getstripe $tf |
+		grep -B1 "lcme_flags.*parity" |
+		grep "lcme_mirror_id" | awk '{print $2}')
+
+	check_parity_read $tf $parity_mirror_id 0 no
+	check_parity_read $tf $parity_mirror_id $parity_len yes
+
+	$LFS mirror verify $tf || error "mirror verify failed after resync"
+}
+run_test 12f "short write resync parity spans [0, 4k) verify"
 
 test_13() {
 	local tf=${DIR}/${tdir}/$tfile
