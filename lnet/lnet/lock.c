@@ -13,6 +13,8 @@
 
 #include <linux/lnet/lib-lnet.h>
 
+#include "lock.h"
+
 /** destroy cpu-partition lock, see libcfs_private.h for more detail */
 void
 cfs_percpt_lock_free(struct cfs_percpt_lock *pcl)

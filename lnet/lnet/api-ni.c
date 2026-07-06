@@ -20,6 +20,7 @@
 #include <linux/libcfs/libcfs.h>
 #include <linux/lnet/lib-lnet.h>
 #include <uapi/linux/lustre/lustre_ver.h>
+#include "lock.h"
 #include "udsp.h"
 
 #define D_LNI D_CONSOLE

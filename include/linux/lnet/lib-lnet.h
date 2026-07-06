@@ -35,7 +35,12 @@
 #include <uapi/linux/lnet/lnetctl.h>
 #include <uapi/linux/lnet/nidstr.h>
 
-#include "lock.h"
+enum {
+	CFS_PERCPT_LOCK_EX	= -1,	/* negative */
+};
+
+void cfs_percpt_lock(struct cfs_percpt_lock *pcl, int index);
+void cfs_percpt_unlock(struct cfs_percpt_lock *pcl, int index);
 
 extern struct lnet the_lnet;			/* THE network */
 

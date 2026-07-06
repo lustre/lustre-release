@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: GPL-2.0
+/* SPDX-License-Identifier: GPL-2.0 */
 
 /* This file is part of Lustre, http://www.lustre.org/
  *
@@ -18,9 +18,8 @@
  *   which is slow and should be really rare.
  */
 
-enum {
-	CFS_PERCPT_LOCK_EX	= -1,	/* negative */
-};
+#ifndef __LNET_LOCK_H__
+#define __LNET_LOCK_H__
 
 struct cfs_percpt_lock {
 	/* cpu-partition-table for this lock */
@@ -42,12 +41,6 @@ struct cfs_percpt_lock *cfs_percpt_lock_create(struct cfs_cpt_table *cptab,
 /* destroy a cpu-partition lock */
 void cfs_percpt_lock_free(struct cfs_percpt_lock *pcl);
 
-/* lock private lock \a index of \a pcl */
-void cfs_percpt_lock(struct cfs_percpt_lock *pcl, int index);
-
-/* unlock private lock \a index of \a pcl */
-void cfs_percpt_unlock(struct cfs_percpt_lock *pcl, int index);
-
 #define CFS_PERCPT_LOCK_KEYS	256
 
 /* NB: don't allocate keys dynamically, lockdep needs them to be in ".data" */
@@ -62,3 +55,5 @@ void cfs_percpt_unlock(struct cfs_percpt_lock *pcl, int index);
 		___lk = cfs_percpt_lock_create(cptab, ___keys);		\
 	___lk;								\
 })
+
+#endif /* __LNET_LOCK_H__ */
