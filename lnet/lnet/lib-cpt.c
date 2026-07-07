@@ -1389,6 +1389,7 @@ EXPORT_SYMBOL(cfs_percpt_number);
 
 #ifdef CONFIG_HOTPLUG_CPU
 static enum cpuhp_state lustre_cpu_online;
+static enum cpuhp_state lustre_cpu_dead;
 
 static int cfs_cpu_online(unsigned int cpu)
 {
@@ -1417,8 +1418,9 @@ void cfs_cpu_fini(void)
 #ifdef CONFIG_HOTPLUG_CPU
 	if (lustre_cpu_online > 0)
 		cpuhp_remove_state_nocalls(lustre_cpu_online);
-	cpuhp_remove_state_nocalls(CPUHP_BP_PREPARE_DYN);
-#endif
+	if (lustre_cpu_dead > 0)
+		cpuhp_remove_state_nocalls(lustre_cpu_dead);
+#endif /* CONFIG_HOTPLUG_CPU */
 }
 
 int cfs_cpu_init(void)
@@ -1433,6 +1435,8 @@ int cfs_cpu_init(void)
 					cfs_cpu_dead);
 	if (ret < 0)
 		goto failed_cpu_dead;
+
+	lustre_cpu_dead = ret;
 
 	ret = cpuhp_setup_state_nocalls(CPUHP_AP_ONLINE_DYN,
 					"fs/lustre/cfe:online",
@@ -1479,7 +1483,8 @@ failed_alloc_table:
 	if (lustre_cpu_online > 0)
 		cpuhp_remove_state_nocalls(lustre_cpu_online);
 failed_cpu_online:
-	cpuhp_remove_state_nocalls(CPUHP_BP_PREPARE_DYN);
+	if (lustre_cpu_dead > 0)
+		cpuhp_remove_state_nocalls(lustre_cpu_dead);
 failed_cpu_dead:
 #endif
 	return ret;
