@@ -20,7 +20,6 @@ cfs_hash_lookup_intent_t||enum cfs_hash_lookup_intent
 cfs_hash_ops_t||struct cfs_hash_ops
 cfs_hash_t||struct cfs_hash
 cfs_from_timer||timer_container_of
-cfs_from_timer||from_timer
 cfs_timer_setup||timer_setup
 container_of0||container_of_safe
 msecs_to_jiffies||cfs_time_seconds
@@ -34,9 +33,10 @@ d_name.name||encode_fn_xxx
 ENOTSUPP||EOPNOTSUPP
 ERR_PTR.PTR_ERR||ERR_CAST
 EWOULDBLOCK||EAGAIN
-fd_flags||lfd_file_flags
-ft_nob||ft_bytes
 f_dentry||f_path.dentry
+fd_flags||lfd_file_flags
+from_timer||timer_container_of
+ft_nob||ft_bytes
 [^_]get_seconds||ktime_get_real_seconds
 GPL[vV]3||Using GPLv3 is usually wrong
 HAVE_SERVER_SUPPORT||CONFIG_LUSTRE_FS_SERVER
