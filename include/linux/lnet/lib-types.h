@@ -244,11 +244,18 @@ struct lnet_libmd {
  * call.
  */
 #define LNET_MD_FLAG_HANDLING	 BIT(3)
-#define LNET_MD_FLAG_GPU	 BIT(5) /**< Special mapping needs */
 
+#define LNET_MD_FLAG_P2PDMA	 BIT(5) /**< P2PDMA / GPU device memory */
+
+static inline bool lnet_md_is_p2p(struct lnet_libmd *md)
+{
+	return (md != NULL) && !!(md->md_flags & LNET_MD_FLAG_P2PDMA);
+}
+
+/* Deprecated: use lnet_md_is_p2p instead. Kept for bisectability. */
 static inline bool lnet_md_is_gpu(struct lnet_libmd *md)
 {
-	return (md != NULL) && !!(md->md_flags & LNET_MD_FLAG_GPU);
+	return lnet_md_is_p2p(md);
 }
 
 struct lnet_test_peer {
@@ -1450,6 +1457,8 @@ struct lnet_ni {
 	 */
 	char			*ni_interface;
 	struct net		*ni_net_ns;     /* original net namespace */
+	/* NI capabilities */
+	unsigned int		ni_p2pdma:1;
 };
 
 #define LNET_PROTO_PING_MATCHBITS	0x8000000000000000LL

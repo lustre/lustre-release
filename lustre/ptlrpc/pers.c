@@ -42,7 +42,7 @@ void ptlrpc_fill_bulk_md(struct lnet_md *md, struct ptlrpc_bulk_desc *desc,
 	}
 
 	if (desc->bd_is_rdma)
-		md->umd_options |= LNET_MD_GPU_ADDR;
+		md->umd_options |= LNET_MD_P2PDMA_ADDR;
 
 	start = desc->bd_mds_off[mdidx];
 	if (mdidx == (desc->bd_md_count - 1))

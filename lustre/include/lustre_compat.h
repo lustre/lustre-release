@@ -203,4 +203,17 @@ static inline void ll_security_release_secctx(char *secdata, u32 seclen,
 #define ll_set_acl(ns, inode, acl, type)	ll_set_acl(inode, acl, type)
 #endif
 
+#ifdef HAVE_IS_PCI_P2PDMA_PAGE
+#include <linux/pci-p2pdma.h>
+#endif
+
+static inline bool lustre_is_p2prdma_page(struct page *page)
+{
+#ifdef HAVE_IS_PCI_P2PDMA_PAGE
+	return is_pci_p2pdma_page(page);
+#else
+	return false;
+#endif
+}
+
 #endif /* _LUSTRE_COMPAT_H */

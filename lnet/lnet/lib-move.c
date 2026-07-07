@@ -1497,9 +1497,9 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 	unsigned int best_dev_prio;
 	int best_ni_fatal;
 	unsigned int dev_idx = UINT_MAX;
-	bool gpu = lnet_md_is_gpu(md);
+	bool is_p2p = lnet_md_is_p2p(md);
 
-	if (gpu) {
+	if (is_p2p) {
 		struct page *page = lnet_get_first_page(md, offset);
 
 		dev_idx = lnet_get_dev_idx(page);
@@ -1557,7 +1557,7 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 		 * All distances smaller than the NUMA range
 		 * are treated equally.
 		 */
-		if (!gpu && distance < lnet_numa_range)
+		if (!is_p2p && distance < lnet_numa_range)
 			distance = lnet_numa_range;
 
 		/*

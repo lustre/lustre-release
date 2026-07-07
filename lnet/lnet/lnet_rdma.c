@@ -4,6 +4,7 @@
 
 #include <linux/lnet/lnet_rdma.h>
 #include <linux/libcfs/libcfs.h>
+#include <lustre_compat.h>
 
 /* MAX / MIN conflict */
 #include <linux/lnet/lib-lnet.h>
@@ -196,6 +197,9 @@ lnet_is_rdma_only_page(struct page *page)
 	struct nvfs_dma_rw_ops *nvfs_ops;
 
 	LASSERT(page != NULL);
+
+	if (lustre_is_p2prdma_page(page))
+		return true;
 
 	nvfs_ops = nvfs_get_ops();
 	if (nvfs_ops != NULL) {
