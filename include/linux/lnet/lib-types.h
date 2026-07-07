@@ -252,12 +252,6 @@ static inline bool lnet_md_is_p2p(struct lnet_libmd *md)
 	return (md != NULL) && !!(md->md_flags & LNET_MD_FLAG_P2PDMA);
 }
 
-/* Deprecated: use lnet_md_is_p2p instead. Kept for bisectability. */
-static inline bool lnet_md_is_gpu(struct lnet_libmd *md)
-{
-	return lnet_md_is_p2p(md);
-}
-
 struct lnet_test_peer {
 	/* info about peers we are trying to fail */
 	struct list_head	tp_list;	/* ln_test_peers */

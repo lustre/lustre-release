@@ -2740,6 +2740,14 @@ kiblnd_hdev_get_attr(struct kib_hca_dev *hdev)
 		rc = -ENOSYS;
 	}
 
+#ifdef HAVE_OFED_IB_DMA_PCI_P2P_DMA_SUPPORTED
+	if (ib_dma_pci_p2p_dma_supported(hdev->ibh_ibdev)) {
+		CDEBUG(D_NET, "%s: PCI P2P DMA supported\n",
+		       hdev->ibh_ibdev->name);
+		hdev->ibh_dev->ibd_dev_caps |= IBLND_DEV_CAPS_P2PDMA_ENABLED;
+	}
+#endif
+
 	rc2 = kiblnd_port_get_attr(hdev);
 	if (rc2 != 0)
 		return rc2;
@@ -3697,6 +3705,9 @@ kiblnd_startup(struct lnet_ni *ni)
 	}
 
 	net->ibn_dev = ibdev;
+	if (ibdev->ibd_dev_caps & IBLND_DEV_CAPS_P2PDMA_ENABLED)
+		ni->ni_p2pdma = 1;
+
 	if (!ni->ni_interface || !strlen(ni->ni_interface)) {
 		rc = lnet_ni_add_interface(ni, ifaces[i].li_name);
 		if (rc < 0)

@@ -795,7 +795,7 @@ struct kfilnd_transaction {
 #endif
 
 	/* Force RDMA */
-	bool			tn_gpu;
+	bool			tn_p2p;
 
 	/* LNet transaction payload byte count. */
 	unsigned int		tn_nob;

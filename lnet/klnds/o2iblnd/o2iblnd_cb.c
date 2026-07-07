@@ -117,7 +117,7 @@ kiblnd_get_idle_tx(struct lnet_ni *ni, struct lnet_nid *target)
 	LASSERT(tx->tx_lntmsg[1] == NULL);
 	LASSERT(tx->tx_nfrags == 0);
 
-	tx->tx_gpu = 0;
+	tx->tx_p2p = 0;
 	tx->tx_gaps = false;
 	tx->tx_hstatus = LNET_MSG_STATUS_OK;
 
@@ -673,7 +673,19 @@ static int kiblnd_map_tx(struct lnet_ni *ni, struct kib_tx *tx,
 	tx->tx_dmadir = (rd != tx->tx_rd) ? DMA_FROM_DEVICE : DMA_TO_DEVICE;
 	tx->tx_nfrags = nfrags;
 
-	rd->rd_nfrags = kiblnd_dma_map_sg(hdev, tx);
+	i = kiblnd_dma_map_sg(hdev, tx);
+	if (i <= 0) {
+		int rc = (i < 0) ? i : -EIO;
+
+		CDEBUG_LIMIT(D_ERROR,
+		       "%s: DMA map failed: tx %p, nfrags %d, p2p %d, dir %d, rc = %d\n",
+		       hdev->ibh_ibdev->name, tx, nfrags,
+		       tx->tx_p2p, tx->tx_dmadir, rc);
+		tx->tx_nfrags = 0;
+		return rc;
+	}
+	rd->rd_nfrags = i;
+
 	for (i = 0, nob = 0; i < rd->rd_nfrags; i++) {
 		rd->rd_frags[i].rf_nob  = kiblnd_sg_dma_len(
 			hdev->ibh_ibdev, &tx->tx_frags[i]);
@@ -698,8 +710,8 @@ static int kiblnd_setup_rd_kiov(struct lnet_ni *ni, struct kib_tx *tx,
 	int max_nkiov;
 	int sg_count = 0;
 
-	CDEBUG(D_NET, "niov %d offset %d nob %d gpu %d\n",
-	       nkiov, offset, nob, tx->tx_gpu);
+	CDEBUG(D_NET, "niov %d offset %d nob %d p2p %d\n",
+	       nkiov, offset, nob, tx->tx_p2p);
 
 	LASSERT(nob > 0);
 	LASSERT(nkiov > 0);
@@ -1656,7 +1668,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	struct kib_msg *ibmsg;
 	struct kib_rdma_desc *rd;
 	struct kib_tx *tx;
-	bool gpu;
+	bool is_p2p;
 	int nob;
 	int rc;
 
@@ -1683,7 +1695,7 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		return -ENOMEM;
 	}
 	ibmsg = tx->tx_msg;
-	gpu = lnet_md_is_gpu(msg_md);
+	is_p2p = lnet_md_is_p2p(msg_md);
 
 	switch (type) {
 	default:
@@ -1701,11 +1713,12 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		/* is the REPLY message too small for RDMA? */
 		nob = offsetof(struct kib_msg,
 			       ibm_u.immediate.ibim_payload[msg_md->md_length]);
-		if (nob <= IBLND_MSG_SIZE && !gpu)
+		if ((nob <= IBLND_MSG_SIZE && !is_p2p) ||
+		    msg_md->md_length == 0)
 			break;                  /* send IMMEDIATE */
 
 		rd = &ibmsg->ibm_u.get.ibgm_rd;
-		tx->tx_gpu = gpu;
+		tx->tx_p2p = is_p2p;
 		rc = kiblnd_setup_rd_kiov(ni, tx, rd,
 					  msg_md->md_niov, msg_md->md_kiov,
 					  0, msg_md->md_length);
@@ -1742,10 +1755,10 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		/* Is the payload small enough not to need RDMA? */
 		nob = offsetof(struct kib_msg,
 				ibm_u.immediate.ibim_payload[payload_nob]);
-		if (nob <= IBLND_MSG_SIZE && !gpu)
+		if ((nob <= IBLND_MSG_SIZE && !is_p2p) || payload_nob == 0)
 			break;			/* send IMMEDIATE */
 
-		tx->tx_gpu = gpu;
+		tx->tx_p2p = is_p2p;
 
 		rc = kiblnd_setup_rd_kiov(ni, tx, tx->tx_rd,
 					  payload_niov, payload_kiov,
@@ -1842,7 +1855,7 @@ kiblnd_reply(struct lnet_ni *ni, struct kib_rx *rx, struct lnet_msg *lntmsg)
 		goto failed_0;
 	}
 
-	tx->tx_gpu = lnet_md_is_gpu(msg_md);
+	tx->tx_p2p = lnet_md_is_p2p(msg_md);
 
 	if (nob == 0)
 		rc = 0;
@@ -1970,7 +1983,7 @@ kiblnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 			break;
 		}
 
-		tx->tx_gpu = lnet_md_is_gpu(msg_md);
+		tx->tx_p2p = lnet_md_is_p2p(msg_md);
 
 		txmsg = tx->tx_msg;
 		rd = &txmsg->ibm_u.putack.ibpam_rd;

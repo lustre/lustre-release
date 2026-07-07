@@ -451,17 +451,17 @@ static void kfilnd_tn_finalize(struct kfilnd_transaction *tn, bool *tn_released)
 		enum dma_data_direction dmadir = tn->tn_dmadir;
 		int rc = 0;
 
-		if (tn->tn_gpu)
+		if (tn->tn_p2p)
 			rc = lnet_rdma_unmap_sg(device, tn->tn_sgt.sgl,
 						tn->tn_sgt.nents, dmadir);
 		else
 			dma_unmap_sgtable(device, &tn->tn_sgt, dmadir, 0);
 
 		CDEBUG(D_NET,
-		       "tn %p tn_sgt %p sgl %p dir %u orig_nents %u nents %u gpu %s rc %d\n",
+		       "tn %p tn_sgt %p sgl %p dir %u orig_nents %u nents %u device %s rc %d\n",
 		       tn, &tn->tn_sgt, tn->tn_sgt.sgl, tn->tn_dmadir,
 		       tn->tn_sgt.orig_nents, tn->tn_sgt.nents,
-		       tn->tn_gpu ? "y" : "n", rc);
+		       tn->tn_p2p ? "y" : "n", rc);
 	}
 #endif
 
@@ -1977,7 +1977,7 @@ static int kfilnd_tn_set_sgl_buf(struct lnet_ni *ni,
 	 */
 	tn->tn_sgt.orig_nents = sg_count;
 
-	if (tn->tn_gpu) {
+	if (tn->tn_p2p) {
 		rc = lnet_rdma_map_sg_attrs(dev->device, tn->tn_sgt.sgl,
 					    sg_count, tn->tn_dmadir);
 		if (rc > 0)
@@ -1989,7 +1989,7 @@ static int kfilnd_tn_set_sgl_buf(struct lnet_ni *ni,
 
 	if (rc < 0) {
 		CERROR("%s: %s failed rc = %d\n", ni->ni_interface,
-		       tn->tn_gpu ? "lnet_rdma_map_sg_attrs" :
+		       tn->tn_p2p ? "lnet_rdma_map_sg_attrs" :
 		       "dma_map_sgtable", rc);
 		kfilnd_tn_sgt_free(tn);
 		return rc;
@@ -1999,10 +1999,10 @@ static int kfilnd_tn_set_sgl_buf(struct lnet_ni *ni,
 	tn->tn_sgt_mapped = true;
 
 	CDEBUG(D_NET,
-	       "tn %p tn_sgt %p sgl %p dir %u nob %d alloc_nents %u orig_nents %u nents %u gpu %s\n",
+	       "tn %p tn_sgt %p sgl %p dir %u nob %d alloc_nents %u orig_nents %u nents %u device %s\n",
 	       tn, &tn->tn_sgt, tn->tn_sgt.sgl, tn->tn_dmadir, tn->tn_nob,
 	       tn->tn_sgt_alloc_nents, tn->tn_sgt.orig_nents, tn->tn_sgt.nents,
-	       tn->tn_gpu ? "y" : "n");
+	       tn->tn_p2p ? "y" : "n");
 
 	return 0;
 }

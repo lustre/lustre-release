@@ -54,6 +54,7 @@
 #endif
 
 #define DEBUG_SUBSYSTEM S_LND
+#include <lustre_compat.h>
 
 #include <linux/libcfs/libcfs.h>
 #include <linux/lnet/lib-lnet.h>
@@ -149,6 +150,7 @@ enum kib_dev_caps {
 #ifdef HAVE_OFED_FMR_POOL_API
 	IBLND_DEV_CAPS_FMR_ENABLED		= BIT(2),
 #endif
+	IBLND_DEV_CAPS_P2PDMA_ENABLED		= BIT(3),
 };
 
 #define IS_FAST_REG_DEV(dev) \
@@ -444,7 +446,7 @@ struct kib_tx {					/* transmit message */
 	/* waiting for peer_ni */
 				tx_waiting:1,
 	/* force RDMA */
-				tx_gpu:1;
+				tx_p2p:1;
 	/* LNET completion status */
 	int			tx_status;
 	/* health status of the transmit */
@@ -994,9 +996,38 @@ int kiblnd_dma_map_sg(struct kib_hca_dev *hdev, struct kib_tx *tx)
 	int nents = tx->tx_nfrags;
 	enum dma_data_direction direction = tx->tx_dmadir;
 
-	if (tx->tx_gpu)
-		return lnet_rdma_map_sg_attrs(hdev->ibh_ibdev->dma_device,
-					      sg, nents, direction);
+	if (tx->tx_p2p) {
+		int rc = lnet_rdma_map_sg_attrs(hdev->ibh_ibdev->dma_device,
+						sg, nents, direction);
+		if (rc != 0)
+			return rc;
+
+		if (nents > 0) {
+			struct scatterlist *s;
+			bool has_p2p = false;
+			int i;
+
+			for_each_sg(sg, s, nents, i) {
+				if (lustre_is_p2prdma_page(sg_page(s))) {
+					has_p2p = true;
+					break;
+				}
+			}
+
+			if (has_p2p) {
+				if (hdev->ibh_dev->ibd_dev_caps &
+				    IBLND_DEV_CAPS_P2PDMA_ENABLED)
+					return ib_dma_map_sg(hdev->ibh_ibdev,
+							     sg, nents,
+							     direction);
+
+				CDEBUG_LIMIT(D_ERROR,
+					     "%s: HCA lacks P2PDMA for P2P mapping\n",
+					     hdev->ibh_ibdev->name);
+				return 0;
+			}
+		}
+	}
 
 	return ib_dma_map_sg(hdev->ibh_ibdev, sg, nents, direction);
 }
@@ -1008,11 +1039,14 @@ void kiblnd_dma_unmap_sg(struct kib_hca_dev *hdev, struct kib_tx *tx)
 	int nents = tx->tx_nfrags;
 	enum dma_data_direction direction = tx->tx_dmadir;
 
-	if (tx->tx_gpu)
-		lnet_rdma_unmap_sg(hdev->ibh_ibdev->dma_device,
-					  sg, nents, direction);
-	else
-		ib_dma_unmap_sg(hdev->ibh_ibdev, sg, nents, direction);
+	if (tx->tx_p2p) {
+		int rc = lnet_rdma_unmap_sg(hdev->ibh_ibdev->dma_device,
+					    sg, nents, direction);
+		if (rc > 0)
+			return;
+	}
+
+	ib_dma_unmap_sg(hdev->ibh_ibdev, sg, nents, direction);
 }
 
 #ifndef HAVE_OFED_IB_SG_DMA_ADDRESS

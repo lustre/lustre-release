@@ -89,7 +89,7 @@ static int kfilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *msg)
 	int rc;
 	bool tn_key = false;
 	lnet_nid_t tgt_nid4;
-	bool gpu = lnet_md_is_gpu(msg->msg_md);
+	bool is_p2p = lnet_md_is_p2p(msg->msg_md);
 	struct iov_iter from;
 
 	iov_iter_bvec(&from, WRITE,
@@ -115,7 +115,8 @@ static int kfilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *msg)
 
 		nob = offsetof(struct kfilnd_msg,
 			       proto.immed.payload[msg->msg_md->md_length]);
-		if (nob <= KFILND_IMMEDIATE_MSG_SIZE && !gpu) {
+		if ((nob <= KFILND_IMMEDIATE_MSG_SIZE && !is_p2p) ||
+		    msg->msg_md->md_length == 0) {
 			lnd_msg_type = KFILND_MSG_IMMEDIATE;
 			break;
 		}
@@ -128,7 +129,8 @@ static int kfilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *msg)
 	case LNET_MSG_PUT:
 		nob = offsetof(struct kfilnd_msg,
 			       proto.immed.payload[msg->msg_len]);
-		if (nob <= KFILND_IMMEDIATE_MSG_SIZE && !gpu) {
+		if ((nob <= KFILND_IMMEDIATE_MSG_SIZE && !is_p2p) ||
+		    msg->msg_len == 0) {
 			lnd_msg_type = KFILND_MSG_IMMEDIATE;
 			break;
 		}
@@ -159,7 +161,7 @@ static int kfilnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *msg)
 		}
 	}
 
-	tn->tn_gpu = gpu;
+	tn->tn_p2p = is_p2p;
 
 	switch (lnd_msg_type) {
 	case KFILND_MSG_IMMEDIATE:
@@ -293,7 +295,7 @@ static int kfilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 			if (msg)
 				msg_md = msg->msg_md;
 
-			tn->tn_gpu = lnet_md_is_gpu(msg_md);
+			tn->tn_p2p = lnet_md_is_p2p(msg_md);
 
 			/* Post the buffer given us as a sink  */
 			tn->sink_buffer = true;
@@ -320,7 +322,7 @@ static int kfilnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 			if (msg)
 				msg_md = msg->msg_md;
 
-			tn->tn_gpu = lnet_md_is_gpu(msg_md);
+			tn->tn_p2p = lnet_md_is_p2p(msg_md);
 
 			/* Post the buffer given to us as a source  */
 			tn->sink_buffer = false;

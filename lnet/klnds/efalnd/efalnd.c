@@ -1032,7 +1032,7 @@ kefalnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	struct kefa_conn *conn;
 	struct kefa_tx *tx;
 	int nob, rc;
-	bool gpu;
+	bool is_p2p;
 
 	tx = kefalnd_get_idle_tx(efa_ni);
 	if (tx == NULL) {
@@ -1060,7 +1060,7 @@ kefalnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	       libcfs_nidstr(&target->nid),
 	       type == LNET_MSG_GET ? msg_md->md_length : lntmsg->msg_len);
 
-	gpu = lnet_md_is_gpu(msg_md);
+	is_p2p = lnet_md_is_p2p(msg_md);
 
 	switch (type) {
 	default:
@@ -1074,7 +1074,8 @@ kefalnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	case LNET_MSG_GET:
 		/* use RDMA or SEND based on size */
 		nob = offsetof(struct kefa_msg, msg_v2.u.immediate.payload[msg_md->md_length]);
-		if (nob <= EFALND_NO_RDMA_THRESH && !gpu)
+		if ((nob <= EFALND_NO_RDMA_THRESH && !is_p2p) ||
+		    msg_md->md_length == 0)
 			break;
 
 		/* RDMA based flow */
@@ -1114,7 +1115,8 @@ kefalnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 	case LNET_MSG_PUT:
 		/* use RDMA or SEND based on size */
 		nob = offsetof(struct kefa_msg, msg_v2.u.immediate.payload[lntmsg->msg_len]);
-		if (nob <= EFALND_NO_RDMA_THRESH && !gpu)
+		if ((nob <= EFALND_NO_RDMA_THRESH && !is_p2p) ||
+		    lntmsg->msg_len == 0)
 			break;
 
 		/* RDMA based flow */
@@ -3143,6 +3145,10 @@ kefalnd_startup(struct lnet_ni *ni)
 
 	efa_ni->efa_dev = efa_dev;
 	ni->ni_dev_cpt = efa_dev->cpt;
+
+#ifdef IN_KERNEL_HAVE_OFED_IB_DMA_PCI_P2P_DMA_SUPPORTED
+	ni->ni_p2pdma = ib_dma_pci_p2p_dma_supported(efa_dev->ib_dev);
+#endif
 
 	/* Bind the NI to the device's local CPTs (if not explicitly
 	 * configured) now that the device's NUMA node is known and before
