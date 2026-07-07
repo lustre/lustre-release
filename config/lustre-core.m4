@@ -1847,6 +1847,34 @@ AC_DEFUN([LC_HAVE_IOV_ITER_GET_PAGES_ALLOC2], [
 ]) # LC_HAVE_IOV_ITER_GET_PAGES_ALLOC2
 
 #
+# LC_IOV_ITER_EXTRACT_PAGES
+#
+# Linux commit v6.3
+#  iov_iter: Introduce iov_iter_extract_pages()
+#
+AC_DEFUN([LC_SRC_IOV_ITER_EXTRACT_PAGES], [
+	LB2_LINUX_TEST_SRC([iov_iter_extract_pages], [
+		#include <linux/uio.h>
+	],[
+		struct iov_iter *iter = NULL;
+		struct page ***pages = NULL;
+		size_t maxsize = 1;
+		unsigned int maxpages = 1;
+		iov_iter_extraction_t flags = 0;
+		size_t start;
+		size_t result __attribute__ ((unused));
+		result = iov_iter_extract_pages(iter, pages, maxsize, maxpages, flags, &start);
+	],[-Werror])
+])
+AC_DEFUN([LC_IOV_ITER_EXTRACT_PAGES], [
+	LB2_MSG_LINUX_TEST_RESULT([if iov_iter_extract_pages() is available],
+	[iov_iter_extract_pages], [
+		AC_DEFINE(HAVE_IOV_ITER_EXTRACT_PAGES, 1,
+			[iov_iter_extract_pages() is available])
+	])
+]) # LC_IOV_ITER_EXTRACT_PAGES
+
+#
 # LC_HAVE_USER_BACKED_ITER
 #
 # Linux commit v5.19-10287-gfcb14cb1bdac
@@ -3831,6 +3859,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	# 6.3
 	LC_SRC_HAVE_MNT_IDMAP_ARG
 	LC_SRC_HAVE_U64_CAPABILITY
+	LC_SRC_IOV_ITER_EXTRACT_PAGES
 	LC_SRC_HAVE_FOLIO_BATCH_REINIT
 
 	# 6.4
@@ -4053,6 +4082,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	# 6.3
 	LC_HAVE_MNT_IDMAP_ARG
 	LC_HAVE_U64_CAPABILITY
+	LC_IOV_ITER_EXTRACT_PAGES
 	LC_HAVE_FOLIO_BATCH_REINIT
 
 	# 6.4
