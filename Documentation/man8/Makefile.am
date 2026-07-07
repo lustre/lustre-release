@@ -26,6 +26,7 @@ MANFILES = 					\
 	lnet_legacy2yaml.8			\
 	lnetctl.8				\
 	lst.8					\
+	lustre_rmmod.8				\
 	lustre_routes_config.8			\
 	lustre_routes_conversion.8		\
 	lustre_rsync.8				\

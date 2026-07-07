@@ -1,12 +1,14 @@
 #!/usr/bin/bash
 #
 # Takes a list of modules and unloads them and all dependent modules.
-# If a module cannot be unloaded (e.g. it's in use), an error is
-# returned.
+# If a module cannot be unloaded (e.g. it's in use), an error is returned.
 ###############################################################################
 
 SCRIPT_NAME="$(basename "$0")"
 LCTL=${LCTL:-lctl}
+# Seconds to wait for OBD devices to drain before unloading. umount may return
+# before OBD devices are fully unconfigured (mgc, lwp/osp imports, obd_zombie).
+WAIT=${LUSTRE_RMMOD_WAIT:-60}
 if [[ -z "$DEBUG" ]]; then
 	if [[ -n "$DEBUG_RMMOD" ]]; then
 		DEBUG=true
@@ -18,13 +20,46 @@ fi
 # Print help message
 print_usage() {
 	echo "$SCRIPT_NAME -h|--help"
-	echo "$SCRIPT_NAME [-d|--debug-kernel] [modulesname...]"
+	echo "$SCRIPT_NAME [-d|--debug-kernel] [-w|--wait SECS] [MODULENAME...]"
 	echo
-	echo -e "\t-h, --help\t\tDisplay this help message"
 	echo -e "\t-d, --debug-kernel\tDisplay lustre kernel debug messages"
-	echo -e "\tmodulesname\t\tList of lustre modules to unload. By default"
-	echo -e "\t\t\t\tldiskfs and libcfs (and their dependencies) are"
-	echo -e "\t\t\t\tselected."
+	echo -e "\t-h, --help\t\tDisplay this help message"
+	echo -e "\t-w, --wait SECS\t\twait for device cleanup (default 60s)"
+	echo -e "\t\t\t\t0 unloads (and potentially fails) immediately"
+	echo -e "\tMODULENAME\t\tList of lustre modules to unload."
+	echo -e "\t\t\t\tBy default all modules are unloaded."
+}
+
+# Wait for all OBD devices to drain and clean up before unloading modules.
+#
+# No output or an error from "lctl dl" means no devices remain (non-fatal).
+# usage: wait_for_devices SECONDS
+wait_for_devices() {
+	local timeout=$1
+	local print
+	local end
+
+	(( timeout > 0 )) || return 0
+
+	end=$((SECONDS + timeout))
+	print=$((SECONDS + 20))
+	while (( SECONDS < end )); do
+		local num=$($LCTL dl 2>/dev/null | wc -l)
+		(( num == 0 )) && return 0
+
+		if (( SECONDS >= print )); then
+			local l=$((end - $SECONDS))
+			echo "$SCRIPT_NAME: wait ${l}s for $num OBD devices" >&2
+			(( print+=60 ))
+		fi
+		sleep 1
+	done
+
+	if [[ -n "$($LCTL dl 2>/dev/null)" ]]; then
+		echo "$SCRIPT_NAME: OBD devices after ${timeout}s:" >&2
+		$LCTL dl 2>/dev/null >&2
+	fi
+	return 0
 }
 
 # Print kernel debug message for lustre modules
@@ -75,21 +110,30 @@ unload_dep_modules_inclusive() {
 }
 
 declare -a modules
-while [ $# -gt 0 ]; do
+while (( $# > 0 )); do
 	case "$1" in
-		-h|--help)
-			print_usage >&2
-			exit 0
-			;;
 		-d|--debug-kernel)
 			if lsmod | grep -E -q '^libcfs'; then
 				DEBUG='true'
 			else
-				echo "Debug unavailable: libcfs is not loaded" >&2
+				echo "Debug unavailable: libcfs not loaded" >&2
+			fi
+			;;
+		-h|--help)
+			print_usage >&2
+			exit 0
+			;;
+		-w|--wait)
+			shift
+			WAIT="$1"
+			if ! [[ "$WAIT" =~ ^[0-9]+$ ]]; then
+				echo "Error: --wait needs number of seconds" >&2
+				print_usage >&2
+				exit 2
 			fi
 			;;
 		-*)
-			echo "Error invalid option" >&2
+			echo "Error invalid option '$1'" >&2
 			print_usage >&2
 			exit 2
 			;;
@@ -103,12 +147,14 @@ done
 # To maintain backwards compatibility, ldiskfs and libcfs must be
 # unloaded if no parameters are given, or if only the ldiskfs parameter
 # is given. It's ugly, but is needed to emulate the prior functionality
-if [ "${#modules[@]}" -eq 0 ] || [ "${modules[*]}" = "ldiskfs" ]; then
+if (( ${#modules[@]} == 0 )) || [[ "${modules[*]}" == "ldiskfs" ]]; then
 	unload_all=true
 	modules=('lnet_selftest' 'ldiskfs' 'libcfs')
 else
 	unload_all=false
 fi
+
+wait_for_devices "$WAIT"
 
 export KMEMLEAK=${KMEMLEAK:-/sys/kernel/debug/kmemleak}
 KMEMLEAK_MODS=/tmp/kmemleak-modules-list.txt

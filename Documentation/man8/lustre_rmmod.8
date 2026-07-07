@@ -1,0 +1,64 @@
+.TH LUSTRE_RMMOD 8 2026-07-07 Lustre "Lustre Configuration Utilities"
+.SH NAME
+lustre_rmmod \- remove Lustre modules from the kernel
+.SH SYNOPSIS
+.SY lustre_rmmod
+.RB [ -d | --debug-kernel "] [" -h | --help "] [" -w | --wait
+.IR SECONDS "] [" MODULE " ...]"
+.YS
+.SH DESCRIPTION
+.B lustre_rmmod
+calls the
+.BR rmmod (8)
+utility to unload all of the Lustre kernel modules in the correct order
+to handle dependencies between them.
+This is useful/necessary when upgrading the kernel modules to ensure
+that the newly-installed modules are used for mounting the filesystem.
+Otherwise, if the system was not rebooted or modules unloaded before
+remounting, it is possible that old modules are used.
+.PP
+If one or more
+.I MODULE
+arguments is given on the command line, then all dependencies of the
+specified module(s) as well as the module itself are unloaded.
+If no module is specified, then all Lustre kernel modules are unloaded.
+.SH OPTIONS
+.TP
+.BR -d ", " --debug-kernel
+Dump the Lustre kernel debug log using
+.BR lctl-debug_kernel (8)
+before unloading the last module.
+This allows capturing full debug traces in case of issues during cleanup,
+or when tracing memory leaks.
+.TP
+.BR -h ", " --help
+Print a usage message and exit.
+.TP
+.BR -w ", " --wait " \fISECONDS"
+Wait up to
+.I SECONDS
+seconds for OBD devices to be cleaned up (according to
+.BR lctl-device_list (8))
+before trying to unload the modules,
+to allow asynchronous device cleanup actions to complete after
+.BR umount (8)
+returns.
+If
+.IB SECONDS
+is
+.BR 0 ,
+no devices are configured, or
+.B lctl
+returns an error, then there is no further wait before module unload.
+.SH AVAILABILITY
+.B lustre_rmmod
+is part of the
+.BR lustre (7)
+filesystem package since release 1.6.0
+.\" Added in commit v1.5.0-134-g113303973e
+.SH SEE ALSO
+.BR lctl (8),
+.BR lctl-debug_kernel (8),
+.BR lctl-device_list (8),
+.BR rmmod (8),
+.BR umount (8)
