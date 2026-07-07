@@ -133,24 +133,35 @@ cl_page_slice_get(const struct cl_page *cl_page, int index)
  *
  * returns number of bytes
  */
-static ssize_t ll_get_iov_memory(int rw, struct iov_iter *iter,
-				struct cl_dio_pages *cdp,
-				size_t maxsize)
+static ssize_t ll_get_iov_memory(struct cl_io *io, int rw,
+				 struct iov_iter *iter,
+				 struct cl_dio_pages *cdp,
+				 size_t maxsize)
 {
 	ssize_t bytes;
 	size_t start;
+	unsigned int maxpages = DIV_ROUND_UP(maxsize, PAGE_SIZE) + 1;
+	unsigned int flags = 0;
 
-	bytes = iov_iter_get_pages_alloc2(iter, &cdp->cdp_pages, maxsize,
-					  &start);
+	if (io && !cl_io_top(io)->ci_p2pdma_unsupported)
+		flags |= ITER_ALLOW_P2PDMA;
+
+	bytes = ll_iov_iter_extract_pages(iter, &cdp->cdp_pages, maxsize,
+					  maxpages, flags, &start);
 	if (bytes > 0) {
 		cdp->cdp_page_count = DIV_ROUND_UP(bytes + start, PAGE_SIZE);
+#ifdef HAVE_IOV_ITER_EXTRACT_PAGES
+		if (iov_iter_extract_will_pin(iter))
+			cdp->cdp_pinned = 1;
+#endif
 		if (user_backed_iter(iter))
 			iov_iter_revert(iter, bytes);
 	}
 	return bytes;
 }
 
-ssize_t cl_dio_pages_init(const struct lu_env *env, struct cl_object *obj,
+ssize_t cl_dio_pages_init(const struct lu_env *env, struct cl_io *io,
+			  struct cl_object *obj,
 			  struct cl_dio_pages *cdp, struct iov_iter *iter,
 			  int rw, size_t bytes, loff_t offset, bool unaligned)
 {
@@ -166,7 +177,7 @@ ssize_t cl_dio_pages_init(const struct lu_env *env, struct cl_object *obj,
 
 	/* these set cdp->page_count, which is used in coo_dio_pages_init */
 	if (!unaligned) {
-		result = ll_get_iov_memory(rw, iter, cdp, bytes);
+		result = ll_get_iov_memory(io, rw, iter, cdp, bytes);
 		/* ll_get_iov_memory returns bytes in the IO or error*/
 		bytes = result;
 	} else {

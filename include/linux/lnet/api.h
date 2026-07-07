@@ -58,6 +58,7 @@ int LNetDist(struct lnet_nid *nid, struct lnet_nid *srcnid, __u32 *order);
 void LNetPrimaryNID(struct lnet_nid *nid);
 void LNetLocalPrimaryNID(struct lnet_nid *nid);
 bool LNetIsPeerLocal(struct lnet_nid *nid);
+bool LNetRouteP2PCapable(struct lnet_nid *target_nid);
 int LNetPeerDiscovered(struct lnet_nid *nid, bool recreate);
 int LNetFetchNIDs(int (*cb)(void *private, struct lnet_nid *nid),
 		  __u32 netid, void *data);

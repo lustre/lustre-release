@@ -460,7 +460,7 @@ static ssize_t ll_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 
 		cdp = &sdio->csd_dio_pages;
 		cdp->cdp_file_offset = file_offset;
-		result = cl_dio_pages_init(env, ll_dio_aio->cda_obj, cdp,
+		result = cl_dio_pages_init(env, io, ll_dio_aio->cda_obj, cdp,
 					   iter, rw, bytes, file_offset,
 					   unaligned);
 		if (unlikely(result <= 0)) {

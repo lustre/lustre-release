@@ -278,6 +278,12 @@ int osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 	if (lnet_is_rdma_only_page(vmpage))
 		brw_flags |= OBD_BRW_RDMA_ONLY;
 
+	/* Fast-fail P2P pages if route to the OST does not support it */
+	if (lustre_is_p2prdma_page(vmpage)) {
+		if (cli->cl_import && !cli->cl_import->imp_p2pdma)
+			return -EOPNOTSUPP;
+	}
+
 	/*
 	 * NOTE: here @page is a top-level page. This is done to avoid
 	 *       creation of sub-page-list.
@@ -1492,12 +1498,21 @@ int osc_io_init(const struct lu_env *env,
 	struct osc_io *oio = osc_env_io(env);
 	struct osc_object *osc = cl2osc(obj);
 	struct obd_export *exp = osc_export(osc);
+	struct client_obd *cli = &exp->exp_obd->u.cli;
 
 	CL_IO_SLICE_CLEAN(oio, oi_cl);
 	cl_io_slice_add(io, &oio->oi_cl, obj, &osc_io_ops);
 
 	if (!exp_connect_unaligned_dio(exp))
 		cl_io_top(io)->ci_allow_unaligned_dio = false;
+
+	/*
+	 * P2P DMA requires ALL OSCs (stripes) representing a file to be
+	 * P2P DMA capable. If any visited OSC is incapable, we set
+	 * ci_p2pdma_unsupported to 1 to track this.
+	 */
+	if (!cli->cl_import || !cli->cl_import->imp_p2pdma)
+		cl_io_top(io)->ci_p2pdma_unsupported = 1;
 
 	return 0;
 }

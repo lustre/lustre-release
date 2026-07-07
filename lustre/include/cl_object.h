@@ -1993,7 +1993,9 @@ struct cl_io {
 	/* was this IO switched from BIO to DIO for hybrid IO? */
 			     ci_hybrid_switched:1,
 	/* this IO is to a parity mirror */
-			     ci_parity_io:1;
+			     ci_parity_io:1,
+	/* LNet route supports PCI P2P DMA */
+			     ci_p2pdma_unsupported:1;
 	/**
 	 * EOF for parity components, calculated based on RAID geometry.
 	 * Valid only when ci_parity_io is set.
@@ -2226,7 +2228,8 @@ static inline int cl_object_refc(struct cl_object *clob)
 }
 
 
-ssize_t cl_dio_pages_init(const struct lu_env *env, struct cl_object *obj,
+ssize_t cl_dio_pages_init(const struct lu_env *env, struct cl_io *io,
+			  struct cl_object *obj,
 			  struct cl_dio_pages *cdp, struct iov_iter *iter,
 			  int rw, size_t maxsize, loff_t offset,
 			  bool unaligned);
@@ -2576,9 +2579,12 @@ struct cl_dio_pages {
 	/* the file offset of the first page. */
 	loff_t                  cdp_file_offset;
 	unsigned int		cdp_lov_index;
+	/* Use 24 bits (64GiB max) for single I/O context
+	 * This leaves room for related flags
+	 */
+	unsigned int		cdp_page_count:24,
+				cdp_pinned:1;
 	loff_t			cdp_osc_off;
-	/** # of pages in the array. */
-	unsigned int		cdp_page_count;
 	/* the first and last page can be incomplete, this records the
 	 * offsets
 	 */
@@ -2623,7 +2629,7 @@ struct cl_sub_dio {
 				csd_write_copied:1;
 };
 
-void ll_release_user_pages(struct page **pages, int npages);
+void ll_release_user_pages(struct cl_dio_pages *cdp);
 int ll_allocate_dio_buffer(struct cl_dio_pages *cdp, size_t io_size);
 void ll_free_dio_buffer(struct cl_dio_pages *cdp);
 ssize_t ll_dio_user_copy(struct cl_sub_dio *sdio);

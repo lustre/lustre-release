@@ -28,6 +28,7 @@
 #include <obd_support.h>
 #include <lustre_fid.h>
 #include <cl_object.h>
+#include <lustre_compat/linux/uio.h>
 #include "cl_internal.h"
 
 /*
@@ -1315,7 +1316,7 @@ static void cl_sub_dio_end(const struct lu_env *env, struct cl_sync_io *anchor)
 		/* unaligned DIO does not get user pages, so it doesn't have to
 		 * release them, but aligned I/O must
 		 */
-		ll_release_user_pages(cdp->cdp_pages, cdp->cdp_page_count);
+		ll_release_user_pages(cdp);
 	}
 	cl_sync_io_note(env, &sdio->csd_ll_aio->cda_sync, ret);
 
@@ -1505,23 +1506,31 @@ void ll_free_dio_buffer(struct cl_dio_pages *cdp)
 }
 EXPORT_SYMBOL(ll_free_dio_buffer);
 
-/*
+/**
  * ll_release_user_pages - tear down page struct array
- * @pages: array of page struct pointers underlying target buffer
+ * @cdp: Direct I/O pages structure underlying target buffer
  */
-void ll_release_user_pages(struct page **pages, int npages)
+void ll_release_user_pages(struct cl_dio_pages *cdp)
 {
+	struct page **pages = cdp->cdp_pages;
+	int npages = cdp->cdp_page_count;
+	bool pinned = cdp->cdp_pinned;
 	int i;
 
-	if (npages == 0) {
-		LASSERT(!pages);
+	cdp->cdp_pages = NULL;
+	/*
+	 * npages can be 0 if cl_dio_pages_init failed after allocating
+	 * cdp_pages. We still need to free the pages array in this case.
+	 */
+	if (!npages) {
+		kvfree(pages);
 		return;
 	}
 
 	for (i = 0; i < npages; i++) {
 		if (!pages[i])
 			break;
-		put_page(pages[i]);
+		ll_release_page(pages[i], pinned);
 	}
 
 	kvfree(pages);

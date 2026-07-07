@@ -637,6 +637,7 @@ connect:
 	/* switch connection, don't mind if it's same as the current one */
 	ptlrpc_connection_put(imp->imp_connection);
 	imp->imp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
+	imp->imp_p2pdma = LNetRouteP2PCapable(&imp->imp_connection->c_peer.nid);
 
 	dlmexp = class_conn2export(&imp->imp_dlm_handle);
 	if (!dlmexp)

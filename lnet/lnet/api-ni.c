@@ -10734,6 +10734,41 @@ bool LNetIsPeerLocal(struct lnet_nid *nid)
 EXPORT_SYMBOL(LNetIsPeerLocal);
 
 /**
+ * LNetRouteP2PCapable() - Check if local NI for a given target supports P2P DMA
+ * @target_nid: the NID of the target peer
+ *
+ * Determines if the local source network interface (NI) that would be used to
+ * reach @target_nid is marked as capable of handling PCI P2P DMA operations.
+ * Note: No reference is held on the inspected NI.
+ *
+ * This provides a best-effort heuristic for the Direct I/O syscall path.
+ * In multi-rail configurations, it assumes NIs on the same local net are
+ * homogeneously configured for P2P DMA hardware capabilities.
+ *
+ * Return: true if the local source NI supports P2P DMA, false otherwise.
+ */
+bool LNetRouteP2PCapable(struct lnet_nid *target_nid)
+{
+	struct lnet_nid src_nid;
+	struct lnet_ni *ni;
+	bool capable = false;
+	int rc, cpt;
+
+	rc = LNetDist(target_nid, &src_nid, NULL);
+	if (rc < 0)
+		return false;
+
+	cpt = lnet_net_lock_current();
+	ni = lnet_nid_to_ni_locked(&src_nid, cpt);
+	if (ni)
+		capable = ni->ni_p2pdma;
+	lnet_net_unlock(cpt);
+
+	return capable;
+}
+EXPORT_SYMBOL(LNetRouteP2PCapable);
+
+/**
  * LNetFetchNIDs() - Retrieve an array of lnet_nid NIDs grouped by networks or
  *                   for particular network only.
  * @cb: callback to pass each new NID to.
