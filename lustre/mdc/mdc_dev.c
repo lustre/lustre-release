@@ -1734,8 +1734,11 @@ static struct lu_device *mdc_device_alloc(const struct lu_env *env,
 
 	/* Setup MDC OBD */
 	obd = class_name2obd(lustre_cfg_string(cfg, 0));
-	if (obd == NULL)
+	if (obd == NULL) {
+		cl_device_fini(lu2cl_dev(d));
+		OBD_FREE_PTR(osc);
 		RETURN(ERR_PTR(-ENODEV));
+	}
 	obd->obd_lu_dev = d;
 	d->ld_obd = obd;
 
