@@ -6592,20 +6592,26 @@ int lqa_ioctl(enum lqa_cmd_type cmd, char *cmdname, char *fsname, char *lqaname,
 
 static inline int lqa_get_range(const char *range, __u32 *start, __u32 *end)
 {
-	long tmp_start, tmp_end;
-	int rc;
+	long long tmp_start, tmp_end;
+	char *endptr;
 
 	if (range == NULL)
 		return -EINVAL;
 
-	rc = sscanf(range, "%ld-%ld", &tmp_start, &tmp_end);
-	switch (rc) {
-	case 1:
+	errno = 0;
+	tmp_start = strtoll(range, &endptr, 10);
+	if (endptr == range || errno == ERANGE)
+		return -EINVAL;
+
+	if (*endptr == '\0') {
 		tmp_end = tmp_start;
-		break;
-	case 2:
-		break;
-	default:
+	} else if (*endptr == '-') {
+		range = endptr + 1;
+		errno = 0;
+		tmp_end = strtoll(range, &endptr, 10);
+		if (endptr == range || *endptr != '\0' || errno == ERANGE)
+			return -EINVAL;
+	} else {
 		return -EINVAL;
 	}
 

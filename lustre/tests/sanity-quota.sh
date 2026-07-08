@@ -7908,6 +7908,34 @@ test_97d() {
 }
 run_test 97d "LQA disk persistence using standard commands"
 
+test_97e()
+{
+	local lqa="lqa1"
+
+	(( $MDS1_VERSION >= $(version_code 2.17.56) )) ||
+		skip "need MDS >= 2.17.56 to reject invalid lqa ranges"
+
+	$LQA_NEW --name $lqa || error "cannot create $lqa"
+	stack_trap "$LQA_DESTROY --name $lqa || true"
+
+	$LQA_ADD --name $lqa --range 10a &&
+		error "lqa add succeeded with invalid range 10a"
+	$LQA_ADD --name $lqa --range 10-11b &&
+		error "lqa add succeeded with invalid range 10-11b"
+	$LQA_ADD --name $lqa --range 10- &&
+		error "lqa add succeeded with invalid range 10-"
+
+	$LQA_REMOVE --name $lqa --range 10a &&
+		error "lqa remove succeeded with invalid range 10a"
+	$LQA_REMOVE --name $lqa --range 10-11b &&
+		error "lqa remove succeeded with invalid range 10-11b"
+	$LQA_REMOVE --name $lqa --range 10- &&
+		error "lqa remove succeeded with invalid range 10-"
+
+	$LQA_DESTROY --name $lqa || error "cannot destroy $lqa"
+}
+run_test 97e "LQA add/remove should reject invalid ranges"
+
 test_98() {
 	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
 
