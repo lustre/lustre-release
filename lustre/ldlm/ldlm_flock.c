@@ -230,9 +230,8 @@ ldlm_flock_deadlock(struct ldlm_lock *req, struct ldlm_lock *bl_lock)
 		LASSERT(flock->owner == bl_owner);
 		bl_owner = flock->blocking_owner;
 		bl_exp_new = class_export_get(flock->blocking_export);
-		class_export_put(bl_exp);
-
 		cfs_hash_put(bl_exp->exp_flock_hash, &lock->l_exp_flock_hash);
+		class_export_put(bl_exp);
 		bl_exp = bl_exp_new;
 
 		if (req == lock) {
