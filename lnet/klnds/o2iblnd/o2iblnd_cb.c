@@ -737,8 +737,7 @@ static int kiblnd_setup_rd_kiov(struct lnet_ni *ni, struct kib_tx *tx,
 		 * therefore exists when a non-first fragment starts mid-page
 		 * or a non-last fragment ends mid-page.
 		 */
-		if ((nkiov < max_nkiov &&
-		     ((kiov->bv_offset + offset) & ~PAGE_MASK)) ||
+		if ((nkiov < max_nkiov && (kiov->bv_offset & ~PAGE_MASK)) ||
 		    (nob > fragnob &&
 		     ((kiov->bv_offset + offset + fragnob) & ~PAGE_MASK))) {
 			CDEBUG(D_NET, "tx_gaps: nkiov %d/%d offset %d fragnob %d nob %d\n",

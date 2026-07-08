@@ -2015,10 +2015,33 @@ no_fmr:
 
 			n = ib_map_mr_sg(mr, tx->tx_frags, rd->rd_nfrags,
 					 NULL, PAGE_SIZE);
+			/* simulate an ib_map_mr_sg() short-map to exercise the
+			 * error-cleanup path
+			 */
+			if (CFS_FAIL_CHECK(CFS_FAIL_O2IBLND_FMR_MAP_SHORT) &&
+			    n == rd->rd_nfrags)
+				n = rd->rd_nfrags - 1;
+
 			if (unlikely(n != rd->rd_nfrags)) {
-				CERROR("Failed to map mr %d/%d elements\n",
-				       n, rd->rd_nfrags);
-				return n < 0 ? n : -EINVAL;
+				rc = n < 0 ? n : -EINVAL;
+				CERROR("Failed to map mr %d/%d elements: rc = %d\n",
+				       n, rd->rd_nfrags, rc);
+				/*
+				 * Return the descriptor to the pool and drop
+				 * the map count we took above; otherwise this
+				 * frd and the pool reference leak on every
+				 * short-map, the pool never goes idle, and the
+				 * FMR pool grows without bound (the fmr_frd /
+				 * fmr_pool fields are left NULL so the caller's
+				 * kiblnd_fmr_pool_unmap() is a no-op).
+				 */
+				spin_lock(&fps->fps_lock);
+				frd->frd_posted = false;
+				list_add_tail(&frd->frd_list,
+					      &fpo->fast_reg.fpo_pool_list);
+				fpo->fpo_map_count--;
+				spin_unlock(&fps->fps_lock);
+				return rc;
 			}
 
 			/* Prepare FastReg WR */

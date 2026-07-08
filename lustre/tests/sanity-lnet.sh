@@ -2702,6 +2702,31 @@ EOF
 }
 run_test 170 "Check CPTs and tunables parsing when importing"
 
+test_180() {
+	[[ $NETTYPE == o2ib* ]] || skip "Need o2ib NETTYPE"
+
+	setupall || error "setupall failed"
+
+	mkdir -p $DIR/$tdir || error "mkdir failed"
+
+#define CFS_FAIL_O2IBLND_FMR_MAP_SHORT          0xf201
+	$LCTL set_param -n fail_loc=0x1000f201 fail_val=10
+
+	local i
+
+	for i in $(seq 1 64); do
+		dd if=/dev/zero of="$DIR/$tdir/$tfile.$((i % 4))" bs=1M \
+			count=1 oflag=direct conv=fsync &>/dev/null
+	done
+
+	$LCTL set_param -n fail_loc=0
+
+	rm -rf "$DIR/$tdir"
+
+	cleanupall || error "Failed to clean up"
+}
+run_test 180 "FastReg map error should not leak descriptors"
+
 test_199() {
 	[[ ${NETTYPE} == tcp* || ${NETTYPE} == o2ib* ]] ||
 		skip "Need tcp or o2ib NETTYPE"

@@ -872,6 +872,10 @@ kiblnd_queue2str(struct kib_conn *conn, struct list_head *q)
 #define IBLND_WID_MR	4
 #define IBLND_WID_MASK	7UL
 
+/* CFS_FAIL_O2IBLND range 0xF200 - 0xF2FF. */
+#define CFS_FAIL_O2IBLND			0xf200
+#define CFS_FAIL_O2IBLND_FMR_MAP_SHORT		0xf201
+
 static inline __u64
 kiblnd_ptr2wreqid(void *ptr, int type)
 {
