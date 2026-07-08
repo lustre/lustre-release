@@ -172,6 +172,7 @@ struct lnet_msg {
 	unsigned int          msg_peerrtrcredit:1; /* taken a peer router credit */
 	unsigned int          msg_onactivelist:1; /* on the activelist */
 	unsigned int	      msg_rdma_get:1;
+	unsigned int	      msg_p2pdma:1;	  /* MD is P2PDMA memory */
 
 	struct lnet_peer_ni  *msg_txpeer;         /* peer I'm sending to */
 	struct lnet_peer_ni  *msg_rxpeer;         /* peer I received from */
@@ -1319,6 +1320,8 @@ enum lnet_fault_rule_attr {
  * @LNET_STATS_ATTR_RECV_LENGTH:	bytes received (NLA_U64)
  * @LNET_STATS_ATTR_ROUTE_LENGTH:	bytes routed (NLA_U64)
  * @LNET_STATS_ATTR_DROP_LENGTH:	bytes dropped (NLA_U64)
+ * @LNET_STATS_ATTR_P2PDMA_SEND_COUNT:	P2PDMA messages sent (NLA_U32)
+ * @LNET_STATS_ATTR_P2PDMA_RECV_COUNT:	P2PDMA messages received (NLA_U32)
  */
 enum lnet_stats_attrs {
 	LNET_STATS_ATTR_UNSPEC			= 0,
@@ -1350,6 +1353,8 @@ enum lnet_stats_attrs {
 	LNET_STATS_ATTR_RECV_LENGTH		= 25,
 	LNET_STATS_ATTR_ROUTE_LENGTH		= 26,
 	LNET_STATS_ATTR_DROP_LENGTH		= 27,
+	LNET_STATS_ATTR_P2PDMA_SEND_COUNT	= 28,
+	LNET_STATS_ATTR_P2PDMA_RECV_COUNT	= 29,
 	__LNET_STATS_ATTR_MAX_PLUS_ONE,
 };
 

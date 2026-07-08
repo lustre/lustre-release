@@ -148,10 +148,11 @@ static int proc_lnet_stats(const struct lnet_debugfs_table *table,
 	int rc;
 	struct lnet_counters *ctrs;
 	struct lnet_counters_common common;
+	struct lnet_counters_p2pdma p2pdma;
 	size_t nob = *lenp;
 	loff_t pos = *ppos;
 	int len;
-	char tmpstr[256]; /* 7 %u and 4 u64 */
+	char tmpstr[256]; /* 9 %u and 4 %llu */
 
 	if (write) {
 		lnet_counters_reset();
@@ -169,15 +170,17 @@ static int proc_lnet_stats(const struct lnet_debugfs_table *table,
 		goto out_no_ctrs;
 
 	common = ctrs->lct_common;
+	p2pdma = ctrs->lct_p2pdma;
 
 	len = scnprintf(tmpstr, sizeof(tmpstr),
-			"%u %u %u %u %u %u %u %llu %llu %llu %llu",
+			"%u %u %u %u %u %u %u %llu %llu %llu %llu %u %u",
 			common.lcc_msgs_alloc, common.lcc_msgs_max,
 			common.lcc_errors,
 			common.lcc_send_count, common.lcc_recv_count,
 			common.lcc_route_count, common.lcc_drop_count,
 			common.lcc_send_length, common.lcc_recv_length,
-			common.lcc_route_length, common.lcc_drop_length);
+			common.lcc_route_length, common.lcc_drop_length,
+			p2pdma.lcp_p2pdma_send, p2pdma.lcp_p2pdma_recv);
 
 	if (pos >= len)
 		rc = 0;

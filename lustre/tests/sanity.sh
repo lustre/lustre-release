@@ -25682,8 +25682,9 @@ test_215() { # for bugs 18102, 21079, 21517
 	local L2 # regexp for 2nd line (optional)
 	local BR # regexp for the rest (body)
 
-	# lnet.stats should look as 11 space-separated non-negative numerics
-	BR="^$N $N $N $N $N $N $N $N $N $N $N$"
+	# lnet.stats should look as 11 space-separated non-negative numerics,
+	# optionally followed by the 2 p2pdma send/recv counters
+	BR="^$N $N $N $N $N $N $N $N $N $N $N( $N $N)?$"
 	create_lnet_proc_files "stats"
 	check_lnet_proc_stats "stats.sys" "lnet.stats" "$BR"
 	remove_lnet_proc_files "stats"

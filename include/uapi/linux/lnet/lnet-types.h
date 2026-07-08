@@ -216,9 +216,15 @@ struct lnet_counters_health {
 	__u32	lch_successful_resends;
 };
 
+struct lnet_counters_p2pdma {
+	__u32	lcp_p2pdma_send;
+	__u32	lcp_p2pdma_recv;
+};
+
 struct lnet_counters {
 	struct lnet_counters_common lct_common;
 	struct lnet_counters_health lct_health;
+	struct lnet_counters_p2pdma lct_p2pdma;
 };
 
 /*

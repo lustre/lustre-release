@@ -1043,6 +1043,7 @@ lnet_counters_get(struct lnet_counters *counters)
 {
 	struct lnet_counters *ctr;
 	struct lnet_counters_health *health = &counters->lct_health;
+	struct lnet_counters_p2pdma *p2pdma = &counters->lct_p2pdma;
 	int i, rc = 0;
 
 	memset(counters, 0, sizeof(*counters));
@@ -1083,6 +1084,8 @@ lnet_counters_get(struct lnet_counters *counters)
 				ctr->lct_health.lch_failed_resends;
 		health->lch_successful_resends +=
 				ctr->lct_health.lch_successful_resends;
+		p2pdma->lcp_p2pdma_send += ctr->lct_p2pdma.lcp_p2pdma_send;
+		p2pdma->lcp_p2pdma_recv += ctr->lct_p2pdma.lcp_p2pdma_recv;
 	}
 out_unlock:
 	lnet_net_unlock(LNET_LOCK_EX);
@@ -4748,13 +4751,26 @@ LNetCtl(unsigned int cmd, void *arg)
 	case IOC_LIBCFS_GET_LNET_STATS:
 	{
 		struct lnet_ioctl_lnet_stats *lnet_stats = arg;
+		struct lnet_counters counters;
+		size_t len;
 
-		if (lnet_stats->st_hdr.ioc_len < sizeof(*lnet_stats))
+		/* Older tools don't know about the p2pdma counters, so
+		 * only require the fields preceding them and fill in as
+		 * much as the caller's buffer can hold.
+		 */
+		if (lnet_stats->st_hdr.ioc_len <
+		    offsetof(struct lnet_ioctl_lnet_stats,
+			     st_cntrs.lct_p2pdma))
 			return -EINVAL;
 
+		len = min_t(size_t, sizeof(counters),
+			    lnet_stats->st_hdr.ioc_len -
+			    offsetof(struct lnet_ioctl_lnet_stats, st_cntrs));
+
 		mutex_lock(&the_lnet.ln_api_mutex);
-		rc = lnet_counters_get(&lnet_stats->st_cntrs);
+		rc = lnet_counters_get(&counters);
 		mutex_unlock(&the_lnet.ln_api_mutex);
+		memcpy(&lnet_stats->st_cntrs, &counters, len);
 		return rc;
 	}
 
@@ -10541,6 +10557,14 @@ static const struct ln_key_list lnet_stats_list = {
 			.lkp_value	= "drop_length",
 			.lkp_data_type	= NLA_U64,
 		},
+		[LNET_STATS_ATTR_P2PDMA_SEND_COUNT]	= {
+			.lkp_value	= "p2pdma_send_count",
+			.lkp_data_type	= NLA_U32,
+		},
+		[LNET_STATS_ATTR_P2PDMA_RECV_COUNT]	= {
+			.lkp_value	= "p2pdma_recv_count",
+			.lkp_data_type	= NLA_U32,
+		},
 	},
 };
 
@@ -10554,6 +10578,7 @@ static int lnet_stats_show_dump(struct sk_buff *msg,
 	int seq = cb->nlh->nlmsg_seq;
 	struct lnet_counters_common *common;
 	struct lnet_counters_health *health;
+	struct lnet_counters_p2pdma *p2pdma;
 	struct lnet_counters counters;
 	void *hdr;
 	int rc;
@@ -10570,6 +10595,7 @@ static int lnet_stats_show_dump(struct sk_buff *msg,
 	}
 	common = &counters.lct_common;
 	health = &counters.lct_health;
+	p2pdma = &counters.lct_p2pdma;
 
 	rc = lnet_genl_send_scalar_list(msg, portid, seq, &lnet_family,
 					gnlh->version,
@@ -10639,7 +10665,11 @@ static int lnet_stats_show_dump(struct sk_buff *msg,
 	    nla_put_u64_64bit(msg, LNET_STATS_ATTR_ROUTE_LENGTH,
 			      common->lcc_route_length, LNET_STATS_ATTR_PAD) ||
 	    nla_put_u64_64bit(msg, LNET_STATS_ATTR_DROP_LENGTH,
-			      common->lcc_drop_length, LNET_STATS_ATTR_PAD)) {
+			      common->lcc_drop_length, LNET_STATS_ATTR_PAD) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_P2PDMA_SEND_COUNT,
+			p2pdma->lcp_p2pdma_send) ||
+	    nla_put_u32(msg, LNET_STATS_ATTR_P2PDMA_RECV_COUNT,
+			p2pdma->lcp_p2pdma_recv)) {
 		genlmsg_cancel(msg, hdr);
 		NL_SET_ERR_MSG(extack, "failed to send statistics");
 		RETURN(-EMSGSIZE);

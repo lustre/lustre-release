@@ -240,6 +240,7 @@ static void
 lnet_msg_decommit_tx(struct lnet_msg *msg, int status)
 {
 	struct lnet_counters_common *common;
+	struct lnet_counters_p2pdma *p2pdma;
 	struct lnet_event *ev = &msg->msg_ev;
 
 	LASSERT(msg->msg_tx_committed);
@@ -247,6 +248,7 @@ lnet_msg_decommit_tx(struct lnet_msg *msg, int status)
 		goto out;
 
 	common = &(the_lnet.ln_counters[msg->msg_tx_cpt]->lct_common);
+	p2pdma = &(the_lnet.ln_counters[msg->msg_tx_cpt]->lct_p2pdma);
 	switch (ev->type) {
 	default: /* routed message */
 		LASSERT(msg->msg_routing);
@@ -267,8 +269,11 @@ lnet_msg_decommit_tx(struct lnet_msg *msg, int status)
 
 	case LNET_EVENT_SEND:
 		LASSERT(!msg->msg_rx_committed);
-		if (msg->msg_type == LNET_MSG_PUT)
+		if (msg->msg_type == LNET_MSG_PUT) {
 			common->lcc_send_length += msg->msg_len;
+			if (msg->msg_p2pdma)
+				p2pdma->lcp_p2pdma_send++;
+		}
 		break;
 
 	case LNET_EVENT_GET:
@@ -314,6 +319,7 @@ static void
 lnet_msg_decommit_rx(struct lnet_msg *msg, int status)
 {
 	struct lnet_counters_common *common;
+	struct lnet_counters_p2pdma *p2pdma;
 	struct lnet_event *ev = &msg->msg_ev;
 
 	LASSERT(!msg->msg_tx_committed); /* decommitted or never committed */
@@ -323,6 +329,7 @@ lnet_msg_decommit_rx(struct lnet_msg *msg, int status)
 		goto out;
 
 	common = &(the_lnet.ln_counters[msg->msg_rx_cpt]->lct_common);
+	p2pdma = &(the_lnet.ln_counters[msg->msg_rx_cpt]->lct_p2pdma);
 	switch (ev->type) {
 	default:
 		LASSERT(ev->type == 0);
@@ -341,6 +348,9 @@ lnet_msg_decommit_rx(struct lnet_msg *msg, int status)
 		LASSERT(msg->msg_type == LNET_MSG_REPLY ||
 			msg->msg_type == LNET_MSG_GET);
 		common->lcc_send_length += msg->msg_wanted;
+		/* the GET payload is sent from the matched MD */
+		if (msg->msg_p2pdma)
+			p2pdma->lcp_p2pdma_send++;
 		break;
 
 	case LNET_EVENT_PUT:
@@ -366,8 +376,11 @@ incr_stats:
 		lnet_incr_stats(&msg->msg_rxni->ni_stats,
 				msg->msg_type,
 				LNET_STATS_TYPE_RECV);
-	if (ev->type == LNET_EVENT_PUT || ev->type == LNET_EVENT_REPLY)
+	if (ev->type == LNET_EVENT_PUT || ev->type == LNET_EVENT_REPLY) {
 		common->lcc_recv_length += msg->msg_wanted;
+		if (msg->msg_p2pdma)
+			p2pdma->lcp_p2pdma_recv++;
+	}
 
  out:
 	lnet_return_rx_credits_locked(msg);
@@ -420,6 +433,7 @@ lnet_msg_attach_md(struct lnet_msg *msg, struct lnet_libmd *md,
 	LASSERT(!msg->msg_routing);
 
 	msg->msg_md = md;
+	msg->msg_p2pdma = lnet_md_is_p2p(md);
 	if (msg->msg_receiving) { /* committed for receiving */
 		msg->msg_offset = offset;
 		msg->msg_wanted = mlen;
@@ -451,6 +465,8 @@ lnet_complete_msg_locked(struct lnet_msg *msg, int cpt)
 		lnet_msg_decommit(msg, cpt, 0);
 
 		msg->msg_ack = 0;
+		/* the MD is detached, the ACK doesn't carry its payload */
+		msg->msg_p2pdma = 0;
 		lnet_net_unlock(cpt);
 
 		LASSERT(msg->msg_ev.type == LNET_EVENT_PUT);

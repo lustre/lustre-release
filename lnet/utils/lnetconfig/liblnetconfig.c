@@ -5325,6 +5325,14 @@ int lustre_lnet_show_stats(int seq_no, struct cYAML **show_rc,
 				 cntrs->lct_common.lcc_drop_length))
 		goto out;
 
+	if (!cYAML_create_number(stats, "p2pdma_send_count",
+				 cntrs->lct_p2pdma.lcp_p2pdma_send))
+		goto out;
+
+	if (!cYAML_create_number(stats, "p2pdma_recv_count",
+				 cntrs->lct_p2pdma.lcp_p2pdma_recv))
+		goto out;
+
 	if (!show_rc)
 		cYAML_print_tree(root);
 
