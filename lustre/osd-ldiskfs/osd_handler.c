@@ -580,6 +580,9 @@ int osd_ldiskfs_add_entry(struct osd_thread_info *info, struct osd_device *osd,
 {
 	int rc, rc2;
 
+	if (unlikely(child->d_name.len > LDISKFS_NAME_LEN))
+		return -ENAMETOOLONG;
+
 	rc = __ldiskfs_add_entry(handle, child, inode, hlock);
 	if (rc == -ENOBUFS || rc == -ENOSPC) {
 		struct lustre_ost_attrs *loa = &info->oti_ost_attrs;
@@ -8169,6 +8172,9 @@ static void osd_olc_save(const struct lu_env *env, struct osd_object *obj,
 	struct osd_lookup_cache_entry *entry;
 	struct osd_lookup_cache *olc;
 
+	if (unlikely(ln->ln_namelen > LDISKFS_NAME_LEN))
+		return;
+
 	if (unlikely(oti->oti_lookup_cache == NULL)) {
 		OBD_ALLOC_PTR(oti->oti_lookup_cache);
 		if (oti->oti_lookup_cache == NULL)
@@ -8193,7 +8199,6 @@ static void osd_olc_save(const struct lu_env *env, struct osd_object *obj,
 	entry->lce_obj.lco_gen = obj->oo_inode->i_generation;
 	entry->lce_obj.lco_version = iversion;
 
-	LASSERT(ln->ln_namelen <= LDISKFS_NAME_LEN + 1);
 	entry->lce_namelen = ln->ln_namelen;
 	memcpy(entry->lce_name, ln->ln_name, ln->ln_namelen);
 	memcpy(&entry->lce_fid, rec, sizeof(entry->lce_fid));
