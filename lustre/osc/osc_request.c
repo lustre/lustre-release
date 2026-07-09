@@ -4155,6 +4155,14 @@ int osc_precleanup_common(struct obd_device *obd)
 	cancel_work_sync(&cli->cl_writeback_work);
 	cancel_work_sync(&cli->cl_lru_work);
 
+	/* Remove from the shrinker list before destroying the import so the
+	 * slab shrinker (osc_cache_shrink_scan) cannot grab a cli whose
+	 * cl_import, cl_cache or cl_lru_left are about to become NULL.
+	 */
+	spin_lock(&osc_shrink_lock);
+	list_del_init(&cli->cl_shrink_list);
+	spin_unlock(&osc_shrink_lock);
+
 	obd_cleanup_client_import(obd);
 	RETURN(0);
 }
@@ -4165,10 +4173,6 @@ int osc_cleanup_common(struct obd_device *obd)
 	struct client_obd *cli = &obd->u.cli;
 
 	ENTRY;
-
-	spin_lock(&osc_shrink_lock);
-	list_del(&cli->cl_shrink_list);
-	spin_unlock(&osc_shrink_lock);
 
 	/* lru cleanup */
 	if (cli->cl_cache != NULL) {

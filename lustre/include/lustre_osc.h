@@ -735,7 +735,7 @@ static inline struct client_obd *osc_cli(const struct osc_object *obj)
 
 static inline char *cli_name(struct client_obd *cli)
 {
-	return cli->cl_import->imp_obd->obd_name;
+	return container_of(cli, struct obd_device, u.cli)->obd_name;
 }
 
 static inline struct osc_object *cl2osc(const struct cl_object *obj)
