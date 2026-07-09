@@ -327,6 +327,9 @@ int osd_fld_lookup(const struct lu_env *env, struct osd_device *osd,
 {
 	struct seq_server_site *ss = osd_seq_site(osd);
 
+	/* Initialize range flags to avoid any garbage */
+	range->lsr_flags = 0;
+
 	if (fid_seq_is_idif(seq)) {
 		fld_range_set_ost(range);
 		range->lsr_index = idif_ost_idx(seq);
