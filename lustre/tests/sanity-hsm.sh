@@ -273,8 +273,8 @@ copy2archive() {
 
 get_hsm_param() {
 	local param=$1
-	local val=$(do_facet $SINGLEMDS $LCTL get_param -n $HSM_PARAM.$param)
-	echo $val
+
+	do_facet $SINGLEMDS $LCTL get_param -n $HSM_PARAM.$param
 }
 
 set_test_state() {
@@ -4902,32 +4902,31 @@ run_test 254a "Request counters are initialized to zero"
 
 test_254b()
 {
-	[ $MDS1_VERSION -lt $(version_code 2.10.56) ] &&
-		skip "need MDS version at least 2.10.56"
+	(( $MDS1_VERSION >= $(version_code v2_10_56_0-68-g42e40555f2) )) ||
+		skip "need MDS >= 2.10.56 for HSM stats counters"
 
 	# The number of request to launch (at least 32)
-	local request_count=$((RANDOM % 32 + 32))
-	printf "Will launch %i requests of each type\n" "$request_count"
+	local count=$((RANDOM % 32 + 32))
+	echo "Will launch $count requests of each type"
 
 	# Launch a copytool to process requests
 	copytool setup
 
 	# Set hsm.max_requests to allow starting all requests at the same time
-	stack_trap \
-		"set_hsm_param max_requests $(get_hsm_param max_requests)" EXIT
-	set_hsm_param max_requests "$request_count"
+	stack_trap "set_hsm_param max_requests $(get_hsm_param max_requests)"
+	set_hsm_param max_requests $((count * 2))
 
 	mkdir_on_mdt0 $DIR/$tdir
 
 	local timeout
 	local count
-	for request_type in archive restore remove; do
-		printf "Checking %s requests\n" "${request_type}"
+	for act in archive restore remove; do
+		echo "Checking $act requests"
 		# Suspend the copytool to give us time to read the proc files
 		copytool_suspend
 
-		for ((i = 0; i < $request_count; i++)); do
-			case $request_type in
+		for ((i = 0; i < $count; i++)); do
+			case $act in
 			archive)
 				create_empty_file "$DIR/$tdir/$tfile-$i" \
 					>/dev/null 2>&1
@@ -4936,40 +4935,22 @@ test_254b()
 				lfs hsm_release "$DIR/$tdir/$tfile-$i"
 				;;
 			esac
-			$LFS hsm_${request_type} "$DIR/$tdir/$tfile-$i"
+			$LFS hsm_$act "$DIR/$tdir/$tfile-$i"
 		done
 
-		# Give the coordinator 10 seconds to start every request
-		timeout=10
-		while get_hsm_param actions | grep -q WAITING; do
-			sleep 1
-			let timeout-=1
-			[ $timeout -gt 0 ] ||
-				error "${request_type^} requests took too " \
-				      "long to start"
-		done
-
-		count="$(get_hsm_param ${request_type}_count)"
-		[ "$count" -eq "$request_count" ] ||
-			error "Expected '$request_count' (!= '$count') " \
-			      "active $request_type requests"
+		local rtc=$HSM_PARAM.${act}_count
+		# Give the coordinator enough time to start every request
+		wait_update_facet mds1 "$LCTL get_param -n $rtc" $count || {
+			local got="$(get_hsm_param ${act}_count)"
+			error "Expected $count (!= $got) active $act requests"
+		}
 
 		# Let the copytool process the requests
 		copytool_continue
-		# Give it 10 seconds maximum
-		timeout=10
-		while get_hsm_param actions | grep -q STARTED; do
-			sleep 1
-			let timeout-=1
-			[ $timeout -gt 0 ] ||
-				error "${request_type^} requests took too " \
-				      "long to complete"
-		done
-
-		count="$(get_hsm_param ${request_type}_count)"
-		[ "$count" -eq 0 ] ||
-			error "Expected 0 (!= '$count') " \
-			      "active $request_type requests"
+		wait_update_facet mds1 "$LCTL get_param -n $rtc" 0 || {
+			got="$(get_hsm_param ${act}_count)"
+			error "Expected 0 (!= $got) active $act requests"
+		}
 	done
 }
 run_test 254b "Request counters are correctly incremented and decremented"
