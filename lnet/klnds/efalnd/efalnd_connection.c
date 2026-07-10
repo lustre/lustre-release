@@ -1130,40 +1130,6 @@ kefalnd_handle_conn_establishment(struct kefa_ni *efa_ni, struct kefa_msg *msg)
 }
 
 static void
-kefalnd_cleanup_conn_txs(struct kefa_conn *conn, time64_t now,
-			 struct list_head *cancel_tx)
-{
-	int timeout = lnet_get_lnd_timeout();
-	struct kefa_tx *tx, *temp_tx;
-	unsigned long flags;
-
-	spin_lock_irqsave(&conn->lock, flags);
-
-	/* Tail of the list holds LRU elements */
-	list_for_each_entry_safe(tx, temp_tx, &conn->active_tx, list_node) {
-		time64_t tx_send_time = atomic64_read(&tx->send_time);
-
-		if (tx_send_time == 0 || now < tx_send_time + timeout)
-			break;
-
-		/* We must call abort TX after increasing the refcount to
-		 * prevent calling TX done which can lead to deadlock.
-		 * Also we abort the Tx only if its refcount is not already 0
-		 * which means its completion is in progress.
-		 */
-		if (atomic_inc_not_zero(&tx->ref_cnt)) {
-			kefalnd_abort_tx(tx, LNET_MSG_STATUS_NETWORK_TIMEOUT,
-					 -ETIMEDOUT);
-			list_move_tail(&tx->list_node, &conn->abort_tx);
-		}
-	}
-
-	list_splice_init(&conn->pend_tx, cancel_tx);
-
-	spin_unlock_irqrestore(&conn->lock, flags);
-}
-
-static void
 kefalnd_scan_ni_conns(struct kefa_ni *efa_ni)
 {
 	int init_timeout, resp_timeout, timeout, bkt;
@@ -1216,12 +1182,57 @@ kefalnd_scan_ni_conns(struct kefa_ni *efa_ni)
 }
 
 static void
+kefalnd_cleanup_conn_txs(struct kefa_conn *conn, time64_t now)
+{
+	int timeout = lnet_get_lnd_timeout();
+	struct kefa_tx *tx, *temp_tx;
+	struct list_head cancel_tx;
+	unsigned long flags;
+
+	INIT_LIST_HEAD(&cancel_tx);
+
+	spin_lock_irqsave(&conn->lock, flags);
+
+	/* Tail of the list holds LRU elements */
+	list_for_each_entry_safe(tx, temp_tx, &conn->active_tx, list_node) {
+		time64_t tx_send_time = atomic64_read(&tx->send_time);
+
+		if (tx_send_time == 0 || now < tx_send_time + timeout)
+			break;
+
+		/* We must call abort TX after increasing the refcount to
+		 * prevent calling TX done which can lead to deadlock.
+		 * Also we abort the Tx only if its refcount is not already 0
+		 * which means its completion is in progress.
+		 */
+		if (atomic_inc_not_zero(&tx->ref_cnt)) {
+			kefalnd_abort_tx(tx, LNET_MSG_STATUS_NETWORK_TIMEOUT,
+					 -ETIMEDOUT);
+			list_move_tail(&tx->list_node, &conn->abort_tx);
+		}
+	}
+
+	list_splice_init(&conn->pend_tx, &cancel_tx);
+	spin_unlock_irqrestore(&conn->lock, flags);
+
+	list_for_each_entry_safe(tx, temp_tx, &conn->abort_tx, list_node) {
+		if (atomic_read(&tx->ref_cnt) == 1) {
+			atomic_dec(&tx->ref_cnt);
+			kefalnd_tx_done(tx);
+		}
+	}
+
+	list_for_each_entry_safe(tx, temp_tx, &cancel_tx, list_node)
+		kefalnd_force_cancel_tx(tx, LNET_MSG_STATUS_LOCAL_ABORTED,
+					-ETIMEDOUT);
+}
+
+static void
 kefalnd_drain_ni_conns(struct kefa_ni *efa_ni)
 {
 	int init_timeout, resp_timeout, timeout;
-	struct list_head cancel_tx, destroy;
 	struct kefa_conn *conn, *temp_conn;
-	struct kefa_tx *tx, *temp_tx;
+	struct list_head destroy;
 	unsigned long flags;
 	time64_t now;
 
@@ -1231,20 +1242,11 @@ kefalnd_drain_ni_conns(struct kefa_ni *efa_ni)
 	now = ktime_get_seconds();
 	init_timeout = efa_ni->lnet_ni->ni_net->net_tunables.lct_peer_timeout;
 	resp_timeout = init_timeout + RESP_CONN_EXTRA_TIME;
-	INIT_LIST_HEAD(&cancel_tx);
 	INIT_LIST_HEAD(&destroy);
 
 	list_for_each_entry_safe(conn, temp_conn, &efa_ni->cleanup_conns,
 				 cleanup_node) {
-		kefalnd_cleanup_conn_txs(conn, now, &cancel_tx);
-
-		list_for_each_entry_safe(tx, temp_tx, &conn->abort_tx,
-					 list_node) {
-			if (atomic_read(&tx->ref_cnt) == 1) {
-				atomic_dec(&tx->ref_cnt);
-				kefalnd_tx_done(tx);
-			}
-		}
+		kefalnd_cleanup_conn_txs(conn, now);
 
 		timeout = conn->type == KEFA_CONN_TYPE_INITIATOR ?
 				init_timeout : resp_timeout;
@@ -1259,10 +1261,6 @@ kefalnd_drain_ni_conns(struct kefa_ni *efa_ni)
 			list_move_tail(&conn->cleanup_node, &destroy);
 		spin_unlock_irqrestore(&conn->lock, flags);
 	}
-
-	list_for_each_entry_safe(tx, temp_tx, &cancel_tx, list_node)
-		kefalnd_force_cancel_tx(tx, LNET_MSG_STATUS_LOCAL_ABORTED,
-					-ETIMEDOUT);
 
 	list_for_each_entry_safe(conn, temp_conn, &destroy, cleanup_node) {
 		list_del_init(&conn->cleanup_node);
