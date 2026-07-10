@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config LNET_SOCKLND
+	tristate "TCP/IP socket LND (ksocklnd)"
+	depends on LNET
+	default LNET
+	help
+	  The socket LND (ksocklnd) carries LNet traffic over any
+	  TCP/IP-capable network interface. It is the default LNet network
+	  driver and requires no special hardware.
+
+	  To compile this as a kernel module, choose M here and it will be
+	  called ksocklnd.
+
+	  If unsure, say Y.

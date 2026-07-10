@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config LUSTRE_FS_WBCFS
+	tristate "Lustre wbcfs OSD support"
+	default n
+	depends on LUSTRE_FS_SERVER
+	help
+	  Enable the wbcfs (in-memory writeback cache) Object Storage Device
+	  backend for Lustre servers.
+
+	  If unsure, say N.

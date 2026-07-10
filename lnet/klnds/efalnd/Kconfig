@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config LNET_EFALND
+	tristate "AWS EFA LND (kefalnd)"
+	depends on LNET && INFINIBAND && INFINIBAND_EFA
+	default n
+	help
+	  The efa LND (kefalnd) carries LNet traffic over the AWS Elastic
+	  Fabric Adapter using the EFA verbs provider.
+
+	  To compile this as a kernel module, choose M here and it will be
+	  called kefalnd.
+
+	  If unsure, say N.

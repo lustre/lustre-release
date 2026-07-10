@@ -1,0 +1,115 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config LUSTRE_FS
+	tristate "Lustre file system client support"
+	depends on LNET
+	select LUSTRE_FS_COMMON
+	select CRYPTO
+	select CRYPTO_MD5
+	select CRYPTO_SHA1
+	select CRYPTO_SHA256
+	select CRYPTO_SHA512
+	select CRC_T10DIF
+	select DEBUG_FS
+	select FHANDLE
+	select QUOTA
+	depends on MULTIUSER
+	help
+	  This option enables Lustre file system client support. Choose Y
+	  here if you want to access a Lustre file system cluster. To compile
+	  this file system support as a module, choose M here: the module will
+	  be called lustre.
+
+	  To mount Lustre file systems, you also need to install the user space
+	  mount.lustre and other user space commands which can be found in the
+	  lustre-client package, available from
+	  http://downloads.whamcloud.com/public/lustre/
+
+	  Lustre file system is the most popular cluster file system in high
+	  performance computing. Source code of both kernel space and user space
+	  Lustre components can also be found at:
+	  https://github.com/lustre/lustre-release
+
+	  If unsure, say N.
+
+	  See also http://wiki.lustre.org/
+
+config LUSTRE_FS_SERVER
+	tristate "Lustre file system server support"
+	depends on LNET
+	select LUSTRE_FS_COMMON
+	help
+	  Enable Lustre server support (MDS, OSS, MGS).
+
+	  If unsure, say N.
+
+source "fs/lustre/osd-wbcfs/Kconfig"
+
+config LUSTRE_FS_COMMON
+	tristate
+	depends on LNET
+	help
+	  Internal symbol covering the modules shared by the Lustre client
+	  and server (obdclass, ptlrpc, ldlm, fid, mgc, obdecho, ec). It is
+	  selected automatically whenever Lustre is enabled and has no prompt
+	  of its own.
+
+config LUSTRE_FS_GSS
+	tristate "Lustre GSS support"
+	depends on LUSTRE_FS
+	select SUNRPC
+	default n
+	help
+	  Enable GSS (Generic Security Services) support for Lustre,
+	  providing Kerberos authentication and encryption.
+
+	  If unsure, say N.
+
+config LUSTRE_FS_GSS_SSK
+	bool "Lustre GSS shared-secret key support"
+	default n
+	depends on LUSTRE_FS_GSS
+	help
+	  Enable shared-secret key (SSK) mechanism for Lustre GSS.
+
+	  If unsure, say N.
+
+config LUSTRE_FS_GSS_KEYRING
+	bool "Lustre GSS keyring support"
+	default n
+	depends on LUSTRE_FS_GSS
+	depends on KEYS
+	help
+	  Enable kernel keyring integration for Lustre GSS.
+
+	  If unsure, say N.
+
+config LUSTRE_FS_POSIX_ACL
+	bool "Lustre POSIX Access Control Lists"
+	depends on LUSTRE_FS_COMMON
+	select FS_POSIX_ACL
+	default y
+	help
+	  POSIX Access Control Lists (ACLs) support permissions for users and
+	  groups beyond the owner/group/world scheme.
+	  Lustre can support these ACLs.
+
+	  If in doubt, say Y.
+
+config LUSTRE_FS_PINGER
+	bool "Enable Lustre pinger"
+	depends on LUSTRE_FS_COMMON
+	default y
+	help
+	  Lustre creates a pinger to determine if nodes are available. Newer
+	  versions of lustre allow disabling this feature.
+
+	  If in doubt, say Y.
+
+config LUSTRE_FS_TESTS
+	tristate "Lustre kernel unit tests"
+	depends on LUSTRE_FS
+	default n
+	help
+	  Build the Lustre in-kernel unit test modules.
+
+	  If unsure, say N.

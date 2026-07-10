@@ -1,0 +1,11 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config LUSTRE_FS_LDISKFS
+	tristate "Lustre ldiskfs OSD support"
+	default n
+	depends on LUSTRE_FS_SERVER
+	depends on EXT4_FS
+	help
+	  Enable the ldiskfs (ext4-based) Object Storage Device backend
+	  for Lustre servers.
+
+	  If unsure, say N.

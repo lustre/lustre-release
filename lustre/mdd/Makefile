@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += mdd.o
+obj-$(CONFIG_LUSTRE_FS_SERVER) += mdd.o
 mdd-objs := \
 	mdd_acl.o \
 	mdd_changelog.o \

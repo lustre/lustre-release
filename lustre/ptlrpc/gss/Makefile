@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += ptlrpc_gss.o
+obj-$(CONFIG_LUSTRE_FS_GSS) += ptlrpc_gss.o
 
 ptlrpc_gss-objs := sec_gss.o gss_bulk.o gss_cli_upcall.o gss_svc_upcall.o \
 		   gss_rawobj.o lproc_gss.o \

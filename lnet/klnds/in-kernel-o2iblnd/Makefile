@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += ko2iblnd.o
+obj-$(CONFIG_LNET_O2IBLND) += ko2iblnd.o
 
 ko2iblnd-objs := o2iblnd.o o2iblnd_cb.o o2iblnd_modparams.o o2iblnd_bounce.o
 

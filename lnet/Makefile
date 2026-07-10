@@ -4,7 +4,8 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += libcfs/
-obj-m += lnet/
-obj-m += klnds/
-obj-m += selftest/
+obj-$(CONFIG_LIBCFS) += libcfs/
+obj-$(CONFIG_LNET) += lnet/ klnds/
+obj-$(CONFIG_LNET_SELFTEST) += selftest/
+
+subdir-ccflags-y += -I$(src)/include

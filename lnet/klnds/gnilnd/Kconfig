@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config LNET_GNILND
+	tristate "Cray GNI LND (kgnilnd)"
+	depends on LNET
+	default n
+	help
+	  The gni LND (kgnilnd) carries LNet traffic over the Cray Gemini
+	  and Aries high-speed networks using the GNI API. It requires the
+	  Cray GNI kernel headers, so it is normally only built on Cray
+	  systems.
+
+	  To compile this as a kernel module, choose M here and it will be
+	  called kgnilnd.
+
+	  If unsure, say N.

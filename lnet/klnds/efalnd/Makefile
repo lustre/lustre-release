@@ -9,7 +9,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += kefalnd.o
+obj-$(CONFIG_LNET_EFALND) += kefalnd.o
 
 kefalnd-objs := efalnd.o efalnd_modparams.o efalnd_peerni.o efalnd_connection.o
 kefalnd-objs += efalnd_debugfs.o

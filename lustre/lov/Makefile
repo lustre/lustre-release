@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += lov.o
+obj-$(CONFIG_LUSTRE_FS) += lov.o
 lov-objs := lov_dev.o \
 	lov_ea.o \
 	lov_io.o \

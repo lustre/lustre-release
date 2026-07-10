@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += lnet.o
+obj-$(CONFIG_LNET) += lnet.o
 
 lnet-objs-$(CONFIG_SMP) = lib-cpt.o
 lnet-objs := api-ni.o config.o nidstrings.o lnet_rdma.o lock.o
