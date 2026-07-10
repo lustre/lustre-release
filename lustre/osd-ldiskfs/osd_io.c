@@ -1660,7 +1660,8 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 
 		if (folio_test_uptodate(lnb[i].lnb_folio)) {
 			cache_hits++;
-			folio_unlock(lnb[i].lnb_folio);
+			if (!folio_test_private_2(lnb[i].lnb_folio))
+				folio_unlock(lnb[i].lnb_folio);
 		} else {
 			cache_misses++;
 			osd_iobuf_add_page(iobuf, &lnb[i]);
