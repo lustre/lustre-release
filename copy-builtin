@@ -1,0 +1,371 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-2.0
+
+#
+# This file is part of Lustre, http://www.lustre.org/
+#
+# Author: Timothy Day <timday@thelustrecollective.com>
+#
+
+set -ef
+
+function headers_clone() {
+	cp -RT include/linux "$KERNEL_DIR/include/linux"
+	cp -RT include/uapi/linux "$KERNEL_DIR/include/uapi/linux"
+	cp include/trace/events/lustre_debug.h "$KERNEL_DIR/include/trace/events/"
+
+	#
+	# TODO: Out-of-tree lustre_compat shims, included as <lustre_compat/...>.
+	# We should not need this...
+	#
+	cp -R include/lustre_compat "$KERNEL_DIR/include/lustre_compat"
+}
+
+#
+# Copy a module tree into the kernel: create the destination, copy each
+# requested subdir into it, then drop in the module's Makefile and Kconfig.
+#
+# Usage: copy_tree <src> <dest> <subdir>...
+#   src     - module directory holding the Makefile/Kconfig (e.g. lnet)
+#   dest    - directory in the kernel tree to populate
+#   subdir  - source paths to copy into dest (e.g. lnet/include)
+#
+function copy_tree() {
+	local src="$1"
+	local dest="$2"
+	shift 2
+
+	mkdir -p "$dest"
+
+	for subdir in "$@"; do
+		cp -R "$subdir" "$dest/"
+	done
+
+	cp "$src/Makefile" "$dest/Makefile"
+	cp "$src/Kconfig" "$dest/Kconfig"
+}
+
+#
+# Native builds force-include the generated lustre_config.h. Out-of-tree
+# builds don't need this (configure handles it), so the source Makefiles
+# omit it and we inject it here while copying into the kernel tree.
+#
+function force_include_config() {
+	echo 'subdir-ccflags-y += -include $(srctree)/lustre_config.h' >> "$1"
+}
+
+LNET_DIRS=(lnet/include lnet/lnet lnet/klnds lnet/selftest lnet/libcfs)
+
+function lnet_clone() {
+	copy_tree lnet "$KERNEL_DIR/net/lnet" "${LNET_DIRS[@]}"
+
+	force_include_config "$KERNEL_DIR/net/lnet/Makefile"
+
+	# Only the socket LND is sourced by lnet/Kconfig by default. The
+	# remaining LNDs are opt-in via CBI_WITH_*, just like the OSDs.
+	setup_klnds
+
+	# TODO: Fix this...
+	sed -i '/module_param(cpu_pattern, charp, 0444);/i char *cpu_pattern = "N";' "$KERNEL_DIR/net/lnet/lnet/lib-cpt.c"
+	sed -i '/module_param(cpu_npartitions, int, 0444);/i int cpu_npartitions;' "$KERNEL_DIR/net/lnet/lnet/lib-cpt.c"
+
+	sed -i '/source "net\/ceph\/Kconfig\"/i\source "net/lnet/Kconfig"' "$KERNEL_DIR/net/Kconfig"
+
+	echo 'obj-$(CONFIG_LNET) += lnet/' >> "$KERNEL_DIR/net/Makefile"
+}
+
+#
+# We are only submitting ksocklnd initially. Make the other LNDs optional.
+#
+function setup_klnds() {
+	local kconfig="$KERNEL_DIR/net/lnet/Kconfig"
+	local klnds="$KERNEL_DIR/net/lnet/klnds"
+
+	# in-kernel-o2iblnd/ is an out-of-tree artifact: its sources are
+	# generated from o2iblnd/ by 'make sources' so ko2iblnd can be built
+	# against the running kernel's RDMA stack while o2iblnd/ is built
+	# against an external OFED. The native build only needs o2iblnd/.
+	rm -rf "$klnds/in-kernel-o2iblnd"
+
+	cbi_klnd "$kconfig" "${CBI_WITH_O2IB:-}" o2iblnd "$klnds/o2iblnd"
+	cbi_klnd "$kconfig" "${CBI_WITH_GNI:-}" gnilnd "$klnds/gnilnd"
+	cbi_klnd "$kconfig" "${CBI_WITH_KFI:-}" kfilnd "$klnds/kfilnd"
+	cbi_klnd "$kconfig" "${CBI_WITH_EFA:-}" efalnd "$klnds/efalnd"
+}
+
+#
+# Enable or drop a single opt-in LND.
+#
+function cbi_klnd() {
+	local kconfig="$1"
+	local enabled="$2"
+	local name="$3"
+	shift 3
+
+	if [[ -z "$enabled" ]]; then
+		rm -rf "$@"
+		return
+	fi
+
+	sed -i "/source \"net\/lnet\/klnds\/socklnd\/Kconfig\"/i\\source \"net/lnet/klnds/$name/Kconfig\"" "$kconfig"
+}
+
+function find_kernel_dirs() {
+	find lustre/ -mindepth 1 -maxdepth 1 -type d |
+		grep -v utils |
+		grep -v scripts |
+		grep -v kernel_patches |
+		grep -v conf |
+		grep -v tests |
+		grep -v doc
+}
+
+LUSTRE_DIRS=($(find_kernel_dirs))
+
+function lustre_clone() {
+	copy_tree lustre "$KERNEL_DIR/fs/lustre" "${LUSTRE_DIRS[@]}"
+	force_include_config "$KERNEL_DIR/fs/lustre/Makefile"
+	setup_lustre_config
+
+	# Optional OSDs
+	setup_ldiskfs
+	setup_zfs
+
+	sed -i '/source "fs\/ceph\/Kconfig\"/i\source "fs/lustre/Kconfig"' "$KERNEL_DIR/fs/Kconfig"
+
+	echo 'obj-$(CONFIG_LUSTRE_FS_COMMON) += lustre/' >> "$KERNEL_DIR/fs/Makefile"
+}
+
+#
+# ldiskfs/ext4 will not be in the initial upstream submission
+#
+# TODO: Only lustre/ is copied into the kernel tree, so the ldiskfs/
+# headers that osd-ldiskfs includes as <ldiskfs/...> are not there yet.
+# CBI_WITH_LDISKFS wires up the Kconfig entry but the OSD does not build
+# until ldiskfs itself is handled.
+#
+function setup_ldiskfs() {
+	local kconfig="$KERNEL_DIR/fs/lustre/Kconfig"
+
+	if [[ -z "${CBI_WITH_LDISKFS:-}" ]]; then
+		rm -rf "$KERNEL_DIR/fs/lustre/osd-ldiskfs"
+		return
+	fi
+
+	sed -i '/source "fs\/lustre\/osd-wbcfs\/Kconfig"/i\source "fs/lustre/osd-ldiskfs/Kconfig"' "$kconfig"
+}
+
+#
+# ZFS is optional since it will never be upstream. The OSD expects the
+# external ZFS headers under $KERNEL_DIR/include/zfs (see osd-zfs/Makefile).
+#
+function setup_zfs() {
+	local kconfig="$KERNEL_DIR/fs/lustre/Kconfig"
+
+	if [[ -z "${CBI_WITH_ZFS:-}" ]]; then
+		rm -rf "$KERNEL_DIR/fs/lustre/osd-zfs"
+		return
+	fi
+
+	sed -i '/source "fs\/lustre\/osd-wbcfs\/Kconfig"/a\source "fs/lustre/osd-zfs/Kconfig"' "$kconfig"
+}
+
+#
+# TODO: None of this should be needed.
+#
+function setup_lustre_config() {
+	if [[ -n "${CBI_CACHED_CONFIG:-}" ]]; then
+		cp "$CBI_CACHED_CONFIG" "$KERNEL_DIR/lustre_config.h"
+		return
+	fi
+
+	cp config.h "$KERNEL_DIR/lustre_config.h"
+	sed -i '/HAVE_LUSTRE_CRYPTO/d' "$KERNEL_DIR/lustre_config.h"
+	sed -i '/CONFIG_LL_ENCRYPTION/d' "$KERNEL_DIR/lustre_config.h"
+	cp undef.h "$KERNEL_DIR/" || true
+	sed -i 's/.*LUSTRE_VERSION_STRING.*/#define LUSTRE_VERSION_STRING "in-kernel"/g' "$KERNEL_DIR/lustre_config.h"
+}
+
+#
+# Undo everything copy_to_tree() did, and nothing else: remove the copied
+# trees and strip the hooks added to the kernel's Kconfig/Makefiles. The
+# kernel .config, build objects and any unrelated local changes are left
+# alone, so a cached lustre_config.h actually saves a rebuild.
+#
+function clean_linux() {
+	rm -rf "$KERNEL_DIR/include/lustre" "$KERNEL_DIR/fs/lustre"
+	rm -rf "$KERNEL_DIR/include/lnet" "$KERNEL_DIR/net/lnet"
+	rm -rf "$KERNEL_DIR/include/lustre_compat" "$KERNEL_DIR/net/lustre_compat"
+	rm -rf "$KERNEL_DIR/include/libcfs"
+	rm -rf "$KERNEL_DIR/include/linux/libcfs" "$KERNEL_DIR/include/linux/lnet"
+	rm -f "$KERNEL_DIR/include/trace/events/lustre_debug.h"
+	rm -rf "$KERNEL_DIR/include/uapi/linux/lnet" "$KERNEL_DIR/include/uapi/linux/lustre"
+	rm -f "$KERNEL_DIR/lustre_config.h" "$KERNEL_DIR/undef.h"
+
+	sed -i '/^source "net\/lnet\/Kconfig"$/d' "$KERNEL_DIR/net/Kconfig"
+	sed -i '/^obj-\$(CONFIG_LNET) += lnet\/$/d' "$KERNEL_DIR/net/Makefile"
+	sed -i '/^source "fs\/lustre\/Kconfig"$/d' "$KERNEL_DIR/fs/Kconfig"
+	sed -i '/^obj-\$(CONFIG_LUSTRE_FS_COMMON) += lustre\/$/d' "$KERNEL_DIR/fs/Makefile"
+}
+
+#
+# Every directory the copied Lustre/LNet/libcfs sources and headers
+# live in. Only emit the ones that exist so the find calls below don't
+# trip 'set -e' on a layout that skipped a tree.
+#
+function cbi_swap_dirs() {
+	local d
+	for d in \
+		"$KERNEL_DIR/net/lnet" \
+		"$KERNEL_DIR/fs/lustre" \
+		"$KERNEL_DIR/include/linux/libcfs" \
+		"$KERNEL_DIR/include/linux/lnet" \
+		"$KERNEL_DIR/include/uapi/linux/lnet" \
+		"$KERNEL_DIR/include/uapi/linux/lustre" \
+		"$KERNEL_DIR/include/lustre_compat"; do
+		[[ -d "$d" ]] && echo "$d"
+	done
+}
+
+#
+# TODO: In an ideal world, the modules would use the correct function
+# names and headers paths. The out-of-tree build would then amend them.
+# Until then, we need this function.
+#
+function swap_all_symbols() {
+	echo "SWAP all symbols in $KERNEL_DIR"
+
+	local sed_args=(
+		# Rename compat symbols to their in-tree equivalents.
+		-e 's/compat_vfree_atomic/vfree_atomic/g'
+		-e 's/cfs_totalram_pages/totalram_pages/g'
+		-e 's/compat_totalram_pages/totalram_pages/g'
+		-e 's/ll_shrinker_alloc/shrinker_alloc/g'
+		-e 's/ll_shrinker_register/shrinker_register/g'
+		-e 's/ll_shrinker_free/shrinker_free/g'
+		-e 's/compat_apply_workqueue_attrs/apply_workqueue_attrs/g'
+		-e 's/compat_alloc_workqueue_attrs/alloc_workqueue_attrs/g'
+		-e 's/compat_free_workqueue_attrs/free_workqueue_attrs/g'
+		-e 's/compat_module_init/module_init/g'
+		-e 's/compat_module_exit/module_exit/g'
+		# Point the workqueue include at <linux/...> instead of <lustre_compat/...>.
+		-e 's|#include <lustre_compat/linux/workqueue|#include <linux/workqueue|g'
+		-e 's|#include <lustre_compat/linux/slab|#include <linux/slab|g'
+		-e 's|#include <lustre_compat/linux/kallsyms|#include <linux/kallsyms|g'
+	)
+
+	find $(cbi_swap_dirs) -type f -exec sed -i "${sed_args[@]}" {} +
+}
+
+function copy_to_tree() {
+	clean_linux
+	headers_clone
+	lnet_clone
+	lustre_clone
+	swap_all_symbols
+}
+
+#
+# Refuse to touch anything that does not look like a Linux source tree.
+# clean_linux() removes directories and edits Kconfig/Makefiles under
+# KERNEL_DIR, so a mistyped path must not get that far.
+#
+function cbi_check_kernel_dir() {
+	local dir="$1"
+
+	[[ -d "$dir" && -f "$dir/Kbuild" && -f "$dir/Makefile" ]] &&
+		grep -q '^VERSION = ' "$dir/Makefile" &&
+		grep -q '^PATCHLEVEL = ' "$dir/Makefile" &&
+		[[ -f "$dir/net/Kconfig" && -f "$dir/net/Makefile" ]] &&
+		[[ -f "$dir/fs/Kconfig" && -f "$dir/fs/Makefile" ]] &&
+		return
+
+	echo "$0: '$dir' does not look like a Linux source tree" >&2
+	exit 1
+}
+
+#
+# TODO: Currently, we must run a configure before doing copy-builtin. To
+# avoid doing this every build, we support a cached config.h in the kernel
+# tree: if one is present at the path it is reused, otherwise we fall back
+# to the config.h produced by configure. Either way, log which one we use.
+#
+function cbi_copy_builtin() {
+	[[ "$#" -eq 1 ]] || cbi_usage
+	cbi_check_kernel_dir "$1"
+
+	KERNEL_DIR="$1"
+
+	local cached_config="$KERNEL_DIR/lustre_config.h"
+	if [[ -e "$cached_config" ]]; then
+		echo "$0: using cached config.h at $cached_config" >&2
+		CBI_CACHED_CONFIG=$(mktemp)
+		cp "$cached_config" "$CBI_CACHED_CONFIG"
+	elif [[ -e 'config.h' ]]; then
+		echo "$0: using config.h from configure" >&2
+	else
+		echo "$0: no cached config.h at $cached_config and no config.h from configure;" >&2
+		echo "$0: run configure, or you're not in the Lustre source directory." >&2
+		exit 1
+	fi
+
+	copy_to_tree
+
+	rm -f "${CBI_CACHED_CONFIG:-}"
+
+	echo "$0: done. now you can build the kernel with Lustre support." >&2
+}
+
+function cbi_clean() {
+	[[ "$#" -eq 2 ]] || cbi_usage
+	cbi_check_kernel_dir "$2"
+
+	KERNEL_DIR="$2"
+
+	clean_linux
+}
+
+function cbi_help() {
+	cat <<HELP
+Usage: ${0##*/} <linux source tree>
+       ${0##*/} clean <linux source tree>
+       ${0##*/} help
+
+Port Lustre to the native Linux build system. With no command, copy the
+LNet and Lustre sources into the given kernel tree and hook them into its
+Kconfig and Makefiles. Run configure in the Lustre tree first, or leave a
+previously generated lustre_config.h at the top of the kernel tree.
+
+Commands:
+    clean         Remove everything copy-builtin added to the kernel tree.
+    help          Show this message.
+
+By default only LNet, ksocklnd, lnet_selftest and the Lustre client,
+server and wbcfs OSD are copied. Set these environment variables to a
+non-empty value to also copy:
+    CBI_WITH_O2IB      ko2iblnd (InfiniBand/RoCE LND)
+    CBI_WITH_GNI       kgnilnd (Cray Gemini/Aries LND)
+    CBI_WITH_KFI       kkfilnd (HPE Slingshot LND)
+    CBI_WITH_EFA       kefalnd (AWS EFA LND)
+    CBI_WITH_LDISKFS   ldiskfs OSD (ldiskfs/ headers are not copied yet)
+    CBI_WITH_ZFS       ZFS OSD (needs external ZFS headers in include/zfs)
+HELP
+}
+
+function cbi_usage() {
+	cbi_help >&2
+	exit 1
+}
+
+# Process options
+for arg in "$@"; do
+	shift
+	case "$arg" in
+		clean) cbi_clean "$arg" "$@";;
+		help) cbi_help;;
+		*) cbi_copy_builtin "$arg" "$@";;
+	esac
+	exit 0
+done
+
+cbi_usage

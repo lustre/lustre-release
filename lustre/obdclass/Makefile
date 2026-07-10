@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += obdclass.o
+obj-$(CONFIG_LUSTRE_FS_COMMON) += obdclass.o
 
 obdclass-objs := llog.o llog_cat.o llog_obd.o llog_swab.o
 obdclass-objs += class_obd.o genops.o hash.o

@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += ec.o
+obj-$(CONFIG_LUSTRE_FS_COMMON) += ec.o
 ec-objs := ec_kmod.o
 
 lobj := ec_base.o ec_base_aliases.o

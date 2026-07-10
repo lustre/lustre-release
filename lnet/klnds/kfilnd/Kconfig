@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config LNET_KFILND
+	tristate "Kfabric LND (kkfilnd)"
+	depends on LNET
+	default n
+	help
+	  The kfi LND (kkfilnd) carries LNet traffic over kfabric (kernel
+	  libfabric) providers, such as the Cray Slingshot CXI network. It
+	  requires the out-of-tree kfabric kernel headers.
+
+	  To compile this as a kernel module, choose M here and it will be
+	  called kkfilnd.
+
+	  If unsure, say N.

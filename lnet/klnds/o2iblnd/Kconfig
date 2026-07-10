@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config LNET_XPRT_IB
+	tristate "OpenFabrics InfiniBand LND (ko2iblnd)"
+	depends on LNET && PCI && INFINIBAND && INFINIBAND_ADDR_TRANS
+	default n
+	help
+	  The o2ib LND (ko2iblnd) carries LNet traffic over OpenFabrics
+	  InfiniBand and RoCE fabrics using the RDMA verbs API.
+
+	  To compile this as a kernel module, choose M here and it will be
+	  called ko2iblnd.
+
+	  If unsure, say N.

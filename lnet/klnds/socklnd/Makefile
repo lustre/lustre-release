@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += ksocklnd.o
+obj-$(CONFIG_LNET_SOCKLND) += ksocklnd.o
 
 ksocklnd-objs := \
 	socklnd.o \

@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += lfsck.o
+obj-$(CONFIG_LUSTRE_FS_SERVER) += lfsck.o
 lfsck-objs := lfsck_lib.o lfsck_engine.o lfsck_bookmark.o lfsck_namespace.o
 lfsck-objs += lfsck_layout.o lfsck_striped_dir.o
 

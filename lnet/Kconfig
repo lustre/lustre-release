@@ -1,0 +1,53 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config LIBCFS
+	tristate
+	help
+	  libcfs is a foundational library shared by Lustre and LNet. It
+	  provides the debug and tracing infrastructure.
+
+	  LIBCFS is required by LNet and Lustre and is selected
+	  automatically whenever either is enabled. It has no prompt of
+	  its own.
+
+config LNET
+	tristate "Lustre networking subsystem (LNet)"
+	depends on INET
+	select LIBCFS
+	help
+	  The Lustre network layer, also known as LNet, is a networking abstraction
+	  level API that was initially created to allow Lustre Filesystem to utilize
+	  very different networks like tcp and ib verbs in a uniform way. In the
+	  case of Lustre routers only the LNet layer is required. Lately other
+	  projects are also looking into using LNet as their networking API as well.
+
+config LNET_DUMP_ON_PANIC
+	bool "LNet dump logs on panic"
+	depends on LNET
+	help
+	  Special functionality to enable collecting extra logs when LNet panics.
+	  Normally only used by developers for debugging purposes.
+
+	  If unsure, say N.
+
+config LUSTRE_DEBUG_EXPENSIVE_CHECK
+	bool "Enable Lustre DEBUG checks"
+	depends on LNET
+	help
+	  This option is mainly for debug purpose. It enables libcfs, LNet
+	  and Lustre code to do expensive checks that may have a performance
+	  impact.
+
+	  Use with caution. If unsure, say N.
+
+config LNET_SELFTEST
+	tristate "Lustre networking self testing"
+	depends on LNET
+	help
+	  Choose Y here if you want to do lnet self testing. To compile this
+	  as a module, choose M here: the module will be called lnet_selftest.
+
+	  If unsure, say N.
+
+	  See also http://wiki.lustre.org/
+
+source "net/lnet/klnds/socklnd/Kconfig"

@@ -1,0 +1,17 @@
+# SPDX-License-Identifier: GPL-2.0-only
+config LUSTRE_FS_ZFS
+	tristate "Lustre ZFS OSD support"
+	default n
+	depends on LUSTRE_FS_SERVER
+	# ZFS is not part of the Linux tree. This symbol, and the headers
+	# under include/zfs used by osd-zfs/Makefile, are provided by the
+	# OpenZFS copy-builtin script, which must be run on the kernel tree
+	# before this one.
+	depends on ZFS
+	help
+	  Enable the ZFS Object Storage Device backend for Lustre servers.
+
+	  This requires the OpenZFS kernel modules and their headers, which
+	  are not part of the Linux tree.
+
+	  If unsure, say N.

@@ -4,12 +4,20 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += libcfs.o
+obj-$(CONFIG_LIBCFS) += libcfs.o
 
 # Debug objects
 libcfs-y := debug.o fail.o module.o tracefile.o
 
-# Compat: core (lustre_compat/{symbols.c,misc.c})
+#
+# The lustre_compat shims provide out-of-tree replacements for kernel
+# symbols that differ across versions. The native in-kernel build uses the
+# upstream symbols directly, so only pull them in for out-of-tree builds.
+# LUSTRE_OOT_BUILD is exported by config/Makefile.exports (out-of-tree only).
+#
+ifdef LUSTRE_OOT_BUILD
+
+# Compat: core
 include $(src)/../../lustre_compat/Makefile
 libcfs-y += $(patsubst %,../../lustre_compat/%,$(module_objs))
 
@@ -22,6 +30,7 @@ endif
 # Compat: mm
 include $(src)/../../lustre_compat/mm/Makefile
 libcfs-y += $(patsubst %,../../lustre_compat/mm/%,$(mm_objs))
+endif
 
 ifdef CONFIG_GCOV_PROFILE_LUSTRE
 GCOV_PROFILE := y

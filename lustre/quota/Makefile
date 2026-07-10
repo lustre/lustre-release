@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += lquota.o
+obj-$(CONFIG_LUSTRE_FS_SERVER) += lquota.o
 
 qmt-objs := \
 	qmt_dev.o \

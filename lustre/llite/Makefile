@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += lustre.o
+obj-$(CONFIG_LUSTRE_FS) += lustre.o
 lustre-objs := dcache.o dir.o file.o llite_lib.o llite_nfs.o
 lustre-objs += rw.o lproc_llite.o namei.o symlink.o llite_mmap.o
 lustre-objs += xattr.o xattr_cache.o

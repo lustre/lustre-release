@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += ptlrpc.o
+obj-$(CONFIG_LUSTRE_FS_COMMON) += ptlrpc.o
 LDLM := ../ldlm/
 TARGET := ../target/
 

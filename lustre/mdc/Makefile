@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += mdc.o
+obj-$(CONFIG_LUSTRE_FS) += mdc.o
 
 mdc-objs-y := mdc_request.o \
 	      mdc_reint.o \

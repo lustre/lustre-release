@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += lmv.o
+obj-$(CONFIG_LUSTRE_FS) += lmv.o
 lmv-objs := lmv_obd.o lmv_intent.o lmv_fld.o lproc_lmv.o
 
 ifdef CONFIG_GCOV_PROFILE_LUSTRE

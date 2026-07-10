@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += fid.o
+obj-$(CONFIG_LUSTRE_FS_COMMON) += fid.o
 fid-objs := fid_request.o lproc_fid.o
 ifdef CONFIG_LUSTRE_FS_SERVER
 fid-objs += fid_handler.o fid_store.o fid_lib.o

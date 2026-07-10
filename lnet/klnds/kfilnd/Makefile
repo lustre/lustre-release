@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += kkfilnd.o
+obj-$(CONFIG_LNET_KFILND) += kkfilnd.o
 
 kkfilnd-objs := \
 	kfilnd.o \

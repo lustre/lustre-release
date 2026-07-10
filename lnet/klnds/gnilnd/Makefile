@@ -4,7 +4,7 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-obj-m += kgnilnd.o
+obj-$(CONFIG_LNET_GNILND) += kgnilnd.o
 
 kgnilnd-objs := gnilnd.o gnilnd_cb.o gnilnd_modparams.o gnilnd_debug.o gnilnd_proc.o \
 		gnilnd_sysctl.o gnilnd_stack.o gnilnd_conn.o
