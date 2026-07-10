@@ -845,7 +845,7 @@ test_7() {
 }
 run_test 7 "nodemap create and delete"
 
-test_8() {
+test_8a() {
 	local rc
 
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
@@ -872,7 +872,32 @@ test_8() {
 
 	return 0
 }
-run_test 8 "nodemap reject duplicates"
+run_test 8a "nodemap reject duplicates"
+
+test_8b() {
+	local badname_dot="bad.name"
+	local badname_dash="bad-name"
+	# 17-char string, exceeds LUSTRE_NODEMAP_NAME_LENGTH=16
+	local badname_long="abcdefghijklmnopq"
+
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+	(( MGS_VERSION < $(version_code 2.5.53) )) &&
+		skip "No nodemap on $MGS_VERSION MGS < 2.5.53"
+
+	stack_trap "do_facet mgs $LCTL $nodemap_del '$badname_dot' || true"
+	stack_trap "do_facet mgs $LCTL $nodemap_del '$badname_dash' || true"
+	stack_trap "do_facet mgs $LCTL $nodemap_del '$badname_long' || true"
+
+	do_facet mgs $LCTL $nodemap_new "$badname_dot" &&
+		error "nodemap should reject nodemap name '$badname_dot'"
+	do_facet mgs $LCTL $nodemap_new "$badname_dash" &&
+		error "nodemap should reject nodemap name '$badname_dash'"
+	do_facet mgs $LCTL $nodemap_new "$badname_long" &&
+		error "nodemap should reject nodemap name longer than 16 chars"
+
+	return 0
+}
+run_test 8b "nodemap should reject invalid nodemap name"
 
 test_9() {
 	local i

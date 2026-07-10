@@ -287,6 +287,16 @@ test_1k() {
 }
 run_test 1k "pool_new should fail if poolname format is wrong"
 
+test_1l() {
+	(( MGS_VERSION >= $(version_code 2.17.58) )) ||
+		skip "need MGS >= 2.17.58 to reject a dot in poolname"
+
+	stack_trap "destroy_pool '${FSNAME}.$POOL.abc'"
+	do_facet mgs lctl pool_new "${FSNAME}.$POOL.abc"
+	(( $? != 0 )) || error "pool_new did not fail for poolname with a dot"
+}
+run_test 1l "pool_new should fail if poolname contains a dot"
+
 test_1m() {
 	create_pool_nofail $POOL2
 	create_pool ${FSNAME}.$POOL2
@@ -739,6 +749,21 @@ test_7c()
 	destroy_pool_int $FSNAME.$pool
 }
 run_test 7c "create a valid pool name and setstripe with a bad one"
+
+test_8() {
+	local badname_slash="name/abc"
+	local fs_badname_dot="$FSNAME.name.abc"
+
+	mkdir -p $DIR/$tdir
+
+	$LFS setstripe -c 1 --pool "$badname_slash" $DIR/$tdir/testfile &&
+		error "setstripe should reject pool name '$badname_slash'"
+	$LFS setstripe -c 1 --pool "$fs_badname_dot" $DIR/$tdir/testfile &&
+		error "setstripe should reject pool name '$fs_badname_dot'"
+
+	return 0
+}
+run_test 8 "lfs setstripe should reject invalid pool name"
 
 test_11() {
 	local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}

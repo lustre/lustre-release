@@ -3831,6 +3831,87 @@ test_27d() {
 }
 run_test 27d "lfs setquota should support fraction block limit"
 
+test_27e() {
+	local badname_dot="name.abc"
+	# a dash is valid in a pool name, but not in a lqa name
+	local badname_dash="name-abc"
+	# 16-char string, exceeds LOV_MAXPOOLNAME=LQA_NAME_MAX=15
+	local badname_long="abcdefghijklmnop"
+
+	$LFS setquota -u $TSTUSR -B 100M --pool "$badname_dot" $DIR &&
+		error "setquota should reject pool name '$badname_dot'"
+	$LFS setquota -u $TSTUSR -B 100M --pool "$badname_long" $DIR &&
+		error "setquota should reject pool name longer than 15 chars"
+
+	$LFS setquota -t -u --block-grace $MAX_DQ_TIME \
+		--pool "$badname_dot" $DIR &&
+		error "setquota -t should reject pool name '$badname_dot'"
+	$LFS setquota -t -u --block-grace $MAX_DQ_TIME \
+		--pool "$badname_long" $DIR &&
+		error "setquota -t should reject pool name longer than 15 chars"
+
+	$LFS setquota -U -B 100M --lqa "$badname_dot" $DIR &&
+		error "setquota should reject lqa name '$badname_dot'"
+	$LFS setquota -U -B 100M --lqa "$badname_dash" $DIR &&
+		error "setquota should reject lqa name '$badname_dash'"
+	$LFS setquota -U -B 100M --lqa "$badname_long" $DIR &&
+		error "setquota should reject lqa name longer than 15 chars"
+
+	$LFS setquota -t -u --block-grace $MAX_DQ_TIME \
+		--lqa "$badname_dot" $DIR &&
+		error "setquota -t should reject lqa name '$badname_dot'"
+	$LFS setquota -t -u --block-grace $MAX_DQ_TIME \
+		--lqa "$badname_dash" $DIR &&
+		error "setquota -t should reject lqa name '$badname_dash'"
+	$LFS setquota -t -u --block-grace $MAX_DQ_TIME \
+		--lqa "$badname_long" $DIR &&
+		error "setquota -t should reject lqa name longer than 15 chars"
+
+	return 0
+}
+run_test 27e "lfs setquota should reject invalid pool/lqa name"
+
+test_27f() {
+	local badname_dot="name.abc"
+	# a dash is valid in a pool name, but not in a lqa name
+	local badname_dash="name-abc"
+	# 16-char string, exceeds LOV_MAXPOOLNAME=LQA_NAME_MAX=15
+	local badname_long="abcdefghijklmnop"
+
+	$LFS quota -u $TSTUSR --pool "$badname_dot" $DIR &&
+		error "quota should reject pool name '$badname_dot'"
+	$LFS quota -u $TSTUSR --pool "$badname_long" $DIR &&
+		error "quota should reject pool name longer than 15 chars"
+
+	$LFS quota -U --lqa "$badname_dot" $DIR &&
+		error "quota should reject lqa name '$badname_dot'"
+	$LFS quota -U --lqa "$badname_dash" $DIR &&
+		error "quota should reject lqa name '$badname_dash'"
+	$LFS quota -U --lqa "$badname_long" $DIR &&
+		error "quota should reject lqa name longer than 15 chars"
+
+	return 0
+}
+run_test 27f "lfs quota should reject invalid pool/lqa name"
+
+test_27g() {
+	local qpool="qpool-1"
+
+	mds_supports_qp
+
+	pool_add $qpool || error "pool_add failed"
+
+	$LFS setquota -u $TSTUSR -B 10M --pool "$qpool" $DIR ||
+		error "setquota should accept pool name '$qpool'"
+	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --pool "$qpool" $DIR ||
+		error "setquota -t should accept pool name '$qpool'"
+	$LFS quota -u $TSTUSR --pool "$qpool" $DIR ||
+		error "quota should accept pool name '$qpool'"
+	$LFS quota -t -u --pool "$qpool" $DIR ||
+		error "quota -t should accept pool name '$qpool'"
+}
+run_test 27g "lfs setquota/quota should accept valid pool name"
+
 test_30()
 {
 	(( $MDS1_VERSION >= $(version_code 2.15.51.29) )) ||
@@ -7890,7 +7971,8 @@ test_97a()
 {
 	local lqa="lqa1"
 	local longstr="0123456789123456789"
-	local badname="lqa2*"
+	local badname_asterisk="lqa2*"
+	local badname_dot="lqa3.abc"
 
 	(( $MDS1_VERSION >= $(version_code 2.17.50) )) ||
 		skip "need MDS >= 2.17.50 to support lctl lqa commands"
@@ -7898,7 +7980,14 @@ test_97a()
 	$LQA_NEW && error "lqa new succeeded with no lqa"
 #define LQA_NAME_MAX 15 /* Maximum lqa name length */
 	$LQA_NEW --name $longstr && error "lqa max name length is 16"
-	$LQA_NEW --name $badname && error "Name $badname contains an asterisk"
+	if (( $MDS1_VERSION >= $(version_code v2_17_52-81-g323f949a15) )); then
+		stack_trap "$LQA_DESTROY --name '$badname_asterisk' || true"
+		stack_trap "$LQA_DESTROY --name '$badname_dot' || true"
+		$LQA_NEW --name "$badname_asterisk" &&
+			error "Name $badname_asterisk contains an asterisk"
+		$LQA_NEW --name "$badname_dot" &&
+			error "Name $badname_dot contains a dot"
+	fi
 	$LQA_NEW --name $lqa || error "cannot create $lqa"
 	stack_trap "$LQA_DESTROY --name $lqa || true"
 

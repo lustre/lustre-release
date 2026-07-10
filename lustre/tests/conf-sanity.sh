@@ -5669,6 +5669,23 @@ test_60b() {
 }
 run_test 60b "check mkfs.lustre MDT default features"
 
+test_60c() {
+	local mdsdev=$(mdsdevname 1)
+	local badname_dot="name.abc"
+	# 9-char string, exceeds LUSTRE_MAXFSNAME=8
+	local badname_long="abcdefghi"
+
+	do_facet $SINGLEMDS $MKFS $(mkfs_opts mds1 "$mdsdev" "$badname_dot") \
+		--dryrun "$mdsdev" &&
+		error "mkfs.lustre should reject fsname '$badname_dot'"
+	do_facet $SINGLEMDS $MKFS $(mkfs_opts mds1 "$mdsdev" "$badname_long") \
+		--dryrun "$mdsdev" &&
+		error "mkfs.lustre should reject fsname longer than 8 chars"
+
+	return 0
+}
+run_test 60c "mkfs.lustre should reject invalid fsname"
+
 test_61a() { # LU-80
 	local lxattr=$(large_xattr_enabled)
 
