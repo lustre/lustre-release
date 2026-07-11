@@ -6447,8 +6447,8 @@ test_45() {
 		error "failed to start ost1"
 
 	$LFS df
-	wait_osc_import_state mds ost FULL
-	wait_osc_import_state client ost FULL
+	wait_osc_import_ready mds ost FULL
+	wait_osc_import_ready client ost FULL
 
 	echo "check the quota usage after UID/GID/PROJID is cleared"
 	usage=$(getquota -u $RUNAS_ID global curspace)
