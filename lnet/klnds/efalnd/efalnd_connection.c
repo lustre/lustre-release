@@ -1218,6 +1218,7 @@ kefalnd_scan_ni_conns(struct kefa_ni *efa_ni)
 static void
 kefalnd_drain_ni_conns(struct kefa_ni *efa_ni)
 {
+	int init_timeout, resp_timeout, timeout;
 	struct list_head cancel_tx, destroy;
 	struct kefa_conn *conn, *temp_conn;
 	struct kefa_tx *tx, *temp_tx;
@@ -1227,6 +1228,8 @@ kefalnd_drain_ni_conns(struct kefa_ni *efa_ni)
 		return;
 
 	now = ktime_get_seconds();
+	init_timeout = efa_ni->lnet_ni->ni_net->net_tunables.lct_peer_timeout;
+	resp_timeout = init_timeout + RESP_CONN_EXTRA_TIME;
 	INIT_LIST_HEAD(&cancel_tx);
 	INIT_LIST_HEAD(&destroy);
 
@@ -1241,6 +1244,12 @@ kefalnd_drain_ni_conns(struct kefa_ni *efa_ni)
 				kefalnd_tx_done(tx);
 			}
 		}
+
+		timeout = conn->type == KEFA_CONN_TYPE_INITIATOR ?
+				init_timeout : resp_timeout;
+
+		if (now <= conn->last_use_time + timeout)
+			continue;
 
 		if (list_empty(&conn->active_tx) &&
 		    list_empty(&conn->abort_tx))
