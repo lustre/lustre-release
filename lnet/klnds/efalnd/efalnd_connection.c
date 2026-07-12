@@ -1222,6 +1222,7 @@ kefalnd_drain_ni_conns(struct kefa_ni *efa_ni)
 	struct list_head cancel_tx, destroy;
 	struct kefa_conn *conn, *temp_conn;
 	struct kefa_tx *tx, *temp_tx;
+	unsigned long flags;
 	time64_t now;
 
 	if (list_empty(&efa_ni->cleanup_conns))
@@ -1251,9 +1252,12 @@ kefalnd_drain_ni_conns(struct kefa_ni *efa_ni)
 		if (now <= conn->last_use_time + timeout)
 			continue;
 
-		if (list_empty(&conn->active_tx) &&
+		spin_lock_irqsave(&conn->lock, flags);
+		if (list_empty(&conn->pend_tx) &&
+		    list_empty(&conn->active_tx) &&
 		    list_empty(&conn->abort_tx))
 			list_move_tail(&conn->cleanup_node, &destroy);
+		spin_unlock_irqrestore(&conn->lock, flags);
 	}
 
 	list_for_each_entry_safe(tx, temp_tx, &cancel_tx, list_node)
