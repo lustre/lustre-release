@@ -1289,8 +1289,11 @@ void cYAML_build_error(int rc, int seq_no, char *cmd,
 
 	r = *root;
 
-	/* look for the command */
-	cmd_obj = cYAML_get_object_item(r, (const char *)cmd);
+	/* Commands are direct children of the error root. A recursive
+	 * search could match a same-named entity nested under another
+	 * command.
+	 */
+	cmd_obj = cYAML_get_object_child(r, (const char *)cmd);
 	if (cmd_obj != NULL && cmd_obj->cy_type == CYAML_TYPE_ARRAY)
 		itm = cYAML_create_seq_item(cmd_obj);
 	else if (cmd_obj == NULL) {
@@ -1317,9 +1320,9 @@ void cYAML_build_error(int rc, int seq_no, char *cmd,
 	return;
 
 failed:
-	/* Only reason we get here is if we run out of memory */
+	/* Callers keep using *root, so it must not be left dangling. */
 	cYAML_free_tree(r);
-	r = NULL;
+	*root = NULL;
 	fprintf(stderr, "error:\n\tfatal: out of memory\n");
 }
 

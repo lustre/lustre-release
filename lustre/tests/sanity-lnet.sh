@@ -4843,6 +4843,18 @@ test_230() {
 		error "import of out-of-range conns-per-peer should have failed"
 	! $LNETCTL net show --net tcp 2>/dev/null | grep -qE "nid: .*@tcp$" ||
 		error "tcp NI should not be configured"
+
+	local out=$TMP/sanity-lnet-$testnum-oldapi.out
+
+	! do_lnetctl import --old-api < $yfile > $out 2>&1 ||
+		error "old-api import should have failed"
+	cat $out
+	grep -q "invalid conns-per-peer" $out ||
+		error "old-api import did not report the range error"
+	! grep -q "out of memory" $out ||
+		error "import with old-api hit out of memory"
+	! $LNETCTL net show --net tcp 2>/dev/null | grep -qE "nid: .*@tcp$" ||
+		error "tcp NI should not be configured"
 }
 run_test 230 "Test setting conns-per-peer"
 

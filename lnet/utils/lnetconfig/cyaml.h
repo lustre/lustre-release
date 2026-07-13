@@ -117,7 +117,9 @@ void cYAML_free_tree(struct cYAML *node);
 /*
  * cYAML_get_object_item
  *   Returns the cYAML object which key corresponds to the name passed in.
- *   This function searches only through the current level.
+ *   The search is recursive: it descends into the children of parent and
+ *   continues through its siblings, so a match can be returned from any
+ *   depth. Use cYAML_get_object_child() to search a single level.
  *
  *   parent - is the parent object on which you want to conduct the search
  *   name - key name of the object you want to find.
@@ -257,7 +259,9 @@ void cYAML_insert_child(struct cYAML *parent, struct cYAML *node);
  *   cmd - the command that failed.
  *   entity - command entity that failed.
  *   err_str - error string to add in the error
- *   root - the root to which to add the YAML error
+ *   root - the root to which to add the YAML error. On failure this
+ *          function frees the whole tree at *root and sets *root to
+ *          NULL, so any errors the caller had already queued are lost.
  */
 void cYAML_build_error(int rc, int seq_no, char *cmd,
 			char *entity, char *err_str,
