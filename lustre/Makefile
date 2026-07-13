@@ -4,6 +4,8 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
+subdir-ccflags-y += -I$(src)/include
+
 obj-m += fid/ obdclass/ ptlrpc/ ldlm/ obdecho/ mgc/ ec/
 
 obj-$(CONFIG_LUSTRE_FS_TESTS) += kunit/
