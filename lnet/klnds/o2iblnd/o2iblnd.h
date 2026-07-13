@@ -222,8 +222,10 @@ struct kib_pages {
 
 /* bounce_enable tri-state, default off:
  *   OFF   - feature disabled, zero footprint.
- *   AUTO  - engage when the sink buffer is a NUMA hop from the HCA; allocate
- *           only on a multi-node NUMA box.
+ *   AUTO  - engage when the sink buffer is a NUMA hop from the HCA and the HCA
+ *           cannot relax the ordering of its writes; allocate only where both
+ *           terms can hold, that is a multi-node NUMA box whose HCA writes
+ *           strictly ordered.
  *   FORCE - engage unconditionally, and allocate even on a single-socket box
  *           so the fail_loc path is testable anywhere.
  */
@@ -261,6 +263,12 @@ struct kib_bounce_pool {
 						 * AUTO must not run its
 						 * distance test against a
 						 * fallback.
+						 */
+	bool			bp_ro_enabled;	/* HCA may write with PCIe
+						 * relaxed ordering, so a
+						 * cross-socket DMA is not
+						 * penalised and AUTO stands
+						 * down. Sampled at bringup.
 						 */
 	int			bp_cpt;		/* CPT of bp_node. Sources the
 						 * pool structures and binds

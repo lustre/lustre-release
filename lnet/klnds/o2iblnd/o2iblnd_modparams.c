@@ -131,7 +131,7 @@ static const struct kernel_param_ops kiblnd_bounce_enable_ops = {
 };
 module_param_cb(bounce_enable, &kiblnd_bounce_enable_ops, &bounce_enable, 0644);
 MODULE_PARM_DESC(bounce_enable,
-		 "NIC-local bounce pool: 0=off (default), 1=auto (on when the sink is a NUMA hop from the HCA), 2=force (always on, allocate even on single-socket). A write to 0 disables bouncing at once. Enabling, or raising auto to force, takes effect at the next device bringup: a module load, or a dev_failover sweep.");
+		 "NIC-local bounce pool: 0=off (default), 1=auto (on when the sink is a NUMA hop from the HCA and the HCA cannot write with PCIe relaxed ordering), 2=force (always on, allocate even on single-socket). A write to 0 disables bouncing at once. Enabling, or raising auto to force, takes effect at the next device bringup: a module load, or a dev_failover sweep.");
 
 static int bounce_pool_mb = 64;
 module_param(bounce_pool_mb, int, 0444);

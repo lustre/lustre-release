@@ -14,6 +14,8 @@
  * penalised and the copy would cost more than it saves.
  */
 
+#include <linux/pci.h>
+
 #include "o2iblnd.h"
 
 /* Counters are module-global so a single readout spans every per-HCA pool.
@@ -26,9 +28,9 @@ static atomic_t   kib_bp_inflight;	/* slots currently checked out */
 static atomic64_t kib_bp_fallback;	/* bounced tx that fell back */
 static atomic64_t kib_bp_bytes;		/* bytes staged through slots */
 
-/* FORCE stages every eligible transfer, whatever the sink's NUMA node. It is
- * writable at runtime, so a selftest reaches the same path on a node whose pool
- * was already built.
+/* FORCE stages every eligible transfer, whatever the sink's NUMA node or
+ * the HCA's ability to relax ordering. It is writable at runtime, so a selftest
+ * reaches the same path on a node whose pool was already built.
  */
 static inline bool
 kiblnd_bounce_forced(void)
@@ -49,26 +51,68 @@ kiblnd_hca_numa_node(struct kib_hca_dev *hdev)
 }
 
 /**
- * kiblnd_bounce_alloc_ok() - Whether to allocate a pool on this node.
+ * kiblnd_hca_relaxed_ordering() - Whether the HCA can relax the ordering of
+ *                                 its writes.
+ * @hdev: HCA to query.
  *
- * AUTO allocates only on a multi-node NUMA box, where the distance predicate
- * can engage; a single-socket node would pin an arena it could never use.
- * FORCE allocates everywhere so the fail_loc path is exercisable on a
- * single-socket test node. The setter keeps bounce_enable within the
+ * Reads the relaxed-ordering enable bit of the PCIe Device Control register.
+ * That bit is the master gate: cleared, the HCA may not set the
+ * relaxed-ordering attribute on any write it issues, whatever the bulk region
+ * was registered with. The kernel clears it on a root complex whose reordering
+ * is known to be unsafe, and an administrator may clear it as well.
+ *
+ * The bit is RsvdP in a virtual function and reads back zero there, so ask the
+ * physical function, which a VF inherits the ordering of. pci_physfn() only
+ * reaches a PF this kernel enumerated, so a VF passed through to a guest still
+ * reads back strictly ordered and leaves AUTO staging as it did before.
+ *
+ * The bit reports the ordering the HCA is permitted to use. Where the platform
+ * allows relaxed ordering the cross-NUMA DMA is already fast and a bounce would
+ * only cost throughput.
+ *
+ * Return: true when the HCA may write with relaxed ordering. False when it may
+ * not, and for a device on no PCI bus at all, where there is no such bit to
+ * read.
+ */
+static bool
+kiblnd_hca_relaxed_ordering(struct kib_hca_dev *hdev)
+{
+#ifdef CONFIG_PCI
+	struct device *dma = hdev->ibh_ibdev->dma_device;
+
+	if (dma == NULL || !dev_is_pci(dma))
+		return false;
+
+	return pcie_relaxed_ordering_enabled(pci_physfn(to_pci_dev(dma)));
+#else
+	return false;
+#endif
+}
+
+/**
+ * kiblnd_bounce_alloc_ok() - Whether to allocate a pool on this HCA.
+ * @ro_enabled: HCA may write with PCIe relaxed ordering.
+ *
+ * AUTO allocates only where its predicate can engage: on a multi-node NUMA box,
+ * and on an HCA that cannot relax the ordering of its writes. Otherwise, the
+ * pool is an arena AUTO could never hand out, so pinning one would waste
+ * bounce_pool_mb per HCA. FORCE allocates everywhere so the feature is
+ * exercisable on any test node. The setter keeps bounce_enable within the
  * tri-state, but match the values explicitly so an out-of-range read can never
  * reach the "allocate" arms.
  *
- * Return: true when the per-HCA pool and copy workqueues should be allocated.
+ * Return: true when the per-HCA pool should be allocated.
  */
 static bool
-kiblnd_bounce_alloc_ok(void)
+kiblnd_bounce_alloc_ok(bool ro_enabled)
 {
 	int enable = *kiblnd_tunables.kib_bounce_enable;
 
 	if (enable == KIBLND_BOUNCE_FORCE)
 		return true;
 	if (enable == KIBLND_BOUNCE_AUTO)
-		return IS_ENABLED(CONFIG_NUMA) && num_online_nodes() >= 2;
+		return IS_ENABLED(CONFIG_NUMA) && num_online_nodes() >= 2 &&
+		       !ro_enabled;
 	return false;
 }
 
@@ -161,6 +205,7 @@ void
 kiblnd_bounce_pool_create(struct kib_hca_dev *hdev)
 {
 	struct kib_bounce_pool *pool;
+	bool ro_enabled;
 	s64 pool_bytes;
 	s64 slot_bytes;
 	s64 max_bytes;
@@ -176,8 +221,23 @@ kiblnd_bounce_pool_create(struct kib_hca_dev *hdev)
 
 	hdev->ibh_bounce_pool = NULL;
 
-	if (!kiblnd_bounce_alloc_ok())
+	/* Test the tunable before the config-space read, so an OFF build pays
+	 * nothing at bringup or on a failover sweep.
+	 */
+	if (*kiblnd_tunables.kib_bounce_enable == KIBLND_BOUNCE_OFF)
 		return;
+
+	ro_enabled = kiblnd_hca_relaxed_ordering(hdev);
+
+	if (!kiblnd_bounce_alloc_ok(ro_enabled)) {
+		/* Re-ask with strict ordering to name the term that declined:
+		 * report only where ordering, not the node count, is why.
+		 */
+		if (ro_enabled && kiblnd_bounce_alloc_ok(false))
+			LCONSOLE_INFO("%s: bounce: HCA writes with relaxed ordering; no pool allocated\n",
+				      hdev->ibh_ibdev->name);
+		return;
+	}
 
 	/* bounce_pool_mb is an unvalidated 0444 int; reject nonsense before it
 	 * underflows the slot maths below. The high end is capped once the
@@ -244,6 +304,7 @@ kiblnd_bounce_pool_create(struct kib_hca_dev *hdev)
 	pool->bp_hdev = hdev;
 	pool->bp_node = node;
 	pool->bp_node_known = node_known;
+	pool->bp_ro_enabled = ro_enabled;
 	pool->bp_cpt = cpt;
 	pool->bp_slot_size = slot_size;
 	pool->bp_slot_pages = slot_pages;
@@ -283,8 +344,9 @@ kiblnd_bounce_pool_create(struct kib_hca_dev *hdev)
 	kiblnd_bounce_wq_create(pool);
 
 	hdev->ibh_bounce_pool = pool;
-	LCONSOLE_INFO("%s: bounce pool on node %d cpt %d, %d slots x %d bytes\n",
-		      hdev->ibh_ibdev->name, node, cpt, nslots, slot_size);
+	LCONSOLE_INFO("%s: bounce pool on node %d cpt %d, %d slots x %d bytes, HCA relaxed ordering %s\n",
+		      hdev->ibh_ibdev->name, node, cpt, nslots, slot_size,
+		      pool->bp_ro_enabled ? "on" : "off");
 }
 
 /**
@@ -558,7 +620,8 @@ kiblnd_bounce_first_page(const struct bio_vec *kiov, int niov, int offset)
  * A transfer larger than one slot cannot be staged even under FORCE, and
  * peer-to-peer buffers are left direct. FORCE then engages unconditionally;
  * AUTO engages when the buffer is a NUMA hop from the HCA, and declines
- * outright when the HCA's own node is unknown.
+ * outright when the HCA's own node is unknown or the HCA may write with
+ * relaxed ordering.
  *
  * Return: true to route this transfer through a NIC-local slot.
  */
@@ -582,10 +645,15 @@ kiblnd_should_bounce(struct kib_hca_dev *hdev, const struct bio_vec *kiov,
 		return false;
 	if (kiblnd_bounce_forced())
 		return true;
-	/* bp_node_known can be false here only if the pool was allocated
-	 * under FORCE and bounce_enable was then lowered to AUTO.
+	/* Either of the next two can hold here only if the pool was allocated
+	 * under FORCE and bounce_enable was then lowered to AUTO. AUTO itself
+	 * never builds a pool with either property: kiblnd_bounce_alloc_ok()
+	 * refuses an HCA that can relax ordering, and
+	 * kiblnd_bounce_pool_create() refuses an HCA with no known NUMA node.
 	 */
 	if (!pool->bp_node_known)
+		return false;
+	if (pool->bp_ro_enabled)
 		return false;
 	if (num_online_nodes() < 2)
 		return false;
