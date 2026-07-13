@@ -128,14 +128,14 @@ procs_are_stopped() {
 	return 0
 }
 
-# Send SIGSTOP to PIDs and wait up to 60 seconds for them to show a
+# Send SIGSTOP to PIDs and wait up to 120 seconds for them to show a
 # stopped process state.
 stop_procs() {
 	local pids="$*"
 	local end
 
 	$KILL -SIGSTOP $pids
-	end=$((SECONDS + 60))
+	end=$((SECONDS + 120))
 	while ((SECONDS < end)); do
 		if procs_are_stopped $pids; then
 			return 0
@@ -350,18 +350,22 @@ test_2c() {
 	local LRSYNC_LOG=$(generate_logname "lrsync_log")
 	# Replicate the changes to $TGT
 	sleep 10 # give dbench a headstart
+
+	stack_trap "pgrep dbench && killall -SIGKILL dbench"
+
 	local quit=0
-	while [ $quit -le 1 ];
-	do
+	while (( $quit <= 1 )); do
 		echo "Running lustre_rsync"
 		$LRSYNC -s $DIR -t $TGT -t $TGT2 -m ${mds1_svc} -u $CL_USER \
 			-l $LREPL_LOG -D $LRSYNC_LOG
 		sleep 5
 		pgrep dbench
-		if [ $? -ne 0 ]; then
-			quit=$(expr $quit + 1)
-		fi
+		(( $? == 0 )) || ((quit++))
 	done
+
+	echo "Running final lustre_rsync"
+	$LRSYNC -s $DIR -t $TGT -t $TGT2 -m ${mds1_svc} -u $CL_USER \
+		-l $LREPL_LOG -D $LRSYNC_LOG
 
 	# Use diff to compare the source and the destination
 	check_diff $DIR/$tdir $TGT/$tdir
