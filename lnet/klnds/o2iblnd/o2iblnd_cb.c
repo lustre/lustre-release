@@ -3370,10 +3370,13 @@ kiblnd_cm_callback(struct rdma_cm_id *cmid, struct rdma_cm_event *event)
 	case RDMA_CM_EVENT_UNREACHABLE:
 		conn = cmid->context;
 
-		/* In case we have a flapping network, we can get this event
-		 * before conn is created */
+		/* The DISCONNECTED handler clears the cm_id context, but the
+		 * cm_id stays ours until connd reaps the conn. A non-zero
+		 * return would have the CM destroy it now, and connd would
+		 * destroy it again. Nothing left to do, so ignore the event.
+		 */
 		if (conn == NULL)
-			return -ENETDOWN;
+			return 0;
 
 		CNETERR("%s: UNREACHABLE %d cm_id %p conn %p ibc_state: %d\n",
 			libcfs_nidstr(&conn->ibc_peer->ibp_nid),

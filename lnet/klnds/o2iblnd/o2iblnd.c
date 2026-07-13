@@ -1031,8 +1031,14 @@ kiblnd_destroy_conn(struct kib_conn *conn)
 
 		atomic_dec(&peer_ni->ibp_nconns);
 		atomic_dec(&net->ibn_nconns);
-		kiblnd_peer_decref(peer_ni);
+
+		/* Destroy the cm_id before dropping the peer_ni reference.
+		 * A CM callback may still be running on this cm_id and may
+		 * dereference conn->ibc_peer. rdma_destroy_id() waits for
+		 * in-flight handlers to complete.
+		 */
 		rdma_destroy_id(cmid);
+		kiblnd_peer_decref(peer_ni);
 	}
 }
 
