@@ -1989,4 +1989,3 @@ lstcon_console_fini(void)
 
 	return 0;
 }
-

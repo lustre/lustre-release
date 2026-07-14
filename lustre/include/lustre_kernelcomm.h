@@ -221,4 +221,3 @@ int libcfs_kkuc_group_foreach(const struct obd_uuid *uuid, int group,
 			      libcfs_kkuc_cb_t cb_func, void *cb_arg);
 
 #endif /* __LUSTRE_KERNELCOMM_H__ */
-

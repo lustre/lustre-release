@@ -163,7 +163,7 @@ static struct page *osd_dio_page_get(const struct lu_env *env)
 	LASSERT(oti->oti_dio_pages);
 	cur = oti->oti_dio_pages_used;
 	page = oti->oti_dio_pages[cur];
-		
+
 	if (unlikely(!page)) {
 		LASSERT(cur < PTLRPC_MAX_BRW_PAGES);
 		page = alloc_page(GFP_NOFS | __GFP_HIGHMEM);
@@ -183,7 +183,7 @@ static void osd_dio_page_put(const struct lu_env *env)
 	oti->oti_dio_pages_used--;
 }
 
-static int osd_zfs_fake_lnb(const struct lu_env *env, 
+static int osd_zfs_fake_lnb(const struct lu_env *env,
 			    struct niobuf_local *lnb, loff_t offset, ssize_t len,
 			    int maxlnb)
 {

@@ -604,4 +604,3 @@ const struct file_operations mdt_hsm_active_requests_fops = {
 	.llseek		= seq_lseek,
 	.release	= seq_release,
 };
-

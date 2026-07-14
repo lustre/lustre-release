@@ -961,7 +961,7 @@ static struct req_format *req_fmt(__u32 opcode)
 	case MDS_GET_INFO:
 		return &RQF_MDS_GET_INFO;
 	/* HSM op is skipped */
-#if 0 
+#if 0
 	case MDS_HSM_STATE_GET:
 		return &RQF_MDS_HSM_STATE_GET;
 	case MDS_HSM_STATE_SET:

@@ -4825,4 +4825,3 @@ lnet_peer_ni_set_healthv(struct lnet_nid *nid, int value, bool all)
 	}
 	lnet_net_unlock(LNET_LOCK_EX);
 }
-

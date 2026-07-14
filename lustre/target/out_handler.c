@@ -1273,4 +1273,3 @@ struct tgt_handler tgt_out_handlers[] = {
 TGT_UPDATE_HDL(IS_MUTABLE,	OUT_UPDATE,	out_handle),
 };
 EXPORT_SYMBOL(tgt_out_handlers);
-

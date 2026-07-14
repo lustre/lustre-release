@@ -94,4 +94,3 @@ unsigned int lnet_get_dev_idx(struct page *page);
 #endif
 
 #endif /* LNET_RDMA_H */
-

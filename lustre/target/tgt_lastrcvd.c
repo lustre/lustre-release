@@ -2417,4 +2417,3 @@ int tgt_handle_tag(struct ptlrpc_request *req)
 {
 	return tgt_check_lookup_req(req, 0, NULL);
 }
-

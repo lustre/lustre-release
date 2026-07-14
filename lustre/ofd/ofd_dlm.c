@@ -332,4 +332,3 @@ out:
 
 	RETURN(rc < 0 ? rc : ELDLM_LOCK_ABORTED);
 }
-

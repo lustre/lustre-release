@@ -214,7 +214,7 @@ __u32 g_verify_token_header(rawobj_t *mech, int *body_size,
                 return (G_BAD_TOK_HEADER);
         if (*buf++ != 0x06)
                 return (G_BAD_TOK_HEADER);
- 
+
         if ((toksize -= 1) < 0)
                 return (G_BAD_TOK_HEADER);
         toid.len = *buf++;
@@ -224,9 +224,9 @@ __u32 g_verify_token_header(rawobj_t *mech, int *body_size,
         toid.data = buf;
         buf += toid.len;
 
-        if (!g_OID_equal(&toid, mech)) 
+        if (!g_OID_equal(&toid, mech))
                 ret = G_WRONG_MECH;
- 
+
         /* G_WRONG_MECH is not returned immediately because it's more
          * important to return G_BAD_TOK_HEADER if the token header is
          * in fact bad
@@ -276,7 +276,7 @@ __u32 g_get_mech_oid(rawobj_t *mech, rawobj_t *in_buf)
         if ((len -= mech->len) < 0)
                 return (G_BAD_TOK_HEADER);
         OBD_ALLOC_LARGE(mech->data, mech->len);
-        if (!mech->data) 
+        if (!mech->data)
                 return (G_BUFFER_ALLOC);
         memcpy(mech->data, buf, mech->len);
 

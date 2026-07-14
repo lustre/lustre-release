@@ -336,4 +336,3 @@ bool tgt_fmd_check(struct obd_export *exp, const struct lu_fid *fid, __u64 xid)
 	return can_update;
 }
 EXPORT_SYMBOL(tgt_fmd_check);
-

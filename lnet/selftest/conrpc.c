@@ -1397,4 +1397,3 @@ lstcon_rpc_module_fini(void)
 	LASSERT(list_empty(&console_session.ses_rpc_freelist));
 	LASSERT(atomic_read(&console_session.ses_rpc_counter) == 0);
 }
-

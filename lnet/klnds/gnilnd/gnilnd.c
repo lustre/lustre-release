@@ -796,7 +796,7 @@ kgnilnd_complete_closed_conn(kgn_conn_t *conn)
 		 kgnilnd_conn_state2str(conn));
 
 	LASSERT(list_empty(&conn->gnc_hashlist));
-	/* We shouldnt be on the delay list, the conn can 
+	/* We shouldnt be on the delay list, the conn can
 	 * get added to this list during a retransmit, and retransmits
 	 * only occur within scheduler threads.
 	 */
@@ -2086,7 +2086,7 @@ kgnilnd_dev_fini(kgn_device_t *dev)
 		 list_empty(&dev->gnd_map_tx) &&
 		 list_empty(&dev->gnd_rdmaq) &&
 		 list_empty(&dev->gnd_delay_conns),
-		 "dev 0x%p ready_conns %d@0x%p delay_conns %d@0x%p" 
+		 "dev 0x%p ready_conns %d@0x%p delay_conns %d@0x%p"
 		 "map_tx %d@0x%p rdmaq %d@0x%p\n",
 		 dev, kgnilnd_count_list(&dev->gnd_ready_conns), &dev->gnd_ready_conns,
 		 kgnilnd_count_list(&dev->gnd_delay_conns), &dev->gnd_delay_conns,

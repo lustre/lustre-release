@@ -56,5 +56,3 @@ void ptlrpc_fill_bulk_md(struct lnet_md *md, struct ptlrpc_bulk_desc *desc,
 	else
 		md->umd_start = &desc->bd_vec[start];
 }
-
-

@@ -38,4 +38,3 @@ endif
 ifdef CONFIG_GCOV_PROFILE_LUSTRE
 GCOV_PROFILE := y
 endif
-

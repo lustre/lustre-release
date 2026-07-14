@@ -398,7 +398,7 @@ static void nrs_resource_put(struct ptlrpc_nrs_resource *res)
  * @nrq if it is to be handled by @policy.
  * @policy: the policy
  * @nrq: the request
- * @moving_req: denotes whether this is a call to the function by 
+ * @moving_req: denotes whether this is a call to the function by
  * ldlm_lock_reorder_req(), in order to move @nrq to the high-priority NRS head;
  * we should not sleep when set.
  *

@@ -238,4 +238,3 @@ struct ptlrpc_nrs_pol_conf nrs_conf_fifo = {
 /** @} fifo */
 
 /** @} nrs */
-

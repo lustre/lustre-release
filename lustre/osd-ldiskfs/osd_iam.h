@@ -982,7 +982,7 @@ int iam_lvar_create(struct inode *obj,
 #ifdef DX_DEBUG
 #define dxtrace(command) command
 #else
-#define dxtrace(command) 
+#define dxtrace(command)
 #endif
 
 #define BH_DXLock        (BH_BITMAP_UPTODATE + 1)
@@ -1057,7 +1057,7 @@ void ldiskfs_iam_release(struct file *filp, struct inode *inode);
 int iam_uapi_ioctl(struct inode * inode, struct file * filp, unsigned int cmd,
                    unsigned long arg);
 
-/* dir.c 
+/* dir.c
 #if LDISKFS_INVARIANT_ON
 extern int ldiskfs_check_dir_entry(const char *, struct inode *,
                                 struct ldiskfs_dir_entry_2 *,
