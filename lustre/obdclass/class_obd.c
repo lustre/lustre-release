@@ -1012,6 +1012,7 @@ static void __exit obdclass_exit(void)
 {
 	__u64 memory_leaked;
 	__u64 memory_max;
+
 	ENTRY;
 
 	misc_deregister(&obd_psdev);

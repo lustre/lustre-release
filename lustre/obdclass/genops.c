@@ -2266,7 +2266,7 @@ int obd_mod_rpc_stats_seq_show(struct client_obd *cli,
 	spin_lock_irq(&cli->cl_mod_rpcs_waitq.lock);
 	lprocfs_stats_header(seq, ktime_get_real(), cli->cl_mod_rpcs_init, 25,
 			     ":", true, "");
-	seq_printf(seq, "modify_RPCs_in_flight:  %hu\n",
+	seq_printf(seq, "modify_RPCs_in_flight:  %u\n",
 		   cli->cl_mod_rpcs_in_flight);
 
 	seq_puts(seq, "\n\t\t\tmodify\n");
@@ -2344,7 +2344,7 @@ static int claim_mod_rpc_function(wait_queue_entry_t *wq_entry,
 		 */
 		ret = -1;
 	else
-		/* There might be be a close we could wake, keep looking */
+		/* There might be a close we could wake, keep looking */
 		ret = 0;
 	return ret;
 }

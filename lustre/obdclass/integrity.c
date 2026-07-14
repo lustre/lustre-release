@@ -223,16 +223,16 @@ static void obd_t10_performance_test(const char *obd_name,
 out:
 	if (rc) {
 		obd_t10_cksum_speeds[index] = rc;
-		CDEBUG(D_INFO, "%s: T10 checksum algorithm %s test error: "
-		       "rc = %d\n", obd_name, obd_t10_cksum_name(index), rc);
+		CDEBUG(D_INFO, "%s: T10 checksum algorithm %s test error: rc = %d\n",
+		       obd_name, obd_t10_cksum_name(index), rc);
 	} else {
 		unsigned long tmp;
 
 		tmp = ((bcount * buf_len / jiffies_to_msecs(end - start)) *
 		       1000) / (1024 * 1024);
 		obd_t10_cksum_speeds[index] = (int)tmp;
-		CDEBUG(D_CONFIG, "%s: T10 checksum algorithm %s speed = %d "
-		       "MB/s\n", obd_name, obd_t10_cksum_name(index),
+		CDEBUG(D_CONFIG, "%s: T10 checksum algorithm %s speed = %d MB/s\n",
+		       obd_name, obd_t10_cksum_name(index),
 		       obd_t10_cksum_speeds[index]);
 	}
 }

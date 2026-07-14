@@ -266,7 +266,7 @@ EXPORT_SYMBOL(dt_lookup);
  * * %negative on failure
  */
 int dt_lookup_dir(const struct lu_env *env, struct dt_object *dir,
-                  const char *name, struct lu_fid *fid)
+		  const char *name, struct lu_fid *fid)
 {
 	if (dt_try_as_dir(env, dir, true))
 		return dt_lookup(env, dir, (struct dt_rec *)fid,
@@ -451,7 +451,7 @@ struct dt_object *dt_find_or_create(const struct lu_env *env,
 
 	rc = dt_create(env, dto, at, NULL, dof, th);
 	if (rc)
-                GOTO(unlock, rc);
+		GOTO(unlock, rc);
 	LASSERT(dt_object_exists(dto));
 unlock:
 	dt_write_unlock(env, dto);
@@ -517,7 +517,7 @@ EXPORT_SYMBOL(dt_read);
  * * %negative on failure
  */
 int dt_record_read(const struct lu_env *env, struct dt_object *dt,
-                   struct lu_buf *buf, loff_t *pos)
+		   struct lu_buf *buf, loff_t *pos)
 {
 	ssize_t size;
 
@@ -819,7 +819,7 @@ static inline const struct dt_index_features *dt_index_feat_select(__u64 seq,
 			/* slave index should be a regular file */
 			return ERR_PTR(-ENOENT);
 		return &dt_quota_slv_features;
-	} else if (seq == FID_SEQ_LAYOUT_RBTREE){
+	} else if (seq == FID_SEQ_LAYOUT_RBTREE) {
 		return &dt_lfsck_layout_orphan_features;
 	} else if (seq >= FID_SEQ_NORMAL) {
 		/* object is part of the namespace, verify that it is a
@@ -1070,6 +1070,7 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 	const struct dt_it_ops *iops;
 	size_t pageidx, bytes, nlupgs = 0;
 	int rc;
+
 	ENTRY;
 
 	LASSERT(rdpg->rp_folios != NULL);
@@ -1126,7 +1127,7 @@ int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
 
 		lp = addr = rdpg_page_get(rdpg, pageidx);
 		/* fill lu pages */
-		for (i = 0; i < LU_PAGE_COUNT; i++, lp++, bytes-=LU_PAGE_SIZE) {
+		for (i = 0; i < LU_PAGE_COUNT; i++, lp++, bytes -= LU_PAGE_SIZE) {
 			rc = filler(env, obj, lp,
 				    min_t(size_t, bytes, LU_PAGE_SIZE),
 				    iops, it, rdpg->rp_attrs, arg);
@@ -1173,6 +1174,7 @@ int dt_index_read(const struct lu_env *env, struct dt_device *dev,
 	const struct dt_index_features	*feat;
 	struct dt_object		*obj;
 	int				 rc;
+
 	ENTRY;
 
 	/*

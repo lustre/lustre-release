@@ -32,11 +32,12 @@ static void __cl_lock_trace(int level, const struct lu_env *env,
 			    const char *func, const int line)
 {
 	struct cl_object_header *h = cl_object_header(lock->cll_descr.cld_obj);
+
 	CDEBUG(level, "%s: %p (%p/%d) at %s():%d\n",
 	       prefix, lock, env, h->coh_nesting, func, line);
 }
 #define cl_lock_trace(level, env, prefix, lock)                         \
-	__cl_lock_trace(level, env, prefix, lock, __FUNCTION__, __LINE__)
+	__cl_lock_trace(level, env, prefix, lock, __func__, __LINE__)
 
 /**
  * cl_lock_slice_add() - Adds lock slice to the compound lock.
@@ -52,8 +53,8 @@ static void __cl_lock_trace(int level, const struct lu_env *env,
  * see cl_req_slice_add(), cl_page_slice_add(), cl_io_slice_add()
  */
 void cl_lock_slice_add(struct cl_lock *lock, struct cl_lock_slice *slice,
-                       struct cl_object *obj,
-                       const struct cl_lock_operations *ops)
+		       struct cl_object *obj,
+		       const struct cl_lock_operations *ops)
 {
 	ENTRY;
 	slice->cls_lock = lock;
@@ -87,6 +88,7 @@ int cl_lock_init(const struct lu_env *env, struct cl_lock *lock,
 	struct cl_object *obj = lock->cll_descr.cld_obj;
 	struct cl_object *scan;
 	int result = 0;
+
 	ENTRY;
 
 	/* Make sure cl_lock::cll_descr is initialized. */
@@ -137,6 +139,7 @@ EXPORT_SYMBOL(cl_lock_at);
 void cl_lock_cancel(const struct lu_env *env, struct cl_lock *lock)
 {
 	const struct cl_lock_slice *slice;
+
 	ENTRY;
 
 	cl_lock_trace(D_DLMTRACE, env, "cancel lock", lock);
@@ -199,6 +202,7 @@ int cl_lock_request(const struct lu_env *env, struct cl_io *io,
 	struct cl_sync_io	*anchor = NULL;
 	__u32			enq_flags = lock->cll_descr.cld_enq_flags;
 	int			rc;
+
 	ENTRY;
 
 	rc = cl_lock_init(env, lock, io);
@@ -256,7 +260,7 @@ const char *cl_lock_mode_name(const enum cl_lock_mode mode)
 		[CLM_WRITE]   = "W",
 		[CLM_GROUP]   = "G"
 	};
-	BUILD_BUG_ON(CLM_MAX != ARRAY_SIZE(names));
+	BUILD_BUG_ON(ARRAY_SIZE(names) != CLM_MAX);
 	return names[mode];
 }
 EXPORT_SYMBOL(cl_lock_mode_name);

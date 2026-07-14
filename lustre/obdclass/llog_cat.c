@@ -120,8 +120,7 @@ int llog_cat_close(const struct lu_env *env, struct llog_handle *cathandle)
 		    (llh->llh_count == 1)) {
 			rc = llog_destroy(env, loghandle);
 			if (rc)
-				CERROR("%s: failure destroying log during "
-				       "cleanup: rc = %d\n",
+				CERROR("%s: failure destroying log during cleanup: rc = %d\n",
 				       loghandle2name(loghandle), rc);
 
 			index = loghandle->u.phd.phd_cookie.lgc_index;

@@ -56,7 +56,7 @@ static int llog_osd_declare_new_object(const struct lu_env *env,
 	struct llog_thread_info *lgi = llog_info(env);
 
 	lgi->lgi_attr.la_valid = LA_MODE;
-	lgi->lgi_attr.la_mode = S_IFREG | S_IRUGO | S_IWUSR;
+	lgi->lgi_attr.la_mode = S_IFREG | 0644;
 	lgi->lgi_dof.dof_type = dt_mode_to_dft(S_IFREG);
 
 	return local_object_declare_create(env, los, o, &lgi->lgi_attr,
@@ -86,7 +86,7 @@ static int llog_osd_create_new_object(const struct lu_env *env,
 	struct llog_thread_info *lgi = llog_info(env);
 
 	lgi->lgi_attr.la_valid = LA_MODE | LA_CTIME | LA_MTIME | LA_ATIME;
-	lgi->lgi_attr.la_mode = S_IFREG | S_IRUGO | S_IWUSR;
+	lgi->lgi_attr.la_mode = S_IFREG | 0644;
 	lgi->lgi_attr.la_ctime = lgi->lgi_attr.la_mtime =
 		lgi->lgi_attr.la_atime = ktime_get_real_seconds();
 	lgi->lgi_dof.dof_type = dt_mode_to_dft(S_IFREG);
@@ -239,16 +239,15 @@ static int llog_osd_read_header(const struct lu_env *env,
 		lustre_swab_llog_hdr(handle->lgh_hdr);
 
 	if (llh_hdr->lrh_type != LLOG_HDR_MAGIC) {
-		CERROR("%s: bad log %s "DFID" header magic: %#x "
-		       "(expected %#x)\n", o->do_lu.lo_dev->ld_obd->obd_name,
+		CERROR("%s: bad log %s "DFID" header magic: %#x (expected %#x)\n",
+		       o->do_lu.lo_dev->ld_obd->obd_name,
 		       handle->lgh_name ? handle->lgh_name : "",
 		       PFID(lu_object_fid(&o->do_lu)),
 		       llh_hdr->lrh_type, LLOG_HDR_MAGIC);
 		GOTO(unlock, rc = -EINVAL);
 	} else if (llh_hdr->lrh_len < LLOG_MIN_CHUNK_SIZE ||
 		   llh_hdr->lrh_len > handle->lgh_hdr_size) {
-		CERROR("%s: incorrectly sized log %s "DFID" header: "
-		       "%#x (expected at least %#x)\n"
+		CERROR("%s: incorrectly sized log %s "DFID" header: %#x (expected at least %#x)\n"
 		       "you may need to re-run lconf --write_conf.\n",
 		       o->do_lu.lo_dev->ld_obd->obd_name,
 		       handle->lgh_name ? handle->lgh_name : "",
@@ -259,8 +258,7 @@ static int llog_osd_read_header(const struct lu_env *env,
 		   LLOG_HDR_BITMAP_SIZE(handle->lgh_hdr) ||
 		   LLOG_HDR_TAIL(handle->lgh_hdr)->lrt_len !=
 			llh_hdr->lrh_len) {
-		CERROR("%s: incorrectly sized log %s "DFID" tailer: "
-		       "%#x : rc = %d\n",
+		CERROR("%s: incorrectly sized log %s "DFID" tailer: %#x : rc = %d\n",
 		       o->do_lu.lo_dev->ld_obd->obd_name,
 		       handle->lgh_name ? handle->lgh_name : "",
 		       PFID(lu_object_fid(&o->do_lu)),
@@ -372,6 +370,7 @@ static int llog_osd_write_rec(const struct lu_env *env,
 	size_t left;
 	__u32 orig_last_idx;
 	bool pad = false;
+
 	ENTRY;
 
 	llh = loghandle->lgh_hdr;
@@ -492,8 +491,7 @@ static int llog_osd_write_rec(const struct lu_env *env,
 			}
 
 			lgi->lgi_off = reccookie->lgc_offset;
-			CDEBUG(D_OTHER, "modify record "DFID": idx:%u, "
-			       "len:%u offset %llu\n",
+			CDEBUG(D_OTHER, "modify record "DFID": idx:%u, len:%u offset %llu\n",
 			       PLOGID(&loghandle->lgh_id), idx,
 			       rec->lrh_len, (long long)lgi->lgi_off);
 		} else {
@@ -501,8 +499,8 @@ static int llog_osd_write_rec(const struct lu_env *env,
 			 * llog processing or llh_size is not set to proper
 			 * record size for fixed records llog. Therefore it is
 			 * impossible to get record offset. */
-			CERROR("%s: can't get record offset, idx:%d, "
-			       "len:%u.\n", o->do_lu.lo_dev->ld_obd->obd_name,
+			CERROR("%s: can't get record offset, idx:%d, len:%u.\n",
+			       o->do_lu.lo_dev->ld_obd->obd_name,
 			       idx, rec->lrh_len);
 			RETURN(-EFAULT);
 		}
@@ -549,7 +547,7 @@ static int llog_osd_write_rec(const struct lu_env *env,
 	if (loghandle->lgh_max_size > 0 &&
 	    lgi->lgi_off >= loghandle->lgh_max_size) {
 		CDEBUG(D_OTHER, "llog is getting too large (%u >= %u) at %u "
-		       DFID"\n", (unsigned)lgi->lgi_off,
+		       DFID"\n", (unsigned int)lgi->lgi_off,
 		       loghandle->lgh_max_size, (int)loghandle->lgh_last_idx,
 		       PLOGID(&loghandle->lgh_id));
 		/* this is to signal that this llog is full */
@@ -1051,13 +1049,11 @@ static void changelog_block_trim_ext(struct llog_rec_hdr *hdr,
 		if (unlikely(hdr->lrh_len == 0)) {
 			/* It is corruption case, we cannot know the next rec,
 			 * jump to the last one directly to avoid dead loop. */
-			LCONSOLE(D_WARNING, "Hit invalid llog record: "
-				 "idx %u, type %u, id %u\n",
+			LCONSOLE(D_WARNING, "Hit invalid llog record: idx %u, type %u, id %u\n",
 				 hdr->lrh_index, hdr->lrh_type, hdr->lrh_id);
 			hdr = llog_rec_hdr_next(last_hdr);
 			if (unlikely(hdr == last_hdr))
-				LCONSOLE(D_WARNING, "The last record crashed: "
-					 "idx %u, type %u, id %u\n",
+				LCONSOLE(D_WARNING, "The last record crashed: idx %u, type %u, id %u\n",
 					 hdr->lrh_index, hdr->lrh_type,
 					 hdr->lrh_id);
 			break;
@@ -1091,7 +1087,7 @@ static void changelog_block_trim_ext(struct llog_rec_hdr *hdr,
  * @buf: pointer to data buffer to fill
  * @len: required len to read, it is usually llog chunk_size.
  *
- * This function finds the the next llog block to return which contains
+ * This function finds the next llog block to return which contains
  * record with required index. It is main part of llog processing.
  *
  * Return:
@@ -1423,6 +1419,7 @@ static int llog_osd_open(const struct lu_env *env, struct llog_handle *handle,
 	LASSERT(dt);
 	if (ctxt->loc_flags & LLOG_CTXT_FLAG_NORMAL_FID) {
 		struct lu_object_conf conf = { 0 };
+
 		if (logid != NULL) {
 			logid_to_fid(logid, &lgi->lgi_fid);
 		} else {
@@ -1618,6 +1615,7 @@ llog_osd_regular_fid_add_name_entry(const struct lu_env *env,
 	struct dt_object	*dir;
 	char			*name = lgi->lgi_name;
 	int			rc;
+
 	ENTRY;
 
 	if (!fid_is_norm(fid))
@@ -1683,7 +1681,7 @@ static int llog_osd_declare_create(const struct lu_env *env,
 
 		lgi->lgi_attr.la_valid = LA_MODE | LA_SIZE;
 		lgi->lgi_attr.la_size = 0;
-		lgi->lgi_attr.la_mode = S_IFREG | S_IRUGO | S_IWUSR;
+		lgi->lgi_attr.la_mode = S_IFREG | 0644;
 		lgi->lgi_dof.dof_type = dt_mode_to_dft(S_IFREG);
 
 		rc = dt_declare_create(env, o, &lgi->lgi_attr, NULL,
@@ -1767,7 +1765,7 @@ static int llog_osd_create(const struct lu_env *env, struct llog_handle *res,
 		lgi->lgi_attr.la_size = 0;
 		lgi->lgi_attr.la_uid = 0;
 		lgi->lgi_attr.la_gid = 0;
-		lgi->lgi_attr.la_mode = S_IFREG | S_IRUGO | S_IWUSR;
+		lgi->lgi_attr.la_mode = S_IFREG | 0644;
 		lgi->lgi_attr.la_ctime = lgi->lgi_attr.la_mtime =
 			lgi->lgi_attr.la_atime = ktime_get_real_seconds();
 		lgi->lgi_dof.dof_type = dt_mode_to_dft(S_IFREG);
@@ -1883,6 +1881,7 @@ llog_osd_regular_fid_del_name_entry(const struct lu_env *env,
 	struct dt_object	*dir;
 	char			*name = lgi->lgi_name;
 	int			rc;
+
 	ENTRY;
 
 	if (!fid_is_norm(fid))
@@ -2063,6 +2062,7 @@ static int llog_osd_setup(const struct lu_env *env, struct obd_device *obd,
 	struct llog_thread_info		*lgi = llog_info(env);
 	struct llog_ctxt		*ctxt;
 	int				 rc = 0;
+
 	ENTRY;
 
 	LASSERT(obd);
@@ -2212,7 +2212,7 @@ int llog_osd_get_cat_list(const struct lu_env *env, struct dt_device *d,
 			GOTO(out, rc = PTR_ERR(th));
 
 		lgi->lgi_attr.la_valid = LA_MODE | LA_TYPE;
-		lgi->lgi_attr.la_mode = S_IFREG | S_IRUGO | S_IWUSR;
+		lgi->lgi_attr.la_mode = S_IFREG | 0644;
 		lgi->lgi_dof.dof_type = dt_mode_to_dft(S_IFREG);
 
 		th->th_wait_submit = 1;

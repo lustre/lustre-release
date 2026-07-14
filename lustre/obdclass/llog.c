@@ -123,6 +123,7 @@ int llog_trans_destroy(const struct lu_env *env, struct llog_handle *handle,
 {
 	const struct llog_operations *lop;
 	int rc;
+
 	ENTRY;
 
 	rc = llog_handle2ops(handle, &lop);
@@ -360,6 +361,7 @@ int llog_read_header(const struct lu_env *env, struct llog_handle *handle,
 {
 	const struct llog_operations *lop;
 	int rc;
+
 	ENTRY;
 
 	rc = llog_handle2ops(handle, &lop);
@@ -623,8 +625,8 @@ repeat:
 		rc = llog_next_block(env, loghandle, &saved_index,
 				     index, &cur_offset, buf, chunk_size);
 		if (repeated && rc)
-			CDEBUG(D_OTHER, "cur_offset %llu, chunk_offset %llu,"
-			       " buf_offset %u, rc = %d\n", cur_offset,
+			CDEBUG(D_OTHER, "cur_offset %llu, chunk_offset %llu, buf_offset %u, rc = %d\n",
+			       cur_offset,
 			       (__u64)chunk_offset, buf_offset, rc);
 		if (rc == -ESTALE)
 			GOTO(out, rc = 0);
@@ -799,8 +801,7 @@ repeat:
 
 				CDEBUG((llh->llh_flags & LLOG_F_IS_CAT ?
 					D_HA : D_OTHER),
-				       "index: %d, lh_last_idx: %d "
-				       "synced_idx: %d lgh_last_idx: %d\n",
+				       "index: %d, lh_last_idx: %d synced_idx: %d lgh_last_idx: %d\n",
 				       index, lh_last_idx, synced_idx,
 				       loghandle->lgh_last_idx);
 
@@ -1000,6 +1001,7 @@ int llog_process(const struct lu_env *env, struct llog_handle *loghandle,
 		 llog_cb_t cb, void *data, void *catdata)
 {
 	int rc;
+
 	rc = llog_process_or_fork(env, loghandle, cb, data, catdata, true);
 	return rc == LLOG_DEL_PLAIN ? 0 : rc;
 }
@@ -1030,12 +1032,13 @@ int llog_reverse_process(const struct lu_env *env,
 			 struct llog_handle *loghandle, llog_cb_t cb,
 			 void *data, void *catdata)
 {
-        struct llog_log_hdr *llh = loghandle->lgh_hdr;
-        struct llog_process_cat_data *cd = catdata;
-        void *buf;
-        int rc = 0, first_index = 1, index, idx;
-	__u32	chunk_size = llh->llh_hdr.lrh_len;
-        ENTRY;
+	struct llog_log_hdr *llh = loghandle->lgh_hdr;
+	struct llog_process_cat_data *cd = catdata;
+	void *buf;
+	int rc = 0, first_index = 1, index, idx;
+	__u32 chunk_size = llh->llh_hdr.lrh_len;
+
+	ENTRY;
 
 	OBD_ALLOC_LARGE(buf, chunk_size);
 	if (buf == NULL)
@@ -1070,12 +1073,12 @@ int llog_reverse_process(const struct lu_env *env,
 		rec = buf;
 		idx = rec->lrh_index;
 		CDEBUG(D_RPCTRACE, "index %u : idx %u\n", index, idx);
-                while (idx < index) {
+		while (idx < index) {
 			rec = (void *)rec + rec->lrh_len;
 			if (LLOG_REC_HDR_NEEDS_SWABBING(rec))
 				lustre_swab_llog_rec(rec);
-                        idx ++;
-                }
+                        idx++;
+		}
 		LASSERT(idx == index);
 		tail = (void *)rec + rec->lrh_len - sizeof(*tail);
 
@@ -1097,22 +1100,22 @@ int llog_reverse_process(const struct lu_env *env,
 					rc = llog_cancel_rec(env, loghandle,
 							     tail->lrt_index);
 				}
-                                if (rc)
-                                        GOTO(out, rc);
-                        }
+				if (rc)
+					GOTO(out, rc);
+			}
 
-                        /* previous record, still in buffer? */
-                        --index;
-                        if (index < first_index)
-                                GOTO(out, rc = 0);
+			/* previous record, still in buffer? */
+			--index;
+			if (index < first_index)
+				GOTO(out, rc = 0);
 			tail = (void *)tail - tail->lrt_len;
-                }
-        }
+		}
+	}
 
 out:
 	if (buf != NULL)
 		OBD_FREE_LARGE(buf, chunk_size);
-        RETURN(rc);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_reverse_process);
 

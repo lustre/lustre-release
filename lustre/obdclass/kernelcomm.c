@@ -1228,6 +1228,7 @@ EXPORT_SYMBOL(libcfs_kkuc_group_add);
 int libcfs_kkuc_group_rem(const struct obd_uuid *uuid, int uid, int group)
 {
 	struct kkuc_reg *reg, *next;
+
 	ENTRY;
 
 	if (!libcfs_kkuc_group_is_valid(group)) {
@@ -1269,6 +1270,7 @@ int libcfs_kkuc_group_put(const struct obd_uuid *uuid, int group, void *payload)
 	struct kkuc_reg	*reg;
 	int		 rc = 0;
 	int one_success = 0;
+
 	ENTRY;
 
 	if (!libcfs_kkuc_group_is_valid(group)) {
@@ -1325,6 +1327,7 @@ int libcfs_kkuc_group_foreach(const struct obd_uuid *uuid, int group,
 {
 	struct kkuc_reg	*reg;
 	int		 rc = 0;
+
 	ENTRY;
 
 	if (!libcfs_kkuc_group_is_valid(group)) {

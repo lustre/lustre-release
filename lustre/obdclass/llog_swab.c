@@ -62,7 +62,7 @@ void lustre_swab_llog_id(struct llog_logid *log_id)
 	__swab32s(&log_id->lgl_ogen);
 }
 
-void lustre_swab_llogd_body (struct llogd_body *d)
+void lustre_swab_llogd_body(struct llogd_body *d)
 {
 	ENTRY;
 	print_llogd_body(d);
@@ -78,7 +78,7 @@ void lustre_swab_llogd_body (struct llogd_body *d)
 }
 EXPORT_SYMBOL(lustre_swab_llogd_body);
 
-void lustre_swab_llogd_conn_body (struct llogd_conn_body *d)
+void lustre_swab_llogd_conn_body(struct llogd_conn_body *d)
 {
 	__swab64s(&d->lgdc_gen.mnt_cnt);
 	__swab64s(&d->lgdc_gen.conn_cnt);
@@ -334,7 +334,7 @@ static void print_llog_hdr(struct llog_log_hdr *h)
 	       LLOG_HDR_TAIL(h)->lrt_len);
 }
 
-void lustre_swab_llog_hdr (struct llog_log_hdr *h)
+void lustre_swab_llog_hdr(struct llog_log_hdr *h)
 {
 	ENTRY;
 	print_llog_hdr(h);
@@ -417,7 +417,7 @@ struct cfg_marker32 {
 };
 
 #define MTI_NAMELEN32    (MTI_NAME_MAXLEN - \
-        (sizeof(struct cfg_marker) - sizeof(struct cfg_marker32)))
+	(sizeof(struct cfg_marker) - sizeof(struct cfg_marker32)))
 
 void lustre_swab_cfg_marker(struct cfg_marker *marker, int swab, int size)
 {

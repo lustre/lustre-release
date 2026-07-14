@@ -83,7 +83,7 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
 
 	rc = kstrtouint(start, 16, &ogen);
 	if (rc)
-                RETURN(-EINVAL);
+		RETURN(-EINVAL);
 	logid->lgl_ogen = ogen;
 
 	RETURN(0);
@@ -165,8 +165,7 @@ static int llog_check_cb(const struct lu_env *env, struct llog_handle *handle,
 			ok = false;
 		}
 
-		l = snprintf(out, remains, "[index]: %05d  [type]: "
-			     "%02x  [len]: %04d %s\n",
+		l = snprintf(out, remains, "[index]: %05d  [type]: %02x  [len]: %04d %s\n",
 			     cur_index, rec->lrh_type, rec->lrh_len,
 			     ok ? "ok" : "failed");
 		out += l;

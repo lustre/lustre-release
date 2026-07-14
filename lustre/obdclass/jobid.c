@@ -152,7 +152,7 @@ static void jobid_free(void *vsj, void *arg)
 	struct session_jobid *sj = vsj;
 
 	put_pid(sj->sj_session);
-	OBD_FREE(sj, sizeof(*sj) + strlen(sj->sj_jobid) + 1);;
+	OBD_FREE(sj, sizeof(*sj) + strlen(sj->sj_jobid) + 1);
 }
 
 static void jobid_prune(struct work_struct *work);
@@ -534,6 +534,7 @@ static int jobid_get_from_cache(char *jobid, size_t joblen)
 	struct jobid_pid_map *pidmap = NULL;
 	time64_t now = ktime_get_real_seconds();
 	int rc = 0;
+
 	ENTRY;
 
 	if (strcmp(obd_jobid_var, JOBSTATS_SESSION) == 0) {
@@ -793,6 +794,7 @@ out:
 int jobid_cache_init(void)
 {
 	int rc = 0;
+
 	ENTRY;
 
 	if (jobid_hash)
@@ -820,6 +822,7 @@ EXPORT_SYMBOL(jobid_cache_init);
 void jobid_cache_fini(void)
 {
 	struct cfs_hash *tmp_hash;
+
 	ENTRY;
 
 	spin_lock(&jobid_hash_lock);
@@ -956,6 +959,7 @@ int lustre_get_jobid(char *jobid, size_t joblen)
 {
 	int len = min_t(int, joblen, LUSTRE_JOBID_SIZE);
 	int rc = 0;
+
 	ENTRY;
 
 	if (unlikely(joblen < 2)) {

@@ -87,7 +87,7 @@ void cl_io_fini(const struct lu_env *env, struct cl_io *io)
 	io->ci_state = CIS_FINI;
 
 	/* sanity check for layout change */
-	switch(io->ci_type) {
+	switch (io->ci_type) {
 	case CIT_READ:
 	case CIT_EC_RD:
 	case CIT_WRITE:
@@ -656,6 +656,7 @@ int cl_io_commit_async(const struct lu_env *env, struct cl_io *io,
 {
 	const struct cl_io_slice *scan;
 	int result = 0;
+
 	ENTRY;
 
 	list_for_each_entry(scan, &io->ci_layers, cis_linkage) {
@@ -674,6 +675,7 @@ void cl_io_extent_release(const struct lu_env *env, struct cl_io *io,
 			  enum cl_io_priority prio)
 {
 	const struct cl_io_slice *scan;
+
 	ENTRY;
 
 	list_for_each_entry(scan, &io->ci_layers, cis_linkage) {
@@ -724,6 +726,7 @@ int cl_io_submit_rw(const struct lu_env *env, struct cl_io *io,
 {
 	const struct cl_io_slice *scan;
 	int result = 0;
+
 	ENTRY;
 
 	list_for_each_entry(scan, &io->ci_layers, cis_linkage) {
@@ -765,6 +768,7 @@ int cl_io_submit_sync(const struct lu_env *env, struct cl_io *io,
 	struct cl_sync_io *anchor = &cl_env_info(env)->clt_anchor;
 	struct cl_page *pg;
 	int rc;
+
 	ENTRY;
 
 	cl_page_list_for_each(pg, &queue->c2_qin) {
@@ -1176,6 +1180,7 @@ void cl_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 		     struct cl_req_attr *attr)
 {
 	struct cl_object *scan;
+
 	ENTRY;
 
 	cl_object_for_each(scan, obj) {
@@ -1240,6 +1245,7 @@ int cl_sync_io_wait(const struct lu_env *env, struct cl_sync_io *anchor,
 		    long timeout)
 {
 	int rc = 0;
+
 	ENTRY;
 
 	LASSERT(timeout >= 0);
@@ -1935,7 +1941,7 @@ void __cl_sync_io_note(const struct lu_env *env, struct cl_sync_io *anchor,
 		 * Holding the lock across both the decrement and
 		 * the wakeup ensures cl_sync_io_wait() doesn't complete
 		 * before the wakeup completes and the contents of
-		 * of anchor become unsafe to access as the owner is free
+		 * anchor become unsafe to access as the owner is free
 		 * to immediately reclaim anchor when cl_sync_io_wait()
 		 * completes.
 		 */
