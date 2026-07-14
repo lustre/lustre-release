@@ -691,7 +691,7 @@ static inline int obd_process_config(struct obd_device *obd, int datalen,
 	LASSERT(ldt);
 	LASSERT(d);
 
-	obd->obd_process_conf = 1;
+	set_bit(OBDF_PROCESS_CONF, obd->obd_flags);
 
 	rc = lu_env_init(&env, ldt->ldt_ctx_tags);
 	if (rc == 0) {
@@ -699,7 +699,7 @@ static inline int obd_process_config(struct obd_device *obd, int datalen,
 		lu_env_fini(&env);
 	}
 
-	obd->obd_process_conf = 0;
+	clear_bit(OBDF_PROCESS_CONF, obd->obd_flags);
 
 	RETURN(rc);
 }

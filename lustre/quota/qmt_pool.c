@@ -1401,7 +1401,7 @@ static int qmt_pool_recalc(void *args)
 	/* Waiting for the end of processing mgs config.
 	 * It is needed to be sure all pools are configured.
 	 */
-	while (obd->obd_process_conf)
+	while (test_bit(OBDF_PROCESS_CONF, obd->obd_flags))
 		schedule_timeout_uninterruptible(cfs_time_seconds(1));
 
 	CFS_FAIL_TIMEOUT(OBD_FAIL_QUOTA_RECALC, cfs_fail_val);
