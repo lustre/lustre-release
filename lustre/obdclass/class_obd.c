@@ -460,7 +460,7 @@ out_lcfg:
 
 		if (test_bit(OBDF_STOPPING, obd->obd_flags))
 			status = "ST";
-		else if (obd->obd_inactive)
+		else if (test_bit(OBDF_INACTIVE, obd->obd_flags))
 			status = "IN";
 		else if (test_bit(OBDF_SET_UP, obd->obd_flags))
 			status = "UP";

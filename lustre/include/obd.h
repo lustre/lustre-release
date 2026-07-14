@@ -650,6 +650,9 @@ enum {
 	OBDF_FORCE,		/* cleanup with > 0 obd refcount */
 	OBDF_FAIL,		/* cleanup with failover */
 	OBDF_NO_CONN,		/* deny new connections */
+	OBDF_INACTIVE,		/* device active/inactive
+				 * (for sysfs status only!!)
+				 */
 	OBDF_NUM_FLAGS,
 };
 
@@ -669,8 +672,6 @@ struct obd_device {
 	/* bitfield modification is protected by obd_dev_lock */
 	DECLARE_BITMAP(obd_flags, OBDF_NUM_FLAGS);
 	unsigned long
-		obd_inactive:1,		/* device active/inactive
-					 * (for /proc/status only!!) */
 		obd_no_ir:1,		/* no imperative recovery. */
 		obd_process_conf:1,	/* device is processing mgs config */
 		obd_checksum_dump:1,	/* dump pages upon cksum error */

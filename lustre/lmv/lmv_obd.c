@@ -54,7 +54,10 @@ void lmv_activate_target(struct lmv_obd *lmv, struct lmv_tgt_desc *tgt,
 	lmv->lmv_mdt_descs.ltd_lmv_desc.ld_active_tgt_count +=
 		(activate ? 1 : -1);
 
-	tgt->ltd_exp->exp_obd->obd_inactive = !activate;
+	if (activate)
+		clear_bit(OBDF_INACTIVE, tgt->ltd_exp->exp_obd->obd_flags);
+	else
+		set_bit(OBDF_INACTIVE, tgt->ltd_exp->exp_obd->obd_flags);
 }
 
 /**

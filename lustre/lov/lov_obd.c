@@ -250,7 +250,7 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
 	if (tgt->ltd_active) {
 		tgt->ltd_active = 0;
 		ltd->ltd_lov_desc.ld_active_tgt_count--;
-		tgt->ltd_exp->exp_obd->obd_inactive = 1;
+		set_bit(OBDF_INACTIVE, tgt->ltd_exp->exp_obd->obd_flags);
 	}
 
 	if (osc_obd) {
@@ -400,10 +400,12 @@ static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
 		tgt->ltd_active = active;
 		if (active) {
 			ltd->ltd_lov_desc.ld_active_tgt_count++;
-			tgt->ltd_exp->exp_obd->obd_inactive = 0;
+			clear_bit(OBDF_INACTIVE,
+				  tgt->ltd_exp->exp_obd->obd_flags);
 		} else {
 			ltd->ltd_lov_desc.ld_active_tgt_count--;
-			tgt->ltd_exp->exp_obd->obd_inactive = 1;
+			set_bit(OBDF_INACTIVE,
+				tgt->ltd_exp->exp_obd->obd_flags);
 		}
 	} else {
 		CERROR("%s: unknown event %d for uuid %s\n", obd->obd_name,
