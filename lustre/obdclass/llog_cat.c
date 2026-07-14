@@ -252,10 +252,10 @@ out:
 	if (rc == LLOG_DEL_PLAIN || rc == LLOG_DEL_RECORD)
 		/* clear wrong catalog entry */
 		rc = llog_cat_cleanup(env, cat_llh, llh, rec->lrh_index);
-	else if (rc == LLOG_SKIP_PLAIN)
+#endif
+	if (rc == LLOG_SKIP_PLAIN)
 		/* processing callback ask to skip the llog -> continue */
 		rc = 0;
-#endif
 	if (llh)
 		llog_handle_put(env, llh);
 
