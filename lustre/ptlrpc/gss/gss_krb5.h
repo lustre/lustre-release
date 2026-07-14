@@ -91,20 +91,20 @@ struct krb5_ctx {
 };
 
 enum sgn_alg {
-        SGN_ALG_DES_MAC_MD5           = 0x0000,
-        SGN_ALG_MD2_5                 = 0x0001,
-        SGN_ALG_DES_MAC               = 0x0002,
-        SGN_ALG_3                     = 0x0003, /* not published */
-        SGN_ALG_HMAC_MD5              = 0x0011, /* microsoft w2k; no support */
-        SGN_ALG_HMAC_SHA1_DES3_KD     = 0x0004
+	SGN_ALG_DES_MAC_MD5           = 0x0000,
+	SGN_ALG_MD2_5                 = 0x0001,
+	SGN_ALG_DES_MAC               = 0x0002,
+	SGN_ALG_3                     = 0x0003, /* not published */
+	SGN_ALG_HMAC_MD5              = 0x0011, /* microsoft w2k; no support */
+	SGN_ALG_HMAC_SHA1_DES3_KD     = 0x0004
 };
 
 enum seal_alg {
-        SEAL_ALG_NONE                 = 0xffff,
-        SEAL_ALG_DES                  = 0x0000,
-        SEAL_ALG_1                    = 0x0001, /* not published */
-        SEAL_ALG_MICROSOFT_RC4        = 0x0010, /* microsoft w2k; no support */
-        SEAL_ALG_DES3KD               = 0x0002
+	SEAL_ALG_NONE                 = 0xffff,
+	SEAL_ALG_DES                  = 0x0000,
+	SEAL_ALG_1                    = 0x0001, /* not published */
+	SEAL_ALG_MICROSOFT_RC4        = 0x0010, /* microsoft w2k; no support */
+	SEAL_ALG_DES3KD               = 0x0002
 };
 
 #define CKSUMTYPE_CRC32                 0x0001

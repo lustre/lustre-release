@@ -36,7 +36,7 @@
  * that reverse contexts use a different range of numbers than regular
  * contexts because they are using the same key.  Therefore the IV/nonce
  * combination must be unique for them.  To accomplish this reverse contexts
- * use the the negative range of a 64-bit number and regular contexts use the
+ * use the negative range of a 64-bit number and regular contexts use the
  * postive range.  If the same IV/nonce combination were reused it would leak
  * information about the plaintext. */
 #define SK_IV_REV_START (1ULL << 63)
@@ -55,7 +55,7 @@ struct sk_ctx {
 struct sk_hdr {
 	__u64			skh_version;
 	__u64			skh_iv;
-} __attribute__((packed));
+} __packed;
 
 /* The format of SK wire data is similar to that of RFC3686 ESP Payload
  * (section 3) except instead of just an IV there is a struct sk_hdr.
@@ -76,6 +76,7 @@ static inline unsigned long sk_block_mask(unsigned long len, int blocksize)
 static int sk_fill_header(struct sk_ctx *skc, struct sk_hdr *skh)
 {
 	__u64 tmp_iv;
+
 	skh->skh_version = be64_to_cpu(SK_MSG_VERSION);
 
 	/* Always using inc_return so we don't use our initial numbers which
@@ -83,8 +84,7 @@ static int sk_fill_header(struct sk_ctx *skc, struct sk_hdr *skh)
 	tmp_iv = atomic64_inc_return(&skc->sc_iv);
 	skh->skh_iv = be64_to_cpu(tmp_iv);
 	if (tmp_iv == 0 || tmp_iv == SK_IV_REV_START) {
-		CERROR("Counter looped, connection must be reset to avoid "
-		       "plaintext information\n");
+		CERROR("Counter looped, connection must be reset to avoid plaintext information\n");
 		return GSS_S_FAILURE;
 	}
 
@@ -349,8 +349,9 @@ u32 sk_verify_hmac(enum cfs_crypto_hash_alg algo, rawobj_t *key,
 
 	checksum.len = cfs_crypto_hash_digestsize(algo);
 	if (token->len < checksum.len) {
-		CDEBUG(D_SEC, "Token received too short, expected %d "
-		       "received %d\n", token->len, checksum.len);
+		CDEBUG(D_SEC,
+		       "Token received too short, expected %u received %u\n",
+		       checksum.len, token->len);
 		return GSS_S_DEFECTIVE_TOKEN;
 	}
 
@@ -397,8 +398,9 @@ u32 sk_verify_bulk_hmac(enum cfs_crypto_hash_alg sc_hmac, rawobj_t *key,
 
 	checksum.len = cfs_crypto_hash_digestsize(sc_hmac);
 	if (token->len < checksum.len) {
-		CDEBUG(D_SEC, "Token received too short, expected %d "
-		       "received %d\n", token->len, checksum.len);
+		CDEBUG(D_SEC,
+		       "Token received too short, expected %u received %u\n",
+		       checksum.len, token->len);
 		return GSS_S_DEFECTIVE_TOKEN;
 	}
 
@@ -618,6 +620,7 @@ static __u32 sk_encrypt_bulk(struct crypto_sync_skcipher *tfm, __u8 *iv,
 	int i;
 	int rc;
 	int nob = 0;
+
 	SYNC_SKCIPHER_REQUEST_ON_STACK(req, tfm);
 
 	blocksize = crypto_sync_skcipher_blocksize(tfm);
@@ -666,6 +669,7 @@ static __u32 sk_decrypt_bulk(struct crypto_sync_skcipher *tfm, __u8 *iv,
 	int rc;
 	int pnob = 0;
 	int cnob = 0;
+
 	SYNC_SKCIPHER_REQUEST_ON_STACK(req, tfm);
 
 	sg_init_table(&ptxt, 1);
@@ -856,6 +860,7 @@ static
 void gss_delete_sec_context_sk(void *internal_context)
 {
 	struct sk_ctx *sk_context = internal_context;
+
 	sk_delete_context(sk_context);
 }
 

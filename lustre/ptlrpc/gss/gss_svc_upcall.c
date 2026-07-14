@@ -865,7 +865,7 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
 	nodemap_test_nid(&req->rq_peer.nid, rsi.si_nm_name,
 			 sizeof(rsi.si_nm_name));
 
-	/* Note that context handle is always 0 for for INIT. */
+	/* Note that context handle is always 0 for INIT. */
 	rc2 = rawobj_dup(&rsi.si_in_handle, &gw->gw_handle);
 	if (rc2) {
 		CERROR("%s: failed to duplicate context handle: rc = %d\n",

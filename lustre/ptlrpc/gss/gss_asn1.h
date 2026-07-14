@@ -66,21 +66,21 @@
 #define G_REFLECT                                (-2045022961L)
 #define G_WRONG_TOKID                            (-2045022960L)
 
-#define g_OID_equal(o1,o2) \
+#define g_OID_equal(o1, o2) \
    (((o1)->len == (o2)->len) && \
-    (memcmp((o1)->data,(o2)->data,(int) (o1)->len) == 0))
+    (memcmp((o1)->data, (o2)->data, (int) (o1)->len) == 0))
 
 __u32 g_verify_token_header(rawobj_t *mech,
-                            int *body_size,
-                            unsigned char **buf_in,
-                            int toksize);
+			    int *body_size,
+			    unsigned char **buf_in,
+			    int toksize);
 
 __u32 g_get_mech_oid(rawobj_t *mech,
-                     rawobj_t *in_buf);
+		     rawobj_t *in_buf);
 
 int g_token_size(rawobj_t *mech,
-                 unsigned int body_size);
+		 unsigned int body_size);
 
 void g_make_token_header(rawobj_t *mech,
-                         int body_size,
-                         unsigned char **buf);
+			 int body_size,
+			 unsigned char **buf);

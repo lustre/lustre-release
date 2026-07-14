@@ -49,13 +49,13 @@
 static DEFINE_SPINLOCK(krb5_seq_lock);
 
 struct krb5_enctype {
-        char           *ke_dispname;
-        char           *ke_enc_name;            /* linux tfm name */
-        char           *ke_hash_name;           /* linux tfm name */
-        int             ke_enc_mode;            /* linux tfm mode */
-        int             ke_hash_size;           /* checksum size */
-        int             ke_conf_size;           /* confounder size */
-        unsigned int    ke_hash_hmac:1;         /* is hmac? */
+	char           *ke_dispname;
+	char           *ke_enc_name;            /* linux tfm name */
+	char           *ke_hash_name;           /* linux tfm name */
+	int             ke_enc_mode;            /* linux tfm mode */
+	int             ke_hash_size;           /* checksum size */
+	int             ke_conf_size;           /* confounder size */
+	unsigned int    ke_hash_hmac:1;         /* is hmac? */
 };
 
 /*
@@ -98,7 +98,7 @@ static struct krb5_enctype enctypes[] = {
 	},
 };
 
-static const char * enctype2str(__u32 enctype)
+static const char *enctype2str(__u32 enctype)
 {
 	if (enctype < ARRAY_SIZE(enctypes) && enctypes[enctype].ke_dispname)
 		return enctypes[enctype].ke_dispname;
@@ -117,7 +117,7 @@ int krb5_init_keys(struct krb5_ctx *kctx)
 		return -1;
 	}
 
-        ke = &enctypes[kctx->kc_enctype];
+	ke = &enctypes[kctx->kc_enctype];
 
 	if (gss_keyblock_init(&kctx->kc_keye, ke->ke_enc_name, ke->ke_enc_mode))
 		return -1;
@@ -130,7 +130,7 @@ int krb5_init_keys(struct krb5_ctx *kctx)
 	    gss_keyblock_init(&kctx->kc_keyc, ke->ke_enc_name, ke->ke_enc_mode))
 		return -1;
 
-        return 0;
+	return 0;
 }
 
 static
@@ -297,7 +297,7 @@ out_err:
  */
 static
 __u32 gss_import_sec_context_kerberos(rawobj_t *inbuf,
-                                      struct gss_ctx *gctx)
+				      struct gss_ctx *gctx)
 {
 	struct krb5_ctx *kctx;
 	char *p = (char *)inbuf->data;
@@ -309,61 +309,61 @@ __u32 gss_import_sec_context_kerberos(rawobj_t *inbuf,
 		return GSS_S_FAILURE;
 	}
 
-        /* only support 0, 1 for the moment */
-        if (tmp_uint > 2) {
-                CERROR("Invalid version %u\n", tmp_uint);
-                return GSS_S_FAILURE;
-        }
+	/* only support 0, 1 for the moment */
+	if (tmp_uint > 2) {
+		CERROR("Invalid version %u\n", tmp_uint);
+		return GSS_S_FAILURE;
+	}
 
-        OBD_ALLOC_PTR(kctx);
-        if (!kctx)
-                return GSS_S_FAILURE;
+	OBD_ALLOC_PTR(kctx);
+	if (!kctx)
+		return GSS_S_FAILURE;
 
-        if (tmp_uint == 0 || tmp_uint == 1) {
-                kctx->kc_initiate = tmp_uint;
-                rc = import_context_rfc1964(kctx, p, end);
-        } else {
-                rc = import_context_rfc4121(kctx, p, end);
-        }
+	if (tmp_uint == 0 || tmp_uint == 1) {
+		kctx->kc_initiate = tmp_uint;
+		rc = import_context_rfc1964(kctx, p, end);
+	} else {
+		rc = import_context_rfc4121(kctx, p, end);
+	}
 
-        if (rc == 0)
-                rc = krb5_init_keys(kctx);
+	if (rc == 0)
+		rc = krb5_init_keys(kctx);
 
-        if (rc) {
-                delete_context_kerberos(kctx);
-                OBD_FREE_PTR(kctx);
+	if (rc) {
+		delete_context_kerberos(kctx);
+		OBD_FREE_PTR(kctx);
 
-                return GSS_S_FAILURE;
-        }
+		return GSS_S_FAILURE;
+	}
 
-        gctx->internal_ctx_id = kctx;
-        return GSS_S_COMPLETE;
+	gctx->internal_ctx_id = kctx;
+	return GSS_S_COMPLETE;
 }
 
 static
 __u32 gss_copy_reverse_context_kerberos(struct gss_ctx *gctx,
-                                        struct gss_ctx *gctx_new)
+					struct gss_ctx *gctx_new)
 {
-        struct krb5_ctx *kctx = gctx->internal_ctx_id;
-        struct krb5_ctx *knew;
+	struct krb5_ctx *kctx = gctx->internal_ctx_id;
+	struct krb5_ctx *knew;
 
-        OBD_ALLOC_PTR(knew);
-        if (!knew)
-                return GSS_S_FAILURE;
+	OBD_ALLOC_PTR(knew);
+	if (!knew)
+		return GSS_S_FAILURE;
 
-        knew->kc_initiate = kctx->kc_initiate ? 0 : 1;
-        knew->kc_cfx = kctx->kc_cfx;
-        knew->kc_seed_init = kctx->kc_seed_init;
-        knew->kc_have_acceptor_subkey = kctx->kc_have_acceptor_subkey;
-        knew->kc_endtime = kctx->kc_endtime;
+	knew->kc_initiate = kctx->kc_initiate ? 0 : 1;
+	knew->kc_cfx = kctx->kc_cfx;
+	knew->kc_seed_init = kctx->kc_seed_init;
+	knew->kc_have_acceptor_subkey = kctx->kc_have_acceptor_subkey;
+	knew->kc_endtime = kctx->kc_endtime;
 
-        memcpy(knew->kc_seed, kctx->kc_seed, sizeof(kctx->kc_seed));
-        knew->kc_seq_send = kctx->kc_seq_recv;
-        knew->kc_seq_recv = kctx->kc_seq_send;
-        knew->kc_enctype = kctx->kc_enctype;
+	memcpy(knew->kc_seed, kctx->kc_seed, sizeof(kctx->kc_seed));
+	knew->kc_seq_send = kctx->kc_seq_recv;
+	knew->kc_seq_recv = kctx->kc_seq_send;
+	knew->kc_enctype = kctx->kc_enctype;
 
-        if (rawobj_dup(&knew->kc_mech_used, &kctx->kc_mech_used))
-                goto out_err;
+	if (rawobj_dup(&knew->kc_mech_used, &kctx->kc_mech_used))
+		goto out_err;
 
 	if (gss_keyblock_dup(&knew->kc_keye, &kctx->kc_keye))
 		goto out_err;
@@ -371,36 +371,36 @@ __u32 gss_copy_reverse_context_kerberos(struct gss_ctx *gctx,
 		goto out_err;
 	if (gss_keyblock_dup(&knew->kc_keyc, &kctx->kc_keyc))
 		goto out_err;
-        if (krb5_init_keys(knew))
-                goto out_err;
+	if (krb5_init_keys(knew))
+		goto out_err;
 
-        gctx_new->internal_ctx_id = knew;
+	gctx_new->internal_ctx_id = knew;
 	CDEBUG(D_SEC, "successfully copied reverse context\n");
-        return GSS_S_COMPLETE;
+	return GSS_S_COMPLETE;
 
 out_err:
-        delete_context_kerberos(knew);
-        OBD_FREE_PTR(knew);
-        return GSS_S_FAILURE;
+	delete_context_kerberos(knew);
+	OBD_FREE_PTR(knew);
+	return GSS_S_FAILURE;
 }
 
 static
 __u32 gss_inquire_context_kerberos(struct gss_ctx *gctx,
 				   time64_t *endtime)
 {
-        struct krb5_ctx *kctx = gctx->internal_ctx_id;
+	struct krb5_ctx *kctx = gctx->internal_ctx_id;
 
 	*endtime = kctx->kc_endtime;
-        return GSS_S_COMPLETE;
+	return GSS_S_COMPLETE;
 }
 
 static
 void gss_delete_sec_context_kerberos(void *internal_ctx)
 {
-        struct krb5_ctx *kctx = internal_ctx;
+	struct krb5_ctx *kctx = internal_ctx;
 
-        delete_context_kerberos(kctx);
-        OBD_FREE_PTR(kctx);
+	delete_context_kerberos(kctx);
+	OBD_FREE_PTR(kctx);
 }
 
 /*
@@ -475,71 +475,71 @@ out_no_hash:
 }
 
 static void fill_krb5_header(struct krb5_ctx *kctx,
-                             struct krb5_header *khdr,
-                             int privacy)
+			     struct krb5_header *khdr,
+			     int privacy)
 {
-        unsigned char acceptor_flag;
+	unsigned char acceptor_flag;
 
-        acceptor_flag = kctx->kc_initiate ? 0 : FLAG_SENDER_IS_ACCEPTOR;
+	acceptor_flag = kctx->kc_initiate ? 0 : FLAG_SENDER_IS_ACCEPTOR;
 
-        if (privacy) {
-                khdr->kh_tok_id = cpu_to_be16(KG_TOK_WRAP_MSG);
-                khdr->kh_flags = acceptor_flag | FLAG_WRAP_CONFIDENTIAL;
-                khdr->kh_ec = cpu_to_be16(0);
-                khdr->kh_rrc = cpu_to_be16(0);
-        } else {
-                khdr->kh_tok_id = cpu_to_be16(KG_TOK_MIC_MSG);
-                khdr->kh_flags = acceptor_flag;
-                khdr->kh_ec = cpu_to_be16(0xffff);
-                khdr->kh_rrc = cpu_to_be16(0xffff);
-        }
+	if (privacy) {
+		khdr->kh_tok_id = cpu_to_be16(KG_TOK_WRAP_MSG);
+		khdr->kh_flags = acceptor_flag | FLAG_WRAP_CONFIDENTIAL;
+		khdr->kh_ec = cpu_to_be16(0);
+		khdr->kh_rrc = cpu_to_be16(0);
+	} else {
+		khdr->kh_tok_id = cpu_to_be16(KG_TOK_MIC_MSG);
+		khdr->kh_flags = acceptor_flag;
+		khdr->kh_ec = cpu_to_be16(0xffff);
+		khdr->kh_rrc = cpu_to_be16(0xffff);
+	}
 
-        khdr->kh_filler = 0xff;
+	khdr->kh_filler = 0xff;
 	spin_lock(&krb5_seq_lock);
 	khdr->kh_seq = cpu_to_be64(kctx->kc_seq_send++);
 	spin_unlock(&krb5_seq_lock);
 }
 
 static __u32 verify_krb5_header(struct krb5_ctx *kctx,
-                                struct krb5_header *khdr,
-                                int privacy)
+				struct krb5_header *khdr,
+				int privacy)
 {
-        unsigned char acceptor_flag;
-        __u16         tok_id, ec_rrc;
+	unsigned char acceptor_flag;
+	__u16         tok_id, ec_rrc;
 
-        acceptor_flag = kctx->kc_initiate ? FLAG_SENDER_IS_ACCEPTOR : 0;
+	acceptor_flag = kctx->kc_initiate ? FLAG_SENDER_IS_ACCEPTOR : 0;
 
-        if (privacy) {
-                tok_id = KG_TOK_WRAP_MSG;
-                ec_rrc = 0x0;
-        } else {
-                tok_id = KG_TOK_MIC_MSG;
-                ec_rrc = 0xffff;
-        }
+	if (privacy) {
+		tok_id = KG_TOK_WRAP_MSG;
+		ec_rrc = 0x0;
+	} else {
+		tok_id = KG_TOK_MIC_MSG;
+		ec_rrc = 0xffff;
+	}
 
-        /* sanity checks */
-        if (be16_to_cpu(khdr->kh_tok_id) != tok_id) {
-                CERROR("bad token id\n");
-                return GSS_S_DEFECTIVE_TOKEN;
-        }
-        if ((khdr->kh_flags & FLAG_SENDER_IS_ACCEPTOR) != acceptor_flag) {
-                CERROR("bad direction flag\n");
-                return GSS_S_BAD_SIG;
-        }
-        if (privacy && (khdr->kh_flags & FLAG_WRAP_CONFIDENTIAL) == 0) {
-                CERROR("missing confidential flag\n");
-                return GSS_S_BAD_SIG;
-        }
-        if (khdr->kh_filler != 0xff) {
-                CERROR("bad filler\n");
-                return GSS_S_DEFECTIVE_TOKEN;
-        }
-        if (be16_to_cpu(khdr->kh_ec) != ec_rrc ||
-            be16_to_cpu(khdr->kh_rrc) != ec_rrc) {
-                CERROR("bad EC or RRC\n");
-                return GSS_S_DEFECTIVE_TOKEN;
-        }
-        return GSS_S_COMPLETE;
+	/* sanity checks */
+	if (be16_to_cpu(khdr->kh_tok_id) != tok_id) {
+		CERROR("bad token id\n");
+		return GSS_S_DEFECTIVE_TOKEN;
+	}
+	if ((khdr->kh_flags & FLAG_SENDER_IS_ACCEPTOR) != acceptor_flag) {
+		CERROR("bad direction flag\n");
+		return GSS_S_BAD_SIG;
+	}
+	if (privacy && (khdr->kh_flags & FLAG_WRAP_CONFIDENTIAL) == 0) {
+		CERROR("missing confidential flag\n");
+		return GSS_S_BAD_SIG;
+	}
+	if (khdr->kh_filler != 0xff) {
+		CERROR("bad filler\n");
+		return GSS_S_DEFECTIVE_TOKEN;
+	}
+	if (be16_to_cpu(khdr->kh_ec) != ec_rrc ||
+	    be16_to_cpu(khdr->kh_rrc) != ec_rrc) {
+		CERROR("bad EC or RRC\n");
+		return GSS_S_DEFECTIVE_TOKEN;
+	}
+	return GSS_S_COMPLETE;
 }
 
 static
@@ -645,6 +645,7 @@ int krb5_encrypt_bulk(struct crypto_sync_skcipher *tfm,
 	struct scatterlist src, dst;
 	struct sg_table sg_src, sg_dst;
 	int blocksize, i, rc, nob = 0;
+
 	SYNC_SKCIPHER_REQUEST_ON_STACK(req, tfm);
 
 	LASSERT(desc->bd_iov_count);
@@ -724,15 +725,15 @@ int krb5_encrypt_bulk(struct crypto_sync_skcipher *tfm,
 	gss_teardown_sgtable(&sg_dst);
 	gss_teardown_sgtable(&sg_src);
 
-        if (rc) {
-                CERROR("error to encrypt krb5 header: %d\n", rc);
-                return rc;
-        }
+	if (rc) {
+		CERROR("error to encrypt krb5 header: %d\n", rc);
+		return rc;
+	}
 
-        if (adj_nob)
-                desc->bd_nob = nob;
+	if (adj_nob)
+		desc->bd_nob = nob;
 
-        return 0;
+	return 0;
 }
 
 /*
@@ -766,6 +767,7 @@ int krb5_decrypt_bulk(struct crypto_sync_skcipher *tfm,
 	struct sg_table sg_src, sg_dst;
 	int ct_nob = 0, pt_nob = 0;
 	int blocksize, i, rc;
+
 	SYNC_SKCIPHER_REQUEST_ON_STACK(req, tfm);
 
 	LASSERT(desc->bd_iov_count);
@@ -1397,55 +1399,55 @@ static int gss_display_kerberos(struct gss_ctx *ctx,
 }
 
 static struct gss_api_ops gss_kerberos_ops = {
-        .gss_import_sec_context     = gss_import_sec_context_kerberos,
-        .gss_copy_reverse_context   = gss_copy_reverse_context_kerberos,
-        .gss_inquire_context        = gss_inquire_context_kerberos,
-        .gss_get_mic                = gss_get_mic_kerberos,
-        .gss_verify_mic             = gss_verify_mic_kerberos,
-        .gss_wrap                   = gss_wrap_kerberos,
-        .gss_unwrap                 = gss_unwrap_kerberos,
-        .gss_prep_bulk              = gss_prep_bulk_kerberos,
-        .gss_wrap_bulk              = gss_wrap_bulk_kerberos,
-        .gss_unwrap_bulk            = gss_unwrap_bulk_kerberos,
-        .gss_delete_sec_context     = gss_delete_sec_context_kerberos,
-        .gss_display                = gss_display_kerberos,
+	.gss_import_sec_context     = gss_import_sec_context_kerberos,
+	.gss_copy_reverse_context   = gss_copy_reverse_context_kerberos,
+	.gss_inquire_context        = gss_inquire_context_kerberos,
+	.gss_get_mic                = gss_get_mic_kerberos,
+	.gss_verify_mic             = gss_verify_mic_kerberos,
+	.gss_wrap                   = gss_wrap_kerberos,
+	.gss_unwrap                 = gss_unwrap_kerberos,
+	.gss_prep_bulk              = gss_prep_bulk_kerberos,
+	.gss_wrap_bulk              = gss_wrap_bulk_kerberos,
+	.gss_unwrap_bulk            = gss_unwrap_bulk_kerberos,
+	.gss_delete_sec_context     = gss_delete_sec_context_kerberos,
+	.gss_display                = gss_display_kerberos,
 };
 
 static struct subflavor_desc gss_kerberos_sfs[] = {
-        {
-                .sf_subflavor   = SPTLRPC_SUBFLVR_KRB5N,
-                .sf_qop         = 0,
-                .sf_service     = SPTLRPC_SVC_NULL,
-                .sf_name        = "krb5n"
-        },
-        {
-                .sf_subflavor   = SPTLRPC_SUBFLVR_KRB5A,
-                .sf_qop         = 0,
-                .sf_service     = SPTLRPC_SVC_AUTH,
-                .sf_name        = "krb5a"
-        },
-        {
-                .sf_subflavor   = SPTLRPC_SUBFLVR_KRB5I,
-                .sf_qop         = 0,
-                .sf_service     = SPTLRPC_SVC_INTG,
-                .sf_name        = "krb5i"
-        },
-        {
-                .sf_subflavor   = SPTLRPC_SUBFLVR_KRB5P,
-                .sf_qop         = 0,
-                .sf_service     = SPTLRPC_SVC_PRIV,
-                .sf_name        = "krb5p"
-        },
+	{
+		.sf_subflavor   = SPTLRPC_SUBFLVR_KRB5N,
+		.sf_qop         = 0,
+		.sf_service     = SPTLRPC_SVC_NULL,
+		.sf_name        = "krb5n"
+	},
+	{
+		.sf_subflavor   = SPTLRPC_SUBFLVR_KRB5A,
+		.sf_qop         = 0,
+		.sf_service     = SPTLRPC_SVC_AUTH,
+		.sf_name        = "krb5a"
+	},
+	{
+		.sf_subflavor   = SPTLRPC_SUBFLVR_KRB5I,
+		.sf_qop         = 0,
+		.sf_service     = SPTLRPC_SVC_INTG,
+		.sf_name        = "krb5i"
+	},
+	{
+		.sf_subflavor   = SPTLRPC_SUBFLVR_KRB5P,
+		.sf_qop         = 0,
+		.sf_service     = SPTLRPC_SVC_PRIV,
+		.sf_name        = "krb5p"
+	},
 };
 
 static struct gss_api_mech gss_kerberos_mech = {
 	/* .gm_owner uses default NULL value for THIS_MODULE */
-        .gm_name        = "krb5",
-        .gm_oid         = (rawobj_t)
-                                {9, "\052\206\110\206\367\022\001\002\002"},
-        .gm_ops         = &gss_kerberos_ops,
-        .gm_sf_num      = 4,
-        .gm_sfs         = gss_kerberos_sfs,
+	.gm_name        = "krb5",
+	.gm_oid         = (rawobj_t)
+				{9, "\052\206\110\206\367\022\001\002\002"},
+	.gm_ops         = &gss_kerberos_ops,
+	.gm_sf_num      = 4,
+	.gm_sfs         = gss_kerberos_sfs,
 };
 
 int __init init_kerberos_module(void)
@@ -1460,5 +1462,5 @@ int __init init_kerberos_module(void)
 
 void cleanup_kerberos_module(void)
 {
-        lgss_mech_unregister(&gss_kerberos_mech);
+	lgss_mech_unregister(&gss_kerberos_mech);
 }

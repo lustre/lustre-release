@@ -135,36 +135,36 @@ int ctx_init_pack_request(struct obd_import *imp,
 
 static
 int ctx_init_parse_reply(struct lustre_msg *msg, int swabbed,
-                         char __user *outbuf, long outlen)
+			 char __user *outbuf, long outlen)
 {
-        struct gss_rep_header   *ghdr;
-        __u32                    obj_len, round_len;
-        __u32                    status, effective = 0;
+	struct gss_rep_header   *ghdr;
+	__u32                    obj_len, round_len;
+	__u32                    status, effective = 0;
 
-        if (msg->lm_bufcount != 3) {
-                CERROR("unexpected bufcount %u\n", msg->lm_bufcount);
-                return -EPROTO;
-        }
+	if (msg->lm_bufcount != 3) {
+		CERROR("unexpected bufcount %u\n", msg->lm_bufcount);
+		return -EPROTO;
+	}
 
-        ghdr = (struct gss_rep_header *) gss_swab_header(msg, 0, swabbed);
-        if (ghdr == NULL) {
-                CERROR("unable to extract gss reply header\n");
-                return -EPROTO;
-        }
+	ghdr = (struct gss_rep_header *) gss_swab_header(msg, 0, swabbed);
+	if (ghdr == NULL) {
+		CERROR("unable to extract gss reply header\n");
+		return -EPROTO;
+	}
 
-        if (ghdr->gh_version != PTLRPC_GSS_VERSION) {
-                CERROR("invalid gss version %u\n", ghdr->gh_version);
-                return -EPROTO;
-        }
+	if (ghdr->gh_version != PTLRPC_GSS_VERSION) {
+		CERROR("invalid gss version %u\n", ghdr->gh_version);
+		return -EPROTO;
+	}
 
 	if (outlen < (4 + 2) * 4 + round_up(ghdr->gh_handle.len, 4) +
 		     round_up(msg->lm_buflens[2], 4)) {
-                CERROR("output buffer size %ld too small\n", outlen);
-                return -EFAULT;
-        }
+		CERROR("output buffer size %ld too small\n", outlen);
+		return -EFAULT;
+	}
 
-        status = 0;
-        effective = 0;
+	status = 0;
+	effective = 0;
 
 	if (copy_to_user(outbuf, &status, 4))
 		return -EFAULT;
@@ -382,14 +382,15 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
 	struct ptlrpc_request	*req;
 	struct ptlrpc_user_desc	*pud;
 	int			 rc;
+
 	ENTRY;
 
 	LASSERT(atomic_read(&ctx->cc_refcount) > 0);
 
 	if (cli_ctx_is_error(ctx) || !cli_ctx_is_uptodate(ctx)) {
-		CDEBUG(D_SEC, "ctx %p(%u->%s at %s) not uptodate, "
-		       "don't send destroy rpc\n", ctx,
-		       ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
+		CDEBUG(D_SEC,
+		       "ctx %p(%u->%s at %s) not uptodate, don't send destroy rpc\n",
+		       ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
 		       sec2nid_str(ctx->cc_sec));
 		RETURN(0);
 	}
@@ -403,48 +404,49 @@ int gss_do_ctx_fini_rpc(struct gss_cli_ctx *gctx)
 	       ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
 	       sec2nid_str(ctx->cc_sec));
 
-        gctx->gc_proc = PTLRPC_GSS_PROC_DESTROY;
+	gctx->gc_proc = PTLRPC_GSS_PROC_DESTROY;
 
-        req = ptlrpc_request_alloc(imp, &RQF_SEC_CTX);
-        if (req == NULL) {
-                CWARN("ctx %p(%u): fail to prepare rpc, destroy locally\n",
-                      ctx, ctx->cc_vcred.vc_uid);
-                GOTO(out, rc = -ENOMEM);
-        }
+	req = ptlrpc_request_alloc(imp, &RQF_SEC_CTX);
+	if (req == NULL) {
+		CWARN("ctx %p(%u): fail to prepare rpc, destroy locally\n",
+		      ctx, ctx->cc_vcred.vc_uid);
+		GOTO(out, rc = -ENOMEM);
+	}
 
-        rc = ptlrpc_request_bufs_pack(req, LUSTRE_OBD_VERSION, SEC_CTX_FINI,
-                                      NULL, ctx);
+	rc = ptlrpc_request_bufs_pack(req, LUSTRE_OBD_VERSION, SEC_CTX_FINI,
+				      NULL, ctx);
 	if (rc)
 		GOTO(out_ref, rc);
 
-        /* fix the user desc */
-        if (req->rq_pack_udesc) {
-                /* we rely the fact that this request is in AUTH mode,
-                 * and user_desc at offset 2. */
-                pud = lustre_msg_buf(req->rq_reqbuf, 2, sizeof(*pud));
-                LASSERT(pud);
-                pud->pud_uid = pud->pud_fsuid = ctx->cc_vcred.vc_uid;
-                pud->pud_gid = pud->pud_fsgid = ctx->cc_vcred.vc_gid;
-                pud->pud_cap = 0;
-                pud->pud_ngroups = 0;
-        }
+	/* fix the user desc */
+	if (req->rq_pack_udesc) {
+		/* we rely the fact that this request is in AUTH mode,
+		 * and user_desc at offset 2.
+		 */
+		pud = lustre_msg_buf(req->rq_reqbuf, 2, sizeof(*pud));
+		LASSERT(pud);
+		pud->pud_uid = pud->pud_fsuid = ctx->cc_vcred.vc_uid;
+		pud->pud_gid = pud->pud_fsgid = ctx->cc_vcred.vc_gid;
+		pud->pud_cap = 0;
+		pud->pud_ngroups = 0;
+	}
 
-        req->rq_phase = RQ_PHASE_RPC;
-        rc = ptl_send_rpc(req, 1);
-        if (rc)
-		CWARN("ctx %p(%u->%s at %s): rpc error %d, destroy locally\n", ctx,
-		      ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
+	req->rq_phase = RQ_PHASE_RPC;
+	rc = ptl_send_rpc(req, 1);
+	if (rc)
+		CWARN("ctx %p(%u->%s at %s): rpc error %d, destroy locally\n",
+		      ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
 		      sec2nid_str(ctx->cc_sec), rc);
 
 out_ref:
 	ptlrpc_req_put(req);
 out:
-        RETURN(rc);
+	RETURN(rc);
 }
 
 int __init gss_init_cli_upcall(void)
 {
-        return 0;
+	return 0;
 }
 
 void gss_exit_cli_upcall(void)

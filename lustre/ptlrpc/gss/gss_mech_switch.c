@@ -70,7 +70,7 @@ struct gss_api_mech *lgss_name_to_mech(char *name)
 
 	spin_lock(&registered_mechs_lock);
 	list_for_each_entry(pos, &registered_mechs, gm_list) {
-		if (0 == strcmp(name, pos->gm_name)) {
+		if (strcmp(name, pos->gm_name) == 0) {
 			if (!try_module_get(pos->gm_owner))
 				continue;
 			gm = pos;
@@ -85,13 +85,13 @@ struct gss_api_mech *lgss_name_to_mech(char *name)
 static inline
 int mech_supports_subflavor(struct gss_api_mech *gm, __u32 subflavor)
 {
-        int i;
+	int i;
 
-        for (i = 0; i < gm->gm_sf_num; i++) {
-                if (gm->gm_sfs[i].sf_subflavor == subflavor)
-                        return 1;
-        }
-        return 0;
+	for (i = 0; i < gm->gm_sf_num; i++) {
+		if (gm->gm_sfs[i].sf_subflavor == subflavor)
+			return 1;
+	}
+	return 0;
 }
 
 struct gss_api_mech *lgss_subflavor_to_mech(__u32 subflavor)
@@ -121,8 +121,8 @@ void lgss_mech_put(struct gss_api_mech *gm)
 /* The mech could probably be determined from the token instead, but it's just
  * as easy for now to pass it in. */
 __u32 lgss_import_sec_context(rawobj_t *input_token,
-                              struct gss_api_mech *mech,
-                              struct gss_ctx **ctx_id)
+			      struct gss_api_mech *mech,
+			      struct gss_ctx **ctx_id)
 {
 	OBD_ALLOC_PTR(*ctx_id);
 	if (*ctx_id == NULL)
@@ -171,14 +171,14 @@ __u32 lgss_copy_reverse_context(struct gss_ctx *ctx_id,
 __u32 lgss_inquire_context(struct gss_ctx *context_handle,
 			   time64_t *endtime)
 {
-        LASSERT(context_handle);
-        LASSERT(context_handle->mech_type);
-        LASSERT(context_handle->mech_type->gm_ops);
-        LASSERT(context_handle->mech_type->gm_ops->gss_inquire_context);
+	LASSERT(context_handle);
+	LASSERT(context_handle->mech_type);
+	LASSERT(context_handle->mech_type->gm_ops);
+	LASSERT(context_handle->mech_type->gm_ops->gss_inquire_context);
 
-        return context_handle->mech_type->gm_ops
-                ->gss_inquire_context(context_handle,
-                                      endtime);
+	return context_handle->mech_type->gm_ops
+		->gss_inquire_context(context_handle,
+				      endtime);
 }
 
 /* gss_get_mic: compute a mic over message and return mic_token. */
@@ -189,18 +189,18 @@ __u32 lgss_get_mic(struct gss_ctx *context_handle,
 		   struct bio_vec *iovs,
 		   rawobj_t *mic_token)
 {
-        LASSERT(context_handle);
-        LASSERT(context_handle->mech_type);
-        LASSERT(context_handle->mech_type->gm_ops);
-        LASSERT(context_handle->mech_type->gm_ops->gss_get_mic);
+	LASSERT(context_handle);
+	LASSERT(context_handle->mech_type);
+	LASSERT(context_handle->mech_type->gm_ops);
+	LASSERT(context_handle->mech_type->gm_ops->gss_get_mic);
 
-        return context_handle->mech_type->gm_ops
-                ->gss_get_mic(context_handle,
-                              msgcnt,
-                              msg,
-                              iovcnt,
-                              iovs,
-                              mic_token);
+	return context_handle->mech_type->gm_ops
+		->gss_get_mic(context_handle,
+			      msgcnt,
+			      msg,
+			      iovcnt,
+			      iovs,
+			      mic_token);
 }
 
 /* gss_verify_mic: check whether the provided mic_token verifies message. */
@@ -211,88 +211,88 @@ __u32 lgss_verify_mic(struct gss_ctx *context_handle,
 		      struct bio_vec *iovs,
 		      rawobj_t *mic_token)
 {
-        LASSERT(context_handle);
-        LASSERT(context_handle->mech_type);
-        LASSERT(context_handle->mech_type->gm_ops);
-        LASSERT(context_handle->mech_type->gm_ops->gss_verify_mic);
+	LASSERT(context_handle);
+	LASSERT(context_handle->mech_type);
+	LASSERT(context_handle->mech_type->gm_ops);
+	LASSERT(context_handle->mech_type->gm_ops->gss_verify_mic);
 
-        return context_handle->mech_type->gm_ops
-                ->gss_verify_mic(context_handle,
-                                 msgcnt,
-                                 msg,
-                                 iovcnt,
-                                 iovs,
-                                 mic_token);
+	return context_handle->mech_type->gm_ops
+		->gss_verify_mic(context_handle,
+				 msgcnt,
+				 msg,
+				 iovcnt,
+				 iovs,
+				 mic_token);
 }
 
 __u32 lgss_wrap(struct gss_ctx *context_handle,
-                rawobj_t *gsshdr,
-                rawobj_t *msg,
-                int msg_buflen,
-                rawobj_t *out_token)
+		rawobj_t *gsshdr,
+		rawobj_t *msg,
+		int msg_buflen,
+		rawobj_t *out_token)
 {
-        LASSERT(context_handle);
-        LASSERT(context_handle->mech_type);
-        LASSERT(context_handle->mech_type->gm_ops);
-        LASSERT(context_handle->mech_type->gm_ops->gss_wrap);
+	LASSERT(context_handle);
+	LASSERT(context_handle->mech_type);
+	LASSERT(context_handle->mech_type->gm_ops);
+	LASSERT(context_handle->mech_type->gm_ops->gss_wrap);
 
-        return context_handle->mech_type->gm_ops
-                ->gss_wrap(context_handle, gsshdr, msg, msg_buflen, out_token);
+	return context_handle->mech_type->gm_ops
+		->gss_wrap(context_handle, gsshdr, msg, msg_buflen, out_token);
 }
 
 __u32 lgss_unwrap(struct gss_ctx *context_handle,
-                  rawobj_t *gsshdr,
-                  rawobj_t *token,
-                  rawobj_t *out_msg)
+		  rawobj_t *gsshdr,
+		  rawobj_t *token,
+		  rawobj_t *out_msg)
 {
-        LASSERT(context_handle);
-        LASSERT(context_handle->mech_type);
-        LASSERT(context_handle->mech_type->gm_ops);
-        LASSERT(context_handle->mech_type->gm_ops->gss_unwrap);
+	LASSERT(context_handle);
+	LASSERT(context_handle->mech_type);
+	LASSERT(context_handle->mech_type->gm_ops);
+	LASSERT(context_handle->mech_type->gm_ops->gss_unwrap);
 
-        return context_handle->mech_type->gm_ops
-                ->gss_unwrap(context_handle, gsshdr, token, out_msg);
+	return context_handle->mech_type->gm_ops
+		->gss_unwrap(context_handle, gsshdr, token, out_msg);
 }
 
 
 __u32 lgss_prep_bulk(struct gss_ctx *context_handle,
-                     struct ptlrpc_bulk_desc *desc)
+		     struct ptlrpc_bulk_desc *desc)
 {
-        LASSERT(context_handle);
-        LASSERT(context_handle->mech_type);
-        LASSERT(context_handle->mech_type->gm_ops);
-        LASSERT(context_handle->mech_type->gm_ops->gss_prep_bulk);
+	LASSERT(context_handle);
+	LASSERT(context_handle->mech_type);
+	LASSERT(context_handle->mech_type->gm_ops);
+	LASSERT(context_handle->mech_type->gm_ops->gss_prep_bulk);
 
-        return context_handle->mech_type->gm_ops
-                ->gss_prep_bulk(context_handle, desc);
+	return context_handle->mech_type->gm_ops
+		->gss_prep_bulk(context_handle, desc);
 }
 
 __u32 lgss_wrap_bulk(struct gss_ctx *context_handle,
-                     struct ptlrpc_bulk_desc *desc,
-                     rawobj_t *token,
-                     int adj_nob)
+		     struct ptlrpc_bulk_desc *desc,
+		     rawobj_t *token,
+		     int adj_nob)
 {
-        LASSERT(context_handle);
-        LASSERT(context_handle->mech_type);
-        LASSERT(context_handle->mech_type->gm_ops);
-        LASSERT(context_handle->mech_type->gm_ops->gss_wrap_bulk);
+	LASSERT(context_handle);
+	LASSERT(context_handle->mech_type);
+	LASSERT(context_handle->mech_type->gm_ops);
+	LASSERT(context_handle->mech_type->gm_ops->gss_wrap_bulk);
 
-        return context_handle->mech_type->gm_ops
-                ->gss_wrap_bulk(context_handle, desc, token, adj_nob);
+	return context_handle->mech_type->gm_ops
+		->gss_wrap_bulk(context_handle, desc, token, adj_nob);
 }
 
 __u32 lgss_unwrap_bulk(struct gss_ctx *context_handle,
-                       struct ptlrpc_bulk_desc *desc,
-                       rawobj_t *token,
-                       int adj_nob)
+		       struct ptlrpc_bulk_desc *desc,
+		       rawobj_t *token,
+		       int adj_nob)
 {
-        LASSERT(context_handle);
-        LASSERT(context_handle->mech_type);
-        LASSERT(context_handle->mech_type->gm_ops);
-        LASSERT(context_handle->mech_type->gm_ops->gss_unwrap_bulk);
+	LASSERT(context_handle);
+	LASSERT(context_handle->mech_type);
+	LASSERT(context_handle->mech_type->gm_ops);
+	LASSERT(context_handle->mech_type->gm_ops->gss_unwrap_bulk);
 
-        return context_handle->mech_type->gm_ops
-                ->gss_unwrap_bulk(context_handle, desc, token, adj_nob);
+	return context_handle->mech_type->gm_ops
+		->gss_unwrap_bulk(context_handle, desc, token, adj_nob);
 }
 
 /* gss_delete_sec_context: free all resources associated with context_handle.
@@ -325,13 +325,13 @@ __u32 lgss_delete_sec_context(struct gss_ctx **context_handle)
 }
 
 int lgss_display(struct gss_ctx *ctx,
-                 char           *buf,
-                 int             bufsize)
+		 char           *buf,
+		 int             bufsize)
 {
-        LASSERT(ctx);
-        LASSERT(ctx->mech_type);
-        LASSERT(ctx->mech_type->gm_ops);
-        LASSERT(ctx->mech_type->gm_ops->gss_display);
+	LASSERT(ctx);
+	LASSERT(ctx->mech_type);
+	LASSERT(ctx->mech_type->gm_ops);
+	LASSERT(ctx->mech_type->gm_ops->gss_display);
 
-        return ctx->mech_type->gm_ops->gss_display(ctx, buf, bufsize);
+	return ctx->mech_type->gm_ops->gss_display(ctx, buf, bufsize);
 }

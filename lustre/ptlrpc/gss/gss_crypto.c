@@ -66,6 +66,7 @@ int gss_keyblock_dup(struct gss_keyblock *new, struct gss_keyblock *kb)
 int gss_get_bytes(char **ptr, const char *end, void *res, size_t len)
 {
 	char *p, *q;
+
 	p = *ptr;
 	q = p + len;
 	if (q > end || q < p)
@@ -204,6 +205,7 @@ int gss_crypt_generic(struct crypto_sync_skcipher *tfm, int decrypt,
 	struct sg_table sg_out;
 	__u8 local_iv[16] = {0};
 	__u32 ret = -EINVAL;
+
 	SYNC_SKCIPHER_REQUEST_ON_STACK(req, tfm);
 
 	LASSERT(tfm);
@@ -381,6 +383,7 @@ int gss_crypt_rawobjs(struct crypto_sync_skcipher *tfm, __u8 *iv,
 	__u8 *buf;
 	__u32 datalen = 0;
 	int i, rc;
+
 	SYNC_SKCIPHER_REQUEST_ON_STACK(req, tfm);
 
 	ENTRY;

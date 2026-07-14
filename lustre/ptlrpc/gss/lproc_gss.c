@@ -489,6 +489,7 @@ void gss_exit_tunables(void)
 int gss_init_tunables(void)
 {
 	int rc;
+
 	spin_lock_init(&gss_stat_oos.oos_lock);
 
 	gss_debugfs_dir = debugfs_create_dir("gss", sptlrpc_debugfs_dir);

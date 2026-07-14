@@ -49,7 +49,7 @@ static struct ptlrpc_ctx_ops gss_keyring_ctxops;
 static struct key_type gss_key_type;
 
 static int sec_install_rctx_kr(struct ptlrpc_sec *sec,
-                               struct ptlrpc_svc_ctx *svc_ctx);
+			       struct ptlrpc_svc_ctx *svc_ctx);
 static void request_key_unlink(struct key *key, bool fullsearch);
 
 /*
@@ -132,17 +132,17 @@ static void ctx_start_timer_kr(struct ptlrpc_cli_ctx *ctx, time64_t timeout)
 static
 void ctx_clear_timer_kr(struct ptlrpc_cli_ctx *ctx)
 {
-        struct gss_cli_ctx_keyring *gctx_kr = ctx2gctx_keyring(ctx);
+	struct gss_cli_ctx_keyring *gctx_kr = ctx2gctx_keyring(ctx);
 	struct timer_list          *timer = &gctx_kr->gck_timer;
 
-        CDEBUG(D_SEC, "ctx %p, key %p\n", ctx, gctx_kr->gck_key);
+	CDEBUG(D_SEC, "ctx %p, key %p\n", ctx, gctx_kr->gck_key);
 
-        timer_delete_sync(timer);
+	timer_delete_sync(timer);
 }
 
 static
 struct ptlrpc_cli_ctx *ctx_create_kr(struct ptlrpc_sec *sec,
-                                     struct vfs_cred *vcred)
+				     struct vfs_cred *vcred)
 {
 	struct ptlrpc_cli_ctx      *ctx;
 	struct gss_cli_ctx_keyring *gctx_kr;
@@ -174,12 +174,12 @@ static void ctx_destroy_kr(struct ptlrpc_cli_ctx *ctx)
 
 	CDEBUG(D_SEC, "destroying ctx %p\n", ctx);
 
-        /* at this time the association with key has been broken. */
-        LASSERT(sec);
+	/* at this time the association with key has been broken. */
+	LASSERT(sec);
 	LASSERT(atomic_read(&sec->ps_refcount) > 0);
 	LASSERT(atomic_read(&sec->ps_nctx) > 0);
 	LASSERT(test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) == 0);
-        LASSERT(gctx_kr->gck_key == NULL);
+	LASSERT(gctx_kr->gck_key == NULL);
 
 	ctx_clear_timer_kr(ctx);
 
@@ -381,8 +381,8 @@ static void unbind_key_locked(struct key *key)
 {
 	struct ptlrpc_cli_ctx *ctx = key_get_payload(key, 0);
 
-        if (ctx)
-                unbind_key_ctx(key, ctx);
+	if (ctx)
+		unbind_key_ctx(key, ctx);
 }
 
 /*
@@ -390,8 +390,8 @@ static void unbind_key_locked(struct key *key)
  */
 static void kill_ctx_kr(struct ptlrpc_cli_ctx *ctx)
 {
-        if (ctx_unlist_kr(ctx, 0))
-                unbind_ctx_kr(ctx);
+	if (ctx_unlist_kr(ctx, 0))
+		unbind_ctx_kr(ctx);
 }
 
 /*
@@ -402,8 +402,8 @@ static void kill_key_locked(struct key *key)
 {
 	struct ptlrpc_cli_ctx *ctx = key_get_payload(key, 0);
 
-        if (ctx && ctx_unlist_kr(ctx, 0))
-                unbind_key_locked(key);
+	if (ctx && ctx_unlist_kr(ctx, 0))
+		unbind_key_locked(key);
 }
 
 /*
@@ -448,7 +448,7 @@ static void dispose_ctx_list_kr(struct hlist_head *freelist)
  * reference taken or NULL.
  */
 static
-struct ptlrpc_cli_ctx * sec_lookup_root_ctx_kr(struct ptlrpc_sec *sec)
+struct ptlrpc_cli_ctx *sec_lookup_root_ctx_kr(struct ptlrpc_sec *sec)
 {
 	struct gss_sec_keyring  *gsec_kr = sec2gsec_keyring(sec);
 	struct ptlrpc_cli_ctx   *ctx = NULL;
@@ -498,8 +498,8 @@ struct ptlrpc_cli_ctx * sec_lookup_root_ctx_kr(struct ptlrpc_sec *sec)
 
 static
 void rvs_sec_install_root_ctx_kr(struct ptlrpc_sec *sec,
-                                 struct ptlrpc_cli_ctx *new_ctx,
-                                 struct key *key)
+				 struct ptlrpc_cli_ctx *new_ctx,
+				 struct key *key)
 {
 	struct gss_sec_keyring *gsec_kr = sec2gsec_keyring(sec);
 	struct ptlrpc_cli_ctx *ctx;
@@ -543,10 +543,10 @@ void rvs_sec_install_root_ctx_kr(struct ptlrpc_sec *sec,
 }
 
 static void construct_key_desc(void *buf, int bufsize,
-                               struct ptlrpc_sec *sec, uid_t uid)
+			       struct ptlrpc_sec *sec, uid_t uid)
 {
-        snprintf(buf, bufsize, "%d@%x", uid, sec->ps_id);
-        ((char *)buf)[bufsize - 1] = '\0';
+	snprintf(buf, bufsize, "%d@%x", uid, sec->ps_id);
+	((char *)buf)[bufsize - 1] = '\0';
 }
 
 /****************************************
@@ -554,66 +554,68 @@ static void construct_key_desc(void *buf, int bufsize,
  ****************************************/
 
 static
-struct ptlrpc_sec * gss_sec_create_kr(struct obd_import *imp,
-                                      struct ptlrpc_svc_ctx *svcctx,
-                                      struct sptlrpc_flavor *sf)
+struct ptlrpc_sec *gss_sec_create_kr(struct obd_import *imp,
+				      struct ptlrpc_svc_ctx *svcctx,
+				      struct sptlrpc_flavor *sf)
 {
-        struct gss_sec_keyring  *gsec_kr;
-        ENTRY;
+	struct gss_sec_keyring  *gsec_kr;
 
-        OBD_ALLOC(gsec_kr, sizeof(*gsec_kr));
-        if (gsec_kr == NULL)
-                RETURN(NULL);
+	ENTRY;
+
+	OBD_ALLOC(gsec_kr, sizeof(*gsec_kr));
+	if (gsec_kr == NULL)
+		RETURN(NULL);
 
 	INIT_HLIST_HEAD(&gsec_kr->gsk_clist);
-        gsec_kr->gsk_root_ctx = NULL;
+	gsec_kr->gsk_root_ctx = NULL;
 	mutex_init(&gsec_kr->gsk_root_uc_lock);
 #ifdef HAVE_KEYRING_UPCALL_SERIALIZED
 	mutex_init(&gsec_kr->gsk_uc_lock);
 #endif
 
-        if (gss_sec_create_common(&gsec_kr->gsk_base, &gss_policy_keyring,
-                                  imp, svcctx, sf))
-                goto err_free;
+	if (gss_sec_create_common(&gsec_kr->gsk_base, &gss_policy_keyring,
+				  imp, svcctx, sf))
+		goto err_free;
 
-        if (svcctx != NULL &&
-            sec_install_rctx_kr(&gsec_kr->gsk_base.gs_base, svcctx)) {
-                gss_sec_destroy_common(&gsec_kr->gsk_base);
-                goto err_free;
-        }
+	if (svcctx != NULL &&
+	    sec_install_rctx_kr(&gsec_kr->gsk_base.gs_base, svcctx)) {
+		gss_sec_destroy_common(&gsec_kr->gsk_base);
+		goto err_free;
+	}
 
-        RETURN(&gsec_kr->gsk_base.gs_base);
+	RETURN(&gsec_kr->gsk_base.gs_base);
 
 err_free:
-        OBD_FREE(gsec_kr, sizeof(*gsec_kr));
-        RETURN(NULL);
+	OBD_FREE(gsec_kr, sizeof(*gsec_kr));
+	RETURN(NULL);
 }
 
 static
 void gss_sec_destroy_kr(struct ptlrpc_sec *sec)
 {
-        struct gss_sec          *gsec = sec2gsec(sec);
-        struct gss_sec_keyring  *gsec_kr = sec2gsec_keyring(sec);
+	struct gss_sec          *gsec = sec2gsec(sec);
+	struct gss_sec_keyring  *gsec_kr = sec2gsec_keyring(sec);
 
-        CDEBUG(D_SEC, "destroy %s@%p\n", sec->ps_policy->sp_name, sec);
+	CDEBUG(D_SEC, "destroy %s@%p\n", sec->ps_policy->sp_name, sec);
 
 	LASSERT(atomic_read(&sec->ps_nctx) == 0);
 	LASSERT(hlist_empty(&gsec_kr->gsk_clist));
-        LASSERT(gsec_kr->gsk_root_ctx == NULL);
+	LASSERT(gsec_kr->gsk_root_ctx == NULL);
 
-        gss_sec_destroy_common(gsec);
+	gss_sec_destroy_common(gsec);
 
-        OBD_FREE(gsec_kr, sizeof(*gsec_kr));
+	OBD_FREE(gsec_kr, sizeof(*gsec_kr));
 }
 
 static inline int user_is_root(struct ptlrpc_sec *sec, struct vfs_cred *vcred)
 {
-        /* except the ROOTONLY flag, treat it as root user only if real uid
-         * is 0, euid/fsuid being 0 are handled as setuid scenarios */
-        if (sec_is_rootonly(sec) || (vcred->vc_uid == 0))
-                return 1;
-        else
-                return 0;
+	/* except the ROOTONLY flag, treat it as root user only if real uid
+	 * is 0, euid/fsuid being 0 are handled as setuid scenarios
+	 */
+	if (sec_is_rootonly(sec) || (vcred->vc_uid == 0))
+		return 1;
+	else
+		return 0;
 }
 
 #ifdef HAVE_KEY_NEED_UNLINK
@@ -979,9 +981,9 @@ EXPORT_SYMBOL(gss_cleanup_sk_key);
  * \retval -ev error number or NULL on error
  */
 static
-struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
-                                              struct vfs_cred *vcred,
-                                              int create, int remove_dead)
+struct ptlrpc_cli_ctx *gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
+					      struct vfs_cred *vcred,
+					      int create, int remove_dead)
 {
 	const size_t sizeof_u32 = sizeof(u32) * 2 + 3; /* string + : */
 	const size_t sizeof_u64 = sizeof(u64) * 2 + 3; /* string + : */
@@ -999,6 +1001,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_kr(struct ptlrpc_sec *sec,
 	char svc_flag = '-';
 	pid_t caller_pid;
 	struct lnet_nid primary;
+
 	ENTRY;
 
 	LASSERT(imp != NULL);
@@ -1232,12 +1235,12 @@ out:
 
 static
 void gss_sec_release_ctx_kr(struct ptlrpc_sec *sec,
-                            struct ptlrpc_cli_ctx *ctx,
-                            int sync)
+			    struct ptlrpc_cli_ctx *ctx,
+			    int sync)
 {
 	LASSERT(atomic_read(&sec->ps_refcount) > 0);
 	LASSERT(atomic_read(&ctx->cc_refcount) == 0);
-        ctx_release_kr(ctx, sync);
+	ctx_release_kr(ctx, sync);
 }
 
 /*
@@ -1312,9 +1315,10 @@ void flush_spec_ctx_cache_kr(struct ptlrpc_sec *sec, uid_t uid, int grace,
 	struct hlist_head	 freelist = HLIST_HEAD_INIT;
 	struct hlist_node *next;
 	struct ptlrpc_cli_ctx	*ctx;
+
 	ENTRY;
 
-        gsec_kr = sec2gsec_keyring(sec);
+	gsec_kr = sec2gsec_keyring(sec);
 
 	spin_lock(&sec->ps_lock);
 	hlist_for_each_entry_safe(ctx, next, &gsec_kr->gsk_clist,
@@ -1357,7 +1361,7 @@ void flush_spec_ctx_cache_kr(struct ptlrpc_sec *sec, uid_t uid, int grace,
 
 static
 int gss_sec_flush_ctx_cache_kr(struct ptlrpc_sec *sec,
-                               uid_t uid, int grace, int force)
+			       uid_t uid, int grace, int force)
 {
 	ENTRY;
 
@@ -1382,6 +1386,7 @@ void gss_sec_gc_ctx_kr(struct ptlrpc_sec *sec)
 	struct ptlrpc_cli_ctx *ctx;
 	struct gss_cli_ctx *gctx;
 	struct hlist_node *next;
+
 	ENTRY;
 
 	CDEBUG(D_SEC, "running gc\n");
@@ -1533,26 +1538,26 @@ int sec_install_rctx_kr(struct ptlrpc_sec *sec,
 	struct vfs_cred vcred = { .vc_uid = 0 };
 	int rc;
 
-        LASSERT(sec);
-        LASSERT(svc_ctx);
+	LASSERT(sec);
+	LASSERT(svc_ctx);
 
-        cli_ctx = ctx_create_kr(sec, &vcred);
-        if (cli_ctx == NULL)
-                return -ENOMEM;
+	cli_ctx = ctx_create_kr(sec, &vcred);
+	if (cli_ctx == NULL)
+		return -ENOMEM;
 
-        rc = gss_copy_rvc_cli_ctx(cli_ctx, svc_ctx);
-        if (rc) {
-                CERROR("failed copy reverse cli ctx: %d\n", rc);
+	rc = gss_copy_rvc_cli_ctx(cli_ctx, svc_ctx);
+	if (rc) {
+		CERROR("failed copy reverse cli ctx: %d\n", rc);
 
-                ctx_put_kr(cli_ctx, 1);
-                return rc;
-        }
+		ctx_put_kr(cli_ctx, 1);
+		return rc;
+	}
 
-        rvs_sec_install_root_ctx_kr(sec, cli_ctx, NULL);
+	rvs_sec_install_root_ctx_kr(sec, cli_ctx, NULL);
 
-        ctx_put_kr(cli_ctx, 1);
+	ctx_put_kr(cli_ctx, 1);
 
-        return 0;
+	return 0;
 }
 
 #else /* ! HAVE_REVERSE_CTX_NOKEY */
@@ -1567,59 +1572,59 @@ int sec_install_rctx_kr(struct ptlrpc_sec *sec,
 	char desc[64];
 	int rc;
 
-        LASSERT(sec);
-        LASSERT(svc_ctx);
-        CWARN("called\n");
+	LASSERT(sec);
+	LASSERT(svc_ctx);
+	CWARN("called\n");
 
-        construct_key_desc(desc, sizeof(desc), sec, 0);
+	construct_key_desc(desc, sizeof(desc), sec, 0);
 
-        key = key_alloc(&gss_key_type, desc, 0, 0,
-                        KEY_POS_ALL | KEY_USR_ALL, 1);
-        if (IS_ERR(key)) {
-                CERROR("failed to alloc key: %ld\n", PTR_ERR(key));
-                return PTR_ERR(key);
-        }
+	key = key_alloc(&gss_key_type, desc, 0, 0,
+			KEY_POS_ALL | KEY_USR_ALL, 1);
+	if (IS_ERR(key)) {
+		CERROR("failed to alloc key: %ld\n", PTR_ERR(key));
+		return PTR_ERR(key);
+	}
 
-        rc = key_instantiate_and_link(key, NULL, 0, NULL, NULL);
-        if (rc) {
-                CERROR("failed to instantiate key: %d\n", rc);
-                goto err_revoke;
-        }
+	rc = key_instantiate_and_link(key, NULL, 0, NULL, NULL);
+	if (rc) {
+		CERROR("failed to instantiate key: %d\n", rc);
+		goto err_revoke;
+	}
 
-        down_write(&key->sem);
+	down_write(&key->sem);
 
 	LASSERT(!key_get_payload(key, 0));
 
-        cli_ctx = ctx_create_kr(sec, &vcred);
-        if (cli_ctx == NULL) {
-                rc = -ENOMEM;
-                goto err_up;
-        }
+	cli_ctx = ctx_create_kr(sec, &vcred);
+	if (cli_ctx == NULL) {
+		rc = -ENOMEM;
+		goto err_up;
+	}
 
-        rc = gss_copy_rvc_cli_ctx(cli_ctx, svc_ctx);
-        if (rc) {
-                CERROR("failed copy reverse cli ctx: %d\n", rc);
-                goto err_put;
-        }
+	rc = gss_copy_rvc_cli_ctx(cli_ctx, svc_ctx);
+	if (rc) {
+		CERROR("failed copy reverse cli ctx: %d\n", rc);
+		goto err_put;
+	}
 
-        rvs_sec_install_root_ctx_kr(sec, cli_ctx, key);
+	rvs_sec_install_root_ctx_kr(sec, cli_ctx, key);
 
-        ctx_put_kr(cli_ctx, 1);
-        up_write(&key->sem);
+	ctx_put_kr(cli_ctx, 1);
+	up_write(&key->sem);
 
-        rc = 0;
-        CWARN("ok!\n");
+	rc = 0;
+	CWARN("ok!\n");
 out:
-        key_put(key);
-        return rc;
+	key_put(key);
+	return rc;
 
 err_put:
-        ctx_put_kr(cli_ctx, 1);
+	ctx_put_kr(cli_ctx, 1);
 err_up:
-        up_write(&key->sem);
+	up_write(&key->sem);
 err_revoke:
-        key_revoke(key);
-        goto out;
+	key_revoke(key);
+	goto out;
 }
 
 #endif /* HAVE_REVERSE_CTX_NOKEY */
@@ -1631,23 +1636,23 @@ err_revoke:
 static
 int gss_svc_accept_kr(struct ptlrpc_request *req)
 {
-        return gss_svc_accept(&gss_policy_keyring, req);
+	return gss_svc_accept(&gss_policy_keyring, req);
 }
 
 static
 int gss_svc_install_rctx_kr(struct obd_import *imp,
-                            struct ptlrpc_svc_ctx *svc_ctx)
+			    struct ptlrpc_svc_ctx *svc_ctx)
 {
-        struct ptlrpc_sec *sec;
-        int                rc;
+	struct ptlrpc_sec *sec;
+	int                rc;
 
-        sec = sptlrpc_import_sec_ref(imp);
-        LASSERT(sec);
+	sec = sptlrpc_import_sec_ref(imp);
+	LASSERT(sec);
 
-        rc = sec_install_rctx_kr(sec, svc_ctx);
-        sptlrpc_sec_put(sec);
+	rc = sec_install_rctx_kr(sec, svc_ctx);
+	sptlrpc_sec_put(sec);
 
-        return rc;
+	return rc;
 }
 
 /****************************************
@@ -1733,6 +1738,7 @@ int gss_kt_update(struct key *key, struct key_preparsed_payload *prep)
 	struct gss_cli_ctx *gctx;
 	rawobj_t tmpobj = RAWOBJ_EMPTY;
 	int rc;
+
 	ENTRY;
 
 	CDEBUG(D_SEC, "updating key %08x (%p)\n", key->serial, key);
@@ -1885,10 +1891,10 @@ void gss_kt_destroy(struct key *key)
 static
 void gss_kt_describe(const struct key *key, struct seq_file *s)
 {
-        if (key->description == NULL)
-                seq_puts(s, "[null]");
-        else
-                seq_puts(s, key->description);
+	if (key->description == NULL)
+		seq_puts(s, "[null]");
+	else
+		seq_puts(s, key->description);
 }
 
 static void gss_kt_revoke(struct key *key)
@@ -1900,8 +1906,7 @@ static void gss_kt_revoke(struct key *key)
 	       key->serial, key, refcount_read(&key->usage));
 }
 
-static struct key_type gss_key_type =
-{
+static struct key_type gss_key_type = {
 	.name		= "lgssc",
 	.def_datalen	= 0,
 	.instantiate	= gss_kt_instantiate,
@@ -1917,78 +1922,78 @@ static struct key_type gss_key_type =
  ****************************************/
 
 static struct ptlrpc_ctx_ops gss_keyring_ctxops = {
-        .match                  = gss_cli_ctx_match,
-        .refresh                = gss_cli_ctx_refresh_kr,
-        .validate               = gss_cli_ctx_validate_kr,
-        .die                    = gss_cli_ctx_die_kr,
-        .sign                   = gss_cli_ctx_sign,
-        .verify                 = gss_cli_ctx_verify,
-        .seal                   = gss_cli_ctx_seal,
-        .unseal                 = gss_cli_ctx_unseal,
-        .wrap_bulk              = gss_cli_ctx_wrap_bulk,
-        .unwrap_bulk            = gss_cli_ctx_unwrap_bulk,
+	.match                  = gss_cli_ctx_match,
+	.refresh                = gss_cli_ctx_refresh_kr,
+	.validate               = gss_cli_ctx_validate_kr,
+	.die                    = gss_cli_ctx_die_kr,
+	.sign                   = gss_cli_ctx_sign,
+	.verify                 = gss_cli_ctx_verify,
+	.seal                   = gss_cli_ctx_seal,
+	.unseal                 = gss_cli_ctx_unseal,
+	.wrap_bulk              = gss_cli_ctx_wrap_bulk,
+	.unwrap_bulk            = gss_cli_ctx_unwrap_bulk,
 };
 
 static struct ptlrpc_sec_cops gss_sec_keyring_cops = {
-        .create_sec             = gss_sec_create_kr,
-        .destroy_sec            = gss_sec_destroy_kr,
-        .kill_sec               = gss_sec_kill,
-        .lookup_ctx             = gss_sec_lookup_ctx_kr,
-        .release_ctx            = gss_sec_release_ctx_kr,
-        .flush_ctx_cache        = gss_sec_flush_ctx_cache_kr,
-        .gc_ctx                 = gss_sec_gc_ctx_kr,
-        .install_rctx           = gss_sec_install_rctx,
-        .alloc_reqbuf           = gss_alloc_reqbuf,
-        .free_reqbuf            = gss_free_reqbuf,
-        .alloc_repbuf           = gss_alloc_repbuf,
-        .free_repbuf            = gss_free_repbuf,
-        .enlarge_reqbuf         = gss_enlarge_reqbuf,
-        .display                = gss_sec_display_kr,
+	.create_sec             = gss_sec_create_kr,
+	.destroy_sec            = gss_sec_destroy_kr,
+	.kill_sec               = gss_sec_kill,
+	.lookup_ctx             = gss_sec_lookup_ctx_kr,
+	.release_ctx            = gss_sec_release_ctx_kr,
+	.flush_ctx_cache        = gss_sec_flush_ctx_cache_kr,
+	.gc_ctx                 = gss_sec_gc_ctx_kr,
+	.install_rctx           = gss_sec_install_rctx,
+	.alloc_reqbuf           = gss_alloc_reqbuf,
+	.free_reqbuf            = gss_free_reqbuf,
+	.alloc_repbuf           = gss_alloc_repbuf,
+	.free_repbuf            = gss_free_repbuf,
+	.enlarge_reqbuf         = gss_enlarge_reqbuf,
+	.display                = gss_sec_display_kr,
 };
 
 static struct ptlrpc_sec_sops gss_sec_keyring_sops = {
-        .accept                 = gss_svc_accept_kr,
-        .invalidate_ctx         = gss_svc_invalidate_ctx,
-        .alloc_rs               = gss_svc_alloc_rs,
-        .authorize              = gss_svc_authorize,
-        .free_rs                = gss_svc_free_rs,
-        .free_ctx               = gss_svc_free_ctx,
-        .prep_bulk              = gss_svc_prep_bulk,
-        .unwrap_bulk            = gss_svc_unwrap_bulk,
-        .wrap_bulk              = gss_svc_wrap_bulk,
-        .install_rctx           = gss_svc_install_rctx_kr,
+	.accept                 = gss_svc_accept_kr,
+	.invalidate_ctx         = gss_svc_invalidate_ctx,
+	.alloc_rs               = gss_svc_alloc_rs,
+	.authorize              = gss_svc_authorize,
+	.free_rs                = gss_svc_free_rs,
+	.free_ctx               = gss_svc_free_ctx,
+	.prep_bulk              = gss_svc_prep_bulk,
+	.unwrap_bulk            = gss_svc_unwrap_bulk,
+	.wrap_bulk              = gss_svc_wrap_bulk,
+	.install_rctx           = gss_svc_install_rctx_kr,
 };
 
 static struct ptlrpc_sec_policy gss_policy_keyring = {
-        .sp_owner               = THIS_MODULE,
-        .sp_name                = "gss.keyring",
-        .sp_policy              = SPTLRPC_POLICY_GSS,
-        .sp_cops                = &gss_sec_keyring_cops,
-        .sp_sops                = &gss_sec_keyring_sops,
+	.sp_owner               = THIS_MODULE,
+	.sp_name                = "gss.keyring",
+	.sp_policy              = SPTLRPC_POLICY_GSS,
+	.sp_cops                = &gss_sec_keyring_cops,
+	.sp_sops                = &gss_sec_keyring_sops,
 };
 
 
 int __init gss_init_keyring(void)
 {
-        int rc;
+	int rc;
 
-        rc = register_key_type(&gss_key_type);
-        if (rc) {
-                CERROR("failed to register keyring type: %d\n", rc);
-                return rc;
-        }
+	rc = register_key_type(&gss_key_type);
+	if (rc) {
+		CERROR("failed to register keyring type: %d\n", rc);
+		return rc;
+	}
 
-        rc = sptlrpc_register_policy(&gss_policy_keyring);
-        if (rc) {
-                unregister_key_type(&gss_key_type);
-                return rc;
-        }
+	rc = sptlrpc_register_policy(&gss_policy_keyring);
+	if (rc) {
+		unregister_key_type(&gss_key_type);
+		return rc;
+	}
 
-        return 0;
+	return 0;
 }
 
 void __exit gss_exit_keyring(void)
 {
-        unregister_key_type(&gss_key_type);
-        sptlrpc_unregister_policy(&gss_policy_keyring);
+	unregister_key_type(&gss_key_type);
+	sptlrpc_unregister_policy(&gss_policy_keyring);
 }

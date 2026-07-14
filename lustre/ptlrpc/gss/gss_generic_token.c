@@ -63,8 +63,8 @@
 
 /* TWRITE_STR from gssapiP_generic.h */
 #define TWRITE_STR(ptr, str, len) \
-        memcpy((ptr), (char *) (str), (len)); \
-        (ptr) += (len);
+	memcpy((ptr), (char *) (str), (len)); \
+	(ptr) += (len);
 
 /* XXXX this code currently makes the assumption that a mech oid will
    never be longer than 127 bytes.  This assumption is not inherent in
@@ -74,14 +74,14 @@
 /* Each token looks like this:
 
 0x60                                tag for APPLICATION 0, SEQUENCE
-                                        (constructed, definite-length)
-        <length>                possible multiple bytes, need to parse/generate
-        0x06                        tag for OBJECT IDENTIFIER
-                <moid_length>        compile-time constant string (assume 1 byte)
-                <moid_bytes>        compile-time constant string
-        <inner_bytes>                the ANY containing the application token
-                                        bytes 0,1 are the token type
-                                        bytes 2,n are the token data
+					(constructed, definite-length)
+	<length>                possible multiple bytes, need to parse/generate
+	0x06                        tag for OBJECT IDENTIFIER
+		<moid_length>        compile-time constant string (assume 1 byte)
+		<moid_bytes>        compile-time constant string
+	<inner_bytes>                the ANY containing the application token
+					bytes 0,1 are the token type
+					bytes 2,n are the token data
 
 For the purposes of this abstraction, the token "header" consists of
 the sequence tag and length octets, the mech OID DER encoding, and the
@@ -93,40 +93,40 @@ first two inner bytes, which indicate the token type.  The token
 static
 int der_length_size(int length)
 {
-        if (length < (1 << 7))
-                return 1;
-        else if (length < (1 << 8))
-                return 2;
+	if (length < (1 << 7))
+		return 1;
+	else if (length < (1 << 8))
+		return 2;
 #if (SIZEOF_INT == 2)
-        else
-                return 3;
+	else
+		return 3;
 #else
-        else if (length < (1 << 16))
-                return 3;
-        else if (length < (1 << 24))
-                return 4;
-        else
-                return 5;
+	else if (length < (1 << 16))
+		return 3;
+	else if (length < (1 << 24))
+		return 4;
+	else
+		return 5;
 #endif
 }
 
 static
 void der_write_length(unsigned char **buf, int length)
 {
-        if (length < (1 << 7)) {
-                *(*buf)++ = (unsigned char) length;
-        } else {
-                *(*buf)++ = (unsigned char) (der_length_size(length) + 127);
+	if (length < (1 << 7)) {
+		*(*buf)++ = (unsigned char) length;
+	} else {
+		*(*buf)++ = (unsigned char) (der_length_size(length) + 127);
 #if (SIZEOF_INT > 2)
-                if (length >= (1 << 24))
-                        *(*buf)++ = (unsigned char) (length >> 24);
-                if (length >= (1 << 16))
-                        *(*buf)++ = (unsigned char) ((length >> 16) & 0xff);
+		if (length >= (1 << 24))
+			*(*buf)++ = (unsigned char) (length >> 24);
+		if (length >= (1 << 16))
+			*(*buf)++ = (unsigned char) ((length >> 16) & 0xff);
 #endif
-                if (length >= (1 << 8))
-                        *(*buf)++ = (unsigned char) ((length >> 8) & 0xff);
-                *(*buf)++ = (unsigned char) (length & 0xff);
-        }
+		if (length >= (1 << 8))
+			*(*buf)++ = (unsigned char) ((length >> 8) & 0xff);
+		*(*buf)++ = (unsigned char) (length & 0xff);
+	}
 }
 
 /*
@@ -136,28 +136,28 @@ void der_write_length(unsigned char **buf, int length)
 static
 int der_read_length(unsigned char **buf, int *bufsize)
 {
-        unsigned char sf;
-        int ret;
+	unsigned char sf;
+	int ret;
 
-        if (*bufsize < 1)
-                return -1;
-        sf = *(*buf)++;
-        (*bufsize)--;
-        if (sf & 0x80) {
-                if ((sf &= 0x7f) > ((*bufsize) - 1))
-                        return -1;
-                if (sf > SIZEOF_INT)
-                        return -1;
-                ret = 0;
-                for (; sf; sf--) {
-                        ret = (ret << 8) + (*(*buf)++);
-                        (*bufsize)--;
-                }
-        } else {
-                ret = sf;
-        }
+	if (*bufsize < 1)
+		return -1;
+	sf = *(*buf)++;
+	(*bufsize)--;
+	if (sf & 0x80) {
+		if ((sf &= 0x7f) > ((*bufsize) - 1))
+			return -1;
+		if (sf > SIZEOF_INT)
+			return -1;
+		ret = 0;
+		for (; sf; sf--) {
+			ret = (ret << 8) + (*(*buf)++);
+			(*bufsize)--;
+		}
+	} else {
+		ret = sf;
+	}
 
-        return ret;
+	return ret;
 }
 
 /*
@@ -165,9 +165,9 @@ int der_read_length(unsigned char **buf, int *bufsize)
  */
 int g_token_size(rawobj_t *mech, unsigned int body_size)
 {
-        /* set body_size to sequence contents size */
-        body_size += 4 + (int) mech->len; /* NEED overflow check */
-        return (1 + der_length_size(body_size) + body_size);
+	/* set body_size to sequence contents size */
+	body_size += 4 + (int) mech->len; /* NEED overflow check */
+	return (1 + der_length_size(body_size) + body_size);
 }
 
 /*
@@ -176,11 +176,11 @@ int g_token_size(rawobj_t *mech, unsigned int body_size)
  */
 void g_make_token_header(rawobj_t *mech, int body_size, unsigned char **buf)
 {
-        *(*buf)++ = 0x60;
-        der_write_length(buf, 4 + mech->len + body_size);
-        *(*buf)++ = 0x06;
-        *(*buf)++ = (unsigned char) mech->len;
-        TWRITE_STR(*buf, mech->data, ((int) mech->len));
+	*(*buf)++ = 0x60;
+	der_write_length(buf, 4 + mech->len + body_size);
+	*(*buf)++ = 0x06;
+	*(*buf)++ = (unsigned char) mech->len;
+	TWRITE_STR(*buf, mech->data, ((int) mech->len));
 }
 
 /*
@@ -192,57 +192,58 @@ void g_make_token_header(rawobj_t *mech, int body_size, unsigned char **buf)
  * *body_size are left unmodified on error.
  */
 __u32 g_verify_token_header(rawobj_t *mech, int *body_size,
-                            unsigned char **buf_in, int toksize)
+			    unsigned char **buf_in, int toksize)
 {
-        unsigned char *buf = *buf_in;
-        int seqsize;
-        rawobj_t toid;
-        int ret = 0;
+	unsigned char *buf = *buf_in;
+	int seqsize;
+	rawobj_t toid;
+	int ret = 0;
 
-        if ((toksize -= 1) < 0)
-                return (G_BAD_TOK_HEADER);
-        if (*buf++ != 0x60)
-                return (G_BAD_TOK_HEADER);
+	if ((toksize -= 1) < 0)
+		return (G_BAD_TOK_HEADER);
+	if (*buf++ != 0x60)
+		return (G_BAD_TOK_HEADER);
 
-        if ((seqsize = der_read_length(&buf, &toksize)) < 0)
-                return(G_BAD_TOK_HEADER);
+	seqsize = der_read_length(&buf, &toksize);
+	if (seqsize < 0)
+		return(G_BAD_TOK_HEADER);
 
-        if (seqsize != toksize)
-                return (G_BAD_TOK_HEADER);
+	if (seqsize != toksize)
+		return (G_BAD_TOK_HEADER);
 
-        if ((toksize -= 1) < 0)
-                return (G_BAD_TOK_HEADER);
-        if (*buf++ != 0x06)
-                return (G_BAD_TOK_HEADER);
+	if ((toksize -= 1) < 0)
+		return (G_BAD_TOK_HEADER);
+	if (*buf++ != 0x06)
+		return (G_BAD_TOK_HEADER);
 
-        if ((toksize -= 1) < 0)
-                return (G_BAD_TOK_HEADER);
-        toid.len = *buf++;
+	if ((toksize -= 1) < 0)
+		return (G_BAD_TOK_HEADER);
+	toid.len = *buf++;
 
-        if ((toksize -= toid.len) < 0)
-                return (G_BAD_TOK_HEADER);
-        toid.data = buf;
-        buf += toid.len;
+	if ((toksize -= toid.len) < 0)
+		return (G_BAD_TOK_HEADER);
+	toid.data = buf;
+	buf += toid.len;
 
-        if (!g_OID_equal(&toid, mech))
-                ret = G_WRONG_MECH;
+	if (!g_OID_equal(&toid, mech))
+		ret = G_WRONG_MECH;
 
-        /* G_WRONG_MECH is not returned immediately because it's more
-         * important to return G_BAD_TOK_HEADER if the token header is
-         * in fact bad
-         */
-        if ((toksize -= 2) < 0)
-                return (G_BAD_TOK_HEADER);
+	/* G_WRONG_MECH is not returned immediately because it's more
+	 * important to return G_BAD_TOK_HEADER if the token header is
+	 * in fact bad
+	 */
+	if ((toksize -= 2) < 0)
+		return (G_BAD_TOK_HEADER);
 
-        if (ret)
-                return (ret);
+	if (ret)
+		return (ret);
 
-        if (!ret) {
-                *buf_in = buf;
-                *body_size = toksize;
-        }
+	if (!ret) {
+		*buf_in = buf;
+		*body_size = toksize;
+	}
 
-        return (ret);
+	return (ret);
 }
 
 /*
@@ -251,34 +252,35 @@ __u32 g_verify_token_header(rawobj_t *mech, int *body_size,
  */
 __u32 g_get_mech_oid(rawobj_t *mech, rawobj_t *in_buf)
 {
-        unsigned char *buf = in_buf->data;
-        int len = in_buf->len;
-        int ret = 0;
-        int seqsize;
+	unsigned char *buf = in_buf->data;
+	int len = in_buf->len;
+	int ret = 0;
+	int seqsize;
 
-        if ((len -= 1) < 0)
-                return (G_BAD_TOK_HEADER);
-        if (*buf++ != 0x60)
-                return (G_BAD_TOK_HEADER);
+	if ((len -= 1) < 0)
+		return (G_BAD_TOK_HEADER);
+	if (*buf++ != 0x60)
+		return (G_BAD_TOK_HEADER);
 
-        if ((seqsize = der_read_length(&buf, &len)) < 0)
-                return (G_BAD_TOK_HEADER);
+	seqsize = der_read_length(&buf, &len);
+	if (seqsize < 0)
+		return (G_BAD_TOK_HEADER);
 
-        if ((len -= 1) < 0)
-                return (G_BAD_TOK_HEADER);
-        if (*buf++ != 0x06)
-                return (G_BAD_TOK_HEADER);
+	if ((len -= 1) < 0)
+		return (G_BAD_TOK_HEADER);
+	if (*buf++ != 0x06)
+		return (G_BAD_TOK_HEADER);
 
-        if ((len -= 1) < 0)
-                return (G_BAD_TOK_HEADER);
-        mech->len = *buf++;
+	if ((len -= 1) < 0)
+		return (G_BAD_TOK_HEADER);
+	mech->len = *buf++;
 
-        if ((len -= mech->len) < 0)
-                return (G_BAD_TOK_HEADER);
-        OBD_ALLOC_LARGE(mech->data, mech->len);
-        if (!mech->data)
-                return (G_BUFFER_ALLOC);
-        memcpy(mech->data, buf, mech->len);
+	if ((len -= mech->len) < 0)
+		return (G_BAD_TOK_HEADER);
+	OBD_ALLOC_LARGE(mech->data, mech->len);
+	if (!mech->data)
+		return (G_BUFFER_ALLOC);
+	memcpy(mech->data, buf, mech->len);
 
-        return ret;
+	return ret;
 }

@@ -115,7 +115,7 @@ typedef unsigned int OM_uint32;
   ((x) & (GSS_C_SUPPLEMENTARY_MASK << GSS_C_SUPPLEMENTARY_OFFSET))
 #define GSS_ERROR(x) \
   ((x) & ((GSS_C_CALLING_ERROR_MASK << GSS_C_CALLING_ERROR_OFFSET) | \
-          (GSS_C_ROUTINE_ERROR_MASK << GSS_C_ROUTINE_ERROR_OFFSET)))
+	  (GSS_C_ROUTINE_ERROR_MASK << GSS_C_ROUTINE_ERROR_OFFSET)))
 
 /*
  * Now the actual status code definitions
@@ -125,51 +125,51 @@ typedef unsigned int OM_uint32;
  * Calling errors:
  */
 #define GSS_S_CALL_INACCESSIBLE_READ \
-        (((OM_uint32) 1ul) << GSS_C_CALLING_ERROR_OFFSET)
+	(((OM_uint32) 1ul) << GSS_C_CALLING_ERROR_OFFSET)
 #define GSS_S_CALL_INACCESSIBLE_WRITE \
-        (((OM_uint32) 2ul) << GSS_C_CALLING_ERROR_OFFSET)
+	(((OM_uint32) 2ul) << GSS_C_CALLING_ERROR_OFFSET)
 #define GSS_S_CALL_BAD_STRUCTURE \
-        (((OM_uint32) 3ul) << GSS_C_CALLING_ERROR_OFFSET)
+	(((OM_uint32) 3ul) << GSS_C_CALLING_ERROR_OFFSET)
 
 /*
  * Routine errors:
  */
 #define GSS_S_BAD_MECH \
-        (((OM_uint32) 1ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 1ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 #define GSS_S_BAD_NAME \
-        (((OM_uint32) 2ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 2ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 #define GSS_S_BAD_NAMETYPE \
-        (((OM_uint32) 3ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 3ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 #define GSS_S_BAD_BINDINGS \
-        (((OM_uint32) 4ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 4ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 #define GSS_S_BAD_STATUS \
-        (((OM_uint32) 5ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 5ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 #define GSS_S_BAD_SIG \
-        (((OM_uint32) 6ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 6ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 #define GSS_S_NO_CRED \
-        (((OM_uint32) 7ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 7ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 #define GSS_S_NO_CONTEXT \
-        (((OM_uint32) 8ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 8ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 #define GSS_S_DEFECTIVE_TOKEN \
-        (((OM_uint32) 9ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 9ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 #define GSS_S_DEFECTIVE_CREDENTIAL \
-        (((OM_uint32) 10ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 10ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 #define GSS_S_CREDENTIALS_EXPIRED \
-        (((OM_uint32) 11ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 11ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 #define GSS_S_CONTEXT_EXPIRED \
-        (((OM_uint32) 12ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 12ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 #define GSS_S_FAILURE \
-        (((OM_uint32) 13ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 13ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 #define GSS_S_BAD_QOP \
-        (((OM_uint32) 14ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 14ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 #define GSS_S_UNAUTHORIZED \
-        (((OM_uint32) 15ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 15ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 #define GSS_S_UNAVAILABLE \
-        (((OM_uint32) 16ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 16ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 #define GSS_S_DUPLICATE_ELEMENT \
-        (((OM_uint32) 17ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 17ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 #define GSS_S_NAME_NOT_MN \
-        (((OM_uint32) 18ul) << GSS_C_ROUTINE_ERROR_OFFSET)
+	(((OM_uint32) 18ul) << GSS_C_ROUTINE_ERROR_OFFSET)
 
 /*
  * Supplementary info bits:
@@ -183,11 +183,11 @@ typedef unsigned int OM_uint32;
 /* XXXX these are not part of the GSSAPI C bindings!  (but should be) */
 
 #define GSS_CALLING_ERROR_FIELD(x) \
-        (((x) >> GSS_C_CALLING_ERROR_OFFSET) & GSS_C_CALLING_ERROR_MASK)
+	(((x) >> GSS_C_CALLING_ERROR_OFFSET) & GSS_C_CALLING_ERROR_MASK)
 #define GSS_ROUTINE_ERROR_FIELD(x) \
-        (((x) >> GSS_C_ROUTINE_ERROR_OFFSET) & GSS_C_ROUTINE_ERROR_MASK)
+	(((x) >> GSS_C_ROUTINE_ERROR_OFFSET) & GSS_C_ROUTINE_ERROR_MASK)
 #define GSS_SUPPLEMENTARY_INFO_FIELD(x) \
-        (((x) >> GSS_C_SUPPLEMENTARY_OFFSET) & GSS_C_SUPPLEMENTARY_MASK)
+	(((x) >> GSS_C_SUPPLEMENTARY_OFFSET) & GSS_C_SUPPLEMENTARY_MASK)
 
 /* XXXX This is a necessary evil until the spec is fixed */
 #define GSS_S_CRED_UNAVAIL GSS_S_FAILURE
