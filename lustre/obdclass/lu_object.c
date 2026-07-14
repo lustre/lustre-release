@@ -2150,7 +2150,7 @@ static void lu_objects_flush(struct work_struct *work)
 
 void lu_objects_destroy_delayed(void)
 {
-	mod_delayed_work(system_long_wq, &lu_site_flush,0);
+	mod_delayed_work(system_long_wq, &lu_site_flush, 0);
 	flush_delayed_work(&lu_site_flush);
 }
 EXPORT_SYMBOL(lu_objects_destroy_delayed);

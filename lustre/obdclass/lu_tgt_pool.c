@@ -117,6 +117,7 @@ int lu_tgt_pool_add_lock(struct lu_tgt_pool *op, __u32 idx,
 {
 	unsigned int i;
 	int rc = 0;
+
 	ENTRY;
 
 	if (lock)
@@ -160,6 +161,7 @@ EXPORT_SYMBOL(lu_tgt_pool_add_lock);
 int lu_tgt_pool_remove(struct lu_tgt_pool *op, __u32 idx)
 {
 	unsigned int i;
+
 	ENTRY;
 
 	down_write(&op->op_rw_sem);
@@ -184,6 +186,7 @@ EXPORT_SYMBOL(lu_tgt_pool_remove);
 int lu_tgt_check_index(int idx, struct lu_tgt_pool *osts)
 {
 	int i, rc = -ENOENT;
+
 	ENTRY;
 
 	down_read(&osts->op_rw_sem);

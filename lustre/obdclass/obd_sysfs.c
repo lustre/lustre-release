@@ -52,7 +52,7 @@
 bool obd_enable_health_write;
 EXPORT_SYMBOL(obd_enable_health_write);
 
-bool obd_enable_fname_encoding = false;
+bool obd_enable_fname_encoding;
 EXPORT_SYMBOL(obd_enable_fname_encoding);
 
 struct static_lustre_uintvalue_attr {

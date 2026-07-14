@@ -112,6 +112,7 @@ static void class_handle_unhash_nolock(struct portals_handle *h)
 void class_handle_unhash(struct portals_handle *h)
 {
 	struct handle_bucket *bucket;
+
 	bucket = handle_hash + (h->h_cookie & HANDLE_HASH_MASK);
 
 	spin_lock(&bucket->lock);

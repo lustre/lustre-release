@@ -193,11 +193,11 @@ ldebugfs_exp_print_export_seq(struct obd_export *exp, void *cb_data)
 		   obd_export_nid2str(exp));
 	obd_connect_seq_flags2str(m, ocd->ocd_connect_flags,
 				  ocd->ocd_connect_flags2, ", ");
-	seq_printf(m, " ]\n");
+	seq_puts(m, " ]\n");
 	obd_connect_data_seqprint(m, ocd);
-	seq_printf(m, "    export_flags: [ ");
+	seq_puts(m, "    export_flags: [ ");
 	obd_export_flags2str(exp, m);
-	seq_printf(m, " ]\n");
+	seq_puts(m, " ]\n");
 
 	if (obd->obd_type && strcmp(obd->obd_type->typ_name, "mdt") == 0 &&
 	    fid_is_sane(&exp->exp_root_fid)) {
@@ -209,7 +209,7 @@ ldebugfs_exp_print_export_seq(struct obd_export *exp, void *cb_data)
 	    strcmp(obd->obd_type->typ_name, "obdfilter") == 0) {
 		struct filter_export_data *fed = &exp->exp_filter_data;
 
-		seq_printf(m, "    grant:\n");
+		seq_puts(m, "    grant:\n");
 		seq_printf(m, "       granted: %ld\n",
 			fed->fed_ted.ted_grant);
 		seq_printf(m, "       dirty: %ld\n",
@@ -1096,9 +1096,9 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 
 	LASSERT(obd != NULL);
 
-	seq_printf(m, "status: ");
+	seq_puts(m, "status: ");
 	if (atomic_read(&obd->obd_max_recoverable_clients) == 0) {
-		seq_printf(m, "INACTIVE\n");
+		seq_puts(m, "INACTIVE\n");
 		goto out;
 	}
 
@@ -1107,7 +1107,7 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 	 * recovery is really finished
 	 */
 	if (obd->obd_recovery_end > 0 && !test_bit(OBDF_RECOVERING, obd->obd_flags)) {
-		seq_printf(m, "COMPLETE\n");
+		seq_puts(m, "COMPLETE\n");
 		seq_printf(m, "recovery_start: %lld\n",
 			   (s64)ktime_get_real_seconds() -
 			   (ktime_get_seconds() - obd->obd_recovery_start));
@@ -1141,7 +1141,7 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 			tdtd->tdtd_show_retrievers_cbdata,
 			&size, &count);
 		if (count > 0) {
-			seq_printf(m, "WAITING\n");
+			seq_puts(m, "WAITING\n");
 			seq_printf(m, "non-ready MDTs: %s\n",
 				   buf ? buf : "unknown (not enough RAM)");
 			seq_printf(m, "recovery_start: %lld\n",
@@ -1161,11 +1161,11 @@ int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data)
 
 	/* recovery won't start until the clients connect */
 	if (obd->obd_recovery_start == 0) {
-		seq_printf(m, "WAITING_FOR_CLIENTS\n");
+		seq_puts(m, "WAITING_FOR_CLIENTS\n");
 		goto out;
 	}
 
-	seq_printf(m, "RECOVERING\n");
+	seq_puts(m, "RECOVERING\n");
 	seq_printf(m, "recovery_start: %lld\n", (s64)ktime_get_real_seconds() -
 		   (ktime_get_seconds() - obd->obd_recovery_start));
 	seq_printf(m, "time_remaining: %lld\n",

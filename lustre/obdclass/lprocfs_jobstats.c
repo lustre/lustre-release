@@ -382,6 +382,7 @@ int lprocfs_job_stats_log(struct obd_device *obd, char *jobid,
 	struct obd_job_stats *stats = &obd2obt(obd)->obt_jobstats;
 	struct job_stat *job, *existing_job;
 	bool mru_last = false;
+
 	ENTRY;
 
 	LASSERT(stats);
@@ -821,6 +822,7 @@ int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
 {
 	struct proc_dir_entry *entry;
 	struct obd_job_stats *stats;
+
 	ENTRY;
 
 	LASSERT(obd->obd_proc_entry != NULL);

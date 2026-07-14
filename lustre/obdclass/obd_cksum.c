@@ -21,8 +21,7 @@ enum cksum_types obd_cksum_types_supported_server(const char *obd_name)
 	enum cksum_types ret = OBD_CKSUM_ADLER;
 	int base_speed;
 
-	CDEBUG(D_INFO, "%s: checksum speed: crc %d, crc32c %d, adler %d, "
-	       "t10ip512 %d, t10ip4k %d, t10crc512 %d, t10crc4k %d\n",
+	CDEBUG(D_INFO, "%s: checksum speed: crc %d, crc32c %d, adler %d, t10ip512 %d, t10ip4k %d, t10crc512 %d, t10crc4k %d\n",
 	       obd_name,
 	       cfs_crypto_hash_speed(cksum_obd2cfs(OBD_CKSUM_CRC32)),
 	       cfs_crypto_hash_speed(cksum_obd2cfs(OBD_CKSUM_CRC32C)),

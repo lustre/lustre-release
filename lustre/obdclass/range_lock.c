@@ -79,6 +79,7 @@ EXPORT_SYMBOL(range_lock_init);
 void range_unlock(struct range_lock_tree *tree, struct range_lock *lock)
 {
 	struct range_lock *overlap;
+
 	ENTRY;
 
 	spin_lock(&tree->rlt_lock);
@@ -121,6 +122,7 @@ int range_lock(struct range_lock_tree *tree, struct range_lock *lock)
 {
 	struct range_lock *overlap;
 	int rc = 0;
+
 	ENTRY;
 
 	spin_lock(&tree->rlt_lock);

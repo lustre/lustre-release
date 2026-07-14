@@ -869,7 +869,7 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 			GOTO(out_los, rc = PTR_ERR(th));
 
 		dti->dti_attr.la_valid = LA_MODE | LA_TYPE;
-		dti->dti_attr.la_mode = S_IFREG | S_IRUGO | S_IWUSR;
+		dti->dti_attr.la_mode = S_IFREG | 0644;
 		dti->dti_dof.dof_type = dt_mode_to_dft(S_IFREG);
 
 		rc = dt_declare_create(env, o, &dti->dti_attr, NULL,

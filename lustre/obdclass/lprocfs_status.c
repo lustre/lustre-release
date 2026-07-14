@@ -25,7 +25,7 @@
 /* enable start/elapsed_time in stats headers by default */
 unsigned int obd_enable_stats_header = 1;
 
-static int lprocfs_no_percpu_stats = 0;
+static int lprocfs_no_percpu_stats;
 module_param(lprocfs_no_percpu_stats, int, 0644);
 MODULE_PARM_DESC(lprocfs_no_percpu_stats, "Do not alloc percpu data for lprocfs stats");
 
@@ -87,8 +87,8 @@ struct proc_dir_entry *lprocfs_add_symlink(const char *name,
 
 	entry = proc_symlink(name, parent, dest);
 	if (!entry)
-		CERROR("LprocFS: Could not create symbolic link from "
-		       "%s to %s\n", name, dest);
+		CERROR("LprocFS: Could not create symbolic link from %s to %s\n",
+		       name, dest);
 
 	OBD_FREE(dest, MAX_STRING_SIZE + 1);
 	return entry;
@@ -197,6 +197,7 @@ lprocfs_register(const char *name, struct proc_dir_entry *parent,
 
 	if (list) {
 		int rc = lprocfs_add_vars(newchild, list, data);
+
 		if (rc) {
 			lprocfs_remove(&newchild);
 			return ERR_PTR(rc);
@@ -723,7 +724,7 @@ static void obd_import_flags2str(struct obd_import *imp, struct seq_file *m)
 	bool first = true;
 
 	if (test_bit(OBDF_NO_RECOV, imp->imp_obd->obd_flags)) {
-		seq_printf(m, "no_recov");
+		seq_puts(m, "no_recov");
 		first = false;
 	}
 
@@ -1021,9 +1022,9 @@ static void lprocfs_import_seq_show_locked(struct seq_file *m,
 	obd_connect_seq_flags2str(m, imp->imp_connect_data.ocd_connect_flags,
 				  imp->imp_connect_data.ocd_connect_flags2,
 				  ", ");
-	seq_printf(m, " ]\n");
+	seq_puts(m, " ]\n");
 	obd_connect_data_seqprint(m, ocd);
-	seq_printf(m, "    import_flags: [ ");
+	seq_puts(m, "    import_flags: [ ");
 	obd_import_flags2str(imp, m);
 
 	seq_printf(m, " ]\n"
@@ -1050,8 +1051,7 @@ static void lprocfs_import_seq_show_locked(struct seq_file *m,
 	list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
 		libcfs_nidstr_r(&conn->oic_conn->c_peer.nid,
 				  nidstr, sizeof(nidstr));
-		seq_printf(m, "\n          \"%s\": { connects: %u, replied: %u,"
-			   " uptodate: %s, sec_ago: ",
+		seq_printf(m, "\n          \"%s\": { connects: %u, replied: %u, uptodate: %s, sec_ago: ",
 			   nidstr, conn->oic_attempts, conn->oic_replied,
 			   conn_uptodate2str(conn->oic_uptodate));
 		if (conn->oic_last_attempt)
@@ -1098,7 +1098,7 @@ static void lprocfs_import_seq_show_locked(struct seq_file *m,
 		   ret.lc_sum, header->lc_units);
 
 	k = 0;
-	for(j = 0; j < IMP_AT_MAX_PORTALS; j++) {
+	for (j = 0; j < IMP_AT_MAX_PORTALS; j++) {
 		if (imp->imp_at.iat_portal[j] == 0)
 			break;
 		k = max_t(unsigned int, k,
@@ -1171,7 +1171,7 @@ int lprocfs_state_seq_show(struct seq_file *m, void *data)
 	with_imp_locked(obd, imp, rc) {
 		seq_printf(m, "current_state: %s\n",
 			   ptlrpc_import_state_name(imp->imp_state));
-		seq_printf(m, "state_history:\n");
+		seq_puts(m, "state_history:\n");
 		k = imp->imp_state_hist_idx;
 		for (j = 0; j < IMP_STATE_HIST_LEN; j++) {
 			struct import_state_hist *ish =
@@ -1190,9 +1190,10 @@ EXPORT_SYMBOL(lprocfs_state_seq_show);
 int lprocfs_at_hist_helper(struct seq_file *m, struct adaptive_timeout *at)
 {
 	int i;
+
 	for (i = 0; i < AT_BINS; i++)
 		seq_printf(m, "%3u ", at->at_hist[i]);
-	seq_printf(m, "\n");
+	seq_puts(m, "\n");
 	return 0;
 }
 EXPORT_SYMBOL(lprocfs_at_hist_helper);
@@ -1223,7 +1224,7 @@ static void lprocfs_timeouts_seq_show_locked(struct seq_file *m,
 		   now - worst_timestamp);
 	lprocfs_at_hist_helper(m, &imp->imp_at.iat_net_latency);
 
-	for(i = 0; i < IMP_AT_MAX_PORTALS; i++) {
+	for (i = 0; i < IMP_AT_MAX_PORTALS; i++) {
 		struct adaptive_timeout *service_est;
 
 		if (imp->imp_at.iat_portal[i] == 0)
@@ -1267,7 +1268,7 @@ int lprocfs_connect_flags_seq_show(struct seq_file *m, void *data)
 		seq_printf(m, "flags=%#llx\n", flags);
 		seq_printf(m, "flags2=%#llx\n", flags2);
 		obd_connect_seq_flags2str(m, flags, flags2, "\n");
-		seq_printf(m, "\n");
+		seq_puts(m, "\n");
 	}
 
 	return rc;
@@ -1345,7 +1346,7 @@ int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 					       obd->obd_vars, obd);
 	if (IS_ERR(obd->obd_proc_entry)) {
 		rc = PTR_ERR(obd->obd_proc_entry);
-		CERROR("error %d setting up lprocfs for %s\n",rc,obd->obd_name);
+		CERROR("error %d setting up lprocfs for %s\n", rc, obd->obd_name);
 		obd->obd_proc_entry = NULL;
 
 		debugfs_remove_recursive(obd->obd_debugfs_entry);
@@ -1426,7 +1427,7 @@ int lprocfs_stats_alloc_one(struct lprocfs_stats *stats, unsigned int cpuid)
 }
 
 struct lprocfs_stats *lprocfs_stats_alloc(unsigned int num,
-                                          enum lprocfs_stats_flags flags)
+					  enum lprocfs_stats_flags flags)
 {
 	struct lprocfs_stats *stats;
 	unsigned int num_entry;
@@ -2477,6 +2478,7 @@ int lprocfs_seq_create(struct proc_dir_entry *parent,
 		       void *data)
 {
 	struct proc_dir_entry *entry;
+
 	ENTRY;
 
 	/* Disallow secretly (un)writable entries. */
@@ -2929,6 +2931,7 @@ int lprocfs_wr_root_squash(const char __user *buffer, unsigned long count,
 	int rc;
 	char kernbuf[64], *tmp, *errmsg;
 	unsigned long uid, gid;
+
 	ENTRY;
 
 	if (count >= sizeof(kernbuf)) {
@@ -2993,6 +2996,7 @@ int lprocfs_wr_nosquash_nids(const char __user *buffer, unsigned long count,
 	char *errmsg;
 	LIST_HEAD(tmp);
 	int len = count;
+
 	ENTRY;
 
 	if (count > 4096) {

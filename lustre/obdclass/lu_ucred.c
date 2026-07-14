@@ -55,6 +55,7 @@ EXPORT_SYMBOL(lu_ucred);
 struct lu_ucred *lu_ucred_check(const struct lu_env *env)
 {
 	struct lu_ucred *uc = lu_ucred(env);
+
 	if (uc && uc->uc_valid != UCRED_OLD && uc->uc_valid != UCRED_NEW)
 		return NULL;
 	return uc;
@@ -73,6 +74,7 @@ EXPORT_SYMBOL(lu_ucred_check);
 struct lu_ucred *lu_ucred_assert(const struct lu_env *env)
 {
 	struct lu_ucred *uc = lu_ucred_check(env);
+
 	LASSERT(uc != NULL);
 	return uc;
 }

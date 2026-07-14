@@ -137,6 +137,7 @@ void lustre_hsm_swab(struct hsm_attrs *attrs)
 int lustre_buf2hsm(void *buf, int rc, struct md_hsm *mh)
 {
 	struct hsm_attrs *attrs = (struct hsm_attrs *)buf;
+
 	ENTRY;
 
 	if (rc == 0 ||  rc == -ENODATA)
@@ -169,6 +170,7 @@ EXPORT_SYMBOL(lustre_buf2hsm);
 void lustre_hsm2buf(void *buf, const struct md_hsm *mh)
 {
 	struct hsm_attrs *attrs = (struct hsm_attrs *)buf;
+
 	ENTRY;
 
 	/* copy HSM attributes */

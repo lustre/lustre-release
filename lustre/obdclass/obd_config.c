@@ -897,6 +897,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
 	int err = 0;
 	char *flag;
+
 	ENTRY;
 
 	CFS_RACE(OBD_FAIL_LDLM_RECOV_CLIENTS);
@@ -1242,6 +1243,7 @@ EXPORT_SYMBOL(class_put_profile);
 void class_del_profiles(void)
 {
 	struct lustre_profile *lprof, *n;
+
 	ENTRY;
 
 	spin_lock(&lustre_profile_list_lock);
@@ -1264,7 +1266,7 @@ EXPORT_SYMBOL(class_del_profiles);
  * it lives in a module that must be loaded after this one.
  */
 #ifdef CONFIG_LUSTRE_FS_SERVER
-static int (*quota_process_config)(struct lustre_cfg *lcfg) = NULL;
+static int (*quota_process_config)(struct lustre_cfg *lcfg);
 #endif /* CONFIG_LUSTRE_FS_SERVER */
 
 /**
@@ -1612,7 +1614,7 @@ int class_process_config(struct lustre_cfg *lcfg, struct kobject *kobj)
 
 		GOTO(out, err = -EINVAL);
 	}
-	switch(lcfg->lcfg_command) {
+	switch (lcfg->lcfg_command) {
 	case LCFG_SETUP: {
 		err = class_setup(obd, lcfg);
 		GOTO(out, err);
@@ -1639,12 +1641,12 @@ int class_process_config(struct lustre_cfg *lcfg, struct kobject *kobj)
 	}
 	case LCFG_POOL_ADD: {
 		err = obd_pool_add(obd, lustre_cfg_string(lcfg, 2),
-                                   lustre_cfg_string(lcfg, 3));
+				   lustre_cfg_string(lcfg, 3));
 		GOTO(out, err = 0);
 	}
 	case LCFG_POOL_REM: {
 		err = obd_pool_rem(obd, lustre_cfg_string(lcfg, 2),
-                                   lustre_cfg_string(lcfg, 3));
+				   lustre_cfg_string(lcfg, 3));
 		GOTO(out, err = 0);
 	}
 	case LCFG_POOL_DEL: {
@@ -1884,6 +1886,7 @@ int class_config_llog_handler(const struct lu_env *env,
 		/* Figure out config state info */
 		if (lcfg->lcfg_command == LCFG_MARKER) {
 			struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
+
 			lustre_swab_cfg_marker(marker, swab,
 					       LUSTRE_CFG_BUFLEN(lcfg, 1));
 			CDEBUG(D_CONFIG, "Marker, inst_flg=%#x mark_flg=%#x\n",
@@ -1938,14 +1941,12 @@ int class_config_llog_handler(const struct lu_env *env,
 
 			if ((lcfg->lcfg_command == LCFG_ATTACH && typename &&
 			    strcmp(typename, "mds") == 0)) {
-				CWARN("For 1.8 interoperability, rename obd "
-					"type from mds to mdt\n");
+				CWARN("For 1.8 interoperability, rename obd type from mds to mdt\n");
 				typename[2] = 't';
 			}
 			if ((lcfg->lcfg_command == LCFG_SETUP && index &&
 			    strcmp(index, "type") == 0)) {
-				CDEBUG(D_INFO, "For 1.8 interoperability, "
-				       "set this index to '0'\n");
+				CDEBUG(D_INFO, "For 1.8 interoperability, set this index to '0'\n");
 				index[0] = '0';
 				index[1] = 0;
 			}
@@ -1962,16 +1963,14 @@ int class_config_llog_handler(const struct lu_env *env,
 			if (typename &&
 			    strcmp(typename, LUSTRE_LOV_NAME) == 0) {
 				CDEBUG(D_CONFIG,
-				       "For 2.x interoperability, rename obd "
-				       "type from lov to lod (%s)\n",
+				       "For 2.x interoperability, rename obd type from lov to lod (%s)\n",
 				       s2lsi(cfg->cfg_sb)->lsi_svname);
 				strcpy(typename, LUSTRE_LOD_NAME);
 			}
 			if (typename &&
 			    strcmp(typename, LUSTRE_OSC_NAME) == 0) {
 				CDEBUG(D_CONFIG,
-				       "For 2.x interoperability, rename obd "
-				       "type from osc to osp (%s)\n",
+				       "For 2.x interoperability, rename obd type from osc to osp (%s)\n",
 				       s2lsi(cfg->cfg_sb)->lsi_svname);
 				strcpy(typename, LUSTRE_OSP_NAME);
 			}
@@ -2117,6 +2116,7 @@ int class_config_parse_llog(const struct lu_env *env, struct llog_ctxt *ctxt,
 	struct llog_handle *llh;
 	llog_cb_t callback;
 	int rc;
+
 	ENTRY;
 
 	CDEBUG(D_INFO, "looking up llog %s\n", name);
