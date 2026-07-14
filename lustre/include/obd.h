@@ -655,6 +655,7 @@ enum {
 				 */
 	OBDF_NO_IR,		/* no imperative recovery. */
 	OBDF_PROCESS_CONF,	/* device is processing mgs config */
+	OBDF_CHECKSUM_DUMP,	/* dump pages upon cksum error */
 	OBDF_NUM_FLAGS,
 };
 
@@ -674,7 +675,6 @@ struct obd_device {
 	/* bitfield modification is protected by obd_dev_lock */
 	DECLARE_BITMAP(obd_flags, OBDF_NUM_FLAGS);
 	unsigned long
-		obd_checksum_dump:1,	/* dump pages upon cksum error */
 		obd_dynamic_nids:1,	/* Allow dynamic NIDs on device */
 		obd_read_only:1,	/* device is read-only */
 		obd_need_scrub:1;	/* device need scrub */

@@ -1233,7 +1233,7 @@ int lprocfs_checksum_dump_seq_show(struct seq_file *m, void *data)
 	struct obd_device *obd = m->private;
 
 	LASSERT(obd != NULL);
-	seq_printf(m, "%d\n", obd->obd_checksum_dump);
+	seq_printf(m, "%d\n", test_bit(OBDF_CHECKSUM_DUMP, obd->obd_flags));
 	return 0;
 }
 EXPORT_SYMBOL(lprocfs_checksum_dump_seq_show);
@@ -1252,7 +1252,10 @@ lprocfs_checksum_dump_seq_write(struct file *file, const char __user *buffer,
 	if (rc)
 		return rc;
 
-	obd->obd_checksum_dump = val;
+	if (val)
+		set_bit(OBDF_CHECKSUM_DUMP, obd->obd_flags);
+	else
+		clear_bit(OBDF_CHECKSUM_DUMP, obd->obd_flags);
 	return count;
 }
 EXPORT_SYMBOL(lprocfs_checksum_dump_seq_write);
@@ -1264,7 +1267,8 @@ ssize_t dt_checksum_dump_show(struct kobject *kobj, struct attribute *attr,
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 
-	return scnprintf(buf, PAGE_SIZE, "%d\n", obd->obd_checksum_dump);
+	return scnprintf(buf, PAGE_SIZE, "%d\n",
+			 test_bit(OBDF_CHECKSUM_DUMP, obd->obd_flags));
 }
 EXPORT_SYMBOL(dt_checksum_dump_show);
 
@@ -1280,7 +1284,10 @@ ssize_t dt_checksum_dump_store(struct kobject *kobj, struct attribute *attr,
 	if (rc < 0)
 		return rc;
 
-	obd->obd_checksum_dump = val;
+	if (val)
+		set_bit(OBDF_CHECKSUM_DUMP, obd->obd_flags);
+	else
+		clear_bit(OBDF_CHECKSUM_DUMP, obd->obd_flags);
 
 	return count;
 }

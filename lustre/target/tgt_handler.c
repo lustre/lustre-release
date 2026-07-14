@@ -2073,7 +2073,7 @@ static int check_read_checksum(struct niobuf_local *local_nb, int npages,
 		return 0;
 	}
 
-	if (exp->exp_obd->obd_checksum_dump)
+	if (test_bit(OBDF_CHECKSUM_DUMP, exp->exp_obd->obd_flags))
 		dump_all_bulk_pages(oa, npages, local_nb, server_cksum,
 				    client_cksum);
 
@@ -2684,7 +2684,7 @@ static void tgt_warn_on_cksum(struct ptlrpc_request *req,
 		router = libcfs_nidstr(&desc->bd_sender);
 	}
 
-	if (exp->exp_obd->obd_checksum_dump)
+	if (test_bit(OBDF_CHECKSUM_DUMP, exp->exp_obd->obd_flags))
 		dump_all_bulk_pages(&body->oa, npages, local_nb, server_cksum,
 				    client_cksum);
 
