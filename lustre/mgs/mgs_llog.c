@@ -2090,8 +2090,7 @@ int mgs_replace_nids(const struct lu_env *env,
 
 	/* We can only change NIDs if no other nodes are connected */
 	spin_lock(&mgs_obd->obd_dev_lock);
-	conn_state = mgs_obd->obd_no_conn;
-	mgs_obd->obd_no_conn = 1;
+	conn_state = test_and_set_bit(OBDF_NO_CONN, mgs_obd->obd_flags);
 	spin_unlock(&mgs_obd->obd_dev_lock);
 
 	/* We can not change nids if not only MGS is started */
@@ -2138,7 +2137,10 @@ int mgs_replace_nids(const struct lu_env *env,
 
 out:
 	spin_lock(&mgs_obd->obd_dev_lock);
-	mgs_obd->obd_no_conn = conn_state;
+	if (conn_state)
+		set_bit(OBDF_NO_CONN, mgs_obd->obd_flags);
+	else
+		clear_bit(OBDF_NO_CONN, mgs_obd->obd_flags);
 	spin_unlock(&mgs_obd->obd_dev_lock);
 
 	if (fsdb)
@@ -2272,8 +2274,7 @@ int mgs_clear_configs(const struct lu_env *env,
 
 	/* Prevent clients and servers from connecting to mgs */
 	spin_lock(&mgs_obd->obd_dev_lock);
-	conn_state = mgs_obd->obd_no_conn;
-	mgs_obd->obd_no_conn = 1;
+	conn_state = test_and_set_bit(OBDF_NO_CONN, mgs_obd->obd_flags);
 	spin_unlock(&mgs_obd->obd_dev_lock);
 
 	/*
@@ -2325,7 +2326,10 @@ int mgs_clear_configs(const struct lu_env *env,
 	OBD_FREE(namedash, strlen(name) + 2);
 out:
 	spin_lock(&mgs_obd->obd_dev_lock);
-	mgs_obd->obd_no_conn = conn_state;
+	if (conn_state)
+		set_bit(OBDF_NO_CONN, mgs_obd->obd_flags);
+	else
+		clear_bit(OBDF_NO_CONN, mgs_obd->obd_flags);
 	spin_unlock(&mgs_obd->obd_dev_lock);
 
 	RETURN(rc);

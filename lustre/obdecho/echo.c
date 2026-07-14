@@ -770,7 +770,7 @@ static int echo_srv_init0(const struct lu_env *env,
 
 	/* No connection accepted until configurations will finish */
 	spin_lock(&obd->obd_dev_lock);
-	obd->obd_no_conn = 1;
+	set_bit(OBDF_NO_CONN, obd->obd_flags);
 	spin_unlock(&obd->obd_dev_lock);
 
 	/* non-replayable target */
@@ -809,7 +809,7 @@ static int echo_srv_init0(const struct lu_env *env,
 		GOTO(err_out, rc);
 
 	spin_lock(&obd->obd_dev_lock);
-	obd->obd_no_conn = 0;
+	clear_bit(OBDF_NO_CONN, obd->obd_flags);
 	spin_unlock(&obd->obd_dev_lock);
 
 	RETURN(0);

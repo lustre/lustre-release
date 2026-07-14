@@ -6638,7 +6638,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	 */
 	set_bit(OBDF_REPLAYABLE, obd->obd_flags);
 	/* No connection accepted until configurations will finish */
-	obd->obd_no_conn = 1;
+	set_bit(OBDF_NO_CONN, obd->obd_flags);
 
 	if (cfg->lcfg_bufcount > 4 && LUSTRE_CFG_BUFLEN(cfg, 4) > 0) {
 		char *str = lustre_cfg_string(cfg, 4);
@@ -7073,9 +7073,9 @@ static int mdt_prepare(const struct lu_env *env,
 
 	target_recovery_init(&mdt->mdt_lut, tgt_request_handle);
 	set_bit(MDT_FL_CFGLOG, &mdt->mdt_state);
-	LASSERT(obd->obd_no_conn);
+	LASSERT(test_bit(OBDF_NO_CONN, obd->obd_flags));
 	spin_lock(&obd->obd_dev_lock);
-	obd->obd_no_conn = 0;
+	clear_bit(OBDF_NO_CONN, obd->obd_flags);
 	spin_unlock(&obd->obd_dev_lock);
 
 	if (!test_bit(OBDF_RECOVERING, obd->obd_flags))

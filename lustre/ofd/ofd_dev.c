@@ -633,9 +633,9 @@ static int ofd_prepare(const struct lu_env *env, struct lu_device *pdev,
 	target_recovery_init(&ofd->ofd_lut, tgt_request_handle);
 	CFS_FAIL_TIMEOUT_ORSET(OBD_FAIL_OST_PREPARE_DELAY, CFS_FAIL_ONCE,
 			       (OBD_TIMEOUT_DEFAULT + 1) / 4);
-	LASSERT(obd->obd_no_conn);
+	LASSERT(test_bit(OBDF_NO_CONN, obd->obd_flags));
 	spin_lock(&obd->obd_dev_lock);
-	obd->obd_no_conn = 0;
+	clear_bit(OBDF_NO_CONN, obd->obd_flags);
 	spin_unlock(&obd->obd_dev_lock);
 
 	if (!test_bit(OBDF_RECOVERING, obd->obd_flags))
@@ -3107,7 +3107,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 
 	/* No connection accepted until configurations will finish */
 	spin_lock(&obd->obd_dev_lock);
-	obd->obd_no_conn = 1;
+	set_bit(OBDF_NO_CONN, obd->obd_flags);
 	spin_unlock(&obd->obd_dev_lock);
 	set_bit(OBDF_REPLAYABLE, obd->obd_flags);
 	if (cfg->lcfg_bufcount > 4 && LUSTRE_CFG_BUFLEN(cfg, 4) > 0) {
