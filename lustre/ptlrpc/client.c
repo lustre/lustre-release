@@ -1678,6 +1678,7 @@ static int after_reply(struct ptlrpc_request *req)
 
 	if (obd->obd_svc_stats) {
 		s64 qtime = ktime_us_delta(work_start, req->rq_queued_time_ns);
+
 		lprocfs_counter_add(obd->obd_svc_stats, PTLRPC_REQWAIT_CNTR,
 				    qtime);
 		ptlrpc_lprocfs_rpc_sent(req, timediff);
@@ -3571,6 +3572,7 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
 void ptlrpc_abort_inflight(struct obd_import *imp)
 {
 	struct ptlrpc_request *req;
+
 	ENTRY;
 
 	/*
@@ -3685,7 +3687,7 @@ void ptlrpc_init_xid(void)
  * Multi-bulk BRW RPCs consume multiple XIDs for each bulk transfer, starting
  * at the returned xid, up to xid + PTLRPC_BULK_OPS_COUNT - 1. The BRW RPC
  * itself uses the last bulk xid needed, so the server can determine the
- * the number of bulk transfers from the RPC XID and a bitmask.  The starting
+ * number of bulk transfers from the RPC XID and a bitmask.  The starting
  * xid must align to a power-of-two value.
  *
  * This is assumed to be true due to the initial ptlrpc_last_xid

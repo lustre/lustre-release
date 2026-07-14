@@ -1180,7 +1180,7 @@ int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
 		.umd_max_size  = service->srv_max_req_size,
 		.umd_threshold = LNET_MD_THRESH_INF,
 		.umd_options   = PTLRPC_MD_OPTIONS | LNET_MD_OP_PUT |
-		             LNET_MD_MAX_SIZE,
+				 LNET_MD_MAX_SIZE,
 		.umd_user_ptr  = &rqbd->rqbd_cbid,
 		.umd_handler   = ptlrpc_handler,
 	};

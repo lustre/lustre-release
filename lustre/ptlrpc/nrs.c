@@ -108,6 +108,7 @@ static void nrs_policy_started_put(struct ptlrpc_nrs_policy *policy)
 static int nrs_policy_stop_locked(struct ptlrpc_nrs_policy *policy)
 {
 	struct ptlrpc_nrs *nrs = policy->pol_nrs;
+
 	ENTRY;
 
 	if (nrs->nrs_policy_fallback == policy && !nrs->nrs_stopping)
@@ -159,6 +160,7 @@ static int nrs_policy_stop_locked(struct ptlrpc_nrs_policy *policy)
 static void nrs_policy_stop_primary(struct ptlrpc_nrs *nrs)
 {
 	struct ptlrpc_nrs_policy *tmp = nrs->nrs_policy_primary;
+
 	ENTRY;
 
 	if (tmp == NULL) {
@@ -208,6 +210,7 @@ static int nrs_policy_start_locked(struct ptlrpc_nrs_policy *policy, char *arg)
 	struct ptlrpc_service_part *svcpt = nrs->nrs_svcpt;
 	char *srv_name = svcpt->scp_service->srv_name;
 	int rc = 0;
+
 	ENTRY;
 
 	/**
@@ -359,8 +362,8 @@ __must_hold(&policy->pol_nrs->nrs_lock)
 /*
  * Find and return a policy by name.
  */
-static struct ptlrpc_nrs_policy * nrs_policy_find_locked(struct ptlrpc_nrs *nrs,
-							 char *name)
+static struct ptlrpc_nrs_policy *nrs_policy_find_locked(struct ptlrpc_nrs *nrs,
+							char *name)
 {
 	struct ptlrpc_nrs_policy *tmp;
 
@@ -409,9 +412,9 @@ static void nrs_resource_put(struct ptlrpc_nrs_resource *res)
  * * %valid-pointer  the bottom level of the resource hierarchy
  */
 static
-struct ptlrpc_nrs_resource * nrs_resource_get(struct ptlrpc_nrs_policy *policy,
-					      struct ptlrpc_nrs_request *nrq,
-					      bool moving_req)
+struct ptlrpc_nrs_resource *nrs_resource_get(struct ptlrpc_nrs_policy *policy,
+					     struct ptlrpc_nrs_request *nrq,
+					     bool moving_req)
 {
 	/**
 	 * Set to NULL to traverse the resource hierarchy from the top.
@@ -549,8 +552,8 @@ static void nrs_resource_put_safe(struct ptlrpc_nrs_resource **resp)
  * Returns the NRS request to be handled
  */
 static inline
-struct ptlrpc_nrs_request * nrs_request_get(struct ptlrpc_nrs_policy *policy,
-					    bool peek, bool force)
+struct ptlrpc_nrs_request *nrs_request_get(struct ptlrpc_nrs_policy *policy,
+					   bool peek, bool force)
 {
 	struct ptlrpc_nrs_request *nrq;
 
@@ -571,8 +574,8 @@ struct ptlrpc_nrs_request * nrs_request_get(struct ptlrpc_nrs_policy *policy,
  * nrs_request_enqueue() - Enqueues request
  * @nrq: the request being enqueued
  *
- * Enqueues request @nrq for later handling, via one one the policies for
- * which resources where earlier obtained via nrs_resource_get_safe(). The
+ * Enqueues request @nrq for later handling, via one of the policies for
+ * which resources were earlier obtained via nrs_resource_get_safe(). The
  * function attempts to enqueue the request first on the primary policy
  * (if any), since this is the preferred choice.
  *
@@ -658,6 +661,7 @@ static int nrs_policy_ctl(struct ptlrpc_nrs *nrs, char *name,
 {
 	struct ptlrpc_nrs_policy       *policy;
 	int				rc = 0;
+
 	ENTRY;
 
 	spin_lock(&nrs->nrs_lock);
@@ -711,6 +715,7 @@ static int nrs_policy_unregister(struct ptlrpc_nrs *nrs, char *name)
 	struct ptlrpc_service_part *svcpt = nrs->nrs_svcpt;
 	char *srv_name = svcpt->scp_service->srv_name;
 	int rc = 0;
+
 	ENTRY;
 
 	spin_lock(&nrs->nrs_lock);
@@ -780,6 +785,7 @@ static int nrs_policy_register(struct ptlrpc_nrs *nrs,
 	struct ptlrpc_service_part *svcpt = nrs->nrs_svcpt;
 	char *srv_name = svcpt->scp_service->srv_name;
 	int rc;
+
 	ENTRY;
 
 	LASSERT(svcpt != NULL);
@@ -875,6 +881,7 @@ static void ptlrpc_nrs_req_add_nolock(struct ptlrpc_request *req)
 static void ptlrpc_nrs_hpreq_add_nolock(struct ptlrpc_request *req)
 {
 	int	opc = lustre_msg_get_opc(req->rq_reqmsg);
+
 	ENTRY;
 
 	spin_lock(&req->rq_lock);
@@ -921,6 +928,7 @@ static int nrs_register_policies_locked(struct ptlrpc_nrs *nrs)
 	struct ptlrpc_service_part	 *svcpt = nrs->nrs_svcpt;
 	struct ptlrpc_service		 *svc = svcpt->scp_service;
 	int				  rc = -EINVAL;
+
 	ENTRY;
 
 	LASSERT(mutex_is_locked(&nrs_core.nrs_mutex));
@@ -1003,6 +1011,7 @@ static int nrs_svcpt_setup_locked(struct ptlrpc_service_part *svcpt)
 {
 	struct ptlrpc_nrs	       *nrs;
 	int				rc;
+
 	ENTRY;
 
 	LASSERT(mutex_is_locked(&nrs_core.nrs_mutex));
@@ -1048,6 +1057,7 @@ static void nrs_svcpt_cleanup_locked(struct ptlrpc_service_part *svcpt)
 	struct ptlrpc_nrs_policy       *tmp;
 	int				rc;
 	bool				hp = false;
+
 	ENTRY;
 
 	LASSERT(mutex_is_locked(&nrs_core.nrs_mutex));
@@ -1084,7 +1094,7 @@ again:
 
 /**
  * nrs_policy_find_desc_locked() - Returns the descriptor for a policy as
- * identified by by @name.
+ * identified by @name.
  * @name: the policy name
  *
  * Returns the policy descriptor on success and NULL on error
@@ -1092,6 +1102,7 @@ again:
 static struct ptlrpc_nrs_pol_desc *nrs_policy_find_desc_locked(const char *name)
 {
 	struct ptlrpc_nrs_pol_desc     *tmp;
+
 	ENTRY;
 
 	list_for_each_entry(tmp, &nrs_core.nrs_policies, pd_list) {
@@ -1121,6 +1132,7 @@ static int nrs_policy_unregister_locked(struct ptlrpc_nrs_pol_desc *desc)
 	struct ptlrpc_service_part     *svcpt;
 	int				i;
 	int				rc = 0;
+
 	ENTRY;
 
 	LASSERT(mutex_is_locked(&nrs_core.nrs_mutex));
@@ -1182,9 +1194,10 @@ again:
  */
 static int ptlrpc_nrs_policy_register(struct ptlrpc_nrs_pol_conf *conf)
 {
-        struct ptlrpc_service	       *svc;
+	struct ptlrpc_service	       *svc;
 	struct ptlrpc_nrs_pol_desc     *desc;
 	int				rc = 0;
+
 	ENTRY;
 
 	LASSERT(conf != NULL);
@@ -1210,10 +1223,7 @@ static int ptlrpc_nrs_policy_register(struct ptlrpc_nrs_pol_conf *conf)
 	    (conf->nc_flags & (PTLRPC_NRS_FL_FALLBACK |
 			       PTLRPC_NRS_FL_REG_START))) {
 		rc = -EINVAL;
-		CERROR("NRS: failing to register policy %s. Please check "
-		       "policy flags; external policies cannot act as fallback "
-		       "policies, or be started immediately upon registration "
-		       "without interaction with lprocfs: rc = %d\n",
+		CERROR("NRS: failing to register policy %s. Please check policy flags; external policies cannot act as fallback policies, or be started immediately upon registration without interaction with lprocfs: rc = %d\n",
 		       conf->nc_name, rc);
 		RETURN(rc);
 	}
@@ -1625,6 +1635,7 @@ void ptlrpc_nrs_req_hp_move(struct ptlrpc_request *req)
 	struct ptlrpc_nrs_request	*nrq = &req->rq_nrq;
 	struct ptlrpc_nrs_resource	*res1[NRS_RES_MAX];
 	struct ptlrpc_nrs_resource	*res2[NRS_RES_MAX];
+
 	ENTRY;
 
 	/**
@@ -1693,6 +1704,7 @@ int ptlrpc_nrs_policy_control(const struct ptlrpc_service *svc,
 	struct ptlrpc_service_part     *svcpt;
 	int				i;
 	int				rc = 0;
+
 	ENTRY;
 
 	LASSERT(opc != PTLRPC_NRS_CTL_INVALID);
@@ -1739,6 +1751,7 @@ out:
 int ptlrpc_nrs_init(void)
 {
 	int	rc;
+
 	ENTRY;
 
 	mutex_init(&nrs_core.nrs_mutex);

@@ -130,8 +130,8 @@ static int nrs_fifo_res_get(struct ptlrpc_nrs_policy *policy,
  *
  */
 static
-struct ptlrpc_nrs_request * nrs_fifo_req_get(struct ptlrpc_nrs_policy *policy,
-					     bool peek, bool force)
+struct ptlrpc_nrs_request *nrs_fifo_req_get(struct ptlrpc_nrs_policy *policy,
+					    bool peek, bool force)
 {
 	struct nrs_fifo_head	  *head = policy->pol_private;
 	struct ptlrpc_nrs_request *nrq;
@@ -147,9 +147,9 @@ struct ptlrpc_nrs_request * nrs_fifo_req_get(struct ptlrpc_nrs_policy *policy,
 
 		list_del_init(&nrq->nr_u.fifo.fr_list);
 
-		CDEBUG(D_RPCTRACE, "NRS start %s request from %s, seq: %llu"
-		       "\n", policy->pol_desc->pd_name,
-		       libcfs_idstr(&req->rq_peer), nrq->nr_u.fifo.fr_sequence);
+		CDEBUG(D_RPCTRACE, "NRS start %s request from %s, seq: %llu\n",
+		       policy->pol_desc->pd_name, libcfs_idstr(&req->rq_peer),
+		       nrq->nr_u.fifo.fr_sequence);
 	}
 
 	return nrq;

@@ -480,11 +480,10 @@ static struct binheap_ops nrs_orr_heap_ops = {
 static int nrs_orr_init(struct ptlrpc_nrs_policy *policy)
 {
 	if (policy->pol_nrs->nrs_svcpt->scp_service->srv_ncpts > 1)
-		CDEBUG(D_CONFIG, "%s: The %s NRS policy was registered on a "
-		      "service with multiple service partitions. This policy "
-		      "may perform better with a single partition.\n",
-		      policy->pol_nrs->nrs_svcpt->scp_service->srv_name,
-		      policy->pol_desc->pd_name);
+		CDEBUG(D_CONFIG,
+		       "%s: The %s NRS policy was registered on a service with multiple service partitions. This policy may perform better with a single partition.\n",
+		       policy->pol_nrs->nrs_svcpt->scp_service->srv_name,
+		       policy->pol_desc->pd_name);
 
 	return 0;
 }
@@ -502,6 +501,7 @@ static int nrs_orr_start(struct ptlrpc_nrs_policy *policy, char *arg)
 {
 	struct nrs_orr_data    *orrd;
 	int			rc = 0;
+
 	ENTRY;
 
 	OBD_CPT_ALLOC_PTR(orrd, nrs_pol2cptab(policy), nrs_pol2cptid(policy));
@@ -579,6 +579,7 @@ out_orrd:
 static void nrs_orr_stop(struct ptlrpc_nrs_policy *policy)
 {
 	struct nrs_orr_data *orrd = policy->pol_private;
+
 	ENTRY;
 
 	LASSERT(orrd != NULL);
@@ -999,16 +1000,13 @@ struct ptlrpc_nrs_request *nrs_orr_req_get(struct ptlrpc_nrs_policy *policy,
 		if (strncmp(policy->pol_desc->pd_name, NRS_POL_NAME_ORR,
 				 NRS_POL_NAME_MAX) == 0)
 			CDEBUG(D_RPCTRACE,
-			       "NRS: starting to handle %s request for object "
-			       "with FID "DFID", from OST with index %u, with "
-			       "round %llu\n", NRS_POL_NAME_ORR,
-			       PFID(&orro->oo_key.ok_fid),
+			       "NRS: starting to handle %s request for object with FID "DFID", from OST with index %u, with round %llu\n",
+			       NRS_POL_NAME_ORR, PFID(&orro->oo_key.ok_fid),
 			       nrq->nr_u.orr.or_key.ok_idx,
 			       nrq->nr_u.orr.or_round);
 		else
 			CDEBUG(D_RPCTRACE,
-			       "NRS: starting to handle %s request from OST "
-			       "with index %u, with round %llu\n",
+			       "NRS: starting to handle %s request from OST with index %u, with round %llu\n",
 			       NRS_POL_NAME_TRR, nrq->nr_u.orr.or_key.ok_idx,
 			       nrq->nr_u.orr.or_round);
 
@@ -1333,13 +1331,13 @@ ptlrpc_lprocfs_nrs_orr_quantum_seq_write(struct file *file,
 	int			     rc = 0;
 	int			     rc2 = 0;
 
-        if (count > (sizeof(kernbuf) - 1))
-                return -EINVAL;
+	if (count > (sizeof(kernbuf) - 1))
+		return -EINVAL;
 
 	if (copy_from_user(kernbuf, buffer, count))
 		return -EFAULT;
 
-        kernbuf[count] = '\0';
+	kernbuf[count] = '\0';
 
 	count_copy = count;
 
@@ -1530,7 +1528,7 @@ no_hp:
  * ost_io service to use logical file offset ordering.
  *
  * policy instances in the ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state are
- * are skipped later by nrs_orr_ctl().
+ * skipped later by nrs_orr_ctl().
  */
 static ssize_t
 ptlrpc_lprocfs_nrs_orr_offset_type_seq_write(struct file *file,
@@ -1551,13 +1549,13 @@ ptlrpc_lprocfs_nrs_orr_offset_type_seq_write(struct file *file,
 	int			     rc = 0;
 	int			     rc2 = 0;
 
-        if (count > (sizeof(kernbuf) - 1))
-                return -EINVAL;
+	if (count > (sizeof(kernbuf) - 1))
+		return -EINVAL;
 
 	if (copy_from_user(kernbuf, buffer, count))
 		return -EFAULT;
 
-        kernbuf[count] = '\0';
+	kernbuf[count] = '\0';
 
 	count_copy = count;
 
@@ -1664,7 +1662,7 @@ LDEBUGFS_SEQ_FOPS(ptlrpc_lprocfs_nrs_orr_offset_type);
  */
 static const char *nrs_orr_supp2str(enum nrs_orr_supp supp)
 {
-	switch(supp) {
+	switch (supp) {
 	case NOS_OST_READ:
 		return LPROCFS_NRS_SUPP_NAME_READS;
 	case NOS_OST_WRITE:
@@ -1792,7 +1790,7 @@ no_hp:
  * the ost_io service to use handle OST_READ and OST_WRITE RPCs.
  *
  * policy instances in the ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPED state are
- * are skipped later by nrs_orr_ctl().
+ * skipped later by nrs_orr_ctl().
  */
 static ssize_t
 ptlrpc_lprocfs_nrs_orr_supported_seq_write(struct file *file,
@@ -1813,13 +1811,13 @@ ptlrpc_lprocfs_nrs_orr_supported_seq_write(struct file *file,
 	int			     rc = 0;
 	int			     rc2 = 0;
 
-        if (count > (sizeof(kernbuf) - 1))
-                return -EINVAL;
+	if (count > (sizeof(kernbuf) - 1))
+		return -EINVAL;
 
 	if (copy_from_user(kernbuf, buffer, count))
 		return -EFAULT;
 
-        kernbuf[count] = '\0';
+	kernbuf[count] = '\0';
 
 	count_copy = count;
 

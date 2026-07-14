@@ -89,7 +89,7 @@ static int nodemap_idmap_show(struct seq_file *m, void *data)
 	up_read(&nodemap->nm_idmap_lock);
 	if (cont)
 		seq_puts(m, "\n");
-	seq_printf(m, "]\n");
+	seq_puts(m, "]\n");
 
 	nodemap_putref(nodemap);
 	return 0;
@@ -246,7 +246,7 @@ static int nodemap_ranges_show(struct seq_file *m, void *unused)
 	mutex_unlock(&active_config_lock);
 	if (cont)
 		seq_puts(m, "\n");
-	seq_printf(m, "]\n");
+	seq_puts(m, "]\n");
 
 	nodemap_putref(nodemap);
 	return 0;
@@ -311,7 +311,7 @@ static int nodemap_ban_ranges_show(struct seq_file *m, void *unused)
 	mutex_unlock(&active_config_lock);
 	if (cont)
 		seq_puts(m, "\n");
-	seq_printf(m, "]\n");
+	seq_puts(m, "]\n");
 
 	nodemap_putref(nodemap);
 	return 0;
@@ -401,6 +401,7 @@ nodemap_fileset_seq_write(struct file *file,
 	struct seq_file *m = file->private_data;
 	char *nm_fileset;
 	int rc = 0;
+
 	ENTRY;
 
 	if (count == 0)
@@ -547,7 +548,7 @@ static int nodemap_exports_show(struct seq_file *m, void *unused)
 
 	if (cont)
 		seq_puts(m, "\n");
-	seq_printf(m, "]\n");
+	seq_puts(m, "]\n");
 
 	nodemap_putref(nodemap);
 	return 0;
@@ -636,6 +637,7 @@ static int nodemap_id_seq_show(struct seq_file *m, void *data)
 	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		int rc = PTR_ERR(nodemap);
+
 		CERROR("cannot find nodemap '%s': rc = %d\n",
 			(char *)m->private, rc);
 		return rc;
@@ -663,6 +665,7 @@ static int nodemap_squash_uid_seq_show(struct seq_file *m, void *data)
 	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		int rc = PTR_ERR(nodemap);
+
 		CERROR("cannot find nodemap '%s': rc = %d\n",
 			(char *)m->private, rc);
 		return rc;
@@ -689,6 +692,7 @@ static int nodemap_squash_gid_seq_show(struct seq_file *m, void *data)
 	nodemap = nodemap_lookup_unlocked(m->private);
 	if (IS_ERR(nodemap)) {
 		int rc = PTR_ERR(nodemap);
+
 		CERROR("cannot find nodemap '%s': rc = %d\n",
 			(char *)m->private, rc);
 		return rc;
@@ -1407,6 +1411,7 @@ int nodemap_procfs_init(void)
 					  debugfs_lustre_root);
 	if (!nodemap_root) {
 		int rc = -EINVAL;
+
 		CERROR("cannot create 'nodemap' directory: rc = %d\n",
 		       rc);
 	} else {

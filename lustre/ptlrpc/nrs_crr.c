@@ -122,6 +122,7 @@ static int nrs_crrn_start(struct ptlrpc_nrs_policy *policy, char *arg)
 {
 	struct nrs_crrn_net    *net;
 	int			rc = 0;
+
 	ENTRY;
 
 	OBD_CPT_ALLOC_PTR(net, nrs_pol2cptab(policy), nrs_pol2cptid(policy));
@@ -175,6 +176,7 @@ out_net:
 static void nrs_crrn_stop(struct ptlrpc_nrs_policy *policy)
 {
 	struct nrs_crrn_net	*net = policy->pol_private;
+
 	ENTRY;
 
 	LASSERT(net != NULL);
@@ -364,9 +366,9 @@ struct ptlrpc_nrs_request *nrs_crrn_req_get(struct ptlrpc_nrs_policy *policy,
 		cli->cc_active--;
 
 		CDEBUG(D_RPCTRACE,
-		       "NRS: starting to handle %s request from %s, with round "
-		       "%llu\n", NRS_POL_NAME_CRRN,
-		       libcfs_idstr(&req->rq_peer), nrq->nr_u.crr.cr_round);
+		       "NRS: starting to handle %s request from %s, with round %llu\n",
+		       NRS_POL_NAME_CRRN, libcfs_idstr(&req->rq_peer),
+		       nrq->nr_u.crr.cr_round);
 
 		/* Peek at the next request to be served */
 		node = binheap_root(net->cn_binheap);
@@ -533,9 +535,9 @@ static void nrs_crrn_req_stop(struct ptlrpc_nrs_policy *policy,
 						  rq_nrq);
 
 	CDEBUG(D_RPCTRACE,
-	       "NRS: finished handling %s request from %s, with round %llu"
-	       "\n", NRS_POL_NAME_CRRN,
-	       libcfs_idstr(&req->rq_peer), nrq->nr_u.crr.cr_round);
+	       "NRS: finished handling %s request from %s, with round %llu\n",
+	       NRS_POL_NAME_CRRN, libcfs_idstr(&req->rq_peer),
+	       nrq->nr_u.crr.cr_round);
 }
 
 /* debugfs interface */

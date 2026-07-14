@@ -1432,10 +1432,10 @@ EXPORT_SYMBOL(sptlrpc_sec_put);
  * policy module is responsible for taking refrence of import
  */
 static
-struct ptlrpc_sec * sptlrpc_sec_create(struct obd_import *imp,
-				       struct ptlrpc_svc_ctx *svc_ctx,
-				       struct sptlrpc_flavor *sf,
-				       enum lustre_sec_part sp)
+struct ptlrpc_sec *sptlrpc_sec_create(struct obd_import *imp,
+				      struct ptlrpc_svc_ctx *svc_ctx,
+				      struct sptlrpc_flavor *sf,
+				      enum lustre_sec_part sp)
 {
 	struct ptlrpc_sec_policy *policy;
 	struct ptlrpc_sec *sec;

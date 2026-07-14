@@ -101,6 +101,7 @@ ptlrpc_connection_get(struct lnet_processid *peer_orig, struct lnet_nid *self,
 {
 	struct ptlrpc_connection *conn, *conn2;
 	struct lnet_processid peer = *peer_orig;
+
 	ENTRY;
 
 	LNetPrimaryNID(&peer.nid);

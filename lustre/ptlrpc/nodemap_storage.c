@@ -262,6 +262,7 @@ static void nodemap_inc_version(const struct lu_env *env,
 				struct thandle *th)
 {
 	u64 ver = dt_version_get(env, nodemap_idx);
+
 	dt_version_set(env, nodemap_idx, ver + 1, th);
 }
 
@@ -314,7 +315,7 @@ again:
 retry:
 	nm_obj = local_index_find_or_create(env, los, root_obj,
 						LUSTRE_NODEMAP_NAME,
-						S_IFREG | S_IRUGO | S_IWUSR,
+						S_IFREG | 0644,
 						&dt_nodemap_features);
 	if (IS_ERR(nm_obj)) {
 		if (PTR_ERR(nm_obj) == -EEXIST && rc != -ENOENT &&
@@ -344,8 +345,8 @@ retry:
 			if (create_new == NCFC_CREATE_NEW)
 				GOTO(out_root, nm_obj = ERR_PTR(rc));
 
-			CERROR("cannot load nodemap index from disk, creating "
-			       "new index: rc = %d\n", rc);
+			CERROR("cannot load nodemap index from disk, creating new index: rc = %d\n",
+			       rc);
 			create_new = NCFC_CREATE_NEW;
 			goto again;
 		}
@@ -2545,6 +2546,7 @@ struct nm_config_file *nm_config_file_register_mgs(const struct lu_env *env,
 {
 	struct nm_config_file *ncf;
 	int rc = 0;
+
 	ENTRY;
 
 	if (nodemap_mgs())
@@ -2724,6 +2726,7 @@ static int nodemap_page_build(const struct lu_env *env, struct dt_object *obj,
 	char *entry;
 	size_t size = ii->ii_keysize + ii->ii_recsize;
 	int rc;
+
 	ENTRY;
 
 	if (bytes < LIP_HDR_SIZE)

@@ -147,10 +147,8 @@ int nm_member_add(struct lu_nodemap *nodemap, struct obd_export *exp)
 			RETURN(0);
 
 		/* possibly reconnecting while about to be reclassified */
-		CWARN("export %p %s already hashed, failed to add to "
-		      "nodemap %s already member of %s\n", exp,
-		      exp->exp_client_uuid.uuid,
-		      nodemap->nm_name,
+		CWARN("export %p %s already hashed, failed to add to nodemap %s already member of %s\n",
+		      exp, exp->exp_client_uuid.uuid, nodemap->nm_name,
 		      (exp->exp_target_data.ted_nodemap == NULL) ?
 				NRS_TBF_TYPE_UNKNOWN :
 				exp->exp_target_data.ted_nodemap->nm_name);

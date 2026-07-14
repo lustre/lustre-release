@@ -19,7 +19,7 @@
 #ifdef OBD_CTXT_DEBUG
 # define ASSERT_CTXT_MAGIC(magic) LASSERT((magic) == OBD_RUN_CTXT_MAGIC)
 #else
-# define ASSERT_CTXT_MAGIC(magic) do {} while(0)
+# define ASSERT_CTXT_MAGIC(magic) do {} while (0)
 #endif
 
 static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,

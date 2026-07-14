@@ -407,8 +407,8 @@ lprocfs_nrs_delay_seq_write_common(const char __user *buffer,
 	enum ptlrpc_nrs_queue_type queue = 0;
 	char *kernbuf;
 	char *val_str;
-	long unsigned int val_reg;
-	long unsigned int val_hp;
+	unsigned long val_reg;
+	unsigned long val_hp;
 	size_t count_copy;
 	int rc = 0;
 	char *tmp = NULL;
@@ -483,6 +483,7 @@ lprocfs_nrs_delay_seq_write_common(const char __user *buffer,
 
 	if (queue & PTLRPC_NRS_QUEUE_HP) {
 		int rc2 = 0;
+
 		if (val_hp > max_val || val_hp < min_val)
 			GOTO(free_tmp, rc = -EINVAL);
 

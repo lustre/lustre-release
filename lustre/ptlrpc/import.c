@@ -30,7 +30,7 @@
 #include "ptlrpc_internal.h"
 
 struct ptlrpc_connect_async_args {
-	 __u64 pcaa_peer_committed;
+	__u64 pcaa_peer_committed;
 	int pcaa_initial_connect;
 };
 
@@ -1911,6 +1911,7 @@ int ptlrpc_disconnect_import_async(struct obd_import *imp, int noclose,
 	struct ptlrpc_request *req;
 	int rc = 0;
 	struct disconnect_async_arg *daa;
+
 	ENTRY;
 
 	spin_lock(&imp->imp_lock);
@@ -1977,6 +1978,7 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 {
 	DECLARE_COMPLETION_ONSTACK(cmpl);
 	int rc;
+
 	ENTRY;
 
 	/* probably the import has been disconnected already being idle */

@@ -506,7 +506,7 @@ static int ping_evictor_main(void *arg)
 		 * removed from the list, we won't find them here.
 		 */
 		spin_lock(&obd->obd_dev_lock);
-		while((exp = obd_export_timed_get(obd, false))) {
+		while ((exp = obd_export_timed_get(obd, false))) {
 			if (current_time > exp->exp_deadline) {
 				struct obd_uuid *client_uuid;
 

@@ -59,9 +59,10 @@ int ptlrpcd_start(struct ptlrpcd_ctl *pc);
 /* client.c */
 void ptlrpc_at_adj_net_latency(struct ptlrpc_request *req,
 			       timeout_t service_timeout);
-struct ptlrpc_bulk_desc *ptlrpc_new_bulk(unsigned npages, unsigned max_brw,
+struct ptlrpc_bulk_desc *ptlrpc_new_bulk(unsigned int nfrags,
+					 unsigned int max_brw,
 					 enum ptlrpc_bulk_op_type type,
-					 unsigned portal,
+					 unsigned int portal,
 					 const struct ptlrpc_bulk_frag_ops
 						*ops);
 int ptlrpc_request_cache_init(void);
@@ -105,8 +106,8 @@ void ptlrpc_ldebugfs_register_service(struct dentry *debugfs_entry,
 				      struct ptlrpc_service *svc);
 void ptlrpc_lprocfs_unregister_service(struct ptlrpc_service *svc);
 void ptlrpc_lprocfs_rpc_sent(struct ptlrpc_request *req, long amount);
-void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
-                                     long q_usec, long work_usec);
+void ptlrpc_lprocfs_do_request_stat(struct ptlrpc_request *req,
+				    long q_usec, long work_usec);
 
 /* NRS */
 
@@ -233,8 +234,10 @@ struct ptlrpc_nrs_policy *nrs_request_policy(struct ptlrpc_nrs_request *nrq)
  * a separating space character.
  */
 #define LPROCFS_NRS_WR_QUANTUM_MAX_CMD					       \
- sizeof(NRS_LPROCFS_QUANTUM_NAME_REG __stringify(LPROCFS_NRS_QUANTUM_MAX) " "  \
-        NRS_LPROCFS_QUANTUM_NAME_HP __stringify(LPROCFS_NRS_QUANTUM_MAX))
+	sizeof(NRS_LPROCFS_QUANTUM_NAME_REG				       \
+	       __stringify(LPROCFS_NRS_QUANTUM_MAX) " "			       \
+	       NRS_LPROCFS_QUANTUM_NAME_HP				       \
+	       __stringify(LPROCFS_NRS_QUANTUM_MAX))
 
 /* recovd_thread.c */
 

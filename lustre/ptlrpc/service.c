@@ -28,7 +28,7 @@
 #include "ptlrpc_internal.h"
 
 /* The following are visible and mutable through /sys/module/ptlrpc */
-int test_req_buffer_pressure = 0;
+int test_req_buffer_pressure;
 module_param(test_req_buffer_pressure, int, 0444);
 MODULE_PARM_DESC(test_req_buffer_pressure, "set non-zero to put pressure on request buffer pools");
 module_param(at_min, int, 0644);
@@ -1264,6 +1264,7 @@ void ptlrpc_update_export_timer(struct ptlrpc_request *req)
 	bool evict = false;
 	void *data;
 	int rc;
+
 	ENTRY;
 
 	LASSERT(req != NULL);
@@ -1328,8 +1329,7 @@ void ptlrpc_update_export_timer(struct ptlrpc_request *req)
 				exp->exp_obd->obd_eviction_timer =
 					ktime_get_real_seconds() +
 					ptlrpc_export_extra_timeout(oldest_exp);
-				CDEBUG(D_HA, "%s: Think about evicting %s "
-				       "from %lld deadline at %lld\n",
+				CDEBUG(D_HA, "%s: Think about evicting %s from %lld deadline at %lld\n",
 				       exp->exp_obd->obd_name,
 				       obd_export_nid2str(oldest_exp),
 				       oldest_exp->exp_deadline,
@@ -2961,7 +2961,7 @@ ptlrpc_server_request_incoming(struct ptlrpc_service_part *svcpt)
 #define wait_event_idle_exclusive_lifo_timeout wait_event_idle_exclusive_timeout
 #endif
 
-static __attribute__((__noinline__)) int
+static noinline int
 ptlrpc_wait_event(struct ptlrpc_service_part *svcpt,
 		  struct ptlrpc_thread *thread)
 {
@@ -3160,7 +3160,7 @@ static int ptlrpc_main(void *arg)
 		/*
 		 * If the number of threads has been tuned downward and this
 		 * thread should be stopped, then stop in reverse order so the
-		 * the threads always have contiguous thread index values.
+		 * threads always have contiguous thread index values.
 		 */
 		if (unlikely(ptlrpc_thread_should_stop(thread)))
 			ptlrpc_thread_stop(thread);

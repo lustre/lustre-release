@@ -332,7 +332,7 @@ static int lprocfs_sptlrpc_sepol_seq_show(struct seq_file *seq, void *v)
 	sepol = rcu_dereference(imp->imp_sec->ps_sepol);
 	if (sepol) {
 		ts = ktime_to_timespec64(sepol->ssp_mtime);
-		seq_printf(seq, "mtime: %lld\n", (long long int) ts.tv_sec);
+		seq_printf(seq, "mtime: %lld\n", (long long) ts.tv_sec);
 		seq_printf(seq, "sepol: %.*s\n",
 			   sepol->ssp_sepol_size, sepol->ssp_sepol);
 	} else {

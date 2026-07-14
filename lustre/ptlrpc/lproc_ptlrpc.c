@@ -31,7 +31,7 @@ static struct ll_rpc_opcode {
 	{ OST_SETATTR,      "ost_setattr" },
 	{ OST_READ,         "ost_read" },
 	{ OST_WRITE,        "ost_write" },
-	{ OST_CREATE ,      "ost_create" },
+	{ OST_CREATE,       "ost_create" },
 	{ OST_DESTROY,      "ost_destroy" },
 	{ OST_GET_INFO,     "ost_get_info" },
 	{ OST_CONNECT,      "ost_connect" },
@@ -532,6 +532,7 @@ static int ptlrpc_lprocfs_nrs_policies_seq_show(struct seq_file *m, void *n)
 	bool hp = false;
 	int i;
 	int rc = 0;
+
 	ENTRY;
 
 	/**
@@ -727,6 +728,7 @@ ptlrpc_lprocfs_nrs_policies_seq_write(struct file *file,
 	char *policy_name;
 	char *queue_name;
 	int rc = 0;
+
 	ENTRY;
 
 	if (count >= LPROCFS_NRS_WR_MAX_CMD)
@@ -827,8 +829,7 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service_part *svcpt,
 			 svcpt->scp_service->srv_name, svcpt->scp_cpt,
 			 srhi->srhi_seq, srhi->srhi_req->rq_history_seq);
 		LASSERTF(!list_empty(&svcpt->scp_hist_reqs),
-			 "%s:%d: seek offset %llu, request seq %llu, "
-			 "last culled %llu\n",
+			 "%s:%d: seek offset %llu, request seq %llu, last culled %llu\n",
 			 svcpt->scp_service->srv_name, svcpt->scp_cpt,
 			 seq, srhi->srhi_seq, svcpt->scp_hist_seq_culled);
 		e = &srhi->srhi_req->rq_history_list;
@@ -895,8 +896,8 @@ ptlrpc_lprocfs_svc_req_history_start(struct seq_file *s, loff_t *pos)
 	int i;
 
 	if (sizeof(loff_t) != sizeof(__u64)) { /* can't support */
-		CWARN("Failed to read request history because size of loff_t "
-		      "%d can't match size of u64\n", (int)sizeof(loff_t));
+		CWARN("Failed to read request history because size of loff_t %d can't match size of u64\n",
+		      (int)sizeof(loff_t));
 		return NULL;
 	}
 
@@ -994,7 +995,7 @@ void target_print_req(void *seq_file, struct ptlrpc_request *req)
 		/* still awaiting a service thread's attention, or rejected
 		 * because the generic request message didn't unpack
 		 */
-		seq_printf(sf, "<not swabbed>\n");
+		seq_puts(sf, "<not swabbed>\n");
 		break;
 	case RQ_PHASE_INTERPRET:
 		/* being handled, so basic msg swabbed, and opc is valid
@@ -1062,7 +1063,7 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
 			   (s64)(arrivaldiff.tv_nsec / NSEC_PER_USEC),
 			   (s64)(req->rq_sent - req->rq_deadline));
 		if (svc->srv_ops.so_req_printer == NULL)
-			seq_printf(s, "\n");
+			seq_puts(s, "\n");
 		else
 			svc->srv_ops.so_req_printer(s, srhi->srhi_req);
 	}
@@ -1365,7 +1366,7 @@ ldebugfs_import_seq_write(struct file *file, const char __user *buffer,
 	struct obd_import *imp;
 	char *kbuf = NULL;
 	int do_reconn = 1;
-	const char prefix[] = "connection=";
+	static const char prefix[] = "connection=";
 	const int prefix_len = sizeof(prefix) - 1;
 	int rc = 0;
 
@@ -1413,8 +1414,7 @@ ldebugfs_import_seq_write(struct file *file, const char __user *buffer,
 				do_reconn = 1;
 			} else {
 				CDEBUG(D_INFO,
-				       "IR: %s has already been connecting to "
-				       "new target(%u)\n",
+				       "IR: %s has already been connecting to new target(%u)\n",
 				       imp->imp_obd->obd_name, inst);
 			}
 		}

@@ -970,7 +970,7 @@ static int nodemap_add_idmap_range(const char *nodemap_name,
 
 	for (i = 0; i < range_count && !rc; i++) {
 		rc = nodemap_add_idmap(nodemap_name, id_type,
-				       (int[2]){map[0] + i, map[1] + i});
+				       (int[2]) {map[0] + i, map[1] + i});
 	}
 
 	return rc;
@@ -3537,6 +3537,7 @@ static int nodemap_sha256(struct lu_nodemap *nodemap)
 
 	{
 		SHASH_DESC_ON_STACK(desc, tfm);
+
 		desc->tfm = tfm;
 		rc = crypto_shash_digest(desc, nodemap->nm_name,
 					 strlen(nodemap->nm_name),
@@ -3696,6 +3697,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 	struct cfs_hash *hash = config->nmc_nodemap_hash;
 	char newname[LUSTRE_NODEMAP_NAME_LENGTH + 1];
 	int rc = 0;
+
 	ENTRY;
 
 	default_nodemap = config->nmc_default_nodemap;
@@ -4553,7 +4555,7 @@ int nodemap_set_gss_identify(const char *name, bool gss_identify)
 		GOTO(out_putref, rc = -EPERM);
 	}
 
-	if (memcmp(nodemap->nm_sha, (const char[SHA256_DIGEST_SIZE]){0},
+	if (memcmp(nodemap->nm_sha, (const char[SHA256_DIGEST_SIZE]) {0},
 		   SHA256_DIGEST_SIZE) == 0) {
 		CDEBUG(D_INFO,
 		       "nodemap %s must have valid sha256 to set 'gssonly_identification' property\n",
@@ -5640,7 +5642,8 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 		char *p;
 		__u8 map_mode = 0;
 
-		if ((p = strstr(param, "all")) != NULL) {
+		p = strstr(param, "all");
+		if (p != NULL) {
 			if ((p == param || *(p-1) == ',') &&
 			    (*(p+3) == '\0' || *(p+3) == ',')) {
 				map_mode = NODEMAP_MAP_ALL;

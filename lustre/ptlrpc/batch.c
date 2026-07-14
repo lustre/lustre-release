@@ -249,7 +249,7 @@ static void object_update_callback_fini(struct object_update_callback *ouc)
 }
 
 /*
- * Insert an @object_update_callback into the the @batch_update_head.
+ * Insert an @object_update_callback into the @batch_update_head.
  *
  * Usually each update in @batch_update_head will have one correspondent
  * callback, and these callbacks will be called in ->rq_interpret_reply.

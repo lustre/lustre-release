@@ -648,7 +648,7 @@ int sptlrpc_process_config(struct lustre_cfg *lcfg)
 	/*
 	 * Three types of targets exist for sptlrpc using conf_param
 	 * 1.	'_mgs' which targets mgc srpc settings. Treat it as
-	 *	as a special file system name.
+	 *	a special file system name.
 	 * 2.	target is a device which can be fsname-MDTXXXX or
 	 *	fsname-OSTXXXX. This can be verified by the function
 	 *	server_name2fsname.

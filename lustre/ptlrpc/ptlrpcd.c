@@ -128,7 +128,7 @@ static struct ptlrpcd	**ptlrpcds;
 static struct ptlrpcd_ctl ptlrpcd_rcv;
 
 struct mutex ptlrpcd_mutex;
-static int ptlrpcd_users = 0;
+static int ptlrpcd_users;
 
 void ptlrpcd_wake(struct ptlrpc_request *req)
 {
