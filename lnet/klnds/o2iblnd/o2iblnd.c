@@ -2732,7 +2732,7 @@ kiblnd_hdev_get_attr(struct kib_hca_dev *hdev)
 	if (dev_attr->device_cap_flags & IB_DEVICE_MEM_MGT_EXTENSIONS) {
 		LCONSOLE_INFO("Using FastReg for registration\n");
 		hdev->ibh_dev->ibd_dev_caps |= IBLND_DEV_CAPS_FASTREG_ENABLED;
-		if (dev_attr->device_cap_flags & IBK_SG_GAPS_REG)
+		if (ib_sg_gaps_reg_supported(dev_attr))
 			hdev->ibh_dev->ibd_dev_caps |=
 				IBLND_DEV_CAPS_FASTREG_GAPS_SUPPORT;
 	} else {
