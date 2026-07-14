@@ -653,6 +653,7 @@ enum {
 	OBDF_INACTIVE,		/* device active/inactive
 				 * (for sysfs status only!!)
 				 */
+	OBDF_NO_IR,		/* no imperative recovery. */
 	OBDF_NUM_FLAGS,
 };
 
@@ -672,7 +673,6 @@ struct obd_device {
 	/* bitfield modification is protected by obd_dev_lock */
 	DECLARE_BITMAP(obd_flags, OBDF_NUM_FLAGS);
 	unsigned long
-		obd_no_ir:1,		/* no imperative recovery. */
 		obd_process_conf:1,	/* device is processing mgs config */
 		obd_checksum_dump:1,	/* dump pages upon cksum error */
 		obd_dynamic_nids:1,	/* Allow dynamic NIDs on device */

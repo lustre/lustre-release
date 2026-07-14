@@ -2659,7 +2659,10 @@ void server_calc_timeout(struct lustre_sb_info *lsi, struct obd_device *obd)
 		soft   = lmd->lmd_recovery_time_soft;
 		hard   = lmd->lmd_recovery_time_hard;
 		has_ir = has_ir && !test_bit(LMD_FLG_NOIR, lmd->lmd_flags);
-		obd->obd_no_ir = !has_ir;
+		if (has_ir)
+			clear_bit(OBDF_NO_IR, obd->obd_flags);
+		else
+			set_bit(OBDF_NO_IR, obd->obd_flags);
 	}
 
 	if (soft == 0)
