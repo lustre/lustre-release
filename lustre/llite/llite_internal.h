@@ -636,16 +636,6 @@ static inline void obd_connect_set_name_enc(struct obd_connect_data *data)
 #endif
 }
 
-static inline bool obd_connect_has_enc_fid2path(struct obd_connect_data *data)
-{
-#ifdef HAVE_LUSTRE_CRYPTO
-	return data->ocd_connect_flags & OBD_CONNECT_FLAGS2 &&
-		data->ocd_connect_flags2 & OBD_CONNECT2_ENCRYPT_FID2PATH;
-#else
-	return false;
-#endif
-}
-
 static inline void obd_connect_set_enc_fid2path(struct obd_connect_data *data)
 {
 #ifdef HAVE_LUSTRE_CRYPTO
@@ -1327,13 +1317,6 @@ static inline bool ll_lov_delay_create_is_set(unsigned int kernel_open_flags)
 	return (kernel_open_flags & O_LOV_DELAY_CREATE) == O_LOV_DELAY_CREATE;
 }
 
-/* Clear (file.f_flag) O_LOV_DELAY_CREATE(volatile) flag */
-static inline void ll_lov_delay_create_clear(unsigned int *kernel_open_flags)
-{
-	if (ll_lov_delay_create_is_set(*kernel_open_flags))
-		*kernel_open_flags &= ~O_LOV_DELAY_CREATE;
-}
-
 enum mds_open_flags ll_kernel_to_mds_open_flags(unsigned int kernel_open_flags);
 
 struct inode *ll_iget(struct super_block *sb, ino_t hash,
@@ -1670,15 +1653,6 @@ static inline struct obd_export *ll_s2dtexp(struct super_block *sb)
 static inline struct obd_export *ll_s2mdexp(struct super_block *sb)
 {
 	return ll_s2sbi(sb)->ll_md_exp;
-}
-
-static inline struct client_obd *sbi2mdc(struct ll_sb_info *sbi)
-{
-	struct obd_device *obd = sbi->ll_md_exp->exp_obd;
-
-	if (obd == NULL)
-		LBUG();
-	return &obd->u.cli;
 }
 
 // FIXME: replace the name of this with LL_SB to conform to kernel stuff

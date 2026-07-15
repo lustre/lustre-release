@@ -208,11 +208,6 @@ static inline struct vvp_device *lu2vvp_dev(const struct lu_device *d)
 	return container_of_safe(d, struct vvp_device, vdv_cl.cd_lu_dev);
 }
 
-static inline struct vvp_device *cl2vvp_dev(const struct cl_device *d)
-{
-	return container_of_safe(d, struct vvp_device, vdv_cl);
-}
-
 static inline struct vvp_object *cl2vvp(const struct cl_object *obj)
 {
 	return container_of_safe(obj, struct vvp_object, vob_cl);
