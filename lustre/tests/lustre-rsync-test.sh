@@ -8,13 +8,13 @@ set -e
 ONLY=${ONLY:-"$*"}
 
 KILL=/bin/kill
-LREPL_LOG=$TMP/lustre_rsync.log
 ORIG_PWD=${PWD}
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env "$@"
 init_logging
+LREPL_LOG=$TMP/lustre_rsync.log
 
 ALWAYS_EXCEPT="$LRSYNC_EXCEPT "
 always_except LU-4256	2b
