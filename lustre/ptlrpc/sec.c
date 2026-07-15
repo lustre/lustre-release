@@ -348,16 +348,6 @@ void sptlrpc_cli_ctx_wakeup(struct ptlrpc_cli_ctx *ctx)
 }
 EXPORT_SYMBOL(sptlrpc_cli_ctx_wakeup);
 
-int sptlrpc_cli_ctx_display(struct ptlrpc_cli_ctx *ctx, char *buf, int bufsize)
-{
-	LASSERT(ctx->cc_ops);
-
-	if (ctx->cc_ops->display == NULL)
-		return 0;
-
-	return ctx->cc_ops->display(ctx, buf, bufsize);
-}
-
 static int import_sec_check_expire(struct obd_import *imp)
 {
 	int adapt = 0;
@@ -1683,15 +1673,6 @@ static void import_flush_ctx_common(struct obd_import *imp,
 	sptlrpc_sec_put(sec);
 }
 
-void sptlrpc_import_flush_root_ctx(struct obd_import *imp)
-{
-	/*
-	 * it's important to use grace mode, see explain in
-	 * sptlrpc_req_refresh_ctx()
-	 */
-	import_flush_ctx_common(imp, 0, 1, 1);
-}
-
 void sptlrpc_import_flush_my_ctx(struct obd_import *imp)
 {
 	import_flush_ctx_common(imp, from_kuid(&init_user_ns, current_uid()),
@@ -1915,16 +1896,6 @@ void sptlrpc_cli_free_repbuf(struct ptlrpc_request *req)
 	EXIT;
 }
 EXPORT_SYMBOL(sptlrpc_cli_free_repbuf);
-
-int sptlrpc_cli_install_rvs_ctx(struct obd_import *imp,
-				struct ptlrpc_cli_ctx *ctx)
-{
-	struct ptlrpc_sec_policy *policy = ctx->cc_sec->ps_policy;
-
-	if (!policy->sp_cops->install_rctx)
-		return 0;
-	return policy->sp_cops->install_rctx(imp, ctx->cc_sec, ctx);
-}
 
 int sptlrpc_svc_install_rvs_ctx(struct obd_import *imp,
 				struct ptlrpc_svc_ctx *ctx)

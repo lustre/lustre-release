@@ -362,7 +362,6 @@ int sptlrpc_rule_set_choose(struct sptlrpc_rule_set *rset,
 			    enum lustre_sec_part to,
 			    struct lnet_nid *nid,
 			    struct sptlrpc_flavor *sf);
-void sptlrpc_rule_set_dump(struct sptlrpc_rule_set *set);
 
 int  sptlrpc_process_config(struct lustre_cfg *lcfg);
 void sptlrpc_conf_log_start(const char *logname);
@@ -1076,7 +1075,6 @@ struct ptlrpc_cli_ctx *sptlrpc_cli_ctx_get(struct ptlrpc_cli_ctx *ctx);
 void sptlrpc_cli_ctx_put(struct ptlrpc_cli_ctx *ctx, int sync);
 void sptlrpc_cli_ctx_expire(struct ptlrpc_cli_ctx *ctx);
 void sptlrpc_cli_ctx_wakeup(struct ptlrpc_cli_ctx *ctx);
-int sptlrpc_cli_ctx_display(struct ptlrpc_cli_ctx *ctx, char *buf, int bufsize);
 
 /*
  * exported client context wrap/buffers
@@ -1115,7 +1113,6 @@ void sptlrpc_import_sec_put(struct obd_import *imp);
 int lprocfs_srpc_serverctx_seq_show(struct seq_file *m, void *data);
 
 int  sptlrpc_import_check_ctx(struct obd_import *imp);
-void sptlrpc_import_flush_root_ctx(struct obd_import *imp);
 void sptlrpc_import_flush_my_ctx(struct obd_import *imp);
 void sptlrpc_import_flush_all_ctx(struct obd_import *imp);
 int  sptlrpc_req_get_ctx(struct ptlrpc_request *req);
@@ -1203,8 +1200,6 @@ struct gss_svc_ctx {
 
 int sptlrpc_svc_install_rvs_ctx(struct obd_import *imp,
 				struct ptlrpc_svc_ctx *ctx);
-int sptlrpc_cli_install_rvs_ctx(struct obd_import *imp,
-				struct ptlrpc_cli_ctx *ctx);
 
 /* bulk security api */
 int sptlrpc_cli_wrap_bulk(struct ptlrpc_request *req,

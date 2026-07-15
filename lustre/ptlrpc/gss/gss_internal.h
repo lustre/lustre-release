@@ -411,26 +411,6 @@ static inline int init_sk_module(void) { return 0; }
 static inline void cleanup_sk_module(void) { return; }
 #endif /* HAVE_OPENSSL_SSK */
 
-/* debug */
-static inline
-void __dbg_memdump(char *name, void *ptr, int size)
-{
-        char *buf, *p = (char *) ptr;
-        int bufsize = size * 2 + 1, i;
-
-        OBD_ALLOC(buf, bufsize);
-        if (!buf) {
-                CDEBUG(D_ERROR, "DUMP ERROR: can't alloc %d bytes\n", bufsize);
-                return;
-        }
-
-        for (i = 0; i < size; i++)
-                sprintf(&buf[i+i], "%02x", (__u8) p[i]);
-        buf[size + size] = '\0';
-        LCONSOLE_INFO("DUMP %s@%p(%d): %s\n", name, ptr, size, buf);
-        OBD_FREE(buf, bufsize);
-}
-
 #define RSI_UPCALL_PATH "/usr/sbin/l_getauth"
 #define UC_RSICACHE_HASH_SIZE 64
 extern struct upcall_cache_ops rsi_upcall_cache_ops;

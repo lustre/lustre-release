@@ -404,18 +404,6 @@ int sptlrpc_rule_set_choose(struct sptlrpc_rule_set *rset,
 	return 0;
 }
 
-void sptlrpc_rule_set_dump(struct sptlrpc_rule_set *rset)
-{
-	struct sptlrpc_rule *r;
-	int     n;
-
-	for (n = 0; n < rset->srs_nrule; n++) {
-		r = &rset->srs_rules[n];
-		CDEBUG(D_SEC, "<%02d> from %x to %x, net %x, rpc %x\n", n,
-		       r->sr_from, r->sr_to, r->sr_netid, r->sr_flvr.sf_rpc);
-	}
-}
-
 static int sptlrpc_rule_set_extract(struct sptlrpc_rule_set *gen,
 				    struct sptlrpc_rule_set *tgt,
 				    enum lustre_sec_part from,

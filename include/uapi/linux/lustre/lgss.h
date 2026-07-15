@@ -226,33 +226,6 @@ out:
 	*dstlen = len;
 }
 
-/*
- * gss_u32_write() - write some u32
- */
-static inline void gss_u32_write(char **dst, int *dstlen, __u32 val)
-{
-	char *cp = *dst;
-	int len = *dstlen;
-	__u32 *p;
-
-	if (len < 0)
-		return;
-
-	if (len < sizeof(__u32)) {
-		len = -1;
-		goto out;
-	}
-
-	p = (__u32 *)cp;
-	*p = val;
-	cp += sizeof(__u32);
-	len -= sizeof(__u32);
-
-out:
-	*dst = cp;
-	*dstlen = len;
-}
-
 static const char base64url_table[] =
 	"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
