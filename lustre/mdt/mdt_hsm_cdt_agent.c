@@ -350,8 +350,10 @@ int mdt_hsm_agent_modify_record(const struct lu_env *env,
 	int rc;
 
 	lctxt = llog_get_context(obd, LLOG_AGENT_ORIG_CTXT);
-	if (lctxt == NULL || lctxt->loc_handle == NULL)
+	if (!lctxt || !lctxt->loc_handle) {
+		llog_ctxt_put(lctxt);
 		RETURN(-ENOENT);
+	}
 
 	cookie.lgc_offset = hmm->mr_offset;
 	cookie.lgc_index = hmm->mr_rec.arr_hdr.lrh_index;

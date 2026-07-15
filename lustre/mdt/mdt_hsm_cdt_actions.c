@@ -75,8 +75,10 @@ int cdt_llog_process(const struct lu_env *env, struct mdt_device *mdt,
 	ENTRY;
 
 	lctxt = llog_get_context(obd, LLOG_AGENT_ORIG_CTXT);
-	if (lctxt == NULL || lctxt->loc_handle == NULL)
+	if (!lctxt || !lctxt->loc_handle) {
+		llog_ctxt_put(lctxt);
 		RETURN(-ENOENT);
+	}
 
 	rc = llog_cat_process(env, lctxt->loc_handle, cb, data, start_cat_idx,
 			      start_rec_idx);
@@ -188,8 +190,10 @@ int mdt_agent_record_add(const struct lu_env *env, struct mdt_device *mdt,
 	memcpy(&larr->arr_hai, hai, hai->hai_len);
 
 	lctxt = llog_get_context(obd, LLOG_AGENT_ORIG_CTXT);
-	if (lctxt == NULL || lctxt->loc_handle == NULL)
+	if (!lctxt || !lctxt->loc_handle) {
+		llog_ctxt_put(lctxt);
 		GOTO(free, rc = -ENOENT);
+	}
 
 	/* If cdt_last_cookie is not set, try to initialize it.
 	 * This is used by RAoLU with non-started coordinator.
