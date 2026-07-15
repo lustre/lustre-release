@@ -967,11 +967,6 @@ static inline int cl_folio_pgno(const struct cl_page *cl_page)
 #endif
 }
 
-static inline void *cl_kmap_local(struct cl_page *pg)
-{
-	return kmap_local_page(pg->cp_vmpage);
-}
-
 static inline pgoff_t cl_page_index(const struct cl_page *cp)
 {
 	return folio_index_page(cl_page_vmpage(cp));
@@ -2170,7 +2165,6 @@ struct cl_object *cl_object_find(const struct lu_env *env, struct cl_device *cd,
 				 const struct cl_object_conf *c);
 
 int  cl_object_header_init(struct cl_object_header *h);
-void cl_object_header_fini(struct cl_object_header *h);
 void cl_object_put(const struct lu_env *env, struct cl_object *o);
 void cl_object_get(struct cl_object *o);
 void cl_object_attr_lock(struct cl_object *o);
@@ -2256,12 +2250,6 @@ void cl_page_print(const struct lu_env *env, void *cookie,
 void cl_page_header_print(const struct lu_env *env, void *cookie,
 			  lu_printer_t printer, const struct cl_page *pg);
 struct cl_page *cl_vmpage_page(struct page *vmpage, struct cl_object *obj);
-
-static inline struct cl_page *cl_page_from_folio(struct page *vmpage,
-						 pgoff_t index, bool get)
-{
-	return cl_vmpage_page(vmpage, NULL);
-}
 
 /**
  * \name ownership
@@ -2516,8 +2504,6 @@ void cl_page_list_fini(const struct lu_env *env, struct cl_page_list *plist);
 
 void cl_2queue_init(struct cl_2queue *queue);
 void cl_2queue_disown(const struct lu_env *env, struct cl_2queue *queue);
-void cl_2queue_assume(const struct lu_env *env, struct cl_io *io,
-		      struct cl_2queue *queue);
 void cl_2queue_discard(const struct lu_env *env, struct cl_io *io,
 		       struct cl_2queue *queue);
 void cl_2queue_fini(const struct lu_env *env, struct cl_2queue *queue);
@@ -2685,7 +2671,6 @@ void cl_env_percpu_put(struct lu_env *env);
 /*
  * Misc
  */
-void cl_attr2lvb(struct ost_lvb *lvb, const struct cl_attr *attr);
 void cl_lvb2attr(struct cl_attr *attr, const struct ost_lvb *lvb);
 
 struct cl_device *cl_type_setup(const struct lu_env *env, struct lu_site *site,

@@ -350,11 +350,6 @@ static inline int exp_max_brw_size(struct obd_export *exp)
 	return ONE_MB_BRW_SIZE;
 }
 
-static inline bool exp_connect_multibulk(struct obd_export *exp)
-{
-	return exp_max_brw_size(exp) > ONE_MB_BRW_SIZE;
-}
-
 static inline bool exp_connect_cancelset(struct obd_export *exp)
 {
 	LASSERT(exp != NULL);
@@ -462,11 +457,6 @@ static inline int exp_connect_flr(struct obd_export *exp)
 	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_FLR);
 }
 
-static inline int exp_connect_parity(struct obd_export *exp)
-{
-	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_FLR_EC);
-}
-
 static inline int exp_connect_lock_convert(struct obd_export *exp)
 {
 	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_LOCK_CONVERT);
@@ -487,11 +477,6 @@ static inline int exp_connect_sepol(struct obd_export *exp)
 static inline int exp_connect_encrypt(struct obd_export *exp)
 {
 	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_ENCRYPT);
-}
-
-static inline int exp_connect_sparse(struct obd_export *exp)
-{
-	return !!(exp_connect_flags2(exp) & OBD_CONNECT2_SPARSE);
 }
 
 static inline int exp_connect_encrypt_fid2path(struct obd_export *exp)

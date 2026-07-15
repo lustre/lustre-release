@@ -661,12 +661,6 @@ ssize_t ping_show(struct kobject *kobj, struct attribute *attr,
 extern ssize_t
 ldebugfs_import_seq_write(struct file *file, const char __user *buffer,
 			  size_t count, loff_t *off);
-static inline ssize_t
-lprocfs_import_seq_write(struct file *file, const char __user *buffer,
-			 size_t count, loff_t *off)
-{
-	return ldebugfs_import_seq_write(file, buffer, count, off);
-}
 ssize_t pinger_recov_show(struct kobject *kobj, struct attribute *attr,
 			  char *buf);
 ssize_t pinger_recov_store(struct kobject *kobj, struct attribute *attr,
@@ -1214,13 +1208,6 @@ lprocfs_ping_seq_write(struct file *file, const char __user *buffer,
 static inline ssize_t
 ldebugfs_import_seq_write(struct file *file, const char __user *buffer,
 			  size_t count, loff_t *off)
-{
-	return 0;
-}
-
-static inline ssize_t
-lprocfs_import_seq_write(struct file *file, const char __user *buffer,
-			 size_t count, loff_t *off)
 {
 	return 0;
 }

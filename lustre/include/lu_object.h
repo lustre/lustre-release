@@ -837,10 +837,6 @@ void lu_object_header_print(const struct lu_env *env, void *cookie,
 			    lu_printer_t printer,
 			    const struct lu_object_header *hdr);
 
-/* Check object consistency. */
-int lu_object_invariant(const struct lu_object *o);
-
-
 /*
  * Check whether object exists, no matter on local or remote storage.
  * Note: LOHA_EXISTS will be set once some one created the object,

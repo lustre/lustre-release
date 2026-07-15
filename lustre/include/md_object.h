@@ -646,14 +646,6 @@ static inline int mdo_unlink(const struct lu_env *env,
 	return p->mo_dir_ops->mdo_unlink(env, p, c, lname, ma, no_name);
 }
 
-static inline int mdo_statfs(const struct lu_env *env,
-			     struct md_device *m,
-			     struct obd_statfs *sfs)
-{
-	LASSERT(m->md_ops->mdo_statfs);
-	return m->md_ops->mdo_statfs(env, m, sfs);
-}
-
 struct dt_device;
 
 void lustre_som_swab(struct lustre_som_attrs *attrs);

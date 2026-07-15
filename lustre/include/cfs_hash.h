@@ -732,19 +732,6 @@ cfs_hash_bucket_validate(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 #define CFS_HASH_MIN_THETA  (1U << (CFS_HASH_THETA_BITS - 1))
 #define CFS_HASH_MAX_THETA  (1U << (CFS_HASH_THETA_BITS + 1))
 
-/* Return integer component of theta */
-static inline int __cfs_hash_theta_int(int theta)
-{
-	return (theta >> CFS_HASH_THETA_BITS);
-}
-
-/* Return a fractional value between 0 and 999 */
-static inline int __cfs_hash_theta_frac(int theta)
-{
-	return ((theta * 1000) >> CFS_HASH_THETA_BITS) -
-		(__cfs_hash_theta_int(theta) * 1000);
-}
-
 static inline int __cfs_hash_theta(struct cfs_hash *hs)
 {
 	return (atomic_read(&hs->hs_count) <<

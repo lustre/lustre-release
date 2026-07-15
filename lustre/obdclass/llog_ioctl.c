@@ -180,19 +180,6 @@ static int llog_check_cb(const struct lu_env *env, struct llog_handle *handle,
 	RETURN(rc);
 }
 
-static inline bool llog_idx_is_eof(struct llog_handle *llh, __u32 cur_idx)
-{
-	__u32 last_idx = llh->lgh_last_idx;
-
-	/* catalog is wrapped ? */
-	if (unlikely(llh->lgh_hdr->llh_flags & LLOG_F_IS_CAT &&
-		     llh->lgh_hdr->llh_cat_idx >= llh->lgh_last_idx &&
-		     llh->lgh_hdr->llh_count > 1))
-		last_idx = LLOG_HDR_BITMAP_SIZE(llh->lgh_hdr) - 1;
-
-	return cur_idx >= last_idx;
-}
-
 #define MARKER_DIFF	10
 int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
 		  struct llog_rec_hdr *rec, void *data)

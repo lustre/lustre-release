@@ -345,19 +345,6 @@ struct llog_ctxt {
 #define LLOG_DEL_PLAIN  0x0003
 #define LLOG_SKIP_PLAIN 0x0004
 
-static inline int llog_obd2ops(struct llog_ctxt *ctxt,
-			       const struct llog_operations **lop)
-{
-	if (ctxt == NULL)
-		return -ENOTCONN;
-
-	*lop = ctxt->loc_logops;
-	if (*lop == NULL)
-		return -EOPNOTSUPP;
-
-	return 0;
-}
-
 static inline int llog_handle2ops(struct llog_handle *loghandle,
 				  const struct llog_operations **lop)
 {

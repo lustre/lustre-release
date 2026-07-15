@@ -1113,16 +1113,6 @@ void cl_2queue_discard(const struct lu_env *env,
 EXPORT_SYMBOL(cl_2queue_discard);
 
 /*
- * Assume to own the pages in cl_2queue
- */
-void cl_2queue_assume(const struct lu_env *env,
-		      struct cl_io *io, struct cl_2queue *queue)
-{
-	cl_page_list_assume(env, io, &queue->c2_qin);
-	cl_page_list_assume(env, io, &queue->c2_qout);
-}
-
-/*
  * Finalize both page lists of a 2-queue.
  */
 void cl_2queue_fini(const struct lu_env *env, struct cl_2queue *queue)

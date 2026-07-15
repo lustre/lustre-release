@@ -78,10 +78,6 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id);
 #define LUSTRE_FATAL_SIGS (sigmask(SIGKILL) | sigmask(SIGINT) |		\
 			   sigmask(SIGTERM) | sigmask(SIGQUIT) |	\
 			   sigmask(SIGALRM))
-static inline int l_fatal_signal_pending(struct task_struct *p)
-{
-	return signal_pending(p) && sigtestsetmask(&p->pending.signal, LUSTRE_FATAL_SIGS);
-}
 
 /** @} lib */
 

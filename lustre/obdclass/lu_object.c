@@ -650,20 +650,6 @@ void lu_object_print(const struct lu_env *env, void *cookie,
 }
 EXPORT_SYMBOL(lu_object_print);
 
-/* Check object consistency. */
-int lu_object_invariant(const struct lu_object *o)
-{
-	struct lu_object_header *top;
-
-	top = o->lo_header;
-	list_for_each_entry(o, &top->loh_layers, lo_linkage) {
-		if (o->lo_ops->loo_object_invariant != NULL &&
-		    !o->lo_ops->loo_object_invariant(o))
-			return 0;
-	}
-	return 1;
-}
-
 /*
  * Limit the lu_object cache to a maximum of lu_cache_nr objects.  Because the
  * calculation for the number of objects to reclaim is not covered by a lock the
