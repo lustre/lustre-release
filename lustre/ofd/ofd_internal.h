@@ -221,11 +221,6 @@ static inline int ofd_object_exists(struct ofd_object *obj)
 	return lu_object_exists(&obj->ofo_obj.do_lu);
 }
 
-static inline struct dt_object *fo2dt(struct ofd_object *obj)
-{
-	return &obj->ofo_obj;
-}
-
 static inline struct dt_object *ofd_object_child(struct ofd_object *_obj)
 {
 	struct lu_object *lu = &(_obj)->ofo_obj.do_lu;
