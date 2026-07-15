@@ -2505,15 +2505,17 @@ static int ofd_quotactl(struct tgt_session_info *tsi)
 
 	if (oqctl->qc_cmd == LUSTRE_Q_ITEROQUOTA)
 		rc = lquota_iter_change_qid(nodemap, oqctl);
-	nodemap_putref(nodemap);
-	if (rc)
+	if (rc) {
+		nodemap_putref(nodemap);
 		RETURN(rc);
+	}
 
 	if (oqctl->qc_id != id)
 		swap(oqctl->qc_id, id);
 
 	rc = lquotactl_slv(tsi->tsi_env, tsi->tsi_tgt->lut_bottom, nodemap,
 			   oqctl, buffer);
+	nodemap_putref(nodemap);
 
 	ofd_counter_incr(tsi->tsi_exp, LPROC_OFD_STATS_QUOTACTL,
 			 tsi->tsi_jobid, ktime_us_delta(ktime_get(), kstart));
