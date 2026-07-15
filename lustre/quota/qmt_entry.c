@@ -1007,30 +1007,6 @@ int qti_lqes_add(const struct lu_env *env, struct lquota_entry *lqe)
 	return 0;
 }
 
-void qti_lqes_del(const struct lu_env *env, int index)
-{
-	struct lquota_entry	**lqes;
-	int lqes_cnt = qti_lqes_cnt(env);
-	int lqep_size = sizeof(struct lquota_entry *);
-
-	if (index == 0) {
-		/* We can't handle non global lqes correctly without
-		 * global lqe located at index 0. If we try to do so,
-		 * something goes wrong. */
-		LQUOTA_ERROR(qti_lqes_glbl(env),
-			     "quota: cannot remove lqe at index 0 as it is global");
-		LASSERT(qti_lqes_glbl(env)->lqe_is_global);
-		return;
-	}
-	lqes = qti_lqes(env);
-	qpi_putref(env, lqe2qpi(lqes[index]));
-	lqe_putref(lqes[index]);
-	memcpy((unsigned char *)lqes + index * lqep_size,
-	       (unsigned char *)lqes + (index + 1) * lqep_size,
-	       (lqes_cnt - index - 1) * lqep_size);
-	qti_lqes_cnt(env)--;
-}
-
 void qti_lqes_fini(const struct lu_env *env)
 {
 	struct qmt_thread_info	*qti = qmt_info(env);

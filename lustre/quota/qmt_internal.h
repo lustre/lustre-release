@@ -499,7 +499,6 @@ __u64 qmt_alloc_expand(struct lquota_entry *, __u64, __u64);
 
 void qti_lqes_init(const struct lu_env *env);
 int qti_lqes_add(const struct lu_env *env, struct lquota_entry *lqe);
-void qti_lqes_del(const struct lu_env *env, int index);
 void qti_lqes_fini(const struct lu_env *env);
 __u64 qti_lqes_min_qunit(const struct lu_env *env);
 int qti_lqes_edquot(const struct lu_env *env);
