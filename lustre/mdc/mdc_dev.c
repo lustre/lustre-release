@@ -339,6 +339,8 @@ static int mdc_dlm_canceling(const struct lu_env *env,
 		cl_object_attr_lock(obj);
 		attr->cat_kms = 0;
 		cl_object_attr_update(env, obj, attr, CAT_KMS);
+		/* Also hit the top object so CAT_KMS updates i_version */
+		cl_object_attr_update(env, cl_object_top(obj), attr, CAT_KMS);
 		cl_object_attr_unlock(obj);
 		unlock_res_and_lock(dlmlock);
 		cl_object_put(env, obj);

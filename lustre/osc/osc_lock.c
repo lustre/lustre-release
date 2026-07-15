@@ -460,6 +460,8 @@ static int __osc_dlm_blocking_ast(const struct lu_env *env,
 		attr->cat_kms = ldlm_extent_shift_kms(dlmlock, old_kms);
 
 		cl_object_attr_update(env, obj, attr, CAT_KMS);
+		/* Also hit the top object so CAT_KMS updates i_version */
+		cl_object_attr_update(env, cl_object_top(obj), attr, CAT_KMS);
 		cl_object_attr_unlock(obj);
 		unlock_res_and_lock(dlmlock);
 
