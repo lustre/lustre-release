@@ -429,12 +429,6 @@ static inline void osp_objseq_buf_prep(struct lu_buf *buf, loff_t *off,
 	*off = sizeof(u64) * index;
 }
 
-static inline void osp_buf_prep(struct lu_buf *lb, void *buf, int buf_len)
-{
-	lb->lb_buf = buf;
-	lb->lb_len = buf_len;
-}
-
 extern struct lu_context_key osp_thread_key;
 
 static inline struct osp_thread_info *osp_env_info(const struct lu_env *env)
@@ -486,17 +480,6 @@ static inline struct osp_object *osp_obj(const struct lu_object *o)
 static inline struct osp_object *dt2osp_obj(const struct dt_object *d)
 {
 	return osp_obj(&d->do_lu);
-}
-
-static inline struct dt_object *osp_object_child(struct osp_object *o)
-{
-	return container_of(lu_object_next(osp2lu_obj(o)),
-			    struct dt_object, do_lu);
-}
-
-static inline struct seq_server_site *osp_seq_site(struct osp_device *osp)
-{
-	return osp->opd_dt_dev.dd_lu_dev.ld_site->ld_seq_site;
 }
 
 static inline int osp_fid_diff(const struct lu_fid *fid1,
