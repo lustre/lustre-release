@@ -3254,19 +3254,6 @@ void ptlrpc_resend_req(struct ptlrpc_request *req)
 	spin_unlock(&req->rq_lock);
 }
 
-/* XXX: this function and rq_status are currently unused */
-void ptlrpc_restart_req(struct ptlrpc_request *req)
-{
-	DEBUG_REQ(D_HA, req, "restarting (possibly-)completed request");
-	req->rq_status = -ERESTARTSYS;
-
-	spin_lock(&req->rq_lock);
-	req->rq_restart = 1;
-	req->rq_timedout = 0;
-	ptlrpc_client_wake_req(req);
-	spin_unlock(&req->rq_lock);
-}
-
 /*
  * Grab additional reference on a request \a req
  */

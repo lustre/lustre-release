@@ -68,7 +68,6 @@ void lustre_swab_mdt_body(struct mdt_body *b);
 void lustre_swab_mdt_ioepoch(struct mdt_ioepoch *b);
 void lustre_swab_mdt_rec_setattr(struct mdt_rec_setattr *sa);
 void lustre_swab_mdt_rec_reint(struct mdt_rec_reint *rr);
-void lustre_swab_lmv_desc(struct lmv_desc *ld);
 void lustre_swab_lmv_mds_md(union lmv_mds_md *lmm);
 void lustre_swab_lmv_user_md_objects(struct lmv_user_mds_data *lmd,
 				     int stripe_count);
@@ -110,7 +109,6 @@ void lustre_swab_hsm_progress_kernel(struct hsm_progress_kernel *hpk);
 void lustre_swab_hsm_user_state(struct hsm_user_state *hus);
 void lustre_swab_hsm_user_item(struct hsm_user_item *hui);
 void lustre_swab_hsm_request(struct hsm_request *hr);
-void lustre_swab_batch_update_request(struct batch_update_request *bur);
 void lustre_swab_but_update_header(struct but_update_header *buh);
 void lustre_swab_but_update_buffer(struct but_update_buffer *bub);
 void lustre_swab_batch_update_reply(struct batch_update_reply *bur);

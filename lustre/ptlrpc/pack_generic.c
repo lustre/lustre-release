@@ -2299,17 +2299,6 @@ void lustre_swab_lov_desc(struct lov_desc *ld)
 }
 EXPORT_SYMBOL(lustre_swab_lov_desc);
 
-void lustre_swab_lmv_desc(struct lmv_desc *ld)
-{
-	__swab32s(&ld->ld_tgt_count);
-	__swab32s(&ld->ld_active_tgt_count);
-	__swab32s(&ld->ld_default_stripe_count);
-	__swab32s(&ld->ld_pattern);
-	__swab64s(&ld->ld_default_hash_size);
-	__swab32s(&ld->ld_qos_maxage);
-	/* uuid endian insensitive */
-}
-
 /* This structure is always in little-endian */
 static void lustre_swab_lmv_mds_md_v1(struct lmv_mds_md_v1 *lmm1)
 {
@@ -3053,14 +3042,6 @@ void lustre_swab_hsm_request(struct hsm_request *hr)
 	__swab64s(&hr->hr_flags);
 	__swab32s(&hr->hr_itemcount);
 	__swab32s(&hr->hr_data_len);
-}
-
-/* TODO: swab each sub request message */
-void lustre_swab_batch_update_request(struct batch_update_request *bur)
-{
-	__swab32s(&bur->burq_magic);
-	__swab16s(&bur->burq_count);
-	__swab16s(&bur->burq_padding);
 }
 
 /* TODO: swab each sub reply message. */

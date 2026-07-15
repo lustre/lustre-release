@@ -1480,11 +1480,6 @@ struct ptlrpc_thread {
 	char			 t_name[PTLRPC_THR_NAME_LEN];
 };
 
-static inline int thread_is_init(struct ptlrpc_thread *thread)
-{
-	return thread->t_flags == 0;
-}
-
 static inline int thread_is_stopped(struct ptlrpc_thread *thread)
 {
 	return !!(thread->t_flags & SVC_STOPPED);
@@ -1508,11 +1503,6 @@ static inline int thread_is_running(struct ptlrpc_thread *thread)
 static inline void thread_clear_flags(struct ptlrpc_thread *thread, __u32 flags)
 {
 	thread->t_flags &= ~flags;
-}
-
-static inline void thread_set_flags(struct ptlrpc_thread *thread, __u32 flags)
-{
-	thread->t_flags = flags;
 }
 
 static inline void thread_add_flags(struct ptlrpc_thread *thread, __u32 flags)
@@ -2060,7 +2050,6 @@ struct ptlrpc_connection *ptlrpc_uuid_to_connection(struct obd_uuid *uuid,
 
 int ptlrpc_queue_wait(struct ptlrpc_request *req);
 int ptlrpc_replay_req(struct ptlrpc_request *req);
-void ptlrpc_restart_req(struct ptlrpc_request *req);
 void ptlrpc_abort_inflight(struct obd_import *imp);
 void ptlrpc_cleanup_imp(struct obd_import *imp);
 void ptlrpc_abort_set(struct ptlrpc_request_set *set);
@@ -2354,16 +2343,6 @@ void lustre_msg_set_projid(struct lustre_msg *msg, __u32 projid);
 void lustre_msg_set_cksum(struct lustre_msg *msg, __u32 cksum);
 void lustre_msg_set_mbits(struct lustre_msg *msg, __u64 mbits);
 
-static inline void
-lustre_shrink_reply(struct ptlrpc_request *req, int segment,
-		    unsigned int newlen, int move_data)
-{
-	LASSERT(req->rq_reply_state);
-	LASSERT(req->rq_repmsg);
-	req->rq_replen = lustre_shrink_msg(req->rq_repmsg, segment,
-					   newlen, move_data);
-}
-
 #ifdef LUSTRE_TRANSLATE_ERRNOS
 
 static inline int ptlrpc_status_hton(int h)
@@ -2503,11 +2482,6 @@ static inline void ptlrpc_req_drop_rs(struct ptlrpc_request *req)
 
 	kref_put(&req->rq_reply_state->rs_refcount, lustre_free_reply_state);
 	req->rq_reply_state = NULL;
-}
-
-static inline __u32 lustre_request_magic(struct ptlrpc_request *req)
-{
-	return lustre_msg_get_magic(req->rq_reqmsg);
 }
 
 static inline int ptlrpc_send_limit_expired(struct ptlrpc_request *req)

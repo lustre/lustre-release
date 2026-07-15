@@ -200,12 +200,6 @@ struct ptlrpc_service *nrs_pol2svc(struct ptlrpc_nrs_policy *policy)
 }
 
 static inline
-struct ptlrpc_service_part *nrs_pol2svcpt(struct ptlrpc_nrs_policy *policy)
-{
-	return policy->pol_nrs->nrs_svcpt;
-}
-
-static inline
 struct cfs_cpt_table *nrs_pol2cptab(struct ptlrpc_nrs_policy *policy)
 {
 	return nrs_pol2svc(policy)->srv_cptable;

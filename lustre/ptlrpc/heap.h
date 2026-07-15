@@ -140,12 +140,6 @@ void binheap_remove(struct binheap *h, struct binheap_node *e);
 void binheap_relocate(struct binheap *h, struct binheap_node *e);
 
 static inline int
-binheap_size(struct binheap *h)
-{
-	return h->cbh_nelements;
-}
-
-static inline int
 binheap_is_empty(struct binheap *h)
 {
 	return h->cbh_nelements == 0;
@@ -155,16 +149,6 @@ static inline struct binheap_node *
 binheap_root(struct binheap *h)
 {
 	return binheap_find(h, 0);
-}
-
-static inline struct binheap_node *
-binheap_remove_root(struct binheap *h)
-{
-	struct binheap_node *e = binheap_find(h, 0);
-
-	if (e != NULL)
-		binheap_remove(h, e);
-	return e;
 }
 
 /** @} heap */
