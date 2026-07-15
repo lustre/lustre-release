@@ -6715,6 +6715,11 @@ int ll_inode_permission(struct mnt_idmap *idmap, struct inode *inode, int mask)
 #else
 # define ll_file_operations_splice_write
 #endif
+#ifdef HAVE_SIMPLE_NOSETLEASE
+# define ll_file_operations_setlease .setlease = simple_nosetlease,
+#else
+# define ll_file_operations_setlease
+#endif
 
 #define declare_ll_file_operations(name, op_splice_read, op_flock)	\
 static const struct file_operations ll_file_operations_ ## name = {	\
@@ -6727,6 +6732,7 @@ static const struct file_operations ll_file_operations_ ## name = {	\
 	.llseek		= ll_file_seek,					\
 	.splice_read	= op_splice_read,				\
 	ll_file_operations_splice_write					\
+	ll_file_operations_setlease					\
 	.fsync		= ll_fsync,					\
 	.flush		= ll_flush,					\
 	.flock		= op_flock,					\

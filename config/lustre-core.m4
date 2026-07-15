@@ -3700,6 +3700,36 @@ AC_DEFUN([LC_HAVE_POSIX_ACL_TO_XATTR_ALLOC_BUFFER],[
 	])
 ]) # LC_HAVE_POSIX_ACL_TO_XATTR_ALLOC_BUFFER
 
+# LC_HAVE_SIMPLE_NOSETLEASE
+#
+# Linux commit v6.19-rc5-31-g2b10994be716
+#   filelock: default to returning -EINVAL when ->setlease operation is NULL
+# Linux commit v6.19-rc5-32-g51e49111c00b
+#   fs: remove simple_nosetlease()
+#
+# Up to v6.19 an unset ->setlease means generic_setlease() and leases are
+# granted, so a filesystem that wants none of them has to point ->setlease
+# at simple_nosetlease(). From v7.0 an unset ->setlease is itself the way
+# to refuse leases and simple_nosetlease() no longer exists.
+#
+AC_DEFUN([LC_SRC_HAVE_SIMPLE_NOSETLEASE], [
+	LB2_LINUX_TEST_SRC([simple_nosetlease], [
+		#include <linux/fs.h>
+	],[
+		const struct file_operations fops = {
+			.setlease = simple_nosetlease,
+		};
+		(void)fops;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_SIMPLE_NOSETLEASE], [
+	LB2_MSG_LINUX_TEST_RESULT([if simple_nosetlease() is available],
+	[simple_nosetlease], [
+		AC_DEFINE(HAVE_SIMPLE_NOSETLEASE, 1,
+			[simple_nosetlease() is available])
+	])
+]) # LC_HAVE_SIMPLE_NOSETLEASE
+
 #
 # LC_HAVE_DCACHE_ANON_UNION_D_ALIAS
 #
@@ -3939,6 +3969,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 
 	# 7.0
 	LC_SRC_HAVE_POSIX_ACL_TO_XATTR_ALLOC_BUFFER
+	LC_SRC_HAVE_SIMPLE_NOSETLEASE
 
 	# 7.1
 	LC_SRC_HAVE_DCACHE_ANON_UNION_D_ALIAS
@@ -4166,6 +4197,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 7.0
 	LC_HAVE_POSIX_ACL_TO_XATTR_ALLOC_BUFFER
+	LC_HAVE_SIMPLE_NOSETLEASE
 
 	# 7.1
 	LC_HAVE_DCACHE_ANON_UNION_D_ALIAS

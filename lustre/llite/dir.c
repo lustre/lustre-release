@@ -3035,6 +3035,9 @@ const struct file_operations ll_dir_operations = {
 	.read		= generic_read_dir,
 	.iterate_shared	= ll_iterate,
 	.unlocked_ioctl	= ll_dir_ioctl,
+#ifdef HAVE_SIMPLE_NOSETLEASE
+	.setlease	= simple_nosetlease,
+#endif
 	.fsync		= ll_fsync,
 	.flush		= ll_dir_flush,
 };
