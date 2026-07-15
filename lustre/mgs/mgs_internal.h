@@ -277,7 +277,6 @@ enum {
 	LPROC_MGS_TARGET_DEL,
 	LPROC_MGS_LAST
 };
-void mgs_counter_incr(struct obd_export *exp, int opcode);
 void mgs_stats_counter_init(struct lprocfs_stats *stats);
 
 struct mgs_thread_info {

@@ -344,13 +344,6 @@ void lproc_mgs_cleanup(struct mgs_device *mgs)
 	lprocfs_obd_cleanup(obd);
 }
 
-void mgs_counter_incr(struct obd_export *exp, int opcode)
-{
-	lprocfs_counter_incr(exp->exp_obd->obd_stats, opcode);
-	if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats != NULL)
-		lprocfs_counter_incr(exp->exp_nid_stats->nid_stats, opcode);
-}
-
 void mgs_stats_counter_init(struct lprocfs_stats *stats)
 {
 	lprocfs_counter_init(stats, LPROC_MGS_CONNECT, 0, "connect");
