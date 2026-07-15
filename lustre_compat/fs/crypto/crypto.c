@@ -42,14 +42,10 @@ MODULE_IMPORT_NS(CRYPTO_INTERNAL);
 #endif
 
 static unsigned int num_prealloc_crypto_pages = 32;
-static unsigned int num_prealloc_crypto_ctxs = 128;
 
 module_param(num_prealloc_crypto_pages, uint, 0444);
 MODULE_PARM_DESC(num_prealloc_crypto_pages,
 		"Number of crypto pages to preallocate");
-module_param(num_prealloc_crypto_ctxs, uint, 0444);
-MODULE_PARM_DESC(num_prealloc_crypto_ctxs,
-		"Number of crypto contexts to preallocate");
 
 static char *client_encryption_engine = "aes-ni";
 module_param(client_encryption_engine, charp, 0444);
@@ -59,20 +55,9 @@ enum llcrypt_crypto_engine_type llcrypt_crypto_engine = LLCRYPT_ENGINE_AES_NI;
 
 static mempool_t *llcrypt_bounce_pool = NULL;
 
-static LIST_HEAD(llcrypt_free_ctxs);
-static DEFINE_SPINLOCK(llcrypt_ctx_lock);
-
-static struct workqueue_struct *llcrypt_read_workqueue;
 static DEFINE_MUTEX(llcrypt_init_mutex);
 
-static struct kmem_cache *llcrypt_ctx_cachep;
 struct kmem_cache *llcrypt_info_cachep;
-
-void llcrypt_enqueue_decrypt_work(struct work_struct *work)
-{
-	queue_work(llcrypt_read_workqueue, work);
-}
-EXPORT_SYMBOL(llcrypt_enqueue_decrypt_work);
 
 /*
  * A simple mempool-backed page allocator that allocates folios
@@ -97,62 +82,6 @@ static inline mempool_t *llmempool_create_folio_pool(int min_nr, long order)
 	return mempool_create(min_nr, llpool_alloc_folios, llpool_free_folios,
 			      (void *)order);
 }
-
-/**
- * llcrypt_release_ctx() - Release a decryption context
- * @ctx: The decryption context to release.
- *
- * If the decryption context was allocated from the pre-allocated pool, return
- * it to that pool.  Else, free it.
- */
-void llcrypt_release_ctx(struct llcrypt_ctx *ctx)
-{
-	unsigned long flags;
-
-	if (ctx->flags & FS_CTX_REQUIRES_FREE_ENCRYPT_FL) {
-		kmem_cache_free(llcrypt_ctx_cachep, ctx);
-	} else {
-		spin_lock_irqsave(&llcrypt_ctx_lock, flags);
-		list_add(&ctx->free_list, &llcrypt_free_ctxs);
-		spin_unlock_irqrestore(&llcrypt_ctx_lock, flags);
-	}
-}
-EXPORT_SYMBOL(llcrypt_release_ctx);
-
-/**
- * llcrypt_get_ctx() - Get a decryption context
- * @gfp_flags:   The gfp flag for memory allocation
- *
- * Allocate and initialize a decryption context.
- *
- * Return: A new decryption context on success; an ERR_PTR() otherwise.
- */
-struct llcrypt_ctx *llcrypt_get_ctx(gfp_t gfp_flags)
-{
-	struct llcrypt_ctx *ctx;
-	unsigned long flags;
-
-	/*
-	 * First try getting a ctx from the free list so that we don't have to
-	 * call into the slab allocator.
-	 */
-	spin_lock_irqsave(&llcrypt_ctx_lock, flags);
-	ctx = list_first_entry_or_null(&llcrypt_free_ctxs,
-					struct llcrypt_ctx, free_list);
-	if (ctx)
-		list_del(&ctx->free_list);
-	spin_unlock_irqrestore(&llcrypt_ctx_lock, flags);
-	if (!ctx) {
-		ctx = kmem_cache_zalloc(llcrypt_ctx_cachep, gfp_flags);
-		if (!ctx)
-			return ERR_PTR(-ENOMEM);
-		ctx->flags |= FS_CTX_REQUIRES_FREE_ENCRYPT_FL;
-	} else {
-		ctx->flags &= ~FS_CTX_REQUIRES_FREE_ENCRYPT_FL;
-	}
-	return ctx;
-}
-EXPORT_SYMBOL(llcrypt_get_ctx);
 
 struct folio *llcrypt_alloc_bounce(gfp_t gfp_flags)
 {
@@ -472,11 +401,6 @@ const struct dentry_operations llcrypt_d_ops = {
 
 static void llcrypt_destroy(void)
 {
-	struct llcrypt_ctx *pos, *n;
-
-	list_for_each_entry_safe(pos, n, &llcrypt_free_ctxs, free_list)
-		kmem_cache_free(llcrypt_ctx_cachep, pos);
-	INIT_LIST_HEAD(&llcrypt_free_ctxs);
 	mempool_destroy(llcrypt_bounce_pool);
 	llcrypt_bounce_pool = NULL;
 }
@@ -492,7 +416,7 @@ static void llcrypt_destroy(void)
  */
 int llcrypt_initialize(unsigned int cop_flags)
 {
-	int i, res = -ENOMEM;
+	int res = 0;
 
 	/* No need to allocate a bounce page pool if this FS won't use it. */
 	if (cop_flags & LL_CFLG_OWN_PAGES)
@@ -502,25 +426,12 @@ int llcrypt_initialize(unsigned int cop_flags)
 	if (llcrypt_bounce_pool)
 		goto already_initialized;
 
-	for (i = 0; i < num_prealloc_crypto_ctxs; i++) {
-		struct llcrypt_ctx *ctx;
-
-		ctx = kmem_cache_zalloc(llcrypt_ctx_cachep, GFP_NOFS);
-		if (!ctx)
-			goto fail;
-		list_add(&ctx->free_list, &llcrypt_free_ctxs);
-	}
-
 	llcrypt_bounce_pool =
 		llmempool_create_folio_pool(num_prealloc_crypto_pages, 0);
 	if (!llcrypt_bounce_pool)
-		goto fail;
+		res = -ENOMEM;
 
 already_initialized:
-	mutex_unlock(&llcrypt_init_mutex);
-	return 0;
-fail:
-	llcrypt_destroy();
 	mutex_unlock(&llcrypt_init_mutex);
 	return res;
 }
@@ -562,29 +473,11 @@ static inline int set_llcrypt_crypto_engine_type(void)
  */
 int __init llcrypt_init(void)
 {
-	int err = -ENOMEM;
-
-	/*
-	 * Use an unbound workqueue to allow bios to be decrypted in parallel
-	 * even when they happen to complete on the same CPU.  This sacrifices
-	 * locality, but it's worthwhile since decryption is CPU-intensive.
-	 *
-	 * Also use a high-priority workqueue to prioritize decryption work,
-	 * which blocks reads from completing, over regular application tasks.
-	 */
-	llcrypt_read_workqueue = alloc_workqueue("llcrypt_read_queue",
-						 WQ_UNBOUND | WQ_HIGHPRI,
-						 num_online_cpus());
-	if (!llcrypt_read_workqueue)
-		goto fail;
-
-	llcrypt_ctx_cachep = KMEM_CACHE(llcrypt_ctx, SLAB_RECLAIM_ACCOUNT);
-	if (!llcrypt_ctx_cachep)
-		goto fail_free_queue;
+	int err;
 
 	llcrypt_info_cachep = KMEM_CACHE(llcrypt_info, SLAB_RECLAIM_ACCOUNT);
 	if (!llcrypt_info_cachep)
-		goto fail_free_ctx;
+		return -ENOMEM;
 
 	err = set_llcrypt_crypto_engine_type();
 	if (err) {
@@ -601,11 +494,6 @@ int __init llcrypt_init(void)
 
 fail_free_info:
 	kmem_cache_destroy(llcrypt_info_cachep);
-fail_free_ctx:
-	kmem_cache_destroy(llcrypt_ctx_cachep);
-fail_free_queue:
-	destroy_workqueue(llcrypt_read_workqueue);
-fail:
 	return err;
 }
 
@@ -624,6 +512,4 @@ void llcrypt_exit(void)
 	rcu_barrier();
 
 	kmem_cache_destroy(llcrypt_info_cachep);
-	kmem_cache_destroy(llcrypt_ctx_cachep);
-	destroy_workqueue(llcrypt_read_workqueue);
 }

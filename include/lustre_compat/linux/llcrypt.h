@@ -38,7 +38,6 @@
 	((name) + round_down((len) - LL_CRYPTO_BLOCK_SIZE - 1,	\
 			     LL_CRYPTO_BLOCK_SIZE))
 
-struct llcrypt_ctx;
 struct llcrypt_info;
 
 struct llcrypt_str {
@@ -84,18 +83,6 @@ struct llcrypt_operations {
 	unsigned int max_namelen;
 };
 
-/* Decryption work */
-struct llcrypt_ctx {
-	union {
-		struct {
-			struct bio *bio;
-			struct work_struct work;
-		};
-		struct list_head free_list;	/* Free list */
-	};
-	u8 flags;				/* Flags */
-};
-
 extern bool llcrypt_has_encryption_key(const struct inode *inode);
 
 static inline bool llcrypt_dummy_context_enabled(struct inode *inode)
@@ -107,18 +94,6 @@ static inline bool llcrypt_dummy_context_enabled(struct inode *inode)
 
 	return lsi->lsi_cop->dummy_context &&
 		lsi->lsi_cop->dummy_context(inode);
-}
-
-/*
- * When d_splice_alias() moves a directory's encrypted alias to its decrypted
- * alias as a result of the encryption key being added, DCACHE_ENCRYPTED_NAME
- * must be cleared.  Note that we don't have to support arbitrary moves of this
- * flag because llcrypt doesn't allow encrypted aliases to be the source or
- * target of a rename().
- */
-static inline void llcrypt_handle_d_move(struct dentry *dentry)
-{
-	dentry->d_flags &= ~DCACHE_ENCRYPTED_NAME;
 }
 
 static inline void folio_bounce_private(struct folio *dst, s32 dstpg,
@@ -143,9 +118,6 @@ static inline void folio_bounce_private(struct folio *dst, s32 dstpg,
 /* crypto.c */
 extern int __init llcrypt_init(void);
 extern void llcrypt_exit(void);
-extern void llcrypt_enqueue_decrypt_work(struct work_struct *);
-extern struct llcrypt_ctx *llcrypt_get_ctx(gfp_t);
-extern void llcrypt_release_ctx(struct llcrypt_ctx *);
 
 extern struct folio *llcrypt_encrypt_pagecache_blocks(struct folio *folio,
 						      s32 pgno,
@@ -200,7 +172,6 @@ extern void llcrypt_free_bounce_folio(struct folio *bounce_folio);
 
 /* policy.c */
 extern int llcrypt_ioctl_set_policy(struct file *, const void __user *);
-extern int llcrypt_ioctl_get_policy(struct file *, void __user *);
 extern int llcrypt_ioctl_get_policy_ex(struct file *, void __user *);
 extern int llcrypt_has_permitted_context(struct inode *, struct inode *);
 extern int llcrypt_inherit_context(struct inode *, struct inode *,
@@ -270,39 +241,6 @@ struct llcrypt_digested_name {
 	u8 digest[LLCRYPT_FNAME_DIGEST_SIZE];
 };
 
-/**
- * llcrypt_match_name() - test whether the given name matches a directory entry
- * @fname: the name being searched for
- * @de_name: the name from the directory entry
- * @de_name_len: the length of @de_name in bytes
- *
- * Normally @fname->disk_name will be set, and in that case we simply compare
- * that to the name stored in the directory entry.  The only exception is that
- * if we don't have the key for an encrypted directory and a filename in it is
- * very long, then we won't have the full disk_name and we'll instead need to
- * match against the llcrypt_digested_name.
- *
- * Return: %true if the name matches, otherwise %false.
- */
-static inline bool llcrypt_match_name(const struct llcrypt_name *fname,
-				      const u8 *de_name, u32 de_name_len)
-{
-	if (unlikely(!fname->disk_name.name)) {
-		const struct llcrypt_digested_name *n =
-			(const void *)fname->crypto_buf.name;
-		if (WARN_ON_ONCE(fname->usr_fname->name[0] != '_'))
-			return false;
-		if (de_name_len <= LLCRYPT_FNAME_MAX_UNDIGESTED_SIZE)
-			return false;
-		return !memcmp(LLCRYPT_FNAME_DIGEST(de_name, de_name_len),
-			       n->digest, LLCRYPT_FNAME_DIGEST_SIZE);
-	}
-
-	if (de_name_len != fname->disk_name.len)
-		return false;
-	return !memcmp(de_name, fname->disk_name.name, fname->disk_name.len);
-}
-
 /* hooks.c */
 extern int llcrypt_file_open(struct inode *inode, struct file *filp);
 extern int __llcrypt_prepare_link(struct inode *inode, struct inode *dir,
@@ -350,25 +288,7 @@ static inline bool llcrypt_dummy_context_enabled(struct inode *inode)
 	return false;
 }
 
-static inline void llcrypt_handle_d_move(struct dentry *dentry)
-{
-}
-
 /* crypto.c */
-static inline void llcrypt_enqueue_decrypt_work(struct work_struct *work)
-{
-}
-
-static inline struct llcrypt_ctx *llcrypt_get_ctx(gfp_t gfp_flags)
-{
-	return ERR_PTR(-EOPNOTSUPP);
-}
-
-static inline void llcrypt_release_ctx(struct llcrypt_ctx *ctx)
-{
-	return;
-}
-
 static inline
 struct folio *llcrypt_encrypt_pagecache_blocks(struct folio *folio,
 					       s32 pgno,
@@ -430,11 +350,6 @@ static inline void llcrypt_free_bounce_folio(struct folio *bounce_page)
 /* policy.c */
 static inline int llcrypt_ioctl_set_policy(struct file *filp,
 					   const void __user *arg)
-{
-	return -EOPNOTSUPP;
-}
-
-static inline int llcrypt_ioctl_get_policy(struct file *filp, void __user *arg)
 {
 	return -EOPNOTSUPP;
 }
@@ -547,15 +462,6 @@ static inline int llcrypt_fname_disk_to_usr(struct inode *inode,
 					    struct llcrypt_str *oname)
 {
 	return -EOPNOTSUPP;
-}
-
-static inline bool llcrypt_match_name(const struct llcrypt_name *fname,
-				      const u8 *de_name, u32 de_name_len)
-{
-	/* Encryption support disabled; use standard comparison */
-	if (de_name_len != fname->disk_name.len)
-		return false;
-	return !memcmp(de_name, fname->disk_name.name, fname->disk_name.len);
 }
 
 /* hooks.c */
@@ -702,39 +608,6 @@ static inline int llcrypt_prepare_rename(struct inode *old_dir,
 }
 
 /**
- * llcrypt_prepare_lookup - prepare to lookup a name in a possibly-encrypted directory
- * @dir: directory being searched
- * @dentry: filename being looked up
- * @fname: (output) the name to use to search the on-disk directory
- *
- * Prepare for ->lookup() in a directory which may be encrypted by determining
- * the name that will actually be used to search the directory on-disk.  Lookups
- * can be done with or without the directory's encryption key; without the key,
- * filenames are presented in encrypted form.  Therefore, we'll try to set up
- * the directory's encryption key, but even without it the lookup can continue.
- *
- * This also installs a custom ->d_revalidate() method which will invalidate the
- * dentry if it was created without the key and the key is later added.
- *
- * Return: 0 on success; -ENOENT if key is unavailable but the filename isn't a
- * correctly formed encoded ciphertext name, so a negative dentry should be
- * created; or another -errno code.
- */
-static inline int llcrypt_prepare_lookup(struct inode *dir,
-					 struct dentry *dentry,
-					 struct llcrypt_name *fname)
-{
-	if (IS_ENCRYPTED(dir))
-		return __llcrypt_prepare_lookup(dir, dentry, fname);
-
-	memset(fname, 0, sizeof(*fname));
-	fname->usr_fname = &dentry->d_name;
-	fname->disk_name.name = (unsigned char *)dentry->d_name.name;
-	fname->disk_name.len = dentry->d_name.len;
-	return 0;
-}
-
-/**
  * llcrypt_prepare_setattr - prepare to change a possibly-encrypted inode's attributes
  * @dentry: dentry through which the inode is being changed
  * @attr: attributes to change
@@ -796,31 +669,6 @@ static inline int llcrypt_prepare_symlink(struct inode *dir,
 	disk_link->len = len + 1;
 	if (disk_link->len > max_len)
 		return -ENAMETOOLONG;
-	return 0;
-}
-
-/**
- * llcrypt_encrypt_symlink - encrypt the symlink target if needed
- * @inode: symlink inode
- * @target: plaintext symlink target
- * @len: length of @target excluding null terminator
- * @disk_link: (in/out) the on-disk symlink target being prepared
- *
- * If the symlink target needs to be encrypted, then this function encrypts it
- * into @disk_link->name.  llcrypt_prepare_symlink() must have been called
- * previously to compute @disk_link->len.  If the filesystem did not allocate a
- * buffer for @disk_link->name after calling llcrypt_prepare_link(), then one
- * will be kmalloc()'ed and the filesystem will be responsible for freeing it.
- *
- * Return: 0 on success, -errno on failure
- */
-static inline int llcrypt_encrypt_symlink(struct inode *inode,
-					  const char *target,
-					  unsigned int len,
-					  struct llcrypt_str *disk_link)
-{
-	if (IS_ENCRYPTED(inode))
-		return __llcrypt_encrypt_symlink(inode, target, len, disk_link);
 	return 0;
 }
 

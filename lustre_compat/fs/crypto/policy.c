@@ -390,25 +390,6 @@ int llcrypt_ioctl_set_policy(struct file *filp, const void __user *arg)
 }
 EXPORT_SYMBOL(llcrypt_ioctl_set_policy);
 
-/* Original ioctl version; can only get the original policy version */
-int llcrypt_ioctl_get_policy(struct file *filp, void __user *arg)
-{
-	union llcrypt_policy policy;
-	int err;
-
-	err = llcrypt_get_policy(file_inode(filp), &policy);
-	if (err)
-		return err;
-
-	if (policy.version != LLCRYPT_POLICY_V1)
-		return -EINVAL;
-
-	if (copy_to_user(arg, &policy, sizeof(policy.v1)))
-		return -EFAULT;
-	return 0;
-}
-EXPORT_SYMBOL(llcrypt_ioctl_get_policy);
-
 /* Valid filenames_encryption_mode associated with contents_encryption_mode,
  * as imposed by llcrypt_valid_enc_modes()
  */

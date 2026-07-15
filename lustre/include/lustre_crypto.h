@@ -98,12 +98,6 @@
 	fscrypt_setup_filename(dir, iname, lookup, fname)
 #define llcrypt_free_filename(fname) \
 	fscrypt_free_filename(fname)
-#define llcrypt_match_name(fname, de_name, name_len)		\
-	fscrypt_match_name(fname, de_name, name_len)
-#define llcrypt_prepare_lookup(dir, dentry, fname) \
-	fscrypt_prepare_lookup(dir, dentry, fname)
-#define llcrypt_encrypt_symlink(inode, target, len, disk_link) \
-	fscrypt_encrypt_symlink(inode, target, len, disk_link)
 #define __llcrypt_encrypt_symlink(inode, target, len, disk_link) \
 	__fscrypt_encrypt_symlink(inode, target, len, disk_link)
 #define llcrypt_prepare_symlink(dir, target, len, max_len, disk_link)	\
