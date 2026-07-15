@@ -78,16 +78,6 @@ static inline bool lsme_is_dom(struct lov_stripe_md_entry *lsme)
 	return (lov_pattern(lsme->lsme_pattern) & LOV_PATTERN_MDT);
 }
 
-static inline void copy_lsm_entry(struct lov_stripe_md_entry *dst,
-				  struct lov_stripe_md_entry *src)
-{
-	unsigned int i;
-
-	for (i = 0; i < src->lsme_stripe_count; i++)
-		*dst->lsme_oinfo[i] = *src->lsme_oinfo[i];
-	memcpy(dst, src, offsetof(typeof(*src), lsme_oinfo));
-}
-
 struct lov_stripe_md {
 	struct kref	lsm_refc;
 	spinlock_t	lsm_lock;
@@ -191,11 +181,6 @@ static inline size_t lov_comp_md_size(const struct lov_stripe_md *lsm)
 	}
 
 	return size;
-}
-
-static inline bool lsm_has_objects(struct lov_stripe_md *lsm)
-{
-	return lsm != NULL && !lsm->lsm_is_released;
 }
 
 static inline unsigned int lov_comp_index(int entry, int stripe)
