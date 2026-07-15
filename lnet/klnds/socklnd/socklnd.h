@@ -570,11 +570,6 @@ static inline int ksocknal_timeout(void)
 	return *ksocknal_tunables.ksnd_timeout ?: lnet_get_lnd_timeout();
 }
 
-static inline int ksocknal_conns_per_peer(void)
-{
-	return *ksocknal_tunables.ksnd_conns_per_peer ?: 1;
-}
-
 int ksocklnd_lookup_conns_per_peer(struct lnet_ni *ni);
 
 int ksocknal_startup(struct lnet_ni *ni);
