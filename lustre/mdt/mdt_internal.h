@@ -675,13 +675,6 @@ static inline u32 hsr_get_archive_id(struct hsm_scan_request *rq)
 	return 0;
 }
 
-static inline
-const struct md_device_operations *mdt_child_ops(struct mdt_device *m)
-{
-	LASSERT(m->mdt_child);
-	return m->mdt_child->md_ops;
-}
-
 static inline struct md_object *mdt_object_child(struct mdt_object *o)
 {
 	LASSERT(o);
@@ -691,12 +684,6 @@ static inline struct md_object *mdt_object_child(struct mdt_object *o)
 static inline struct ptlrpc_request *mdt_info_req(struct mdt_thread_info *info)
 {
 	return info->mti_pill ? info->mti_pill->rc_req : NULL;
-}
-
-static inline __u64 mdt_conn_flags(struct mdt_thread_info *info)
-{
-	LASSERT(info->mti_exp);
-	return exp_connect_flags(info->mti_exp);
 }
 
 static inline void mdt_object_get(const struct lu_env *env,
@@ -1153,8 +1140,6 @@ struct cdt_agent_req *mdt_cdt_update_request(struct coordinator *cdt,
 					 const struct hsm_progress_kernel *pgs);
 int mdt_cdt_remove_request(struct coordinator *cdt, __u64 cookie);
 /* mdt/mdt_coordinator.c */
-void mdt_hsm_dump_hal(int level, const char *prefix,
-		      struct hsm_action_list *hal);
 int cdt_restore_handle_add(struct mdt_thread_info *mti, struct coordinator *cdt,
 			   const struct lu_fid *fid,
 			   const struct hsm_extent *he);
@@ -1212,11 +1197,6 @@ static inline int mdt_fail_write(const struct lu_env *env,
 	}
 
 	return 0;
-}
-
-static inline struct mdt_export_data *mdt_req2med(struct ptlrpc_request *req)
-{
-	return &req->rq_export->exp_mdt_data;
 }
 
 static inline struct mdt_device *mdt_exp2dev(struct obd_export *exp)

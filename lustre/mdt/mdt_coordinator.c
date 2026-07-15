@@ -89,37 +89,6 @@ struct mdt_object *mdt_hsm_get_md_hsm(struct mdt_thread_info *mti,
 	return mdt_hsm_get_md_hsm_lock(mti, fid, hsm, NULL, LCK_NL);
 }
 
-void mdt_hsm_dump_hal(int level, const char *prefix,
-		      struct hsm_action_list *hal)
-{
-	int			 i, sz;
-	struct hsm_action_item	*hai;
-	char			 buf[12];
-
-	CDEBUG(level, "%s: HAL header: version %X count %d"
-		      " archive_id %d flags %#llx\n",
-	       prefix, hal->hal_version, hal->hal_count,
-	       hal->hal_archive_id, hal->hal_flags);
-
-	hai = hai_first(hal);
-	for (i = 0; i < hal->hal_count; i++) {
-		sz = hai->hai_len - sizeof(*hai);
-		CDEBUG(level, "%s %d: fid="DFID" dfid="DFID
-		       " cookie=%#llx"
-		       " action=%s extent=%#llx-%#llx gid=%#llx"
-		       " datalen=%d data=[%s]\n",
-		       prefix, i,
-		       PFID(&hai->hai_fid), PFID(&hai->hai_dfid),
-		       hai->hai_cookie,
-		       hsm_copytool_action2name(hai->hai_action),
-		       hai->hai_extent.offset,
-		       hai->hai_extent.length,
-		       hai->hai_gid, sz,
-		       hai_dump_data_field(hai, buf, sizeof(buf)));
-		hai = hai_next(hai);
-	}
-}
-
 struct hsm_scan_data {
 	struct mdt_thread_info	*hsd_mti;
 	char			 hsd_fsname[MTI_NAME_MAXLEN + 1];
