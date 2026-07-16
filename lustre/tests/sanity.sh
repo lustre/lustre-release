@@ -18494,7 +18494,6 @@ test_133a() {
 	# verify mdt stats first.
 	mkdir_on_mdt0 ${testdir} || error "mkdir_on_mdt0 failed"
 	check_stats $SINGLEMDS "mkdir" 1
-
 	# clear "open" from "lfs mkdir" above
 	do_facet $SINGLEMDS $LCTL set_param mdt.*.md_stats=clear
 	touch ${testdir}/${tfile} || error "touch failed"
@@ -18505,6 +18504,8 @@ test_133a() {
 		ls -lR ${testdir}
 		check_stats $SINGLEMDS "open" 2
 		check_stats $SINGLEMDS "close" 2
+		(( $MDS1_VERSION >= $(version_code 2.17.55) )) &&
+			check_stats $SINGLEMDS "readpage" 1
 	}
 	[ $MDS1_VERSION -ge $(version_code 2.8.54) ] && {
 		mknod ${testdir}/${tfile}-pipe p || error "mknod failed"
@@ -37001,10 +37002,12 @@ test_855() {
 
 	cancel_lru_locks mdc
 	lctl set_param mdc.*.stats clear
+	do_facet $SINGLEMDS $LCTL set_param mdt.*.md_stats=clear
 	local num_ls=$(ls -1 $DIR/$tdir | wc -l)
 	local mds_readpage=$(calc_stats mdc.*.stats mds_readpage)
 	(( $mds_readpage == 0 )) || error "readpages: $mds_readpage"
 	(( $nrfiles == $num_ls )) || error "incorrect reading dir"
+	check_stats $SINGLEMDS "readpage" 1
 }
 run_test 855 "readdir on open validation"
 

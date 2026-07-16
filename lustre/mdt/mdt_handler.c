@@ -2955,6 +2955,8 @@ static int mdt_readpage(struct tgt_session_info *tsi)
 	struct mdt_object	*object = mdt_obj(tsi->tsi_corpus);
 	struct lu_rdpg		*rdpg = &info->mti_u.rdpg.mti_rdpg;
 	const struct mdt_body	*reqbody = tsi->tsi_mdt_body;
+	struct ptlrpc_request	*req = tgt_ses_req(tsi);
+	ktime_t			 kstart = ktime_get();
 	struct mdt_body		*repbody;
 	int			 rc;
 	int			 i;
@@ -3018,6 +3020,9 @@ free_rdpg:
 	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE))
 		RETURN(0);
 
+	if (rc == 0)
+		mdt_counter_incr(req, LPROC_MDT_READPAGE,
+				 ktime_us_delta(ktime_get(), kstart));
 	return rc;
 }
 
@@ -3099,13 +3104,14 @@ static int mdt_dir_read_on_open(struct mdt_thread_info	*info,
 	const struct lu_env *env = info->mti_env;
 	struct lu_rdpg		*rdpg = &info->mti_u.rdpg.mti_rdpg;
 	struct req_capsule	*pill = info->mti_pill;
-	int			 rc;
-	struct mdt_body         *mbo;
+	ktime_t			 kstart = ktime_get();
 	struct mdt_device	*mdt = info->mti_mdt;
-	struct mdt_object	*o;
 	struct ptlrpc_request	*req = pill->rc_req;
-	bool have_lock = false;
 	struct lu_fid *fid; // dir fid
+	struct mdt_body         *mbo;
+	int			 rc;
+	struct mdt_object	*o;
+	bool have_lock = false;
 
 	ENTRY;
 
@@ -3172,6 +3178,11 @@ out_rnb:
 out_err:
 	if (rc < 0)
 		CDEBUG(D_INFO, "read dir on open failed with rc = %d\n", rc);
+
+	if (rc > 0)
+		mdt_counter_incr(req, LPROC_MDT_READPAGE,
+				 ktime_us_delta(ktime_get(), kstart));
+
 	RETURN(0);
 }
 
