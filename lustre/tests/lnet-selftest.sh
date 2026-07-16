@@ -35,15 +35,16 @@ lst_TESTS=${lst_TESTS:-"write read ping"}
 # "none" -> LST_BRW_CHECK_NONE
 # "full" -> LST_BRW_CHECK_FULL
 # "simple" -> LST_BRW_CHECK_SIMPLE
-lst_CHECK=${lst_CHECK:-"full"}
+# "discard" -> LST_BRW_CHECK_DISCARD
+if (( MDS1_VERSION >= $(version_code 2.17.54) &&
+      OST1_VERSION >= $(version_code 2.17.54) &&
+      CLIENT_VERSION >= $(version_code 2.17.54) )); then
+	lst_CHECK=${lst_CHECK:-"full none discard"}
+else
+	lst_CHECK=${lst_CHECK:-"full none"}
+fi
 
 lst_FROM=${lst_FROM:-"cs"}
-
-case $lst_CHECK in
-	full|simple) check="check=$lst_CHECK";;
-	none) check="";;
-	*) error Unknown flag $lst_CHECK;;
-esac
 
 LOAD_MODULES_REMOTE=true load_modules
 
@@ -133,18 +134,38 @@ test_smoke_sub () {
 	for t in $lst_TESTS; do
 		for s in $lst_SIZES; do
 			for c in $lst_CONCR; do
-				for ((i=0; i<${#tests[@]}; i++)); do
-					echo -n "$pre --concurrency $c"\
-						" --distribute ${tests[i]} "
-					case $t in
-						read|write)
-							echo -n "brw $t" \
-							" $check size=$s";;
-						ping)
-							echo -n $t;;
-						*) error Unknonwn LST test;;
+				for chk in $lst_CHECK; do
+					case $chk in
+					full|discard)
+						check="check=$chk"
+						;;
+					none)
+						check=""
+						;;
+					*)
+						error "Unknown flag $chk"
+						;;
 					esac
-					echo
+					for ((i=0; i<${#tests[@]}; i++)); do
+						echo -n "$pre --concurrency $c"\
+							" --distribute ${tests[i]} "
+						case $t in
+						read|write)
+							echo -n "brw $t " \
+								"$check size=$s"
+							;;
+						ping)
+							echo -n $t
+							;;
+						*)
+							error "Unknown LST test"
+							;;
+						esac
+						echo
+					done
+					# Ping ignores check so don't iterate
+					# over all lst_CHECK values
+					[[ $t != ping ]] || break
 				done
 			done
 		done
