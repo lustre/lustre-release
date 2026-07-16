@@ -1824,15 +1824,34 @@ bad_pkt:
 	return -EPROTO;
 }
 
+static struct kefa_rx *
+kefalnd_get_rx_from_wc(struct kefa_ni *efa_ni, struct ib_wc *wc)
+{
+	u32 rx_idx = EFALND_RX_WRID_INDEX(wc->wr_id);
+	u32 epoch = EFALND_RX_WRID_EPOCH(wc->wr_id);
+	struct kefa_qp *qp = wc->qp->qp_context;
+
+	if (epoch != (u32)efa_ni->ni_epoch)
+		return NULL;
+
+	if (rx_idx >= EFALND_RX_MSGS(qp))
+		return NULL;
+
+	return qp->rx_msgs + rx_idx;
+}
+
 static void
 kefalnd_rx_complete(struct kefa_ni *efa_ni, struct ib_wc *wc)
 {
 	struct kefa_rx *rx;
 	int nob, rc;
 
-	rx = (void *)wc->wr_id;
+	rx = kefalnd_get_rx_from_wc(efa_ni, wc);
+	if (!rx)
+		return;
+
 	nob = wc->byte_len;
-	if (!rx || nob == 0) {
+	if (nob == 0) {
 		/* Reaching here means FW or LND did something bad */
 		CERROR("cpu[%u] received bad RX handle with status[%u] nob[%u]",
 		       smp_processor_id(), wc->status, nob);
@@ -2204,6 +2223,7 @@ static int
 kefalnd_init_rx_msgs(struct kefa_qp *qp)
 {
 	struct kefa_dev *efa_dev = qp->efa_dev;
+	struct kefa_ni *efa_ni = efa_dev->efa_ni;
 	struct kefa_rx *rx;
 	int i;
 
@@ -2235,7 +2255,7 @@ kefalnd_init_rx_msgs(struct kefa_qp *qp)
 
 		rx->wrq.sg_list = &rx->sge;
 		rx->wrq.num_sge = 1;
-		rx->wrq.wr_id = (u64)rx;
+		rx->wrq.wr_id = EFALND_RX_WRID(efa_ni->ni_epoch, i);
 		INIT_LIST_HEAD(&rx->list_node);
 		list_add_tail(&rx->list_node, &qp->free_rx);
 	}
@@ -2292,6 +2312,7 @@ kefalnd_create_qp(struct kefa_dev *efa_dev, struct kefa_qp *qp,
 	init_attr.send_cq = cq->ib_cq;
 	init_attr.recv_cq = cq->ib_cq;
 	init_attr.sq_sig_type = IB_SIGNAL_ALL_WR;
+	init_attr.qp_context = qp;
 
 	ib_qp = ib_create_qp(efa_dev->pd, &init_attr);
 	if (IS_ERR(ib_qp)) {

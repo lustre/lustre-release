@@ -49,6 +49,11 @@
 #define EFALND_MSG_PAGES		(EFALND_MSG_SIZE_ALIGNED / PAGE_SIZE)
 #define EFALND_RX_MSGS(q)		(2 * (q)->rq_depth)
 
+/* RX work request ID encoding: [epoch(32) | rx_index(32)] */
+#define EFALND_RX_WRID(epoch, idx)	(((u64)(epoch) << 32) | (u32)(idx))
+#define EFALND_RX_WRID_EPOCH(wrid)	((u32)((wrid) >> 32))
+#define EFALND_RX_WRID_INDEX(wrid)	((u32)(wrid))
+
 /* max # of fragments supported. + 1 for unaligned case */
 #define EFALND_MAX_TX_FRAGS		(LNET_MAX_IOV + 1)
 
