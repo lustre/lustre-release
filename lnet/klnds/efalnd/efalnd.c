@@ -3158,7 +3158,8 @@ kefalnd_startup(struct lnet_ni *ni)
 							 &efa_dev->gid,
 							 efa_dev->cm_qp->ib_qp->qp_num,
 							 efa_dev->cm_qp->qkey);
-		if (!efa_ni->self_peer_ni) {
+		if (IS_ERR_OR_NULL(efa_ni->self_peer_ni)) {
+			efa_ni->self_peer_ni = NULL;
 			rc = -ENODEV;
 			goto failed;
 		}
