@@ -1955,9 +1955,12 @@ static int printf_format_directive(char *seq, char *buffer, size_t size,
 		static __thread gid_t save_gid = -1;
 
 		if (save_gid != param->fp_lmd->lmd_stx.stx_gid) {
-			struct group *gr;
+			struct group grp;
+			struct group *gr = NULL;
+			char gbuf[4096];
 
-			gr = getgrgid(param->fp_lmd->lmd_stx.stx_gid);
+			getgrgid_r(param->fp_lmd->lmd_stx.stx_gid, &grp,
+				   gbuf, sizeof(gbuf), &gr);
 			if (gr) {
 				save_gid = param->fp_lmd->lmd_stx.stx_gid;
 				strncpy(save_gr_name, gr->gr_name,
@@ -2010,9 +2013,12 @@ static int printf_format_directive(char *seq, char *buffer, size_t size,
 		static __thread uid_t save_uid = -1;
 
 		if (save_uid != param->fp_lmd->lmd_stx.stx_uid) {
-			struct passwd *pw;
+			struct passwd pwd;
+			struct passwd *pw = NULL;
+			char pbuf[4096];
 
-			pw = getpwuid(param->fp_lmd->lmd_stx.stx_uid);
+			getpwuid_r(param->fp_lmd->lmd_stx.stx_uid, &pwd,
+				   pbuf, sizeof(pbuf), &pw);
 			if (pw) {
 				save_uid = param->fp_lmd->lmd_stx.stx_uid;
 				strncpy(save_username, pw->pw_name,
