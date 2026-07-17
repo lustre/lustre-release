@@ -3170,7 +3170,7 @@ out_rnb:
 	else
 		req_capsule_shrink(pill, &RMF_NIOBUF_INLINE, rc, RCL_SERVER);
 out_err:
-	if (rc)
+	if (rc < 0)
 		CDEBUG(D_INFO, "read dir on open failed with rc = %d\n", rc);
 	RETURN(0);
 }
