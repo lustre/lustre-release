@@ -3148,16 +3148,18 @@ static int osd_execute_fallocate(const struct lu_env *env,
 	file->f_mode |= FMODE_64BITHASH;
 	rc = file->f_op->fallocate(file, mode, start, end - start);
 	compat_security_file_free(file);
-	if (rc == 0) {
-		osd_partial_page_flush_punch(d, inode, start, end - 1);
-		/*
-		 * When the fallocate grows the file, ldiskfs also zeroes the
-		 * partial block at the old EOF, which lies outside the
-		 * [start, end) range flushed above.
-		 */
-		if (i_size_read(inode) > old_size)
-			osd_partial_page_flush(d, inode, old_size);
-	}
+	/* simulate ldiskfs failing after it already zeroed part of the range */
+	if (rc == 0 && CFS_FAIL_CHECK(OBD_FAIL_OSD_FALLOCATE_ERR))
+		rc = -EIO;
+	/* a failed fallocate may still have dirtied part of the range */
+	osd_partial_page_flush_punch(d, inode, start, end - 1);
+	/*
+	 * When the fallocate grows the file, ldiskfs also zeroes the
+	 * partial block at the old EOF, which lies outside the
+	 * [start, end) range flushed above.
+	 */
+	if (i_size_read(inode) > old_size)
+		osd_partial_page_flush(d, inode, old_size);
 	return rc;
 }
 

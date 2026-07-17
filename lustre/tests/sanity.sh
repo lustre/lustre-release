@@ -19681,6 +19681,41 @@ test_150ic() {
 }
 run_test 150ic "Verify fallocate LARGE zero PREALLOC functionality"
 
+test_150id() {
+	(( $OST1_VERSION >= $(version_code 2.17.55) )) ||
+		skip "need OST1 version >= 2.17.55 for the fallocate error flush"
+
+	[[ "$ost1_FSTYPE" == "ldiskfs" ]] ||
+		skip "fallocate zero-range is ldiskfs only"
+
+	check_set_fallocate_or_skip
+
+	local osts=$(osts_nodes)
+
+	get_osd_param $osts '' read_cache_enable > /dev/null ||
+		skip "not cache-capable obdfilter"
+
+	stack_trap "rm -f $DIR/$tfile $TMP/$tfile.fsxgood; wait_delete_completed"
+
+	# With the OST caches off a write is handed whatever page ldiskfs
+	# left in the page cache rather than a private one, so a page left
+	# dirty there is caught instead of tolerated.
+	stack_trap "set_osd_param $osts '' writethrough_cache_enable 1"
+	stack_trap "set_osd_param $osts '' read_cache_enable 1"
+	set_osd_param $osts '' read_cache_enable 0
+	set_osd_param $osts '' writethrough_cache_enable 0
+
+	#define OBD_FAIL_OSD_FALLOCATE_ERR 0x2303
+	stack_trap "do_nodes $osts $LCTL set_param fail_loc=0"
+	do_nodes $osts "$LCTL set_param fail_loc=0x2303"
+
+	$LFS setstripe -c 1 $DIR/$tfile || error "$LFS setstripe failed"
+
+	$FSX -c 50 -p 10000 -S 0 -P $TMP -l 5407677 -N 20000 $DIR/$tfile ||
+		error "fsx failed"
+}
+run_test 150id "fallocate that fails must not leave a dirty page behind"
+
 #LU-2902 roc_hit was not able to read all values from lproc
 function roc_hit_init() {
 	local osts=${1:-$(osts_nodes)}

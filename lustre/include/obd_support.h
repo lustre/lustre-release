@@ -778,6 +778,7 @@ extern bool obd_enable_fname_encoding;
 
 #define OBD_FAIL_OSD_FAIL_AT_TRUNCATE		0x2301
 #define OBD_FAIL_OSD_MARK_COMPRESSED	 	0x2302
+#define OBD_FAIL_OSD_FALLOCATE_ERR		0x2303
 
 /* continuation of MDS related constants */
 #define OBD_FAIL_MDS_PAUSE_CREATE_AFTER_LOOKUP	0x2401
