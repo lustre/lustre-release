@@ -209,15 +209,12 @@ wait_for_devices
 export KMEMLEAK=${KMEMLEAK:-/sys/kernel/debug/kmemleak}
 KMEMLEAK_MODS=/tmp/kmemleak-modules-list.txt
 if [[ -w $KMEMLEAK ]]; then
-	kmemleak_out=$(echo scan > $KMEMLEAK 2>&1 || true)
-
-	if [[ "$kmemleak_out" =~ "Device or resource busy" ]]; then
+	if ! echo scan > $KMEMLEAK 2>&1; then
 		echo "kmemleak disabled"
 		export KMEMLEAK=disabled
 	else
 		kmemleak_pre=/tmp/kmemleak-pre-unload.txt
 
-		echo $kmemleak_out
 		cat /proc/modules > $KMEMLEAK_MODS
 		cat $KMEMLEAK > $kmemleak_pre
 		[[ -s $kmemleak_pre ]] && logger -t leak-pre -f $kmemleak_pre

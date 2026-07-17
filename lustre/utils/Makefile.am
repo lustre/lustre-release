@@ -150,7 +150,7 @@ endif
 if SERVER
 LIB_TARGETS += mount_osd_wbcfs.so
 endif
-endif
+endif # PLUGINS
 
 install-exec-hook:
 	@$(NORMAL_INSTALL)
@@ -163,9 +163,16 @@ install-exec-hook:
 	    $(INSTALL_DATA) $$p $(DESTDIR)$(libdir)/lustre/$$f; \
 	  else :; fi; \
 	done
-	if [ "$(SERVER)" = "yes" ]; then \
-		ln -sf $(DESTDIR)$(sbindir)/mount.lustre $(DESTDIR)$(sbindir)/mount.lustre_tgt; \
-	fi
+if SERVER
+	$(mkinstalldirs) $(DESTDIR)$(rootsbindir)
+	ln -sf mount.lustre $(DESTDIR)$(rootsbindir)/mount.lustre_tgt
+
+all-local: mount.lustre_tgt
+
+mount.lustre_tgt: mount.lustre
+	rm -f $@
+	$(LN_S) mount.lustre $@
+endif # SERVER
 endif # UTILS
 
 llog_reader_SOURCES = llog_reader.c

@@ -36,6 +36,7 @@ export JOBID_VAR=${JOBID_VAR:-"procname_uid"}  # or "existing" or "disable"
 
 #export PDSH="pdsh -S -Rssh -w"
 export MOUNT_CMD=${MOUNT_CMD:-"mount -t lustre"}
+export MOUNT_TGT=${MOUNT_TGT:-"mount -t lustre_tgt"}
 export UMOUNT=${UMOUNT:-"umount -d"}
 
 # A switch to enable kptr less restrictively
@@ -1039,9 +1040,7 @@ load_lnet() {
 	# that obviously has nothing to do with this Lustre run
 	# Disable automatic memory scanning to avoid perf hit.
 	if [[ -w $KMEMLEAK ]] ; then
-		local kmemleak_out=$(echo scan=off > $KMEMLEAK 2>&1 || true)
-
-		if [[ "$kmemleak_out" =~ "Device or resource busy" ]]; then
+		if ! echo scan=off > $KMEMLEAK 2>&1; then
 			echo "kmemleak disabled"
 			export KMEMLEAK=disabled
 		else
@@ -1207,16 +1206,17 @@ load_modules_local() {
 	rm -f $OGDB/ogdb-$HOSTNAME
 	$LCTL modules > $OGDB/ogdb-$HOSTNAME
 
-	# 'mount' doesn't look in $PATH, just sbin
+	# 'mount' doesn't look in $PATH, it hard-codes /sbin/mount.$FSTYPE
 	local mount_lustre=$LUSTRE/utils/mount.lustre
-	if [ -f $mount_lustre ]; then
-		local sbin_mount=$(readlink -f /sbin)/mount.lustre
+	local sbin_mount=$(readlink -f /sbin)/${mount_lustre//*\//}
+	if [[ -f $mount_lustre ]]; then
 		if grep -qw "$sbin_mount" /proc/mounts; then
 			cmp -s $mount_lustre $sbin_mount || umount $sbin_mount
 		fi
 		if ! grep -qw "$sbin_mount" /proc/mounts; then
-			[ ! -f "$sbin_mount" ] && touch "$sbin_mount"
-			if [ ! -s "$sbin_mount" -a -w "$sbin_mount" ]; then
+			ls -l $sbin_mount $mount_lustre || true
+			[[ -f "$sbin_mount" ]] || touch "$sbin_mount" || continue
+			if [[ ! -s "$sbin_mount" && -w "$sbin_mount" ]]; then
 				cat <<- EOF > "$sbin_mount"
 				#!/usr/bin/bash
 				#STUB MARK
@@ -1227,11 +1227,26 @@ load_modules_local() {
 				EOF
 				chmod a+x $sbin_mount
 			fi
+			echo "mount --bind $mount_lustre $sbin_mount"
 			mount --bind $mount_lustre $sbin_mount ||
 				error "can't bind $mount_lustre to $sbin_mount"
 			# ignore errors to symlink .libs for read-only /sbin
-			[[ -e /sbin/.libs ]] ||
-				ln -sf $LUSTRE/utils/.libs /sbin/.libs || true
+			[[ ! -w /sbin || -e /sbin/.libs ]] ||
+				ln -svf $LUSTRE/utils/.libs /sbin/.libs || true
+		fi
+	fi
+
+	# /sbin/mount.lustre symlink may not be created in a read-only root fs
+	if [[ $MOUNT_TGT =~ lustre_tgt ]]; then
+		sbin_mount=$(readlink -f /sbin)/mount.lustre_tgt
+		if [[ ! -e $sbin_mount ]]; then
+			if [[ ! -w /usr/sbin ]]; then
+				echo "/usr/sbin/ not writable for $sbin_mount"
+				MOUNT_TGT=$MOUNT_CMD
+			elif ! ln -svf mount.lustre ${sbin_mount}; then
+				echo "cannot create $sbin_mount symlink"
+				MOUNT_TGT=$MOUNT_CMD
+			fi
 		fi
 	fi
 }
@@ -1325,11 +1340,17 @@ unload_modules() {
 	local sbin_mount=$(readlink -f /sbin)/mount.lustre
 	if grep -qe "$sbin_mount " /proc/mounts; then
 		umount $sbin_mount || true
-		[ -s $sbin_mount ] && ! grep -q "STUB MARK" $sbin_mount ||
+		[[ -s $sbin_mount ]] && ! grep -q "STUB MARK" $sbin_mount ||
+			rm -f $sbin_mount
+	fi
+	sbin_mount=$(readlink -f /sbin)/mount.lustre_tgt
+	if grep -qe "$sbin_mount " /proc/mounts; then
+		umount $sbin_mount || true
+		[[ -s $sbin_mount ]] && ! grep -q "STUB MARK" $sbin_mount ||
 			rm -f $sbin_mount
 	fi
 
-	[ -L /sbin/.libs ] && rm /sbin/.libs
+	[[ -L /sbin/.libs ]] && rm /sbin/.libs
 
 	[[ $rc -eq 0 ]] && echo "modules unloaded."
 
@@ -2663,7 +2684,7 @@ mount_facet() {
 
 		case $fstype in
 		wbcfs)
-			echo "Start ${facet}: $MOUNT_CMD -v lustre-wbcfs $mntpt"
+			echo "Start ${facet}: $MOUNT_TGT -v lustre-wbcfs $mntpt"
 
 			export OSD_WBC_FSNAME="$FSNAME"
 			export OSD_WBC_INDEX="$index"
@@ -2695,12 +2716,12 @@ mount_facet() {
 				 OSD_WBC_MGS_NID=$OSD_WBC_MGS_NID \
 				 OSD_WBC_PRIMARY_MDT=$OSD_WBC_PRIMARY_MDT \
 				 OSD_WBC_FSNAME=$OSD_WBC_FSNAME \
-				 $MOUNT_CMD -v lustre-wbcfs $mntpt"
+				 $MOUNT_TGT -v lustre-wbcfs $mntpt"
 			;;
 		*)
-			echo "Start ${facet}: $MOUNT_CMD $opts $dm_dev $mntpt"
+			echo "Start ${facet}: $MOUNT_TGT $opts $dm_dev $mntpt"
 			do_facet ${facet} \
-				"mkdir -p $mntpt; $MOUNT_CMD $opts $dm_dev $mntpt"
+				"mkdir -p $mntpt; $MOUNT_TGT $opts $dm_dev $mntpt"
 		esac
 
 		RC=${PIPESTATUS[0]}
