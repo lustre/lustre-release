@@ -303,7 +303,11 @@ configure-stamp: autogen-stamp debian/control.main debian/control.modules.in
 	); \
 	touch $@
 
-build-arch build-indep: build
+build-arch: build
+
+# The arch-independent packages ship source and headers only, so nothing
+# needs to be configured or built for them.
+build-indep:
 
 build: build-stamp
 build-stamp: patch-stamp configure-stamp
@@ -451,8 +455,8 @@ binary-$(DEV_PKG): build-stamp
 	dh_md5sums -p $(DEV_PKG)
 	dh_builddeb -p $(DEV_PKG)
 
-binary-$(SOURCE_PKG): build-stamp
-	dh_testdir 
+binary-$(SOURCE_PKG):
+	dh_testdir
 	dh_testroot
 	# Copy everything 
 	dh_installdirs -p $(SOURCE_PKG) usr/src/modules/lustre/debian
@@ -481,7 +485,7 @@ binary-$(SOURCE_PKG): build-stamp
 	dh_md5sums -p $(SOURCE_PKG)
 	dh_builddeb -p $(SOURCE_PKG)
 
-binary-$(DKMS_PKG): build-stamp
+binary-$(DKMS_PKG):
 	dh_testdir
 	dh_testroot
 	# Create /usr/src/lustre-client-modules-<version>
@@ -493,15 +497,13 @@ binary-$(DKMS_PKG): build-stamp
 	# Clean it up
 	$(MAKE) -C debian/$(DKMS_PKG)/usr/src/lustre-client-modules-$(UPVERSION) -f debian/rules clean
 
-	mkdir -p $(CURDIR)/debian/$(DKMS_PKG)/_tmp_
-	$(MAKE) install DESTDIR=$(CURDIR)/debian/$(DKMS_PKG)/_tmp_
-	rm -fr $(CURDIR)/debian/$(DKMS_PKG)/_tmp_/usr/include/lustre/
-	mv $(CURDIR)/debian/$(DKMS_PKG)/_tmp_/usr/include $(CURDIR)/debian/$(DKMS_PKG)/usr/
-	rm -fr $(CURDIR)/debian/$(DKMS_PKG)/_tmp_
-
 	# Put the DKMS configuration file in place
 	sed -e 's/[@]UPVERSION[@]/$(UPVERSION)/' debian/dkms.conf.in > debian/$(DKMS_PKG)/usr/src/lustre-client-modules-$(UPVERSION)/dkms.conf
-	dh_install -p $(DKMS_PKG)
+	# The UAPI headers are not generated, so dh_install copies them
+	# straight from the source tree (see $(DKMS_PKG).install). Skip the
+	# server-only headers, matching UAPI_LUSTRE_EXCLUDE in autoMakefile.am.
+	dh_install -p $(DKMS_PKG) -Xlustre_access_log.h -Xlustre_barrier_user.h \
+		-Xlustre_disk.h -Xlustre_lfsck_user.h -Xlustre_log_user.h
 	dh_installchangelogs -p $(DKMS_PKG) lustre/ChangeLog
 	dh_installdocs -p $(DKMS_PKG)
 	dh_compress -p $(DKMS_PKG)

@@ -16,30 +16,21 @@ dkms-debs: debs_common
 	export DEB_BUILD_PROFILES="client"
 	export KERNEL_OBJ="$(LINUX_OBJ)"
 	export KERNEL_SRC="$(LINUX)"
-	if test "x$(systemdsystemunitdir)" != "x"; then
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} systemd"
-		export SYSTEMD_OPTIONS="--with-systemdsystemunitdir=$(systemdsystemunitdir)"
-	fi
-	if test "x$(DPKG_INT_O2IB)" != "x"; then
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} int_o2ib"
-	fi
 	echo "Enabled Build Profiles: $${DEB_BUILD_PROFILES}"
 	tmpprofiles=`tr ' ' ',' <<< $$DEB_BUILD_PROFILES`
 	echo "Kernel Source: $${KERNEL_SRC}"
 	echo "Kernel Object: $${KERNEL_OBJ}"
 	export BUILD_DKMS="true"
 	cp -v debian/control.main debian/control
-	dpkg-buildpackage -us -uc -I.git -I\*.out[0-9]\* -I\*.swp -P$$tmpprofiles || {
+	dpkg-buildpackage -us -uc -g -I.git -I\*.out[0-9]\* -I\*.swp -P$$tmpprofiles || {
 		rc=$${PIPESTATUS[0]}
 		[ $${rc} -gt 1 ] && exit $${rc}
 		exit 0
 	}
 	VER=$$(sed -ne '1s/^lustre (\(.*-[0-9][0-9]*\)).*$$/\1/p' debian/changelog)
 	mkdir -p debs
-	mv ../lustre-dev_$${VER}_*.deb ../lustre-source_$${VER}_all.deb \
-	   ../lustre-iokit_$${VER}_*.deb ../lustre-tests_$${VER}_*.deb \
-	   ../lustre-*-utils_$${VER}_*.deb \
+	mv ../lustre-source_$${VER}_all.deb \
 	   ../lustre_$${VER}.dsc ../lustre_$${VER}_*.changes \
 	   ../lustre_$${VER}.tar.gz ../lustre-*-modules-dkms_$${VER}_*.deb \
-	   ../lustre-*-dbgsym_$${VER}_*.*deb ../lustre_$${VER}_*.buildinfo \
+	   ../lustre_$${VER}_*.buildinfo \
 	   debs/
