@@ -417,7 +417,7 @@ out:
 }
 
 static int dir_stripe_limit_check(int stripe_offset, int stripe_count,
-				  int hash_type)
+				  enum lmv_hash_type hash_type)
 {
 	int rc;
 
@@ -790,7 +790,7 @@ static int verify_dir_param(const char *name,
 	/* Check if the stripe pattern is sane. */
 	rc = dir_stripe_limit_check(param->lsp_stripe_offset,
 				    param->lsp_stripe_count,
-				    param->lsp_stripe_pattern);
+				    param->lsp_hash_type);
 	if (rc != 0)
 		return rc;
 
@@ -869,7 +869,7 @@ static inline void param2lmu(struct lmv_user_md *lmu,
 						  LMV_USER_MAGIC;
 	lmu->lum_stripe_count = param->lsp_stripe_count;
 	lmu->lum_stripe_offset = param->lsp_stripe_offset;
-	lmu->lum_hash_type = param->lsp_stripe_pattern;
+	lmu->lum_hash_type = param->lsp_hash_type;
 	lmu->lum_max_inherit = param->lsp_max_inherit;
 	lmu->lum_max_inherit_rr = param->lsp_max_inherit_rr;
 	if (param->lsp_is_specific) {
@@ -924,14 +924,14 @@ int llapi_dir_set_default_lmv(const char *name,
 }
 
 int llapi_dir_set_default_lmv_stripe(const char *name, int stripe_offset,
-				     int stripe_count, int stripe_pattern,
+				     int stripe_count, enum lmv_hash_type hash,
 				     const char *pool_name)
 {
 	const struct llapi_stripe_param param = {
-		.lsp_stripe_count = stripe_count,
-		.lsp_stripe_offset = stripe_offset,
-		.lsp_stripe_pattern = stripe_pattern,
-		.lsp_pool = (char *)pool_name
+		.lsp_stripe_count	= stripe_count,
+		.lsp_stripe_offset	= stripe_offset,
+		.lsp_hash_type		= hash,
+		.lsp_pool		= (char *)pool_name
 	};
 
 	return llapi_dir_set_default_lmv(name, &param);

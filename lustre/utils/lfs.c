@@ -9651,10 +9651,10 @@ static int lfs_setdirstripe(int argc, char **argv)
 	else
 		param->lsp_stripe_offset = lsa.lsa_stripe_off;
 
-	param->lsp_stripe_pattern = lsa.lsa_hash;
+	param->lsp_hash_type = lsa.lsa_hash;
 
 	if (overstriped) {
-		param->lsp_stripe_pattern |= LMV_HASH_FLAG_OVERSTRIPED;
+		param->lsp_hash_type |= LMV_HASH_FLAG_OVERSTRIPED;
 		max_inherit = LMV_INHERIT_DEFAULT_OVERSTRIPED;
 	}
 

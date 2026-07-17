@@ -128,7 +128,10 @@ struct llapi_stripe_param {
 	unsigned long long	lsp_stripe_size;
 	char			*lsp_pool;
 	int			lsp_stripe_offset;
-	enum lov_pattern	lsp_stripe_pattern;
+	union {
+		enum lov_pattern	lsp_stripe_pattern;
+		enum lmv_hash_type	lsp_hash_type;
+	};
 	/* Number of stripes. Size of lsp_osts[] if lsp_specific is true.*/
 	int			lsp_stripe_count;
 	bool			lsp_is_specific;
@@ -538,7 +541,8 @@ int llapi_file_fget_mdtidx(int fd, int *mdtidx);
 int llapi_dir_set_default_lmv(const char *name,
 			      const struct llapi_stripe_param *param);
 int llapi_dir_set_default_lmv_stripe(const char *name, int stripe_offset,
-				     int stripe_count, int stripe_pattern,
+				     int stripe_count,
+				     enum lmv_hash_type hash_type,
 				     const char *pool_name);
 int llapi_dir_create(const char *name, mode_t mode,
 		     const struct llapi_stripe_param *param);
