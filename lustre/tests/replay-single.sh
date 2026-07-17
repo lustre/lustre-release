@@ -5022,9 +5022,18 @@ test_135() {
 	printf "%s\n" $DIR/$tdir/file.{1..20} |
 		xargs -I{} -P20 dd if=/dev/urandom of={} bs=1K count=1 &> /dev/null
 
+	# Keep the just-written data on the client until after the failover so
+	# that sync has genuinely dirty pages to write back through the
+	# recovering OST.  If it were flushed to ost1 before the stop, sync
+	# would find nothing dirty and return at once (LU-17262).  Clear the
+	# hold before ost1 sets its own fail_loc; only one is active per node.
+	#define OBD_FAIL_OSC_DELAY_IO	0x414
+	$LCTL set_param fail_loc=0x414 fail_val=60
+
 	stop ost1
 	change_active ost1
 	wait_for_facet ost1
+	$LCTL set_param fail_loc=0
 
 	#define OBD_FAIL_LDLM_LOCK_REPLAY	0x32d
 	# Make sure lock replay server side never completes and errors out.
