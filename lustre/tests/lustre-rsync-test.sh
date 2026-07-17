@@ -18,8 +18,6 @@ init_logging
 
 ALWAYS_EXCEPT="$LRSYNC_EXCEPT "
 always_except LU-4256	2b
-[[ $(uname -r) = *"debug" ]] &&
-	always_except LU-16489	2c
 
 build_test_filter
 
