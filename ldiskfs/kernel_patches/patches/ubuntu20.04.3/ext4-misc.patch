@@ -70,11 +70,12 @@ diff -ur a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
 diff -ur a/fs/ext4/inode.c b/fs/ext4/inode.c
 --- a/fs/ext4/inode.c	2022-03-24 16:23:11.721060900 -0600
 +++ b/fs/ext4/inode.c	2022-03-24 16:24:35.412642805 -0600
-@@ -6222,3 +6222,21 @@
+@@ -6222,3 +6222,22 @@
  
  	return ret;
  }
 +EXPORT_SYMBOL(ext4_map_blocks);
++EXPORT_SYMBOL(ext4_set_aops);
 +EXPORT_SYMBOL(ext4_truncate);
 +EXPORT_SYMBOL(ext4_iget);
 +EXPORT_SYMBOL(ext4_bread);

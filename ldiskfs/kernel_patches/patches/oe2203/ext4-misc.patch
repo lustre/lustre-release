@@ -73,11 +73,12 @@ diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
 index e868b33ed8f5..70f3bb4ef5eb 100644
 --- a/fs/ext4/inode.c
 +++ b/fs/ext4/inode.c
-@@ -6215,3 +6215,21 @@ vm_fault_t ext4_filemap_fault(struct vm_fault *vmf)
+@@ -6215,3 +6215,22 @@ vm_fault_t ext4_filemap_fault(struct vm_fault *vmf)
  
  	return ret;
  }
 +EXPORT_SYMBOL(ext4_map_blocks);
++EXPORT_SYMBOL(ext4_set_aops);
 +EXPORT_SYMBOL(ext4_truncate);
 +EXPORT_SYMBOL(ext4_iget);
 +EXPORT_SYMBOL(ext4_bread);

@@ -82,11 +82,12 @@ diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
 index 06ee22e..bb109d9 100644
 --- a/fs/ext4/inode.c
 +++ b/fs/ext4/inode.c
-@@ -6204,3 +6204,21 @@ out_error:
+@@ -6204,3 +6204,22 @@ out_error:
  	ext4_journal_stop(handle);
  	goto out;
  }
 +EXPORT_SYMBOL(ext4_map_blocks);
++EXPORT_SYMBOL(ext4_set_aops);
 +EXPORT_SYMBOL(ext4_truncate);
 +EXPORT_SYMBOL(ext4_iget);
 +EXPORT_SYMBOL(ext4_bread);

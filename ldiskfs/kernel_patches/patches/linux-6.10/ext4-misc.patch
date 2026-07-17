@@ -83,11 +83,12 @@ diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
 index 339bdfac..cd8ab8d3 100644
 --- a/fs/ext4/inode.c
 +++ b/fs/ext4/inode.c
-@@ -6166,3 +6166,21 @@ out_error:
+@@ -6166,3 +6166,22 @@ out_error:
  	ext4_journal_stop(handle);
  	goto out;
  }
 +EXPORT_SYMBOL(ext4_map_blocks);
++EXPORT_SYMBOL(ext4_set_aops);
 +EXPORT_SYMBOL(ext4_truncate);
 +EXPORT_SYMBOL(ext4_iget);
 +EXPORT_SYMBOL(ext4_bread);

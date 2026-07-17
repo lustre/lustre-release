@@ -7824,6 +7824,7 @@ check_dmesg_for_errors() {
 	errors="VFS: Busy inodes after unmount of"
 	errors+="\|ldiskfs_check_descriptors: Checksum for group 0 failed"
 	errors+="\|group descriptors corrupted"
+	errors+="\|JBD2: Spotted dirty metadata buffer"
 	errors+="\|UBSAN\|KASAN"
 
 	res=$(do_nodes -q $(comma_list $(nodes_list)) "dmesg" |

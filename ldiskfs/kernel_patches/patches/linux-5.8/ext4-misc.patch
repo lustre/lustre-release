@@ -90,11 +90,12 @@ diff -ur a/fs/ext4/ialloc.c b/fs/ext4/ialloc.c
 diff -ur a/fs/ext4/inode.c b/fs/ext4/inode.c
 --- a/fs/ext4/inode.c	2021-06-28 08:45:39.069955021 -0600
 +++ b/fs/ext4/inode.c	2021-06-28 08:46:06.921523449 -0600
-@@ -6088,3 +6088,20 @@
+@@ -6088,3 +6088,21 @@
  
  	return ret;
  }
 +EXPORT_SYMBOL(ext4_map_blocks);
++EXPORT_SYMBOL(ext4_set_aops);
 +EXPORT_SYMBOL(ext4_truncate);
 +EXPORT_SYMBOL(ext4_iget);
 +EXPORT_SYMBOL(ext4_bread);

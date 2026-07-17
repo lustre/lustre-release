@@ -2147,6 +2147,8 @@ static int osd_ldiskfs_write_fast(struct osd_object *o,  void *buf, int bufsize,
 	/* only the first flag-set matters */
 	dirty_inode = !test_and_set_bit(LDISKFS_INODE_JOURNAL_DATA,
 					&ei->i_flags);
+	if (dirty_inode)
+		ldiskfs_set_aops(inode);
 
 	rc = osd_attach_jinode(inode);
 	if (rc)
@@ -2242,6 +2244,8 @@ int osd_ldiskfs_write(struct osd_device *osd, struct inode *inode, void *buf,
 	/* only the first flag-set matters */
 	dirty_inode = !test_and_set_bit(LDISKFS_INODE_JOURNAL_DATA,
 				       &ei->i_flags);
+	if (dirty_inode)
+		ldiskfs_set_aops(inode);
 
 	/* sparse checking is racy, but sparse is very rare case, leave as is */
 	sparse = (new_size > 0 && (inode->i_blocks >> (inode->i_blkbits - 9)) <

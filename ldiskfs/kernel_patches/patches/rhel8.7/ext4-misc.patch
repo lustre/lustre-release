@@ -73,11 +73,12 @@ Index: linux-4.18.0-240.1.1.el8/fs/ext4/inode.c
 ===================================================================
 --- linux-4.18.0-240.1.1.el8.orig/fs/ext4/inode.c
 +++ linux-4.18.0-240.1.1.el8/fs/ext4/inode.c
-@@ -6343,3 +6343,21 @@ vm_fault_t ext4_filemap_fault(struct vm_
+@@ -6343,3 +6343,22 @@ vm_fault_t ext4_filemap_fault(struct vm_
 
  	return ret;
  }
 +EXPORT_SYMBOL(ext4_map_blocks);
++EXPORT_SYMBOL(ext4_set_aops);
 +EXPORT_SYMBOL(ext4_truncate);
 +EXPORT_SYMBOL(__ext4_iget);
 +EXPORT_SYMBOL(ext4_bread);
