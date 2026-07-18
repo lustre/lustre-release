@@ -1395,10 +1395,8 @@ bool nodemap_id_is_squashed(struct lu_nodemap *nodemap, __u32 id,
 			    enum nodemap_tree_type tree_type)
 {
 	bool id_is_squashed = false;
-	__u32 tempid;
 
-	tempid = __nodemap_map_id(nodemap, type, tree_type, id,
-				  &id_is_squashed);
+	__nodemap_map_id(nodemap, type, tree_type, id, &id_is_squashed);
 
 	return id_is_squashed;
 }
@@ -3820,7 +3818,7 @@ struct lu_nodemap *nodemap_create(const char *name,
 out_list_hash:
 	if (!list_empty(&nodemap->nm_parent_entry))
 		list_del(&nodemap->nm_parent_entry);
-	(void *)cfs_hash_del_key(hash, newname);
+	(void)cfs_hash_del_key(hash, newname);
 out:
 	OBD_FREE_PTR(nodemap);
 	if (!IS_ERR_OR_NULL(parent_nodemap))
