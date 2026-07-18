@@ -11,6 +11,8 @@ NUM_THREADS=${NUM_THREADS:-3}
 RACER_MAX_CLEANUP_WAIT=${RACER_MAX_CLEANUP_WAIT:-$DURATION}
 
 mkdir -p $DIR
+# need to specify mountpoint directly if 'fuser -M' is used
+MNT=$(stat -c %m $DIR)
 
 if [[ -z "$RACER_PROGS" ]]; then
 	RACER_PROGS="file_create dir_create file_rm file_rename file_link"
@@ -50,35 +52,41 @@ racer_cleanup()
 	done
 	trap 0
 
-	local TOT_WAIT=0
-	local SHORT_WAIT=5
+	local short_wait=5
+	local start=$SECONDS
+	local end=$((start + $RACER_MAX_CLEANUP_WAIT))
 
-	local rc
-	while [[ $TOT_WAIT -le $RACER_MAX_CLEANUP_WAIT ]]; do
-		rc=0
-		echo sleeping $SHORT_WAIT sec ...
-		sleep $SHORT_WAIT
+	while (( $SECONDS <= $end )); do
+		local rc=0
+
+		echo "sleeping $short_wait sec ..."
+		sleep $short_wait
 		# this only checks whether processes exist
 		for P in $RACER_PROGS; do
 			killall -0 $P.sh
-			[[ $? -eq 0 ]] && (( rc+=1 ))
+			(( $? == 0 )) && (( rc+=1 ))
 		done
 
 		# Kill dd processes to speedup cleanup
 		local pids=$(ps uax | grep "$DIR" | grep dd | grep -v grep |
-				awk '{print $2}')
+			     awk '{print $2}')
 		for pid in $pids; do
 			kill $pid
 		done
 
-		if [[ $rc -eq 0 ]]; then
-			echo there should be NO racer processes:
+		# killall only signals the worker scripts ($P.sh) but not
+		# commands started by them, which may now be orphans.
+		# Kill leftover users of the racer mount here.
+		# Do not kill everything on system if $DIR is now root.
+		[[ "$MNT" != "/" ]] &&
+			timeout $short_wait fuser -M -k -m "$MNT"
+
+		if (( $rc == 0 )); then
+			echo "there should be NO racer processes:"
 			ps uww -C "${RACER_PROGS// /.sh,}.sh"
 			return 0
 		fi
-		(( TOT_WAIT+=SHORT_WAIT ))
-		echo -n "Waited $TOT_WAIT, rc=$rc "
-		(( SHORT_WAIT+=SHORT_WAIT ))
+		echo -n "Waited $((SECONDS - start)): rc=$rc "
 	done
 	ps uww -C "${RACER_PROGS// /.sh,}.sh"
 	return 1
