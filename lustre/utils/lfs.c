@@ -6525,6 +6525,13 @@ create_mirror:
 		goto usage_error;
 	}
 
+	if (restripe && !migrate_mode) {
+		fprintf(stderr,
+			"%s %s: --restripe valid only for migrate command\n",
+			progname, argv[0]);
+		goto usage_error;
+	}
+
 	if (stripe_count_set && auto_stripe) {
 		fprintf(stderr,
 			"%s %s: -c|--stripe-count incompatible with -A|--auto-stripe\n",
