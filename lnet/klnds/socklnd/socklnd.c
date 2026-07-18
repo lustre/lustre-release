@@ -2611,7 +2611,6 @@ ksocknal_startup(struct lnet_ni *ni)
 	struct lnet_inetdev *ifaces = NULL;
 	int rc, if_idx;
 	int dev_status;
-	__u32 ipaddr = 0;
 
 	LASSERT(ni->ni_net->net_lnd == &the_ksocklnd);
 	if (ksocknal_data.ksnd_init == SOCKNAL_INIT_NOTHING) {
@@ -2681,7 +2680,6 @@ ksocknal_startup(struct lnet_ni *ni)
 		ksi->ksni_netmask = ifaces[if_idx].li_netmask;
 		ni->ni_nid.nid_size = 0;
 		ni->ni_nid.nid_addr[0] = sa->sin_addr.s_addr;
-		ipaddr = sa->sin_addr.s_addr;
 	}
 	strscpy(ksi->ksni_name, ifaces[if_idx].li_name, sizeof(ksi->ksni_name));
 
