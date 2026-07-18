@@ -144,7 +144,7 @@ static inline __u32 obd_ioctl_packlen(struct obd_ioctl_data *data)
 #define OBD_IOC_GETDTNAME	_IOR('f', 127, char[MAX_OBD_NAME])
 #define OBD_IOC_GETUUID		_IOR('f', 127, char[UUID_MAX])
 /* ioctl codes 128-143 are reserved for fsverity */
-#define OBD_IOC_UUID2DEV	_IOWR('f', 130, OBD_IOC_DATA_TYPE)
+/* was	OBD_IOC_UUID2DEV	_IOWR('f', 130, OBD_IOC_DATA_TYPE) until 2.18 */
 #define OBD_IOC_GETMDNAME	_IOR('f', 131, char[MAX_OBD_NAME])
 #define OBD_IOC_CLIENT_RECOVER	_IOW('f', 133, OBD_IOC_DATA_TYPE)
 /* ioctl codes 128-143 are reserved for fsverity */

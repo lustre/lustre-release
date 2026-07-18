@@ -586,27 +586,6 @@ struct obd_device *class_name2obd(const char *name)
 }
 EXPORT_SYMBOL(class_name2obd);
 
-int class_uuid2dev(struct obd_uuid *uuid)
-{
-	struct obd_device *obd = NULL;
-	unsigned long dev_no = 0;
-	int ret;
-
-	obd_device_lock();
-	obd_device_for_each(dev_no, obd) {
-		if (obd_uuid_equals(uuid, &obd->obd_uuid)) {
-			LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-			ret = obd->obd_minor;
-			obd_device_unlock();
-			return ret;
-		}
-	}
-	obd_device_unlock();
-
-	return -1;
-}
-EXPORT_SYMBOL(class_uuid2dev);
-
 struct obd_device *class_uuid2obd(struct obd_uuid *uuid)
 {
 	struct obd_device *obd = NULL;

@@ -48,11 +48,6 @@ static int obd_test_device_init(const struct lu_env *env, struct lu_device *lu,
 		       obd_minor_found,
 		       obd_minor_found == obd->obd_minor ? "PASS" : "FAIL");
 
-		obd_minor_found = class_uuid2dev(&obd->obd_uuid);
-		pr_info("Lustre: OBD: class_uuid2dev(): %i, %s",
-		       obd_minor_found,
-		       obd_minor_found == obd->obd_minor ? "PASS" : "FAIL");
-
 		obd_minor_found = class_name2obd(obd->obd_name)->obd_minor;
 		pr_info("Lustre: OBD: class_name2obd(): %i, %s",
 		       obd_minor_found,
