@@ -235,7 +235,7 @@ proc_lnet_routes(const struct ctl_table *table, int write,
 	s = tmpstr; /* points to current position in tmpstr[] */
 
 	if (*ppos == 0) {
-		s += scnprintf(s, tmpstr + tmpsiz - s, ln_routing2str());
+		s += scnprintf(s, tmpstr + tmpsiz - s, "%s", ln_routing2str());
 
 		LASSERT(tmpstr + tmpsiz - s > 0);
 
