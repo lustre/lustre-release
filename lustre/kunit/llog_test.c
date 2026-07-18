@@ -2164,10 +2164,9 @@ static int llog_test_11(const struct lu_env *env, struct obd_device *obd)
 {
 	struct llog_process_data data = { .lpd_data = "test 7" };
 	struct llog_handle *llh;
-	int rc = 0, i, process_count;
+	int rc = 0, i;
 	struct llog_ctxt *ctxt;
 	struct llog_mini_rec lmr;
-	int num_recs = 0;
 	struct lu_attr la;
 	struct llog_logid  logid;
 	unsigned long old_size;
@@ -2215,7 +2214,6 @@ static int llog_test_11(const struct lu_env *env, struct obd_device *obd)
 			       i + 1, rc);
 			GOTO(out_close, rc);
 		}
-		num_recs++;
 	}
 
 	rc = dt_attr_get(env, llh->lgh_obj, &la);
@@ -2230,7 +2228,6 @@ static int llog_test_11(const struct lu_env *env, struct obd_device *obd)
 		CERROR("11: llog process failed: %d\n", rc);
 		GOTO(out_close, rc);
 	}
-	process_count = plain_counter;
 
 	set_bit(LU_OBJECT_HEARD_BANSHEE, &llh->lgh_obj->do_lu.lo_header->loh_flags);
 	llog_close(env, llh);
