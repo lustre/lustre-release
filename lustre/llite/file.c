@@ -6289,10 +6289,19 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 
 	parent = dget_parent(de);
 	dir = d_inode(parent);
-	ll_statahead_enter(dir, de);
-	if (dentry_may_statahead(dir, de))
-		ll_start_statahead(dir, de, need_glimpse &&
-				   !(flags & AT_STATX_DONT_SYNC));
+	/*
+	 * NFS re-export hands us a disconnected (self-parented) dentry, so
+	 * dget_parent() returns the file itself and @dir is not a directory.
+	 * Statahead updates directory-only members of struct ll_inode_info
+	 * which share a union with the regular-file members (e.g.
+	 * lli_size_mutex), so it must not run unless @dir really is a directory.
+	 */
+	if (S_ISDIR(dir->i_mode)) {
+		ll_statahead_enter(dir, de);
+		if (dentry_may_statahead(dir, de))
+			ll_start_statahead(dir, de, need_glimpse &&
+					   !(flags & AT_STATX_DONT_SYNC));
+	}
 	dput(parent);
 
 	if (flags & AT_STATX_DONT_SYNC)
