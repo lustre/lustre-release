@@ -68,7 +68,7 @@ static void cpu_latency_work(struct work_struct *work)
 
 	latency_qos = container_of(work, struct cpu_latency_qos,
 				   delayed_work.work);
-	cpu = (latency_qos - cpus_latency_qos) / sizeof(struct cpu_latency_qos);
+	cpu = latency_qos - cpus_latency_qos;
 	mutex_lock(&latency_qos->lock);
 	if (time_after_eq64(jiffies_64, latency_qos->deadline)) {
 		CDEBUG(D_INFO, "work item of %p (cpu %d) has reached its deadline %llu, at %llu\n",
