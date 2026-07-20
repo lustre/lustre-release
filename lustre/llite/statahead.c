@@ -2523,6 +2523,13 @@ out:
 			ll_sai_free(sai);
 		if (ctx)
 			ll_sax_free(ctx);
+		/*
+		 * @sai was freed directly (or never allocated), so nothing
+		 * accounted for the ll_sa_running increment above; do it here.
+		 * On the other branch ll_sai_put() does it when it drops the
+		 * last reference.
+		 */
+		atomic_dec(&sbi->ll_sa_running);
 	} else {
 		if (sai)
 			ll_sai_put(sai);
@@ -2530,8 +2537,6 @@ out:
 			ll_sax_put(ctx);
 	}
 
-	if (rc)
-		atomic_dec(&sbi->ll_sa_running);
 	RETURN(rc);
 }
 
@@ -2660,12 +2665,12 @@ int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise)
 				       sbi->ll_sa_running_max)) {
 		CDEBUG(D_READA,
 		       "Too many concurrent statahead instances, avoid new statahead instance temporarily.\n");
-		GOTO(out, rc = -EMFILE);
+		GOTO(out_dec, rc = -EMFILE);
 	}
 
 	sai = ll_sai_alloc(dentry);
-	if (sai == NULL)
-		GOTO(out, rc = -ENOMEM);
+	if (!sai)
+		GOTO(out_dec, rc = -ENOMEM);
 
 	sai->sai_fstart = ladvise->lla_start;
 	sai->sai_fend = ladvise->lla_end;
@@ -2675,32 +2680,45 @@ int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise)
 	sai->sai_pid = current->pid;
 
 	ctx = ll_sax_get(dir);
-	if (ctx == NULL) {
+	if (!ctx) {
 		ctx = ll_sax_alloc(dir);
-		if (ctx == NULL)
-			GOTO(out, rc = -ENOMEM);
+		if (!ctx)
+			GOTO(out_sai, rc = -ENOMEM);
 
 		spin_lock(&lli->lli_sa_lock);
 		if (unlikely(lli->lli_sax)) {
 			struct ll_statahead_context *tmp = ctx;
 
-			if (lli->lli_sa_pattern == LSA_PATTERN_NONE ||
-			    lli->lli_sa_pattern == LSA_PATTERN_ADVISE) {
-				lli->lli_sa_pattern = LSA_PATTERN_ADVISE;
-				ctx = lli->lli_sax;
-				__ll_sax_get(ctx);
-				lfd->fd_sai = __ll_sai_get(sai);
-				rc = 0;
-			} else {
+			if (lli->lli_sa_pattern != LSA_PATTERN_NONE &&
+			    lli->lli_sa_pattern != LSA_PATTERN_ADVISE) {
+				/* snapshot it, the lock goes away below */
+				enum ll_sa_pattern pattern =
+							lli->lli_sa_pattern;
+
 				rc = -EINVAL;
+				spin_unlock(&lli->lli_sa_lock);
 				CWARN("%s: pattern %X is not ADVISE: rc = %d\n",
-				      sbi->ll_fsname, lli->lli_sa_pattern, rc);
+				      sbi->ll_fsname, pattern, rc);
+				/*
+				 * @tmp was never installed in lli_sax, so
+				 * free it directly rather than with
+				 * ll_sax_put(), which would clear the lli_sax
+				 * and lli_sa_pattern that belong to the
+				 * context the racing task just installed.
+				 * out_sai: does not look at @ctx; NULL it so
+				 * it cannot be used stale later either.
+				 */
+				ll_sax_free(tmp);
+				ctx = NULL;
+				GOTO(out_sai, rc);
 			}
 
+			lli->lli_sa_pattern = LSA_PATTERN_ADVISE;
+			ctx = lli->lli_sax;
+			__ll_sax_get(ctx);
+			lfd->fd_sai = __ll_sai_get(sai);
 			spin_unlock(&lli->lli_sa_lock);
 			ll_sax_free(tmp);
-			if (rc)
-				GOTO(out, rc);
 		} else {
 			lli->lli_sa_pattern = LSA_PATTERN_ADVISE;
 			lli->lli_sax = ctx;
@@ -2709,10 +2727,10 @@ int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise)
 		}
 	} else {
 		spin_lock(&lli->lli_sa_lock);
-		if (!(lli->lli_sa_pattern == LSA_PATTERN_ADVISE ||
-		      lli->lli_sa_pattern == LSA_PATTERN_NONE)) {
+		if (lli->lli_sa_pattern != LSA_PATTERN_ADVISE &&
+		    lli->lli_sa_pattern != LSA_PATTERN_NONE) {
 			spin_unlock(&lli->lli_sa_lock);
-			GOTO(out, rc = -EINVAL);
+			GOTO(out_ctx, rc = -EINVAL);
 		}
 
 		lli->lli_sa_pattern = LSA_PATTERN_ADVISE;
@@ -2731,7 +2749,7 @@ int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise)
 		rc = PTR_ERR(task);
 		CERROR("%s: cannot start ll_sa_%u thread for '%pd': rc = %d\n",
 		       sbi->ll_fsname, sai->sai_pid, sai->sai_dentry, rc);
-		GOTO(out, rc);
+		GOTO(out_fd, rc);
 	}
 
 	if (test_bit(LL_SBI_AGL_ENABLED, sbi->ll_flags) && agl)
@@ -2742,19 +2760,23 @@ int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise)
 	wake_up_process(task);
 
 	RETURN(0);
-out:
-	if (lfd->fd_sai) {
-		ll_sai_put(sai);
-		ll_sax_put(ctx);
-		lfd->fd_sai = NULL;
-	}
 
-	if (sai)
-		ll_sai_put(sai);
-
-	if (ctx)
-		ll_sax_put(ctx);
-
+out_fd:
+	/*
+	 * Release the @sai and @ctx references charged to the file handle;
+	 * out_ctx/out_sai below release the pair that would have been handed
+	 * to the statahead thread.
+	 */
+	lfd->fd_sai = NULL;
+	ll_sai_put(sai);
+	ll_sax_put(ctx);
+out_ctx:
+	ll_sax_put(ctx);
+out_sai:
+	/* ll_sai_put() drops ll_sa_running when it frees @sai */
+	ll_sai_put(sai);
+	RETURN(rc);
+out_dec:
 	atomic_dec(&sbi->ll_sa_running);
 	RETURN(rc);
 }
