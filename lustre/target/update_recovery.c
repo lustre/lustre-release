@@ -1433,6 +1433,13 @@ stop_trans:
 		tgt_ses_info(env)->tsi_exp = NULL;
 	}
 exit_session:
+	/*
+	 * session_env is on this thread's stack; don't leave env->le_ses
+	 * dangling to it once we return, or a later transaction on the same
+	 * recovery thread (e.g. tgt_client_del() from recovery abort) will
+	 * dereference freed stack via tgt_txn_start_cb().
+	 */
+	env->le_ses = NULL;
 	lu_context_exit(&session_env);
 	lu_context_fini(&session_env);
 	RETURN(rc);
