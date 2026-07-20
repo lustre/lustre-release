@@ -2221,17 +2221,22 @@ static bool lmv_qos_exclude(struct lmv_obd *lmv, struct md_op_data *op_data)
 {
 	const char *name = op_data->op_name;
 	struct qos_exclude_pattern *pat;
+	bool excluded = false;
 
 	/* skip encrypted files */
 	if (op_data->op_file_encctx)
 		return false;
 
+	spin_lock(&lmv->lmv_lock);
 	list_for_each_entry(pat, &lmv->lmv_qos_exclude_list, qep_list) {
-		if (glob_match(pat->qep_name, name))
-			return true;
+		if (glob_match(pat->qep_name, name)) {
+			excluded = true;
+			break;
+		}
 	}
+	spin_unlock(&lmv->lmv_lock);
 
-	return false;
+	return excluded;
 }
 
 struct lmv_tgt_desc *lmv_locate_tgt_create(struct obd_device *obd,
