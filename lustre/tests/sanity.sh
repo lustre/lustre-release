@@ -37707,6 +37707,29 @@ test_911()
 }
 run_test 911 "Check lfs/lctl --list-commands"
 
+test_912() {
+	$LFS setstripe -c 1 -i 0 $DIR/$tfile || error "setstripe failed"
+
+	# Emulate a client that can no longer flush (e.g. evicted mid-write):
+	# dirty pages are pinned in their cached (OES_CACHE) extent. A small
+	# buffered write is not eagerly flushed, so it stays dirty.
+	#define OBD_FAIL_OSC_NO_FLUSH		0x41a
+	$LCTL set_param -n fail_loc=0x41a
+
+	dd if=/dev/zero of=$DIR/$tfile bs=64k count=1 conv=notrunc ||
+		error "dd failed"
+
+	# The file is still linked, so inode teardown at umount flushes with
+	# CL_FSYNC_LOCAL; that flush fails here. Without the fix this LBUGs in
+	# osc_page_delete() tearing down a page left in a cached extent.
+	umount_client $MOUNT || error "umount failed"
+
+	$LCTL set_param -n fail_loc=0
+	mount_client $MOUNT || error "mount failed"
+	rm -f $DIR/$tfile
+}
+run_test 912 "no LBUG tearing down un-flushable cached pages at umount"
+
 test_920()
 {
 	mount | grep lustre

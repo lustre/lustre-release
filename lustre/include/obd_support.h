@@ -437,6 +437,7 @@ extern bool obd_enable_fname_encoding;
 #define OBD_FAIL_OSC_SLOW_PAGE_EVICT		0x417
 #define OBD_FAIL_OSC_FIEMAP			0x418
 #define OBD_FAIL_OSC_MARK_COMPRESSED		0x419
+#define OBD_FAIL_OSC_NO_FLUSH			0x41a
 
 #define OBD_FAIL_PTLRPC                  0x500
 #define OBD_FAIL_PTLRPC_ACK              0x501

@@ -3402,6 +3402,8 @@ void ll_delete_inode(struct inode *inode)
 	ENTRY;
 
 	if (S_ISREG(inode->i_mode) && lli->lli_clob != NULL) {
+		int rc;
+
 		/* It is last chance to write out dirty pages,
 		 * otherwise we may lose data while umount.
 		 *
@@ -3409,9 +3411,17 @@ void ll_delete_inode(struct inode *inode)
 		 * local inode gets i_nlink 0 from server only for the last
 		 * unlink, so that file is not opened somewhere else
 		 */
-		cl_sync_file_range(inode, 0, OBD_OBJECT_EOF, inode->i_nlink ?
-				   CL_FSYNC_LOCAL : CL_FSYNC_DISCARD, 1,
-				   IO_PRIO_NORMAL);
+		rc = cl_sync_file_range(inode, 0, OBD_OBJECT_EOF,
+					inode->i_nlink ? CL_FSYNC_LOCAL :
+					CL_FSYNC_DISCARD, 1, IO_PRIO_NORMAL);
+		/* A failed local flush (client evicted, OST error) leaves the
+		 * dirty pages in a cached extent that can never be written now;
+		 * discard them locally so the truncate below does not LBUG in
+		 * osc_page_delete() tearing down a still-cached page.
+		 */
+		if (rc < 0 && inode->i_nlink)
+			cl_sync_file_range(inode, 0, OBD_OBJECT_EOF,
+					   CL_FSYNC_DISCARD, 1, IO_PRIO_NORMAL);
 	}
 
 	ll_truncate_inode_pages_final(inode);

@@ -3269,6 +3269,14 @@ int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 
 	ENTRY;
 
+	/* diagnostic: emulate a client that can no longer flush (e.g. evicted):
+	 * fail the writeback and leave the dirty pages in their cached extent.
+	 * Discard must still succeed so the fix path can clean up. See sanity
+	 * test_912.
+	 */
+	if (!discard && CFS_FAIL_CHECK(OBD_FAIL_OSC_NO_FLUSH))
+		RETURN(-EIO);
+
 repeat:
 	osc_object_lock(obj);
 	ext = osc_extent_search(obj, start);
