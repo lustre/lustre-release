@@ -322,9 +322,9 @@ static inline int qsd_wait_timeout(struct qsd_instance *qsd)
 	return min_t(int, obd_get_at_max(obd) / 2, obd_timeout / 2);
 }
 
-/**
+/*
  * helper function bumping lqe_pending_req if there is no quota request in
- * flight for the lquota entry \a lqe. Otherwise, EBUSY is returned.
+ * flight for the lquota entry @lqe. Otherwise, EBUSY is returned.
  */
 static inline int qsd_request_enter(struct lquota_entry *lqe)
 {
@@ -344,7 +344,7 @@ static inline int qsd_request_enter(struct lquota_entry *lqe)
 	return 0;
 }
 
-/**
+/*
  * Companion of qsd_request_enter() dropping lqe_pending_req to 0.
  */
 static inline void qsd_request_exit(struct lquota_entry *lqe)

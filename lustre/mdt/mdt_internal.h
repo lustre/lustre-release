@@ -650,7 +650,7 @@ struct hsm_mem_req_rec {
 	struct llog_agent_req_rec mr_rec;
 };
 
-/**
+/*
  * data passed to llog_cat_process() callback
  * to scan requests and take actions
  */

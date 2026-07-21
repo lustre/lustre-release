@@ -79,7 +79,7 @@ struct pcc_conjunction {
 	struct list_head	pc_expressions;
 };
 
-/**
+/*
  * Match rule for auto PCC-cached files.
  */
 struct pcc_match_rule {

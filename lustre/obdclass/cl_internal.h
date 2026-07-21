@@ -18,7 +18,7 @@
 #ifndef _CL_INTERNAL_H
 #define _CL_INTERNAL_H
 
-/**
+/*
  * Thread local state internal for generic cl-code.
  */
 struct cl_thread_info {

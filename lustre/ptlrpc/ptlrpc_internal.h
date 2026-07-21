@@ -41,9 +41,8 @@ extern struct ptlrpc_nrs_pol_conf nrs_conf_trr;
 extern struct ptlrpc_nrs_pol_conf nrs_conf_tbf;
 #endif /* CONFIG_LUSTRE_FS_SERVER */
 
-/**
- * \addtogoup nrs
- * @{
+/*
+ * NRS
  */
 extern struct nrs_core nrs_core;
 
@@ -111,7 +110,7 @@ void ptlrpc_lprocfs_do_request_stat(struct ptlrpc_request *req,
 
 /* NRS */
 
-/**
+/*
  * NRS core object.
  *
  * Holds NRS core fields.
@@ -224,12 +223,12 @@ struct ptlrpc_nrs_policy *nrs_request_policy(struct ptlrpc_nrs_request *nrq)
 #define NRS_LPROCFS_QUANTUM_NAME_REG	"reg_quantum:"
 #define NRS_LPROCFS_QUANTUM_NAME_HP	"hp_quantum:"
 
-/**
+/*
  * the maximum size of nrs_crrn_client::cc_quantum and nrs_orr_data::od_quantum.
  */
 #define LPROCFS_NRS_QUANTUM_MAX		65535
 
-/**
+/*
  * Max valid command string is the size of the labels, plus "65535" twice, plus
  * a separating space character.
  */

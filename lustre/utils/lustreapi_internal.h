@@ -75,7 +75,7 @@ int sattr_cache_get_defaults(const char *const fsname,
 			     const char *const pathname, unsigned int *scount,
 			     unsigned int *ssize, unsigned int *soffset);
 
-/**
+/*
  * Often when determining the parameter path in sysfs/procfs we
  * are often only interest set of data. This enum gives use the
  * ability to return data of parameters for:

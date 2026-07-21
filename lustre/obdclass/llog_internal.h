@@ -16,7 +16,7 @@
 
 #include <lustre_log.h>
 
-/**
+/*
  * lockdep markers for nested struct llog_handle::lgh_lock locking.
  */
 enum {

@@ -25,7 +25,7 @@ extern int (*tgt_lfsck_in_notify_local)(const struct lu_env *env,
 					struct dt_device *key,
 					struct lfsck_req_local *lrl,
 					struct thandle *th);
-/**
+/*
  * Common data shared by tg-level handlers. This is allocated per-thread to
  * reduce stack consumption.
  */

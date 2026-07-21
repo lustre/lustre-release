@@ -191,7 +191,7 @@ static inline char *ofd_name(struct ofd_device *ofd)
 	return ofd->ofd_dt_dev.dd_lu_dev.ld_obd->obd_name;
 }
 
-/**
+/*
  * for compatibility, filter_fid could occupy more space in newer version and
  * downgraded Lustre would fail reading it with -ERANGE, so it can read it
  * again with more space to hold it.
@@ -530,7 +530,7 @@ static inline int ofd_validate_seq(struct obd_export *exp, __u64 seq)
 	return 0;
 }
 
-/**
+/*
  * whether the requestion IO contains older layout version than that on the
  * disk.
  */
