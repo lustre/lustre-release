@@ -220,6 +220,7 @@ l_wait_condition||wait_event_idle
 MAX\(||max_t
 MIN\(||min_t
 mktemp||mkstemp
+MODULE_PARM_DESC||create Documentation/man4/ page for this parameter
 nla_strlcpy||nla_strscpy
 obd_abort_recovery||OBDF_ABORT_RECOVERY
 obd_abort_mdt_recovery||OBDF_ABORT_MDT_RECOVERY
