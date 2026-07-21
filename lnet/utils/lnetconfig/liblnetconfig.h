@@ -868,16 +868,12 @@ int lustre_lnet_parse_nid_range(struct nid_node *head, char *nidstr,
 void lustre_lnet_free_list(struct nid_node *head);
 
 /**
- * yaml_lnet_configure
- *
- *   Shared code for LNet setup and teardown.
- *
- *   flags	- Netlink flags that control setup behavior
- *		  NLM_F_CREATE  - initializes LNet stack
- *		  NLM_F_EXCL	- ignore module params
- *		  0		- tears down LNet stack
- *
- *   msg	  error msg string returned.
+ * yaml_lnet_configure() - Shared code for LNet setup and teardown.
+ * @flags: - Netlink flags that control setup behavior
+ *	     NLM_F_CREATE - initializes LNet stack
+ *	     NLM_F_EXCL   - ignore module params
+ *	     0            - tears down LNet stack
+ * @msg: error msg string returned.
  */
 int yaml_lnet_configure(int flags, const char **msg);
 
@@ -885,25 +881,30 @@ int yaml_lnet_fault_rule(yaml_document_t *results, __u32 opc, char *src,
 			 char *dst, char *local_nid,
 			 struct lnet_fault_attr *attr);
 
-/**
- * yaml_emitter_set_output_netlink
+/*
+ * Note: Emitter object setup with this function should always call
+ * yaml_emitter_cleanup() and not yaml_emitter_delete(). Otherwise it will
+ * result in memory leak
  *
- *   Special handling to integrate LNet handling into libyaml.
- *   This function sets up the ability to take the data stored in @emitter
- *   and formats into a netlink packet to send to the kernel.
+ * Special handling to integrate LNet handling into libyaml.
+ * This function sets up the ability to take the data stored in @emitter
+ * and formats into a netlink packet to send to the kernel.
  *
- *   emitter	- YAML emitter containing what the user specified
- *   nl		- Netlink socket to be used by libyaml
- *   family	- Netlink family
- *   version	- notify kernel what version user land supports
- *   cmd	- Netlink command to execute
- *   flags	- Netlink flags
+ * See the kdoc on definition in liblnetconfig_netlink.c
  */
 int yaml_emitter_set_output_netlink(yaml_emitter_t *emitter, struct nl_sock *nl,
 				    char *family, int version, int cmd,
 				    int flags);
 /**
- * yaml_emitter_set_streaming_output_netlink
+ * yaml_emitter_set_streaming_output_netlink() - Convert YAML documentations
+ *						 into Netlink message to send
+ * @sender: YAML emitter
+ * @nl: Netlink socket.
+ * @family: Netlink family
+ * @version: Netlink API version
+ * @cmd: Netlink command (*_CMD_*)
+ * @flags: Netlink flags (NLM_F_*)
+ * @stream: Is the netlink socket reusable
  *
  * Special handling to handle the fact RHEL7 is super old.
  */
@@ -913,67 +914,54 @@ int yaml_emitter_set_streaming_output_netlink(yaml_emitter_t *sender,
 					      bool stream);
 
 /**
- * yaml_emitter_get_output_version
- *
- * Enquire of the kernel what Netlink family protocol version is supported.
+ * yaml_emitter_get_output_version() - Enquire of the kernel what Netlink family
+ *				       protocol version is supported.
+ * @request: YAML emitter to get output version
  */
 int yaml_emitter_get_output_version(yaml_emitter_t *request);
 
 /**
- * yaml_parser_set_input_netlink
+ * yaml_parser_set_input_netlink() - Setup YAML parser for Netlink data via LNet
+ * @parser: YAML parser that is used to present the data received from the
+ * kernel in Netlink format.
+ * @nl: should be the Netlink socket receiving data from the kernel.
+ * @stream: Handle the case of continuous data coming in.
  *
- *   Special handling to LNet handling into libyaml.
- *   This function sets up the ability to receive the Netlink data
- *   from the Linux kernel. That data is formated into a YAML document.
- *
- *   parser	- YAML parser that is used to present the data received
- *		  from the kernel in Netlink format.
- *   nl		- should be the Netlink socket receiving data from
- *		  the kernel.
- *   stream	- Handle the case of continuous data coming in.
+ * This function sets up the ability to receive the Netlink data
+ * from the Linux kernel. That data is formatted into a YAML document.
  */
 int yaml_parser_set_input_netlink(yaml_parser_t *parser, struct nl_sock *nl,
 				  bool stream);
 
 /**
- * yaml_parser_get_reader_proto_version
- *
- *   This function retrieves the Neltink version the kernel module
- *   is set to.
- *
- *   parser	- YAML parser being used for Netlink communication.
+ * yaml_parser_get_reader_proto_version() - This function retrieves the Netlink
+ *					    version the kernel module is set to.
+ * @parser: YAML parser being used for Netlink communication.
  */
 int yaml_parser_get_reader_proto_version(yaml_parser_t *parser);
 
 /**
- * yaml_parser_get_reader_error
+ * yaml_parser_get_reader_error() - Report better parser errors
+ * @parser: YAML parser that has reported an error.
  *
- *   By default libyaml reports a generic write error. We need a way
- *   to report better parser errors so we can track down problems.
- *
- *   parser	- YAML parser that has reported an error.
+ * By default libyaml reports a generic write error. We need a way
+ * to report better parser errors so we can track down problems.
  */
 const char *yaml_parser_get_reader_error(yaml_parser_t *parser);
 
 /**
- * yaml_parser_log_error
- *
- *   Helper function to report the parser error to @log.
- *
- *   parser	- YAML parser that has reported an error.
- *   log	- file descriptor to write the error message out to.
- *   errmsg	- Special extra string to append to error message.
+ * yaml_parser_log_error() - Helper function to report the parser error to @log.
+ * @parser: YAML parser that has reported an error.
+ * @log: file descriptor to write the error message out to.
+ * @errmsg: Special extra string to append to error message.
  */
 void yaml_parser_log_error(yaml_parser_t *parser, FILE *log,
 			   const char *errmsg);
 
 /**
- * yaml_emitter_log_error
- *
- *   Helper function to report the emitter error to @log.
- *
- *   emitter	- YAML emitter that has reported an error.
- *   log	- file descriptor to write the error message out to.
+ * yaml_emitter_log_error() - Helper to report the emitter error to @log.
+ * @emitter: YAML emitter that has reported an error.
+ * @log: file descriptor to write the error message out to.
  */
 void yaml_emitter_log_error(yaml_emitter_t *emitter, FILE *log);
 
@@ -988,30 +976,25 @@ void yaml_emitter_cleanup(yaml_emitter_t *request);
 void yaml_parser_cleanup(yaml_parser_t *reply);
 
 /**
- * yaml_netlink_setup_emitter
- *
- *   Helper function to setup emitter with Netlink. Needed for
- *   cases where we reuse the @sk.
- *
- *   emitter	- YAML emitter to setup.
- *   sk		- Netlink socket.
- *   family	- Netlink family
- *   version	- Netlink API version
- *   flags	- Netlink flags (NLM_F_*)
- *   op		- Netlink command (*_CMD_*)
- *   stream	- Is the netlink socket reusable
+ * yaml_netlink_setup_emitter() - Helper function to setup emitter with Netlink.
+ *				  Needed for cases where we reuse the @sk.
+ * @output: YAML emitter to setup.
+ * @sk: Netlink socket.
+ * @family: Netlink family
+ * @version: Netlink API version
+ * @flags: Netlink flags (NLM_F_*)
+ * @op: Netlink command (*_CMD_*)
+ * @stream: Is the netlink socket reusable
  */
 int yaml_netlink_setup_emitter(yaml_emitter_t *output, struct nl_sock *sk,
 			       char *family, int version, int flags, int op,
 			       bool stream);
 
 /**
- * yaml_netlink_complete_emitter
- *
- *   Helper function to cleanup emitter when done. The netlink socket
- *   is not altered in anyway.
- *
- *   emitter	- YAML emitter to cleanup.
+ * yaml_netlink_complete_emitter() - Helper function to cleanup emitter when
+ *				     done. The netlink socket is not altered
+ *				     in any way.
+ * @output: YAML emitter to cleanup.
  */
 int yaml_netlink_complete_emitter(yaml_emitter_t *output);
 
