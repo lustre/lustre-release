@@ -6,12 +6,14 @@
 client  >  v2_16_54-54-ga2e3a2f5a3  LU-14590 0d
 mds1    <  v2_14_55-100-g8a84c7f9c7 LU-14927 0f
 client  >= v2_17_50-72-ge1f272796c  LU-19743 27z
+client  >= v2_17_52-99-g84242c4358  LU-20010 56aa
+client  >  v2_15_63-239-gab4ede45b4 LU-17856 56wa 56xe
 client  >= v2_17_50-196-g63ee4af3bb LU-19620 60b
 client  >= v2_15_7-16-gab522d54ad   LU-16203 60i
-client  >  v2_15_63-239-gab4ede45b4 LU-17856 56wa 56xe
 client  >= v2_17_50-34-g089f438ba9  LU-19692 77k
 client  >= v2_17_50-71-g2cbe29c282  LU-19644 150ib
 ost1    <  v2_17_50-410-gbd8e7b9555 LU-12550 216
 mds1    <= CLIENT_VERSION           LU-18562 270a
 client  >  v2_15_63-134-gdacc4b6d38 LU-15963 312
 mds1    <= 2.16.61-1-g89cf292a8c2   LU-18938 360
+client  >= v2_17_55-19-g2868627130  LU-20435 430a
