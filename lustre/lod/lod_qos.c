@@ -2057,7 +2057,17 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	if (!down_write_trylock(&lod->lod_ost_descs.ltd_qos.lq_rw_sem)) {
 		struct semaphore_timer timer;
 
-		kernel_sigaction(SIGKILL, SIG_DFL);
+		/*
+		 * The timer wakes us from down_write_killable() with
+		 * send_sig(SIGKILL).  Set the SIGKILL disposition to
+		 * SIG_KTHREAD: the kthread default SIG_IGN would discard
+		 * the signal, and SIG_DFL would make sig_fatal() latch
+		 * SIGNAL_GROUP_EXIT on this long-lived service thread at
+		 * the first wakeup, after which kernels >= v6.1 silently
+		 * drop all further signals to this task, leaving later
+		 * waiters stuck for as long as lq_rw_sem is held.
+		 */
+		allow_signal(SIGKILL);
 		timer.task = current;
 		cfs_timer_setup(&timer.timer, process_semaphore_timer, 0, 0);
 		mod_timer(&timer.timer, jiffies + cfs_time_seconds(2));
@@ -2065,7 +2075,7 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		rc = down_write_killable(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
 
 		timer_delete_sync(&timer.timer);
-		kernel_sigaction(SIGKILL, SIG_IGN);
+		disallow_signal(SIGKILL);
 		if (rc) {
 			flush_signals(current);
 			CDEBUG(D_OTHER, "%s: wakeup semaphore on timeout rc = %d\n",
