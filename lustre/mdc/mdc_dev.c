@@ -1235,10 +1235,10 @@ static int mdc_io_fsync_start(const struct lu_env *env,
 		 * OST_SYNC at both MDC and MDT.
 		 */
 		rc = osc_fsync_ost(env, osc, fio);
-		if (result == 0) {
+		if (!rc)
 			cbargs->opc_rpc_sent = 1;
+		if (!result)
 			result = rc;
-		}
 	}
 
 	RETURN(result);
