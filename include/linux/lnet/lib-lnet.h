@@ -356,6 +356,19 @@ lnet_peer_net_decref_locked(struct lnet_peer_net *lpn)
 		lnet_destroy_peer_net_locked(lpn);
 }
 
+/*
+ * Tell LNetPrimaryGen() readers that a NID can now resolve to another
+ * primary NID. Call after the change.
+ */
+static inline void lnet_prim_gen_bump(void)
+{
+	/* Pairs with smp_rmb() in LNetPrimaryGen(). A reader that sees the
+	 * new value then also sees the change.
+	 */
+	smp_mb__before_atomic();
+	atomic64_inc(&the_lnet.ln_prim_gen);
+}
+
 static inline void
 lnet_peer_addref_locked(struct lnet_peer *lp)
 {
@@ -990,8 +1003,8 @@ struct lnet_peer_ni *lnet_peer_ni_get_locked(struct lnet_peer *lp,
 struct lnet_peer_ni *lnet_peer_ni_find_locked(struct lnet_nid *nid);
 struct lnet_peer *lnet_find_peer(struct lnet_nid *nid);
 void lnet_peer_net_added(struct lnet_net *net);
-void lnet_peer_primary_nid_locked(struct lnet_nid *nid,
-				  struct lnet_nid *result);
+int lnet_peer_primary_nid_locked(struct lnet_nid *nid,
+				 struct lnet_nid *result);
 int lnet_discover_peer_locked(struct lnet_peer_ni *lpni, int cpt, bool block);
 void lnet_peer_queue_message(struct lnet_peer *lp, struct lnet_msg *msg);
 int lnet_peer_discovery_start(void);

@@ -96,17 +96,24 @@ static void cpu_latency_work(struct work_struct *work)
 	}
 }
 
+/**
+ * ptlrpc_connection_get_primary() - Get the connection for a primary NID.
+ * @peer: Peer process ID. @peer->nid must be the current primary NID.
+ *
+ * Unlike ptlrpc_connection_get(), this function does not call
+ * LNetPrimaryNID(). It never waits on discovery.
+ *
+ * Context: Can sleep, because it can allocate the connection.
+ * Return: The connection keyed on @peer, or NULL if the allocation fails.
+ */
 struct ptlrpc_connection *
-ptlrpc_connection_get(struct lnet_processid *peer_orig, struct lnet_nid *self,
-		      struct obd_uuid *uuid)
+ptlrpc_connection_get_primary(struct lnet_processid *peer)
 {
 	struct ptlrpc_connection *conn, *conn2;
-	struct lnet_processid peer = *peer_orig;
 
 	ENTRY;
 
-	LNetPrimaryNID(&peer.nid);
-	conn = rhashtable_lookup_fast(&conn_hash, &peer, conn_hash_params);
+	conn = rhashtable_lookup_fast(&conn_hash, peer, conn_hash_params);
 	if (conn) {
 		ptlrpc_connection_addref(conn);
 		GOTO(out, conn);
@@ -116,7 +123,7 @@ ptlrpc_connection_get(struct lnet_processid *peer_orig, struct lnet_nid *self,
 	if (!conn)
 		RETURN(NULL);
 
-	conn->c_peer = peer;
+	conn->c_peer = *peer;
 	atomic_set(&conn->c_refcount, 1);
 
 	/*
@@ -150,6 +157,17 @@ out:
 	       conn, atomic_read(&conn->c_refcount),
 	       libcfs_nidstr(&conn->c_peer.nid));
 	return conn;
+}
+
+struct ptlrpc_connection *
+ptlrpc_connection_get(struct lnet_processid *peer, struct lnet_nid *self,
+		      struct obd_uuid *uuid)
+{
+	struct lnet_processid primary = *peer;
+
+	LNetPrimaryNID(&primary.nid);
+
+	return ptlrpc_connection_get_primary(&primary);
 }
 
 struct ptlrpc_connection *

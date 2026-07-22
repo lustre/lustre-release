@@ -1122,8 +1122,6 @@ static int rev_import_reconnect(struct obd_export *exp,
 	/* avoid sending a request until import flags are changed */
 	ptlrpc_import_enter_resend(revimp);
 
-	ptlrpc_connection_put(revimp->imp_connection);
-
 	/*
 	 * client from recovery don't have a handle so we need to take from
 	 * request. it may produce situation when wrong client connected
@@ -1138,7 +1136,15 @@ static int rev_import_reconnect(struct obd_export *exp,
 	 */
 	revimp->imp_msg_magic = req->rq_reqmsg->lm_magic;
 
+	/*
+	 * A lock callback on this reverse import can run
+	 * ptlrpc_refresh_import_primary() at the same time. Without imp_lock,
+	 * both paths put the same connection reference.
+	 */
+	spin_lock(&revimp->imp_lock);
+	ptlrpc_connection_put(revimp->imp_connection);
 	revimp->imp_connection = ptlrpc_connection_addref(exp->exp_connection);
+	spin_unlock(&revimp->imp_lock);
 
 	rc = rev_import_flags_update(revimp, req);
 	if (rc != 0) {

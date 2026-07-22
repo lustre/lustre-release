@@ -904,6 +904,13 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 		RETURN(-ENODEV);
 	}
 
+	/*
+	 * The reply ME below must key on the current primary NID. Re-key
+	 * first, so that the check below does not drop each connect to an
+	 * old NID.
+	 */
+	connection = ptlrpc_refresh_import_primary(imp);
+
 	/* drop request over non-uptodate peers at connection stage,
 	 * otherwise LNet peer discovery may pin request for much longer
 	 * time than own ptlrpc expiration timeout. LU-17906
@@ -918,8 +925,6 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 		RETURN(0);
 	}
 	spin_unlock(&imp->imp_lock);
-
-	connection = imp->imp_connection;
 
 	lustre_msg_set_handle(request->rq_reqmsg,
 			      &imp->imp_remote_handle);

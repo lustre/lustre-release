@@ -35,6 +35,18 @@ lnet_peer_remove_from_remote_list(struct lnet_peer_ni *lpni)
 	}
 }
 
+/*
+ * Set the primary NID of @lp. Use this function for each change of the
+ * primary NID of a peer that is in the peer table, because
+ * LNetPrimaryGen() must see each change.
+ */
+static void lnet_peer_write_primary_nid(struct lnet_peer *lp,
+					struct lnet_nid *nid)
+{
+	lp->lp_primary_nid = *nid;
+	lnet_prim_gen_bump();
+}
+
 void
 lnet_peer_net_added(struct lnet_net *net)
 {
@@ -362,6 +374,8 @@ lnet_peer_detach_peer_ni_locked(struct lnet_peer_ni *lpni)
 	CDEBUG(D_NET, "peer %s NID %s\n",
 		libcfs_nidstr(&lp->lp_primary_nid),
 		libcfs_nidstr(&lpni->lpni_nid));
+	/* the NID no longer resolves to the primary NID of @lp */
+	lnet_prim_gen_bump();
 }
 
 /* called with lnet_net_lock LNET_LOCK_EX held */
@@ -568,7 +582,7 @@ __must_hold(&the_lnet.ln_api_mutex)
 		/* assign the next peer_ni to be the primary */
 		lpni2 = lnet_get_next_peer_ni_locked(lp, NULL, lpni);
 		LASSERT(lpni2);
-		lp->lp_primary_nid = lpni2->lpni_nid;
+		lnet_peer_write_primary_nid(lp, &lpni2->lpni_nid);
 	}
 	rc = lnet_peer_ni_del_locked(lpni, force);
 	lnet_peer_ni_decref_locked(lpni);
@@ -682,7 +696,8 @@ lnet_peer_table_cleanup_locked(struct lnet_net *net,
 				if (nid_same(&peer->lp_primary_nid,
 					     &lpni->lpni_nid) &&
 				    !(peer->lp_state & LNET_PEER_LOCK_PRIMARY))
-					peer->lp_primary_nid = keep->lpni_nid;
+					lnet_peer_write_primary_nid(
+						peer, &keep->lpni_nid);
 				lnet_peer_ni_clr_local_net_locked(lpni);
 				continue;
 			}
@@ -1330,17 +1345,29 @@ lnet_peer_clr_pref_nids(struct lnet_peer_ni *lpni)
 	}
 }
 
-void
+/**
+ * lnet_peer_primary_nid_locked() - Find the primary NID of the peer that owns
+ * @nid.
+ * @nid: NID to look up.
+ * @result: Set to the owning peer's primary NID, or to @nid if no peer owns it.
+ *
+ * Context: Caller must hold an lnet_net_lock.
+ * Return: 0 if a peer owns @nid, -ENOENT if none does.
+ */
+int
 lnet_peer_primary_nid_locked(struct lnet_nid *nid, struct lnet_nid *result)
 {
 	struct lnet_peer_ni *lpni;
 
 	*result = *nid;
 	lpni = lnet_peer_ni_find_locked(nid);
-	if (lpni) {
-		*result = lpni->lpni_peer_net->lpn_peer->lp_primary_nid;
-		lnet_peer_ni_decref_locked(lpni);
-	}
+	if (!lpni)
+		return -ENOENT;
+
+	*result = lpni->lpni_peer_net->lpn_peer->lp_primary_nid;
+	lnet_peer_ni_decref_locked(lpni);
+
+	return 0;
 }
 
 /* peer state lock (lp_lock) already taken. Must exit function with lock in
@@ -1636,6 +1663,89 @@ out_unlock:
 }
 EXPORT_SYMBOL(LNetPrimaryNID);
 
+/**
+ * LNetPrimaryNIDNoWait() - Look up the current primary NID of a peer.
+ * @nid: On entry, any NID of the peer. On return, the primary NID of that
+ *       peer. @nid changes only on a return of 0.
+ *
+ * Unlike LNetPrimaryNID(), this function does no discovery and allocates
+ * no peer. It reports only what LNet knows now.
+ *
+ * A primary NID and a NID that no peer owns both leave @nid unchanged. A
+ * caller that must not act on an unverified NID must test the return code,
+ * not compare @nid. The loopback NID gives 0 with no peer, so a caller
+ * that can hold it must exclude it first.
+ *
+ * lnet_parse() uses the same helper to stamp msg_initiator. The NID that
+ * this function finds and the NID that a reply carries thus agree.
+ *
+ * Context: Takes and releases the lnet_net_lock of the current CPT. Does
+ *          not sleep.
+ * Return: 0 if a peer owns @nid, or if @nid is the loopback NID. -ENOENT if
+ *         no peer owns @nid. -EAGAIN if a concurrent primary NID write
+ *         gave a NID that is not a primary NID.
+ */
+int LNetPrimaryNIDNoWait(struct lnet_nid *nid)
+{
+	struct lnet_nid orig;
+	struct lnet_nid prim;
+	int rc;
+	int cpt;
+
+	if (nid_is_lo0(nid))
+		return 0;
+
+	orig = *nid;
+
+	cpt = lnet_net_lock_current();
+	rc = lnet_peer_primary_nid_locked(nid, &prim);
+	/*
+	 * A primary NID write holds lp_lock, not this lock, and a failed
+	 * lnet_peer_set_primary_nid() restores the old value. Give a new
+	 * primary NID only if it is the primary NID of the peer that owns it.
+	 */
+	if (!rc && !nid_same(&prim, nid)) {
+		struct lnet_nid check;
+
+		if (lnet_peer_primary_nid_locked(&prim, &check) ||
+		    !nid_same(&check, &prim))
+			rc = -EAGAIN;
+	}
+	lnet_net_unlock(cpt);
+
+	if (!rc)
+		*nid = prim;
+
+	CDEBUG(D_NET, "NID %s primary NID %s rc %d\n", libcfs_nidstr(&orig),
+	       libcfs_nidstr(nid), rc);
+
+	return rc;
+}
+EXPORT_SYMBOL(LNetPrimaryNIDNoWait);
+
+/**
+ * LNetPrimaryGen() - Read the generation of the peer table.
+ *
+ * LNet increments the value after each change that can make a NID resolve
+ * to another primary NID. A caller that reads the value before an
+ * LNetPrimaryNIDNoWait() call thus misses no change. If a later read gives
+ * the same value, the caller can skip the next lookup.
+ *
+ * Context: Any context. Does not sleep.
+ * Return: The current generation. Never 0.
+ */
+u64 LNetPrimaryGen(void)
+{
+	u64 gen = atomic64_read(&the_lnet.ln_prim_gen);
+
+	/* Pairs with lnet_prim_gen_bump(). The lookup after this read sees
+	 * each change that came before the read.
+	 */
+	smp_rmb();
+	return gen;
+}
+EXPORT_SYMBOL(LNetPrimaryGen);
+
 /* NOTE: with @recreate=true function may sleep in slow path */
 int LNetPeerDiscovered(struct lnet_nid *nid, bool recreate)
 {
@@ -1808,6 +1918,8 @@ lnet_peer_attach_peer_ni(struct lnet_peer *lp,
 	       libcfs_nidstr(&lpni->lpni_nid), flags);
 	lnet_peer_ni_decref_locked(lpni);
 	lnet_net_unlock(LNET_LOCK_EX);
+	/* the NID now resolves to the primary NID of @lp */
+	lnet_prim_gen_bump();
 
 	return 0;
 }
@@ -2020,7 +2132,7 @@ __must_hold(&the_lnet.ln_api_mutex)
 			    peer2_prim_lock_ts < lp->lp_prim_lock_ts) ||
 			     !(lp->lp_state & LNET_PEER_LOCK_PRIMARY))) {
 				lp->lp_prim_lock_ts = peer2_prim_lock_ts;
-				lp->lp_primary_nid = *nid;
+				lnet_peer_write_primary_nid(lp, nid);
 				lp->lp_state |= LNET_PEER_LOCK_PRIMARY;
 			}
 			spin_unlock(&lp->lp_lock);
@@ -2100,12 +2212,12 @@ __must_hold(&the_lnet.ln_api_mutex)
 
 	spin_lock(&lp->lp_lock);
 	if (!(lp->lp_state & LNET_PEER_LOCK_PRIMARY))
-		lp->lp_primary_nid = *nid;
+		lnet_peer_write_primary_nid(lp, nid);
 	spin_unlock(&lp->lp_lock);
 
 	rc = lnet_peer_add_nid(lp, nid, flags);
 	if (rc) {
-		lp->lp_primary_nid = old;
+		lnet_peer_write_primary_nid(lp, &old);
 		goto out;
 	}
 out:

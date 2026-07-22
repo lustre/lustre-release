@@ -569,6 +569,11 @@ struct ptlrpc_connection {
 	struct lnet_processid	c_peer;
 	/** reference counter for this connection */
 	atomic_t		c_refcount;
+	/**
+	 * LNetPrimaryGen() at the last primary NID lookup of c_peer that
+	 * found no change, 0 if none
+	 */
+	u64			c_prim_gen_seen;
 };
 
 /** Client definition for PortalRPC */
@@ -1954,6 +1959,8 @@ extern void server_bulk_callback(struct lnet_event *ev);
 struct ptlrpc_connection *ptlrpc_connection_get(struct lnet_processid *peer,
 						struct lnet_nid *self,
 						struct obd_uuid *uuid);
+struct ptlrpc_connection *
+ptlrpc_connection_get_primary(struct lnet_processid *peer);
 
 static inline void  ptlrpc_connection_put(struct ptlrpc_connection *conn)
 {

@@ -504,6 +504,88 @@ static void import_refresh_connections(struct obd_import *imp)
 }
 
 /*
+ * P2P DMA depends on the local NI that reaches the target. The primary NID
+ * can be on a net with no local NI, and LNetDist() then fails. Thus check
+ * the closest configured NID of the current failover entry.
+ */
+static bool import_p2pdma_capable(struct obd_import *imp,
+				  struct ptlrpc_connection *conn)
+{
+	struct obd_import_conn *cur = imp->imp_conn_current;
+	struct lnet_processid peer;
+	struct lnet_nid self;
+
+	if (cur && !ptlrpc_uuid_to_peer(&cur->oic_uuid, &peer, &self,
+					imp->imp_conn_restricted_net))
+		return LNetRouteP2PCapable(&peer.nid);
+
+	return LNetRouteP2PCapable(&conn->c_peer.nid);
+}
+
+/**
+ * import_switch_connection() - Point an import and its DLM export at @conn.
+ * @imp: Import to update.
+ * @conn: Connection to install. The caller keeps its own reference.
+ * @oic: Failover entry to make current. NULL keeps the current entry and
+ *       re-keys it onto @conn.
+ *
+ * Every connection switch of a connected import goes through this function.
+ * The DLM export connection must stay equal to oic_conn of the current
+ * entry, because client_import_del_conn() asserts it.
+ * client_import_del_conn() and rev_import_reconnect() also write
+ * imp_connection, but neither switches between failover entries.
+ *
+ * The function keeps imp_connection equal to imp_conn_current->oic_conn.
+ * With a NULL @oic, it replaces oic_conn, so a later reconnect cannot
+ * restore the stale connection. oic_uuid keeps the configured NID, because
+ * import_set_conn() matches an entry by that UUID. An import with no
+ * imp_conn_current, such as a reverse import, has no entry to change.
+ *
+ * An import with IMPF_DLM_FAKE has no DLM export of its own, so it gets
+ * only the connection swap. For a forward import, the DLM export step is
+ * last, and a failure does not undo the swap.
+ *
+ * Context: The caller holds imp->imp_lock.
+ * Return: 0 on success, or -EINVAL if a forward import has no DLM export.
+ *         On -EINVAL, the import uses @conn and the DLM export does not.
+ */
+static int import_switch_connection(struct obd_import *imp,
+				    struct ptlrpc_connection *conn,
+				    struct obd_import_conn *oic)
+{
+	struct obd_import_conn *cur;
+	struct obd_export *dlmexp;
+
+	assert_spin_locked(&imp->imp_lock);
+
+	ptlrpc_connection_put(imp->imp_connection);
+	imp->imp_connection = ptlrpc_connection_addref(conn);
+
+	if (oic) {
+		imp->imp_conn_current = oic;
+	} else {
+		cur = imp->imp_conn_current;
+		if (cur && cur->oic_conn != conn) {
+			ptlrpc_connection_put(cur->oic_conn);
+			cur->oic_conn = ptlrpc_connection_addref(conn);
+		}
+	}
+	imp->imp_p2pdma = import_p2pdma_capable(imp, conn);
+
+	if (test_bit(IMPF_DLM_FAKE, imp->imp_flags))
+		return 0;
+
+	dlmexp = class_conn2export(&imp->imp_dlm_handle);
+	if (!dlmexp)
+		return -EINVAL;
+	ptlrpc_connection_put(dlmexp->exp_connection);
+	dlmexp->exp_connection = ptlrpc_connection_addref(conn);
+	class_export_put(dlmexp);
+
+	return 0;
+}
+
+/*
  * Connection on import @imp is changed to another one (if more than one is
  * present). We typically chose connection that we have not tried to connect to
  * the longest
@@ -511,7 +593,6 @@ static void import_refresh_connections(struct obd_import *imp)
 static int import_select_connection(struct obd_import *imp)
 {
 	struct obd_import_conn *imp_conn = NULL, *conn, *lru_conn = NULL;
-	struct obd_export *dlmexp;
 	char *target_start;
 	int target_len;
 	bool tried_all = true, to_refresh = false;
@@ -634,31 +715,20 @@ connect:
 	imp_conn->oic_last_attempt = ktime_get_seconds();
 	imp_conn->oic_attempts++;
 
-	/* switch connection, don't mind if it's same as the current one */
-	ptlrpc_connection_put(imp->imp_connection);
-	imp->imp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
-	imp->imp_p2pdma = LNetRouteP2PCapable(&imp->imp_connection->c_peer.nid);
+	if (imp->imp_conn_current && imp->imp_conn_current != imp_conn) {
+		deuuidify(obd2cli_tgt(imp->imp_obd), NULL,
+			  &target_start, &target_len);
 
-	dlmexp = class_conn2export(&imp->imp_dlm_handle);
-	if (!dlmexp)
-		GOTO(out_unlock, rc = -EINVAL);
-	ptlrpc_connection_put(dlmexp->exp_connection);
-	dlmexp->exp_connection = ptlrpc_connection_addref(imp_conn->oic_conn);
-	class_export_put(dlmexp);
-
-	if (imp->imp_conn_current != imp_conn) {
-		if (imp->imp_conn_current) {
-			deuuidify(obd2cli_tgt(imp->imp_obd), NULL,
-				  &target_start, &target_len);
-
-			CDEBUG(D_HA, "%s: Connection changing to %.*s (at %s)\n",
-			       imp->imp_obd->obd_name,
-			       target_len, target_start,
-			       libcfs_nidstr(&imp_conn->oic_conn->c_peer.nid));
-		}
-
-		imp->imp_conn_current = imp_conn;
+		CDEBUG(D_HA, "%s: Connection changing to %.*s (at %s)\n",
+		       imp->imp_obd->obd_name,
+		       target_len, target_start,
+		       libcfs_nidstr(&imp_conn->oic_conn->c_peer.nid));
 	}
+
+	/* The new connection can be the same as the current one. */
+	rc = import_switch_connection(imp, imp_conn->oic_conn, imp_conn);
+	if (rc)
+		GOTO(out_unlock, rc);
 
 	/* The below message is checked in conf-sanity.sh test_35[ab] */
 	CDEBUG(D_HA, "%s: import %p using connection %s/%s\n",
@@ -671,6 +741,97 @@ out_unlock:
 		import_refresh_connections(imp);
 
 	RETURN(rc);
+}
+
+/**
+ * ptlrpc_refresh_import_primary() - Re-key an import on the peer primary NID.
+ * @imp: Import whose connection can use an old primary NID.
+ *
+ * On a change, the function installs a connection keyed on the current
+ * primary NID. It uses import_switch_connection().
+ * ptl_send_rpc() calls it on every send, so the next send corrects a
+ * reconnect that restores the old connection. The function skips the lookup
+ * when LNetPrimaryGen() has not changed since the last check of the
+ * connection that found no change.
+ *
+ * The lookup keys on the NID of the current connection. After discovery
+ * prunes that NID from the peer, the lookup fails. The function then misses
+ * the migration until the peer advertises the NID again.
+ *
+ * Context: The caller must not hold imp->imp_lock. The function takes it
+ *          around the swap. Can sleep in ptlrpc_connection_get_primary().
+ * Return: The connection that ptl_send_rpc() must use: the new connection
+ *         after a migration, or else the current connection. NULL only if
+ *         the import has no connection.
+ */
+struct ptlrpc_connection *ptlrpc_refresh_import_primary(struct obd_import *imp)
+{
+	struct ptlrpc_connection *old = imp->imp_connection;
+	struct ptlrpc_connection *new, *conn;
+	struct lnet_processid peer;
+	struct lnet_nid prim;
+	u64 gen;
+	int rc = 0;
+
+	if (!old)
+		return old;
+
+	/*
+	 * Read the generation before the lookup. A change after the read
+	 * then makes the next send check again.
+	 */
+	gen = LNetPrimaryGen();
+	if (gen == READ_ONCE(old->c_prim_gen_seen))
+		return old;
+
+	prim = old->c_peer.nid;
+	if (LNetPrimaryNIDNoWait(&prim) || nid_same(&prim, &old->c_peer.nid)) {
+		WRITE_ONCE(old->c_prim_gen_seen, gen);
+		return old;
+	}
+
+	peer = old->c_peer;
+	peer.nid = prim;
+	new = ptlrpc_connection_get_primary(&peer);
+	if (!new)
+		return old;
+
+	spin_lock(&imp->imp_lock);
+	if (imp->imp_connection == old) {
+		/*
+		 * With a NULL oic, import_switch_connection()
+		 * also re-keys the current failover entry. A later reconnect
+		 * then selects @new, not the stale connection.
+		 */
+		rc = import_switch_connection(imp, new, NULL);
+		CDEBUG(D_HA,
+		       "%s: peer primary migrated %s -> %s; refreshed connection\n",
+		       imp->imp_obd->obd_name, libcfs_nidstr(&old->c_peer.nid),
+		       libcfs_nidstr(&prim));
+	}
+	/*
+	 * A concurrent client_import_del_conn() can clear imp_connection. The
+	 * caller dereferences the result, so return the connection of this
+	 * send, not the field.
+	 */
+	conn = imp->imp_connection;
+	if (!conn)
+		conn = old;
+	spin_unlock(&imp->imp_lock);
+
+	/*
+	 * class_conn2export() found no DLM export, so the import moved
+	 * without it. client_import_del_conn() cannot find that export
+	 * either, so its check on the export connection does not apply.
+	 */
+	if (rc)
+		CDEBUG(D_HA,
+		       "%s: DLM export not found, import switched without it: rc = %d\n",
+		       imp->imp_obd->obd_name, rc);
+
+	ptlrpc_connection_put(new);
+
+	return conn;
 }
 
 /*

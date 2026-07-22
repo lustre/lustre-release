@@ -56,6 +56,8 @@ int LNetNIFini(void);
 int LNetGetId(unsigned int index, struct lnet_processid *id, bool large_nids);
 int LNetDist(struct lnet_nid *nid, struct lnet_nid *srcnid, __u32 *order);
 void LNetPrimaryNID(struct lnet_nid *nid);
+int LNetPrimaryNIDNoWait(struct lnet_nid *nid);
+u64 LNetPrimaryGen(void);
 void LNetLocalPrimaryNID(struct lnet_nid *nid);
 bool LNetIsPeerLocal(struct lnet_nid *nid);
 bool LNetRouteP2PCapable(struct lnet_nid *target_nid);

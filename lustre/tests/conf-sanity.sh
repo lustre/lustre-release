@@ -6823,6 +6823,97 @@ test_73f() {
 }
 run_test 73f "mgc register before connect"
 
+test_73g() {
+	remote_servers || skip "need servers on remote nodes"
+	[[ $(facet_active_host ost1) != $(facet_active_host mds1) ]] ||
+		skip "need OST on a separate node from MDS/MGS"
+	(( $MDS1_VERSION >= $(version_code 2.16.57) )) ||
+		skip "Need server version at least 2.16.57 for dynamic config"
+	(( $CLIENT_VERSION >= $(version_code 2.17.57) )) ||
+		skip "need client version >= 2.17.57 for conn re-resolution"
+
+	local net=${NETTYPE}10
+	local rnode
+	local rinf
+
+	stack_trap "cleanup_73c"
+
+	cleanup
+
+	start_mgsmds || error "start mgsmds failed"
+	start_ost || error "start ost failed"
+
+	stack_trap "do_facet mgs $LCTL set_param -P -d mgc.*.dynamic_nids"
+	do_facet mgs $LCTL set_param -P mgc.*.dynamic_nids=1 ||
+		error "failed to enable dynamic_nids on mgs"
+
+	# Add a second NID to each running server. This setup starts the
+	# servers without setupall, so it does not set mdsN_HOST and ostN_HOST.
+	# all_server_nodes() needs them, so the list comes from tgts_nodes.
+	local server_nodes="$(comma_list $(tgts_nodes) \
+			      $(facet_active_host mgs))"
+
+	for rnode in ${server_nodes//,/ }; do
+		rinf=$(do_rpc_nodes --quiet $rnode lnet_if_list)
+		[[ -n $rinf ]] ||
+			error "Failed to determine interface for $rnode"
+		do_node $rnode "$LNETCTL lnet configure" ||
+			error "configure failed on $rnode rc=$?"
+		do_node $rnode "$LNETCTL net add --net $net --if $rinf" ||
+			error "unable to add $net on $rnode rc=$?"
+	done
+
+	local mgs_nid=$(do_facet mgs $LCTL list_nids | grep "@$net\$" | head -1)
+	[[ -n "$mgs_nid" ]] || error "mgs has no $net NID"
+
+	# The client gets a NID only on the second net of the servers
+	load_lnet "config_on_load=1" || error "Failed to load LNet rc=$?"
+	local intfs=( $(lnet_if_list) )
+
+	$LNETCTL lnet configure || error "configure failed rc=$?"
+	$LNETCTL net del --net ${NETTYPE} ||
+		error "Failed to delete ${NETTYPE} rc=$?"
+	! $LCTL list_nids | grep -q "@${NETTYPE}\$" ||
+		error "Unexpected NID found \"$($LCTL list_nids | xargs echo)\""
+	$LNETCTL net add --net $net --if ${intfs[0]} ||
+		error "unable to add $net on ${intfs[0]} rc=$?"
+
+	# The client mounts on ${NETTYPE}10. The server primary NIDs are on
+	# ${NETTYPE}, so the server peers and their imports migrate.
+	$MOUNT_CMD $mgs_nid:/$FSNAME $MOUNT || error "mount client failed"
+
+	$LNETCTL peer show
+
+	wait_clients_import_ready "$HOSTNAME" "ost1,$(get_facets MDS),mgs"
+
+	local ost_nid=$(do_facet ost1 $LCTL list_nids |
+			grep "@$net\$" | head -1)
+
+	[[ -n $ost_nid ]] || error "ost1 has no $net NID"
+
+	local ost_prim=$($LNETCTL peer show --nid $ost_nid |
+			 awk '/primary nid:/ { print $NF; exit }')
+
+	echo "OSS peer NID: $ost_nid, primary NID: $ost_prim"
+	[[ $ost_prim == *@${NETTYPE} ]] ||
+		error "OSS peer primary not on ${NETTYPE}: ${ost_prim:-none}"
+
+	# The client mounted over $net, so without the refresh the OSC
+	# connection stays keyed on the $net NID. Assert it moved to the
+	# peer's current primary NID.
+	wait_update $HOSTNAME \
+		"$LCTL get_param -n osc.$FSNAME-OST0000-osc-*.ost_conn_uuid" \
+		"$ost_prim" ||
+		error "OSC connection is not the primary NID $ost_prim"
+
+	dd if=/dev/zero of=$MOUNT/$tfile bs=1M count=4 ||
+		error "write over migrated server primary failed"
+	cancel_lru_locks osc
+	dd if=$MOUNT/$tfile of=/dev/null bs=1M count=4 ||
+		error "read over migrated server primary failed"
+}
+run_test 73g "ptlrpc refreshes import connection on peer primary migration"
+
 # LU-15246
 test_74() {
 	(( $MDS1_VERSION >= $(version_code 2.15.57.16) )) ||

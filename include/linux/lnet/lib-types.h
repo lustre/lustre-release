@@ -2148,6 +2148,10 @@ struct lnet {
 	struct lnet_peer_table		**ln_peer_tables;
 	/* list of peer nis not on a local network */
 	struct list_head		ln_remote_peer_ni_list;
+	/* changes at each peer table change that can move a NID to another
+	 * primary NID, see LNetPrimaryGen()
+	 */
+	atomic64_t			ln_prim_gen;
 	/* failure simulation */
 	struct list_head		ln_test_peers;
 	struct list_head		ln_drop_rules;

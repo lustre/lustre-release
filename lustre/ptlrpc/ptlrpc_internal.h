@@ -92,6 +92,7 @@ int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt,
 			     bool invalid);
 void ptlrpc_handle_failed_import(struct obd_import *imp);
 int ptlrpc_replay_next(struct obd_import *imp, int *inflight);
+struct ptlrpc_connection *ptlrpc_refresh_import_primary(struct obd_import *imp);
 
 int lustre_unpack_req_ptlrpc_body(struct ptlrpc_request *req, int offset);
 int lustre_unpack_rep_ptlrpc_body(struct ptlrpc_request *req, int offset);

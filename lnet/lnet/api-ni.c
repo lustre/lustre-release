@@ -1369,6 +1369,8 @@ lnet_prepare(lnet_pid_t requested_pid)
 
 	INIT_LIST_HEAD(&the_lnet.ln_test_peers);
 	INIT_LIST_HEAD(&the_lnet.ln_remote_peer_ni_list);
+	/* 0 is never a generation, so a new connection looks up once */
+	atomic64_set(&the_lnet.ln_prim_gen, 1);
 	INIT_LIST_HEAD(&the_lnet.ln_nets);
 	INIT_LIST_HEAD(&the_lnet.ln_routers);
 	INIT_LIST_HEAD(&the_lnet.ln_drop_rules);
