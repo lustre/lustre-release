@@ -21,8 +21,8 @@
 
 #include "osc_internal.h"
 
-static void osc_lru_del(struct client_obd *cli, struct osc_page *opg);
-static void osc_lru_use(struct client_obd *cli, struct osc_page *opg);
+static void osc_lru_del(struct osc_page *opg);
+static void osc_lru_use(struct osc_page *opg);
 static int osc_lru_alloc(const struct lu_env *env, struct client_obd *cli,
 			 struct osc_page *opg);
 
@@ -65,7 +65,7 @@ int osc_page_cache_add(const struct lu_env *env, struct osc_object *osc,
 	if (result != 0)
 		osc_page_transfer_put(env, opg);
 	else
-		osc_lru_use(osc_cli(osc), opg);
+		osc_lru_use(opg);
 
 	RETURN(result);
 }
@@ -146,7 +146,7 @@ static void osc_page_delete(const struct lu_env *env,
 		LASSERT(0);
 	}
 
-	osc_lru_del(osc_cli(obj), opg);
+	osc_lru_del(opg);
 
 	if (opg->ops_intree) {
 		spin_lock(&obj->oo_tree_lock);
@@ -288,7 +288,6 @@ EXPORT_SYMBOL(osc_page_init);
 void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 		     enum cl_req_type crt, int brw_flags)
 {
-	struct osc_object *obj = osc_page_object(opg);
 	struct cl_page *page = opg->ops_cl.cpl_page;
 	struct osc_async_page *oap = &opg->ops_oap;
 	struct osc_io *oio = osc_env_io(env);
@@ -306,7 +305,7 @@ void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
 
 	if (page->cp_type != CPT_TRANSIENT) {
 		osc_page_transfer_get(opg, "transfer\0imm");
-		osc_lru_use(osc_cli(obj), opg);
+		osc_lru_use(opg);
 	}
 }
 
@@ -455,13 +454,36 @@ void osc_lru_add_batch(struct client_obd *cli, struct list_head *plist)
 
 	list_for_each_entry(oap, plist, oap_pending_item) {
 		struct osc_page *opg = oap2osc_page(oap);
+		struct client_obd *pcli;
 
 		if (!opg->ops_in_lru)
 			continue;
 
-		++npages;
 		LASSERT(list_empty(&opg->ops_lru));
-		list_add(&opg->ops_lru, &lru);
+
+		/* osc_lru_del() takes the page off its own OSC's LRU */
+		pcli = osc_cli(osc_page_object(opg));
+		if (likely(pcli == cli)) {
+			++npages;
+			list_add(&opg->ops_lru, &lru);
+			continue;
+		}
+
+		spin_lock(&pcli->cl_lru_list_lock);
+		list_add_tail(&opg->ops_lru, &pcli->cl_lru_list);
+		atomic_long_dec(&pcli->cl_lru_busy);
+		atomic_long_inc(&pcli->cl_lru_in_list);
+		pcli->cl_lru_last_used = ktime_get_real_seconds();
+		spin_unlock(&pcli->cl_lru_list_lock);
+
+		CWARN("%s: LRU page %pK index %lu of "DOSTID" is homed on %s, not on the finishing extent's OSC\n",
+		      cli_name(cli), opg, osc_index(opg),
+		      POSTID(&osc_page_object(opg)->oo_oinfo->loi_oi),
+		      cli_name(pcli));
+
+		/* the batched wake-up below only ever covers @cli */
+		if (waitqueue_active(&osc_lru_waitq))
+			schedule_work(&pcli->cl_lru_work);
 	}
 
 	if (npages > 0) {
@@ -505,9 +527,10 @@ static void __osc_lru_del(struct client_obd *cli, struct osc_page *opg)
  * Page is being destroyed. The page may be not in LRU list, if the transfer
  * has never finished(error occurred).
  */
-static void osc_lru_del(struct client_obd *cli, struct osc_page *opg)
+static void osc_lru_del(struct osc_page *opg)
 {
 	if (opg->ops_in_lru) {
+		struct client_obd *cli = osc_cli(osc_page_object(opg));
 		bool mlocked = false;
 
 		spin_lock(&cli->cl_lru_list_lock);
@@ -533,13 +556,17 @@ static void osc_lru_del(struct client_obd *cli, struct osc_page *opg)
 /**
  * Delete page from LRU list for redirty.
  */
-static void osc_lru_use(struct client_obd *cli, struct osc_page *opg)
+static void osc_lru_use(struct osc_page *opg)
 {
 	/* If page is being transferred for the first time,
 	 * ops_lru should be empty */
 	if (opg->ops_in_lru) {
+		struct client_obd *cli;
+
 		if (list_empty(&opg->ops_lru))
 			return;
+
+		cli = osc_cli(osc_page_object(opg));
 		spin_lock(&cli->cl_lru_list_lock);
 		if (!list_empty(&opg->ops_lru)) {
 			__osc_lru_del(cli, opg);

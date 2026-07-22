@@ -216,6 +216,22 @@ bool ll_iov_iter_is_unaligned(struct iov_iter *i)
 	       (iov_iter_alignment(i) & ~PAGE_MASK);
 }
 
+/* a single user buffer starting on a page boundary */
+static bool ll_iov_iter_starts_on_page(struct iov_iter *i)
+{
+	unsigned long start;
+
+	if (iter_is_ubuf(i))
+		start = (unsigned long)iter_ubuf(i);
+	else if (iter_is_iovec(i) &&
+		 iov_iter_single_seg_count(i) == iov_iter_count(i))
+		start = (unsigned long)iter_iov(i)->iov_base;
+	else
+		return false;
+
+	return !((start + i->iov_offset) & ~PAGE_MASK);
+}
+
 static int
 ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 		   int rw, struct inode *inode, bool ciphertext,
@@ -384,6 +400,16 @@ static ssize_t ll_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 	}
 	if (rw == WRITE && ciphertext)
 		set_bit(LLIF_CIPHERTEXT_WRITTEN, &ll_i2info(inode)->lli_flags);
+
+	/* Buffered I/O to a designated mirror would leave pages of that
+	 * mirror in the cache, where normal I/O takes them for its own.
+	 * Servers without unaligned DIO still take an I/O whose only
+	 * unaligned part is its length, as before unaligned DIO.
+	 */
+	if (unaligned && cl_io_top(io)->ci_designated_mirror > 0 &&
+	    !cl_io_top(io)->ci_allow_unaligned_dio &&
+	    !(file_offset & ~PAGE_MASK) && ll_iov_iter_starts_on_page(iter))
+		unaligned = false;
 
 	/* if one part of an I/O is unaligned, just handle all of it that way -
 	 * otherwise we create significant complexities with managing the iovec
