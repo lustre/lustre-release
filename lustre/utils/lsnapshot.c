@@ -189,8 +189,10 @@ static int snapshot_load_conf_ldev(struct snapshot_instance *si, char *buf,
 		rc = -EINVAL;
 		goto out;
 	}
-	if (strcmp(st->st_fhost, "-") == 0)
+	if (strcmp(st->st_fhost, "-") == 0) {
+		free(st->st_fhost);
 		st->st_fhost = NULL;
+	}
 
 	/* Format of device:
 	 * [md|zfs:][pool_dir/]<pool>/<filesystem> */
@@ -316,13 +318,13 @@ out:
  *
  * For old snasphot tools, the configration is in /etc/lsnapshot/${fsname}.conf,
  * the format is:
- * <host> <pool_dir> <pool> <local_fsname> <role(,s)> <index>
+ * <host> <foreign_host> <pool_dir> <pool> <local_fsname> <role(,s)> <index>
  *
  * For example:
- * host-mdt1 /tmp myfs-mdt1 mdt1 MGS,MDT 0
- * host-mdt2 /tmp myfs-mdt2 mdt2 MDT 1
- * host-ost1 /tmp myfs-ost1 ost1 OST 0
- * host-ost2 /tmp myfs-ost2 ost2 OST 1
+ * host-mdt1 - /tmp myfs-mdt1 mdt1 MGS,MDT 0
+ * host-mdt2 - /tmp myfs-mdt2 mdt2 MDT 1
+ * host-ost1 - /tmp myfs-ost1 ost1 OST 0
+ * host-ost2 - /tmp myfs-ost2 ost2 OST 1
  *
  * For new snasphot tools, the configration is in /etc/ldev.conf, which is not
  * only for snapshot, but also for other purpose. The format is:
@@ -386,11 +388,15 @@ static int snapshot_load_conf_one(struct snapshot_instance *si,
 			    &st->st_host, &st->st_fhost, &st->st_dir,
 			    &st->st_pool, &st->st_filesystem, &role,
 			    &st->st_index);
-		if (rc < 7)
+		if (rc < 7) {
 			rc = -EINVAL;
+			goto out;
+		}
 
-		if (strcmp(st->st_fhost, "-") == 0)
+		if (strcmp(st->st_fhost, "-") == 0) {
+			free(st->st_fhost);
 			st->st_fhost = NULL;
+		}
 	}
 
 	if (rc < 0)
