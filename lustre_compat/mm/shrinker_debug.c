@@ -251,17 +251,25 @@ struct shrinker *ll_shrinker_alloc(unsigned int flags, const char *fmt, ...)
 	if (rc == 0) {
 		const char *name = kvasprintf_const(GFP_KERNEL, fmt, args);
 
-		if (strncmp(name, "ldlm_pools", strlen("ldlm_pools")) != 0)
-			rc = shrinker_add_debugfs(shrinker, name);
-
-		kfree(name);
+		if (name) {
+			if (strncmp(name, "ldlm_pools",
+				    strlen("ldlm_pools")) != 0)
+				rc = shrinker_add_debugfs(shrinker, name);
+			kfree_const(name);
+		} else {
+			rc = -ENOMEM;
+		}
 	}
 #endif
 	va_end(args);
 
 	if (rc < 0) {
-		if (shrinker)
+		if (shrinker) {
 			ll_shrinker_free(shrinker);
+		} else if (s) {
+			LIBCFS_FREE_PRE(s, sizeof(*s), "kfreed");
+			kfree(s);
+		}
 		return ERR_PTR(rc);
 	}
 
