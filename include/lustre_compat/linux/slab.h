@@ -3,10 +3,18 @@
 #ifndef _LINUX_SLAB_LUSTRE_H
 #define _LINUX_SLAB_LUSTRE_H
 
-#include <linux/slab.h>
+#include_next <linux/slab.h>
 
 #ifndef HAVE_KFREE_SENSITIVE
 #define kfree_sensitive(x)      kzfree(x)
 #endif
 
-#endif /* _LINUX_MM_LUSTRE_H */
+/*
+ * linux commit v6.8-5277-gf88c3fb81c4ba
+ *  v6.8-5277-gf88c3fb81c4ba
+ */
+#ifndef SLAB_MEM_SPREAD
+#define SLAB_MEM_SPREAD		0
+#endif
+
+#endif /* _LINUX_SLAB_LUSTRE_H */

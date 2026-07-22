@@ -21,6 +21,7 @@
 #include <lustre_quota.h>
 #include <linux/init.h>
 #include <lustre_compat/linux/fs.h>
+#include <lustre_compat/linux/slab.h>
 #include <linux/random.h>
 #include <lprocfs_status.h>
 #include "llite_internal.h"
@@ -294,8 +295,7 @@ static int __init lustre_init(void)
 					    sizeof(struct ll_inode_info), 0,
 					    SLAB_HWCACHE_ALIGN |
 					    SLAB_RECLAIM_ACCOUNT |
-					    SLAB_MEM_SPREAD |
-					    SLAB_ACCOUNT,
+					    SLAB_MEM_SPREAD | SLAB_ACCOUNT,
 					    NULL);
 	if (ll_inode_cachep == NULL)
 		GOTO(out_cache, rc = -ENOMEM);

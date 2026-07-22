@@ -49,10 +49,6 @@
 #define bio_start_sector(bio) (bio->bi_sector)
 #endif
 
-#ifndef SLAB_MEM_SPREAD
-#define SLAB_MEM_SPREAD		0
-#endif
-
 #ifdef HAVE_STRUCT_FILE_LOCK_CORE
 #define C_FLC_TYPE	c.flc_type
 #define C_FLC_PID	c.flc_pid
