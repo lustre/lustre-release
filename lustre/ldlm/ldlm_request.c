@@ -667,7 +667,7 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct req_capsule *pill,
 
 		ptlrpc_put_mod_rpc_slot(req);
 
-		if (req && req->rq_svc_thread)
+		if (req->rq_svc_thread)
 			env = req->rq_svc_thread->t_env;
 	}
 
