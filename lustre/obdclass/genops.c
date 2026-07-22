@@ -1005,6 +1005,7 @@ static struct obd_export *__class_new_export(struct obd_device *obd,
 	spin_lock_init(&export->exp_locks_list_guard);
 #endif
 	atomic_set(&export->exp_replay_count, 0);
+	atomic64_set(&export->exp_primary_observed, 0);
 	export->exp_obd = obd;
 	INIT_LIST_HEAD(&export->exp_outstanding_replies);
 	spin_lock_init(&export->exp_uncommitted_replies_lock);

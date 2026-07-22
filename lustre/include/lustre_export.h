@@ -225,14 +225,20 @@ struct obd_export {
 	spinlock_t		exp_uncommitted_replies_lock;
 	/** Last committed transno for this export */
 	__u64			exp_last_committed;
+	/**
+	 * Arrival time on CLOCK_MONOTONIC, in nanoseconds, of the newest
+	 * request that gave a primary NID observation for this export. See
+	 * exp_observe_primary().
+	 */
+	atomic64_t		exp_primary_observed;
 	/** When was last request received */
 	time64_t		exp_last_request_time;
 	time64_t		exp_deadline;
 	/** On replay all requests waiting for replay are linked here */
 	struct list_head	exp_req_replay_queue;
 	/**
-	 * protects exp_flags, exp_outstanding_replies and the change
-	 * of exp_imp_reverse
+	 * protects exp_flags, exp_outstanding_replies, exp_connection of a
+	 * target export, and the change of exp_imp_reverse
 	 */
 	spinlock_t		exp_lock;
 	/* Compatibility flags for this export embedded into exp_connect_data */
@@ -321,6 +327,60 @@ static inline int lprocfs_nid_ldlm_stats_init(struct nid_stat *tmp)
 			    tmp->nid_ldlm_stats, &ldebugfs_stats_seq_fops);
 
 	return 0;
+}
+
+/**
+ * exp_observe_primary() - Record a primary NID observation on an export.
+ * @exp: Export that the request resolved.
+ * @arrival: Arrival time of the request, rq_arrival_mono.
+ *
+ * request_in_callback() writes rq_peer and rq_arrival_mono together, so
+ * @arrival dates the NID in rq_peer. The export keeps the newest time.
+ *
+ * The order comes from CLOCK_MONOTONIC, not from rq_arrival_time. A step
+ * back of the real time clock would otherwise leave a future time here.
+ * Every later request would then look stale.
+ *
+ * Two requests with the same time have no order. The export then takes the
+ * NID of the request that runs last. The next request corrects it.
+ *
+ * A request records its time even when its NID agrees with the export.
+ * Otherwise an older request could key the export onto a NID that the peer
+ * left.
+ *
+ * Context: Takes no lock. A cmpxchg loop keeps the newest time.
+ */
+static inline void exp_observe_primary(struct obd_export *exp, ktime_t arrival)
+{
+	s64 ns = ktime_to_ns(arrival);
+	s64 seen = atomic64_read(&exp->exp_primary_observed);
+
+	while (ns > seen) {
+		s64 was = atomic64_cmpxchg(&exp->exp_primary_observed, seen,
+					   ns);
+
+		if (was == seen)
+			return;
+		seen = was;
+	}
+}
+
+/**
+ * exp_primary_is_stale() - Check if a later request superseded this one.
+ * @exp: Export that the request resolved.
+ * @arrival: Arrival time of the request, rq_arrival_mono.
+ *
+ * Each request calls exp_observe_primary() before this check. The export
+ * thus holds a later time only if a later request arrived.
+ *
+ * Return: %true if a request that arrived later recorded a newer time,
+ *         %false otherwise.
+ */
+static inline bool exp_primary_is_stale(struct obd_export *exp,
+					ktime_t arrival)
+{
+	return ktime_to_ns(arrival) <
+	       atomic64_read(&exp->exp_primary_observed);
 }
 
 static inline __u64 *exp_connect_flags_ptr(struct obd_export *exp)

@@ -2472,6 +2472,137 @@ err_req:
 	RETURN(1);
 }
 
+#ifdef CONFIG_LUSTRE_FS_SERVER
+/**
+ * ptlrpc_refresh_export_primary() - Re-key an export on a new primary NID.
+ * @exp: Export whose connection can use an old client primary NID.
+ * @peer: rq_peer of the current request. LNet resolved it as the primary
+ *        NID at parse time, so the function does no lookup and never
+ *        waits on discovery.
+ * @arrival: rq_arrival_mono of the current request.
+ *
+ * On a change, the function installs a connection keyed on @peer. It
+ * re-keys the obd NID hash, as a connect does. It also moves the reverse
+ * import onto the new connection.
+ *
+ * Service threads do not handle requests in arrival order. A migration
+ * does not increase exp_conn_cnt, so ptlrpc_check_req() admits a request
+ * that is older than the migration. The function thus ignores a request
+ * that exp_primary_is_stale() reports. A parked request then does not put
+ * the export back on an old NID. A connect does not use this check.
+ *
+ * This order is best effort. A later request records its time and reads
+ * exp_connection without exp_lock. It can do this between the last stale
+ * check of an older request and the store of that older request. The later
+ * request then sees no change, and the export moves to the older NID.
+ * The @peer NID can also change, because a discovery that is not complete
+ * can move it. The export can also hold a NID that the peer left after the
+ * newest request arrived. In each case, the next request corrects it.
+ *
+ * Only an export with a reverse import changes. On a server that is also a
+ * client, a callback resolves the local DLM export of one of its imports.
+ * ptlrpc_import_switch_connection() owns that export under imp_lock, and
+ * this path holds only exp_lock. rev_import_init() gives a reverse import
+ * to every export that a client connects to.
+ *
+ * A disconnected export does not change. class_disconnect() already
+ * dropped its NID hash reference. A new hash entry would take a reference
+ * that nothing releases, and the export would leak. A failed export does
+ * not change, because the server disconnects it next.
+ *
+ * The function does not move exp_nid_stats, so the exports directory of
+ * the target keeps the connect-time NID. An evict by NID still works,
+ * because it uses the target NID hash.
+ *
+ * Context: The caller holds no export lock. The function takes exp_lock
+ *          around the swap, and imp_lock inside it for the reverse import.
+ *          Can sleep in ptlrpc_connection_get_primary().
+ */
+static void ptlrpc_refresh_export_primary(struct obd_export *exp,
+					  struct lnet_processid *peer,
+					  ktime_t arrival)
+{
+	struct ptlrpc_connection *old, *new;
+
+	if (LNET_NID_IS_ANY(&peer->nid))
+		return;
+
+	spin_lock(&exp->exp_lock);
+	old = exp->exp_connection;
+	if (!old || !exp->exp_imp_reverse || exp->exp_disconnected ||
+	    exp->exp_failed || nid_same(&peer->nid, &old->c_peer.nid)) {
+		spin_unlock(&exp->exp_lock);
+		return;
+	}
+	if (exp_primary_is_stale(exp, arrival)) {
+		CDEBUG(D_HA, "%s: stale request from %s; export stays on %s\n",
+		       exp->exp_obd->obd_name, libcfs_nidstr(&peer->nid),
+		       libcfs_nidstr(&old->c_peer.nid));
+		spin_unlock(&exp->exp_lock);
+		return;
+	}
+	ptlrpc_connection_addref(old);
+	spin_unlock(&exp->exp_lock);
+
+	new = ptlrpc_connection_get_primary(peer);
+	if (!new) {
+		ptlrpc_connection_put(old);
+		return;
+	}
+
+	spin_lock(&exp->exp_lock);
+	if (exp->exp_connection == old && !exp->exp_disconnected &&
+	    !exp->exp_failed && !exp_primary_is_stale(exp, arrival)) {
+		struct obd_import *revimp = exp->exp_imp_reverse;
+		int rc;
+
+		obd_nid_del(exp->exp_obd, exp);
+		ptlrpc_connection_put(exp->exp_connection);
+		exp->exp_connection = new;
+		rc = obd_nid_add(exp->exp_obd, exp);
+
+		/*
+		 * The reverse import cannot detect the migration after the
+		 * client drops the old NID. @peer is authoritative, so move the
+		 * reverse import here.
+		 */
+		if (revimp) {
+			spin_lock(&revimp->imp_lock);
+			if (revimp->imp_connection != new)
+				ptlrpc_import_switch_connection(revimp, new,
+								NULL);
+			spin_unlock(&revimp->imp_lock);
+		}
+
+		spin_unlock(&exp->exp_lock);
+
+		/*
+		 * Log only after the swap commits. A thread that loses the
+		 * recheck above must not report a re-key that it did not do.
+		 */
+		CDEBUG(D_HA,
+		       "%s: client primary migrated %s -> %s; refreshed export\n",
+		       exp->exp_obd->obd_name, libcfs_nidstr(&old->c_peer.nid),
+		       libcfs_nidstr(&peer->nid));
+
+		/*
+		 * The export is now in no NID list. Until the client
+		 * reconnects, an evict by NID and every other lookup by NID
+		 * miss it.
+		 */
+		if (rc)
+			CERROR("%s: cannot re-hash export on %s: rc = %d\n",
+			       exp->exp_obd->obd_name,
+			       libcfs_nidstr(&peer->nid), rc);
+	} else {
+		spin_unlock(&exp->exp_lock);
+		ptlrpc_connection_put(new);
+	}
+
+	ptlrpc_connection_put(old);
+}
+#endif /* CONFIG_LUSTRE_FS_SERVER */
+
 /**
  * ptlrpc_server_handle_request() - Main incoming request handling logic
  * @svcpt: pointer to struct ptlrpc_service_part
@@ -2540,10 +2671,48 @@ static int ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 	}
 
 	if (likely(request->rq_export)) {
+#ifdef CONFIG_LUSTRE_FS_SERVER
+		ktime_t arrival = request->rq_arrival_mono;
+		struct ptlrpc_connection *exp_conn;
+#endif
 		if (unlikely(ptlrpc_check_req(request)))
 			goto put_conn;
 
 		ptlrpc_update_export_timer(request);
+
+#ifdef CONFIG_LUSTRE_FS_SERVER
+		/*
+		 * Park one request of the opcode named by fail_val here, so
+		 * that a request parsed later can overtake it. The sleep ends
+		 * early when the test clears fail_loc.
+		 */
+		if (CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_PAUSE_EXP_REFRESH) &&
+		    op == cfs_fail_val)
+			CFS_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_PAUSE_EXP_REFRESH, 60);
+
+		/*
+		 * Record the time before the read below, even when the NID
+		 * agrees. An earlier request that has not checked the time yet
+		 * then cannot re-key the export after this one.
+		 */
+		exp_observe_primary(request->rq_export, arrival);
+		/*
+		 * A difference between rq_peer and the export NID means that
+		 * the client primary migrated while the connection stayed up.
+		 *
+		 * Read exp_connection once, without exp_lock. A concurrent
+		 * reconnect from a new NID clears it for a short time. A
+		 * second read can then give nid_same() a NULL. Nothing frees a
+		 * connection at runtime, so the pointer stays valid.
+		 * ptlrpc_refresh_export_primary() checks again under exp_lock.
+		 */
+		exp_conn = READ_ONCE(request->rq_export->exp_connection);
+		if (exp_conn &&
+		    !nid_same(&request->rq_peer.nid, &exp_conn->c_peer.nid))
+			ptlrpc_refresh_export_primary(request->rq_export,
+						      &request->rq_peer,
+						      arrival);
+#endif
 	}
 
 	/*

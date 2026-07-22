@@ -330,6 +330,7 @@ void request_in_callback(struct lnet_event *ev)
 	if (ev->type == LNET_EVENT_PUT && ev->status == 0)
 		req->rq_reqdata_len = ev->mlength;
 	ktime_get_real_ts64(&req->rq_arrival_time);
+	req->rq_arrival_mono = ktime_get();
 	/* Multi-Rail: keep track of both initiator and source NID. */
 	req->rq_peer = ev->initiator;
 	req->rq_source = ev->source;

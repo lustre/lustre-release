@@ -912,6 +912,11 @@ struct ptlrpc_srv_req {
 	/** @} nrs */
 	/** request arrival time */
 	struct timespec64		 sr_arrival_time;
+	/**
+	 * Arrival time on CLOCK_MONOTONIC, for orderings that must survive a
+	 * step of the real time clock. See exp_observe_primary().
+	 */
+	ktime_t				 sr_arrival_mono;
 	/** server's half ctx */
 	struct ptlrpc_svc_ctx		*sr_svc_ctx;
 	/** (server side), pointed directly into req buffer */
@@ -940,6 +945,7 @@ struct ptlrpc_srv_req {
 #define rq_session		rq_srv.sr_ses
 #define rq_nrq			rq_srv.sr_nrq
 #define rq_arrival_time		rq_srv.sr_arrival_time
+#define rq_arrival_mono		rq_srv.sr_arrival_mono
 #define rq_reply_state		rq_srv.sr_reply_state
 #define rq_svc_ctx		rq_srv.sr_svc_ctx
 #define rq_user_desc		rq_srv.sr_user_desc

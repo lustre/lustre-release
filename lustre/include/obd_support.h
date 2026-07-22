@@ -493,6 +493,7 @@ extern bool obd_enable_fname_encoding;
 #define OBD_FAIL_PTLRPC_FAIL_REPLAY		0x537
 #define OBD_FAIL_PTLRPC_MAINT_RECONNECT		0x538
 #define OBD_FAIL_PTLRPC_DROP_CONNECT		0x539
+#define OBD_FAIL_PTLRPC_PAUSE_EXP_REFRESH	0x53a
 
 #define OBD_FAIL_OBD_PING_NET            0x600
 /*	OBD_FAIL_OBD_LOG_CANCEL_NET      0x601 obsolete since 1.5 */

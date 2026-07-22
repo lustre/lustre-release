@@ -1148,9 +1148,9 @@ static int rev_import_reconnect(struct obd_export *exp,
 	revimp->imp_msg_magic = req->rq_reqmsg->lm_magic;
 
 	/*
-	 * A lock callback on this reverse import can run
-	 * ptlrpc_refresh_import_primary() at the same time. Without imp_lock,
-	 * both paths put the same connection reference.
+	 * ptlrpc_refresh_import_primary() and ptlrpc_refresh_export_primary()
+	 * can run at the same time on this reverse import. Without imp_lock,
+	 * two paths put the same connection reference.
 	 */
 	spin_lock(&revimp->imp_lock);
 	ptlrpc_connection_put(revimp->imp_connection);
@@ -1735,6 +1735,17 @@ dont_check_exports:
 		pcon = NULL;
 	}
 	obd_nid_add(export->exp_obd, export);
+
+	/*
+	 * The connect keys the export too, so record its time. Otherwise a
+	 * request that arrived before the connect could move the export back
+	 * to the NID that the connect left.
+	 *
+	 * A connect is authoritative, so it ignores the recorded time.
+	 * exp_observe_primary() keeps the newest time, so a late connect
+	 * cannot move it back.
+	 */
+	exp_observe_primary(export, req->rq_arrival_mono);
 
 	spin_unlock(&export->exp_lock);
 

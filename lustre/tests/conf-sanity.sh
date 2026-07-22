@@ -6843,7 +6843,7 @@ test_73f() {
 }
 run_test 73f "mgc register before connect"
 
-test_73g() {
+setup_73gh() {
 	remote_servers || skip "need servers on remote nodes"
 	[[ $(facet_active_host ost1) != $(facet_active_host mds1) ]] ||
 		skip "need OST on a separate node from MDS/MGS"
@@ -6852,7 +6852,7 @@ test_73g() {
 	(( $CLIENT_VERSION >= $(version_code 2.17.57) )) ||
 		skip "need client version >= 2.17.57 for conn re-resolution"
 
-	local net=${NETTYPE}10
+	local net="$1"
 	local rnode
 	local rinf
 
@@ -6898,13 +6898,19 @@ test_73g() {
 	$LNETCTL net add --net $net --if ${intfs[0]} ||
 		error "unable to add $net on ${intfs[0]} rc=$?"
 
-	# The client mounts on ${NETTYPE}10. The server primary NIDs are on
-	# ${NETTYPE}, so the server peers and their imports migrate.
 	$MOUNT_CMD $mgs_nid:/$FSNAME $MOUNT || error "mount client failed"
 
-	$LNETCTL peer show
-
 	wait_clients_import_ready "$HOSTNAME" "ost1,$(get_facets MDS),mgs"
+}
+
+test_73g() {
+	local net=${NETTYPE}10
+
+	setup_73gh "$net"
+
+	stack_trap "set_default_debug_nodes $HOSTNAME"
+	set_default_debug_nodes "$HOSTNAME" "+ha"
+	$LCTL dk > /dev/null
 
 	local ost_nid=$(do_facet ost1 $LCTL list_nids |
 			grep "@$net\$" | head -1)
@@ -6918,9 +6924,7 @@ test_73g() {
 	[[ $ost_prim == *@${NETTYPE} ]] ||
 		error "OSS peer primary not on ${NETTYPE}: ${ost_prim:-none}"
 
-	# The client mounted over $net, so without the refresh the OSC
-	# connection stays keyed on the $net NID. Assert it moved to the
-	# peer's current primary NID.
+	# the client keys the OSC connection on the current primary NID
 	wait_update $HOSTNAME \
 		"$LCTL get_param -n osc.$FSNAME-OST0000-osc-*.ost_conn_uuid" \
 		"$ost_prim" ||
@@ -6931,8 +6935,236 @@ test_73g() {
 	cancel_lru_locks osc
 	dd if=$MOUNT/$tfile of=/dev/null bs=1M count=4 ||
 		error "read over migrated server primary failed"
+
+	# A regression guard, not a control. Either of two conditions keeps
+	# the server refresh off the client. First, no client export has a
+	# reverse import, because only target_handle_connect() calls
+	# rev_import_init(). Second, the import refresh keeps the DLM export
+	# connection of the client equal to rq_peer.
+	# ptlrpc_import_switch_connection() owns that export, so the server
+	# refresh must never re-key it.
+	! $LCTL dk | grep -q "client primary migrated" ||
+		error "client re-keyed a DLM export of one of its own imports"
 }
 run_test 73g "ptlrpc refreshes import connection on peer primary migration"
+
+# Move the client off $1 and back onto ${NETTYPE}. Its LNet primary NID
+# then migrates while its connections to the servers stay up.
+migrate_73_client() {
+	local net=$1
+
+	# lnetctl exits 0 on a usage error, so an empty --if argument would
+	# pass silently. Re-read the interface list and check the NIDs.
+	local intfs=( $(lnet_if_list) )
+
+	[[ -n "${intfs[0]}" ]] || error "no LNet interface found"
+
+	$LNETCTL net add --net ${NETTYPE} --if ${intfs[0]} ||
+		error "unable to add ${NETTYPE} on ${intfs[0]} rc=$?"
+	$LCTL list_nids | grep -q "@${NETTYPE}\$" ||
+		error "no ${NETTYPE} NID after net add"
+
+	$LNETCTL net del --net $net --if ${intfs[0]} ||
+		error "unable to del $net on ${intfs[0]} rc=$?"
+	! $LCTL list_nids | grep -q "@$net\$" ||
+		error "$net NID still present after net del"
+}
+
+# Report whether $facet still resolves an export for $nid. The
+# exports.<nid> directory keeps its connect-time name. But each file under
+# it looks up the export in the target NID hash, which uses the export
+# connection. A NID that the export no longer holds thus stops resolving.
+export_keyed_on_nid() {
+	local facet=$1
+	local param=$2
+	local nid=$3
+
+	do_facet $facet "$LCTL get_param -n $param.exports.*.export 2>&1" |
+		awk '/client:/ { print $2 }' | grep -Fqx -- "$nid"
+}
+
+# Report whether $facet logged the export re-key. The record stays in the
+# debug log even if a later request moves the export again.
+export_rekey_logged() {
+	local facet=$1
+	local old_nid=$2
+	local new_nid=$3
+
+	do_facet $facet "$LCTL dk" |
+		grep -qF "client primary migrated $old_nid -> $new_nid"
+}
+
+test_73h() {
+	(( $MDS1_VERSION >= $(version_code 2.17.57) )) ||
+		skip "need MDS version >= 2.17.57 for ptlrpc conn refresh"
+	(( $OST1_VERSION >= $(version_code 2.17.57) )) ||
+		skip "need OSS version >= 2.17.57 for ptlrpc conn refresh"
+	(( $MGS_VERSION >= $(version_code 2.17.57) )) ||
+		skip "need MGS version >= 2.17.57 for ptlrpc conn refresh"
+
+	local net=${NETTYPE}10
+
+	setup_73gh "$net"
+
+	local ost_param="obdfilter.$FSNAME-OST0000"
+	local mdt_param="mdt.$FSNAME-MDT0000"
+	local srv_nodes="$(comma_list $(facet_active_host ost1) \
+			   $(facet_active_host mds1))"
+	local cli_old=$($LCTL list_nids | grep "@$net\$" | head -1)
+
+	[[ -n $cli_old ]] || error "client has no $net NID"
+
+	stack_trap "set_default_debug_nodes $srv_nodes"
+	set_default_debug_nodes "$srv_nodes" "+ha"
+
+	do_nodes $srv_nodes "$LCTL dk > /dev/null"
+
+	# an idle client drops its export, so give both targets some
+	# traffic before reading the exports they hold
+	dd if=/dev/zero of=$MOUNT/$tfile bs=1M count=4 ||
+		error "write before migration failed"
+
+	export_keyed_on_nid ost1 "$ost_param" "$cli_old" ||
+		error "ost1 export is not keyed on $cli_old"
+	export_keyed_on_nid mds1 "$mdt_param" "$cli_old" ||
+		error "mds1 export is not keyed on $cli_old"
+
+	# The negative control. The client primary did not move, so a server
+	# must not re-key its export. "lctl dk" also clears the log for the
+	# assertions after the migration.
+	# Every node gets $net, so a server primary can settle from the old
+	# net onto $net while discovery runs. That move re-keys a server to
+	# server export, which is correct. Look only at the exports of this
+	# client.
+	local cli_nids=$($LCTL list_nids | paste -sd'|')
+	local rekeys=$(do_nodes $srv_nodes "$LCTL dk" |
+		       grep "client primary migrated" |
+		       grep -E "migrated ($cli_nids) ")
+
+	[[ -z $rekeys ]] ||
+		error "a server re-keyed an unmigrated client: $rekeys"
+
+	migrate_73_client "$net"
+
+	local cli_new=$($LCTL list_nids | grep "@${NETTYPE}\$" | head -1)
+
+	[[ -n $cli_new ]] || error "client has no ${NETTYPE} NID"
+
+	$LFS check servers || error "lfs check servers failed rc=$?"
+
+	wait_clients_import_ready "$HOSTNAME" "ost1,$(get_facets MDS),mgs"
+
+	# lfs check servers pings every target. A server re-keys the export
+	# before it answers, so the test need not wait.
+	export_rekey_logged ost1 "$cli_old" "$cli_new" ||
+		error "ost1 did not re-key the export on $cli_new"
+	export_rekey_logged mds1 "$cli_old" "$cli_new" ||
+		error "mds1 did not re-key the export on $cli_new"
+
+	! export_keyed_on_nid ost1 "$ost_param" "$cli_old" ||
+		error "ost1 export is still keyed on $cli_old"
+	! export_keyed_on_nid mds1 "$mdt_param" "$cli_old" ||
+		error "mds1 export is still keyed on $cli_old"
+
+	dd if=/dev/zero of=$MOUNT/$tfile bs=1M count=4 ||
+		error "write over migrated server primary failed"
+	cancel_lru_locks osc
+	dd if=$MOUNT/$tfile of=/dev/null bs=1M count=4 ||
+		error "read over migrated server primary failed"
+}
+run_test 73h "ptlrpc refreshes export connection on peer primary migration"
+
+test_73i() {
+	(( $MDS1_VERSION >= $(version_code 2.17.57) )) ||
+		skip "need MDS version >= 2.17.57 for ptlrpc conn refresh"
+	(( $OST1_VERSION >= $(version_code 2.17.57) )) ||
+		skip "need OSS version >= 2.17.57 for ptlrpc conn refresh"
+	(( $MGS_VERSION >= $(version_code 2.17.57) )) ||
+		skip "need MGS version >= 2.17.57 for ptlrpc conn refresh"
+
+	local net=${NETTYPE}10
+
+	setup_73gh "$net"
+
+	local ost_param="obdfilter.$FSNAME-OST0000"
+	local ost_node=$(facet_active_host ost1)
+	local cli_old=$($LCTL list_nids | grep "@$net\$" | head -1)
+	local ddpid
+
+	[[ -n $cli_old ]] || error "client has no $net NID"
+
+	stack_trap "set_default_debug_nodes $ost_node"
+	set_default_debug_nodes "$ost_node" "+ha"
+	do_facet ost1 "$LCTL dk > /dev/null"
+
+	# a file left by an earlier run makes setstripe fail
+	rm -f $MOUNT/$tfile
+	$LFS setstripe -c 1 -i 0 $MOUNT/$tfile || error "setstripe failed"
+	stack_trap "rm -f $MOUNT/$tfile"
+
+	# dmesg is cumulative and no test clears it, so an earlier run in the
+	# same boot leaves records behind. Count only what this run adds.
+	local park_base=$(do_facet ost1 \
+			  "dmesg | grep -c 'cfs_fail_timeout id 53a'")
+
+	# The park lasts 60s unless the test ends it sooner. Everything up to
+	# the re-key assertion has to stay inside that window, so start the
+	# clock before the park does.
+	local parked_at=$SECONDS
+
+	# park the one OST_WRITE below, opcode 4
+#define OBD_FAIL_PTLRPC_PAUSE_EXP_REFRESH 0x53a
+	do_facet ost1 "$LCTL set_param fail_val=4 fail_loc=0x8000053a" ||
+		error "unable to set fail_loc on ost1"
+
+	dd if=/dev/zero of=$MOUNT/$tfile bs=1M count=1 oflag=direct &
+	ddpid=$!
+	# clearing fail_loc releases the write, so let it drain before the
+	# mount point goes away
+	stack_trap "wait $ddpid || true"
+	stack_trap "do_facet ost1 $LCTL set_param fail_loc=0 fail_val=0"
+
+	# the console record of the park, which does not depend on the
+	# format of fail_loc
+	wait_update_facet_cond ost1 \
+		"dmesg | grep -c 'cfs_fail_timeout id 53a'" "-ge" \
+		"$((park_base + 1))" 60 ||
+		error "no write parked on ost1"
+
+	migrate_73_client "$net"
+
+	local cli_new=$($LCTL list_nids | grep "@${NETTYPE}\$" | head -1)
+
+	[[ -n $cli_new ]] || error "client has no ${NETTYPE} NID"
+
+	# A request parsed after the migration overtakes the parked write.
+	# lfs check osts returns only after ost1 answers. ost1 re-keys the
+	# export before it answers, so the test need not wait.
+	$LFS check osts || error "lfs check osts failed rc=$?"
+
+	export_rekey_logged ost1 "$cli_old" "$cli_new" ||
+		error "ost1 did not re-key the export on $cli_new"
+
+	(( SECONDS - parked_at < 60 )) ||
+		error "re-key took too long, the write may have resumed"
+
+	# release the parked write, which still carries $cli_old
+	do_facet ost1 "$LCTL set_param fail_loc=0" ||
+		error "unable to clear fail_loc on ost1"
+
+	wait $ddpid || error "write over migrated client primary failed"
+
+	local dk=$TMP/$TESTNAME-ost1.dk
+
+	do_facet ost1 "$LCTL dk" > $dk
+	grep -qF "stale request from $cli_old" $dk ||
+		error "ost1 did not reject the stale request from $cli_old"
+	! grep -qF "client primary migrated $cli_new -> $cli_old" $dk ||
+		error "stale request moved the export back to $cli_old"
+	! export_keyed_on_nid ost1 "$ost_param" "$cli_old" ||
+		error "ost1 export is keyed on $cli_old again"
+}
+run_test 73i "stale request does not undo an export re-key"
 
 # LU-15246
 test_74() {

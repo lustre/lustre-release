@@ -572,7 +572,7 @@ static bool import_p2pdma_capable(struct obd_import *imp,
 }
 
 /**
- * import_switch_connection() - Point an import and its DLM export at @conn.
+ * ptlrpc_import_switch_connection() - Point an import at a new connection.
  * @imp: Import to update.
  * @conn: Connection to install. The caller keeps its own reference.
  * @oic: Failover entry to make current. NULL keeps the current entry and
@@ -598,7 +598,7 @@ static bool import_p2pdma_capable(struct obd_import *imp,
  * Return: 0 on success, or -EINVAL if a forward import has no DLM export.
  *         On -EINVAL, the import uses @conn and the DLM export does not.
  */
-static int import_switch_connection(struct obd_import *imp,
+int ptlrpc_import_switch_connection(struct obd_import *imp,
 				    struct ptlrpc_connection *conn,
 				    struct obd_import_conn *oic)
 {
@@ -775,7 +775,7 @@ connect:
 	}
 
 	/* The new connection can be the same as the current one. */
-	rc = import_switch_connection(imp, imp_conn->oic_conn, imp_conn);
+	rc = ptlrpc_import_switch_connection(imp, imp_conn->oic_conn, imp_conn);
 	if (rc)
 		GOTO(out_unlock, rc);
 
@@ -797,7 +797,7 @@ out_unlock:
  * @imp: Import whose connection can use an old primary NID.
  *
  * On a change, the function installs a connection keyed on the current
- * primary NID. It uses import_switch_connection().
+ * primary NID. It uses ptlrpc_import_switch_connection().
  * ptl_send_rpc() calls it on every send, so the next send corrects a
  * reconnect that restores the old connection. The function skips the lookup
  * when LNetPrimaryGen() has not changed since the last check of the
@@ -806,6 +806,8 @@ out_unlock:
  * The lookup keys on the NID of the current connection. After discovery
  * prunes that NID from the peer, the lookup fails. The function then misses
  * the migration until the peer advertises the NID again.
+ * A request from the client also moves a reverse import, in
+ * ptlrpc_refresh_export_primary().
  *
  * Context: The caller must not hold imp->imp_lock. The function takes it
  *          around the swap. Can sleep in ptlrpc_connection_get_primary().
@@ -848,11 +850,11 @@ struct ptlrpc_connection *ptlrpc_refresh_import_primary(struct obd_import *imp)
 	spin_lock(&imp->imp_lock);
 	if (imp->imp_connection == old) {
 		/*
-		 * With a NULL oic, import_switch_connection()
+		 * With a NULL oic, ptlrpc_import_switch_connection()
 		 * also re-keys the current failover entry. A later reconnect
 		 * then selects @new, not the stale connection.
 		 */
-		rc = import_switch_connection(imp, new, NULL);
+		rc = ptlrpc_import_switch_connection(imp, new, NULL);
 		CDEBUG(D_HA,
 		       "%s: peer primary migrated %s -> %s; refreshed connection\n",
 		       imp->imp_obd->obd_name, libcfs_nidstr(&old->c_peer.nid),

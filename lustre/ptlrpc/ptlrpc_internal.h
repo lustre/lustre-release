@@ -26,6 +26,7 @@
 
 struct ldlm_namespace;
 struct obd_import;
+struct obd_import_conn;
 struct ldlm_res_id;
 struct ptlrpc_request_set;
 extern int test_req_buffer_pressure;
@@ -133,6 +134,9 @@ int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt,
 void ptlrpc_handle_failed_import(struct obd_import *imp);
 int ptlrpc_replay_next(struct obd_import *imp, int *inflight);
 struct ptlrpc_connection *ptlrpc_refresh_import_primary(struct obd_import *imp);
+int ptlrpc_import_switch_connection(struct obd_import *imp,
+				    struct ptlrpc_connection *conn,
+				    struct obd_import_conn *oic);
 
 int lustre_unpack_req_ptlrpc_body(struct ptlrpc_request *req, int offset);
 int lustre_unpack_rep_ptlrpc_body(struct ptlrpc_request *req, int offset);
