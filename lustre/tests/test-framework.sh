@@ -1182,6 +1182,7 @@ load_modules_local() {
 			load_module quota/lquota $LQUOTAOPTS
 		if [[ $(node_fstypes $HOSTNAME) == *zfs* ]]; then
 			load_module osd-zfs/osd_zfs
+			set_spl_panic
 		elif [[ $(node_fstypes $HOSTNAME) == *ldiskfs* ]]; then
 			load_module ../ldiskfs/ldiskfs
 			load_module osd-ldiskfs/osd_ldiskfs
@@ -1985,6 +1986,22 @@ zfs_local_fsname() {
 }
 
 #
+# Panic the node on SPL assertion failure, so ZFS bugs crash the
+# node and leave a dump.
+#
+set_spl_panic() {
+	local facet=$1
+	local param=/sys/module/spl/parameters/spl_panic_halt
+	local cmd="[[ ! -w $param ]] || echo 1 > $param"
+
+	if [[ -n "$facet" ]]; then
+		do_facet $facet "$cmd"
+	else
+		eval "$cmd"
+	fi
+}
+
+#
 # Create ZFS storage pool.
 #
 create_zpool() {
@@ -1996,7 +2013,8 @@ create_zpool() {
 
 	do_facet $facet "lsmod | grep zfs >&/dev/null || modprobe zfs;
 		$ZPOOL list -H $poolname >/dev/null 2>&1 ||
-		$ZPOOL create -f $opts $poolname $vdev"
+		$ZPOOL create -f $opts $poolname $vdev" || return $?
+	set_spl_panic $facet
 }
 
 #
@@ -2063,7 +2081,8 @@ import_zpool() {
 		opts+=" -d $(dirname $(facet_vdevice $facet))"
 		do_facet $facet "lsmod | grep zfs >&/dev/null || modprobe zfs;
 			$ZPOOL list -H $poolname >/dev/null 2>&1 ||
-			$ZPOOL import -f $opts $poolname"
+			$ZPOOL import -f $opts $poolname" || return $?
+		set_spl_panic $facet
 	fi
 }
 
