@@ -3653,7 +3653,7 @@ static int __lfsck_layout_repair_dangling(const struct lu_env *env,
 		lmm = lovea->lb_buf;
 		magic = le32_to_cpu(lmm->lmm_magic);
 		if (magic == LOV_MAGIC_COMP_V1 || magic == LOV_MAGIC_SEL) {
-			struct lov_comp_md_v1 *lcm = buf->lb_buf;
+			struct lov_comp_md_v1 *lcm = (struct lov_comp_md_v1 *)lmm;
 			struct lov_comp_md_entry_v1 *lcme;
 			__u16 count = le16_to_cpu(lcm->lcm_entry_count);
 			int i;
