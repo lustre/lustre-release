@@ -18,11 +18,10 @@ lsrctree := $(realpath $(src)/../../..)
 
 # Include the Lustre header paths
 ccflags-y += -include $(lsrctree)/config.h
-NOSTDINC_FLAGS += -I$(lsrctree)/lnet/include/uapi
 NOSTDINC_FLAGS += -I$(lsrctree)/lnet/include
-NOSTDINC_FLAGS += -I$(lsrctree)/lustre/include/uapi
 NOSTDINC_FLAGS += -I$(lsrctree)/lustre/include
 NOSTDINC_FLAGS += -I$(lsrctree)/include
+NOSTDINC_FLAGS += -I$(lsrctree)/include/uapi
 
 # Need to make sure that an external OFED source pool overrides
 # any in-kernel OFED sources
