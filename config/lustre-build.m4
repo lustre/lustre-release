@@ -391,7 +391,6 @@ AM_CONDITIONAL([USE_QUILT], [test x$use_quilt = xyes])
 AM_CONDITIONAL([RHEL], [test -f /etc/redhat-release -o -f /etc/openEuler-release])
 AM_CONDITIONAL([SUSE], [test -f /etc/SUSE-brand -o -f /etc/SuSE-release])
 AM_CONDITIONAL([UBUNTU], [test x$UBUNTU_KERNEL = xyes])
-AM_CONDITIONAL([HAVE_DEBUG_INFO_BTF_MODULES], [test "x$HAVE_DEBUG_INFO_BTF_MODULES" = "xyes"])
 
 LN_CONDITIONALS
 LC_CONDITIONALS

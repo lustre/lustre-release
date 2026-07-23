@@ -158,7 +158,4 @@ utils: lib lnet/utils lustre/utils
 lustre/tests: utils
 ldiskfs: $(SOURCE_SUBDIRS_TGT)
 modules: __modules $(LUSTRE_BUILT_IN_KO2IBLND_NT) $(LUSTRE_EXTERNAL_KO2IBLND_NT)
-ifeq ($(LUSTRE_EMBED_BTF),yes)
-	$(SHELL) config/embed-btf.sh
-endif
 __default: utils $(LUSTRE_MODULES_MT) $(SUBDIRS)
