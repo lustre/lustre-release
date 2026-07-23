@@ -8175,7 +8175,7 @@ static int lod_dir_layout_check(const struct lu_env *env,
 		struct lmv_user_mds_data *stripe_desc = lum->lum_objects + i;
 		struct dt_object *stripe_obj = lo->ldo_stripe[i];
 		__u32 lum_mds_idx, dt_mds_idx;
-		int type;
+		int type = LU_SEQ_RANGE_MDT;
 
 		lum_mds_idx = le32_to_cpu(stripe_desc->lum_mds);
 		rc = lod_fld_lookup(env, ld, lu_object_fid(&stripe_obj->do_lu),
