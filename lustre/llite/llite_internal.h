@@ -1550,7 +1550,8 @@ int ll_get_sb_uuid(struct inode *inode, void __user *arg);
 void ll_compute_rootsquash_state(struct ll_sb_info *sbi);
 ssize_t ll_copy_user_md(const struct lov_user_md __user *md,
 			struct lov_user_md **kbuf);
-void ll_open_cleanup(struct super_block *sb, struct req_capsule *pill);
+void ll_open_cleanup(struct super_block *sb, struct lookup_intent *it,
+		     struct ptlrpc_request *req);
 
 void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req);
 void ll_dir_finish_open(struct inode *inode, struct ptlrpc_request *req);

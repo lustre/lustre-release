@@ -3744,7 +3744,13 @@ void ll_umount_begin(struct super_block *sb)
 /**
  * ll_open_cleanup() - Cleanup the open handle that is cached on MDT-side.
  * @sb: super block for this file-system
- * @pill: pointer to the original open request message
+ * @it: intent for this open (required). It gates the cleanup, and has
+ *	DISP_OPEN_OPEN cleared once the close has been issued, so a repeated
+ *	cleanup of the same abandoned open is a no-op.
+ * @req: a reference on the open reply that the caller still owns, or NULL if
+ *	it has none. Only consulted when the intent no longer carries its own
+ *	reference, i.e. when the MDT granted the open and then failed the
+ *	request.
  *
  * For open case, the client side open handling thread may hit error
  * after the MDT grant the open. Under such case, the client should
@@ -3756,7 +3762,8 @@ void ll_umount_begin(struct super_block *sb)
  * subsequent threads that want to locate such object via FID.
  *
  */
-void ll_open_cleanup(struct super_block *sb, struct req_capsule *pill)
+void ll_open_cleanup(struct super_block *sb, struct lookup_intent *it,
+		     struct ptlrpc_request *req)
 {
 	struct mdt_body			*body;
 	struct md_op_data		*op_data;
@@ -3765,13 +3772,57 @@ void ll_open_cleanup(struct super_block *sb, struct req_capsule *pill)
 
 	ENTRY;
 
-	body = req_capsule_server_get(pill, &RMF_MDT_BODY);
+	/*
+	 * DISP_OPEN_OPEN says the MDT granted an open, so the reply carries a
+	 * handle that has to be released.  Which reference on that reply we may
+	 * use depends on how the open ended:
+	 *
+	 * - DISP_ENQ_OPEN_REF set: mdc_finish_intent_lock() took a reference
+	 *   for the intent and nobody has consumed the handle yet, so
+	 *   it->it_request is ours to work with.
+	 * - bit clear and the open itself failed (mdt_finish_open() installed
+	 *   the mfd and a later step, e.g. mdt_refetch_lovea(), returned an
+	 *   error): the bit was never set, since mdc_finish_intent_lock() only
+	 *   sets it when it_open_error(DISP_OPEN_OPEN) is 0. The handle is
+	 *   still ours to release, but only the caller has a reference on the
+	 *   reply -- the MDT zeroed the transno, so nothing retained it -- and
+	 *   only the caller can tell us so.
+	 * - bit clear and the open succeeded: ll_file_open() or
+	 *   ll_release_openhandle() took the handle over and cleared the bit;
+	 *   an och owns it now (and with it rq_early_free_repbuf, so rq_repmsg
+	 *   may already be gone), and the request may not even be alive. Leave
+	 *   it alone.
+	 */
+	if (!it_disposition(it, DISP_OPEN_OPEN))
+		RETURN_EXIT;
+
+	if (it_disposition(it, DISP_ENQ_OPEN_REF))
+		req = it->it_request;
+	else if (!req || !it_open_error(DISP_OPEN_OPEN, it))
+		RETURN_EXIT;
+
+	/*
+	 * Stop replaying this open, the same way and for the same reason
+	 * mdc_close() does it for a normal close: we are abandoning the
+	 * handle, so replaying the open would only recreate a handle nobody
+	 * would ever close.  It has to happen before the close goes out,
+	 * because after_reply() for that close runs ptlrpc_free_committed()
+	 * on this import; if the open has committed by then and rq_replay is
+	 * still set, that pass moves the request to imp_committed_list, which
+	 * is only rescanned once the import generation changes, and the reply
+	 * buffer (sized to max_mds_easize) stays pinned until reconnect.
+	 */
+	spin_lock(&req->rq_lock);
+	req->rq_replay = 0;
+	spin_unlock(&req->rq_lock);
+
+	body = req_capsule_server_get(&req->rq_pill, &RMF_MDT_BODY);
 	OBD_ALLOC_PTR(op_data);
 	if (op_data == NULL) {
 		CWARN("%s: cannot allocate op_data to release open handle for "
 		      DFID"\n", ll_s2sbi(sb)->ll_fsname, PFID(&body->mbo_fid1));
 
-		RETURN_EXIT;
+		GOTO(out, 0);
 	}
 
 	op_data->op_fid1 = body->mbo_fid1;
@@ -3780,6 +3831,16 @@ void ll_open_cleanup(struct super_block *sb, struct req_capsule *pill)
 	md_close(exp, op_data, NULL, &close_req);
 	ptlrpc_req_put(close_req);
 	ll_finish_md_op_data(op_data);
+
+	it_clear_disposition(it, DISP_OPEN_OPEN);
+out:
+	/*
+	 * Drop it from the replay list right away if the open has already
+	 * committed, as mdc_free_open() does after a normal close.  This also
+	 * covers an open that some earlier ptlrpc_free_committed() pass had
+	 * already moved to imp_committed_list.
+	 */
+	ptlrpc_request_committed(req, 0);
 
 	EXIT;
 }
@@ -3934,7 +3995,8 @@ out:
 
 	if (rc != 0 && it != NULL && it->it_op & IT_OPEN) {
 		ll_intent_drop_lock(it);
-		ll_open_cleanup(sb != NULL ? sb : (*inode)->i_sb, pill);
+		ll_open_cleanup(sb != NULL ? sb : (*inode)->i_sb, it,
+				pill->rc_req);
 	}
 
 	return rc;

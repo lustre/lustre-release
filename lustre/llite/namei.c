@@ -825,7 +825,7 @@ static int ll_lookup_it_finish(struct ptlrpc_request *request,
 out:
 	if (rc != 0 && it->it_op & IT_OPEN) {
 		ll_intent_drop_lock(it);
-		ll_open_cleanup((*de)->d_sb, &request->rq_pill);
+		ll_open_cleanup((*de)->d_sb, it, request);
 	}
 
 	return rc;
@@ -1551,6 +1551,21 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 	}
 
 out_release:
+	/*
+	 * Both the error exits and the two finish_no_open() branches (rc == 1,
+	 * the VFS opens the dentry itself and calls ->open again) land here
+	 * with the open handle the MDT granted for this intent unused, so
+	 * release it.  Successful ll_finish_open() jumps to out_free instead.
+	 * Drop the intent lock first: the close waits for a mod RPC slot, and
+	 * holding the lock across that wait can get us evicted (LU-13101).
+	 */
+	ll_intent_drop_lock(it);
+	/*
+	 * No request of our own here: ll_lookup_it() has already dropped its
+	 * reference on the open reply, so this can only clean up an open whose
+	 * reference the intent still carries.
+	 */
+	ll_open_cleanup(dir->i_sb, it, NULL);
 	ll_intent_release(it);
 out_free:
 	OBD_FREE(it, sizeof(*it));
