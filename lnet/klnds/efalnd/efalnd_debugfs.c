@@ -17,15 +17,14 @@
 
 #include <linux/debugfs.h>
 #include <linux/inet.h>
-
-#include <lprocfs_status.h>
+#include <linux/seq_file.h>
 
 #include "kcompat.h"
 #include "efalnd.h"
 
 struct dentry *kefalnd_debug_dir;
 
-static int gidmap_seq_show(struct seq_file *s, void *unused)
+static int gidmap_show(struct seq_file *s, void *unused)
 {
 	struct kefa_peer_ni *peer_ni;
 	char ip_str[INET_ADDRSTRLEN];
@@ -71,7 +70,7 @@ static int gidmap_seq_show(struct seq_file *s, void *unused)
 
 	return 0;
 }
-LDEBUGFS_SEQ_FOPS_RO(gidmap);
+DEFINE_SHOW_ATTRIBUTE(gidmap);
 
 void kefalnd_debugfs_init(void)
 {
