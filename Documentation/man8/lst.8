@@ -1,12 +1,16 @@
 .\" SPDX-License-Identifier: GPL-2.0
 .
-.TH lst 8 "2017 Jan 12" Lustre "configuration utilities"
+.TH LST 8 2026-08-23 Lustre "Lustre Configuration Utilities"
 .SH NAME
-lst \- Start the Lustre LNET Self-test
+lst \- run the Lustre LNET self-test
 .SH SYNOPSIS
-.B "lst"
-.br
-.B "lst --list-commands"
+.SY lst
+.SY lst
+.B --list-commands
+.SY lst
+.I COMMAND
+.RI [ ARGUMENT "] ..."
+.YS
 .SH DESCRIPTION
 LNET self-test helps site administrators confirm that Lustre
 Networking (LNET) has been properly installed and configured.
@@ -29,11 +33,300 @@ composed of a number of individual point-to-point tests running in parallel.
 These individual point-to-point tests are instantiated according to the
 test type, source group, target group and distribution specified when the
 test is added to the test batch.
-.LP
 .SH OPTIONS
 .TP
-.B --list-commands
-Output a list of the commands supported by the lst utility
+.BR --list-commands ", " list-commands
+Output a list of the commands supported by the
+.B lst
+utility and exit.
+.TP
+.BR --help ", " help
+Print a short usage summary.
+.B "lst help"
+.I COMMAND
+prints the usage string of a single command.
+.TP
+.BR --version ", " version
+Output the build version of the utility itself.
+.TP
+.BR --ignore_errors ", " ignore_errors
+Ignore errors during script processing.  The flag is only consulted for
+commands read from standard input by a single
+.B lst
+process, as in
+.BR "lst < script" ,
+so it belongs on the first line of that script rather than on the command
+line.  It has no effect on a shell script that runs one
+.B lst
+per line, such as the one below.
+.SH COMMANDS
+Given a command,
+.B lst
+runs that single command against the current session and exits.  Invoked with
+no arguments at all it reads commands from standard input instead, presenting
+an interactive prompt when standard input is a terminal.  Run
+.B lst --list-commands
+for the full list of commands and
+.B lst help
+.I COMMAND
+for the full usage string of one of them.  The synopses below show the
+principal options only; the most commonly used commands are:
+.TP
+.BI "new_session [--timeout " SECONDS "] [--force] [" NAME ]
+Create a new session.  A node may belong to only one session at a time;
+.B --force
+takes the nodes away from whatever session they are already in, running or
+not, and
+.B --timeout
+sets how long the session survives without an
+.B lst
+command being run against it (default 300 seconds).
+.I NAME
+defaults to
+.IR user @ host .
+.TP
+.B end_session
+Stop all running batches and destroy the session, releasing every node.
+.TP
+.B show_session
+Show the name, key and owning node of the current session.
+.TP
+.BI "add_group " NAME " " NIDS ...
+Create a named group from a list of NIDs (for example
+.BR 192.168.1.[1-253/2]@o2ib ).
+Groups let a set of nodes be referenced by a single name.
+.TP
+.BI "list_group [--active] [--busy] [--down] [--unknown] [--all] [" NAME "] ..."
+List the defined groups, or the members and status of the named groups.
+.TP
+.BI "del_group " NAME
+Remove a group.
+.TP
+.BI "update_group {--refresh | --clean " STATE " | --remove " NIDS "} " NAME
+Update an existing group.
+.B --refresh
+re-queries the state of its nodes,
+.BI --clean " STATE"
+drops the nodes that are in one state
+.RB ( active ", " busy ", " down ", " unknown " or " invalid ),
+and
+.BI --remove " NIDS"
+removes the listed nodes.  Exactly one of the three operations must be given.
+There is no operation to add nodes to an existing group.
+.TP
+.BI "add_batch " NAME
+Create an empty, named test batch.  A batch is a collection of tests that
+are started, stopped and reported on together.
+.TP
+.BI "add_test [--batch " NAME "] --from " GROUP " --to " GROUP " \
+[--concurrency " N "] [--distribute " SRC : DST "] [--loop " N "] " TEST " ..."
+Add a test to a batch.  See
+.B TEST PARAMETERS
+below.
+.TP
+.BI "run [" NAME ]
+Start running the tests in a batch (default
+.BR batch ).
+.TP
+.BI "stop [--force] [" NAME ]
+Stop a running batch (default
+.BR batch ).
+.TP
+.BI "list_batch [" NAME "]"
+List batches, or the tests and per-node state of one batch.
+.TP
+.BI "query [" NAME ]
+Query the run state of the tests in a batch (default
+.BR batch ).
+.TP
+.BI "stat [--rpc] [--mbs] [--delay " SECONDS "] [--count " N "] " NAME " ..."
+Print live LNet send and receive rates and bandwidth for the named groups,
+or for a list of NIDs, every
+.B --delay
+seconds (default 5) until interrupted or until
+.B --count
+samples have been printed.
+.B --mbs
+reports bandwidth in MB/s instead of MiB/s.  Only the LNet counters are
+implemented, so
+.B --rpc
+prints nothing; error counters come from
+.B show_error
+below.
+.TP
+.BI "show_error " NAME " ..."
+Show the accumulated error counters for the named groups, or for a list of
+NIDs.
+.TP
+.BI "ping {--session | --group " NAME " | --batch " NAME " | --nodes " NIDS "}"
+Probe the selected nodes and report whether they are reachable and which
+session they belong to.  The nodes are always named by one of the selector
+options above;
+.B ping
+takes no positional NIDs, and it probes the nodes of the current session
+rather than performing a low-level LNET ping.
+.SH TEST PARAMETERS
+The
+.B add_test
+command takes a set of options that select the nodes and shape of the test,
+followed by the test type and its type-specific parameters.
+.SS add_test options
+.TP
+.BI "--batch " NAME
+Batch to add the test to (defaults to the batch named
+.BR batch ).
+.TP
+.BI "--from " GROUP
+Source group: the nodes that initiate the test (the clients).
+.TP
+.BI "--to " GROUP
+Target group: the nodes that service the test (the servers).
+.TP
+.BI "--concurrency " N
+Number of concurrent RPCs each source node keeps in flight to each of its
+target nodes (default 1).  A source node paired with several targets by
+.B --distribute
+therefore has that many times
+.I N
+RPCs outstanding.
+.TP
+.BI "--distribute " SRC : DST
+Ratio that maps source nodes to target nodes, controlling the point-to-point
+pairing between the two groups (default 1:1).
+.TP
+.BI "--loop " N
+Number of iterations to run; a negative value (the default) loops until the
+batch is stopped.
+.SS Test type: ping
+.B ping
+takes no further parameters and drives small, payload-free RPCs between the
+source and target groups.
+.B lst stat
+reports the resulting RPC rate; the individual round-trip times are only
+written to the kernel debug log under
+.BR D_NET .
+.SS Test type: brw
+.B brw
+(bulk read/write) moves bulk payloads to measure throughput and, optionally, to
+verify data integrity.  Its parameters follow the word
+.B brw
+as bare keywords such as
+.B read
+or as
+.IR keyword = value
+tokens:
+.TP
+.BR read | write " (or " r | w )
+Direction of the bulk transfer.  With
+.B read
+the target group (server) sends and the source group (client) receives; with
+.B write
+the client sends and the server receives.  Default is
+.BR read .
+.TP
+.BI "size=" BYTES
+Size of each bulk transfer; the short form
+.B s=
+is also accepted.  A
+.B K
+or
+.B M
+suffix multiplies by 1024 or 1024*1024.  The maximum is one LNET MTU
+(1 MiB) and the default is 4096.  The size must be a multiple of 8 bytes;
+this is not checked, and an unaligned one asserts on the source node while it
+fills the bulk, before any request is sent.
+.TP
+.BI "off=" BYTES
+Offset within the client-side bulk buffer, as a multiple of 8 bytes
+(default 0).  The server side always uses offset 0; the request carries no
+offset field.  A non-zero offset is only safe when it fits in the
+unused tail of the last page of the transfer, since the bulk descriptor is
+sized from
+.B size=
+alone: with a
+.B size=
+that is a whole number of pages any non-zero offset overruns it.
+.TP
+.BR check=simple | full | discard " (or " c=... )
+Data-integrity checking mode for the bulk payload.  If no
+.B check=
+parameter is given the payload is neither filled nor verified and only
+throughput is measured; there is no
+.B check=none
+value to spell that case explicitly, and giving one is an error.
+.RS
+.TP
+.B simple
+Fill and verify a magic pattern in the first and last 8 bytes of each page.
+Catches gross corruption cheaply.
+.TP
+.B full
+Fill and verify the magic pattern across every 8 bytes of the payload.  Most
+thorough, but the byte-by-byte fill and check cost CPU and lower the achievable
+bandwidth.
+.TP
+.B discard
+Peak-throughput measurement mode.  The node that
+.I receives
+the bulk data drops the incoming payload as it arrives \(em socklnd reads the
+socket with
+.B MSG_TRUNC
+instead of copying the bytes into the destination pages \(em which removes the
+receive-side memory-copy overhead that otherwise caps large-message bandwidth.
+.IP
+Because the payload is never delivered, this mode performs
+.I no
+data verification: it is effectively an unchecked test with the receive copy
+skipped as well, so use it only to measure raw bandwidth, never to validate
+data integrity.
+.IP
+The discard takes effect only on the side that receives the bulk, i.e. the
+.I sink:
+for
+.B brw read
+that is the client (the
+.B --from
+group) and for
+.B brw write
+it is the server (the
+.B --to
+group).  It is currently honored only by the socket LND, so the receiving
+side must communicate over a socklnd network
+.RB ( @tcp ", " @tcp1 ", ...);"
+on other LNDs (for example o2iblnd or kfilnd) the parameter is
+accepted but silently has no effect and the test behaves like an ordinary
+unchecked bulk test.
+.RE
+.TP
+.BR skip_rx_copy | skip-rx-copy
+Select the discard mode above.  These are bulk parameters in their own right
+and not
+.B check=
+values, so
+.B check=skip_rx_copy
+is rejected.  Combining either of them with a
+.B check=
+mode other than
+.B discard
+is an error.
+.SH ENVIRONMENT
+.TP
+.B LST_SESSION
+The session key.  It must be set (normally to the shell PID,
+.BR "export LST_SESSION=$$" )
+before any command is issued; commands that need a session refuse to run
+without it.
+.TP
+.B LST_FEATURES
+Hexadecimal mask of the optional session features to enable, 0x1 being
+variable bulk length.  Defaults to all supported features; lower it when
+older test nodes reject the session.  A session without variable bulk length
+falls back to the original bulk request, which carries no offset and only a
+page count, so
+.B off=
+is ignored and
+.B size=
+is rounded up to a whole number of pages.
 .SH MODULES
 To run LNET self-test, load these modules: libcfs, lnet, lnet_selftest
 and any one of the klnds (i.e, ksocklnd, ko2iblnd...).
@@ -67,18 +360,41 @@ lst add_group servers 192.168.10.[8,10,12-16]@tcp
 lst add_group readers 192.168.1.[1-253/2]@o2ib
 lst add_group writers 192.168.1.[2-254/2]@o2ib
 lst add_batch bulk_rw
-lst add_test --batch bulk_rw --from readers --to servers \
+lst add_test --batch bulk_rw --from readers --to servers \e
     brw read check=simple size=1M
-lst add_test --batch bulk_rw --from writers --to servers \
+lst add_test --batch bulk_rw --from writers --to servers \e
     brw write check=full size=4K
-# start running
+# Measure peak write bandwidth with no receive-side copy or checking.
+# The sink here is the "servers" group, which is on @tcp, so the socklnd
+# discard actually takes effect (it would be a no-op on the @o2ib readers).
+# Use a separate batch so this test does not contend with the two above.
+lst add_batch bulk_discard
+lst add_test --batch bulk_discard --from writers --to servers \e
+    brw write check=discard size=1M
+# run the checked tests and display server stats for 30 seconds
 lst run bulk_rw
-# display server stats for 30 seconds
 lst stat servers & sleep 30; kill $!
+lst stop bulk_rw
+# then measure the discard bandwidth on its own
+lst run bulk_discard
+lst stat servers & sleep 30; kill $!
+lst stop bulk_discard
 # tear down
 lst end_session
 .fi
+.SH AVAILABILITY
+.B lst
+is part of the
+.BR lustre (7)
+filesystem package since release 1.6.1.
+.\" Added in commit 1.6.0.1-93-g776615e682
+The
+.B check=discard
+bulk test mode was added in release 2.18.0.
+.\" Added in commit v2_17_57-39-g64a2e0110a
 .SH SEE ALSO
-This manual page was extracted from Introduction to LNET Self-Test,
-section 19.4.1 of the Lustre Operations Manual.  For more detailed
-information, please refer to that document.
+.BR lnet (7),
+.BR lustre (7),
+.BR lctl (8),
+.BR lnetctl (8),
+.BR routerstat (8)
