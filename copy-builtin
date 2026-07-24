@@ -286,9 +286,10 @@ function cbi_check_kernel_dir() {
 
 #
 # TODO: Currently, we must run a configure before doing copy-builtin. To
-# avoid doing this every build, we support a cached config.h in the kernel
-# tree: if one is present at the path it is reused, otherwise we fall back
-# to the config.h produced by configure. Either way, log which one we use.
+# avoid doing this every build, we support a cached lustre_config.h stored
+# in the Lustre tree: if one is present it is reused, otherwise we fall
+# back to the config.h produced by configure. Either way, log which one
+# we use.
 #
 function cbi_copy_builtin() {
 	[[ "$#" -eq 1 ]] || cbi_usage
@@ -296,22 +297,18 @@ function cbi_copy_builtin() {
 
 	KERNEL_DIR="$1"
 
-	local cached_config="$KERNEL_DIR/lustre_config.h"
-	if [[ -e "$cached_config" ]]; then
-		echo "$0: using cached config.h at $cached_config" >&2
-		CBI_CACHED_CONFIG=$(mktemp)
-		cp "$cached_config" "$CBI_CACHED_CONFIG"
+	if [[ -e 'lustre_config.h' ]]; then
+		echo "$0: using cached lustre_config.h from the Lustre tree" >&2
+		CBI_CACHED_CONFIG="$PWD/lustre_config.h"
 	elif [[ -e 'config.h' ]]; then
 		echo "$0: using config.h from configure" >&2
 	else
-		echo "$0: no cached config.h at $cached_config and no config.h from configure;" >&2
+		echo "$0: no cached lustre_config.h and no config.h from configure;" >&2
 		echo "$0: run configure, or you're not in the Lustre source directory." >&2
 		exit 1
 	fi
 
 	copy_to_tree
-
-	rm -f "${CBI_CACHED_CONFIG:-}"
 
 	echo "$0: done. now you can build the kernel with Lustre support." >&2
 }
@@ -334,7 +331,7 @@ Usage: ${0##*/} <linux source tree>
 Port Lustre to the native Linux build system. With no command, copy the
 LNet and Lustre sources into the given kernel tree and hook them into its
 Kconfig and Makefiles. Run configure in the Lustre tree first, or leave a
-previously generated lustre_config.h at the top of the kernel tree.
+previously generated lustre_config.h at the top of the Lustre tree.
 
 Commands:
     clean         Remove everything copy-builtin added to the kernel tree.
