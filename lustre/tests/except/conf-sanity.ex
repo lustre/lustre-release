@@ -4,3 +4,4 @@
 #
 # facet op need_version             jira     space_separated_subtests
 client  >  v2_15_63-53-g1a6ef725c2  LU-16938 81
+client  >= v2_15_65-31-g74a5b9efaa  LU-18348 32b 32c
