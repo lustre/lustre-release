@@ -15,8 +15,8 @@
 
 #define DEBUG_SUBSYSTEM S_LND
 #include "gnilnd.h"
+#include <linux/proc_fs.h>
 #include <linux/seq_file.h>
-#include <lprocfs_status.h>
 
 #define GNILND_PROC_STATS	"stats"
 #define GNILND_PROC_MDD		"mdd"
