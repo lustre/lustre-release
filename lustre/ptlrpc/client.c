@@ -279,10 +279,23 @@ void __ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
 	LASSERT(len > 0);
 	LASSERT(pageoffset + len <= PAGE_SIZE);
 
+	/*
+	 * Each kiov adds at least PTLRPC_BULK_INTEROP_PAGE_SIZE to bd_iop_len,
+	 * so an MD fills to LNET_MTU at or before its LNET_MAX_IOV'th kiov and
+	 * the per-MD iov cap needs no runtime check. This holds only while an
+	 * MTU worth of interop pages fits the cap.
+	 */
+	BUILD_BUG_ON(LNET_MTU / PTLRPC_BULK_INTEROP_PAGE_SIZE > LNET_MAX_IOV);
 restart:
-	if (((desc->bd_iov_count % LNET_MAX_IOV) == 0) ||
-	    ((desc->bd_iop_len + PTLRPC_BULK_INTEROP_PAGE_SIZE) > LNET_MTU)) {
-		/* no free for align chunk */
+	/*
+	 * Open a new MD when the current one would exceed LNET_MTU. The
+	 * boundary is keyed on bd_iop_len, the 4KiB-virtual on-wire byte
+	 * count, because sender and receiver run this packer on page lists
+	 * that differ by page size and only bd_iop_len is identical on both;
+	 * both ends must therefore agree on where each MD begins and ends.
+	 */
+	if (desc->bd_md_count == 0 ||
+	    (desc->bd_iop_len + PTLRPC_BULK_INTEROP_PAGE_SIZE) > LNET_MTU) {
 		desc->bd_mds_off[desc->bd_md_count] = desc->bd_iov_count;
 		desc->bd_md_count++;
 		desc->bd_iop_len = 0;

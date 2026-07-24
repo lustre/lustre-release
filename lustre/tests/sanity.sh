@@ -16171,6 +16171,104 @@ test_119r() {
 }
 run_test 119r "Test error handling in unaligned DIO user copy"
 
+test_119s() {
+	# A full-size bulk write whose object offset is not aligned to the
+	# client page size is carved into a different number of MDs by a
+	# large-page client and a 4KiB-page server. The server's bulk GET is
+	# then dropped by the client as "too big" and the write hangs. This
+	# only reproduces with a client page larger than the server's. A
+	# large-page server hits a separate, pre-existing bulk-descriptor
+	# sizing gap, so the test needs a 4KiB-page OST.
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	unaligned_dio_or_skip
+	(( PAGE_SIZE > 4096 )) ||
+		skip "need client page size larger than the server's"
+	(( $(do_facet ost1 getconf PAGE_SIZE) == 4096 )) ||
+		skip "server-side large-page bulk not handled; need 4KiB OST"
+	(( OST1_VERSION >= $(version_code 2.9.52) )) ||
+		skip "need OST brw_size=16M support"
+
+	local tf=$DIR/$tdir/$tfile
+	local goal=$((16 * 1024 * 1024))	# one full max-size RPC
+	local bsize=$((PAGE_SIZE / 2))		# 4KiB-aligned, not page-aligned
+	local blocks=$((goal / bsize))		# single write() of $goal bytes
+	local want=$((goal + bsize))		# offset is one $bsize block in
+	local pages=$((goal / PAGE_SIZE))
+	local mark="ncp-bulk-md-$RANDOM-$$"
+	local brw_size="obdfilter.*.brw_size"
+	local osts=$(osts_nodes)
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local orig_mb=$(do_facet ost1 $LCTL get_param -n $brw_size | head -n1)
+	local saved mp pid reproduced=0 i
+
+	# The client caps its RPC size at what the OST advertises, so the OST
+	# must serve 16MiB bulk before the client can build a 16MiB RPC. Raise
+	# brw_size on every OST and remount so the larger size is renegotiated.
+	if (( orig_mb < 16 )); then
+		save_lustre_params $(get_facets OST) "$brw_size" > $p
+		stack_trap "restore_lustre_params < $p; \
+			    remount_client $MOUNT || true; rm -f $p"
+		do_nodes $osts $LCTL set_param -n $brw_size=16M ||
+			error "set 16MB brw_size failed"
+		remount_client $MOUNT || error "remount_client failed"
+	fi
+
+	# Force the write into one 16MiB RPC so the bulk reaches the page count
+	# where the client and server MD segmentation diverge. The client can
+	# only be raised to 16MiB once the OST advertises it (done above).
+	saved=$($LCTL get_param -n osc.*.max_pages_per_rpc | head -n1)
+	stack_trap "$LCTL set_param osc.*.max_pages_per_rpc=$saved"
+	$LCTL set_param osc.*.max_pages_per_rpc=16M ||
+		skip "cannot set max_pages_per_rpc=16M"
+	for mp in $($LCTL get_param -n osc.*.max_pages_per_rpc); do
+		(( mp == pages )) || skip "RPC size capped below 16MiB"
+	done
+
+	test_mkdir -p $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $tf || error "setstripe failed"
+	stack_trap "rm -f $tf"
+
+	$LCTL mark "$mark" || error "$LCTL mark failed"
+
+	# On a buggy build the write hangs in D state and never returns, so poll
+	# the console for the oversize-match drop rather than block on it.
+	$DIRECTIO write $tf 1 $blocks $bsize &> /dev/null &
+	pid=$!
+	for ((i = 0; i < 60; i++)); do
+		if dmesg | sed -n "/$mark/,\$p" |
+		   grep -q "lnet_try_match_md.*too big"; then
+			reproduced=1
+			break
+		fi
+		kill -0 $pid 2>/dev/null || break
+		sleep 1
+	done
+
+	if (( reproduced )); then
+		# do not leave a wedged OSC behind for the rest of the suite
+		$LCTL set_param osc.*OST0000*.active=0 2>/dev/null
+		$LCTL set_param osc.*OST0000*.active=1 2>/dev/null
+		kill -9 $pid 2>/dev/null
+		error "bulk MD mismatch: server GET dropped as too big"
+	fi
+
+	# The drop never appeared. If the write is still running it is wedged
+	# for another reason; kill it rather than block the suite on a D-state
+	# process with no timeout.
+	if kill -0 $pid 2>/dev/null; then
+		$LCTL set_param osc.*OST0000*.active=0 2>/dev/null
+		$LCTL set_param osc.*OST0000*.active=1 2>/dev/null
+		kill -9 $pid 2>/dev/null
+		error "DIO write still running after 60s, no oversize drop"
+	fi
+
+	wait $pid || error "unaligned full-size DIO write failed"
+
+	local sz=$(stat -c %s $tf)
+	(( sz == want )) || error "file size $sz != $want"
+}
+run_test 119s "full-size unaligned DIO packs matching bulk MDs"
+
 test_120a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
@@ -16202,8 +16300,10 @@ test_120a() {
 	       awk '/ldlm_cancel/ {print $2}')
 	blk2=$($LCTL get_param -n ldlm.services.ldlm_cbd.stats |
 	       awk '/ldlm_bl_callback/ {print $2}')
-	(( $can1 == $can2 )) || error "$((can2-can1)) cancel RPC occured."
-	(( $blk1 == $blk2 )) || error "$((blk2-blk1)) blocking RPC occured."
+	(( ${can1:-0} == ${can2:-0} )) ||
+		error "$((can2-can1)) cancel RPC occured."
+	(( ${blk1:-0} == ${blk2:-0} )) ||
+		error "$((blk2-blk1)) blocking RPC occured."
 }
 run_test 120a "Early Lock Cancel: mkdir test"
 
@@ -16229,8 +16329,10 @@ test_120b() {
 	       awk '/ldlm_cancel/ {print $2}')
 	blk2=$($LCTL get_param -n ldlm.services.ldlm_cbd.stats |
 	       awk '/ldlm_bl_callback/ {print $2}')
-	(( $can1 == $can2 )) || error "$((can2-can1)) cancel RPC occured."
-	(( $blk1 == $blk2 )) || error "$((blk2-blk1)) blocking RPC occured."
+	(( ${can1:-0} == ${can2:-0} )) ||
+		error "$((can2-can1)) cancel RPC occured."
+	(( ${blk1:-0} == ${blk2:-0} )) ||
+		error "$((blk2-blk1)) blocking RPC occured."
 }
 run_test 120b "Early Lock Cancel: create test"
 
@@ -16259,8 +16361,10 @@ test_120c() {
 	       awk '/ldlm_cancel/ {print $2}')
 	blk2=$($LCTL get_param -n ldlm.services.ldlm_cbd.stats |
 	       awk '/ldlm_bl_callback/ {print $2}')
-	(( $can1 == $can2 )) || error "$((can2-can1)) cancel RPC occured."
-	(( $blk1 == $blk2 )) || error "$((blk2-blk1)) blocking RPC occured."
+	(( ${can1:-0} == ${can2:-0} )) ||
+		error "$((can2-can1)) cancel RPC occured."
+	(( ${blk1:-0} == ${blk2:-0} )) ||
+		error "$((blk2-blk1)) blocking RPC occured."
 }
 run_test 120c "Early Lock Cancel: link test"
 
@@ -16287,8 +16391,10 @@ test_120d() {
 	       awk '/ldlm_cancel/ {print $2}')
 	blk2=$($LCTL get_param -n ldlm.services.ldlm_cbd.stats |
 	       awk '/ldlm_bl_callback/ {print $2}')
-	(( $can1 == $can2 )) || error "$((can2-can1)) cancel RPC occured."
-	(( $blk1 == $blk2 )) || error "$((blk2-blk1)) blocking RPC occured."
+	(( ${can1:-0} == ${can2:-0} )) ||
+		error "$((can2-can1)) cancel RPC occured."
+	(( ${blk1:-0} == ${blk2:-0} )) ||
+		error "$((blk2-blk1)) blocking RPC occured."
 }
 run_test 120d "Early Lock Cancel: setattr test"
 
@@ -16327,8 +16433,10 @@ test_120e() {
 	       awk '/ldlm_cancel/ {print $2}')
 	blk2=$($LCTL get_param -n ldlm.services.ldlm_cbd.stats |
 	       awk '/ldlm_bl_callback/ {print $2}')
-	(( $can1 == $can2 )) || error "$((can2 - can1)) cancel RPC occured"
-	(( $blk1 == $blk2 )) || error "$((blk2 - blk1)) blocking RPC occured"
+	(( ${can1:-0} == ${can2:-0} )) ||
+		error "$((can2 - can1)) cancel RPC occured"
+	(( ${blk1:-0} == ${blk2:-0} )) ||
+		error "$((blk2 - blk1)) blocking RPC occured"
 }
 run_test 120e "Early Lock Cancel: unlink test"
 
@@ -16366,8 +16474,10 @@ test_120f() {
 	       awk '/ldlm_cancel/ {print $2}')
 	blk2=$($LCTL get_param -n ldlm.services.ldlm_cbd.stats |
 	       awk '/ldlm_bl_callback/ {print $2}')
-	(( $can1 == $can2 )) || error "$((can2-can1)) cancel RPC occured."
-	(( $blk1 == $blk2 )) || error "$((blk2-blk1)) blocking RPC occured."
+	(( ${can1:-0} == ${can2:-0} )) ||
+		error "$((can2-can1)) cancel RPC occured."
+	(( ${blk1:-0} == ${blk2:-0} )) ||
+		error "$((blk2-blk1)) blocking RPC occured."
 }
 run_test 120f "Early Lock Cancel: rename test"
 
