@@ -13,7 +13,15 @@
 # the autoMakefile.
 #
 
+#
+# Module directories that can be built standalone with 'make <dir>' (see the
+# generic $(MODULE_SUBDIRS) target below).
+#
+
+MODULE_SUBDIRS := lustre/osd-zfs
+
 ALWAYS_TARGETS := help checkpatch utils modules \
+	$(MODULE_SUBDIRS) \
 	TAGS tags etags ctags cscope mkid \
 	checkstack checkstack-update checkstack-clean
 
@@ -133,6 +141,21 @@ lnet/klnds/o2iblnd: __modules
 lnet/klnds/in-kernel-o2iblnd: __modules
 	cp -vf lnet/klnds/in-kernel-o2iblnd/ko2iblnd.ko \
 		lnet/klnds/in-kernel-o2iblnd/in-kernel-ko2iblnd.ko
+
+#
+# Generic target to build a single module directory standalone via kbuild,
+# e.g. 'make lustre/osd-zfs' against a kernel that already carries the rest
+# of Lustre in-tree. Symbols resolve from the kernel build's Module.symvers
+# plus any configured extra symvers (e.g. an out-of-tree ZFS build). Each
+# listed directory's Makefile must self-supply the Lustre include flags in
+# LUSTRE_OOT_BUILD mode (see lnet/klnds/o2iblnd).
+#
+
+.PHONY: $(MODULE_SUBDIRS)
+$(MODULE_SUBDIRS):
+	$(MAKE) KBUILD_EXTRA_SYMBOLS="$(LUSTRE_EXTRA_SYMBOLS)" \
+	CC="$(LUSTRE_CC)" -C $(LUSTRE_LINUX_OBJ) \
+	M=$(PWD)/$@
 
 #
 # This is the entry point to the Linux build system. The top-level Kbuild file

@@ -12,6 +12,19 @@ osd_zfs-objs += osd_scrub.o
 ifdef LUSTRE_OOT_BUILD
 zfs_incdir := $(ZFS)/include
 spl_incdir := $(SPL)/include
+
+# Supply the flags the top-level Kbuild would provide, so this directory can
+# also be built standalone (M=lustre/osd-zfs, see MODULE_SUBDIRS in the
+# top-level Makefile) against a kernel carrying the rest of Lustre in-tree.
+# Duplicates are harmless when kbuild descends from the top-level Kbuild.
+lsrctree := $(realpath $(src)/../..)
+ccflags-y += -include $(lsrctree)/config.h
+NOSTDINC_FLAGS += -I$(lsrctree)/lnet/include/uapi
+NOSTDINC_FLAGS += -I$(lsrctree)/lnet/include
+NOSTDINC_FLAGS += -I$(lsrctree)/lustre/include/uapi
+NOSTDINC_FLAGS += -I$(lsrctree)/lustre/include
+NOSTDINC_FLAGS += -I$(lsrctree)/include/uapi
+NOSTDINC_FLAGS += -I$(lsrctree)/include
 else
 ZFS     := $(srctree)/include/zfs
 ZFS_OBJ := $(srctree)/include/zfs
