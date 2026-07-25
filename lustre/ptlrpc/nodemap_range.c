@@ -459,6 +459,33 @@ int ban_range_insert(struct nodemap_config *config, struct lu_nid_range *range,
 }
 
 /**
+ * range_reparent_subtree() - Move sub-ranges one level up
+ * @range: range being removed from its tree
+ *
+ * The sub-ranges of @range live in the interval tree embedded in @range, and
+ * point back to it via their rn_tree. As @range is about to be freed, move
+ * them to the tree @range itself belongs to. They cannot conflict there: they
+ * were included in @range, which did not overlap any other range of that tree.
+ */
+static void range_reparent_subtree(struct lu_nid_range *range)
+{
+	struct rb_root_cached *subtree;
+	struct rb_node *node;
+
+	subtree = &range->rn_subtree.nmrt_range_interval_root;
+
+	while ((node = rb_first_cached(subtree)) != NULL) {
+		struct lu_nid_range *subrange;
+
+		subrange = rb_entry(node, struct lu_nid_range, rn_rb);
+		nm_range_remove(subrange, subtree);
+		nm_range_insert(subrange,
+				&range->rn_tree->nmrt_range_interval_root);
+		subrange->rn_tree = range->rn_tree;
+	}
+}
+
+/**
  * range_delete_generic() - Delete a range from the interval tree and any
  *			    associated nodemap references
  * @range: range to delete
@@ -468,9 +495,11 @@ static void range_delete_generic(struct lu_nid_range *range)
 	list_del(&range->rn_list);
 
 	if (!range->rn_netmask) {
-		if (range->rn_tree)
+		if (range->rn_tree) {
 			nm_range_remove(range,
 				    &range->rn_tree->nmrt_range_interval_root);
+			range_reparent_subtree(range);
+		}
 	} else {
 		list_del(&range->rn_collect);
 	}

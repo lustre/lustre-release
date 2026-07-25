@@ -9535,6 +9535,18 @@ dyn_nm_helper() {
 		awk 'BEGIN{RS=", "} $1=="start_nid:"{print $2 ; exit}')
 	[[ -z "$val" ]] || error "nid range should be empty, got $val"
 
+	if (( $(lustre_version_code $facet) >= $(version_code 2.17.56) )); then
+		val=$(do_facet $facet $LCTL nodemap_test_nid 1.1.1.10@tcp)
+		[[ "$val" == "${nm}_3" ]] ||
+			error "1.1.1.10@tcp should be in ${nm}_3, got $val"
+		val=$(do_facet $facet $LCTL nodemap_test_nid 1.1.1.30@tcp)
+		[[ "$val" == "${nm}_1" ]] ||
+			error "1.1.1.30@tcp should be in ${nm}_1, got $val"
+		val=$(do_facet $facet $LCTL nodemap_test_nid 1.1.1.60@tcp)
+		[[ "$val" == "${nm}_2" ]] ||
+			error "1.1.1.60@tcp should be in ${nm}_2, got $val"
+	fi
+
 	do_facet $facet $LCTL nodemap_del $nm ||
 		error "dynamic nodemap del on server failed"
 	val=$(do_facet $facet $LCTL get_param nodemap.$nm.id)
