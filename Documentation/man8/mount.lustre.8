@@ -390,6 +390,19 @@ Sets the MD RAID 'stripe_cache_size' parameter to
 .I cache_size
 KiB for server OST or MDT block device with a striped RAID configuration.
 .TP
+.BI stripe= N
+Passed to ldiskfs: align block allocations to
+.I N
+filesystem blocks, overriding the RAID geometry stored in the superblock.
+For an OST on a parity md array (raid4/5/6 or raidkm),
+.B mount.lustre
+otherwise warns when the stored geometry is missing or is not a multiple of
+the array's full stripe; see RAID ALIGNMENT under NOTES in
+.BR mkfs.lustre (8)
+and
+.B MOUNT_LUSTRE_GEOMETRY_WARN
+under ENVIRONMENT.
+.TP
 .BI recovery_time_soft= timeout
 Allow
 .I timeout
@@ -453,6 +466,15 @@ Print extra information during mounting.  This will be passed on from
 Print the build version of the
 .BR mount.lustre
 binary and exit.
+.SH ENVIRONMENT
+.TP
+.B MOUNT_LUSTRE_GEOMETRY_WARN
+If set to
+.BR 0 ,
+.B mount.lustre
+does not print the RAID geometry warning described under the
+.B stripe=
+option.
 .SH BUGS
 Not very many mount options can be changed with
 .BR "-o remount" .

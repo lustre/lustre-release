@@ -63,6 +63,8 @@
 #define STRIPE_CACHE_SIZE	"md/stripe_cache_size"
 
 #define DEFAULT_SCHEDULER	"deadline"
+#define DEF_BULK_RPC_SIZE	(4U << 20) /* DT_DEF_BRW_SIZE */
+#define MAX_BULK_RPC_SIZE	(64U << 20) /* DT_MAX_BRW_SIZE */
 
 extern char *progname;
 
@@ -78,6 +80,7 @@ static int open_flags_rw = EXT2_FLAG_RW | EXT2_FLAG_64BITS;
 static void append_unique(char *buf, char *prefix, char *key, char *val,
 			  size_t maxbuflen);
 static bool is_e2fsprogs_feature_supp(const char *feature);
+static int read_file(const char *path, char *buf, int size);
 
 /* Determine if a device is a block device (as opposed to a file) */
 static int is_block(char *devname)
@@ -733,6 +736,403 @@ static char *moveopts_to_end(char *start)
 	return idx;
 }
 
+struct md_geometry {
+	unsigned long	mg_chunk_bytes;
+	unsigned int	mg_data_disks;
+	bool		mg_parity;	/* partial-row writes are RMW */
+};
+
+/* raidkm (md level 71) encodes its geometry in the md layout word (keep in
+ * sync with md-kmec km/raid_km.h): bits 0-7 parity count m; bit 10
+ * declustered flag; bits 16-23 declustered group width g, where the data
+ * cells per row k = g - m.  Non-declustered arrays have k = raid_disks - m.
+ */
+#define RAIDKM_LAYOUT_M_MASK	0x00ff
+#define RAIDKM_LAYOUT_DCL	0x0400
+#define RAIDKM_LAYOUT_DCL_G(l)	(((l) >> 16) & 0xff)
+
+/* raid10 encodes its replication factor in the md layout word; bits 0-7 are
+ * the near copy count.  Far copies replicate into another region of the same
+ * devices rather than widening the row, so a row spans raid_disks / near
+ * devices -- the same width md itself reports as io_opt.
+ */
+#define RAID10_LAYOUT_NEAR(l)	((l) & 0xff)
+
+static int md_read_geometry(const char *sys_path, struct md_geometry *geom)
+{
+	char path[PATH_MAX + 32];
+	char level[64];
+	char buf[64];
+	long raid_disks;
+	long data_disks;
+	unsigned long chunk;
+	int rc;
+
+	snprintf(path, sizeof(path), "%s/md/level", sys_path);
+	rc = read_file(path, level, sizeof(level));
+	if (rc != 0)
+		return -rc;
+
+	snprintf(path, sizeof(path), "%s/md/raid_disks", sys_path);
+	rc = read_file(path, buf, sizeof(buf));
+	if (rc != 0)
+		return -rc;
+	raid_disks = strtol(buf, NULL, 0);
+
+	snprintf(path, sizeof(path), "%s/md/chunk_size", sys_path);
+	rc = read_file(path, buf, sizeof(buf));
+	if (rc != 0)
+		return -rc;
+	chunk = strtoul(buf, NULL, 0);
+
+	geom->mg_parity = true;
+	if (strcmp(level, "raid0") == 0) {
+		data_disks = raid_disks;
+		geom->mg_parity = false;
+	} else if (strcmp(level, "raid4") == 0 || strcmp(level, "raid5") == 0) {
+		data_disks = raid_disks - 1;
+	} else if (strcmp(level, "raid6") == 0) {
+		data_disks = raid_disks - 2;
+	} else if (strcmp(level, "raid10") == 0) {
+		long layout, near;
+
+		snprintf(path, sizeof(path), "%s/md/layout", sys_path);
+		rc = read_file(path, buf, sizeof(buf));
+		if (rc != 0)
+			return -rc;
+		layout = strtol(buf, NULL, 0);
+		near = RAID10_LAYOUT_NEAR(layout);
+		/* A device count that is not a multiple of the near copy
+		 * count has no whole-chunk row, so no single stride is right.
+		 */
+		if (near <= 0 || raid_disks % near != 0)
+			return -EINVAL;
+		data_disks = raid_disks / near;
+		geom->mg_parity = false;
+	} else if (strcmp(level, "raidkm") == 0) {
+		long layout, m;
+
+		snprintf(path, sizeof(path), "%s/md/layout", sys_path);
+		rc = read_file(path, buf, sizeof(buf));
+		if (rc != 0)
+			return -rc;
+		layout = strtol(buf, NULL, 0);
+		m = layout & RAIDKM_LAYOUT_M_MASK;
+		if (layout & RAIDKM_LAYOUT_DCL)
+			data_disks = RAIDKM_LAYOUT_DCL_G(layout) - m;
+		else
+			data_disks = raid_disks - m;
+	} else {
+		return -ENOTSUP;
+	}
+
+	if (chunk == 0 || data_disks <= 0)
+		return -EINVAL;
+
+	geom->mg_chunk_bytes = chunk;
+	geom->mg_data_disks = data_disks;
+
+	return 0;
+}
+
+/* Read the dm uuid of @sys_path, true only if it starts with @prefix */
+static bool dm_read_uuid(const char *sys_path, const char *prefix,
+			 char *uuid, int size)
+{
+	char path[PATH_MAX + 16];
+	FILE *fp;
+
+	/* Not read_file(): it prints an error if dm/uuid can't be read,
+	 * e.g. while the device is being removed.
+	 */
+	snprintf(path, sizeof(path), "%s/dm/uuid", sys_path);
+	fp = fopen(path, "r");
+	if (!fp)
+		return false;
+	if (!fgets(uuid, size, fp)) {
+		fclose(fp);
+		return false;
+	}
+	fclose(fp);
+
+	uuid[strcspn(uuid, "\n")] = '\0';
+	return strncmp(uuid, prefix, strlen(prefix)) == 0;
+}
+
+static bool dm_read_lvm_uuid(const char *sys_path, char *uuid, int size)
+{
+	return dm_read_uuid(sys_path, "LVM-", uuid, size);
+}
+
+/* cryptsetup names its dm-crypt and dm-integrity devices "CRYPT-".  dm-crypt
+ * shifts the data by its header (16MiB for LUKS2) and dm-integrity puts tag
+ * sectors between data areas, so neither keeps the rows of the array below.
+ */
+static bool dm_is_cryptsetup(const char *sys_path)
+{
+	char uuid[256];
+
+	return dm_read_uuid(sys_path, "CRYPT-", uuid, sizeof(uuid));
+}
+
+/* dm-thin and dm-vdo map each block independently onto their data device,
+ * so a row-aligned extent above them is not row-aligned on the array.  LVM
+ * names these pool devices with a "-tpool" or "-vpool" dm uuid suffix.
+ */
+static bool dm_is_remapping_pool(const char *sys_path)
+{
+	char uuid[256];
+	size_t len;
+
+	if (!dm_read_lvm_uuid(sys_path, uuid, sizeof(uuid)))
+		return false;
+
+	len = strlen(uuid);
+	return len > 6 && (strcmp(uuid + len - 6, "-tpool") == 0 ||
+			   strcmp(uuid + len - 6, "-vpool") == 0);
+}
+
+/* LVM reserves these in LV (not VG) names for the cache sub-LVs of a
+ * dm-cache or dm-writecache LV, which hold no file data at a fixed offset.
+ */
+static bool dm_is_cache_component(const char *sys_path)
+{
+	static const char *const caches[] = { "_cdata", "_cmeta", "_cvol",
+					      NULL };
+	const char *const *c;
+	char path[PATH_MAX + 16];
+	char uuid[256];
+	char name[256];
+	char *lv;
+
+	if (!dm_read_lvm_uuid(sys_path, uuid, sizeof(uuid)))
+		return false;
+
+	snprintf(path, sizeof(path), "%s/dm/name", sys_path);
+	if (read_file(path, name, sizeof(name)) != 0)
+		return false;
+
+	/* The dm name is "<vg>-<lv>", with any '-' in either doubled */
+	lv = name;
+	while ((lv = strchr(lv, '-')) && lv[1] == '-')
+		lv += 2;
+	if (!lv)
+		return false;
+
+	for (c = caches; *c; c++)
+		if (strstr(lv + 1, *c))
+			return true;
+
+	return false;
+}
+
+/* True if a member of the md array at @sys_path has its own io_opt that
+ * does not divide the chunk, e.g. a nested md array (RAID60) or a hardware
+ * RAID LUN.  A chunk then holds a partial member row, so no row of this
+ * array is a whole row on the members.
+ */
+static bool md_member_geometry_differs(const char *sys_path,
+				       const struct md_geometry *geom)
+{
+	char path[PATH_MAX * 2];
+	char buf[64];
+	struct dirent *d;
+	bool differs = false;
+	bool part;
+	DIR *dir;
+
+	snprintf(path, sizeof(path), "%s/slaves", sys_path);
+	dir = opendir(path);
+	if (!dir)
+		return false;
+
+	while (!differs && (d = readdir(dir)) != NULL) {
+		unsigned long io_opt;
+
+		if (d->d_name[0] == '.')
+			continue;
+
+		/* A partition has no queue/; use that of its disk */
+		snprintf(path, sizeof(path), "%s/slaves/%s/partition",
+			 sys_path, d->d_name);
+		part = access(path, F_OK) == 0;
+		snprintf(path, sizeof(path),
+			 "%s/slaves/%s/%squeue/optimal_io_size",
+			 sys_path, d->d_name, part ? "../" : "");
+		if (read_file(path, buf, sizeof(buf)) != 0)
+			continue;
+		io_opt = strtoul(buf, NULL, 0);
+		differs = io_opt != 0 && geom->mg_chunk_bytes % io_opt != 0;
+	}
+	closedir(dir);
+
+	return differs;
+}
+
+/* Find the striped md array (if any) underneath a block device, descending
+ * through stacked (dm) devices via sysfs slave links.  A dm device is only
+ * followed when it has a single slave in the data path: one that spans or
+ * stripes over several (e.g. an LV on several PVs) keeps no one array's rows,
+ * so we report -EINVAL.  So does an md array whose members add their own
+ * geometry.
+ */
+static int md_probe_sys_geometry(const char *sys_path,
+				 struct md_geometry *geom, int depth)
+{
+	char path[PATH_MAX * 2];
+	struct dirent *d;
+	char *data = NULL;
+	int nr_data = 0;
+	DIR *dir;
+	int rc;
+
+	snprintf(path, sizeof(path), "%s/md/level", sys_path);
+	if (access(path, F_OK) == 0) {
+		rc = md_read_geometry(sys_path, geom);
+		/* Members add their own geometry: no single row fits, so
+		 * leave it to the blkid topology mke2fs reads.
+		 */
+		if (rc == 0 && md_member_geometry_differs(sys_path, geom))
+			rc = -EINVAL;
+		return rc;
+	}
+
+	if (depth <= 0 || dm_is_remapping_pool(sys_path) ||
+	    dm_is_cryptsetup(sys_path))
+		return -ENOTSUP;
+
+	/* A partition of an md array (e.g. an LVM PV on md0p1) has neither
+	 * md/ nor slaves/; its geometry is that of the array it is in.
+	 */
+	snprintf(path, sizeof(path), "%s/partition", sys_path);
+	if (access(path, F_OK) == 0) {
+		char *parent;
+
+		snprintf(path, sizeof(path), "%s/..", sys_path);
+		parent = realpath(path, NULL);
+		if (!parent)
+			return -ENOTSUP;
+		rc = md_probe_sys_geometry(parent, geom, depth - 1);
+		free(parent);
+		return rc;
+	}
+
+	snprintf(path, sizeof(path), "%s/slaves", sys_path);
+	dir = opendir(path);
+	if (!dir)
+		return -ENOTSUP;
+
+	while ((d = readdir(dir)) != NULL) {
+		char *real;
+
+		if (d->d_name[0] == '.')
+			continue;
+
+		snprintf(path, sizeof(path), "%s/slaves/%s", sys_path,
+			 d->d_name);
+		real = realpath(path, NULL);
+		if (real && dm_is_cache_component(real)) {
+			free(real);
+			continue;
+		}
+		if (nr_data++ > 0) {
+			free(real);
+			free(data);
+			closedir(dir);
+			return -EINVAL;
+		}
+		data = real;
+	}
+	closedir(dir);
+
+	if (!data)
+		return -ENOTSUP;
+
+	rc = md_probe_sys_geometry(data, geom, depth - 1);
+	free(data);
+
+	return rc;
+}
+
+/* Look up the geometry of the md array underneath @devname.  On success, if
+ * @part_start_out is non-NULL it is set to the device's partition start (in
+ * 512-byte sectors), or 0 when the device is not a partition, so that the
+ * caller can check the partition's alignment against the array.
+ */
+static int ldiskfs_get_md_geometry(const char *devname,
+				   struct md_geometry *geom,
+				   unsigned long long *part_start_out)
+{
+	struct stat st;
+	char sys_path[PATH_MAX];
+	char attr_path[PATH_MAX + 16];
+	char buf[64];
+	char *real_sys_path;
+	unsigned long long part_start = 0;
+	int rc;
+
+	if (stat(devname, &st) != 0 || !S_ISBLK(st.st_mode))
+		return -ENOTSUP;
+
+	if (major(st.st_rdev) == LOOP_MAJOR)
+		return -ENOTSUP;
+
+	snprintf(sys_path, sizeof(sys_path), "/sys/dev/block/%u:%u",
+		 major(st.st_rdev), minor(st.st_rdev));
+
+	snprintf(attr_path, sizeof(attr_path), "%s/partition", sys_path);
+	if (access(attr_path, F_OK) == 0) {
+		snprintf(attr_path, sizeof(attr_path), "%s/start", sys_path);
+		if (read_file(attr_path, buf, sizeof(buf)) == 0)
+			part_start = strtoull(buf, NULL, 0);
+
+		snprintf(sys_path, sizeof(sys_path), "/sys/dev/block/%u:%u/..",
+			 major(st.st_rdev), minor(st.st_rdev));
+	}
+
+	real_sys_path = realpath(sys_path, NULL);
+	if (!real_sys_path)
+		return -errno;
+
+	rc = md_probe_sys_geometry(real_sys_path, geom, 4);
+	free(real_sys_path);
+	if (rc != 0)
+		return rc;
+
+	if (part_start_out)
+		*part_start_out = part_start;
+
+	return 0;
+}
+
+/* The OST default brw_size is the bigalloc cluster size when that is larger
+ * than DEF_BULK_RPC_SIZE, see osd_conf_get().
+ */
+static unsigned long long ldiskfs_def_brw_size(const char *mkfsopts)
+{
+	static const char units[] = "KMGT";
+	unsigned long long cluster;
+	const char *opt;
+	const char *unit;
+	char *end;
+
+	for (opt = strstr(mkfsopts, "-C"); opt; opt = strstr(opt + 2, "-C"))
+		if (opt == mkfsopts || isspace((unsigned char)opt[-1]))
+			break;
+	if (!opt)
+		return DEF_BULK_RPC_SIZE;
+
+	/* Same suffixes as mke2fs -C, where 's' is 512-byte sectors */
+	cluster = strtoull(opt + 2, &end, 0);
+	unit = *end ? strchr(units, toupper((unsigned char)*end)) : NULL;
+	if (unit)
+		cluster <<= 10 * (unit - units + 1);
+	else if (*end == 's')
+		cluster <<= 9;
+
+	return cluster > DEF_BULK_RPC_SIZE ? cluster : DEF_BULK_RPC_SIZE;
+}
+
 /* Build fs according to type */
 int ldiskfs_make_lustre(struct mkfs_opts *mop)
 {
@@ -1031,6 +1431,109 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 		append_unique(start, ext_opts ? "," : " -E ",
 			      "packed_meta_blocks", NULL, maxbuflen);
 		ext_opts = 1;
+	}
+
+	/* For OSTs on striped md arrays, inspect the array geometry to (a)
+	 * warn about a row that the default RPC size is not a multiple of,
+	 * and (b) explicitly seed stride/stripe_width so mballoc can size
+	 * and align allocations to full rows.  mke2fs can derive the latter
+	 * from the blkid topology, but dm-cache replaces optimal_io_size with
+	 * its own block size when that does not divide the row.  dm-thin and
+	 * dm-vdo pools are not probed through, see dm_is_remapping_pool().
+	 * Values given by the user are left alone -- but the warning is not
+	 * suppressed by them, since the row shape is a property of the
+	 * array, not of what was typed.
+	 */
+	if (IS_OST(&mop->mo_ldd) && !(mop->mo_flags & MO_IS_LOOP)) {
+		struct md_geometry geom;
+		unsigned long long part_start = 0;
+		unsigned long long def_rpc;
+		unsigned long bs = mop->mo_blocksize_kb * 1024;
+
+		def_rpc = ldiskfs_def_brw_size(mop->mo_mkfsopts);
+
+		if (ldiskfs_get_md_geometry(mop->mo_device, &geom,
+					    &part_start) == 0) {
+			unsigned long long row =
+				(unsigned long long)geom.mg_chunk_bytes *
+				geom.mg_data_disks;
+			unsigned long stride;
+
+			/* A partition that does not start on a full-stripe
+			 * boundary phase-shifts the whole filesystem against
+			 * the array: stride/stripe_width are still worth
+			 * setting, but stripe-aligned allocations will not be
+			 * stripe-aligned on the platter, so warn.
+			 */
+			if (part_start != 0 && (part_start * 512) % row != 0)
+				fprintf(stderr,
+					"%s: warning: partition %s starts at sector %llu which is not aligned to the %llu-byte RAID full stripe; large writes will be split across stripes\n",
+					progname, mop->mo_device, part_start,
+					row);
+
+			/* An RPC avoids a partial row only if its size is a
+			 * multiple of the data row.  The default bulk RPC
+			 * sizes are powers of two, so that needs a row that is
+			 * a power of two and no larger than the RPC.  If the
+			 * row is not a power of two, every default-sized RPC
+			 * leaves a partial row, which a parity array must
+			 * service as a read-modify-write; avoiding that needs
+			 * a non-default max_pages_per_rpc that is a multiple
+			 * of the row, on every client.  raid0/raid10 have no
+			 * parity, so a partial row costs them nothing.  Unlike
+			 * stride/stripe_width the row cannot be corrected
+			 * later -- it is a property of the array -- so say so
+			 * now, while the geometry can still be chosen.  A row
+			 * larger than the default RPC can still be fixed later
+			 * by raising the RPC size, but not past the maximum.
+			 */
+			if (geom.mg_parity && row > MAX_BULK_RPC_SIZE)
+				fprintf(stderr,
+					"%s: warning: %s RAID data row is %llu bytes (%u data disks * %lu-byte chunk), which is larger than the maximum %u-byte bulk RPC, so each RPC will write a partial stripe (read-modify-write). This cannot be fixed after formatting. Consider a geometry where data_disks * chunk is a power of two no larger than %u bytes.\n",
+					progname, mop->mo_device, row,
+					geom.mg_data_disks,
+					geom.mg_chunk_bytes,
+					MAX_BULK_RPC_SIZE, MAX_BULK_RPC_SIZE);
+			else if (geom.mg_parity && (row & (row - 1)) != 0)
+				fprintf(stderr,
+					"%s: warning: %s RAID data row is %llu bytes (%u data disks * %lu-byte chunk), which is not a power of two; the default bulk RPC sizes are not a multiple of it, so each RPC will write a partial stripe (read-modify-write) unless every client sets max_pages_per_rpc to a multiple of the row%s. Consider a geometry where data_disks * chunk is a power of two.\n",
+					progname, mop->mo_device, row,
+					geom.mg_data_disks,
+					geom.mg_chunk_bytes,
+					row <= def_rpc ? "" :
+					", after obdfilter.*.brw_size is raised to match and the clients are remounted");
+			else if (geom.mg_parity && row > def_rpc)
+				fprintf(stderr,
+					"%s: warning: %s RAID data row is %llu bytes (%u data disks * %lu-byte chunk), which is larger than the default %llu-byte bulk RPC, so each RPC will write a partial stripe (read-modify-write) unless obdfilter.*.brw_size is raised to a multiple of the row and the clients are remounted.\n",
+					progname, mop->mo_device, row,
+					geom.mg_data_disks,
+					geom.mg_chunk_bytes, def_rpc);
+
+			/* Explicitly seed stride/stripe_width so mballoc can
+			 * size and align allocations to full rows.  Values
+			 * given by the user are left alone.
+			 */
+			if (bs > 0 && geom.mg_chunk_bytes % bs == 0 &&
+			    !strstr(mop->mo_mkfsopts, "stride=") &&
+			    !strstr(mop->mo_mkfsopts, "stripe_width=") &&
+			    !strstr(mop->mo_mkfsopts, "stripe-width=")) {
+				stride = geom.mg_chunk_bytes / bs;
+
+				snprintf(buf, sizeof(buf), "%lu", stride);
+				append_unique(start, ext_opts ? "," : " -E ",
+					      "stride", buf, maxbuflen);
+				snprintf(buf, sizeof(buf), "%lu",
+					 stride * geom.mg_data_disks);
+				append_unique(start, ",", "stripe_width", buf,
+					      maxbuflen);
+				ext_opts = 1;
+				vprint(
+					"probed md geometry: %lu-byte chunk * %u data disks -> stride=%lu stripe_width=%lu\n",
+					geom.mg_chunk_bytes,
+					geom.mg_data_disks, stride,
+					stride * geom.mg_data_disks);
+			}
+		}
 	}
 
 	/* end handle -E mkfs options */
@@ -1367,8 +1870,91 @@ out:
 	return rc;
 }
 
+static bool mount_opt_has(const char *opts, const char *name)
+{
+	size_t len = strlen(name);
+	const char *p = opts;
+
+	while (p && *p) {
+		if (strncmp(p, name, len) == 0)
+			return true;
+		p = strchr(p, ',');
+		if (p)
+			p++;
+	}
+
+	return false;
+}
+
+/* Warn when mounting an OST that sits on a parity md array but whose
+ * backing filesystem was formatted without matching RAID geometry: mballoc
+ * then has no stripe to align to and large streaming writes split across
+ * stripes, which a parity array services as read-modify-write.  Warning
+ * only -- never fails the mount.
+ */
+static void check_md_stripe_geometry(char *dev, struct mount_opts *mop)
+{
+	struct md_geometry geom;
+	ext2_filsys fs = NULL;
+	unsigned long stride;
+	unsigned long width;
+	unsigned long fs_stripe;
+	const char *env;
+
+	/* l_tunedisk (run by udev) has no mount options and no one to warn */
+	if (!IS_OST(&mop->mo_ldd) || !mop->mo_orig_options)
+		return;
+
+	env = getenv("MOUNT_LUSTRE_GEOMETRY_WARN");
+	if (env && strcmp(env, "0") == 0)
+		return;
+
+	/* The admin chose the stripe with -o stripe=, so stay quiet */
+	if (mount_opt_has(mop->mo_orig_options, "stripe=") ||
+	    mount_opt_has(mop->mo_ldd.ldd_mount_opts, "stripe="))
+		return;
+
+	if (ldiskfs_get_md_geometry(dev, &geom, NULL) != 0 || !geom.mg_parity)
+		return;
+
+	if (ext2fs_open(dev, open_flags_ro, 0, 0, unix_io_manager, &fs))
+		return;
+
+	if (geom.mg_chunk_bytes % fs->blocksize != 0)
+		goto out;
+
+	stride = geom.mg_chunk_bytes / fs->blocksize;
+	width = stride * geom.mg_data_disks;
+
+	/* mballoc aligns to the stripe ext4_get_stripe_size() picks: -o stripe=
+	 * (handled above), else stripe_width, else stride as a fallback.  So
+	 * only that value matters, and it is stripe-aligned if it is any
+	 * multiple of the array row -- a larger multiple only sizes
+	 * allocations larger.
+	 */
+	fs_stripe = fs->super->s_raid_stripe_width;
+	if (!fs_stripe)
+		fs_stripe = fs->super->s_raid_stride;
+
+	if (!fs_stripe)
+		fprintf(stderr,
+			"%s: warning: %s is on a striped md array but was formatted without RAID geometry; set it with 'tune2fs -E stride=%lu,stripe_width=%lu' or mount with '-o stripe=%lu' to avoid partial-stripe writes (set MOUNT_LUSTRE_GEOMETRY_WARN=0 to hide this warning)\n",
+			progname, dev, stride, width, width);
+	else if (fs_stripe % width != 0)
+		fprintf(stderr,
+			"%s: warning: %s RAID geometry mismatch: filesystem %s is %lu blocks which is not a multiple of the %lu-block array full stripe; set it with 'tune2fs -E stride=%lu,stripe_width=%lu' (set MOUNT_LUSTRE_GEOMETRY_WARN=0 to hide this warning)\n",
+			progname, dev,
+			fs->super->s_raid_stripe_width ? "stripe_width" :
+							 "stride",
+			fs_stripe, width, stride, width);
+out:
+	ext2fs_close_free(&fs);
+}
+
 int ldiskfs_tune_lustre(char *dev, struct mount_opts *mop)
 {
+	check_md_stripe_geometry(dev, mop);
+
 	return tune_block_dev(dev, mop);
 }
 

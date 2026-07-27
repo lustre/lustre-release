@@ -5,7 +5,7 @@
 .\"
 .\" This file may be copied under the terms of the GNU Public License.
 .\"
-.TH MKFS.LUSTRE 8 2026-08-13 Lustre "Lustre Configuration Utilities"
+.TH MKFS.LUSTRE 8 2026-10-01 Lustre "Lustre Configuration Utilities"
 .SH NAME
 mkfs.lustre \- format a disk for a Lustre service
 .SH SYNOPSIS
@@ -236,6 +236,145 @@ by a colon (:) or by repeating a keyword such as
 .B --mgsnode=
 or
 .BR --servicenode= .
+.SH NOTES
+.SS RAID ALIGNMENT
+When an OST is formatted on an md RAID array,
+.B mkfs.lustre
+probes the array through sysfs, descending through any stacked device-mapper
+layers, and seeds
+.BI "-E stride=" N ",stripe_width=" M
+so that
+.B mballoc
+sizes and aligns allocations to a full stripe.  Values given with
+.B --mkfsoptions
+are left alone.  LVM thin and VDO volumes are skipped, since they place each
+block independently and a full stripe in the volume is not one on the array.
+So are dm-crypt (LUKS) and dm-integrity volumes made by
+.BR cryptsetup (8)
+or
+.BR integritysetup (8),
+since their headers and integrity tags move the data off the array rows.
+An md array whose members add their own geometry, such as raid0 over raid6
+or over hardware RAID LUNs, is also skipped when a chunk does not hold whole
+member rows, as is any volume that spans one, and left to the block device
+topology that
+.B mke2fs
+reads.
+So is a volume whose device-mapper layer maps onto more than one device, such
+as an LV spanning or striped across several PVs.  The cache sub-LVs of an LVM
+dm-cache or dm-writecache volume are not counted, so a cached LV on an md
+array is probed through its origin.
+The full stripe, or data row, is the chunk size times the
+number of data disks, and is reported by the array as:
+.RS
+.EX
+.B # cat /sys/block/md0/queue/optimal_io_size
+.EE
+.RE
+.PP
+Two properties of the array cannot be corrected once the OST has been
+formatted, so
+.B mkfs.lustre
+warns about them while the geometry can still be changed.
+.PP
+First, the OST should be formatted on the raw md device wherever possible.  If
+a partition or an LVM physical volume is used instead, its start offset must be
+a multiple of the full stripe, otherwise the filesystem is phase-shifted
+against the array and a stripe-aligned write lands across two stripes on the
+platters.
+.B mkfs.lustre
+checks the start only of a partition given to it directly.
+Check an LVM physical volume by hand, and also the start of a partition that
+holds one, such as md0p1.
+The start of a partition, in 512-byte sectors, is:
+.RS
+.EX
+.B # cat /sys/class/block/md0p1/start
+.EE
+.RE
+.PP
+Lustre normally runs directly on the block device, and current versions of
+.BR parted (8)
+and
+.BR pvcreate (8)
+align by default, so this is rarely a problem.  Where it is, the container has
+to be recreated, with
+.B parted -a optimal
+or
+.BI "pvcreate --dataalignment " SIZE ,
+and the OST reformatted.
+.PP
+For LVM, each logical volume begins on an extent boundary, at the physical
+volume start plus a whole number of extents, so a row-aligned physical volume
+is not enough.  The extent size
+.RB ( "vgcreate -s" )
+must also be a multiple of the full stripe, or each logical volume must start
+on a row boundary.  Check both with:
+.RS
+.EX
+.B # pvs -o +pe_start
+.B # lvs -o +seg_pe_ranges
+.EE
+.RE
+.PP
+Second, on a parity array (raid4/5/6 or raidkm) the data row itself should be
+a power of two.  An RPC avoids a partial row only if its size is a multiple
+of the row.  The default bulk RPC sizes are powers of two, so the row must be a
+power of two and no larger than the RPC.  A geometry such as 5 data disks with
+a 64KiB chunk (320KiB) leaves a partial row at the tail of every
+default-sized RPC, which the array services as a read-modify-write.  The only
+remedy after formatting is a non-default
+.B osc.*.max_pages_per_rpc
+that is a multiple of the row (for example
+.B max_pages_per_rpc=2560K
+for a 320KiB row; a byte count works on any page size), set on every client.
+If the row is larger than 4MiB,
+.B obdfilter.*.brw_size
+must be raised to match first, as described below.
+Prefer a geometry where data disks times chunk size is a power of two, for
+example 4 or 8 data disks with a 64KiB chunk.
+.PP
+A power-of-two row larger than the default 4MiB RPC, such as raid6 with 16
+data disks and a 512KiB chunk (8MiB), also leaves a partial row on every
+default-sized RPC.
+With bigalloc, the default RPC is the cluster size
+.RB ( "mke2fs -C" )
+when that is larger than 4MiB.
+.B mkfs.lustre
+warns about this too.  A row of up to 64MiB can be fixed after formatting.
+Set
+.B obdfilter.*.brw_size
+to a multiple of the row with
+.BR "lctl set_param -P" .
+The OSS applies it only when a client connects, so remount the clients.
+Each client then uses the new size, unless
+.B osc.*.max_pages_per_rpc
+was set explicitly; in that case raise it to match.
+A row larger than 64MiB cannot be fixed, since
+.B brw_size
+cannot exceed 64MiB, and
+.B mkfs.lustre
+warns that it cannot be fixed.
+.PP
+.B mount.lustre
+also warns when an OST on a parity array was formatted without RAID geometry,
+or with geometry that does not match the array underneath.  Unlike the two
+cases above this can be repaired in place: unmount the OST and run
+.BR tune2fs (8):
+.RS
+.EX
+.BI "# tune2fs -E stride=" N ",stripe_width=" M " /dev/md0"
+.EE
+.RE
+.PP
+This changes only new allocations, so it is safe on an OST that already
+holds data.  The new values take effect at the next mount of the OST.
+The warning is not printed when the OST is mounted with
+.BI "-o stripe=" N ,
+or when
+.B MOUNT_LUSTRE_GEOMETRY_WARN=0
+is set in the environment of
+.BR mount.lustre .
 .SH EXAMPLES
 Combined MGS and MDT for filesystem 'testfs' on node e.g. cfs21:
 .RS
@@ -312,5 +451,6 @@ filesystem package since release 1.4.0
 .BR lctl (8),
 .BR mke2fs (8),
 .BR mount.lustre (8),
+.BR tune2fs (8),
 .BR tunefs.lustre (8),
 .BR zpool (8)
