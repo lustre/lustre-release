@@ -717,24 +717,26 @@ Index: linux-stage/fs/ext4/dir.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/dir.c
 +++ linux-stage/fs/ext4/dir.c
-@@ -474,12 +474,15 @@ int ext4_htree_store_dirent(struct file
+@@ -474,14 +474,16 @@ int ext4_htree_store_dirent(struct file
  	struct rb_node **p, *parent = NULL;
  	struct fname *fname, *new_fn;
  	struct dir_private_info *info;
-+	int extra_data = 0;
+-	int len;
++	int len, extra_data = 0;
  
  	info = dir_file->private_data;
  	p = &info->root.rb_node;
  
  	/* Create and allocate the fname structure */
--	new_fn = kzalloc(struct_size(new_fn, name, ent_name->len + 1),
 +	if (dirent->file_type & ~EXT4_FT_MASK)
 +		extra_data = ext4_get_dirent_data_len(dirent);
-+	new_fn = kzalloc(struct_size(new_fn, name, ent_name->len + extra_data + 1),
- 			 GFP_KERNEL);
+ 	len = sizeof(struct fname) + ent_name->len + 1;
+-	new_fn = kzalloc(len, GFP_KERNEL);
++	new_fn = kzalloc(len + extra_data, GFP_KERNEL);
  	if (!new_fn)
  		return -ENOMEM;
-@@ -489,6 +492,13 @@ int ext4_htree_store_dirent(struct file
+ 	new_fn->hash = hash;
+@@ -490,6 +492,13 @@ int ext4_htree_store_dirent(struct file
  	new_fn->name_len = ent_name->len;
  	new_fn->file_type = dirent->file_type;
  	memcpy(new_fn->name, ent_name->name, ent_name->len);

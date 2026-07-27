@@ -1,3 +1,37 @@
+commit 409935cc7094bf0d98b392d8ddc9a016f02749eb
+Author: Artem Blagodarenko <ablagodarenko@thelustrecollective.com>
+Date:   Mon Jan 19 09:37:24 2026 +0300
+LU-19847 ldiskfs: dirent and fscrypt+case_insensitive
+
+EXT4 occupies space in dirent just after the name with
+a hash for simultaneous fscrypt and casefold support.
+
+It was discussed with the EXT4 community that it is
+possible to move the hash to dirdata. It could be the
+second (or third, if 64-bit inode count) user of
+dirdata.
+
+At the same time, the hash placed after the file name
+should also be supported.
+
+This patch makes LDISKFS ready for such a hash present
+in both variants. While it is not currently possible
+to enable fscrypt + case_insensitive on LDISKFS, it is
+useful to verify that LUFID works well with such code.
+
+fscrypt + case_insensitive support with dirdata
+enabled is checked in a special xfstest sent to EXT4
+with the dirdata patch.
+
+Signed-off-by: Artem Blagodarenko <ablagodarenko@thelustrecollective.com>
+Change-Id: Ia9874396037a24b494dd3cfa7208e10a366f5eb3
+Reviewed-on: https://review.whamcloud.com/c/fs/lustre-release/+/64439
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Reviewed-by: Jian Yu <yujian@whamcloud.com>
+Reviewed-by: Andreas Dilger <adilger@thelustrecollective.com>
+---
+Patch 2 of 3: ext4-dirdata-core.patch
+
 Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
 --- linux-stage.orig/fs/ext4/ext4.h
@@ -306,10 +340,11 @@ Index: linux-stage/fs/ext4/namei.c
  		/*
  		 * Just checking IS_ENCRYPTED(parent) below is not
  		 * sufficient to decide whether one can use the hash for
-@@ -1467,9 +1546,12 @@ static bool ext4_match(struct inode *par
+@@ -1467,10 +1546,13 @@ static bool ext4_match(struct inode *par
  		 * considering the calculated hash.
  		 */
- 		if (IS_ENCRYPTED(parent) && fname->cf_name.name &&
+ 		if (sb_no_casefold_compat_fallback(parent->i_sb) &&
+ 		    IS_ENCRYPTED(parent) && fname->cf_name.name &&
 -		    (fname->hinfo.hash != EXT4_DIRENT_HASH(de) ||
 -		     fname->hinfo.minor_hash != EXT4_DIRENT_MINOR_HASH(de)))
 -			return false;

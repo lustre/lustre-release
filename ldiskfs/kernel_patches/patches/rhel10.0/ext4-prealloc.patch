@@ -218,22 +218,22 @@ diff --git a/fs/ext4/mballoc.c b/fs/ext4/mballoc.c
  	}
  
  	sbi->s_locality_groups = alloc_percpu(struct ext4_locality_group);
-@@ -3841,6 +3856,7 @@ out:
- out:
- 	ext4_mb_avg_fragment_size_destroy(sbi);
- 	ext4_mb_largest_free_orders_destroy(sbi);
+@@ -3744,6 +3856,7 @@ out:
+ 	kfree(sbi->s_mb_avg_fragment_size_locks);
+ 	kfree(sbi->s_mb_largest_free_orders);
+ 	kfree(sbi->s_mb_largest_free_orders_locks);
 +	kfree(sbi->s_mb_prealloc_table);
  	kfree(sbi->s_mb_offsets);
  	sbi->s_mb_offsets = NULL;
  	kfree(sbi->s_mb_maxs);
-@@ -3903,6 +3923,7 @@ void ext4_mb_release(struct super_block *sb)
+@@ -3810,6 +3923,7 @@ void ext4_mb_release(struct super_block *sb)
+ 		kvfree(group_info);
+ 		rcu_read_unlock();
  	}
- 	ext4_mb_avg_fragment_size_destroy(sbi);
- 	ext4_mb_largest_free_orders_destroy(sbi);
 +	kfree(sbi->s_mb_prealloc_table);
- 	kfree(sbi->s_mb_offsets);
- 	kfree(sbi->s_mb_maxs);
- 	iput(sbi->s_buddy_cache);
+ 	kfree(sbi->s_mb_avg_fragment_size);
+ 	kfree(sbi->s_mb_avg_fragment_size_locks);
+ 	kfree(sbi->s_mb_largest_free_orders);
 @@ -4097,7 +4211,6 @@ ext4_mb_mark_diskspace_used(struct ext4_allocation_context *ac,
  	ext4_grpblk_t changed;
  
