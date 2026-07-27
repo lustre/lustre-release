@@ -6,8 +6,15 @@
 
 SCRIPT_NAME="$(basename "$0")"
 LCTL=${LCTL:-lctl}
-# Seconds to wait for OBD devices to drain before unloading. umount may return
-# before OBD devices are fully unconfigured (mgc, lwp/osp imports, obd_zombie).
+# Seconds to wait for OBD devices to drain before unloading, and to retry a
+# failed module unload against its refcount. umount may return before OBD
+# devices are fully unconfigured (mgc, lwp/osp imports, obd_zombie), and an
+# empty device list does not itself mean a module's refcount has reached
+# zero -- there is a short tail while mdt/osd/ptlrpc release their last
+# reference. $WAIT_REMAINING is a shared budget for the device drain and
+# the module unload retries, decremented only for seconds actually spent
+# sleeping in those two phases -- other work in between (kmemleak scan,
+# debug dump, lnet unconfigure) does not consume it.
 WAIT=${LUSTRE_RMMOD_WAIT:-60}
 if [[ -z "$DEBUG" ]]; then
 	if [[ -n "$DEBUG_RMMOD" ]]; then
@@ -24,7 +31,8 @@ print_usage() {
 	echo
 	echo -e "\t-d, --debug-kernel\tDisplay lustre kernel debug messages"
 	echo -e "\t-h, --help\t\tDisplay this help message"
-	echo -e "\t-w, --wait SECS\t\twait for device cleanup (default 60s)"
+	echo -e "\t-w, --wait SECS\t\twait for device cleanup and module"
+	echo -e "\t\t\t\trefcounts to drain (default 60s)"
 	echo -e "\t\t\t\t0 unloads (and potentially fails) immediately"
 	echo -e "\tMODULENAME\t\tList of lustre modules to unload."
 	echo -e "\t\t\t\tBy default all modules are unloaded."
@@ -33,33 +41,72 @@ print_usage() {
 # Wait for all OBD devices to drain and clean up before unloading modules.
 #
 # No output or an error from "lctl dl" means no devices remain (non-fatal).
-# usage: wait_for_devices SECONDS
+# Consumes from the shared $WAIT_REMAINING budget, decremented once per
+# second actually spent sleeping here; a slow device drain leaves less
+# budget for the module unload retries that follow.
 wait_for_devices() {
-	local timeout=$1
 	local print
-	local end
 
-	(( timeout > 0 )) || return 0
+	(( WAIT_REMAINING > 0 )) || return 0
 
-	end=$((SECONDS + timeout))
 	print=$((SECONDS + 20))
-	while (( SECONDS < end )); do
+	while (( WAIT_REMAINING > 0 )); do
 		local num=$($LCTL dl 2>/dev/null | wc -l)
 		(( num == 0 )) && return 0
 
 		if (( SECONDS >= print )); then
-			local l=$((end - $SECONDS))
-			echo "$SCRIPT_NAME: wait ${l}s for $num OBD devices" >&2
+			echo "$SCRIPT_NAME: wait ${WAIT_REMAINING}s for $num OBD devices" >&2
 			(( print+=60 ))
 		fi
 		sleep 1
+		(( WAIT_REMAINING-- )) || true
 	done
 
 	if [[ -n "$($LCTL dl 2>/dev/null)" ]]; then
-		echo "$SCRIPT_NAME: OBD devices after ${timeout}s:" >&2
-		$LCTL dl 2>/dev/null >&2
+		echo "$SCRIPT_NAME: OBD devices after ${WAIT}s:" >&2
+		$LCTL dl >&2
 	fi
 	return 0
+}
+
+# rmmod with retries against the shared $WAIT_REMAINING budget, decremented
+# once per second actually spent sleeping here (and in wait_for_devices());
+# work in between -- the kmemleak scan, the debug dump, lnet unconfigure --
+# does not consume it. An empty "lctl dl" does not imply the module's
+# refcnt is zero: there is a short tail after the last OBD device
+# disappears where mdt/osd/ptlrpc still hold a module reference, so an
+# immediate rmmod can fail "module in use" on a fast teardown (seen on
+# single-MDT hosts). Between attempts poll /sys/module/<mod>/refcnt and
+# only reattempt once it reads 0 (a module that vanished concurrently
+# counts as unloaded). Once the budget is spent, make a final visible
+# attempt so a genuinely stuck module still fails with the usual error.
+rmmod_wait() {
+	local mod=$1
+	local refcnt=/sys/module/$mod/refcnt
+	local print cnt
+
+	if (( WAIT_REMAINING > 0 )); then
+		rmmod $mod 2>/dev/null && return 0
+
+		print=$((SECONDS + 20))
+		while (( WAIT_REMAINING > 0 )); do
+			sleep 1
+			(( WAIT_REMAINING-- )) || true
+			[[ -e $refcnt ]] || return 0
+
+			read -r cnt 2>/dev/null < "$refcnt" || cnt=0
+			if (( cnt > 0 )); then
+				if (( SECONDS >= print )); then
+					echo "$SCRIPT_NAME: wait ${WAIT_REMAINING}s for $mod (refcnt $cnt)" >&2
+					(( print+=60 ))
+				fi
+				continue
+			fi
+			rmmod $mod 2>/dev/null && return 0
+		done
+	fi
+
+	rmmod $mod
 }
 
 # Print kernel debug message for lustre modules
@@ -105,7 +152,7 @@ unload_dep_modules_inclusive() {
 		$LCTL mark "$SCRIPT_NAME : Unload $MODULE"
 	fi
 
-	rmmod $MODULE || return 1
+	rmmod_wait $MODULE || return 1
 	return 0
 }
 
@@ -154,7 +201,10 @@ else
 	unload_all=false
 fi
 
-wait_for_devices "$WAIT"
+# Shared budget for the device drain and per-module refcnt retries.
+WAIT_REMAINING=$WAIT
+
+wait_for_devices
 
 export KMEMLEAK=${KMEMLEAK:-/sys/kernel/debug/kmemleak}
 KMEMLEAK_MODS=/tmp/kmemleak-modules-list.txt

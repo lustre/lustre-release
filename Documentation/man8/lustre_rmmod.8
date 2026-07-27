@@ -37,7 +37,7 @@ Print a usage message and exit.
 .BR -w ", " --wait " \fISECONDS"
 Wait up to
 .I SECONDS
-seconds for OBD devices to be cleaned up (according to
+seconds, total, for OBD devices to be cleaned up (according to
 .BR lctl-device_list (8))
 before trying to unload the modules,
 to allow asynchronous device cleanup actions to complete after
@@ -50,6 +50,16 @@ is
 no devices are configured, or
 .B lctl
 returns an error, then there is no further wait before module unload.
+.RS
+.PP
+An empty device list does not itself guarantee that a module's
+reference count has reached zero, since some modules may
+briefly retain a reference after the last device disappears.
+If unloading a module fails, the remainder of the
+.I SECONDS
+budget is used to poll the module's reference count and retry the
+unload once it reaches zero, rather than failing immediately.
+.RE
 .SH AVAILABILITY
 .B lustre_rmmod
 is part of the
