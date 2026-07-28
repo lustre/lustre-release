@@ -794,12 +794,12 @@ ssize_t ir_factor_store(struct kobject *kobj, struct attribute *attr,
  * for a read-write debugfs entry, and then call LDEBUGFS_SEQ_FOPS instead.
  * Finally, call debugfs_create_file(filename, 0444, obd, data, &name#_fops);
  */
-#define __LDEBUGFS_SEQ_FOPS(name, custom_seq_write)			\
+#define __LDEBUGFS_SEQ_FOPS(storage, name, custom_seq_write)		\
 static int name##_single_open(struct inode *inode, struct file *file)	\
 {									\
 	return single_open(file, name##_seq_show, inode->i_private);	\
 }									\
-static const struct file_operations name##_fops = {			\
+storage const struct file_operations name##_fops = {			\
 	.owner	 = THIS_MODULE,						\
 	.open	 = name##_single_open,					\
 	.read	 = seq_read,						\
@@ -808,20 +808,23 @@ static const struct file_operations name##_fops = {			\
 	.release = single_release,					\
 }
 
-#define LDEBUGFS_SEQ_FOPS_RO(name)	__LDEBUGFS_SEQ_FOPS(name, NULL)
-#define LDEBUGFS_SEQ_FOPS(name)		__LDEBUGFS_SEQ_FOPS(name, \
-							    name##_seq_write)
+#define LDEBUGFS_SEQ_FOPS_RO(name) __LDEBUGFS_SEQ_FOPS(static, name, NULL)
+#define LDEBUGFS_SEQ_FOPS(name)	   __LDEBUGFS_SEQ_FOPS(static, name,	\
+						       name##_seq_write)
 
-#define LDEBUGFS_SEQ_FOPS_RO_TYPE(name, type)				\
+#define __LDEBUGFS_SEQ_FOPS_RO_TYPE(storage, name, type)		\
 	static int name##_##type##_seq_show(struct seq_file *m, void *v)\
 	{								\
 		if (!m->private)					\
 			return -ENODEV;					\
 		return lprocfs_##type##_seq_show(m, m->private);	\
 	}								\
-	LDEBUGFS_SEQ_FOPS_RO(name##_##type)
+	__LDEBUGFS_SEQ_FOPS(storage, name##_##type, NULL)
 
-#define LDEBUGFS_SEQ_FOPS_RW_TYPE(name, type)				\
+#define LDEBUGFS_SEQ_FOPS_RO_TYPE(name, type)				\
+	__LDEBUGFS_SEQ_FOPS_RO_TYPE(static, name, type)
+
+#define __LDEBUGFS_SEQ_FOPS_RW_TYPE(storage, name, type)		\
 	static int name##_##type##_seq_show(struct seq_file *m, void *v)\
 	{								\
 		if (!m->private)					\
@@ -839,7 +842,25 @@ static const struct file_operations name##_fops = {			\
 		return ldebugfs_##type##_seq_write(file, buffer, count,	\
 						   seq->private);	\
 	}								\
-	LDEBUGFS_SEQ_FOPS(name##_##type);
+	__LDEBUGFS_SEQ_FOPS(storage, name##_##type, name##_##type##_seq_write)
+
+#define LDEBUGFS_SEQ_FOPS_RW_TYPE(name, type)				\
+	__LDEBUGFS_SEQ_FOPS_RW_TYPE(static, name, type)
+
+/*
+ * Non-static variants of LDEBUGFS_SEQ_FOPS_R[OW]_TYPE(): the generated
+ * <name>_<type>_fops has external linkage so it can be defined once and
+ * shared between several files linked into the same module.  Declare the
+ * shared fops in a common header with LDEBUGFS_SEQ_FOPS_TYPE_DECLARE().
+ */
+#define LDEBUGFS_SEQ_FOPS_RO_TYPE_SHARED(name, type)			\
+	__LDEBUGFS_SEQ_FOPS_RO_TYPE(, name, type)
+
+#define LDEBUGFS_SEQ_FOPS_RW_TYPE_SHARED(name, type)			\
+	__LDEBUGFS_SEQ_FOPS_RW_TYPE(, name, type)
+
+#define LDEBUGFS_SEQ_FOPS_TYPE_DECLARE(name, type)			\
+	extern const struct file_operations name##_##type##_fops
 
 #define LDEBUGFS_FOPS_WR_ONLY(name, type)				\
 	static ssize_t name##_##type##_write(struct file *file,		\

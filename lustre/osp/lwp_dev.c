@@ -45,6 +45,20 @@ static inline struct lu_device *lwp2lu_dev(struct lwp_device *d)
 	return &d->lpd_dev;
 }
 
+static struct ldebugfs_vars ldebugfs_lwp_obd_vars[] = {
+	{ .name	=	"connect_flags",
+	  .fops	=	&osp_connect_flags_fops	},
+	{ .name	=	"mdt_server_uuid",
+	  .fops	=	&osp_server_uuid_fops	},
+	{ .name	=	"timeouts",
+	  .fops	=	&osp_timeouts_fops	},
+	{ .name	=	"import",
+	  .fops	=	&osp_import_fops	},
+	{ .name	=	"state",
+	  .fops	=	&osp_state_fops		},
+	{ NULL }
+};
+
 /**
  * lwp_setup() - Setup LWP device.
  * @env: environment passed by caller
@@ -265,19 +279,21 @@ static int lwp_init0(const struct lu_env *env, struct lwp_device *lwp,
 		RETURN(rc);
 	}
 
-	rc = lprocfs_obd_setup(lwp->lpd_obd, true);
+	rc = lwp_setup(env, lwp, lustre_cfg_string(cfg, 1));
 	if (rc) {
-		CERROR("%s: lprocfs_obd_setup failed. %d\n",
+		CERROR("%s: setup lwp failed. %d\n",
 		       lwp->lpd_obd->obd_name, rc);
 		ptlrpcd_decref();
 		RETURN(rc);
 	}
 
-	rc = lwp_setup(env, lwp, lustre_cfg_string(cfg, 1));
+	lwp->lpd_obd->obd_debugfs_vars = ldebugfs_lwp_obd_vars;
+
+	rc = lprocfs_obd_setup(lwp->lpd_obd, true);
 	if (rc) {
-		CERROR("%s: setup lwp failed. %d\n",
+		CERROR("%s: lprocfs_obd_setup failed. %d\n",
 		       lwp->lpd_obd->obd_name, rc);
-		lprocfs_obd_cleanup(lwp->lpd_obd);
+		client_obd_cleanup(lwp->lpd_obd);
 		ptlrpcd_decref();
 		RETURN(rc);
 	}

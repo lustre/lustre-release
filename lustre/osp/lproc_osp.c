@@ -991,12 +991,12 @@ static ssize_t osp_conn_uuid_show(struct kobject *kobj, struct attribute *attr,
 LUSTRE_ATTR(ost_conn_uuid, 0444, osp_conn_uuid_show, NULL);
 LUSTRE_ATTR(mdt_conn_uuid, 0444, osp_conn_uuid_show, NULL);
 
-LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, connect_flags);
-LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, server_uuid);
-LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, timeouts);
+LDEBUGFS_SEQ_FOPS_RO_TYPE_SHARED(osp, connect_flags);
+LDEBUGFS_SEQ_FOPS_RO_TYPE_SHARED(osp, server_uuid);
+LDEBUGFS_SEQ_FOPS_RO_TYPE_SHARED(osp, timeouts);
 
-LDEBUGFS_SEQ_FOPS_RW_TYPE(osp, import);
-LDEBUGFS_SEQ_FOPS_RO_TYPE(osp, state);
+LDEBUGFS_SEQ_FOPS_RW_TYPE_SHARED(osp, import);
+LDEBUGFS_SEQ_FOPS_RO_TYPE_SHARED(osp, state);
 
 static int osp_rpc_stats_seq_show(struct seq_file *seq, void *v)
 {

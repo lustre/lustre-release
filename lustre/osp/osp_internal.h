@@ -796,6 +796,17 @@ void osp_statfs_fini(struct osp_device *d);
 void osp_tunables_init(struct osp_device *osp);
 void osp_tunables_fini(struct osp_device *osp);
 
+/*
+ * debugfs file_operations for import stats common to OSP and LWP
+ * (both linked into the osp module); defined in lproc_osp.c and reused
+ * by lwp_dev.c.
+ */
+LDEBUGFS_SEQ_FOPS_TYPE_DECLARE(osp, connect_flags);
+LDEBUGFS_SEQ_FOPS_TYPE_DECLARE(osp, server_uuid);
+LDEBUGFS_SEQ_FOPS_TYPE_DECLARE(osp, timeouts);
+LDEBUGFS_SEQ_FOPS_TYPE_DECLARE(osp, import);
+LDEBUGFS_SEQ_FOPS_TYPE_DECLARE(osp, state);
+
 /* osp_sync.c */
 int osp_sync_declare_add(const struct lu_env *env, struct osp_object *o,
 			 enum llog_op_type type, struct thandle *th);
