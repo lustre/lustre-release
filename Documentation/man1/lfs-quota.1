@@ -1,4 +1,4 @@
-.TH LFS-QUOTA 1 2026-03-19 "Lustre" "Lustre User Utilities"
+.TH LFS-QUOTA 1 2026-08-18 "Lustre" "Lustre User Utilities"
 .SH NAME
 lfs-quota \- display quota limits and status for users, groups, or projects.
 .SH SYNOPSIS
@@ -7,7 +7,7 @@ lfs-quota \- display quota limits and status for users, groups, or projects.
 .RB [ --block-softlimit | --bsoftlimit ]
 .RB [ --block-hardlimit | --bhardlimit ]
 .RB [ --block-grace | --bgrace | --btime ]
-.RB [ --delimiter
+.RB [ -d | --delimiter
 .IR DELIMITER ]
 .RB [ --filesystem | --mount-point ]
 .RB [ -h | --human-readable ]
@@ -245,25 +245,14 @@ Display root quota entry.
 By default, it is skipped.
 .SS DEFAULT QUOTA
 .TP
-.BR -G ", " --default-grp " {" \fIGROUP | \fIGID }
-Display default quota limits for group name
-.I GROUP
-or numeric
-.IR GID .
+.BR -G ", " --default-grp
+Display default group quota limit.
 .TP
-.BR -P ", " --default-prj " {" \fIPROJECT | \fIPROJID }
-Display default quota limits for project
-.I PROJID
-or
-.I PROJNAME
-as listed in
-.BR /etc/projid (5).
+.BR -P ", " --default-prj
+Display default project quota limit.
 .TP
-.BR -U ", " --default-usr " {" \fIUSER | UID }
-Display default quota limits for username
-.I USER
-or numeric
-.IR UID .
+.BR -U ", " --default-usr
+Display default user quota limit.
 .TP
 .BI --pool " POOL_NAME"
 Display default quota information for OST pool

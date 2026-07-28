@@ -533,7 +533,7 @@ command_t cmdlist[] = {
 	 "             [--block-softlimit|--bsoftlimit]\n"
 	 "             [--block-hardlimit|--bhardlimit]\n"
 	 "             [--block-grace|--bgrace|--btime]\n"
-	 "             [--delimiter DELIMITER]\n"
+	 "             [-d|--delimiter DELIMITER]\n"
 	 "             [--filesystem|--mount-point]\n"
 	 "             [--inodes|--iusage]\n"
 	 "             [--inode-softlimit|--isoftlimit]\n"
@@ -11860,12 +11860,12 @@ static int lfs_quota(int argc, char **argv)
 	bool all = false;
 
 	struct option long_opts[] = {
-	{ .val = 'a',	.name = "all",		.has_arg = required_argument },
-	{ .val = 'e',	.name = "end-qid",	.has_arg = required_argument },
+	{ .val = 'a',	.name = "all",		.has_arg = no_argument },
 	{ .val = 'd',	.name = "delimiter",	.has_arg = required_argument },
+	{ .val = 'e',	.name = "end-qid",	.has_arg = required_argument },
 	{ .val = LFS_QUOTA_DEFAULT_OPT,
 			.name = "default",	.has_arg = no_argument },
-	{ .val = 'g',	.name = "group",	.has_arg = required_argument },
+	{ .val = 'g',	.name = "group",	.has_arg = no_argument },
 	{ .val = 'G',	.name = "default-grp",	.has_arg = no_argument },
 	{ .val = 'h',	.name = "human-readable", .has_arg = no_argument },
 	/* It is unfortunate that '-i' was used for mdt-index, and '-I' for
@@ -11881,13 +11881,13 @@ static int lfs_quota(int argc, char **argv)
 	{ .val = 'o',	.name = "ost",		.has_arg = required_argument },
 	{ .val = LFS_LQA_OPT, .name = "lqa",	.has_arg = required_argument },
 	{ .val = LFS_POOL_OPT, .name = "pool",	.has_arg = optional_argument },
-	{ .val = 'p',	.name = "projid",	.has_arg = required_argument },
+	{ .val = 'p',	.name = "projid",	.has_arg = no_argument },
 	{ .val = 'P',	.name = "default-prj",	.has_arg = no_argument },
 	{ .val = 'q',	.name = "quiet",	.has_arg = no_argument },
 	{ .val = 's',	.name = "start-qid",	.has_arg = required_argument },
 	{ .val = 't',	.name = "times",	.has_arg = no_argument },
-	{ .val = 'u',	.name = "user",		.has_arg = required_argument },
-	{ .val = 'U',	.name = "default-usr",	.has_arg = required_argument },
+	{ .val = 'u',	.name = "user",		.has_arg = no_argument },
+	{ .val = 'U',	.name = "default-usr",	.has_arg = no_argument },
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 	{ .val = LFS_QUOTA_FILESYSTEM_OPT,
 			.name = "filesystem",	.has_arg = no_argument },
@@ -11958,7 +11958,7 @@ static int lfs_quota(int argc, char **argv)
 	qctl->qc_type = ALLQUOTA;
 	obd_uuid = (char *)qctl->obd_uuid.uuid;
 
-	while ((c = getopt_long(argc, argv, "abBe:gGhi:I:m:no:pPqs:tuUv",
+	while ((c = getopt_long(argc, argv, "abBd:e:gGhi:I:m:no:pPqs:tuUv",
 		long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'a':

@@ -4748,6 +4748,64 @@ test_49b() {
 }
 run_test 49b "lfs quota -a --blocks has a delimiter"
 
+test_49c() {
+	(( CLIENT_VERSION >= $(version_code 2.17.57) )) ||
+		skip "Need client version >= 2.17.57 for long option fix"
+
+	local nodir=$DIR/nonexistent
+
+	$LFS quota --user $TSTUSR $DIR ||
+		error "'quota --user $TSTUSR $DIR' failed"
+	$LFS quota --group $TSTUSR $DIR ||
+		error "'quota --group $TSTUSR $DIR' failed"
+	$LFS quota --default-usr $DIR ||
+		error "'quota --default-usr $DIR' failed"
+	$LFS quota --default-usr $nodir &&
+		error "'quota --default-usr $nodir' should have failed"
+	$LFS quota --default-grp $DIR ||
+		error "'quota --default-grp $DIR' failed"
+	$LFS quota --default-grp $nodir &&
+		error "'quota --default-grp $nodir' should have failed"
+
+	if is_project_quota_supported; then
+		$LFS quota --projid $TSTPRJID $DIR ||
+			error "'quota --projid $TSTPRJID $DIR' failed"
+		$LFS quota --default-prj $DIR ||
+			error "'quota --default-prj $DIR' failed"
+		$LFS quota --default-prj $nodir &&
+			error "'quota --default-prj $nodir' should have failed"
+	fi
+
+	(( MDS1_VERSION >= $(version_code v2_15_61-145-g3edc718) )) ||
+		skip "Need MDS >= 2.15.61 for 'lfs quota --all'"
+
+	$LFS quota --all -u $DIR || error "'quota --all -u $DIR' failed"
+	$LFS quota --all -g $DIR || error "'quota --all -g $DIR' failed"
+
+	if is_project_quota_supported; then
+		$LFS quota --all -p $DIR || error "'quota --all -p $DIR' failed"
+	fi
+
+	return 0
+}
+run_test 49c "lfs quota long options don't consume an extra argument"
+
+test_49d() {
+	(( CLIENT_VERSION >= $(version_code 2.17.57) )) ||
+		skip "Need client version >= 2.17.57 for 'lfs quota -d' fix"
+
+	local out
+
+	out=$($LFS quota -d "," -u $TSTUSR $DIR) ||
+		error "'quota -d , -u $TSTUSR' failed"
+	[[ "$out" =~ "," ]] || error "no ',' delimiter for -d: '$out'"
+
+	out=$($LFS quota --delimiter="," -u $TSTUSR $DIR) ||
+		error "'quota --delimiter=, -u $TSTUSR' failed"
+	[[ "$out" =~ "," ]] || error "no ',' delimiter for --delimiter: '$out'"
+}
+run_test 49d "lfs quota -d and --delimiter both work"
+
 test_50() {
 	! is_project_quota_supported &&
 		skip "Project quota is not supported"
