@@ -328,20 +328,21 @@ find_with_lock:
 			 */
 			if (left <= 0 && !cache->uc_acquire_replay)
 				failedacquiring = true;
-			put_entry(cache, entry);
 			if (!failedacquiring) {
-				write_unlock(&cache->uc_lock);
 				failedacquiring = true;
 				new = NULL;
 				CDEBUG(D_OTHER,
 				       "retry acquire for key %llu (got %d)\n",
 				       entry->ue_key, rc);
+				put_entry(cache, entry);
+				write_unlock(&cache->uc_lock);
 				goto find_again;
 			}
 			wake_up_all(&entry->ue_waitq);
 			CERROR("%s: acquire for key %lld after %llu: rc = %d\n",
 			       cache->uc_name, entry->ue_key,
 			       cache->uc_acquire_expire, rc);
+			put_entry(cache, entry);
 			GOTO(out, entry = ERR_PTR(rc));
 		}
 	}
