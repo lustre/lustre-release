@@ -3574,6 +3574,8 @@ int nodemap_set_capabilities(const char *name, char *buffer)
 	enum nodemap_cap_type type;
 	unsigned long long caps;
 	kernel_cap_t newcaps;
+	enum nodemap_cap_type old_type;
+	kernel_cap_t old_caps;
 	bool cap_was_clear;
 	u64 *p_newcaps;
 	u64 cap_tmp;
@@ -3628,16 +3630,32 @@ int nodemap_set_capabilities(const char *name, char *buffer)
 	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_CAPS, *p_newcaps))
 		GOTO(out_putref, rc = -EPERM);
 
+	/* skip update and lock revocation if no change */
+	if (cap_issubset(nodemap->nm_capabilities, newcaps) &&
+	    cap_issubset(newcaps, nodemap->nm_capabilities) &&
+	    nodemap->nmf_caps_type == type)
+		GOTO(out_putref, rc = 0);
+
+	old_caps = nodemap->nm_capabilities;
+	old_type = nodemap->nmf_caps_type;
 	cap_was_clear = cap_isclear(nodemap->nm_capabilities);
 	nodemap->nm_capabilities = newcaps;
 	nodemap->nmf_caps_type = type;
 
-	if (cap_isclear(nodemap->nm_capabilities))
+	if (cap_isclear(nodemap->nm_capabilities)) {
 		rc = nodemap_idx_capabilities_del(nodemap);
-	else if (cap_was_clear)
+		if (rc == -ENOENT)
+			rc = 0;
+	} else if (cap_was_clear) {
 		rc = nodemap_idx_capabilities_add(nodemap);
-	else
+	} else {
 		rc = nodemap_idx_capabilities_update(nodemap);
+	}
+	if (rc) {
+		nodemap->nm_capabilities = old_caps;
+		nodemap->nmf_caps_type = old_type;
+		GOTO(out_putref, rc);
+	}
 
 	nm_member_revoke_locks(nodemap);
 
@@ -3827,8 +3845,9 @@ out:
  */
 int nodemap_set_deny_unknown(const char *name, bool deny_unknown)
 {
-	struct lu_nodemap	*nodemap = NULL;
-	int			rc = 0;
+	struct lu_nodemap *nodemap = NULL;
+	int rc = 0;
+	bool old_val;
 
 	nodemap = nodemap_lookup_unlocked(name);
 	if (IS_ERR(nodemap))
@@ -3839,10 +3858,20 @@ int nodemap_set_deny_unknown(const char *name, bool deny_unknown)
 				deny_unknown))
 		GOTO(out_putref, rc = -EPERM);
 
+	/* skip update and lock revocation if no change */
+	if (nodemap->nmf_deny_unknown == deny_unknown)
+		GOTO(out_putref, rc = 0);
+
+	old_val = nodemap->nmf_deny_unknown;
 	nodemap->nmf_deny_unknown = deny_unknown;
 	rc = nodemap_idx_nodemap_update(nodemap);
+	if (rc) {
+		nodemap->nmf_deny_unknown = old_val;
+		GOTO(out_putref, rc);
+	}
 
 	nm_member_revoke_locks(nodemap);
+
 out_putref:
 	nodemap_putref(nodemap);
 out:
@@ -3860,8 +3889,9 @@ EXPORT_SYMBOL(nodemap_set_deny_unknown);
  */
 int nodemap_set_allow_root(const char *name, bool allow_root)
 {
-	struct lu_nodemap	*nodemap = NULL;
-	int			rc = 0;
+	struct lu_nodemap *nodemap = NULL;
+	int rc = 0;
+	bool old_val;
 
 	nodemap = nodemap_lookup_unlocked(name);
 	if (IS_ERR(nodemap))
@@ -3871,10 +3901,20 @@ int nodemap_set_allow_root(const char *name, bool allow_root)
 	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_ADMIN, allow_root))
 		GOTO(out_putref, rc = -EPERM);
 
+	/* skip update and lock revocation if no change */
+	if (nodemap->nmf_allow_root_access == allow_root)
+		GOTO(out_putref, rc = 0);
+
+	old_val = nodemap->nmf_allow_root_access;
 	nodemap->nmf_allow_root_access = allow_root;
 	rc = nodemap_idx_nodemap_update(nodemap);
+	if (rc) {
+		nodemap->nmf_allow_root_access = old_val;
+		GOTO(out_putref, rc);
+	}
 
 	nm_member_revoke_locks(nodemap);
+
 out_putref:
 	nodemap_putref(nodemap);
 out:
@@ -3893,8 +3933,9 @@ EXPORT_SYMBOL(nodemap_set_allow_root);
  */
 int nodemap_set_trust_client_ids(const char *name, bool trust_client_ids)
 {
-	struct lu_nodemap	*nodemap = NULL;
-	int			rc = 0;
+	struct lu_nodemap *nodemap = NULL;
+	int rc = 0;
+	bool old_val;
 
 	nodemap = nodemap_lookup_unlocked(name);
 	if (IS_ERR(nodemap))
@@ -3905,10 +3946,20 @@ int nodemap_set_trust_client_ids(const char *name, bool trust_client_ids)
 				trust_client_ids))
 		GOTO(out_putref, rc = -EPERM);
 
+	/* skip update and lock revocation if no change */
+	if (nodemap->nmf_trust_client_ids == trust_client_ids)
+		GOTO(out_putref, rc = 0);
+
+	old_val = nodemap->nmf_trust_client_ids;
 	nodemap->nmf_trust_client_ids = trust_client_ids;
 	rc = nodemap_idx_nodemap_update(nodemap);
+	if (rc) {
+		nodemap->nmf_trust_client_ids = old_val;
+		GOTO(out_putref, rc);
+	}
 
 	nm_member_revoke_locks(nodemap);
+
 out_putref:
 	nodemap_putref(nodemap);
 out:
@@ -3919,8 +3970,9 @@ EXPORT_SYMBOL(nodemap_set_trust_client_ids);
 int nodemap_set_mapping_mode(const char *name,
 			     enum nodemap_mapping_modes map_mode)
 {
-	struct lu_nodemap	*nodemap = NULL;
-	int			rc = 0;
+	struct lu_nodemap *nodemap = NULL;
+	int rc = 0;
+	enum nodemap_mapping_modes old_val;
 
 	nodemap = nodemap_lookup_unlocked(name);
 	if (IS_ERR(nodemap))
@@ -3928,10 +3980,20 @@ int nodemap_set_mapping_mode(const char *name,
 	if (!allow_op_on_nm(nodemap))
 		GOTO(out_putref, rc = -ENXIO);
 
+	/* skip update and lock revocation if no change */
+	if (nodemap->nmf_map_mode == map_mode)
+		GOTO(out_putref, rc = 0);
+
+	old_val = nodemap->nmf_map_mode;
 	nodemap->nmf_map_mode = map_mode;
 	rc = nodemap_idx_nodemap_update(nodemap);
+	if (rc) {
+		nodemap->nmf_map_mode = old_val;
+		GOTO(out_putref, rc);
+	}
 
 	nm_member_revoke_locks(nodemap);
+
 out_putref:
 	nodemap_putref(nodemap);
 out:
@@ -3998,6 +4060,10 @@ int nodemap_set_rbac(const char *name, enum nodemap_rbac_roles rbac)
 	rc = nodemap_idx_cluster_roles_modify(nodemap, old_rbac,
 					      nodemap->nmf_raise_privs,
 					      nodemap->nmf_rbac_raise);
+	if (rc) {
+		nodemap->nmf_rbac = old_rbac;
+		GOTO(put, rc);
+	}
 
 	nm_member_revoke_locks(nodemap);
 put:
@@ -4022,8 +4088,9 @@ EXPORT_SYMBOL(nodemap_set_rbac);
  */
 int nodemap_set_squash_uid(const char *name, uid_t uid)
 {
-	struct lu_nodemap	*nodemap = NULL;
-	int			rc = 0;
+	struct lu_nodemap *nodemap = NULL;
+	int rc = 0;
+	uid_t old_val;
 
 	nodemap = nodemap_lookup_unlocked(name);
 	if (IS_ERR(nodemap))
@@ -4031,10 +4098,20 @@ int nodemap_set_squash_uid(const char *name, uid_t uid)
 	if (!allow_op_on_nm(nodemap))
 		GOTO(out_putref, rc = -ENXIO);
 
+	/* skip update and lock revocation if no change */
+	if (nodemap->nm_squash_uid == uid)
+		GOTO(out_putref, rc = 0);
+
+	old_val = nodemap->nm_squash_uid;
 	nodemap->nm_squash_uid = uid;
 	rc = nodemap_idx_nodemap_update(nodemap);
+	if (rc) {
+		nodemap->nm_squash_uid = old_val;
+		GOTO(out_putref, rc);
+	}
 
 	nm_member_revoke_locks(nodemap);
+
 out_putref:
 	nodemap_putref(nodemap);
 out:
@@ -4057,8 +4134,9 @@ EXPORT_SYMBOL(nodemap_set_squash_uid);
  */
 int nodemap_set_squash_gid(const char *name, gid_t gid)
 {
-	struct lu_nodemap	*nodemap = NULL;
-	int			rc = 0;
+	struct lu_nodemap *nodemap = NULL;
+	int rc = 0;
+	gid_t old_val;
 
 	nodemap = nodemap_lookup_unlocked(name);
 	if (IS_ERR(nodemap))
@@ -4066,10 +4144,20 @@ int nodemap_set_squash_gid(const char *name, gid_t gid)
 	if (!allow_op_on_nm(nodemap))
 		GOTO(out_putref, rc = -ENXIO);
 
+	/* skip update and lock revocation if no change */
+	if (nodemap->nm_squash_gid == gid)
+		GOTO(out_putref, rc = 0);
+
+	old_val = nodemap->nm_squash_gid;
 	nodemap->nm_squash_gid = gid;
 	rc = nodemap_idx_nodemap_update(nodemap);
+	if (rc) {
+		nodemap->nm_squash_gid = old_val;
+		GOTO(out_putref, rc);
+	}
 
 	nm_member_revoke_locks(nodemap);
+
 out_putref:
 	nodemap_putref(nodemap);
 out:
@@ -4093,8 +4181,9 @@ EXPORT_SYMBOL(nodemap_set_squash_gid);
  */
 int nodemap_set_squash_projid(const char *name, projid_t projid)
 {
-	struct lu_nodemap	*nodemap = NULL;
-	int			rc = 0;
+	struct lu_nodemap *nodemap = NULL;
+	int rc = 0;
+	projid_t old_val;
 
 	nodemap = nodemap_lookup_unlocked(name);
 	if (IS_ERR(nodemap))
@@ -4102,10 +4191,20 @@ int nodemap_set_squash_projid(const char *name, projid_t projid)
 	if (!allow_op_on_nm(nodemap))
 		GOTO(out_putref, rc = -ENXIO);
 
+	/* skip update and lock revocation if no change */
+	if (nodemap->nm_squash_projid == projid)
+		GOTO(out_putref, rc = 0);
+
+	old_val = nodemap->nm_squash_projid;
 	nodemap->nm_squash_projid = projid;
 	rc = nodemap_idx_nodemap_update(nodemap);
+	if (rc) {
+		nodemap->nm_squash_projid = old_val;
+		GOTO(out_putref, rc);
+	}
 
 	nm_member_revoke_locks(nodemap);
+
 out_putref:
 	nodemap_putref(nodemap);
 out:
@@ -4207,8 +4306,9 @@ EXPORT_SYMBOL(nodemap_can_setquota);
  */
 int nodemap_set_audit_mode(const char *name, bool enable_audit)
 {
-	struct lu_nodemap	*nodemap = NULL;
-	int			rc = 0;
+	struct lu_nodemap *nodemap = NULL;
+	int rc = 0;
+	bool old_val;
 
 	nodemap = nodemap_lookup_unlocked(name);
 	if (IS_ERR(nodemap))
@@ -4216,10 +4316,20 @@ int nodemap_set_audit_mode(const char *name, bool enable_audit)
 	if (!allow_op_on_nm(nodemap))
 		GOTO(out_putref, rc = -ENXIO);
 
+	/* skip update and lock revocation if no change */
+	if (nodemap->nmf_enable_audit == enable_audit)
+		GOTO(out_putref, rc = 0);
+
+	old_val = nodemap->nmf_enable_audit;
 	nodemap->nmf_enable_audit = enable_audit;
 	rc = nodemap_idx_nodemap_update(nodemap);
+	if (rc) {
+		nodemap->nmf_enable_audit = old_val;
+		GOTO(out_putref, rc);
+	}
 
 	nm_member_revoke_locks(nodemap);
+
 out_putref:
 	nodemap_putref(nodemap);
 out:
@@ -4240,6 +4350,7 @@ int nodemap_set_forbid_encryption(const char *name, bool forbid_encryption)
 {
 	struct lu_nodemap *nodemap = NULL;
 	int rc = 0;
+	bool old_val;
 
 	nodemap = nodemap_lookup_unlocked(name);
 	if (IS_ERR(nodemap))
@@ -4250,10 +4361,20 @@ int nodemap_set_forbid_encryption(const char *name, bool forbid_encryption)
 				forbid_encryption))
 		GOTO(out_putref, rc = -EPERM);
 
+	/* skip update and lock revocation if no change */
+	if (nodemap->nmf_forbid_encryption == forbid_encryption)
+		GOTO(out_putref, rc = 0);
+
+	old_val = nodemap->nmf_forbid_encryption;
 	nodemap->nmf_forbid_encryption = forbid_encryption;
 	rc = nodemap_idx_nodemap_update(nodemap);
+	if (rc) {
+		nodemap->nmf_forbid_encryption = old_val;
+		GOTO(out_putref, rc);
+	}
 
 	nm_member_revoke_locks(nodemap);
+
 out_putref:
 	nodemap_putref(nodemap);
 out:
@@ -4300,8 +4421,14 @@ int nodemap_set_raise_privs(const char *name, enum nodemap_raise_privs privs,
 	nodemap->nmf_rbac_raise = rbac_raise;
 	rc = nodemap_idx_cluster_roles_modify(nodemap, nodemap->nmf_rbac,
 					      old_privs, old_rbac_raise);
+	if (rc) {
+		nodemap->nmf_raise_privs = old_privs;
+		nodemap->nmf_rbac_raise = old_rbac_raise;
+		GOTO(out_putref, rc);
+	}
 
 	nm_member_revoke_locks(nodemap);
+
 out_putref:
 	nodemap_putref(nodemap);
 out:
@@ -4319,8 +4446,9 @@ EXPORT_SYMBOL(nodemap_set_raise_privs);
  */
 int nodemap_set_readonly_mount(const char *name, bool readonly_mount)
 {
-	struct lu_nodemap	*nodemap = NULL;
-	int			rc = 0;
+	struct lu_nodemap *nodemap = NULL;
+	int rc = 0;
+	bool old_val;
 
 	nodemap = nodemap_lookup_unlocked(name);
 	if (IS_ERR(nodemap))
@@ -4331,10 +4459,20 @@ int nodemap_set_readonly_mount(const char *name, bool readonly_mount)
 				readonly_mount))
 		GOTO(out_putref, rc = -EPERM);
 
+	/* skip update and lock revocation if no change */
+	if (nodemap->nmf_readonly_mount == readonly_mount)
+		GOTO(out_putref, rc = 0);
+
+	old_val = nodemap->nmf_readonly_mount;
 	nodemap->nmf_readonly_mount = readonly_mount;
 	rc = nodemap_idx_nodemap_update(nodemap);
+	if (rc) {
+		nodemap->nmf_readonly_mount = old_val;
+		GOTO(out_putref, rc);
+	}
 
 	nm_member_revoke_locks(nodemap);
+
 out_putref:
 	nodemap_putref(nodemap);
 out:
@@ -4354,6 +4492,7 @@ int nodemap_set_deny_mount(const char *name, bool deny_mount)
 {
 	struct lu_nodemap *nodemap = NULL;
 	int rc = 0;
+	bool old_val;
 
 	nodemap = nodemap_lookup_unlocked(name);
 	if (IS_ERR(nodemap))
@@ -4364,10 +4503,20 @@ int nodemap_set_deny_mount(const char *name, bool deny_mount)
 				deny_mount))
 		GOTO(out_putref, rc = -EPERM);
 
+	/* skip update and lock revocation if no change */
+	if (nodemap->nmf_deny_mount == deny_mount)
+		GOTO(out_putref, rc = 0);
+
+	old_val = nodemap->nmf_deny_mount;
 	nodemap->nmf_deny_mount = deny_mount;
 	rc = nodemap_idx_nodemap_update(nodemap);
+	if (rc) {
+		nodemap->nmf_deny_mount = old_val;
+		GOTO(out_putref, rc);
+	}
 
 	nm_member_revoke_locks(nodemap);
+
 out_putref:
 	nodemap_putref(nodemap);
 	return rc;
@@ -4386,6 +4535,7 @@ int nodemap_set_gss_identify(const char *name, bool gss_identify)
 {
 	struct lu_nodemap *nodemap = NULL;
 	int rc = 0;
+	bool old_val;
 
 	nodemap = nodemap_lookup_unlocked(name);
 	if (IS_ERR(nodemap))
@@ -4411,8 +4561,17 @@ int nodemap_set_gss_identify(const char *name, bool gss_identify)
 		GOTO(out_putref, rc = -EPERM);
 	}
 
+	/* skip update and lock revocation if no change */
+	if (nodemap->nmf_gss_identify == gss_identify)
+		GOTO(out_putref, rc = 0);
+
+	old_val = nodemap->nmf_gss_identify;
 	nodemap->nmf_gss_identify = gss_identify;
 	rc = nodemap_idx_nodemap_update(nodemap);
+	if (rc) {
+		nodemap->nmf_gss_identify = old_val;
+		GOTO(out_putref, rc);
+	}
 
 	nm_member_revoke_locks(nodemap);
 
