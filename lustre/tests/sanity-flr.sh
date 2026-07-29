@@ -1621,6 +1621,7 @@ test_34a() {
 	# stop two OSTs, so the 2nd stripe of the 1st mirror and
 	# the 1st stripe of the 2nd mirror will be inaccessible, ...
 	stop_osts 2 3
+	stack_trap "start_osts 2 3"
 
 	echo "comparing files ... "
 
@@ -1628,8 +1629,6 @@ test_34a() {
 	# the 1st stripe from mirror 1 and 2st stripe from mirror 2.
 	cmp -n 2097152 <(rwv -f $DIR/$tfile -r -o -n 1 2097152) \
 		$DIR/$tfile-ref || error "file reading error"
-
-	start_osts 2 3
 }
 run_test 34a "read mirrored file with multiple stripes"
 
@@ -1660,6 +1659,7 @@ test_34b() {
 	# stop two OSTs, so the 2nd component of the 1st mirror and
 	# the 1st component of the 2nd mirror will be inaccessible, ...
 	stop_osts 2 3
+	stack_trap "start_osts 2 3"
 
 	echo "comparing files ... "
 
@@ -1667,8 +1667,6 @@ test_34b() {
 	# the 1st stripe from mirror 1 and 2st stripe from mirror 2.
 	cmp -n 2097152 <(rwv -f $DIR/$tfile -r -o -n 1 2097152) \
 		$DIR/$tfile-ref || error "file reading error"
-
-	start_osts 2 3
 }
 run_test 34b "read mirrored file with multiple components"
 
@@ -3844,14 +3842,14 @@ test_71() {
 }
 run_test 71 "check mirror extend parent fid"
 
-test_72() {
-	local comp_file=$DIR/$tfile
+# check component instantiation when appending to mirrored file $1, which
+# is empty with mirror 1 "-E1M -E2M -E3M -Eeof" and mirror 2 "-E2M -E4M
+# -Eeof", and only the first component of each mirror instantiated
+t72() {
+	local comp_file="$1"
 	local id
 
-	$LFS mirror create -N -E1M -S1M -c1 -E 2M -E 3M -E eof \
-		-N -E2M -S1M -c1 -E4M -E eof $comp_file ||
-		error "Create $comp_file failed"
-
+	echo "layout after create"
 	$LFS getstripe $comp_file
 	id=$($LFS getstripe --mirror-id=1 -I0x10001 $comp_file | grep "l_fid")
 	[[ -z $id ]] && error "1: 1st component uninstantiated"
@@ -3865,6 +3863,8 @@ test_72() {
 	dd if=/dev/urandom bs=1M count=2 >> $comp_file
 	$LFS mirror resync $comp_file || error "cannot resync mirror $comp_file"
 
+	echo "layout after 2M append+resync"
+	$LFS getstripe $comp_file
 	id=$($LFS getstripe --mirror-id=1 -I0x10002 $comp_file | grep "l_fid")
 	[[ -z $id ]] && error "3: 2nd component uninstantiated"
 	id=$($LFS getstripe --mirror-id=1 -I0x10003 $comp_file | grep "l_fid")
@@ -3874,12 +3874,11 @@ test_72() {
 	id=$($LFS getstripe --mirror-id=2 -I0x20006 $comp_file | grep "l_fid")
 	[[ -n $id ]] && error "4: 2nd component instantiated"
 
-	$LFS getstripe $comp_file
-
 	dd if=/dev/urandom bs=1M count=1 >> $comp_file
 	$LFS getstripe $comp_file
 	$LFS mirror resync $comp_file || error "cannot resync mirror $comp_file"
 
+	echo "layout after 1M append+resync"
 	$LFS getstripe $comp_file
 	id=$($LFS getstripe --mirror-id=1 -I0x10003 $comp_file | grep "l_fid")
 	[[ -z $id ]] && error "5: 3rd component uninstantiated"
@@ -3892,7 +3891,45 @@ test_72() {
 
 	return 0
 }
-run_test 72 "check append on FLR file"
+
+test_72a() {
+	local comp_file=$DIR/$tdir/$tfile
+
+	test_mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	stack_trap "rm -rf $DIR/$tdir"
+
+	$LFS mirror create -N -E1M -S1M -c1 -E 2M -E 3M -E eof \
+		-N -E2M -S1M -c1 -E4M -E eof $comp_file ||
+		error "Create $comp_file failed"
+
+	t72 $comp_file
+}
+run_test 72a "check append on FLR file with setstripe"
+
+test_72b() {
+	local comp_file=$DIR/$tdir/$tfile
+
+	(( MDS1_VERSION >= $(version_code 2.17.60.1) )) ||
+		skip "need MDS >= 2.17.60.1 for NO_APPEND handling"
+	[[ $(mount | grep "$MOUNT ") =~ noappend_layout ]] ||
+		skip "client mounted with append_layout"
+
+	test_mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+	stack_trap "rm -rf $DIR/$tdir"
+
+	$LFS setstripe -N -E1M -S1M -c1 -E 2M -E 3M -E eof \
+		-N -E2M -S1M -c1 -E4M -E eof $DIR/$tdir ||
+		error "setstripe on $DIR/$tdir failed"
+
+	# create file with open(O_APPEND)
+	echo 1 >> $comp_file ||
+		error "create $comp_file failed with append"
+	# truncate to zero so writes do not spill into next comp
+	> $comp_file || error "truncate $comp_file failed"
+
+	t72 $comp_file
+}
+run_test 72b "check append on FLR file with open(O_APPEND)"
 
 write_file_200() {
 	local tf=$1

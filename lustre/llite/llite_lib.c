@@ -560,6 +560,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 	if (test_bit(LL_SBI_ALWAYS_PING, sbi->ll_flags))
 		data->ocd_connect_flags &= ~OBD_CONNECT_PINGLESS;
 
+	if (!test_bit(LL_SBI_APPEND_LAYOUT, sbi->ll_flags))
+		data->ocd_connect_flags2 |= OBD_CONNECT2_NO_APPEND;
+
 	/* Cache the login UID of the mount process. This is specifically
 	 * needed for GSSIAM authentication (passed down via upcalls).
 	 * It cannot be dynamically retrieved inside ll_upcall_notify_gssiam()
@@ -701,6 +704,9 @@ retry_connect:
 		sb->s_flags &= ~SB_POSIXACL;
 		clear_bit(LL_SBI_ACL, sbi->ll_flags);
 	}
+
+	if (!obd_connect_has_no_append(data))
+		set_bit(LL_SBI_APPEND_LAYOUT, sbi->ll_flags);
 
 	if (data->ocd_connect_flags & OBD_CONNECT_64BITHASH)
 		set_bit(LL_SBI_64BIT_HASH, sbi->ll_flags);
@@ -1179,6 +1185,9 @@ static const match_table_t ll_sbi_flags_name = {
 	{LL_SBI_LOCALFLOCK,		"localflock"},
 	{LL_SBI_FLOCK,			"flock"},
 	{LL_SBI_FLOCK,			"noflock"},
+	{LL_SBI_ALWAYS_PING,		"always_ping"},
+	{LL_SBI_APPEND_LAYOUT,		"append_layout"},
+	{LL_SBI_APPEND_LAYOUT,		"noappend_layout"},
 	{LL_SBI_CHECKSUM,		"checksum"},
 	{LL_SBI_CHECKSUM,		"nochecksum"},
 	{LL_SBI_ENCRYPT,		"encrypt"},
@@ -1202,7 +1211,6 @@ static const match_table_t ll_sbi_flags_name = {
 	{LL_SBI_USER_XATTR,		"nouser_xattr"},
 	{LL_SBI_VERBOSE,		"verbose"},
 	{LL_SBI_VERBOSE,		"noverbose"},
-	{LL_SBI_ALWAYS_PING,		"always_ping"},
 	{LL_SBI_NUM_MOUNT_OPT,		NULL},
 
 	{LL_SBI_64BIT_HASH,		"64bit_hash"},
@@ -1324,6 +1332,7 @@ static int ll_options(char *options, struct super_block *sb)
 		case LL_SBI_CHECKSUM:
 			sbi->ll_checksum_set = 1;
 			fallthrough;
+		case LL_SBI_APPEND_LAYOUT:
 		case LL_SBI_LRU_RESIZE:
 		case LL_SBI_LAZYSTATFS:
 		case LL_SBI_STATFS_PROJECT:

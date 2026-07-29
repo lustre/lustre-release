@@ -650,6 +650,12 @@ static inline void obd_connect_set_enc_fid2path(struct obd_connect_data *data)
 #endif
 }
 
+static inline bool obd_connect_has_no_append(struct obd_connect_data *data)
+{
+	return data->ocd_connect_flags & OBD_CONNECT_FLAGS2 &&
+		data->ocd_connect_flags2 & OBD_CONNECT2_NO_APPEND;
+}
+
 /*
  * Locking to guarantee consistency of non-atomic updates to long long i_size,
  * consistency between file size and KMS.
@@ -808,6 +814,7 @@ enum ll_sbi_flags {
 	LL_SBI_LOCALFLOCK,		/* local flocks instead of fs-wide */
 	LL_SBI_FLOCK,			/* flock enabled */
 	LL_SBI_ALWAYS_PING,		/* ping even if server suppress_pings */
+	LL_SBI_APPEND_LAYOUT,		/* use mdd.*.append_* layout */
 	LL_SBI_CHECKSUM,		/* checksum each page as it's written */
 	LL_SBI_ENCRYPT,			/* client side encryption */
 	LL_SBI_FOREIGN_SYMLINK,		/* foreign fake-symlink support */

@@ -5,7 +5,7 @@
 .\"
 .\" This file may be copied under the terms of the GNU Public License v2.
 .\"
-.TH MOUNT.LUSTRE 8 2026-09-06 Lustre "Lustre Configuration Utilities"
+.TH MOUNT.LUSTRE 8 2026-10-23 Lustre "Lustre Configuration Utilities"
 .SH NAME
 mount.lustre, mount.lustre_tgt \- mount helper for Lustre client/target service
 .SH SYNOPSIS
@@ -229,6 +229,28 @@ and only those mounted with
 .B flock
 will be coherent amongst each other.
 .TP
+.B always_ping
+Force a client to keep pinging even if servers have enabled suppress_pings.
+.TP
+.B append_layout
+Changes the client to use the
+.B mdd.*.append_stripe_count
+and
+.B mdd.*.append_pool
+layout parameters when creating files with the
+.B O_APPEND
+option to
+.BR open (2)
+instead of using the default layout from the parent or root directory.
+This was the default behavior before 2.18.0 to work around a previous
+issue with such files, but this is no longer required in this version.
+While most sites prefer to inherit normal file layouts for their files,
+this option allows reverting to the old behavior on a per-client basis.
+.TP
+.B noappend_layout
+Do not use the append-specific layout.
+This is the default behavior, if the MDT supports it.
+.TP
 .B lazystatfs
 Allows
 .BR statfs (2)
@@ -253,9 +275,6 @@ manual page.
 .B nouser_xattr
 Disable use of extended attributes by regular users.
 Root and system processes can still use extended attributes.
-.TP
-.B always_ping
-Force a client to keep pinging even if servers have enabled suppress_pings.
 .TP
 .B verbose
 Enable mount/remount/umount console messages.

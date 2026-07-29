@@ -3746,6 +3746,18 @@ test_27L() {
 }
 run_test 27L "lfs pool_list gives correct pool name"
 
+# The MDS ignores the mdd.*.append_* layout parameters for clients that
+# send NO_APPEND (LU-19722), so remount with append_layout to test them.
+# noappend_layout is only shown when the MDS supports NO_APPEND.
+remount_client_append_layout() {
+	[[ $(mount | grep "$MOUNT ") =~ noappend_layout ]] || return 0
+
+	stack_trap "umount_client $MOUNT; mount_client $MOUNT"
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	mount_client $MOUNT ${MOUNT_OPTS:+$MOUNT_OPTS,}append_layout ||
+		error "remount client with append_layout failed"
+}
+
 test_27M() {
 	(( $MDS1_VERSION >= $(version_code 2.12.57) )) ||
 		skip "Need MDS version >= than 2.12.57"
@@ -3768,8 +3780,6 @@ test_27M() {
 		skip "server does not support overstriping"
 	fi
 
-	test_mkdir $DIR/$tdir
-
 	# Validate existing append_* params and ensure restore
 	local pool=$(do_facet mds1 $LCTL get_param -n mdd.$FSNAME-MDT0000.append_pool)
 	[[ "$pool" == "" ]] || error "expected append_pool == '', got '$pool'"
@@ -3783,8 +3793,12 @@ test_27M() {
 
 	local orig_count=$(do_facet mds1 $LCTL get_param -n mdd.$FSNAME-MDT0000.append_stripe_count)
 	stack_trap "do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=$orig_count"
-	do_nodes $mdts "$LCTL set_param mdd.*.append_stripe_count=1"
+	local appendcount=1
+	do_nodes $mdts "$LCTL set_param mdd.*.append_stripe_count=$appendcount"
 
+	remount_client_append_layout
+
+	test_mkdir $DIR/$tdir
 	$LFS setstripe $stripe_opt $DIR/$tdir
 
 	echo 1 > $DIR/$tdir/${tfile}.1
@@ -3792,7 +3806,6 @@ test_27M() {
 	(( $count == $setcount )) ||
 		error "(1) stripe count $count, should be $setcount"
 
-	local appendcount=1
 	echo 1 >> $DIR/$tdir/${tfile}.2_append
 	count=$($LFS getstripe -c $DIR/$tdir/${tfile}.2_append)
 	(( $count == $appendcount )) ||
@@ -3809,10 +3822,10 @@ test_27M() {
 		error "(3) stripe count $count, should be $setcount"
 
 	# Try changing the stripe count for append files
-	do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=2
+	appendcount=2
+	do_nodes $mdts $LCTL set_param mdd.*.append_stripe_count=$appendcount
 
 	# Append striping is now 2 (directory default is still 4)
-	appendcount=2
 	echo 1 >> $DIR/$tdir/${tfile}.4_append
 	count=$($LFS getstripe -c $DIR/$tdir/${tfile}.4_append)
 	(( $count == $appendcount )) ||
@@ -4434,6 +4447,8 @@ test_27U() {
 
 	pool_add $normal_pool || error "pool creation failed"
 	pool_add_targets $normal_pool 0 1 || error "Pool add targets failed"
+
+	remount_client_append_layout
 
 	test_mkdir $dir
 	$LFS setstripe -E 1M -c 1 -p $normal_pool -E 2M -c 2 -p $normal_pool -E eof -c -1 $dir
@@ -20667,15 +20682,20 @@ run_test 131a "test iov's crossing stripe boundary for writev/readv"
 
 test_131b() {
 	local fsize=$((524288 + 1048576 + 1572864))
+	stack_trap "rm -f $DIR/$tfile"
+
 	rwv -f $DIR/$tfile -w -a -n 3 524288 1048576 1572864 &&
-		$CHECKSTAT -t file $DIR/$tfile -s $fsize ||
-			error "append writev test failed"
+		$CHECKSTAT -t file $DIR/$tfile -s $fsize || {
+			$LFS getstripe -vy $DIR/$tfile
+			error "append writev test failed size=$fsize"
+		}
 
 	((fsize += 1572864 + 1048576))
 	rwv -f $DIR/$tfile -w -a -n 2 1572864 1048576 &&
-		$CHECKSTAT -t file $DIR/$tfile -s $fsize ||
-			error "append writev test failed"
-	rm -f $DIR/$tfile
+		$CHECKSTAT -t file $DIR/$tfile -s $fsize || {
+			$LFS getstripe -vy $DIR/$tfile
+			error "append writev test failed size2=$fsize"
+		}
 }
 run_test 131b "test append writev"
 
