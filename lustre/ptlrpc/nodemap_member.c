@@ -186,7 +186,8 @@ static void nm_member_exp_revoke(struct obd_export *exp, bool force_ost)
 		return;
 	if (test_bit(OBDF_RECOVERING, exp->exp_obd->obd_flags))
 		return;
-	if (nid_is_lo0(&exp->exp_connection->c_peer.nid) ||
+	if (!exp->exp_connection ||
+	    nid_is_lo0(&exp->exp_connection->c_peer.nid) ||
 	    is_lwp_on_ost(exp->exp_client_uuid.uuid) ||
 	    is_lwp_on_mdt(exp->exp_client_uuid.uuid))
 		return;
@@ -341,7 +342,8 @@ out_end:
  * This has to be done 'by hand' because ted_nodemap should never be NULL on
  * a live export, so nm_member_del() cannot be called.
  * This needs to be called with the active_config_lock held.
- *
+ * It also drops a ref on the old nodemap, and holds a ref on the new nodemap
+ * on success.
  */
 void __nodemap_member_switch(struct obd_export *exp,
 			     struct lu_nodemap *new_nodemap,
@@ -353,17 +355,19 @@ void __nodemap_member_switch(struct obd_export *exp,
 	/* could deadlock if new_nodemap also reclassifying,
 	 * active_config_lock serializes reclassifies
 	 */
-	mutex_lock(&new_nodemap->nm_member_list_lock);
-
-	list_del_init(&exp->exp_target_data.ted_nodemap_member);
-
 	spin_lock(&exp->exp_target_data.ted_nodemap_lock);
 	old_nodemap = exp->exp_target_data.ted_nodemap;
+	/* do nothing if nodemap does not change */
+	if (old_nodemap == new_nodemap) {
+		spin_unlock(&exp->exp_target_data.ted_nodemap_lock);
+		return;
+	}
+	nodemap_getref(new_nodemap);
 	exp->exp_target_data.ted_nodemap = new_nodemap;
 	spin_unlock(&exp->exp_target_data.ted_nodemap_lock);
-	if (old_nodemap)
-		nodemap_putref(old_nodemap);
 
+	mutex_lock(&new_nodemap->nm_member_list_lock);
+	list_del_init(&exp->exp_target_data.ted_nodemap_member);
 	list_add(&exp->exp_target_data.ted_nodemap_member,
 		 &new_nodemap->nm_member_list);
 	mutex_unlock(&new_nodemap->nm_member_list_lock);
@@ -385,6 +389,10 @@ void __nodemap_member_switch(struct obd_export *exp,
 
 	if (need_revoke)
 		nm_member_exp_revoke(exp, banned);
+
+	/* Drop the ref held by the old list */
+	if (old_nodemap)
+		nodemap_putref(old_nodemap);
 }
 
 /**
@@ -417,12 +425,21 @@ void nm_member_reclassify_nodemap(struct lu_nodemap *nodemap)
 
 		new_nodemap = NULL;
 
-		/* if no conn assigned to this exp, reconnect will reclassify */
 		spin_lock(&exp->exp_lock);
 		if (exp->exp_connection) {
 			nid = &exp->exp_connection->c_peer.nid;
 		} else {
+			/* if no conn assigned to this exp, reconnect will
+			 * reclassify, but it must be moved to the new
+			 * config's default nodemap to prevent stranded
+			 * exports pinning old configs.
+			 */
 			spin_unlock(&exp->exp_lock);
+			if (nodemap == active_config->nmc_default_nodemap)
+				continue;
+			new_nodemap = active_config->nmc_default_nodemap;
+			__nodemap_member_switch(exp, new_nodemap,
+						false, false);
 			continue;
 		}
 		spin_unlock(&exp->exp_lock);
@@ -508,8 +525,7 @@ classify:
 		if (new_nodemap != nodemap)
 			__nodemap_member_switch(exp, new_nodemap,
 						banned, newly_banned);
-		else
-			nodemap_putref(new_nodemap);
+		nodemap_putref(new_nodemap);
 	}
 
 	if (use_nm_cmp_cache) {
