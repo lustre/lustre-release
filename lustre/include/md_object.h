@@ -132,9 +132,9 @@ struct md_op_spec {
 	/* Archive ID used for auto PCC attach when create newly files. */
 	__u32		 sp_archive_id;
 
-	/** don't create lov objects or llog cookie - this replay */
-	unsigned int no_create:1,
-		     sp_cr_lookup:1, /* do lookup sanity check or not. */
+	unsigned int no_create:1, /* skip lov objs and llog cookie in replay */
+		     sp_append_layout:1, /* use mdd_append_stripe_count/pool */
+		     sp_cr_lookup:1, /* do lookup sanity check or not */
 		     sp_rm_entry:1,  /* only remove name entry */
 		     sp_permitted:1, /* do not check permission */
 		     sp_migrate_close:1, /* close the file during migrate */

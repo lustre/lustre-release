@@ -4255,7 +4255,7 @@ void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
 			  const struct md_op_spec *spec,
 			  struct dt_allocation_hint *hint)
 {
-	struct dt_object *np = parent ?  mdd_object_child(parent) : NULL;
+	struct dt_object *np = parent ? mdd_object_child(parent) : NULL;
 	struct mdd_device *mdd = mdd_obj2mdd_dev(child);
 	struct dt_object *nc = mdd_object_child(child);
 
@@ -4273,13 +4273,17 @@ void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
 		}
 		hint->dah_dmv_imp_inherit = spec->sp_dmv_imp_inherit;
 	} else if (S_ISREG(attr->la_mode) &&
-		   spec->sp_cr_flags & MDS_OPEN_APPEND) {
+		   (spec->sp_cr_flags & MDS_OPEN_APPEND) &&
+		   spec->sp_append_layout) {
 		hint->dah_append_stripe_count = mdd->mdd_append_stripe_count;
 		hint->dah_append_pool = mdd->mdd_append_pool;
 	}
 
-	CDEBUG(D_INFO, DFID" eadata %p len %d\n", PFID(mdd_object_fid(child)),
-	       hint->dah_eadata, hint->dah_eadata_len);
+	CDEBUG(D_INFO, DFID" eadata %p len %d flags %#lo append %u?%d/%s\n",
+	       PFID(mdd_object_fid(child)), hint->dah_eadata,
+	       hint->dah_eadata_len, spec ? spec->sp_cr_flags : -1,
+	       spec ? spec->sp_append_layout : -1,
+	       hint->dah_append_stripe_count, hint->dah_append_pool);
 	/* @hint will be initialized by underlying device. */
 	nc->do_ops->do_ah_init(env, hint, np, nc, attr->la_mode & S_IFMT);
 }

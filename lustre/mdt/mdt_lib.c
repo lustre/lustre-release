@@ -1551,7 +1551,6 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 	attr->la_atime = rec->cr_time;
 	attr->la_valid = LA_MODE | LA_RDEV | LA_UID | LA_GID | LA_TYPE |
 		LA_CTIME | LA_MTIME | LA_ATIME;
-	memset(&sp->u, 0, sizeof(sp->u));
 	sp->sp_cr_flags = get_mrc_cr_flags(rec);
 
 	rc = mdt_name_unpack(pill, &RMF_NAME, &rr->rr_name, 0);
@@ -1941,12 +1940,12 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 	attr->la_atime = rec->cr_time;
 	attr->la_valid = LA_MODE  | LA_RDEV  | LA_UID   | LA_GID |
 			 LA_CTIME | LA_MTIME | LA_ATIME;
-	memset(&info->mti_spec.u, 0, sizeof(info->mti_spec.u));
 	info->mti_spec.sp_cr_flags = get_mrc_cr_flags(rec);
 	/* Do not trigger ASSERTION if client miss to set such flags. */
 	if (unlikely(info->mti_spec.sp_cr_flags == 0))
 		RETURN(-EPROTO);
 
+	sp->sp_append_layout = !exp_connect_no_append(info->mti_exp);
 	info->mti_cross_ref = !!(rec->cr_bias & MDS_CROSS_REF);
 
 	mdt_name_unpack(pill, &RMF_NAME, &rr->rr_name, MNF_FIX_ANON);
@@ -2121,6 +2120,8 @@ int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op)
 
 	ENTRY;
 	memset(&info->mti_rr, 0, sizeof(info->mti_rr));
+	/* see mdt_thread_info_reset() for mti_spec initialization */
+	/* see mdt_version_get_check() for mti_ver initialization */
 	if (op < REINT_MAX && mdt_reint_unpackers[op] != NULL) {
 		info->mti_rr.rr_opcode = op;
 		rc = mdt_reint_unpackers[op](info);

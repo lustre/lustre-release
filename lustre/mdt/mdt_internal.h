@@ -520,9 +520,12 @@ struct mdt_thread_info {
 
 	/*
 	 * XXX: Part Three:
-	 * The following members will be filled explicitly
-	 * with zero in mdt_reint_unpack(), because they are only used
-	 * by reint requests (including mdt_reint_open()).
+	 * The mti_rr member will be filled explicitly with zero in
+	 * mdt_reint_unpack() because it is only used by reint requests
+	 * like mdt_reint_open().
+	 * The mti_ver member is initialized only in mdt_version_get_check().
+	 * The mti_spec member is only initialized by mdt_thread_info_reset(),
+	 * and remaining fields by specific reinters as needed. Caveat utilitor.
 	 */
 
 	/* reint record. contains information for reint operations. */

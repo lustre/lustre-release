@@ -466,6 +466,11 @@ static inline bool exp_connect_mirror_id_fix(struct obd_export *exp)
 	return exp_connect_flags2(exp) & OBD_CONNECT2_MIRROR_ID_FIX;
 }
 
+static inline bool exp_connect_no_append(struct obd_export *exp)
+{
+	return exp_connect_flags2(exp) & OBD_CONNECT2_NO_APPEND;
+}
+
 static inline bool imp_connect_lvb_type(struct obd_import *imp)
 {
 	struct obd_connect_data *ocd;

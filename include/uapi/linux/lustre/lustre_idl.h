@@ -863,7 +863,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_READDIR_OPEN      0x8000000000ULL /* read first dir page on open */
 #define OBD_CONNECT2_FLR_EC           0x10000000000ULL /* parity support */
 #define OBD_CONNECT2_FLR_IMMED_MIRROR 0x20000000000ULL /* client writes mirror*/
-#define OBD_CONNECT2_NO_APPEND        0x40000000000ULL /* O_APPEND locking fix*/
+#define OBD_CONNECT2_NO_APPEND        0x40000000000ULL /* no O_APPEND layout */
 #define OBD_CONNECT2_FLR_EC_WR        0x80000000000ULL /* write EC support */
 #define OBD_CONNECT2_PERFSTATS	     0x100000000000ULL /* perf stats in statfs*/
 #define OBD_CONNECT2_POOL_SLV_PACKED 0x200000000000ULL /* packed pool SLV */
@@ -934,6 +934,7 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT2_ASYNC_DISCARD | \
 				OBD_CONNECT2_PCC | \
 				OBD_CONNECT2_CRUSH | \
+				OBD_CONNECT2_NO_APPEND | \
 				OBD_CONNECT2_ENCRYPT | \
 				OBD_CONNECT2_GETATTR_PFID |\
 				OBD_CONNECT2_LSEEK | OBD_CONNECT2_DOM_LVB |\

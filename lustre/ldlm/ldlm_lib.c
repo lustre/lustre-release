@@ -1257,10 +1257,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 {
 	struct obd_device *target = NULL;
 	struct obd_export *export = NULL;
-	/*
-	 * connect handle - filled from target_handle_reconnect in
-	 * reconnect case
-	 */
+	/* connect handle - filled from target_handle_reconnect in reconnect */
 	struct lustre_handle conn;
 	struct lustre_handle *tmp;
 	struct obd_uuid cluuid;
@@ -1347,6 +1344,10 @@ int target_handle_connect(struct ptlrpc_request *req)
 	if (rc)
 		GOTO(out, rc);
 
+	CDEBUG(D_INFO, "%s: client_uuid %s connect_flags %llx:%llx\n",
+	       target->obd_name, cluuid.uuid,
+	       data->ocd_connect_flags, data->ocd_connect_flags2);
+
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 	/*
 	 * Don't allow clients to connect that are using old 1.8 format
@@ -1366,9 +1367,6 @@ int target_handle_connect(struct ptlrpc_request *req)
 	 */
 	tmp_exp_old_falloc =
 		!!(data->ocd_connect_flags & OBD_CONNECT_OLD_FALLOC);
-
-	CDEBUG(D_INFO, "%s: ocd_connect_flags: %#llx tmp_exp_old_falloc: %d\n",
-	       target->obd_name, data->ocd_connect_flags, tmp_exp_old_falloc);
 
 	/*
 	 * Don't allow liblustre clients to connect.

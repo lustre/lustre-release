@@ -114,8 +114,6 @@ static void mdt_auto_split_prep(struct mdt_thread_info *info,
 	spec->u.sp_ea.eadatalen = sizeof(*lum);
 	spec->u.sp_ea.eadata = lum;
 	spec->sp_cr_flags = MDS_OPEN_HAS_EA;
-	spec->no_create = 0;
-	spec->sp_migrate_close = 0;
 }
 
 /* restripe directory: split or merge stripes */
@@ -492,8 +490,6 @@ static void mdt_restripe_migrate_prep(struct mdt_thread_info *info,
 	spec->u.sp_ea.eadatalen = sizeof(*lum);
 	spec->u.sp_ea.eadata = lum;
 	spec->sp_cr_flags = MDS_OPEN_HAS_EA;
-	spec->no_create = 0;
-	spec->sp_migrate_close = 0;
 	/* if 'nsonly' is set, don't migrate inode */
 	if (S_ISDIR(type))
 		spec->sp_migrate_nsonly = 1;
@@ -835,6 +831,8 @@ static int mdt_restriper_main(void *arg)
 
 	while (({set_current_state(TASK_IDLE);
 		 !kthread_should_stop(); })) {
+		mdt_thread_info_reset(info);
+
 		if (!list_empty(&restriper->mdr_auto_splitting)) {
 			__set_current_state(TASK_RUNNING);
 			mdt_auto_split(info);
