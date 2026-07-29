@@ -47,14 +47,14 @@ static void nodemap_destroy(struct lu_nodemap *nodemap)
 {
 	ENTRY;
 
-	if (nodemap->nm_pde_data != NULL)
-		lprocfs_nodemap_remove(nodemap->nm_pde_data);
+	lprocfs_nodemap_remove(nodemap->nm_pde_data);
 	if (nodemap->nm_dt_stats)
 		lprocfs_stats_free(&nodemap->nm_dt_stats);
 	if (nodemap->nm_md_stats)
 		lprocfs_stats_free(&nodemap->nm_md_stats);
 
 	OBD_FREE(nodemap->nm_fileset_prim, nodemap->nm_fileset_prim_size);
+	OBD_FREE_STR(nodemap->nm_identity);
 
 	mutex_lock(&active_config_lock);
 	down_read(&active_config->nmc_range_tree_lock);
@@ -98,6 +98,7 @@ void nodemap_getref(struct lu_nodemap *nodemap)
 	CDEBUG(D_INFO, "GETting nodemap %s(p=%p) : new refcount %d\n",
 	       nodemap->nm_name, nodemap, refcount_read(&nodemap->nm_refcount));
 }
+EXPORT_SYMBOL(nodemap_getref);
 
 /*
  * Destroy nodemap if last reference is put. Should be called outside
@@ -419,6 +420,7 @@ struct lu_nodemap *nodemap_lookup_unlocked(const char *name)
 
 	return nodemap;
 }
+EXPORT_SYMBOL(nodemap_lookup_unlocked);
 
 /**
  * nodemap_lookup_and_lock() - look up a nodemap and keep active_config_lock
@@ -431,7 +433,7 @@ struct lu_nodemap *nodemap_lookup_unlocked(const char *name)
  *
  * Return: pointer to the nodemap on success, or ERR_PTR() on failure.
  */
-static struct lu_nodemap *nodemap_lookup_and_lock(const char *name)
+struct lu_nodemap *nodemap_lookup_and_lock(const char *name)
 {
 	struct lu_nodemap *nodemap;
 
@@ -448,7 +450,7 @@ static struct lu_nodemap *nodemap_lookup_and_lock(const char *name)
  * reference taken by nodemap_lookup_and_lock().
  * @nodemap: nodemap previously returned by nodemap_lookup_and_lock()
  */
-static void nodemap_unlock_and_put(struct lu_nodemap *nodemap)
+void nodemap_unlock_and_put(struct lu_nodemap *nodemap)
 {
 	mutex_unlock(&active_config_lock);
 	nodemap_putref(nodemap);
@@ -1397,18 +1399,31 @@ EXPORT_SYMBOL(nodemap_id_is_squashed);
  * @exp: export to check
  * @fs_uid: uid of the resource
  * @fs_gid: gid of the resource
+ * @fs_projid: projid of the resource
  *
- * Checks whether an export should be able to access a resource. This is called,
- * e.g., for an MDT inode or OST object. If both UID and GID are squashed,
- * the export should not be able to access the object since it is from outside
- * the nodemap ID range.
+ * Checks whether an export should be able to access a resource (MDT inode or
+ * OST object).
+ *
+ * - Non-GSSIAM nodemap case:
+ *   Access is evaluated based on UID and GID mapping ranges. If BOTH fs_uid
+ *   and fs_gid fall outside the tenant nodemap's mapped ID ranges (both are
+ *   squashed), access is denied with -ECHRNG. This prevents a tenant from
+ *   accessing resources belonging to other tenants even if world-accessible.
+ *
+ * - GSSIAM-managed nodemap case:
+ *   Access is evaluated based on the Project ID mapping range. Each GSSIAM
+ *   nodemap is dynamically configured for the tenant's authorized project ID
+ *   (resolved from fileset and security context). Even if UID and GID are not
+ *   squashed (e.g. root or matching user/group), if fs_projid is squashed
+ *   (outside the nodemap's authorized project ID range), access will still be
+ *   denied with -ECHRNG. This enforces strict multi-tenant project isolation.
  *
  * Return:
  * * %0 on success (access is allowed)
  * * %-ECHRNG if access is denied
  */
 int nodemap_check_resource_ids(struct obd_export *exp, __u32 fs_uid,
-			       __u32 fs_gid)
+			       __u32 fs_gid, __u32 fs_projid)
 {
 	struct lu_nodemap *nodemap;
 	int rc = 0;
@@ -1419,14 +1434,24 @@ int nodemap_check_resource_ids(struct obd_export *exp, __u32 fs_uid,
 	if (IS_ERR_OR_NULL(nodemap))
 		RETURN(0);
 
-	if (nodemap_id_is_squashed(nodemap, fs_uid, NODEMAP_UID,
-				   NODEMAP_FS_TO_CLIENT) &&
-	    nodemap_id_is_squashed(nodemap, fs_gid, NODEMAP_GID,
-				   NODEMAP_FS_TO_CLIENT)) {
+	/*
+	 * Check resource accessibility:
+	 * 1. Non-GSSIAM: deny if both UID and GID are outside mapped ranges.
+	 * 2. GSSIAM: deny if Project ID is outside authorized project range,
+	 *    even if UID/GID are not squashed.
+	 */
+	if ((!nodemap->nmf_gssiam_managed &&
+	     nodemap_id_is_squashed(nodemap, fs_uid, NODEMAP_UID,
+				    NODEMAP_FS_TO_CLIENT) &&
+	     nodemap_id_is_squashed(nodemap, fs_gid, NODEMAP_GID,
+				    NODEMAP_FS_TO_CLIENT)) ||
+	    (nodemap->nmf_gssiam_managed && fs_projid != MDT_INVALID_PROJID &&
+	     nodemap_id_is_squashed(nodemap, fs_projid, NODEMAP_PROJID,
+				    NODEMAP_FS_TO_CLIENT))) {
 		CDEBUG(D_SEC,
-		       "Nodemap %s: access denied for export %s (at %s) fs_uid=%u fs_gid=%u\n",
+		       "Nodemap %s: access denied for export %s (at %s) fs_uid=%u fs_gid=%u fs_projid=%u\n",
 		       nodemap->nm_name, obd_uuid2str(&exp->exp_client_uuid),
-		       obd_export_nid2str(exp), fs_uid, fs_gid);
+		       obd_export_nid2str(exp), fs_uid, fs_gid, fs_projid);
 		GOTO(out, rc = -ECHRNG);
 	}
 
@@ -1455,6 +1480,7 @@ static int nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nmf_raise_privs = NODEMAP_RAISE_PRIV_NONE;
 		dst->nmf_rbac_raise = NODEMAP_RBAC_NONE;
 		dst->nmf_gss_identify = 0;
+		dst->nmf_gssiam_managed = 0;
 
 		dst->nm_squash_uid = NODEMAP_NOBODY_UID;
 		dst->nm_squash_gid = NODEMAP_NOBODY_GID;
@@ -1482,6 +1508,7 @@ static int nodemap_inherit_properties(struct lu_nodemap *dst,
 		dst->nmf_fileset_use_iam = 1;
 		dst->nmf_raise_privs = src->nmf_raise_privs;
 		dst->nmf_rbac_raise = src->nmf_rbac_raise;
+		dst->nmf_gssiam_managed = src->nmf_gssiam_managed;
 		dst->nm_squash_uid = src->nm_squash_uid;
 		dst->nm_squash_gid = src->nm_squash_gid;
 		dst->nm_squash_projid = src->nm_squash_projid;
@@ -3526,6 +3553,59 @@ const char *nodemap_get_sepol(const struct lu_nodemap *nodemap)
 }
 EXPORT_SYMBOL(nodemap_get_sepol);
 
+/**
+ * nodemap_set_identity() - Set identity on dynamic nodemap.
+ * @name: nodemap name
+ * @identity: human readable identity string
+ *
+ * Return:
+ * * %0 on success
+ * * %-EINVAL if identity is empty, contains newline characters, or nodemap is not dynamic
+ * * %-ENAMETOOLONG if identity length exceeds LUSTRE_NODEMAP_IDENTITY_LENGTH
+ * * %-ENOMEM on memory allocation failure
+ * * %-ENOENT or other error from nodemap lookup
+ */
+int nodemap_set_identity(const char *name, const char *identity)
+{
+	struct lu_nodemap *nodemap;
+	char *old_identity;
+	size_t len;
+	int rc = 0;
+
+	ENTRY;
+
+	if (!identity)
+		RETURN(-EINVAL);
+
+	len = strlen(identity);
+	if (len == 0 || strchr(identity, '\n') || strchr(identity, '\r'))
+		RETURN(-EINVAL);
+
+	if (len > LUSTRE_NODEMAP_IDENTITY_LENGTH)
+		RETURN(-ENAMETOOLONG);
+
+	nodemap = nodemap_lookup_and_lock(name);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+
+	if (!nodemap->nm_dyn)
+		GOTO(out_putref, rc = -EINVAL);
+
+	old_identity = nodemap->nm_identity;
+	OBD_STRDUP(nodemap->nm_identity, identity);
+	if (!nodemap->nm_identity) {
+		nodemap->nm_identity = old_identity;
+		GOTO(out_putref, rc = -ENOMEM);
+	}
+	OBD_FREE_STR(old_identity);
+	nm_member_revoke_locks(nodemap);
+
+out_putref:
+	nodemap_unlock_and_put(nodemap);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(nodemap_set_identity);
+
 static int nodemap_sha256(struct lu_nodemap *nodemap)
 {
 	struct crypto_shash *tfm;
@@ -4584,6 +4664,32 @@ out_putref:
 EXPORT_SYMBOL(nodemap_set_gss_identify);
 
 /**
+ * nodemap_unlink() - Remove a nodemap from global hash and parent lists
+ * @nodemap: nodemap to unlink
+ *
+ * This safely undoes the global linking performed by nodemap_create().
+ */
+static void nodemap_unlink(struct lu_nodemap *nodemap)
+{
+	int rc;
+
+	if (!list_empty(&nodemap->nm_parent_entry))
+		list_del_init(&nodemap->nm_parent_entry);
+
+	(void)cfs_hash_del_key(active_config->nmc_nodemap_hash,
+			       nodemap->nm_name);
+
+	rc = rhashtable_remove_fast(&active_config->nmc_nodemap_sha_hash,
+				    &nodemap->nm_sha_hash,
+				    nodemap_sha_hash_params);
+	if (rc == 0)
+		nodemap_putref(nodemap); /* Drop the SHA hash reference */
+
+	if (nodemap->nm_dyn)
+		atomic_dec(&active_config->nmc_dyn_count);
+}
+
+/**
  * nodemap_add() - Add a nodemap
  * @nodemap_name: name of nodemap
  * @dynamic: if true nodemap will be dynamic (can be modified runtime)
@@ -4607,17 +4713,30 @@ int nodemap_add(const char *nodemap_name, bool dynamic)
 	}
 
 	rc = nodemap_idx_nodemap_add(nodemap);
-	if (rc == 0 &&
-	    (nodemap->nmf_rbac != NODEMAP_RBAC_ALL ||
-	     nodemap->nmf_raise_privs != NODEMAP_RAISE_PRIV_NONE ||
-	     nodemap->nmf_rbac_raise != NODEMAP_RBAC_NONE))
+	if (rc)
+		GOTO(out_putref, rc);
+
+	if (nodemap->nmf_rbac != NODEMAP_RBAC_ALL ||
+	    nodemap->nmf_raise_privs != NODEMAP_RAISE_PRIV_NONE ||
+	    nodemap->nmf_rbac_raise != NODEMAP_RBAC_NONE) {
 		rc = nodemap_idx_cluster_roles_add(nodemap);
-	if (rc == 0)
-		rc = lprocfs_nodemap_register(nodemap, 0);
+		if (rc)
+			GOTO(out_idx_del, rc);
+	}
 
-	mutex_unlock(&active_config_lock);
-	nodemap_putref(nodemap);
+	rc = lprocfs_nodemap_register(nodemap, 0);
 
+out_idx_del:
+	if (rc)
+		nodemap_idx_nodemap_del(nodemap);
+out_putref:
+	if (rc) {
+		nodemap_unlink(nodemap); /* unlink from hash */
+		/* put to balance set_ref(2) in create */
+		nodemap_putref(nodemap);
+	}
+
+	nodemap_unlock_and_put(nodemap);
 	return rc;
 }
 EXPORT_SYMBOL(nodemap_add);
@@ -4648,6 +4767,7 @@ int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset)
 	nodemap = nodemap_lookup_unlocked(nodemap_name);
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
+
 	if (!allow_op_on_nm(nodemap)) {
 		nodemap_putref(nodemap);
 		GOTO(out, rc = -ENXIO);
@@ -4659,13 +4779,16 @@ int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset)
 
 		list_for_each_entry_safe(nm, nm_temp, &nodemap->nm_subnodemaps,
 					 nm_parent_entry) {
+			char name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
+
+			strscpy(name, nm->nm_name, sizeof(name));
 			/* do our best and report any error on sub-nodemaps
 			 * but do not forward rc
 			 */
-			rc2 = nodemap_del(nm->nm_name, NULL);
-			CDEBUG_LIMIT(D_INFO,
-				     "cannot del sub-nodemap %s: rc = %d\n",
-				     nm->nm_name, rc2);
+			rc2 = nodemap_del(name, NULL);
+			if (rc2 != 0)
+				CERROR("%s: cannot del sub-nodemap '%s': rc = %d\n",
+				       nodemap_name, name, rc2);
 		}
 	}
 	nodemap_putref(nodemap);
@@ -4792,8 +4915,14 @@ void nodemap_clear_dynamic_nodemaps(void)
 		list_for_each_entry_safe(dyn_nm, dyn_nm_tmp,
 					 &nodemap->nm_subnodemaps,
 					 nm_parent_entry) {
-			/* nodemap_del() recursively deletes sub-dyn-nodemaps */
-			nodemap_del(dyn_nm->nm_name, NULL);
+
+			/* nodemap_del() recursively deletes sub-dyn-nodemaps.
+			 * GSSIAM nodemaps are skipped here so they can be
+			 * migrated to the new configuration in
+			 * nodemap_config_set_active().
+			 */
+			if (!dyn_nm->nmf_gssiam_managed)
+				nodemap_del(dyn_nm->nm_name, NULL);
 		}
 
 		nodemap_putref(nodemap);
@@ -5152,6 +5281,111 @@ int nm_hash_list_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 	return 0;
 }
 
+/**
+ * nodemap_gssiam_migrate_one() - Migrate one dynamic nodemap that is managed by
+ * GSSIAM from old config to new config
+ * @old_config: the old nodemap config
+ * @new_config: the new nodemap config
+ * @old_nm: the nodemap to migrate
+ */
+static void nodemap_gssiam_migrate_one(struct nodemap_config *old_config,
+				       struct nodemap_config *new_config,
+				       struct lu_nodemap *old_nm)
+{
+	struct cfs_hash *old_h = old_config->nmc_nodemap_hash;
+	struct cfs_hash *new_h = new_config->nmc_nodemap_hash;
+	struct rhashtable *old_sha = &old_config->nmc_nodemap_sha_hash;
+	struct rhashtable *new_sha = &new_config->nmc_nodemap_sha_hash;
+	struct lu_nodemap *new_nm;
+
+	new_nm = cfs_hash_lookup(new_h, old_nm->nm_name);
+	if (new_nm != NULL) {
+		nodemap_putref(new_nm);
+		return;
+	}
+
+	cfs_hash_del(old_h, old_nm->nm_name, &old_nm->nm_hash);
+	atomic_dec(&old_config->nmc_dyn_count);
+
+	cfs_hash_add(new_h, old_nm->nm_name, &old_nm->nm_hash);
+	atomic_inc(&new_config->nmc_dyn_count);
+
+	if (rhashtable_remove_fast(old_sha, &old_nm->nm_sha_hash,
+				   nodemap_sha_hash_params) == 0) {
+		if (rhashtable_insert_fast(new_sha, &old_nm->nm_sha_hash,
+					   nodemap_sha_hash_params) != 0) {
+			CDEBUG(D_SEC, "%s: failed to insert nodemap\n",
+			       old_nm->nm_name);
+			nodemap_putref(old_nm);
+		}
+	}
+	new_config->nmc_nodemap_highest_id++;
+	old_nm->nm_id = new_config->nmc_nodemap_highest_id;
+
+	if (old_nm->nm_parent_nm != NULL) {
+		struct lu_nodemap *new_parent;
+		const char *pname = old_nm->nm_parent_nm->nm_name;
+
+		new_parent = cfs_hash_lookup(new_h, pname);
+		if (new_parent != NULL) {
+			struct lu_nodemap *old_parent;
+			struct list_head *pentry;
+
+			old_parent = old_nm->nm_parent_nm;
+			pentry = &old_nm->nm_parent_entry;
+			if (!list_empty(pentry))
+				list_del_init(pentry);
+
+			old_nm->nm_parent_nm = new_parent;
+			list_add(pentry, &new_parent->nm_subnodemaps);
+
+			nodemap_putref(old_parent);
+		} else {
+			CDEBUG(D_SEC, "%s: parent %s not found in new config\n",
+			       old_nm->nm_name, pname);
+		}
+	}
+}
+
+static void nodemap_migrate_gssiam_managed(struct nodemap_config *old_config,
+					   struct nodemap_config *new_config)
+{
+	struct lu_nodemap *old_nm, *old_tmp;
+	struct cfs_hash *old_h = old_config->nmc_nodemap_hash;
+	LIST_HEAD(old_nm_list);
+
+	cfs_hash_for_each_safe(old_h, nm_hash_list_cb, &old_nm_list);
+
+	/*
+	 * Pass 1: Migrate top-level GSSIAM nodemaps first (e.g., "gssiam"
+	 * parent whose parent is default nodemap or NULL) so that any
+	 * dynamic child nodemaps will always find their parent in new_config
+	 * during migration.
+	 */
+	list_for_each_entry_safe(old_nm, old_tmp, &old_nm_list, nm_list) {
+		if (!old_nm->nmf_gssiam_managed)
+			continue;
+		if (old_nm->nm_parent_nm != NULL &&
+		    old_nm->nm_parent_nm != old_config->nmc_default_nodemap)
+			continue;
+
+		nodemap_gssiam_migrate_one(old_config, new_config, old_nm);
+		list_del_init(&old_nm->nm_list);
+	}
+
+	/* Pass 2: Migrate child GSSIAM nodemaps */
+	list_for_each_entry_safe(old_nm, old_tmp, &old_nm_list, nm_list) {
+		if (!old_nm->nmf_gssiam_managed)
+			continue;
+
+		nodemap_gssiam_migrate_one(old_config, new_config, old_nm);
+		list_del_init(&old_nm->nm_list);
+	}
+
+	list_for_each_entry_safe(old_nm, old_tmp, &old_nm_list, nm_list)
+		list_del_init(&old_nm->nm_list);
+}
+
 void nodemap_config_set_active(struct nodemap_config *config)
 {
 	struct nodemap_config	*old_config = active_config;
@@ -5167,17 +5401,37 @@ void nodemap_config_set_active(struct nodemap_config *config)
 
 	mutex_lock(&active_config_lock);
 
+	/* migrate dynamic nodemaps from old config to new config */
+	if (active_config != NULL)
+		nodemap_migrate_gssiam_managed(active_config, config);
+
 	/* move proc entries from already existing nms, create for new nms */
 	cfs_hash_for_each_safe(config->nmc_nodemap_hash,
 			       nm_hash_list_cb, &nodemap_list_head);
 	list_for_each_entry_safe(nodemap, tmp, &nodemap_list_head, nm_list) {
 		struct lu_nodemap *old_nm = NULL;
 
+		/*
+		 * Skip gssiam nodemaps. They were migrated in the previous
+		 * phase and are already fully initialized.
+		 */
+		if (nodemap->nmf_gssiam_managed)
+			continue;
+
 		if (active_config != NULL)
 			old_nm = cfs_hash_lookup(
 					active_config->nmc_nodemap_hash,
 					nodemap->nm_name);
 		if (old_nm != NULL) {
+			/* Only dynamic nodemap will be moved to the new
+			 * config, otherwise nodemap in the new config and
+			 * old config must be different.
+			 */
+			LASSERT(old_nm != nodemap);
+			/*
+			 * Hand over proc entries and stats if replacing a
+			 * persistent nodemap.
+			 */
 			nodemap->nm_pde_data = old_nm->nm_pde_data;
 			old_nm->nm_pde_data = NULL;
 
@@ -5844,6 +6098,96 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 
 	RETURN(rc);
 }
+
+/**
+ * nodemap_gssiam_attrs_update() - Update nodemap by projid, readonly, and
+ * allow_root, exclusively used by gssiam case
+ * @name: nodemap name to update
+ * @projid: the projid to squash to
+ * @readonly: whether to mount readonly
+ * @allow_root: whether to disable root squash (allow root access)
+ *
+ * This function is strictly invoked from the internal GSSIAM handshake
+ * process (during authentication/connection setup) rather than through
+ * administrative or user ioctl commands.
+ *
+ * It checks the parent nodemap's privilege policies via check_privs_for_op()
+ * for admin (root) access and readonly mount mode before applying GSSIAM
+ * session parameters.
+ *
+ * Return:
+ * * %0		success
+ * * %-ENOENT	nodemap not found
+ * * %-EINVAL	not a dynamic nodemap
+ * * %-EPERM	privilege raising not permitted by parent nodemap
+ * * %<0	error during idmap nodemap_add_idmap_helper
+ */
+int nodemap_gssiam_attrs_update(const char *name, __u32 projid,
+				bool readonly, bool allow_root)
+{
+	struct lu_nodemap *nodemap;
+	int rc = 0;
+
+	ENTRY;
+
+	nodemap = nodemap_lookup_and_lock(name);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+
+	if (!nodemap->nm_dyn || !nodemap->nmf_gssiam_managed)
+		GOTO(out_unlock_put, rc = -EINVAL);
+
+	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_ADMIN,
+				allow_root) ||
+	    !check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_RO,
+				readonly))
+		GOTO(out_unlock_put, rc = -EPERM);
+
+	if (nodemap->nm_squash_projid != projid ||
+	    nodemap->nmf_readonly_mount != readonly ||
+	    nodemap->nmf_allow_root_access != allow_root) {
+		__u32 map[2] = { projid, projid };
+		projid_t old_projid = nodemap->nm_squash_projid;
+
+		/* Insert the new mapping first to ensure rollback safety
+		 * on failure
+		 */
+		rc = nodemap_add_idmap_helper(nodemap, NODEMAP_PROJID, map);
+		if (rc != 0 && rc != -EEXIST)
+			GOTO(out_unlock_put, rc);
+		rc = 0;
+
+		/* Delete the old mapping only after the new mapping is
+		 * successfully added.
+		 */
+		if (old_projid != projid) {
+			struct lu_idmap *idmap;
+
+			down_write(&nodemap->nm_idmap_lock);
+			idmap = idmap_search(nodemap, NODEMAP_CLIENT_TO_FS,
+					     NODEMAP_PROJID, old_projid);
+			if (idmap)
+				idmap_delete(NODEMAP_PROJID, idmap, nodemap);
+			up_write(&nodemap->nm_idmap_lock);
+		}
+
+		nodemap->nm_squash_projid = projid;
+		nodemap->nmf_readonly_mount = readonly;
+		nodemap->nmf_allow_root_access = allow_root;
+		nodemap->nmf_gss_identify = 1;
+		nodemap->nmf_trust_client_ids = 0;
+		nodemap->nmf_map_mode |= NODEMAP_MAP_PROJID;
+
+		nodemap_del_offset_helper(nodemap);
+
+		nm_member_revoke_locks(nodemap);
+	}
+
+out_unlock_put:
+	nodemap_unlock_and_put(nodemap);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(nodemap_gssiam_attrs_update);
 
 /**
  * server_iocontrol_nodemap() - nodemap related ioctl commands

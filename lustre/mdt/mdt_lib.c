@@ -801,37 +801,43 @@ out_allow:
  * @obj: mdt object to check
  *
  * Check whether the client is allowed to access the resource by consulting
- * the nodemap with the client's export and the MDT inode's UID/GID attributes.
+ * the nodemap with the client's export and the MDT inode's UID/GID or
+ * project ID attributes.
  *
  * Return:
  * * %0 on success (access is allowed)
  * * %-ECHRNG if access is denied
+ * * negative errno on mo_attr_get() failure
  */
 int mdt_check_resource_ids(struct mdt_thread_info *info, struct mdt_object *obj)
 {
-	struct dt_object *dt;
-	struct lu_attr la = { 0 };
+	struct md_attr ma = { 0 };
+	__u32 projid = MDT_INVALID_PROJID;
+	int rc;
 
 	ENTRY;
 
 	if (info->mti_mdt->mdt_lut.lut_enable_resource_id_check == 0)
 		RETURN(0);
 
-	dt = mdt_obj2dt(obj);
-
-	/* Get attributes from MDT inode */
-	if (dt && dt->do_ops && dt->do_ops->do_attr_get) {
-		dt_attr_get(info->mti_env, mdt_obj2dt(obj), &la);
-	} else {
-		/* log this case but don't return err code */
-		CERROR("%s: no dt object for " DFID ": rc = %d\n",
-		       mdt_obd_name(info->mti_mdt), PFID(mdt_object_fid(obj)),
-		       -ENOENT);
+	if (unlikely(obj == NULL || !mdt_object_exists(obj)))
 		RETURN(0);
+
+	ma.ma_need = MA_INODE;
+	rc = mo_attr_get(info->mti_env, mdt_object_child(obj), &ma);
+	if (rc) {
+		CERROR("%s: failed to get attr for " DFID ": rc = %d\n",
+		       mdt_obd_name(info->mti_mdt), PFID(mdt_object_fid(obj)),
+		       rc);
+		RETURN(rc);
 	}
 
+	if (ma.ma_attr.la_valid & LA_PROJID)
+		projid = ma.ma_attr.la_projid;
+
 	RETURN(nodemap_check_resource_ids(mdt_info_req(info)->rq_export,
-					  la.la_uid, la.la_gid));
+					  ma.ma_attr.la_uid, ma.ma_attr.la_gid,
+					  projid));
 }
 
 /* copied from lov/lov_ea.c, just for debugging, will be removed later */

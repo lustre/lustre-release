@@ -1493,7 +1493,8 @@ static int ofd_id_repair_enqueue(struct ofd_device *ofd,
  * @oa: obdo from client
  *
  * Check whether the client is allowed to access the resource by consulting
- * the nodemap with the client's export and the OST objects's UID/GID attr.
+ * the nodemap with the client's export and the OST objects's UID/GID/PROJID
+ * attr.
  *
  * Return:
  * * %0 on success (access is allowed)
@@ -1508,6 +1509,7 @@ static int __ofd_check_resource_ids(const struct lu_env *env,
 	struct ofd_thread_info *info = ofd_info(env);
 	struct obd_export *exp = info->fti_exp;
 	struct lu_attr la_obj = { 0 };
+	__u32 projid = MDT_INVALID_PROJID;
 	int rc;
 
 	ENTRY;
@@ -1544,7 +1546,11 @@ static int __ofd_check_resource_ids(const struct lu_env *env,
 
 		RETURN(-EAGAIN);
 	}
-	RETURN(nodemap_check_resource_ids(exp, la_obj.la_uid, la_obj.la_gid));
+
+	if (la_obj.la_valid & LA_PROJID)
+		projid = la_obj.la_projid;
+	RETURN(nodemap_check_resource_ids(exp, la_obj.la_uid, la_obj.la_gid,
+					  projid));
 }
 
 /**

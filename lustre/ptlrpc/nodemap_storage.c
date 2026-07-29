@@ -2256,6 +2256,10 @@ nodemap_save_config_cache(const struct lu_env *env,
 			       nm_hash_list_cb, &nodemap_list_head);
 
 	list_for_each_entry_safe(nodemap, nm_tmp, &nodemap_list_head, nm_list) {
+		/* Do not save dynamic nodemaps to persistent config cache */
+		if (nodemap->nm_dyn)
+			continue;
+
 		nodemap_cluster_key_init(&nk, nodemap->nm_id,
 					 NODEMAP_CLUSTER_REC);
 		nodemap_cluster_rec_init(&nr, nodemap);

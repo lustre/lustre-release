@@ -1,0 +1,67 @@
+.TH NODEMAP.IDENTITY 4 2026-06-04 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+nodemap.identity \- human-readable identity for dynamic nodemaps
+.SH SYNOPSIS
+.SY
+.BI "lctl get_param nodemap." NODEMAP_NAME ".identity"
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.br
+.BR 444 " | " -r--r--r--
+.TP
+.B Scope
+.br
+Per nodemap (except the default nodemap).
+.TP
+.B Config
+.br
+Present for all nodemaps except the default nodemap.
+.TP
+.B Default
+.br
+Empty string.
+.SH DESCRIPTION
+The
+.B identity
+parameter shows the human-readable identity associated with a dynamic nodemap.
+Dynamic nodemaps are created automatically by certain authentication and
+identity management mechanisms (such as GSS IAM) to provide fine-grained,
+per-identity mapping for clients.
+.PP
+For static nodemaps configured via
+.BR lctl-nodemap-add (8),
+this parameter is always empty. For dynamic nodemaps, it contains the
+string representation of the external identity (e.g., a GSS principal name)
+that the nodemap was created for, up to a maximum of 1024 characters.
+.PP
+This parameter is read-only and is intended for debugging and administrative
+monitoring to correlate dynamic nodemaps with their corresponding external
+identities.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B nodemap.*.identity
+.EE
+.SH EXAMPLES
+To see the identity of a specific nodemap:
+.EX
+.RB "# " "lctl get_param nodemap.dynamic_123.identity"
+nodemap.dynamic_123.identity=user@DOMAIN.COM
+.EE
+To see all nodemaps and their identities:
+.EX
+.RB "# " "lctl get_param nodemap.*.identity"
+.EE
+.SH AVAILABILITY
+The
+.B nodemap.identity
+parameter is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" Added in commit 2.17.5x
+.SH SEE ALSO
+.BR lctl (8),
+.BR lctl-get_param (8),
+.BR lctl-nodemap-add (8)

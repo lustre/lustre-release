@@ -1032,11 +1032,23 @@ do {						\
 		memcpy(str, orig, len + 1);	\
 } while(0)
 
+#define OBD_STRDUP(str, orig)			\
+do {						\
+	const char *__orig = (orig);		\
+	if (__orig) {				\
+		size_t __len = strlen(__orig);	\
+		OBD_STRNDUP(str, __orig, __len);\
+	} else {				\
+		str = NULL;			\
+	}					\
+} while (0)
+
 #define OBD_FREE_STR(str)			\
 do {						\
 	if (str) {				\
 		int len = strlen(str) + 1;	\
 		OBD_FREE(str, len);		\
+		str = NULL;			\
 	}					\
 } while (0)
 

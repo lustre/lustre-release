@@ -457,6 +457,39 @@ static int nodemap_sepol_seq_show(struct seq_file *m, void *data)
 	return rc;
 }
 
+static int nodemap_identity_seq_show(struct seq_file *m, void *data)
+{
+	struct lu_nodemap *nodemap;
+	char *identity = NULL;
+	int rc = 0;
+
+	nodemap = nodemap_lookup_and_lock(m->private);
+	if (IS_ERR(nodemap)) {
+		rc = PTR_ERR(nodemap);
+		CERROR("%s: cannot find: rc = %d\n", (char *)m->private, rc);
+		return rc;
+	}
+
+	if (nodemap->nm_identity) {
+		OBD_STRDUP(identity, nodemap->nm_identity);
+		if (!identity)
+			rc = -ENOMEM;
+	}
+
+	nodemap_unlock_and_put(nodemap);
+
+	if (rc == 0) {
+		if (identity)
+			seq_printf(m, "%s\n", identity);
+		else
+			seq_putc(m, '\n');
+	}
+
+	OBD_FREE_STR(identity);
+	return rc;
+}
+LDEBUGFS_SEQ_FOPS_RO(nodemap_identity);
+
 /**
  * nodemap_sepol_seq_write() - Set SELinux policy info on a nodemap.
  * @file: proc file
@@ -1253,6 +1286,10 @@ static struct ldebugfs_vars lprocfs_nodemap_vars[] = {
 		.fops		= &nodemap_id_fops,
 	},
 	{
+		.name		= "identity",
+		.fops		= &nodemap_identity_fops,
+	},
+	{
 		.name		= "idmap",
 		.fops		= &nodemap_idmap_fops,
 	},
@@ -1441,6 +1478,9 @@ void nodemap_procfs_exit(void)
  */
 void lprocfs_nodemap_remove(struct nodemap_pde *nm_pde)
 {
+	if (!nm_pde)
+		return;
+
 	debugfs_remove_recursive(nm_pde->npe_debugfs_entry);
 	list_del(&nm_pde->npe_list_member);
 	OBD_FREE_PTR(nm_pde);

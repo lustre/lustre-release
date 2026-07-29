@@ -18,6 +18,7 @@
 #include <uapi/linux/lustre/lustre_disk.h>
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include <crypto/hash.h>
+#include <linux/atomic.h>
 #ifdef HAVE_CRYPTO_SHA2_HEADER
 #include <crypto/sha2.h>
 #else
@@ -29,6 +30,7 @@
 
 #define LUSTRE_NODEMAP_DEFAULT_ID	0
 #define LUSTRE_NODEMAP_MAX_ID		UINT_MAX
+#define LUSTRE_NODEMAP_IDENTITY_LENGTH	1024
 
 static const struct nodemap_rbac_name {
 	enum nodemap_rbac_roles nrn_mode;
@@ -117,7 +119,8 @@ struct lu_nodemap {
 				 nmf_readonly_mount:1,
 				 nmf_deny_mount:1,
 				 nmf_fileset_use_iam:1,
-				 nmf_gss_identify:1;
+				 nmf_gss_identify:1,
+				 nmf_gssiam_managed:1;
 	/* bitmap for mapping type */
 	enum nodemap_mapping_modes nmf_map_mode;
 	/* bitmap for rbac, enum nodemap_rbac_roles */
@@ -174,6 +177,8 @@ struct lu_nodemap {
 	unsigned int		 nm_fileset_alt_sz;
 	/* information about the expected SELinux policy on the nodes */
 	char			 nm_sepol[LUSTRE_NODEMAP_SEPOL_LENGTH + 1];
+	/* human-readable identity for dynamic nodemaps */
+	char			 *nm_identity;
 	/* used when loading/unloading nodemaps */
 	struct list_head	 nm_list;
 	/* is a dynamic nodemap */
@@ -228,6 +233,8 @@ int nodemap_add_member(struct ptlrpc_svc_ctx *svc_ctx, struct lnet_nid *nid,
 void nodemap_del_member(struct obd_export *exp);
 int nodemap_member_switch(struct obd_export *exp, char *new_nm_name,
 			  bool gssonly);
+int nodemap_gssiam_attrs_update(const char *name, __u32 projid,
+				bool readonly, bool allow_root);
 int nodemap_parse_range(const char *range_string, struct lnet_nid range[2],
 			u8 *netmask);
 int nodemap_parse_idmap(const char *nodemap_name, char *idmap_str,
@@ -278,6 +285,7 @@ int nodemap_fileset_modify(const char *nodemap_name, const char *fileset_src,
 			   struct lu_nodemap_fileset_modify *fset_modify);
 int nodemap_set_sepol(const char *name, const char *sepol, bool checkperm);
 const char *nodemap_get_sepol(const struct lu_nodemap *nodemap);
+int nodemap_set_identity(const char *name, const char *identity);
 int nodemap_set_capabilities(const char *nodemap_name, char *caps);
 __u32 nodemap_map_id(struct lu_nodemap *nodemap,
 		     enum nodemap_id_type id_type,
@@ -289,7 +297,7 @@ bool nodemap_id_is_squashed(struct lu_nodemap *nodemap, __u32 id,
 			    enum nodemap_id_type type,
 			    enum nodemap_tree_type tree_type);
 int nodemap_check_resource_ids(struct obd_export *exp, __u32 fs_uid,
-			       __u32 fs_gid);
+			       __u32 fs_gid, __u32 fs_projid);
 #ifdef CONFIG_LUSTRE_FS_SERVER
 void nodemap_test_nid(struct lnet_nid *nid, char *name_buf, size_t name_len);
 #else
@@ -314,6 +322,7 @@ void nm_config_file_deregister_mgs(const struct lu_env *env,
 void nm_config_file_deregister_tgt(const struct lu_env *env,
 				   struct nm_config_file *ncf);
 struct lu_nodemap *nodemap_get_from_exp(struct obd_export *exp);
+void nodemap_getref(struct lu_nodemap *nodemap);
 void nodemap_putref(struct lu_nodemap *nodemap);
 
 #ifdef CONFIG_LUSTRE_FS_SERVER

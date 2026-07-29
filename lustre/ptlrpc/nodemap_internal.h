@@ -124,6 +124,10 @@ struct lu_nodemap *nodemap_create(const char *name,
 				  bool is_default, bool dynamic);
 void nodemap_putref(struct lu_nodemap *nodemap);
 struct lu_nodemap *nodemap_lookup_locked(const char *name);
+
+struct lu_nodemap *nodemap_lookup_and_lock(const char *name);
+void nodemap_unlock_and_put(struct lu_nodemap *nodemap);
+
 /* Prefer using nodemap_lookup_locked() over nodemap_lookup().
  *
  * It isn't practical to remove nodemap_lookup() completely right now,
@@ -250,8 +254,6 @@ int nodemap_add_offset_helper(struct lu_nodemap *nodemap, __u32 offset_start,
 			      __u32 offset_limit);
 int nodemap_del_offset_helper(struct lu_nodemap *nodemap);
 
-void nodemap_getref(struct lu_nodemap *nodemap);
-void nodemap_putref(struct lu_nodemap *nodemap);
 int nm_hash_list_cb(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 		    struct hlist_node *hnode,
 		    void *nodemap_list_head);
