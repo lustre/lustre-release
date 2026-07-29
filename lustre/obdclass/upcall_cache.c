@@ -276,8 +276,12 @@ find_with_lock:
 		rc = upcall_cache_get_entry_internal(cache, entry, args,
 						     &fsgid, &ginfo);
 		write_lock(&cache->uc_lock);
-		if (rc)
+		if (rc) {
+			if (entry == new)
+				UC_CACHE_SET_INVALID(entry);
+			put_entry(cache, entry);
 			GOTO(out, entry = ERR_PTR(rc));
+		}
 	}
 
 	/* acquire for new one */
