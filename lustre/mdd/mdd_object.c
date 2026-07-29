@@ -1876,7 +1876,7 @@ static bool mdd_ec_pair_linked(const struct lov_comp_md_v1 *comp_v1,
  * so @buf_vic can hold two mirrors.  Splitting a parity mirror directly never
  * drags its data mirror along.  Links naming a mirror that ended up on the
  * other side are cleared in both layouts.  The victim keeps only
- * LCME_FL_INIT and LCME_FL_PARITY, and its parity mirror is marked
+ * LCME_INTERNAL_COMP_FLAGS, and its parity mirror is marked
  * LCME_FL_STALE unless the pair was in sync on the source.
  *
  * Return:
@@ -1898,7 +1898,7 @@ static int mdd_split_ea(struct mdd_object *obj,
 	__u16 parity_id = 0;
 	__u16 mirrors_split = 1;
 	__u16 link_id = 0;
-	__u32 vic_flag_mask = LCME_FL_INIT | LCME_FL_PARITY;
+	__u32 vic_flag_mask = LCME_INTERNAL_COMP_FLAGS;
 	bool target_found = false;
 	bool target_is_parity = false;
 	bool target_stale = false;

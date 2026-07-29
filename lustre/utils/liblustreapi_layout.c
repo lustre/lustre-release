@@ -3562,8 +3562,8 @@ int llapi_layout_file_comp_set(const char *path, uint32_t *ids, uint32_t *flags,
 			return -1;
 		}
 
-		/* do not allow to set or clear INIT flag */
-		if (flags[i] & LCME_FL_INIT) {
+		/* do not allow to set or clear the internal flags */
+		if (flags[i] & LCME_INTERNAL_COMP_FLAGS) {
 			errno = EINVAL;
 			return -1;
 		}

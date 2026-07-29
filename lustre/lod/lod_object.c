@@ -3045,7 +3045,8 @@ static int lod_declare_layout_set(const struct lu_env *env,
 		__u16 mirror_id = mirror_id_of(id);
 		bool neg = flags & LCME_FL_NEG;
 
-		if (flags & LCME_FL_INIT) {
+		/* do not allow to set/clear the internal flags */
+		if (flags & LCME_INTERNAL_COMP_FLAGS) {
 			if (changed)
 				lod_striping_free_nolock(env, lo);
 			mutex_unlock(&lo->ldo_layout_mutex);

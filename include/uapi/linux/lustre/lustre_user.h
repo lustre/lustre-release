@@ -1058,9 +1058,16 @@ enum lov_comp_md_entry_flags {
 				 LCME_FL_EXTENSION | LCME_FL_PARITY | \
 				 LCME_FL_NOCOMPR | LCME_FL_IS_LINK_ID)
 
-/* The component flags can be set by users at creation/modification time. */
+/* The component flags can be set by users at creation/modification time,
+ * except LCME_FL_PARITY which may only be set at creation time. */
 #define LCME_USER_COMP_FLAGS	(LCME_FL_PREF_RW | LCME_FL_NOSYNC | \
 				 LCME_FL_EXTENSION | LCME_FL_PARITY)
+
+/* Component flags restricted by the MDT: users may not set or clear
+ * them on an existing component (see llapi_layout_file_comp_set() and
+ * lod_declare_layout_set()), and they are the only flags retained when a
+ * mirror is split off into the victim layout. */
+#define LCME_INTERNAL_COMP_FLAGS	(LCME_FL_INIT | LCME_FL_PARITY)
 
 /* The mirror flags can be set by users at creation time. */
 #define LCME_USER_MIRROR_FLAGS	(LCME_FL_PREF_RW | LCME_FL_NOCOMPR)

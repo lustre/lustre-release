@@ -2014,6 +2014,83 @@ test_6e() {
 }
 run_test 6e "Write fails when only parity mirror is non-stale"
 
+test_6f() {
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local ids
+	local data_comp_id
+
+	stack_trap "rm -f $tf"
+
+	# The parity flag (LCME_FL_PARITY) is reserved for EC parity mirrors
+	# that are created implicitly by --ec.  It must not be settable on a
+	# file layout component through "lfs setstripe --comp-set
+	# --comp-flags=parity", nor clearable with "^parity", on either a
+	# plain data component or the data component of an EC file.
+
+	# Create a plain composite file so we have a real data component id
+	# to target with --comp-set.
+	$LFS setstripe -E 1M -E -1 $tf ||
+		error "create plain composite file failed"
+
+	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+	data_comp_id=${ids[0]}
+
+	# Test 1: setting parity flag on a plain data component must fail
+	$LFS setstripe --comp-set -I $data_comp_id --comp-flags=parity $tf &&
+		error "setstripe should fail when setting parity flag"
+
+	# Verify the parity flag was NOT actually applied
+	$LFS getstripe -I$data_comp_id $tf | grep -q "parity" &&
+		error "parity flag should not be set on data component"
+
+	# Test 2: clearing parity flag (^parity) on a data component must fail
+	$LFS setstripe --comp-set -I $data_comp_id --comp-flags=^parity $tf &&
+		error "setstripe should fail when clearing parity flag"
+
+	# Recreate as an EC file and retry against its data component to make
+	# sure the rejection also holds within an EC layout.
+	rm -f $tf
+	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf || error "create EC file failed"
+
+	# Find the data component (the one without the parity flag)
+	data_comp_id=$($LFS getstripe $tf |
+		awk '/lcme_id:/ {id=$2}
+		     /lcme_flags:/ && !/parity/ {print id; exit}')
+	[[ -n "$data_comp_id" ]] ||
+		error "could not find data component ID in EC file"
+
+	# Sanity check: confirm we picked the data component, not a parity one
+	$LFS getstripe -I$data_comp_id $tf | grep -q "parity" &&
+		error "selected component should not already have parity flag"
+
+	# Test 3: setting parity flag on the data component of an EC file
+	# must fail
+	$LFS setstripe --comp-set -I $data_comp_id --comp-flags=parity $tf &&
+		error "setstripe should fail setting parity flag on EC data component"
+
+	# Verify the data component is still not a parity component
+	$LFS getstripe -I$data_comp_id $tf | grep -q "parity" &&
+		error "parity flag should not be set on EC data component"
+
+	# Test 4: combining parity with an allowed flag must still be rejected
+	# outright; parity must not sneak in alongside a valid flag, and the
+	# allowed flag must not be partially applied either.
+	$LFS setstripe --comp-set -I $data_comp_id --comp-flags=parity,nosync \
+		$tf &&
+		error "setstripe should fail when mixing parity with nosync"
+
+	# Neither parity nor nosync should be applied after the failed call
+	$LFS getstripe -I$data_comp_id $tf | grep -q "parity" &&
+		error "parity flag should not be set after mixed-flags failure"
+	$LFS getstripe -I$data_comp_id $tf | grep -q "nosync" &&
+		error "nosync flag should not be set after mixed-flags failure"
+
+	return 0
+}
+run_test 6f "Block setting parity flag on file layout components"
+
 test_7a() {
 	enable_ec
 
