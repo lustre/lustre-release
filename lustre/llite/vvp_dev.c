@@ -358,7 +358,7 @@ ll_filemap_get_one_page_contig(struct address_space *mapping,
 	*pg = NULL;
 
 	nr = filemap_get_folios_contig(mapping, &start, start, &fbatch);
-	if (nr == PAGEVEC_SIZE) {
+	if (nr == FOLIO_BATCH_SIZE) {
 		--nr;
 		*pg = folio_page(fbatch.folios[nr], 0);
 		return 1;

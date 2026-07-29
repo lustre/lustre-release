@@ -200,7 +200,7 @@ void ll_prune_aliases(struct inode *inode)
 	       PFID(ll_inode2fid(inode)), inode);
 
 	spin_lock(&inode->i_lock);
-	hlist_for_each_entry(dentry, &inode->i_dentry, d_u.d_alias)
+	hlist_for_each_entry(dentry, &inode->i_dentry, DENTRY_D_ALIAS)
 		d_lustre_invalidate(dentry);
 	spin_unlock(&inode->i_lock);
 

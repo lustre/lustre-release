@@ -25,7 +25,7 @@
 #include <lustre_compat/linux/bio.h>
 #include <linux/mm.h>
 #include <linux/swap.h>
-#include <linux/pagevec.h>
+#include <lustre_compat/linux/folio_batch.h>
 #include <linux/blk_types.h>
 
 /*
@@ -959,8 +959,8 @@ static int osd_ldiskfs_map_inode_pages(struct inode *inode,
 
 	max_page_index = inode->i_sb->s_maxbytes >> PAGE_SHIFT;
 
-	CDEBUG(D_OTHER, "inode %lu: map %d pages from %lu\n",
-		inode->i_ino, pages, folio_index_page((*lnbs)->lnb_page));
+	CDEBUG(D_OTHER, "inode %llu: map %d pages from %lu\n",
+	       (u64)inode->i_ino, pages, folio_index_page((*lnbs)->lnb_page));
 
 	if (osd->od_extents_dense)
 		compressed = iobuf->dr_lnbs[0]->lnb_flags & OBD_BRW_COMPRESSED;
@@ -1438,8 +1438,8 @@ static int osd_declare_write_commit(const struct lu_env *env,
 		credits += dirty_groups;
 
 	CDEBUG(D_INODE,
-	       "%s: inode #%lu extent_bytes %u extents %d credits %d\n",
-	       osd_ino2name(inode), inode->i_ino, extent_bytes, extents,
+	       "%s: inode #%llu extent_bytes %u extents %d credits %d\n",
+	       osd_ino2name(inode), (u64)inode->i_ino, extent_bytes, extents,
 	       credits);
 
 out_declare:
@@ -1709,9 +1709,9 @@ int osd_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs)
 		csize = min(blocksize - boffs, size);
 		bh = __ldiskfs_bread(NULL, inode, block, 0);
 		if (IS_ERR(bh)) {
-			CERROR("%s: can't read %u@%llu on ino %lu: rc = %ld\n",
-			       osd_ino2name(inode), csize, *offs, inode->i_ino,
-			       PTR_ERR(bh));
+			CERROR("%s: can't read %u@%llu on ino %llu: rc = %ld\n",
+			       osd_ino2name(inode), csize, *offs,
+			       (u64)inode->i_ino, PTR_ERR(bh));
 			return PTR_ERR(bh);
 		}
 
@@ -2532,8 +2532,8 @@ static int osd_fallocate_preallocate(const struct lu_env *env,
 	LASSERT(osd_invariant(obj));
 	LASSERT(inode != NULL);
 
-	CDEBUG(D_INODE, "fallocate: inode #%lu: start %llu end %llu mode %d\n",
-	       inode->i_ino, *start, end, mode);
+	CDEBUG(D_INODE, "fallocate: inode #%llu: start %llu end %llu mode %d\n",
+	       (u64)inode->i_ino, *start, end, mode);
 
 	dquot_initialize(inode);
 
@@ -2580,8 +2580,8 @@ static int osd_fallocate_preallocate(const struct lu_env *env,
 		rc = ldiskfs_map_blocks(handle, inode, &map, flags);
 		if (rc <= 0) {
 			CDEBUG(D_INODE,
-			       "inode #%lu: block %u: len %u: ldiskfs_map_blocks returned %d\n",
-			       inode->i_ino, map.m_lblk, map.m_len, rc);
+			       "inode #%llu: block %u: len %u: ldiskfs_map_blocks returned %d\n",
+			       (u64)inode->i_ino, map.m_lblk, map.m_len, rc);
 			ldiskfs_mark_inode_dirty(handle, inode);
 			break;
 		}

@@ -2368,7 +2368,8 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 		int idx;
 
 		if (!ll_has_encryption_key(inode)) {
-			CDEBUG(D_SEC, "no enc key for ino %lu\n", inode->i_ino);
+			CDEBUG(D_SEC, "no enc key for ino %llu\n",
+			       (u64)inode->i_ino);
 			GOTO(out, rc);
 		}
 		for (idx = 0; idx < aa->aa_page_count; idx++) {

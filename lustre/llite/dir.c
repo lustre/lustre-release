@@ -22,7 +22,7 @@
 #include <linux/uidgid.h>
 #include <linux/uaccess.h>
 #include <linux/buffer_head.h>   // for wait_on_buffer
-#include <linux/pagevec.h>
+#include <lustre_compat/linux/folio_batch.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
 

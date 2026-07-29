@@ -85,8 +85,8 @@ select_encryption_mode(const union llcrypt_policy *policy,
 	if (S_ISDIR(inode->i_mode) || S_ISLNK(inode->i_mode))
 		return &available_modes[llcrypt_policy_fnames_mode(policy)];
 
-	WARN_ONCE(1, "llcrypt: filesystem tried to load encryption info for inode %lu, which is not encryptable (file type %d)\n",
-		  inode->i_ino, (inode->i_mode & S_IFMT));
+	WARN_ONCE(1, "llcrypt: filesystem tried to load encryption info for inode %llu, which is not encryptable (file type %d)\n",
+		  (u64)inode->i_ino, (inode->i_mode & S_IFMT));
 	return ERR_PTR(-EINVAL);
 }
 

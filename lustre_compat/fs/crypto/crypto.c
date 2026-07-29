@@ -528,22 +528,17 @@ fail:
 void llcrypt_msg(const struct inode *inode, int mask,
 		 const char *fmt, ...)
 {
-	static DEFINE_RATELIMIT_STATE(rs, DEFAULT_RATELIMIT_INTERVAL,
-				      DEFAULT_RATELIMIT_BURST);
 	struct va_format vaf;
 	va_list args;
-
-	if (!__ratelimit(&rs))
-		return;
 
 	va_start(args, fmt);
 	vaf.fmt = fmt;
 	vaf.va = &args;
 	if (inode)
-		CDEBUG(mask, "llcrypt (%s, inode %lu): %pV\n",
-		       inode->i_sb->s_id, inode->i_ino, &vaf);
+		CDEBUG_LIMIT(mask, "llcrypt (%s, inode %llu): %pV\n",
+			     inode->i_sb->s_id, (u64)inode->i_ino, &vaf);
 	else
-		CDEBUG(mask, "llcrypt: %pV\n", &vaf);
+		CDEBUG_LIMIT(mask, "llcrypt: %pV\n", &vaf);
 	va_end(args);
 }
 

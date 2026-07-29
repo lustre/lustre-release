@@ -78,7 +78,7 @@
 #include <linux/spinlock.h>
 #include <lustre_compat/linux/string.h>
 #include <linux/wait.h>
-#include <linux/pagevec.h>
+#include <lustre_compat/linux/folio_batch.h>
 
 #include <lu_object.h>
 #include <lustre_dlm.h>

@@ -160,10 +160,11 @@ static int iam_lfix_init(struct iam_leaf *l)
 		result = -EIO;
 		obj = iam_leaf_container(l)->ic_object;
 		CERROR(
-		"Bad magic in node %llu #%lu: %#x != %#x or bad cnt: %d %d: rc = %d\n",
-			(unsigned long long)l->il_bh->b_blocknr, obj->i_ino,
-			le16_to_cpu(ill->ill_magic), IAM_LEAF_HEADER_MAGIC,
-			count, leaf_count_limit(l), result);
+		"Bad magic in node %llu #%llu: %#x != %#x or bad cnt: %d %d: rc = %d\n",
+			(unsigned long long)l->il_bh->b_blocknr,
+			(u64)obj->i_ino, le16_to_cpu(ill->ill_magic),
+			IAM_LEAF_HEADER_MAGIC, count, leaf_count_limit(l),
+			result);
 	}
 	return result;
 }

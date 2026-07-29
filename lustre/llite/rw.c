@@ -1874,8 +1874,8 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	 * the PCC copy.
 	 */
 	if (inode->i_op != &ll_file_inode_operations) {
-		CERROR("%s: readpage() on invalidated PCC inode %lu: rc=%d\n",
-		       sb->s_id, inode->i_ino, -EIO);
+		CERROR("%s: readpage() on invalidated PCC inode %llu: rc=%d\n",
+		       sb->s_id, (u64)inode->i_ino, -EIO);
 		unlock_page(vmpage);
 		RETURN(-EIO);
 	}

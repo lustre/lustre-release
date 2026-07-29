@@ -3053,8 +3053,9 @@ int ll_update_inode(struct inode *inode, struct lustre_md *md)
 	if (body->mbo_valid & OBD_MD_FLMTIME) {
 		if (body->mbo_mtime > inode_get_mtime_sec(inode)) {
 			CDEBUG(D_INODE,
-			       "setting ino %lu mtime from %lld to %llu\n",
-			       inode->i_ino, (s64) inode_get_mtime_sec(inode),
+			       "setting ino %llu mtime from %lld to %llu\n",
+			       (u64)inode->i_ino,
+			       (s64)inode_get_mtime_sec(inode),
 			       body->mbo_mtime);
 			inode_set_mtime(inode, body->mbo_mtime, 0);
 		}

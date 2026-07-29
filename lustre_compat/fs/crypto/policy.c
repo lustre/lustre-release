@@ -342,8 +342,8 @@ int llcrypt_ioctl_set_policy(struct file *filp, const void __user *arg)
 	 * encryption-unaware clients.
 	 */
 	if (!(lsi->lsi_flags & LSI_FILENAME_ENC)) {
-		CWARN("inode %lu: forcing policy filenames_encryption_mode to null\n",
-		      inode->i_ino);
+		CWARN("inode %llu: forcing policy filenames_encryption_mode to null\n",
+		      (u64)inode->i_ino);
 		cfs_tty_write_msg("\n\nForcing policy filenames_encryption_mode to null.\n\n");
 		switch (policy.version) {
 		case LLCRYPT_POLICY_V1:
@@ -460,8 +460,8 @@ int llcrypt_ioctl_get_policy_ex(struct file *filp, void __user *uarg)
 			policy->v1.filenames_encryption_mode =
 				contents2filenames_encmode(
 					policy->v1.contents_encryption_mode);
-			CWARN("inode %lu: returning policy filenames_encryption_mode as %d, but is in fact null\n",
-			      inode->i_ino,
+			CWARN("inode %llu: returning policy filenames_encryption_mode as %d, but is in fact null\n",
+			      (u64)inode->i_ino,
 			      policy->v1.filenames_encryption_mode);
 		}
 		break;
@@ -470,8 +470,8 @@ int llcrypt_ioctl_get_policy_ex(struct file *filp, void __user *uarg)
 			policy->v2.filenames_encryption_mode =
 				contents2filenames_encmode(
 					policy->v2.contents_encryption_mode);
-			CWARN("inode %lu: returning policy filenames_encryption_mode as %d, but is in fact null\n",
-			      inode->i_ino,
+			CWARN("inode %llu: returning policy filenames_encryption_mode as %d, but is in fact null\n",
+			      (u64)inode->i_ino,
 			      policy->v2.filenames_encryption_mode);
 		}
 		break;

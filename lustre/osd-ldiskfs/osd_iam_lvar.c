@@ -357,8 +357,8 @@ static int lvar_init(struct iam_leaf *l)
 
 		obj = iam_leaf_container(l)->ic_object;
 		CERROR(
-		"Bad magic in node %llu (#%lu): %#x != %#x or wrong used: %d\n",
-		(unsigned long long)l->il_bh->b_blocknr, obj->i_ino,
+		"Bad magic in node %llu (#%llu): %#x != %#x or wrong used: %d\n",
+		(unsigned long long)l->il_bh->b_blocknr, (u64)obj->i_ino,
 		le16_to_cpu(head->vlh_magic), IAM_LVAR_LEAF_MAGIC,
 		used);
 		result = -EIO;

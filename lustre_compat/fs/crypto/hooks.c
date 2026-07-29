@@ -44,8 +44,8 @@ int llcrypt_file_open(struct inode *inode, struct file *filp)
 	if (IS_ENCRYPTED(d_inode(dir)) &&
 	    !llcrypt_has_permitted_context(d_inode(dir), inode)) {
 		llcrypt_warn(inode,
-			     "Inconsistent encryption context (parent directory: %lu)",
-			     d_inode(dir)->i_ino);
+			     "Inconsistent encryption context (parent directory: %llu)",
+			     (u64)d_inode(dir)->i_ino);
 		err = -EPERM;
 	}
 	dput(dir);

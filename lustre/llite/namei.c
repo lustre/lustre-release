@@ -166,7 +166,7 @@ static void ll_prune_negative_children(struct inode *dir)
 
 restart:
 	spin_lock(&dir->i_lock);
-	hlist_for_each_entry(dentry, &dir->i_dentry, d_u.d_alias) {
+	hlist_for_each_entry(dentry, &dir->i_dentry, DENTRY_D_ALIAS) {
 		spin_lock(&dentry->d_lock);
 		d_for_each_child(child, dentry) {
 			if (child->d_inode)
@@ -581,7 +581,7 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *dentry)
 	discon_alias = invalid_alias = NULL;
 
 	spin_lock(&inode->i_lock);
-	hlist_for_each_entry(alias, &inode->i_dentry, d_u.d_alias) {
+	hlist_for_each_entry(alias, &inode->i_dentry, DENTRY_D_ALIAS) {
 		LASSERT(alias != dentry);
 
 		spin_lock(&alias->d_lock);

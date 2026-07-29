@@ -2339,9 +2339,9 @@ static int server_getattr(struct mnt_idmap *idmap,
 	if (!root_inode)
 		return -EACCES;
 
-	CDEBUG(D_SUPER, "%s: root_inode from %s ino=%lu, dev=%x\n",
+	CDEBUG(D_SUPER, "%s: root_inode from %s ino=%llu, dev=%x\n",
 	       lsi->lsi_svname, root_inode == inode ? "lsi" : "vfsmnt",
-	       root_inode->i_ino, root_inode->i_rdev);
+	       (u64)root_inode->i_ino, root_inode->i_rdev);
 	generic_fillattr(IDMAP_ARG RQMASK_ARG root_inode, stat);
 	iput(root_inode);
 

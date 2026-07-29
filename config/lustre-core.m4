@@ -1414,7 +1414,11 @@ AC_DEFUN([LC_HAVE_WB_STAT_MOD], [
 #
 AC_DEFUN([LC_SRC_HAVE_FOLIO_BATCH], [
 	LB2_LINUX_TEST_SRC([struct_folio_batch_exists], [
-		#include <linux/pagevec.h>
+		#if __has_include (<linux/folio_batch.h>)
+		# include <linux/folio_batch.h>
+		#else
+		# include <linux/pagevec.h>
+		#endif
 	],[
 		struct folio_batch fbatch __attribute__ ((unused));
 
@@ -2218,7 +2222,11 @@ AC_DEFUN([LC_HAVE_LOCKS_LOCK_FILE_WAIT_IN_FILELOCK], [
 #
 AC_DEFUN([LC_SRC_HAVE_FOLIO_BATCH_REINIT], [
 	LB2_LINUX_TEST_SRC([folio_batch_reinit_exists], [
-		#include <linux/pagevec.h>
+		#if __has_include (<linux/folio_batch.h>)
+		# include <linux/folio_batch.h>
+		#else
+		# include <linux/pagevec.h>
+		#endif
 	],[
 		struct folio_batch fbatch __attribute__ ((unused));
 
@@ -2432,7 +2440,11 @@ AC_DEFUN([LC_HAVE_SG_SET_FOLIO], [
 #
 AC_DEFUN([LC_SRC_HAVE_STRUCT_PAGEVEC], [
 	LB2_LINUX_TEST_SRC([struct_pagevec_exists], [
-		#include <linux/pagevec.h>
+		#if __has_include (<linux/folio_batch.h>)
+		# include <linux/folio_batch.h>
+		#else
+		# include <linux/pagevec.h>
+		#endif
 	],[
 		struct pagevec *pvec = NULL;
 		(void)pvec;
@@ -3722,6 +3734,33 @@ AC_DEFUN([LC_HAVE_POSIX_ACL_TO_XATTR_ALLOC_BUFFER],[
 ]) # LC_HAVE_POSIX_ACL_TO_XATTR_ALLOC_BUFFER
 
 #
+# LC_HAVE_DCACHE_ANON_UNION_D_ALIAS
+#
+# Linux commit v7.0-rc6-4-g14a51045e10d3
+#  get rid of busy-waiting in shrink_dcache_tree()
+# anonymized the union containing d_alias
+#
+AC_DEFUN([LC_SRC_HAVE_DCACHE_ANON_UNION_D_ALIAS],[
+	LB2_LINUX_TEST_SRC([dentry_d_alias_anonymized], [
+		#include <linux/dcache.h>
+	],[
+		struct dentry *dentry = NULL;
+
+		hlist_del_init(&dentry->d_alias);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_DCACHE_ANON_UNION_D_ALIAS],[
+	LB2_MSG_LINUX_TEST_RESULT([if dentry union with d_alias is anonymized],
+	[dentry_d_alias_anonymized], [
+		AC_DEFINE(DENTRY_D_ALIAS, d_alias,
+			  [union with d_alias is anonymous])
+	], [
+		AC_DEFINE([DENTRY_D_ALIAS], [d_u.d_alias],
+			  [d_u union needed to access d_alias])
+	])
+]) # LC_HAVE_DCACHE_ANON_UNION_D_ALIAS
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -3932,6 +3971,9 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 
 	# 7.0
 	LC_SRC_HAVE_POSIX_ACL_TO_XATTR_ALLOC_BUFFER
+
+	# 7.1
+	LC_SRC_HAVE_DCACHE_ANON_UNION_D_ALIAS
 ])
 
 AC_DEFUN([LC_PROG_LINUX_RESULTS], [
@@ -4155,6 +4197,9 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 7.0
 	LC_HAVE_POSIX_ACL_TO_XATTR_ALLOC_BUFFER
+
+	# 7.1
+	LC_HAVE_DCACHE_ANON_UNION_D_ALIAS
 ])
 
 #

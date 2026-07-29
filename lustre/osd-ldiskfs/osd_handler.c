@@ -475,10 +475,10 @@ int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
 		/* Check LMA compatibility */
 		if (lma->lma_incompat & ~LMA_INCOMPAT_SUPP) {
 			rc = -EOPNOTSUPP;
-			CWARN("%s: unsupported incompat LMA feature(s) %#x for fid = "DFID", ino = %lu: rc = %d\n",
+			CWARN("%s: unsupported incompat LMA feature(s) %#x for fid = "DFID", ino = %llu: rc = %d\n",
 			      osd_ino2name(inode),
 			      lma->lma_incompat & ~LMA_INCOMPAT_SUPP,
-			      PFID(&lma->lma_self_fid), inode->i_ino, rc);
+			      PFID(&lma->lma_self_fid), (u64)inode->i_ino, rc);
 		}
 	} else if (rc == 0) {
 		rc = -ENODATA;
@@ -605,12 +605,12 @@ int osd_ldiskfs_add_entry(struct osd_thread_info *info, struct osd_device *osd,
 
 		/* below message is checked in sanity.sh test_129 */
 		if (rc == -ENOSPC) {
-			CWARN("%s: directory (inode: %lu, FID: %s) has reached max size limit\n",
-			      osd_name(osd), parent->i_ino, fidstr);
+			CWARN("%s: directory (inode: %llu, FID: %s) has reached max size limit\n",
+			      osd_name(osd), (u64)parent->i_ino, fidstr);
 		} else {
 			rc = 0;	/* ignore such error now */
-			CWARN("%s: directory (inode: %lu, FID: %s) is approaching max size limit\n",
-			      osd_name(osd), parent->i_ino, fidstr);
+			CWARN("%s: directory (inode: %llu, FID: %s) is approaching max size limit\n",
+			      osd_name(osd), (u64)parent->i_ino, fidstr);
 		}
 
 	}
@@ -867,10 +867,10 @@ static int osd_check_lma(const struct lu_env *env, struct osd_object *obj)
 		if (unlikely((lma->lma_incompat & ~LMA_INCOMPAT_SUPP) ||
 			     (CFS_FAIL_CHECK(OBD_FAIL_OSD_LMA_INCOMPAT) &&
 			      S_ISREG(inode->i_mode)))) {
-			CWARN("%s: unsupported incompat LMA feature(s) %#x for "
-			      "fid = "DFID", ino = %lu\n", osd_name(osd),
+			CWARN("%s: unsupported incompat LMA feature(s) %#x for fid = "DFID", ino = %llu\n",
+			      osd_name(osd),
 			      lma->lma_incompat & ~LMA_INCOMPAT_SUPP,
-			      PFID(rfid), inode->i_ino);
+			      PFID(rfid), (u64)inode->i_ino);
 			rc = -EOPNOTSUPP;
 		} else {
 			fid = &lma->lma_self_fid;
@@ -1089,9 +1089,9 @@ again:
 out:
 	if (rc < 0)
 		CDEBUG(D_LFSCK,
-		       "%s: cannot check LMV, ino = %lu/%u: rc = %d\n",
-		       osd_ino2name(inode), inode->i_ino, inode->i_generation,
-		       rc);
+		       "%s: cannot check LMV, ino = %llu/%u: rc = %d\n",
+		       osd_ino2name(inode), (u64)inode->i_ino,
+		       inode->i_generation, rc);
 	else
 		rc = 0;
 
@@ -1339,9 +1339,9 @@ check_lma:
 
 	LASSERTF(id->oii_ino == inode->i_ino &&
 		 id->oii_gen == inode->i_generation,
-		 "locate wrong inode for FID: "DFID", %u/%u => %ld/%u\n",
+		 "locate wrong inode for FID: "DFID", %u/%u => %llu/%u\n",
 		 PFID(fid), id->oii_ino, id->oii_gen,
-		 inode->i_ino, inode->i_generation);
+		 (u64)inode->i_ino, inode->i_generation);
 
 	saved_ino = inode->i_ino;
 	saved_gen = inode->i_generation;
@@ -2531,7 +2531,7 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 	if (obj->oo_destroyed) {
 		struct qsd_instance *qsd;
 
-		CDEBUG(D_QUOTA, " %p ino=%lu\n", inode, inode->i_ino);
+		CDEBUG(D_QUOTA, " %p ino=%llu\n", inode, (u64)inode->i_ino);
 		qsd = osd->od_quota_slave_dt;
 		osd_quota_refresh(env, qsd, projid, uid, gid);
 
@@ -2571,9 +2571,9 @@ static int osd_object_print(const struct lu_env *env, void *cookie,
 	else
 		d = NULL;
 	return (*p)(env, cookie,
-		    LUSTRE_OSD_LDISKFS_NAME"-object@%p(i:%p:%lu/%u)[%s]",
+		    LUSTRE_OSD_LDISKFS_NAME"-object@%p(i:%p:%llu/%u)[%s]",
 		    o, o->oo_inode,
-		    o->oo_inode ? o->oo_inode->i_ino : 0UL,
+		    (u64)(o->oo_inode ? o->oo_inode->i_ino : 0UL),
 		    o->oo_inode ? o->oo_inode->i_generation : 0,
 		    d ? d->id_ops->id_name : "plain");
 }
@@ -3390,8 +3390,8 @@ static int osd_quota_transfer(struct inode *inode, const struct lu_attr *attr,
 		struct iattr iattr;
 
 		CDEBUG(D_QUOTA,
-		       "executing dquot_transfer inode %ld uid %d -> %d gid %d -> %d\n",
-		       inode->i_ino, i_uid_read(inode), attr->la_uid,
+		       "executing dquot_transfer inode %llu uid %d -> %d gid %d -> %d\n",
+		       (u64)inode->i_ino, i_uid_read(inode), attr->la_uid,
 		       i_gid_read(inode), attr->la_gid);
 
 		dquot_initialize(inode);
@@ -4152,8 +4152,8 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 
 	if (S_ISDIR(inode->i_mode)) {
 		if (inode->i_nlink > 2)
-			CERROR("%s: directory "DFID" ino %lu link count is %u at unlink. run e2fsck to repair\n",
-			       osd_name(osd), PFID(fid), inode->i_ino,
+			CERROR("%s: directory "DFID" ino %llu link count is %u at unlink. run e2fsck to repair\n",
+			       osd_name(osd), PFID(fid), (u64)inode->i_ino,
 			       inode->i_nlink);
 
 		spin_lock(&obj->oo_guard);
@@ -4822,8 +4822,8 @@ static int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 		if (buf->lb_len < sizeof(dt_obj_version_t))
 			return -ERANGE;
 
-		CDEBUG(D_INODE, "Get version %#llx for inode %lu\n",
-		       LDISKFS_I(inode)->i_fs_version, inode->i_ino);
+		CDEBUG(D_INODE, "Get version %#llx for inode %llu\n",
+		       LDISKFS_I(inode)->i_fs_version, (u64)inode->i_ino);
 
 		*ver = LDISKFS_I(inode)->i_fs_version;
 
@@ -5206,9 +5206,9 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 		LASSERT(buf->lb_len == sizeof(dt_obj_version_t));
 
 		CDEBUG(D_INODE,
-		       DFID" set version %#llx (old %#llx) for inode %lu\n",
+		       DFID" set version %#llx (old %#llx) for inode %llu\n",
 		       PFID(lu_object_fid(&dt->do_lu)), *version,
-		       LDISKFS_I(inode)->i_fs_version, inode->i_ino);
+		       LDISKFS_I(inode)->i_fs_version, (u64)inode->i_ino);
 
 		LDISKFS_I(inode)->i_fs_version = *version;
 		/*
@@ -6839,9 +6839,9 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
 
 	rc = osd_ea_add_rec(env, obj, child_inode, name, fid, th);
 
-	CDEBUG(D_INODE, "parent %lu insert %s:%lu rc = %d\n",
-	       obj->oo_inode->i_ino, encode_fn_len(name, namelen),
-	       child_inode->i_ino, rc);
+	CDEBUG(D_INODE, "parent %llu insert %s:%llu rc = %d\n",
+	       (u64)obj->oo_inode->i_ino, encode_fn_len(name, namelen),
+	       (u64)child_inode->i_ino, rc);
 
 	if (child_inode && child_inode != oti->oti_inode)
 		iput(child_inode);
@@ -7599,8 +7599,8 @@ osd_dirent_reinsert(const struct lu_env *env, struct osd_device *dev,
 	 */
 	if (rc != 0)
 		CDEBUG(D_LFSCK,
-		       "%s: fail to reinsert the dirent, dir = %lu/%u, name = "DNAME", "DFID": rc = %d\n",
-		       osd_ino2name(inode), dir->i_ino, dir->i_generation,
+		       "%s: fail to reinsert the dirent, dir = %llu/%u, name = "DNAME", "DFID": rc = %d\n",
+		       osd_ino2name(inode), (u64)dir->i_ino, dir->i_generation,
 		       encode_fn_dentry(dentry), PFID(fid), rc);
 
 	RETURN(rc);
@@ -7654,8 +7654,8 @@ osd_dirent_check_repair(const struct lu_env *env, struct osd_object *obj,
 			rc = 0;
 		} else {
 			CDEBUG(D_LFSCK,
-			       "%s: fail to iget() for dirent check_repair, dir = %lu/%u, name = "DNAME", ino = %llu: rc = %d\n",
-			       devname, dir->i_ino, dir->i_generation,
+			       "%s: fail to iget() for dirent check_repair, dir = %llu/%u, name = "DNAME", ino = %llu: rc = %d\n",
+			       devname, (u64)dir->i_ino, dir->i_generation,
 			       encode_fn_oied(ent), ent->oied_ino, rc);
 		}
 
@@ -7697,11 +7697,10 @@ again:
 		jh = osd_journal_start_sb(sb, LDISKFS_HT_MISC, credits);
 		if (IS_ERR(jh)) {
 			rc = PTR_ERR(jh);
-			CDEBUG(D_LFSCK, "%s: fail to start trans for dirent "
-			       "check_repair, dir = %lu/%u, credits = %d, "
-			       "name = "DNAME", ino = %llu: rc = %d\n",
-			       devname, dir->i_ino, dir->i_generation, credits,
-			       encode_fn_oied(ent), ent->oied_ino, rc);
+			CDEBUG(D_LFSCK,
+			       "%s: fail to start trans for dirent check_repair, dir = %llu/%u, credits = %d, name = "DNAME", ino = %llu: rc = %d\n",
+			       devname, (u64)dir->i_ino, dir->i_generation,
+			       credits, encode_fn_oied(ent), ent->oied_ino, rc);
 
 			GOTO(out_inode, rc);
 		}
@@ -7765,11 +7764,11 @@ again:
 				 */
 				*attr |= LUDA_IGNORE;
 			} else {
-				CDEBUG(D_LFSCK, "%s: expect remote agent "
-				       "parent directory, but got "DNAME" under "
-				       "dir = %lu/%u with the FID "DFID"\n",
-				       devname, encode_fn_oied(ent), dir->i_ino,
-				       dir->i_generation, PFID(tfid));
+				CDEBUG(D_LFSCK,
+				       "%s: expect remote agent parent directory, but got "DNAME" under dir = %llu/%u with the FID "DFID"\n",
+				       devname, encode_fn_oied(ent),
+				       (u64)dir->i_ino, dir->i_generation,
+				       PFID(tfid));
 
 				*attr |= LUDA_UNKNOWN;
 			}
@@ -7789,23 +7788,22 @@ again:
 			 * it may because the dirent entry corruption
 			 * and points to other's inode.
 			 */
-			CDEBUG(D_LFSCK, "%s: the target inode does not "
-			       "recognize the dirent, dir = %lu/%u, "
-			       " name = "DNAME", ino = %llu, "
-			       DFID": rc = %d\n", devname, dir->i_ino,
-			       dir->i_generation, encode_fn_oied(ent),
-			       ent->oied_ino, PFID(fid), rc);
+			CDEBUG(D_LFSCK,
+			       "%s: the target inode does not recognize the dirent, dir = %llu/%u, name = "DNAME", ino = %llu, "DFID": rc = %d\n",
+			       devname, (u64)dir->i_ino, dir->i_generation,
+			       encode_fn_oied(ent), ent->oied_ino, PFID(fid),
+			       rc);
 			*attr |= LUDA_UNKNOWN;
 
 			GOTO(out, rc = 0);
 		}
 
 		if (rc && rc != -ENODATA) {
-			CDEBUG(D_LFSCK, "%s: fail to verify FID in the dirent, "
-			       "dir = %lu/%u, name = "DNAME", ino = %llu, "
-			       DFID": rc = %d\n", devname, dir->i_ino,
-			       dir->i_generation, encode_fn_oied(ent),
-			       ent->oied_ino, PFID(fid), rc);
+			CDEBUG(D_LFSCK,
+			       "%s: fail to verify FID in the dirent, dir = %llu/%u, name = "DNAME", ino = %llu, "DFID": rc = %d\n",
+			       devname, (u64)dir->i_ino, dir->i_generation,
+			       encode_fn_oied(ent), ent->oied_ino, PFID(fid),
+			       rc);
 			*attr |= LUDA_UNKNOWN;
 
 			GOTO(out, rc = 0);
@@ -7845,10 +7843,9 @@ again:
 		if (rc == 0)
 			*attr |= LUDA_REPAIR;
 		else
-			CDEBUG(D_LFSCK, "%s: fail to re-insert FID after "
-			       "the dirent, dir = %lu/%u, name = "DNAME", "
-			       "ino = %llu, "DFID": rc = %d\n",
-			       devname, dir->i_ino, dir->i_generation,
+			CDEBUG(D_LFSCK,
+			       "%s: fail to re-insert FID after the dirent, dir = %llu/%u, name = "DNAME", ino = %llu, "DFID": rc = %d\n",
+			       devname, (u64)dir->i_ino, dir->i_generation,
 			       encode_fn_oied(ent), ent->oied_ino,
 			       PFID(fid), rc);
 	} else {
@@ -7888,13 +7885,11 @@ again:
 			if (rc == 0)
 				*attr |= LUDA_REPAIR;
 			else
-				CDEBUG(D_LFSCK, "%s: fail to set LMA for "
-				       "update dirent, dir = %lu/%u, "
-				       "name = "DNAME", ino = %llu, "
-				       DFID": rc = %d\n",
-				       devname, dir->i_ino, dir->i_generation,
-				       encode_fn_oied(ent), ent->oied_ino,
-				       PFID(fid), rc);
+				CDEBUG(D_LFSCK,
+				       "%s: fail to set LMA for update dirent, dir = %llu/%u, name = "DNAME", ino = %llu, "DFID": rc = %d\n",
+				       devname, (u64)dir->i_ino,
+				       dir->i_generation, encode_fn_oied(ent),
+				       ent->oied_ino, PFID(fid), rc);
 		} else if (dev->od_index == 0) {
 			lu_igif_build(fid, inode->i_ino, inode->i_generation);
 			/*
@@ -7906,13 +7901,11 @@ again:
 			if (rc == 0)
 				*attr |= LUDA_UPGRADE;
 			else
-				CDEBUG(D_LFSCK, "%s: fail to append IGIF "
-				       "after the dirent, dir = %lu/%u, "
-				       "name = "DNAME", ino = %llu, "
-				       DFID": rc = %d\n",
-				       devname, dir->i_ino, dir->i_generation,
-				       encode_fn_oied(ent), ent->oied_ino,
-				       PFID(fid), rc);
+				CDEBUG(D_LFSCK,
+				       "%s: fail to append IGIF after the dirent, dir = %llu/%u, name = "DNAME", ino = %llu, "DFID": rc = %d\n",
+				       devname, (u64)dir->i_ino,
+				       dir->i_generation, encode_fn_oied(ent),
+				       ent->oied_ino, PFID(fid), rc);
 		}
 	}
 

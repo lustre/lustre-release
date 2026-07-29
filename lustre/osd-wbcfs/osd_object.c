@@ -173,9 +173,9 @@ static int osd_object_print(const struct lu_env *env, void *cookie,
 	struct osd_object *o = osd_obj(l);
 
 	return (*p)(env, cookie,
-		    LUSTRE_OSD_WBCFS_NAME"-object@%p(i:%p:%lu/%u)",
+		    LUSTRE_OSD_WBCFS_NAME"-object@%p(i:%p:%llu/%u)",
 		    o, o->oo_inode,
-		    o->oo_inode ? o->oo_inode->i_ino : 0UL,
+		    (u64)(o->oo_inode ? o->oo_inode->i_ino : 0UL),
 		    o->oo_inode ? o->oo_inode->i_generation : 0);
 }
 
@@ -385,8 +385,8 @@ static int osd_mkfile(const struct lu_env *env, struct osd_object *obj,
 	inode->i_generation = lu_fid_build_gen(fid);
 	MEMFS_I(inode)->mei_fid = *fid;
 	if (unlikely(insert_inode_locked(inode) < 0)) {
-		CERROR("%s: Failed to insert inode %lu "DFID": doubly allocated?\n",
-		       osd_name(osd), inode->i_ino, PFID(fid));
+		CERROR("%s: Failed to insert inode %llu "DFID": doubly allocated?\n",
+		       osd_name(osd), (u64)inode->i_ino, PFID(fid));
 		iput(inode);
 		RETURN(-EIO);
 	}
@@ -664,8 +664,8 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 	/* TODO: Agent entry remvoal... */
 	if (S_ISDIR(inode->i_mode)) {
 		if (inode->i_nlink > 2)
-			CERROR("%s: dir "DFID" ino %lu nlink %u at unlink.\n",
-			       osd_name(osd), PFID(fid), inode->i_ino,
+			CERROR("%s: dir "DFID" ino %llu nlink %u at unlink.\n",
+			       osd_name(osd), PFID(fid), (u64)inode->i_ino,
 			       inode->i_nlink);
 
 		down_write(&obj->oo_guard);

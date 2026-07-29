@@ -78,9 +78,10 @@ static struct dentry *osd_lookup_noperm_common(struct osd_device *dev,
 		return dchild;
 
 	if (dchild->d_inode && unlikely(is_bad_inode(dchild->d_inode))) {
-		CERROR("%s: bad inode returned %lu/%u: rc = -ENOENT\n",
-		       osd_name(dev), dchild->d_inode->i_ino,
-		       dchild->d_inode->i_generation);
+		CERROR("%s: bad inode returned %llu/%u: rc = %d\n",
+		       osd_name(dev), (u64)dchild->d_inode->i_ino,
+		       dchild->d_inode->i_generation,
+		       -ENOENT);
 		dput(dchild);
 		dchild = ERR_PTR(-ENOENT);
 	}
@@ -151,8 +152,8 @@ simple_mkdir(const struct lu_env *env, struct osd_device *osd,
 
 		if (!S_ISDIR(old_mode)) {
 			err = -ENOTDIR;
-			CERROR("%s: found '%s' (%lu/%u) is mode %o: rc = %d\n",
-			       osd->od_svname, name, inode->i_ino,
+			CERROR("%s: found '%s' (%llu/%u) is mode %o: rc = %d\n",
+			       osd->od_svname, name, (u64)inode->i_ino,
 			       inode->i_generation, old_mode, err);
 			GOTO(out_err, err);
 		}

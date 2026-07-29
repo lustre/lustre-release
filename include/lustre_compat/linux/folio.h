@@ -22,7 +22,7 @@
 #include <linux/backing-dev.h>
 #include <linux/slab.h>
 #include <linux/security.h>
-#include <linux/pagevec.h>
+#include <lustre_compat/linux/folio_batch.h>
 #include <linux/workqueue.h>
 
 #ifndef HAVE_GENERIC_ERROR_REMOVE_FOLIO
