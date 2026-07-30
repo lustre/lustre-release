@@ -123,8 +123,15 @@ static inline int inode_generic_drop(struct inode *inode)
 #endif
 
 #ifndef HAVE_ILOOKUP5_NOWAIT_ISNEW
+static inline
+struct inode *compat_ilookup5_nowait(struct super_block *sb, u64 hashval,
+			      int (*fn)(struct inode *, void *),
+			      void *data, bool *isnew)
+{
+	return ilookup5_nowait(sb, hashval, fn, data);
+}
 #define ilookup5_nowait(sb, hash, fn, data, isnew) \
-	ilookup5_nowait((sb), (hash), (fn), (data))
+	compat_ilookup5_nowait((sb), (hash), (fn), (data), (isnew))
 #endif
 
 #ifndef F_GETLK64

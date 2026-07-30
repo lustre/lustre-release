@@ -124,8 +124,8 @@ static inline void llcrypt_handle_d_move(struct dentry *dentry)
 static inline void folio_bounce_private(struct folio *dst, s32 dstpg,
 					struct folio *src, s32 srcpg)
 {
-	s32 spg __maybe_unused = srcpg > 0 ? srcpg : 0;
-	s32 dpg __maybe_unused = dstpg > 0 ? srcpg : 0;
+	s32 spg = srcpg > 0 ? srcpg : 0;
+	s32 dpg = dstpg > 0 ? srcpg : 0;
 
 	if (dpg) {
 		struct page *vmpg;

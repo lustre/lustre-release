@@ -130,7 +130,7 @@ simple_mkdir(const struct lu_env *env, struct osd_device *osd,
 	struct lu_fid *tfid = &info->oti_fid3;
 	struct inode *inode;
 	struct dentry *dchild;
-	struct dentry *dentry __maybe_unused = NULL;
+	struct dentry *dentry = NULL;
 	int err = 0;
 
 	ENTRY;

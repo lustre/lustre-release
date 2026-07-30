@@ -191,8 +191,8 @@ void llcrypt_generate_iv(union llcrypt_iv *iv, u64 lblk_num,
 static inline void memcpy_folio_page(struct folio *dst, s32 dpg,
 				     struct folio *src, s32 spg)
 {
-	size_t doff __maybe_unused = dpg > 0 ? PAGE_SIZE * dpg : 0;
-	size_t soff __maybe_unused = spg > 0 ? PAGE_SIZE * spg : 0;
+	size_t doff = dpg > 0 ? PAGE_SIZE * dpg : 0;
+	size_t soff = spg > 0 ? PAGE_SIZE * spg : 0;
 	void *to = kmap_local_folio(dst, doff);
 	void *from = kmap_local_folio(src, soff);
 

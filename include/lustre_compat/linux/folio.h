@@ -30,7 +30,10 @@
 #define generic_folio			folio
 #else
 #define generic_folio			page
-#define folio_page(page, n)		(page)
+static inline struct page *folio_page(struct page *page, int n)
+{
+	return page;
+}
 #define folio_nr_pages(page)		(1)
 #define page_folio(page)		(page)
 #endif
@@ -72,7 +75,12 @@ ll_read_cache_folio(struct address_space *mapping, pgoff_t index,
 
 #if defined(HAVE___FILEMAP_GET_FOLIO)
 #define get_folio_lock(m, i, f, g)	__filemap_get_folio((m), (i), (f), (g))
-#define get_folio_nowait(m, i, f, g)	__filemap_get_folio((m), (i), (f), (g))
+static inline struct folio *get_folio_nowait(struct address_space *mapping,
+					     pgoff_t index, int fgp_flags,
+					     gfp_t gfp)
+{
+	return __filemap_get_folio(mapping, index, fgp_flags, gfp);
+}
 #define get_folio_write(m, i, e, f, g)	__filemap_get_folio((m), (i), (f), (g))
 #define get_folio_read(m, i, f, g)	__filemap_get_folio((m), (i), (f), (g))
 #define get_folio_create(m, i, f, g)	__filemap_get_folio((m), (i), (f), (g))
@@ -81,7 +89,10 @@ ll_read_cache_folio(struct address_space *mapping, pgoff_t index,
 #define fpgptr(folio)			(&folio->page)
 
 /* older kernels maintain mapping back to kmap() */
-#define ll_kmap_local_folio(f, off)	kmap_local_folio((f), (off))
+static inline void *ll_kmap_local_folio(struct folio *folio, size_t offset)
+{
+	return kmap_local_folio(folio, offset);
+}
 #define ll_kunmap_local(kaddr)		kunmap_local((kaddr))
 
 #ifndef FGP_WRITEBEGIN
@@ -117,7 +128,12 @@ ll_read_cache_folio(struct address_space *mapping, pgoff_t index,
 
 #else /* !HAVE___FILEMAP_GET_FOLIO */
 #define get_folio_lock(m, i, f, g)	find_lock_page((m), (i))
-#define get_folio_nowait(m, i, f, g)	grab_cache_page_nowait((m), (i))
+static inline struct page *get_folio_nowait(struct address_space *mapping,
+					     pgoff_t index, int fgp_flags,
+					     gfp_t gfp)
+{
+	return grab_cache_page_nowait(mapping, index);
+}
 #ifdef HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN_WITH_FLAGS
 #define get_folio_write(m, i, e, f, g)	\
 	grab_cache_page_write_begin((m), (i), (e))
@@ -139,8 +155,14 @@ ll_read_cache_folio(struct address_space *mapping, pgoff_t index,
  * Note this pollutes the use of 'page' as a variable
  */
 #define folio				page
-#define kmap_local_folio(f, off)	kmap_local_page((f))
-#define ll_kmap_local_folio(f, off)	kmap(fpgptr((f)))
+static inline void *kmap_local_folio(struct page *page, size_t offset)
+{
+	return kmap_local_page(page);
+}
+static inline void *ll_kmap_local_folio(struct page *page, size_t offset)
+{
+	return kmap(page);
+}
 #define ll_kunmap_local(kaddr)		kunmap(kmap_to_page((kaddr)))
 #define page_folio(page)		(page)
 #define fpgptr(page)			(page)

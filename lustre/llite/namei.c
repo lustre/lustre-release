@@ -234,7 +234,7 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock,
 {
 	struct inode *inode = ll_inode_from_resource_lock(lock);
 	struct ll_inode_info *lli;
-	bool is_new __maybe_unused;
+	bool is_new;
 	int rc;
 
 	ENTRY;
