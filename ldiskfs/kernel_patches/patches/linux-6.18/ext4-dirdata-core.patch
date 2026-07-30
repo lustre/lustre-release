@@ -23,27 +23,60 @@ fscrypt + case_insensitive support with dirdata
 enabled is checked in a special xfstest sent to EXT4
 with the dirdata patch.
 
-Test-Parameters: clientdistro=el10.0 serverdistro=el10.0
-Test-Parameters: clientdistro=el10.1 serverdistro=el10.1
 Signed-off-by: Artem Blagodarenko <ablagodarenko@thelustrecollective.com>
 Change-Id: Ia9874396037a24b494dd3cfa7208e10a366f5eb3
 Reviewed-on: https://review.whamcloud.com/c/fs/lustre-release/+/64439
-Tested-by: jenkins <devops@whamcloud.com>
 Reviewed-by: Oleg Drokin <green@whamcloud.com>
-Tested-by: Maloo <maloo@whamcloud.com>
 Reviewed-by: Jian Yu <yujian@whamcloud.com>
 Reviewed-by: Andreas Dilger <adilger@thelustrecollective.com>
 ---
 Patch 2 of 3: ext4-dirdata-core.patch
 ---
+ fs/ext4/dir.c         |  14 +-
  fs/ext4/ext4.h        |  14 +-
  fs/ext4/fast_commit.c |   2 +-
  fs/ext4/inline.c      |  13 +-
  fs/ext4/namei.c       | 302 ++++++++++++++++++++++++++++++++++++------
  fs/ext4/super.c       |   4 +-
  fs/ext4/sysfs.c       |   2 +
- 6 files changed, 287 insertions(+), 50 deletions(-)
+ 7 files changed, 299 insertions(+), 52 deletions(-)
 
+diff --git a/fs/ext4/dir.c b/fs/ext4/dir.c
+--- a/fs/ext4/dir.c
++++ b/fs/ext4/dir.c
+@@ -474,13 +474,16 @@ int ext4_htree_store_dirent(struct file *dir_file, __u32 hash,
+ 	struct rb_node **p, *parent = NULL;
+ 	struct fname *fname, *new_fn;
+ 	struct dir_private_info *info;
++	int extra_data = 0;
+ 
+ 	info = dir_file->private_data;
+ 	p = &info->root.rb_node;
+ 
+ 	/* Create and allocate the fname structure */
+-	new_fn = kzalloc(struct_size(new_fn, name, ent_name->len + 1),
+-			 GFP_KERNEL);
++	if (dirent->file_type & ~EXT4_FT_MASK)
++		extra_data = ext4_get_dirent_data_len(dirent);
++	new_fn = kzalloc(struct_size(new_fn, name, ent_name->len + 1 +
++				     extra_data), GFP_KERNEL);
+ 	if (!new_fn)
+ 		return -ENOMEM;
+ 	new_fn->hash = hash;
+@@ -489,6 +492,13 @@ int ext4_htree_store_dirent(struct file *dir_file, __u32 hash,
+ 	new_fn->name_len = ent_name->len;
+ 	new_fn->file_type = dirent->file_type;
+ 	memcpy(new_fn->name, ent_name->name, ent_name->len);
++	if (extra_data)
++		/* Dirdata bytes lie past the __counted_by(name_len) bound but
++		 * within the kzalloc allocation; use unsafe_memcpy to
++		 * avoid a FORTIFY_SOURCE false positive. */
++		unsafe_memcpy(new_fn->name + ent_name->len,
++			      dirent->name + dirent->name_len, extra_data,
++			      /* within kzalloc allocation */);
+ 
+ 	while (*p) {
+ 		parent = *p;
 diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
 --- a/fs/ext4/ext4.h
 +++ b/fs/ext4/ext4.h
@@ -220,7 +253,7 @@ diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
  #endif
  			}
 -			space += ext4_dir_rec_len(de->name_len, dir);
-+			space += ext4_dir_entry_len(de->name_len, dir);
++			space += ext4_dir_entry_len(de, dir);
  			names++;
  		}
  		de = ext4_next_entry(de, size);

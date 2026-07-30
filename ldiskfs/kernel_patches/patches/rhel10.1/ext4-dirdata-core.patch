@@ -224,7 +224,7 @@ Index: linux-stage/fs/ext4/namei.c
  #endif
  			}
 -			space += ext4_dir_rec_len(de->name_len, dir);
-+			space += ext4_dir_entry_len(de->name_len, dir);
++			space += ext4_dir_entry_len(de, dir);
  			names++;
  		}
  		de = ext4_next_entry(de, size);
