@@ -1343,7 +1343,7 @@ int lprocfs_obd_setup(struct obd_device *obd, bool uuid_only)
 
 	obd->obd_proc_entry = lprocfs_register(obd->obd_name,
 					       obd->obd_type->typ_procroot,
-					       obd->obd_vars, obd);
+					       NULL, obd);
 	if (IS_ERR(obd->obd_proc_entry)) {
 		rc = PTR_ERR(obd->obd_proc_entry);
 		CERROR("error %d setting up lprocfs for %s\n", rc, obd->obd_name);

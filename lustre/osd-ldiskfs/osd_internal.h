@@ -950,7 +950,6 @@ static inline char *osd_oid_name(char *name, size_t name_size,
 
 #ifdef CONFIG_PROC_FS
 /* osd_lproc.c */
-extern struct lprocfs_vars lprocfs_osd_obd_vars[];
 int osd_procfs_init(struct osd_device *osd, const char *name);
 void osd_procfs_fini(struct osd_device *osd);
 void osd_brw_stats_update(struct osd_device *osd, struct osd_iobuf *iobuf);

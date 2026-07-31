@@ -778,7 +778,6 @@ struct obd_device {
 	struct dentry			*obd_svc_debugfs_entry;
 	struct lprocfs_stats		*obd_svc_stats;
 	const struct attribute	       **obd_attrs;
-	struct lprocfs_vars	*obd_vars;
 	struct ldebugfs_vars	*obd_debugfs_vars;
 	struct list_head	obd_evict_list;	/* protected with pet_lock */
 	atomic_t		obd_eviction_count;

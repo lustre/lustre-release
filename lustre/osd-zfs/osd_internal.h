@@ -619,8 +619,6 @@ enum {
 
 extern struct kmem_cache *osd_zapit_cachep;
 /* osd_lproc.c */
-extern struct lprocfs_vars lprocfs_osd_obd_vars[];
-
 int osd_procfs_init(struct osd_device *osd, const char *name);
 void osd_procfs_fini(struct osd_device *osd);
 
