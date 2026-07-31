@@ -2297,6 +2297,9 @@ static int server_show_options(struct seq_file *seq, struct dentry *dentry)
 	if (lmd->lmd_osd_type)
 		seq_printf(seq, ",osd=%s", lmd->lmd_osd_type);
 
+	if (lmd->lmd_nidnet)
+		seq_printf(seq, ",network=%s", lmd->lmd_nidnet);
+
 	if (lmd->lmd_opts) {
 		seq_putc(seq, ',');
 		seq_puts(seq, lmd->lmd_opts);

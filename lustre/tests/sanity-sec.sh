@@ -4203,6 +4203,7 @@ test_31() {
 	local nid2=${addr}@$net2
 	local addr2 failover_mds1
 	local all=$(all_nodes)
+	local mntpt opts
 
 	export LNETCTL=$(which lnetctl 2> /dev/null)
 
@@ -4404,9 +4405,19 @@ test_31() {
 	mountmgs
 	for ((num = 1; num <= $MDSCOUNT; num++)); do
 		start mds$num $(mdsdevname $num) $MDS_MOUNT_OPTS,network=$net2
+		mntpt=$(facet_mntpt mds$num)
+		opts=$(do_facet mds$num \
+			"grep ' $mntpt ' /proc/mounts | awk '{ print \\\$4 }'")
+		[[ "$opts," =~ network=$net2, ]] ||
+			error "network=$net2 missing from mds$num mount options"
 	done
 	for ((num = 1; num <= $OSTCOUNT; num++)); do
 		start ost$num $(ostdevname $num) $OST_MOUNT_OPTS,network=$net2
+		mntpt=$(facet_mntpt ost$num)
+		opts=$(do_facet ost$num \
+			"grep ' $mntpt ' /proc/mounts | awk '{ print \\\$4 }'")
+		[[ "$opts," =~ network=$net2, ]] ||
+			error "network=$net2 missing from ost$num mount options"
 	done
 	export KEEP_ZPOOL="$KZPOOL"
 	sleep 5
