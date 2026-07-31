@@ -2526,19 +2526,22 @@ static int emit_changelog_after_swap_layout(const struct lu_env *env,
 					    struct lu_buf *hsm_buf)
 {
 	enum changelog_rec_flags flags = 0;
-	enum changelog_rec_type type;
+	enum changelog_rec_type type = CL_LAYOUT;
 	enum hsm_states hsm_flags;
 	struct hsm_attrs *attrs;
 
 	ENTRY;
+	/*
+	 * Caller always ran fetch_hsm_xattr() first: that allocates lb_buf
+	 * before mdo_xattr_get(), so on success and -ENODATA the buffer is
+	 * present (zeroed when no xattr). -ENOMEM aborts the swap before
+	 * emit is reached.
+	 */
 	attrs = hsm_buf->lb_buf;
 	hsm_flags = le32_to_cpu(attrs->hsm_flags);
-
 	if ((hsm_flags & HS_RELEASED) && !mdd_is_dead_obj(o)) {
 		hsm_set_cl_event(&flags, HE_RELEASE);
 		type = CL_HSM;
-	} else {
-		type = CL_LAYOUT;
 	}
 
 	return mdd_changelog_data_store(env, mdo2mdd(&o->mod_obj), type,
@@ -2550,17 +2553,20 @@ static int emit_changelog_after_swap_layout(const struct lu_env *env,
  *  the rules are:
  *  - only normal FIDs or non-system IGIFs
  *  - same type of objects
- *  - same owner/group (so quotas are still valid) unless this is from HSM
- *    release.
+ *  - same owner/group (so quotas stay coherent) unless this is HSM
+ *    release, or this is a single-stripe swap (SWAP_LAYOUTS_SINGLE_STRIPE,
+ *    e.g. admin migrate_stripe) and the caller holds CAP_FOWNER, in which
+ *    case root may swap a stripe between files owned by others
  */
 static int mdd_layout_swap_allowed(const struct lu_env *env,
 				   struct mdd_object *o1,
 				   const struct lu_attr *attr1,
 				   struct mdd_object *o2,
 				   const struct lu_attr *attr2,
-				   __u64 flags)
+				   enum lustre_swap_layouts_flags flags)
 {
 	const struct lu_fid *fid1, *fid2;
+	struct lu_ucred *uc;
 
 	ENTRY;
 
@@ -2589,8 +2595,24 @@ static int mdd_layout_swap_allowed(const struct lu_env *env,
 		RETURN(0);
 
 	if ((attr1->la_uid != attr2->la_uid) ||
-	    (attr1->la_gid != attr2->la_gid))
-		RETURN(-EPERM);
+	    (attr1->la_gid != attr2->la_gid)) {
+		/* Generic swap_layouts still requires matching uid/gid,
+		 * even for root, so quotas stay coherent (see sanity 184b).
+		 * The single-stripe FID swap used by admin migrate_stripe
+		 * (SWAP_LAYOUTS_SINGLE_STRIPE) allows CAP_FOWNER to bypass
+		 * this even between two ordinary, differently-owned files:
+		 * mdd_swap_layouts() re-chowns the moved OST object(s) to
+		 * their new file's uid/gid/projid, so OST quota accounting
+		 * stays coherent without requiring the partner to be an
+		 * orphan/volatile object.
+		 */
+		if (!(flags & SWAP_LAYOUTS_SINGLE_STRIPE))
+			RETURN(-EPERM);
+
+		uc = lu_ucred_check(env);
+		if (uc == NULL || !cap_raised(uc->uc_cap, CAP_FOWNER))
+			RETURN(-EPERM);
+	}
 
 	RETURN(0);
 }
@@ -2805,7 +2827,7 @@ static bool swap_hsm_set_dirty(struct lu_buf *out_buf, struct lu_buf *src_buf)
  */
 static int swap_hsm_update_version(struct sl_hsm_object_info *out,
 				   struct sl_hsm_object_info *src,
-				   __u64 flags)
+				   enum lustre_swap_layouts_flags flags)
 {
 
 	struct lu_buf *out_buf = out->hsm_buf;
@@ -2867,7 +2889,7 @@ static int swap_layouts_prepare_hsm_attr(const struct lu_env *env,
 					 struct thandle *handle,
 					 struct sl_hsm_object_info *fst,
 					 struct sl_hsm_object_info *snd,
-					 __u64 flags)
+					 enum lustre_swap_layouts_flags flags)
 {
 	unsigned long o_fst_fl;
 	unsigned long o_snd_fl;
@@ -2944,20 +2966,233 @@ static int swap_layouts_prepare_hsm_attr(const struct lu_env *env,
 	return 0;
 }
 
+/**
+ * Return objects[] for a simple v1/v3 LOV blob.
+ * @magic is host-endian with LOV_MAGIC_DEFINED already cleared.
+ */
+static struct lov_ost_data_v1 *
+mdd_lmm_objects(struct lov_mds_md *v1, __u32 magic)
+{
+	if (magic == LOV_MAGIC_V3)
+		return ((struct lov_mds_md_v3 *)v1)->lmm_objects;
+	if (magic == LOV_MAGIC_V1)
+		return v1->lmm_objects;
+	return NULL;
+}
+
+/**
+ * Find a lov_ost_data_v1 entry in @lmm whose OST object matches @fid.
+ * Walks simple (v1/v3) and composite layouts (COMP_V1 and SEL). Only
+ * initialized composite components are searched (uninit ones, including
+ * extension components, can claim a large stripe_count).
+ * LOV_MAGIC_DEFINED is ignored; LOV_MAGIC_FOREIGN components are skipped.
+ *
+ * @lmm_len: total size in bytes of the buffer @lmm points into. Used to
+ * clamp every stripe_count read from the (untrusted) on-disk/wire layout
+ * so a bogus or directory-default (LOV_ALL_STRIPES) stripe_count cannot
+ * walk lov_ost_data_v1 slots past the end of the allocation.
+ * @stripe_size: if non-NULL, set to the host-endian lmm_stripe_size of
+ * the component the returned object was found in (simple layouts report
+ * the top-level lmm_stripe_size).
+ *
+ * Returns pointer into the layout buffer on success, ERR_PTR on failure.
+ */
+static struct lov_ost_data_v1 *
+mdd_lmm_find_ost_obj(struct lov_mds_md *lmm, size_t lmm_len,
+		     const struct lu_fid *fid, __u32 *stripe_size)
+{
+	struct lov_comp_md_v1 *comp;
+	struct lov_mds_md *v1;
+	struct lov_ost_data_v1 *objs;
+	struct lu_fid obj_fid;
+	struct ost_id oi;
+	__u32 magic, sub_magic, off;
+	int i, j, ent_count, stripe_count, avail_count;
+	int rc;
+
+	if (lmm == NULL || fid == NULL || fid_is_zero(fid) ||
+	    lmm_len < sizeof(*lmm))
+		return ERR_PTR(-EINVAL);
+
+	/* Drop LOV_MAGIC_DEFINED so V1/V3/COMP/SEL match with or without it */
+	magic = le32_to_cpu(lmm->lmm_magic) & ~LOV_MAGIC_DEFINED;
+
+	/* SEL is composite with extension components (lcm_magic rewritten
+	 * from COMP_V1 when any component has LCME_FL_EXTENSION).
+	 */
+	if (magic == LOV_MAGIC_COMP_V1 || magic == LOV_MAGIC_SEL) {
+		if (lmm_len < sizeof(*comp))
+			return ERR_PTR(-EINVAL);
+		comp = (struct lov_comp_md_v1 *)lmm;
+		ent_count = le16_to_cpu(comp->lcm_entry_count);
+		avail_count = (lmm_len - sizeof(*comp)) /
+			      sizeof(comp->lcm_entries[0]);
+		if (ent_count > avail_count)
+			ent_count = avail_count;
+		for (i = 0; i < ent_count; i++) {
+			size_t v1_avail;
+
+			if (!(le32_to_cpu(comp->lcm_entries[i].lcme_flags) &
+			      LCME_FL_INIT))
+				continue;
+			off = le32_to_cpu(comp->lcm_entries[i].lcme_offset);
+			/* Component header itself must fit in the buffer */
+			if (off > lmm_len ||
+			    lmm_len - off < sizeof(*v1))
+				continue;
+			v1 = (struct lov_mds_md *)((char *)comp + off);
+			v1_avail = lmm_len - off;
+			sub_magic = le32_to_cpu(v1->lmm_magic) &
+				    ~LOV_MAGIC_DEFINED;
+			/* Skip foreign / unknown component blobs */
+			objs = mdd_lmm_objects(v1, sub_magic);
+			if (objs == NULL)
+				continue;
+			stripe_count = le16_to_cpu(v1->lmm_stripe_count);
+			if ((size_t)((char *)objs - (char *)v1) > v1_avail)
+				continue;
+			avail_count = (v1_avail - ((char *)objs - (char *)v1)) /
+				      sizeof(*objs);
+			if (stripe_count > avail_count)
+				stripe_count = avail_count;
+			for (j = 0; j < stripe_count; j++) {
+				if (unlikely(lovea_slot_is_dummy(&objs[j])))
+					continue;
+				ostid_le_to_cpu(&objs[j].l_ost_oi, &oi);
+				rc = ostid_to_fid(&obj_fid, &oi,
+						  le32_to_cpu(objs[j].l_ost_idx));
+				if (rc)
+					continue;
+				if (lu_fid_eq(&obj_fid, fid)) {
+					if (stripe_size)
+						*stripe_size = le32_to_cpu(
+							v1->lmm_stripe_size);
+					return &objs[j];
+				}
+			}
+		}
+		return ERR_PTR(-ENOENT);
+	}
+
+	objs = mdd_lmm_objects(lmm, magic);
+	if (objs == NULL)
+		return ERR_PTR(-EINVAL);
+
+	if ((size_t)((char *)objs - (char *)lmm) > lmm_len)
+		return ERR_PTR(-EINVAL);
+
+	avail_count = (lmm_len - ((char *)objs - (char *)lmm)) / sizeof(*objs);
+
+	stripe_count = le16_to_cpu(lmm->lmm_stripe_count);
+	if (stripe_count > avail_count)
+		stripe_count = avail_count;
+	for (j = 0; j < stripe_count; j++) {
+		if (unlikely(lovea_slot_is_dummy(&objs[j])))
+			continue;
+		ostid_le_to_cpu(&objs[j].l_ost_oi, &oi);
+		rc = ostid_to_fid(&obj_fid, &oi,
+				  le32_to_cpu(objs[j].l_ost_idx));
+		if (rc)
+			continue;
+		if (lu_fid_eq(&obj_fid, fid)) {
+			if (stripe_size)
+				*stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
+			return &objs[j];
+		}
+	}
+	return ERR_PTR(-ENOENT);
+}
+
+/**
+ * mdd_swap_single_stripe - Swap a single OST object between two layouts
+ *
+ * @fst_lmm: First layout
+ * @fst_lmm_len: size in bytes of the buffer @fst_lmm points into
+ * @snd_lmm: Second layout
+ * @snd_lmm_len: size in bytes of the buffer @snd_lmm points into
+ * @fid1: OST object FID to find in first layout
+ * @fid2: OST object FID to find in second layout
+ *
+ * Identifies objects by FID rather than (comp_id, stripe_index) so a
+ * concurrent component delete/recreate cannot redirect the swap.
+ *
+ * The two components' lmm_stripe_size must match: swapping OST objects
+ * between differently-sized stripes would silently corrupt the RAID0
+ * byte-to-object mapping (and the glimpsed i_size) for whichever file
+ * keeps its own stripe_size after the swap. Object length itself lives
+ * on the OST, not in the LOV, so it cannot be checked here; the caller
+ * (llapi_fswap_layout_fids()) is responsible for pairing objects of
+ * matching length.
+ */
+static int mdd_swap_single_stripe(struct lov_mds_md *fst_lmm,
+				  size_t fst_lmm_len,
+				  struct lov_mds_md *snd_lmm,
+				  size_t snd_lmm_len,
+				  const struct lu_fid *fid1,
+				  const struct lu_fid *fid2)
+{
+	struct lov_ost_data_v1 *fst_obj, *snd_obj;
+	struct lov_ost_data_v1 tmp_obj;
+	__u32 fst_ssize, snd_ssize;
+
+	ENTRY;
+
+	fst_obj = mdd_lmm_find_ost_obj(fst_lmm, fst_lmm_len, fid1, &fst_ssize);
+	if (IS_ERR(fst_obj)) {
+		CDEBUG(D_LAYOUT, "OST object "DFID" not found in first layout: rc = %ld\n",
+		       PFID(fid1), PTR_ERR(fst_obj));
+		RETURN(PTR_ERR(fst_obj));
+	}
+
+	snd_obj = mdd_lmm_find_ost_obj(snd_lmm, snd_lmm_len, fid2, &snd_ssize);
+	if (IS_ERR(snd_obj)) {
+		CDEBUG(D_LAYOUT, "OST object "DFID" not found in second layout: rc = %ld\n",
+		       PFID(fid2), PTR_ERR(snd_obj));
+		RETURN(PTR_ERR(snd_obj));
+	}
+
+	if (fst_ssize != snd_ssize) {
+		CDEBUG(D_LAYOUT,
+		       "stripe_size mismatch swapping "DFID" (%u) and "DFID" (%u)\n",
+		       PFID(fid1), fst_ssize, PFID(fid2), snd_ssize);
+		RETURN(-EINVAL);
+	}
+
+	tmp_obj = *fst_obj;
+	*fst_obj = *snd_obj;
+	*snd_obj = tmp_obj;
+
+	CDEBUG(D_LAYOUT, "swapped OST objects "DFID" and "DFID"\n",
+	       PFID(fid1), PFID(fid2));
+
+	RETURN(0);
+}
+
 /* swap layouts between 2 lustre objects */
 static int mdd_swap_layouts(const struct lu_env *env,
 			    struct md_object *obj1, struct md_object *obj2,
-			    __u64 dv1, __u64 dv2, __u64 flags)
+			    __u64 dv1, __u64 dv2,
+			    enum lustre_swap_layouts_flags flags,
+			    const struct lu_fid *fid1,
+			    const struct lu_fid *fid2)
 {
 	struct mdd_thread_info *info = mdd_env_info(env);
 	struct mdd_object *fst_o = md2mdd_obj(obj1);
 	struct mdd_object *snd_o = md2mdd_obj(obj2);
 	struct lu_attr *fst_la = MDD_ENV_VAR(env, cattr);
 	struct lu_attr *snd_la = MDD_ENV_VAR(env, tattr);
+	/* uid/gid/projid to re-push down to the OST object(s) after a
+	 * single-stripe swap, so quota accounting follows the file that
+	 * now owns the stripe rather than staying with its previous owner.
+	 */
+	struct lu_attr *fst_chown = MDD_ENV_VAR(env, pattr);
+	struct lu_attr *snd_chown = MDD_ENV_VAR(env, tpattr);
 	struct mdd_device *mdd = mdo2mdd(obj1);
 	struct lov_mds_md *fst_lmm, *snd_lmm;
 	struct sl_hsm_object_info fst_info;
 	struct sl_hsm_object_info snd_info;
+	const struct lu_fid *fst_fid = fid1;
+	const struct lu_fid *snd_fid = fid2;
 	struct mdd_object *vlt_o = NULL;
 	struct mdd_object *dom_o = NULL;
 	struct ost_id *saved_oi = NULL;
@@ -2969,6 +3204,7 @@ static int mdd_swap_layouts(const struct lu_env *env,
 	__u64 domsize_dom;
 	__u64 domsize_vlt;
 	__u32 saved_gen;
+	__u32 saved_snd_gen;
 	int retried = 0;
 	__u32 fst_gen;
 	__u32 snd_gen;
@@ -2976,11 +3212,16 @@ static int mdd_swap_layouts(const struct lu_env *env,
 	int fst_fl;
 	int rc2 = 0;
 	int rc;
+	bool snd_lov_committed = false;
+	bool fst_chown_committed = false;
 
 	ENTRY;
 
 	BUILD_BUG_ON(ARRAY_SIZE(info->mdi_buf) < 4);
+	BUILD_BUG_ON(sizeof(enum lustre_swap_layouts_flags) != sizeof(__u64));
 retry:
+	snd_lov_committed = false;
+	fst_chown_committed = false;
 	fst_buf = &info->mdi_buf[0];
 	snd_buf = &info->mdi_buf[1];
 	fst_hsm_buf = &info->mdi_buf[2];
@@ -2998,6 +3239,16 @@ retry:
 	if (rc < 0) {
 		swap(fst_o, snd_o);
 		swap(dv1, dv2);
+		/*
+		 * Parent FIDs are sorted here for lock order. OST object FIDs
+		 * must NOT be swapped at this step: the client already bound
+		 * msl_fid1/msl_fid2 to the sorted parent order when it swapped
+		 * sl_fid1 with the inodes. A second swap would mis-bind them.
+		 * The only later OST-FID swap is the null-layout reorder below,
+		 * which reorders objects, buffers, and FIDs in tandem when
+		 * one side has no LOV (then single-stripe rejects that with
+		 * -EINVAL, so those swapped FIDs are never used for lookup).
+		 */
 	}
 
 	rc = mdd_la_get(env, fst_o, fst_la);
@@ -3036,43 +3287,59 @@ retry:
 	domsize_dom = mdd_lmm_dom_size(snd_buf->lb_buf);
 	domsize_vlt = mdd_lmm_dom_size(fst_buf->lb_buf);
 
-	/* Only migration is supported for DoM files, not 'swap_layouts' so
-	 * target file must be volatile and orphan.
+	/*
+	 * Full layout swap with DoM is migration-only (volatile/orphan partner,
+	 * matching DoM size). Single-stripe swap only moves one OST object and
+	 * never touches the DoM component, so skip these checks (and leave
+	 * dom_o NULL so mdd_dom_fixup is not run).
 	 */
-	if (fst_o->mod_flags & (ORPHAN_OBJ | VOLATILE_OBJ)) {
-		vlt_o = domsize_vlt ? fst_o : NULL;
-		dom_o = domsize_dom ? snd_o : NULL;
-	} else if (snd_o->mod_flags & (ORPHAN_OBJ | VOLATILE_OBJ)) {
-		swap(domsize_dom, domsize_vlt);
-		vlt_o = domsize_vlt ? snd_o : NULL;
-		dom_o = domsize_dom ? fst_o : NULL;
-	} else if (domsize_dom > 0 || domsize_vlt > 0) {
-		/* 'lfs swap_layouts' case, neither file should have DoM */
-		rc = -EOPNOTSUPP;
-		CDEBUG(D_LAYOUT, "cannot swap layouts with DOM component, use migration instead: rc = %d\n",
-		       rc);
-		GOTO(stop, rc);
+	if (!(flags & SWAP_LAYOUTS_SINGLE_STRIPE)) {
+		if (fst_o->mod_flags & (ORPHAN_OBJ | VOLATILE_OBJ)) {
+			vlt_o = domsize_vlt ? fst_o : NULL;
+			dom_o = domsize_dom ? snd_o : NULL;
+		} else if (snd_o->mod_flags & (ORPHAN_OBJ | VOLATILE_OBJ)) {
+			swap(domsize_dom, domsize_vlt);
+			vlt_o = domsize_vlt ? snd_o : NULL;
+			dom_o = domsize_dom ? fst_o : NULL;
+		} else if (domsize_dom > 0 || domsize_vlt > 0) {
+			/* 'lfs swap_layouts': neither file may have DoM */
+			rc = -EOPNOTSUPP;
+			CDEBUG(D_LAYOUT, "cannot swap layouts with DOM component, use migration instead: rc = %d\n",
+			       rc);
+			GOTO(stop, rc);
+		}
+
+		if (domsize_vlt > 0 && domsize_dom == 0) {
+			rc = -EOPNOTSUPP;
+			CDEBUG(D_LAYOUT,
+			       "%s: cannot swap "DFID" layout: OST to DOM migration not supported: rc = %d\n",
+			       mdd_obj_dev_name(snd_o),
+			       PFID(mdd_object_fid(snd_o)), rc);
+			GOTO(stop, rc);
+		} else if (domsize_vlt > 0 && domsize_dom != domsize_vlt) {
+			rc = -EOPNOTSUPP;
+			CDEBUG(D_LAYOUT,
+			       "%s: cannot swap "DFID" layout: new layout must have same DoM component size: rc = %d\n",
+			       mdd_obj_dev_name(fst_o),
+			       PFID(mdd_object_fid(fst_o)), rc);
+			GOTO(stop, rc);
+		}
 	}
 
-	if (domsize_vlt > 0 && domsize_dom == 0) {
-		rc = -EOPNOTSUPP;
-		CDEBUG(D_LAYOUT,
-		       "%s: cannot swap "DFID" layout: OST to DOM migration not supported: rc = %d\n",
-		       mdd_obj_dev_name(snd_o),
-		       PFID(mdd_object_fid(snd_o)), rc);
-		GOTO(stop, rc);
-	} else if (domsize_vlt > 0 && domsize_dom != domsize_vlt) {
-		rc = -EOPNOTSUPP;
-		CDEBUG(D_LAYOUT,
-		       "%s: cannot swap "DFID" layout: new layout must have same DoM component size: rc = %d\n",
-		       mdd_obj_dev_name(fst_o),
-		       PFID(mdd_object_fid(fst_o)), rc);
-		GOTO(stop, rc);
-	}
-
-	/* swapping 2 non existant layouts is a success */
-	if (fst_buf->lb_buf == NULL && snd_buf->lb_buf == NULL)
+	/* swapping 2 non existant layouts is a success, unless this is a
+	 * single-stripe swap: exchanging a stripe between two files that
+	 * have no layout at all is nonsensical and must be rejected rather
+	 * than silently reported as success.
+	 */
+	if (fst_buf->lb_buf == NULL && snd_buf->lb_buf == NULL) {
+		if (flags & SWAP_LAYOUTS_SINGLE_STRIPE) {
+			CDEBUG(D_LAYOUT,
+			       "%s: cannot do single-stripe swap without layouts\n",
+			       mdd_obj_dev_name(fst_o));
+			GOTO(stop, rc = -EINVAL);
+		}
 		GOTO(stop, rc = 0);
+	}
 
 	/* to help inode migration between MDT, it is better to
 	 * start by the no layout file (if one), so we order the swap
@@ -3081,6 +3348,7 @@ retry:
 		swap(fst_o, snd_o);
 		swap(fst_buf, snd_buf);
 		swap(dv1, dv2);
+		swap(fst_fid, snd_fid);
 	}
 
 	fst_gen = snd_gen = 0;
@@ -3098,7 +3366,19 @@ retry:
 	snd_lmm = snd_buf->lb_buf;
 	mdd_get_lmm_gen(snd_lmm, &snd_gen);
 
+	/* Single-stripe swap needs layouts on both sides; after the
+	 * reorder above snd_lmm is always set (or we already returned),
+	 * so only fst_lmm can still be missing.
+	 */
+	if ((flags & SWAP_LAYOUTS_SINGLE_STRIPE) && fst_lmm == NULL) {
+		CDEBUG(D_LAYOUT,
+		       "%s: cannot do single-stripe swap without layouts\n",
+		       mdd_obj_dev_name(fst_o));
+		GOTO(stop, rc = -EINVAL);
+	}
+
 	saved_gen = fst_gen;
+	saved_snd_gen = snd_gen;
 	/* increase the generation layout numbers */
 	snd_gen++;
 	fst_gen++;
@@ -3120,50 +3400,132 @@ retry:
 	else if (fst_gen > snd_gen)
 		snd_gen = fst_gen;
 
-	/* set the file specific informations in lmm */
-	if (fst_lmm != NULL) {
-		struct ost_id temp_oi;
+	/* Handle single-stripe swap */
+	if (flags & SWAP_LAYOUTS_SINGLE_STRIPE) {
+		if (fst_fid == NULL || snd_fid == NULL ||
+		    fid_is_zero(fst_fid) || fid_is_zero(snd_fid)) {
+			CDEBUG(D_LAYOUT,
+			       "%s: single-stripe swap requires non-zero OST FIDs\n",
+			       mdd_obj_dev_name(fst_o));
+			GOTO(stop, rc = -EINVAL);
+		}
+		rc = mdd_swap_single_stripe(fst_lmm, fst_buf->lb_len,
+					    snd_lmm, snd_buf->lb_len,
+					    fst_fid, snd_fid);
+		if (rc)
+			GOTO(stop, rc);
 
-		saved_oi = &info->mdi_oa.o_oi;
-		mdd_get_lmm_oi(fst_lmm, saved_oi);
-		mdd_get_lmm_oi(snd_lmm, &temp_oi);
+		/* Update generation numbers for both layouts */
 		mdd_set_lmm_gen(fst_lmm, &snd_gen);
-		mdd_set_lmm_oi(fst_lmm, &temp_oi);
-		mdd_set_lmm_oi(snd_lmm, saved_oi);
+		mdd_set_lmm_gen(snd_lmm, &fst_gen);
+
+		/*
+		 * Surgical OST-object replace must not touch HSM xattrs:
+		 * only LOV object slots move; archive state stays with the
+		 * parent file. Fall through to declare/xattr LOV set only.
+		 */
 	} else {
-		if ((snd_lmm->lmm_magic & cpu_to_le32(LOV_MAGIC_MASK)) ==
-		    cpu_to_le32(LOV_MAGIC_MAGIC))
-			snd_lmm->lmm_magic |= cpu_to_le32(LOV_MAGIC_DEFINED);
-		else
-			GOTO(stop, rc = -EPROTO);
+		/* Full layout swap - set the file specific informations in lmm */
+		if (fst_lmm != NULL) {
+			struct ost_id temp_oi;
+
+			saved_oi = &info->mdi_oa.o_oi;
+			mdd_get_lmm_oi(fst_lmm, saved_oi);
+			mdd_get_lmm_oi(snd_lmm, &temp_oi);
+			mdd_set_lmm_gen(fst_lmm, &snd_gen);
+			mdd_set_lmm_oi(fst_lmm, &temp_oi);
+			mdd_set_lmm_oi(snd_lmm, saved_oi);
+		} else {
+			if ((snd_lmm->lmm_magic & cpu_to_le32(LOV_MAGIC_MASK)) ==
+			    cpu_to_le32(LOV_MAGIC_MAGIC))
+				snd_lmm->lmm_magic |= cpu_to_le32(LOV_MAGIC_DEFINED);
+			else
+				GOTO(stop, rc = -EPROTO);
+		}
+		mdd_set_lmm_gen(snd_lmm, &fst_gen);
 	}
-	mdd_set_lmm_gen(snd_lmm, &fst_gen);
 
 	fst_info.o = fst_o;
 	fst_info.hsm_buf = fst_hsm_buf;
 	fst_info.dv = dv1;
+	fst_info.xattr_flags = 0;
 
 	snd_info.o = snd_o;
 	snd_info.hsm_buf = snd_hsm_buf;
 	snd_info.dv = dv2;
-	rc = swap_layouts_prepare_hsm_attr(env, mdd, handle,
-					   &fst_info, &snd_info, flags);
-	if (rc)
-		GOTO(stop, rc);
+	snd_info.xattr_flags = 0;
+
+	if (flags & SWAP_LAYOUTS_SINGLE_STRIPE) {
+		/*
+		 * Surgical OST-object replace must not rewrite HSM xattrs
+		 * (archive state stays with the parent). Still fetch HSM
+		 * into the buffers: emit_changelog_after_swap_layout()
+		 * reads hsm_buf to choose CL_HSM vs CL_LAYOUT.
+		 */
+		rc = fetch_hsm_xattr(env, fst_o, fst_hsm_buf);
+		if (rc != -ENODATA && rc != 0)
+			GOTO(stop, rc);
+		rc = fetch_hsm_xattr(env, snd_o, snd_hsm_buf);
+		if (rc != -ENODATA && rc != 0)
+			GOTO(stop, rc);
+		rc = 0;
+	} else {
+		rc = swap_layouts_prepare_hsm_attr(env, mdd, handle,
+						   &fst_info, &snd_info,
+						   flags);
+		if (rc)
+			GOTO(stop, rc);
+	}
 
 	/* prepare transaction */
-	rc = mdd_declare_xattr_set(env, mdd, fst_o, snd_buf, XATTR_NAME_LOV,
-				   fst_fl, handle);
-	if (rc != 0)
-		GOTO(stop, rc);
+	if (flags & SWAP_LAYOUTS_SINGLE_STRIPE) {
+		/* For single-stripe swap, each file keeps its own modified layout */
+		rc = mdd_declare_xattr_set(env, mdd, fst_o, fst_buf,
+					   XATTR_NAME_LOV, fst_fl, handle);
+		if (rc != 0)
+			GOTO(stop, rc);
 
-	if (fst_buf->lb_buf != NULL)
-		rc = mdd_declare_xattr_set(env, mdd, snd_o, fst_buf,
+		rc = mdd_declare_xattr_set(env, mdd, snd_o, snd_buf,
 					   XATTR_NAME_LOV, LU_XATTR_REPLACE,
 					   handle);
-	else
-		rc = mdd_declare_xattr_del(env, mdd, snd_o, XATTR_NAME_LOV,
+		if (rc != 0)
+			GOTO(stop, rc);
+
+		/* Refresh OST-object ownership on both sides so the moved
+		 * stripe is charged to the file it now belongs to (see
+		 * mdd_layout_swap_allowed(), CAP_FOWNER single-stripe swap
+		 * between differently-owned files).
+		 */
+		fst_chown->la_valid = LA_UID | LA_GID | LA_PROJID;
+		fst_chown->la_uid = fst_la->la_uid;
+		fst_chown->la_gid = fst_la->la_gid;
+		fst_chown->la_projid = fst_la->la_projid;
+
+		snd_chown->la_valid = LA_UID | LA_GID | LA_PROJID;
+		snd_chown->la_uid = snd_la->la_uid;
+		snd_chown->la_gid = snd_la->la_gid;
+		snd_chown->la_projid = snd_la->la_projid;
+
+		rc = mdo_declare_attr_set(env, fst_o, fst_chown, handle);
+		if (rc != 0)
+			GOTO(stop, rc);
+
+		rc = mdo_declare_attr_set(env, snd_o, snd_chown, handle);
+	} else {
+		/* For full layout swap, exchange the layout buffers */
+		rc = mdd_declare_xattr_set(env, mdd, fst_o, snd_buf,
+					   XATTR_NAME_LOV, fst_fl, handle);
+		if (rc != 0)
+			GOTO(stop, rc);
+
+		if (fst_buf->lb_buf != NULL)
+			rc = mdd_declare_xattr_set(env, mdd, snd_o, fst_buf,
+					   XATTR_NAME_LOV, LU_XATTR_REPLACE,
 					   handle);
+		else
+			rc = mdd_declare_xattr_del(env, mdd, snd_o, XATTR_NAME_LOV,
+						   handle);
+	}
 	if (rc != 0)
 		GOTO(stop, rc);
 
@@ -3196,21 +3558,59 @@ retry:
 			GOTO(out_restore_hsm_fst, rc);
 	}
 
-	rc = mdo_xattr_set(env, fst_o, snd_buf, XATTR_NAME_LOV, fst_fl, handle);
-	if (rc != 0)
-		GOTO(out_restore_hsm, rc);
+	if (flags & SWAP_LAYOUTS_SINGLE_STRIPE) {
+		/* For single-stripe swap, write each file's own modified layout */
+		rc = mdo_xattr_set(env, fst_o, fst_buf, XATTR_NAME_LOV, fst_fl,
+				   handle);
+		if (rc != 0)
+			GOTO(out_restore_hsm, rc);
 
-	if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_MDS_HSM_SWAP_LAYOUTS))) {
-		rc = -EOPNOTSUPP;
+		rc = mdo_xattr_set(env, snd_o, snd_buf, XATTR_NAME_LOV,
+				   LU_XATTR_REPLACE, handle);
+		if (rc != 0)
+			GOTO(out_restore, rc);
+		/* snd_o's layout has now actually been written to disk;
+		 * any later failure in this branch must also roll back
+		 * this write, not just fst_o's.
+		 */
+		snd_lov_committed = true;
+
+		/* Push uid/gid/projid down to the (possibly just-swapped-in)
+		 * OST object(s) of each file, keeping OST quota accounting
+		 * coherent with the MDT inode that now owns the stripe.
+		 */
+		rc = mdo_attr_set(env, fst_o, fst_chown, handle);
+		if (rc != 0)
+			GOTO(out_restore, rc);
+		fst_chown_committed = true;
+
+		if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_MDS_SWAP_SS_ATTR_SET)))
+			GOTO(out_restore, rc = -EIO);
+
+		rc = mdo_attr_set(env, snd_o, snd_chown, handle);
+		if (rc != 0)
+			GOTO(out_restore, rc);
 	} else {
-		if (fst_buf->lb_buf != NULL)
-			rc = mdo_xattr_set(env, snd_o, fst_buf, XATTR_NAME_LOV,
-					   LU_XATTR_REPLACE, handle);
-		else
-			rc = mdo_xattr_del(env, snd_o, XATTR_NAME_LOV, handle);
+		/* For full layout swap, exchange the buffers */
+		rc = mdo_xattr_set(env, fst_o, snd_buf, XATTR_NAME_LOV, fst_fl,
+				   handle);
+		if (rc != 0)
+			GOTO(out_restore_hsm, rc);
+
+		if (unlikely(CFS_FAIL_CHECK(OBD_FAIL_MDS_HSM_SWAP_LAYOUTS))) {
+			rc = -EOPNOTSUPP;
+		} else {
+			if (fst_buf->lb_buf != NULL)
+				rc = mdo_xattr_set(env, snd_o, fst_buf,
+						   XATTR_NAME_LOV,
+						   LU_XATTR_REPLACE, handle);
+			else
+				rc = mdo_xattr_del(env, snd_o, XATTR_NAME_LOV,
+						   handle);
+		}
+		if (rc != 0)
+			GOTO(out_restore, rc);
 	}
-	if (rc != 0)
-		GOTO(out_restore, rc);
 
 	/* Issue one changelog record per file */
 	rc = emit_changelog_after_swap_layout(env, handle, fst_o, fst_hsm_buf);
@@ -3228,8 +3628,30 @@ out_restore:
 		 * to roll back first.
 		 */
 		if (fst_buf->lb_buf != NULL) {
-			mdd_set_lmm_oi(fst_lmm, saved_oi);
-			mdd_set_lmm_gen(fst_lmm, &saved_gen);
+			if (flags & SWAP_LAYOUTS_SINGLE_STRIPE) {
+				/*
+				 * Undo: after the successful swap above, the
+				 * object that used to match fst_fid now sits
+				 * under snd_fid and vice versa. Look them up
+				 * by their current identities (args reversed).
+				 */
+				rc2 = mdd_swap_single_stripe(fst_lmm,
+							     fst_buf->lb_len,
+							     snd_lmm,
+							     snd_buf->lb_len,
+							     snd_fid, fst_fid);
+				if (rc2) {
+					CERROR("%s: failed to undo single-stripe swap for rollback: rc = %d\n",
+					       mdd_obj_dev_name(fst_o), rc2);
+					goto do_lbug;
+				}
+				/* Restore original generation */
+				mdd_set_lmm_gen(fst_lmm, &saved_gen);
+			} else {
+				/* For full swap, restore saved OI and gen */
+				mdd_set_lmm_oi(fst_lmm, saved_oi);
+				mdd_set_lmm_gen(fst_lmm, &saved_gen);
+			}
 			rc2 = mdo_xattr_set(env, fst_o, fst_buf, XATTR_NAME_LOV,
 					    LU_XATTR_REPLACE, handle);
 		} else {
@@ -3237,6 +3659,26 @@ out_restore:
 		}
 		if (rc2 < 0)
 			goto do_lbug;
+
+		if ((flags & SWAP_LAYOUTS_SINGLE_STRIPE) && snd_lov_committed) {
+			/* snd_o's swapped-in layout was already written to
+			 * disk, so it must be restored too, or it would be
+			 * left pointing at the wrong OST object.
+			 */
+			mdd_set_lmm_gen(snd_lmm, &saved_snd_gen);
+			rc2 = mdo_xattr_set(env, snd_o, snd_buf,
+					    XATTR_NAME_LOV, LU_XATTR_REPLACE,
+					    handle);
+			if (rc2 < 0)
+				goto do_lbug;
+
+			if (fst_chown_committed) {
+				rc2 = mdo_attr_set(env, snd_o, snd_chown,
+						   handle);
+				if (rc2 < 0)
+					goto do_lbug;
+			}
+		}
 
 out_restore_hsm:
 		if (snd_info.xattr_flags) {
@@ -3278,6 +3720,9 @@ stop:
 	/* Truncate local DOM data if all went well, except migration case
 	 * with the same DOM component size. In that case a local data is
 	 * still in use and shouldn't be deleted.
+	 *
+	 * Single-stripe never assigns dom_o (only an OST object is moved),
+	 * so mdd_dom_fixup is skipped automatically.
 	 */
 	if (!rc && dom_o)
 		mdd_dom_fixup(env, mdd, dom_o, vlt_o);

@@ -2173,7 +2173,7 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 	/* Swap layout with orphan objects. */
 	rc = mo_swap_layouts(info->mti_env, mdt_object_child(o),
 			     mdt_object_child(orphan), 0, 0,
-			     SWAP_LAYOUTS_MDS_RELEASE);
+			     SWAP_LAYOUTS_MDS_RELEASE, NULL, NULL);
 
 	if (!rc && ma->ma_attr_flags & MDS_PCC_ATTACH) {
 		ma->ma_need = MA_LOV;
@@ -2341,7 +2341,7 @@ static int mdt_close_handle_layouts(struct mdt_thread_info *info,
 	if (ma->ma_attr_flags & MDS_CLOSE_LAYOUT_SWAP) {
 		__u64 dv1 = data->cd_data_version;
 		__u64 dv2 = 0;
-		__u64 flags = 0;
+		enum lustre_swap_layouts_flags flags = 0;
 
 		if (ma->ma_attr_flags & MDS_CLOSE_LAYOUT_SWAP_HSM) {
 			/* Compat: new clients send new dataversion in
@@ -2357,7 +2357,8 @@ static int mdt_close_handle_layouts(struct mdt_thread_info *info,
 			swap(dv1, dv2);
 
 		rc = mo_swap_layouts(info->mti_env, mdt_object_child(o1),
-				     mdt_object_child(o2), dv1, dv2, flags);
+				     mdt_object_child(o2), dv1, dv2, flags,
+				     NULL, NULL);
 	} else if (ma->ma_attr_flags & MDS_CLOSE_LAYOUT_MERGE ||
 		   ma->ma_attr_flags & MDS_CLOSE_LAYOUT_SPLIT) {
 		struct lu_buf *buf = &info->mti_buf;

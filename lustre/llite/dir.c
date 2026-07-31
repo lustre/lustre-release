@@ -2340,6 +2340,7 @@ out_rmdir:
 	case LL_IOC_RMFID:
 		RETURN(ll_rmfid(file, uarg));
 	case LL_IOC_LOV_SWAP_LAYOUTS:
+	case LL_IOC_LOV_SWAP_LAYOUTS_FID:
 		RETURN(-EPERM);
 	case LL_IOC_LOV_GETSTRIPE:
 	case LL_IOC_LOV_GETSTRIPE_NEW:

@@ -492,7 +492,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 				   OBD_CONNECT2_UNALIGNED_DIO |
 				   OBD_CONNECT2_PCCRO |
 				   OBD_CONNECT2_MIRROR_ID_FIX |
-				   OBD_CONNECT2_READDIR_OPEN;
+				   OBD_CONNECT2_READDIR_OPEN |
+				   OBD_CONNECT2_ONE_OBJ_SWAP;
 
 	if (llite_enable_flr_ec)
 		data->ocd_connect_flags2 |= OBD_CONNECT2_FLR_EC;

@@ -314,12 +314,15 @@ int llapi_create_volatile_idx(const char *directory, int mdt_idx,
  * * %-errno on failure.
  */
 int llapi_fswap_layouts_grouplock(int fd1, int fd2, __u64 dv1, __u64 dv2,
-				  int gid, __u64 flags)
+				  int gid,
+				  enum lustre_swap_layouts_flags flags)
 {
-	struct lustre_swap_layouts	lsl;
-	struct stat			st1;
-	struct stat			st2;
-	int				rc;
+	struct lustre_swap_layouts lsl;
+	struct stat		   st1;
+	struct stat		   st2;
+	int			   rc;
+
+	BUILD_BUG_ON(sizeof(enum lustre_swap_layouts_flags) != sizeof(__u64));
 
 	if (flags & (SWAP_LAYOUTS_KEEP_ATIME | SWAP_LAYOUTS_KEEP_MTIME)) {
 		rc = fstat(fd1, &st1);
@@ -330,11 +333,13 @@ int llapi_fswap_layouts_grouplock(int fd1, int fd2, __u64 dv1, __u64 dv2,
 		if (rc < 0)
 			return -errno;
 	}
+	memset(&lsl, 0, sizeof(lsl));
 	lsl.sl_fd = fd2;
 	lsl.sl_flags = flags;
 	lsl.sl_gid = gid;
 	lsl.sl_dv1 = dv1;
 	lsl.sl_dv2 = dv2;
+	/* Historical 32-byte ioctl; FIDs are only on LL_IOC_LOV_SWAP_LAYOUTS_FID. */
 	rc = ioctl(fd1, LL_IOC_LOV_SWAP_LAYOUTS, &lsl);
 	if (rc < 0)
 		return -errno;
@@ -374,7 +379,8 @@ int llapi_fswap_layouts_grouplock(int fd1, int fd2, __u64 dv1, __u64 dv2,
 	return 0;
 }
 
-int llapi_fswap_layouts(int fd1, int fd2, __u64 dv1, __u64 dv2, __u64 flags)
+int llapi_fswap_layouts(int fd1, int fd2, __u64 dv1, __u64 dv2,
+			enum lustre_swap_layouts_flags flags)
 {
 	int grp_id;
 	int rc;
@@ -406,9 +412,12 @@ int llapi_fswap_layouts(int fd1, int fd2, __u64 dv1, __u64 dv2, __u64 flags)
  * * %-errno on failure.
  */
 int llapi_swap_layouts(const char *path1, const char *path2,
-		       __u64 dv1, __u64 dv2, __u64 flags)
+		       __u64 dv1, __u64 dv2,
+		       enum lustre_swap_layouts_flags flags)
 {
 	int	fd1, fd2, rc;
+
+	BUILD_BUG_ON(sizeof(enum lustre_swap_layouts_flags) != sizeof(__u64));
 
 	fd1 = open(path1, O_WRONLY | O_LOV_DELAY_CREATE);
 	if (fd1 < 0) {
@@ -508,4 +517,80 @@ int llapi_group_unlock64(int fd, __u64 gid)
 		llapi_error(LLAPI_MSG_ERROR, rc, "cannot put group lock");
 	}
 	return rc;
+}
+
+/**
+ * llapi_fswap_layout_fids() - Swap one OST object between two file layouts
+ * @fd_src: file descriptor of source file
+ * @fd_volatile: file descriptor of the partner file (typically a volatile)
+ * @fid_src: OST object FID in the source file to replace
+ * @fid_volatile: OST object FID in the partner file
+ * @dv_src: data version of source file at copy time
+ * @dv_volatile: data version of partner file after copy
+ * @flags: optional SWAP_LAYOUTS_* flags. Always ORed in:
+ *	   SWAP_LAYOUTS_SINGLE_STRIPE, SWAP_LAYOUTS_WITH_DV12,
+ *	   SWAP_LAYOUTS_CHECK_DV1, and SWAP_LAYOUTS_CHECK_DV2.
+ *	   CHECK_DV* make ll_swap_layouts() return -EAGAIN if either file
+ *	   changed since the versions were captured. WITH_DV12 alone only
+ *	   transmits the versions. SWAP_LAYOUTS_CLOSE is not supported.
+ *
+ * Objects are identified by OST FID (not layout index) so a concurrent
+ * component rewrite cannot redirect the swap. Today migrate_stripe uses a
+ * single-stripe volatile partner; multi-stripe partners are allowed by the
+ * protocol as long as @fid_volatile names the intended object.
+ *
+ * Return:
+ * * %0 on success.
+ * * %-EAGAIN if a data version changed since the copy.
+ * * %-errno on failure.
+ */
+int llapi_fswap_layout_fids(int fd_src, int fd_volatile,
+			    const struct lu_fid *fid_src,
+			    const struct lu_fid *fid_volatile,
+			    __u64 dv_src, __u64 dv_volatile,
+			    enum lustre_swap_layouts_flags flags)
+{
+	struct lustre_swap_layouts_fid lsl = {};
+	int rc;
+
+	BUILD_BUG_ON(sizeof(enum lustre_swap_layouts_flags) != sizeof(__u64));
+
+	if (fid_src == NULL || fid_volatile == NULL ||
+	    fid_is_zero(fid_src) || fid_is_zero(fid_volatile))
+		return -EINVAL;
+
+	/* Close path drops stripe selectors; do not allow the combination */
+	if (flags & SWAP_LAYOUTS_CLOSE)
+		return -EINVAL;
+
+	/*
+	 * Always verify data versions. WITH_DV12 alone only transmits dv1/dv2
+	 * for HSM paths; CHECK_DV1/CHECK_DV2 is what makes ll_swap_layouts()
+	 * reject concurrent modification with -EAGAIN.
+	 *
+	 * Callers typically take dv_src before the data copy and dv_volatile
+	 * after filling the partner, so CHECK_DV1 catches races on the source
+	 * and CHECK_DV2 is a cheap self-consistency check on the partner.
+	 */
+	lsl.sl_fd = fd_volatile;
+	lsl.sl_flags = flags | SWAP_LAYOUTS_SINGLE_STRIPE |
+		       SWAP_LAYOUTS_WITH_DV12 |
+		       SWAP_LAYOUTS_CHECK_DV1 | SWAP_LAYOUTS_CHECK_DV2;
+	/*
+	 * sl_gid 0: do not take a group lock inside ll_swap_layouts().
+	 * Callers that need to fence concurrent IO (e.g. migrate_stripe)
+	 * already hold a group lock across copy+swap; a non-zero gid
+	 * here would try to take another and fail with -EINVAL.
+	 */
+	lsl.sl_gid = 0;
+	lsl.sl_dv1 = dv_src;
+	lsl.sl_dv2 = dv_volatile;
+	lsl.sl_fid1 = *fid_src;
+	lsl.sl_fid2 = *fid_volatile;
+
+	rc = ioctl(fd_src, LL_IOC_LOV_SWAP_LAYOUTS_FID, &lsl);
+	if (rc < 0)
+		return -errno;
+
+	return 0;
 }

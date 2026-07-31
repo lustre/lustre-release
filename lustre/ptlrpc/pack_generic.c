@@ -3146,16 +3146,27 @@ int lustre_swab_swap_layouts(struct mdc_swap_layouts *msl, __u32 size)
 {
 	__swab64s(&msl->msl_flags);
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 4, 53, 0)
-	/* Only swab dv1/dv2 fields if WITH_DV12 flag is sent by client, to
-	 * avoid access beyond the end of struct mdc_swap_layouts_217.
+	/* Only swab dv1/dv2 if WITH_DV12 is set and the message is large
+	 * enough, so we never touch past mdc_swap_layouts_217. Do not return
+	 * early: msl_fid1/msl_fid2 may still need swabbing for SINGLE_STRIPE
+	 * even when WITH_DV12 is clear.
 	 */
-	if (!(msl->msl_flags & SWAP_LAYOUTS_WITH_DV12) ||
-	    size < offsetof(struct mdc_swap_layouts, msl_dv2) + sizeof(msl->msl_dv2))
-		return 0;
- #endif
-	__swab64s(&msl->msl_dv1);
-	__swab64s(&msl->msl_dv2);
+	if ((msl->msl_flags & SWAP_LAYOUTS_WITH_DV12) &&
+	    size >= offsetof(struct mdc_swap_layouts, msl_dv2) +
+		    sizeof(msl->msl_dv2))
+#endif
+	{
+		__swab64s(&msl->msl_dv1);
+		__swab64s(&msl->msl_dv2);
+	}
 
+	/* Only swab OST object FIDs if present in the message */
+	if (size >= offsetof(struct mdc_swap_layouts, msl_fid1) +
+		    sizeof(msl->msl_fid1))
+		lustre_swab_lu_fid(&msl->msl_fid1);
+	if (size >= offsetof(struct mdc_swap_layouts, msl_fid2) +
+		    sizeof(msl->msl_fid2))
+		lustre_swab_lu_fid(&msl->msl_fid2);
 	return 0;
 }
 

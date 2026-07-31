@@ -1610,7 +1610,7 @@ static int ll_check_swap_layouts_validity(struct inode *inode1,
 
 static int ll_swap_layouts_close(struct obd_client_handle *och,
 				 struct inode *inode, struct inode *inode2,
-				 struct lustre_swap_layouts *lsl)
+				 struct lustre_swap_layouts_fid *lsl)
 {
 	const struct lu_fid *fid1 = ll_inode2fid(inode);
 	struct swap_layouts_param slp;
@@ -3765,16 +3765,19 @@ out:
 }
 
 struct ll_swap_stack {
-	__u64			 dv1;
-	__u64			 dv2;
-	struct inode		*inode1;
-	struct inode		*inode2;
-	bool			 check_dv1;
-	bool			 check_dv2;
+	__u64				lsl_dv1;
+	__u64				lsl_dv2;
+	struct inode		       *lsl_inode1;
+	struct inode		       *lsl_inode2;
+	bool			        lsl_check_dv1;
+	bool			        lsl_check_dv2;
+	enum lustre_swap_layouts_flags  lsl_flags;
+	struct lu_fid			lsl_fid1; /* OST object FID in file1 */
+	struct lu_fid			lsl_fid2; /* OST object FID in file2 */
 };
 
 static int ll_swap_layouts(struct file *file1, struct file *file2,
-			   struct lustre_swap_layouts *lsl)
+			   struct lustre_swap_layouts_fid *lsl)
 {
 	struct mdc_swap_layouts msl;
 	struct ll_swap_stack *llss;
@@ -3787,44 +3790,70 @@ static int ll_swap_layouts(struct file *file1, struct file *file2,
 	if (llss == NULL)
 		RETURN(-ENOMEM);
 
-	llss->inode1 = file_inode(file1);
-	llss->inode2 = file_inode(file2);
+	llss->lsl_inode1 = file_inode(file1);
+	llss->lsl_inode2 = file_inode(file2);
 
-	rc = ll_check_swap_layouts_validity(llss->inode1, llss->inode2);
+	rc = ll_check_swap_layouts_validity(llss->lsl_inode1,
+					    llss->lsl_inode2);
 	if (rc < 0)
 		GOTO(free, rc);
 
+	/* Check if server supports single-stripe swap */
+	if (lsl->sl_flags & SWAP_LAYOUTS_SINGLE_STRIPE) {
+		struct obd_export *exp = ll_i2mdexp(llss->lsl_inode1);
+
+		if (!OCD_HAS_FLAG2(&exp->exp_connect_data,
+				   ONE_OBJ_SWAP)) {
+			CDEBUG(D_LAYOUT,
+			       "%s: server does not support single-stripe swap (connect_flags2=0x%llx)\n",
+			       ll_i2sbi(llss->lsl_inode1)->ll_fsname,
+			       exp->exp_connect_data.ocd_connect_flags2);
+			GOTO(free, rc = -EOPNOTSUPP);
+		}
+		if (fid_is_zero(&lsl->sl_fid1) || fid_is_zero(&lsl->sl_fid2))
+			GOTO(free, rc = -EINVAL);
+	}
+
 	/* we use 2 bool because it is easier to swap than 2 bits */
 	if (lsl->sl_flags & SWAP_LAYOUTS_CHECK_DV1)
-		llss->check_dv1 = true;
+		llss->lsl_check_dv1 = true;
 
 	if (lsl->sl_flags & SWAP_LAYOUTS_CHECK_DV2)
-		llss->check_dv2 = true;
+		llss->lsl_check_dv2 = true;
 
 	/* we cannot use lsl->sl_dvX directly because we may swap them */
-	llss->dv1 = lsl->sl_dv1;
-	llss->dv2 = lsl->sl_dv2;
+	llss->lsl_dv1 = lsl->sl_dv1;
+	llss->lsl_dv2 = lsl->sl_dv2;
+	/* Mask to only allow userspace-safe flags. SWAP_LAYOUTS_MDS_RELEASE
+	 * is server-only and must not be set by unprivileged callers.
+	 */
+	llss->lsl_flags = (lsl->sl_flags & ~SWAP_LAYOUTS_MDS_RELEASE) |
+			  SWAP_LAYOUTS_WITH_DV12;
+	llss->lsl_fid1 = lsl->sl_fid1;
+	llss->lsl_fid2 = lsl->sl_fid2;
 
-	rc = lu_fid_cmp(ll_inode2fid(llss->inode1), ll_inode2fid(llss->inode2));
+	rc = lu_fid_cmp(ll_inode2fid(llss->lsl_inode1),
+			ll_inode2fid(llss->lsl_inode2));
 	if (rc == 0) /* same file, done! */
 		GOTO(free, rc);
 
 	if (rc < 0) { /* sequentialize it */
-		swap(llss->inode1, llss->inode2);
+		swap(llss->lsl_inode1, llss->lsl_inode2);
 		swap(file1, file2);
-		swap(llss->dv1, llss->dv2);
-		swap(llss->check_dv1, llss->check_dv2);
+		swap(llss->lsl_dv1, llss->lsl_dv2);
+		swap(llss->lsl_check_dv1, llss->lsl_check_dv2);
+		swap(llss->lsl_fid1, llss->lsl_fid2);
 	}
 
 	gid = lsl->sl_gid;
 	if (gid != 0) { /* application asks to flush dirty cache */
-		rc = ll_get_grouplock(llss->inode1, file1, gid);
+		rc = ll_get_grouplock(llss->lsl_inode1, file1, gid);
 		if (rc < 0)
 			GOTO(free, rc);
 
-		rc = ll_get_grouplock(llss->inode2, file2, gid);
+		rc = ll_get_grouplock(llss->lsl_inode2, file2, gid);
 		if (rc < 0) {
-			ll_put_grouplock(llss->inode1, file1, gid);
+			ll_put_grouplock(llss->lsl_inode1, file1, gid);
 			GOTO(free, rc);
 		}
 	}
@@ -3832,39 +3861,39 @@ static int ll_swap_layouts(struct file *file1, struct file *file2,
 	/* ultimate check, before swaping the layouts we check if
 	 * dataversion has changed (if requested)
 	 */
-	if (llss->check_dv1) {
-		rc = ll_data_version(llss->inode1, &dv, 0);
+	if (llss->lsl_check_dv1) {
+		rc = ll_data_version(llss->lsl_inode1, &dv, 0);
 		if (rc)
 			GOTO(putgl, rc);
-		if (dv != llss->dv1)
+		if (dv != llss->lsl_dv1)
 			GOTO(putgl, rc = -EAGAIN);
 	}
 
-	if (llss->check_dv2) {
-		rc = ll_data_version(llss->inode2, &dv, 0);
+	if (llss->lsl_check_dv2) {
+		rc = ll_data_version(llss->lsl_inode2, &dv, 0);
 		if (rc)
 			GOTO(putgl, rc);
-		if (dv != llss->dv2)
+		if (dv != llss->lsl_dv2)
 			GOTO(putgl, rc = -EAGAIN);
 	}
 
 	/* struct md_op_data is used to send the swap args to the mdt
 	 * only flags is missing, so we use struct mdc_swap_layouts
 	 * through the md_op_data->op_data
-	 *
-	 * flags from user space have to be converted before they are send to
-	 * server, no flag is sent today, they are only used on the client
 	 */
-	msl.msl_flags = SWAP_LAYOUTS_WITH_DV12;
-	msl.msl_dv1 = llss->dv1;
-	msl.msl_dv2 = llss->dv2;
+	msl.msl_flags = llss->lsl_flags; /* already masked into lsl_flags */
+	msl.msl_dv1 = llss->lsl_dv1;
+	msl.msl_dv2 = llss->lsl_dv2;
+	msl.msl_fid1 = llss->lsl_fid1;
+	msl.msl_fid2 = llss->lsl_fid2;
 	rc = -ENOMEM;
-	op_data = ll_prep_md_op_data(NULL, llss->inode1, llss->inode2, NULL, 0,
-				     0, LUSTRE_OPC_ANY, &msl);
+	op_data = ll_prep_md_op_data(NULL, llss->lsl_inode1, llss->lsl_inode2,
+				     NULL, 0, 0, LUSTRE_OPC_ANY, &msl);
 	if (IS_ERR(op_data))
 		GOTO(free, rc = PTR_ERR(op_data));
 
-	rc = obd_iocontrol(LL_IOC_LOV_SWAP_LAYOUTS, ll_i2mdexp(llss->inode1),
+	rc = obd_iocontrol(LL_IOC_LOV_SWAP_LAYOUTS,
+			   ll_i2mdexp(llss->lsl_inode1),
 			   sizeof(*op_data), op_data, NULL);
 	ll_finish_md_op_data(op_data);
 
@@ -3873,8 +3902,8 @@ static int ll_swap_layouts(struct file *file1, struct file *file2,
 
 putgl:
 	if (gid != 0) {
-		ll_put_grouplock(llss->inode2, file2, gid);
-		ll_put_grouplock(llss->inode1, file1, gid);
+		ll_put_grouplock(llss->lsl_inode2, file2, gid);
+		ll_put_grouplock(llss->lsl_inode1, file1, gid);
 	}
 
 free:
@@ -4822,11 +4851,20 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		RETURN(ll_lov_setstripe(inode, file, uarg));
 	case LL_IOC_LOV_SETEA:
 		RETURN(ll_lov_setea(inode, file, uarg));
-	case LL_IOC_LOV_SWAP_LAYOUTS: {
+	case LL_IOC_LOV_SWAP_LAYOUTS:
+	case LL_IOC_LOV_SWAP_LAYOUTS_FID: {
 		struct file *file2;
-		struct lustre_swap_layouts lsl;
+		struct lustre_swap_layouts_fid lsl = { 0 };
+		size_t lsl_size = sizeof(struct lustre_swap_layouts);
 
-		if (copy_from_user(&lsl, uarg, sizeof(lsl)))
+		/*
+		 * LL_IOC_LOV_SWAP_LAYOUTS keeps the historical 32-byte arg so
+		 * existing userspace keeps matching. FID-based single-stripe
+		 * swap uses LL_IOC_LOV_SWAP_LAYOUTS_FID (same nr, larger size).
+		 */
+		if (cmd == LL_IOC_LOV_SWAP_LAYOUTS_FID)
+			lsl_size = sizeof(lsl);
+		if (copy_from_user(&lsl, uarg, lsl_size))
 			RETURN(-EFAULT);
 
 		if ((file->f_flags & O_ACCMODE) == O_RDONLY)
@@ -4839,6 +4877,28 @@ ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		/* O_WRONLY or O_RDWR */
 		if ((file2->f_flags & O_ACCMODE) == O_RDONLY)
 			GOTO(out, rc = -EPERM);
+
+		/*
+		 * CLOSE swaps the full layouts via the lease-close path
+		 * (ll_swap_layouts_close() -> struct swap_layouts_param ->
+		 * MDS_CLOSE_LAYOUT_SWAP), which only carries slp_dv1/slp_dv2
+		 * and has no sl_fid1/sl_fid2 equivalent, so single-stripe
+		 * swap cannot be combined with CLOSE yet. This is a current
+		 * limitation, not a permanent restriction: supporting it
+		 * would require extending struct close_data /
+		 * mdt_close_handle_layouts() to carry the OST object FIDs.
+		 * Until then, single-stripe swap must use the normal
+		 * ll_swap_layouts() path.
+		 */
+		if ((lsl.sl_flags & (SWAP_LAYOUTS_CLOSE |
+				     SWAP_LAYOUTS_SINGLE_STRIPE)) ==
+		    (SWAP_LAYOUTS_CLOSE | SWAP_LAYOUTS_SINGLE_STRIPE))
+			GOTO(out, rc = -EINVAL);
+
+		/* Historical ioctl has no FID fields */
+		if (cmd == LL_IOC_LOV_SWAP_LAYOUTS &&
+		    (lsl.sl_flags & SWAP_LAYOUTS_SINGLE_STRIPE))
+			GOTO(out, rc = -EINVAL);
 
 		if (lsl.sl_flags & SWAP_LAYOUTS_CLOSE) {
 			struct obd_client_handle *och = NULL;

@@ -1525,7 +1525,7 @@ static int hsm_swap_layouts(struct mdt_thread_info *mti,
 		GOTO(out_dobj, rc);
 
 	rc = mo_swap_layouts(mti->mti_env, mdt_object_child(obj),
-			     mdt_object_child(dobj), 0, 0, 0);
+			     mdt_object_child(dobj), 0, 0, 0, NULL, NULL);
 	if (rc)
 		GOTO(out_dobj, rc);
 

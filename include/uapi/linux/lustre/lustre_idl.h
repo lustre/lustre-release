@@ -946,7 +946,8 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT2_UNALIGNED_DIO | \
 				OBD_CONNECT2_PCCRO | \
 				OBD_CONNECT2_MIRROR_ID_FIX |\
-				OBD_CONNECT2_READDIR_OPEN)
+				OBD_CONNECT2_READDIR_OPEN | \
+				OBD_CONNECT2_ONE_OBJ_SWAP)
 
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
 				OBD_CONNECT_VERSION | OBD_CONNECT_INDEX | \
@@ -3829,11 +3830,16 @@ enum batch_update_cmd {
  *
  * /!\ msl_dv1 and msl_dv2 are valid only if msl_flags contains
  *     SWAP_LAYOUTS_WITH_DV12
+ * /!\ msl_fid1 and msl_fid2 are valid only if msl_flags contains
+ *     SWAP_LAYOUTS_SINGLE_STRIPE; they are the OST object FIDs to
+ *     exchange (looked up in each layout).
  */
 struct mdc_swap_layouts {
-	__u64           msl_flags;
+	__u64		msl_flags; /* enum lustre_swap_layouts_flags */
 	__u64		msl_dv1; /* data version of file 1 */
 	__u64		msl_dv2; /* data version of file 2 */
+	struct lu_fid	msl_fid1;  /* OST object FID in file 1 (SINGLE_STRIPE) */
+	struct lu_fid	msl_fid2; /* OST object FID in file 2 (SINGLE_STRIPE) */
 };
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 4, 53, 0)

@@ -97,6 +97,7 @@
 /statone
 /statx
 /swap_lock_test
+/swap_single_stripe
 /tchmod
 /test_brw
 /testreq

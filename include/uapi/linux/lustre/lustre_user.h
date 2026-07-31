@@ -678,8 +678,15 @@ struct ll_ioc_lease_id {
 #define LL_IOC_HSM_PROGRESS		_IOW('f', 216, struct hsm_user_request)
 #define LL_IOC_HSM_REQUEST		_IOW('f', 217, struct hsm_user_request)
 #define LL_IOC_DATA_VERSION		_IOR('f', 218, struct ioc_data_version)
+/* Full layout swap (historical 32-byte arg). Size is baked into the ioctl
+ * number; leave this on struct lustre_swap_layouts so existing userspace
+ * keeps matching.
+ */
 #define LL_IOC_LOV_SWAP_LAYOUTS		_IOW('f', 219, \
 						struct lustre_swap_layouts)
+/* Single-stripe swap: same nr, larger arg with OST object FIDs. */
+#define LL_IOC_LOV_SWAP_LAYOUTS_FID	_IOW('f', 219, \
+						struct lustre_swap_layouts_fid)
 #define LL_IOC_HSM_ACTION		_IOR('f', 220, \
 						struct hsm_current_action)
 /*	lustre_ioctl.h			221-233 */
@@ -1805,18 +1812,46 @@ enum lustre_swap_layouts_flags {
 	 */
 	SWAP_LAYOUTS_WITH_DV12		= 0x00000020,
 
+	/* Swap only a single stripe instead of entire layouts.
+	 * The OST objects are identified by lustre_swap_layouts_fid::sl_fid1 /
+	 * sl_fid2 (unambiguous even if layout components are rewritten between
+	 * copy and swap). Use LL_IOC_LOV_SWAP_LAYOUTS_FID.
+	 */
+	SWAP_LAYOUTS_SINGLE_STRIPE	= 0x00000040,
+
 	/* Skip the UID/GID check before a swap layout for a release
 	 * (server only)
 	 */
 	SWAP_LAYOUTS_MDS_RELEASE	= 0x80000000,
+
+	/* Forcing the enum to be same size as __u64 to be compatible
+	 * with old ABI.
+	 */
+	_SWAP_LAYOUTS_FORCE_U64_SIZE    = 0x8000000000000000,
 };
 
+/* Historical full-layout swap argument (32 bytes). */
 struct lustre_swap_layouts {
-	__u64	sl_flags;
-	__u32	sl_fd;
-	__u32	sl_gid;
-	__u64	sl_dv1;
-	__u64	sl_dv2;
+	__u64		sl_flags; /* enum lustre_swap_layouts_flags */
+	__u32		sl_fd;
+	__u32		sl_gid;
+	__u64		sl_dv1;
+	__u64		sl_dv2;
+};
+
+/* FID-extended arg for SWAP_LAYOUTS_SINGLE_STRIPE /
+ * LL_IOC_LOV_SWAP_LAYOUTS_FID. First fields match lustre_swap_layouts so
+ * full swaps can share the prefix.
+ */
+struct lustre_swap_layouts_fid {
+	__u64		sl_flags; /* enum lustre_swap_layouts_flags */
+	__u32		sl_fd;
+	__u32		sl_gid;
+	__u64		sl_dv1;
+	__u64		sl_dv2;
+	/* OST object FIDs for SINGLE_STRIPE (file1 / file2) */
+	struct lu_fid	sl_fid1;
+	struct lu_fid	sl_fid2;
 };
 
 /** Bit-mask of valid attributes */

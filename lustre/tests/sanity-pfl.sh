@@ -2732,6 +2732,298 @@ test_28() { # LU-19519
 }
 run_test 28 "migrate PFL file with uninitialized component on invalid OST"
 
+test_29a() {
+	(( MDS1_VERSION >= $(version_code 2.17.58) )) ||
+		skip "need MDS >= 2.17.58 for single-stripe layout swap"
+	(( OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs"
+
+	local file1=$DIR/$tdir/file1
+	local file2=$DIR/$tdir/file2
+	local old_order new_order
+	local fid1_0 fid2_1 fid2_2 fid1_1
+
+	mkdir -p $DIR/$tdir || error "mkdir failed"
+
+	# Create first file with 2 stripes on OST 0,1
+	$LFS setstripe -S 1M -E -1 -c 2 -o 0,1 $file1 ||
+		error "setstripe $file1 failed"
+
+	# Create second file with 3 stripes on OST 0,1,2
+	$LFS setstripe -S 1M -E -1 -c 3 -o 0,1,2 $file2 ||
+		error "setstripe $file2 failed"
+
+	# Write some data to both files to instantiate the layout
+	tr "\000" "\001" < /dev/zero | dd bs=1M count=1          \
+		iflag=fullblock of=$file1 2>/dev/null
+	tr "\000" "\002" < /dev/zero | dd bs=1M count=1 seek=1   \
+		iflag=fullblock of=$file1 2>/dev/null
+	# $file1 is now:
+	# 000000 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+	# 100000 02 02 02 02 02 02 02 02 02 02 02 02 02 02 02 02
+
+	tr "\000" "\003" < /dev/zero | dd bs=1M count=1          \
+		iflag=fullblock of=$file2 2>/dev/null
+	tr "\000" "\004" < /dev/zero | dd bs=1M count=1 seek=1   \
+		iflag=fullblock of=$file2 2>/dev/null
+	tr "\000" "\005" < /dev/zero | dd bs=1M count=1 seek=2   \
+		iflag=fullblock of=$file2 2>/dev/null
+	# $file2 is now:
+	# 000000 03 03 03 03 03 03 03 03 03 03 03 03 03 03 03 03
+	# 100000 04 04 04 04 04 04 04 04 04 04 04 04 04 04 04 04
+	# 200000 05 05 05 05 05 05 05 05 05 05 05 05 05 05 05 05
+
+	old_order=$( ($LFS getstripe -v $file1; $LFS getstripe -v $file2) |
+			 grep l_ost_idx |
+			 sed -e "s/.*l_ost_idx: *//" -e "s/,.*//" |
+			 while read IDX; do echo -n $IDX; done)
+	echo "Old Order" $old_order
+	[[ $old_order = "01012" ]] || {
+		error "OST selection wrong for created files." \
+		      "$old_order != \"01012\""
+	}
+
+	# Helper: get OST object FID for stripe index N (0-based) of a file.
+	# getstripe yaml lines look like:  -   0: { l_ost_idx: 0, l_fid: [0x..:0x..:0x0] }
+	# Use plain sub() (not gawk match(..., a)) so mawk on Debian/Ubuntu works.
+	get_ost_fid() {
+		local f=$1
+		local idx=$2
+		$LFS getstripe -v $f | awk -v i="$idx" '
+			$1 == "-" && $2 == (i ":") {
+				sub(/.*l_fid: */, "")
+				sub(/\}.*/, "")
+				print
+			}'
+	}
+
+	# Swap stripe 0 from file1 with stripe 1 from file2 by OST FID
+	fid1_0=$(get_ost_fid $file1 0)
+	fid2_1=$(get_ost_fid $file2 1)
+	[[ -n "$fid1_0" && -n "$fid2_1" ]] ||
+		error "failed to get OST FIDs: '$fid1_0' '$fid2_1'"
+	$LUSTRE/tests/swap_single_stripe $file1 "$fid1_0" $file2 "$fid2_1" ||
+		error "swap_single_stripe failed"
+
+	new_order=$( ($LFS getstripe -v $file1; $LFS getstripe -v $file2) |
+			 grep l_ost_idx |
+			 sed -e "s/.*l_ost_idx: *//" -e "s/,.*//" |
+			 while read IDX; do echo -n $IDX; done)
+	[[ $new_order = "11002" ]] || {
+		error "OST ordering wrong after swap." \
+		      "$new_order != \"11002\""
+	}
+
+	# The files should now contain
+	# $file1:
+	# 000000 04 04 04 04 04 04 04 04 04 04 04 04 04 04 04 04
+	# 100000 02 02 02 02 02 02 02 02 02 02 02 02 02 02 02 02
+	#
+	# $file2:
+	# 000000 03 03 03 03 03 03 03 03 03 03 03 03 03 03 03 03
+	# 100000 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01 01
+	# 200000 05 05 05 05 05 05 05 05 05 05 05 05 05 05 05 05
+	od -t x1 -Ax $file1 | grep "000000 04" ||
+		error "Stripe filled with 04 not found in file1"
+	od -t x1 -Ax $file2 | grep "100000 01" ||
+		error "Stripe filled with 01 not found in file2"
+
+	# Swap stripe 2 from file2 with stripe 1 from file1 by OST FID
+	fid2_2=$(get_ost_fid $file2 2)
+	fid1_1=$(get_ost_fid $file1 1)
+	[[ -n "$fid2_2" && -n "$fid1_1" ]] ||
+		error "failed to get OST FIDs: '$fid2_2' '$fid1_1'"
+	$LUSTRE/tests/swap_single_stripe $file2 "$fid2_2" $file1 "$fid1_1" ||
+		error "swap_single_stripe failed"
+	new_order=$( ($LFS getstripe -v $file1; $LFS getstripe -v $file2) |
+			 grep l_ost_idx |
+			 sed -e "s/.*l_ost_idx: *//" -e "s/,.*//" |
+			 while read IDX; do echo -n $IDX; done)
+	[[ $new_order = "12001" ]] || {
+		error "OST ordering wrong after swap." \
+		      "$new_order != \"12001\""
+	}
+
+	echo "Stripe swap successful"
+}
+run_test 29a "swap single stripe between two files"
+
+test_29b() {
+	(( MDS1_VERSION >= $(version_code 2.17.58) )) ||
+		skip "need MDS >= 2.17.58 for single-stripe layout swap"
+	[[ "$ost1_FSTYPE" == ldiskfs ]] ||
+		skip_env "test needs ldiskfs OST to check object ownership"
+	(( OSTCOUNT >= 1 )) || skip_env "needs >= 1 OST"
+
+	local file1=$DIR/$tdir/file1
+	local file2=$DIR/$tdir/file2
+	local fid1 fid2
+
+	mkdir -p $DIR/$tdir || error "mkdir failed"
+
+	$LFS setstripe -c 1 -i 0 $file1 || error "setstripe $file1 failed"
+	$LFS setstripe -c 1 -i 0 $file2 || error "setstripe $file2 failed"
+	dd if=/dev/zero of=$file1 bs=4k count=1 >/dev/null 2>&1 ||
+		error "write $file1 failed"
+	dd if=/dev/zero of=$file2 bs=4k count=1 >/dev/null 2>&1 ||
+		error "write $file2 failed"
+
+	chown $RUNAS_ID:$RUNAS_GID $file1 || error "chown $file1 failed"
+	chown 0:0 $file2 || error "chown $file2 failed"
+
+	# Check the OST objects' initial owners match their files
+	#
+	# NB: these files are single-stripe plain (non-PFL) layouts, so
+	# "lfs getstripe -v" prints the plain "obdidx objid objid group"
+	# table rather than the indented "l_ost_idx/l_fid" form used for
+	# composite (PFL) layouts, so parse that format instead.
+	get_ost_fid() {
+		local f=$1
+		$LFS getstripe $f | awk '
+			$1 ~ /^[0-9]+$/ { print $4":"$3":0"; exit }'
+	}
+
+	check_ost_obj_owner() {
+		local file=$1
+		local exp_uid=$2
+		local exp_gid=$3
+		local fid=$(get_ost_fid $file)
+		local objpath=$(ost_fid2_objpath ost1 $fid)
+		local ostdev=$(ostdevname 1)
+		# NB: this string is passed through do_node()'s
+		# "bash -c \"$*\"" wrapper and then eval'ed by no_dsh(),
+		# so '"' and '$' must be double-escaped (\\\" / \\\$) to
+		# still be literal characters by the time the awk script
+		# is parsed by the final shell/awk instance
+		local check="sync; sync; sync; $DEBUGFS -c -R 'stat $objpath' \
+			$ostdev 2>/dev/null |
+			awk '/^User:/ { printf \\\"%s:%s\\\", \\\$2, \\\$4 }'"
+
+		# chown/swap uid+gid propagation to the OST object is done via
+		# an async setattr RPC, so poll instead of checking once
+		wait_update_facet ost1 "$check" "$exp_uid:$exp_gid" 20 ||
+			error "OST obj for $file: uid:gid != $exp_uid:$exp_gid"
+	}
+
+	check_ost_obj_owner $file1 $RUNAS_ID $RUNAS_GID
+	check_ost_obj_owner $file2 0 0
+
+	fid1=$(get_ost_fid $file1)
+	fid2=$(get_ost_fid $file2)
+	[[ -n "$fid1" && -n "$fid2" ]] ||
+		error "failed to get OST FIDs: '$fid1' '$fid2'"
+
+	# swap the (only) stripe between two files with different owners;
+	# this requires CAP_FOWNER, run as root
+	$LUSTRE/tests/swap_single_stripe $file1 "$fid1" $file2 "$fid2" ||
+		error "swap_single_stripe failed"
+
+	# the OST objects must now be owned by the file that received them,
+	# so quota accounting stays correct across the swap: each file keeps
+	# its own uid/gid regardless of which physical object it now uses
+	check_ost_obj_owner $file1 $RUNAS_ID $RUNAS_GID
+	check_ost_obj_owner $file2 0 0
+}
+run_test 29b "single-stripe swap between differently-owned files updates OST object owner"
+
+test_29c() {
+	(( MDS1_VERSION >= $(version_code 2.17.58) )) ||
+		skip "need MDS >= 2.17.58 for single-stripe layout swap"
+	[[ "$ost1_FSTYPE" == ldiskfs ]] ||
+		skip_env "test needs ldiskfs OST to check object ownership"
+	(( OSTCOUNT >= 1 )) || skip_env "needs >= 1 OST"
+
+	local file1=$DIR/$tdir/file1
+	local file2=$DIR/$tdir/file2
+	local fid1 fid2
+
+	# pin $tdir to MDT0 so the fail_loc injected below on mds1 is
+	# guaranteed to be hit by the MDS handling the swap_layouts RPC;
+	# on a multi-MDS system a plain mkdir can otherwise land on any
+	# MDT via QoS/round-robin dir placement, and this test would then
+	# fail to trigger the fault it is checking the rollback for
+	test_mkdir -i 0 -c 1 $DIR/$tdir
+
+	$LFS setstripe -c 1 -i 0 $file1 || error "setstripe $file1 failed"
+	$LFS setstripe -c 1 -i 0 $file2 || error "setstripe $file2 failed"
+	dd if=/dev/zero of=$file1 bs=4k count=1 >/dev/null 2>&1 ||
+		error "write $file1 failed"
+	dd if=/dev/zero of=$file2 bs=4k count=1 >/dev/null 2>&1 ||
+		error "write $file2 failed"
+
+	chown $RUNAS_ID:$RUNAS_GID $file1 || error "chown $file1 failed"
+	chown 0:0 $file2 || error "chown $file2 failed"
+
+	# see comment in test_29b() about why this parses the plain
+	# "obdidx objid objid group" format
+	get_ost_fid() {
+		local f=$1
+		$LFS getstripe $f | awk '
+			$1 ~ /^[0-9]+$/ { print $4":"$3":0"; exit }'
+	}
+
+	# see check_ost_obj_owner() in test_29b() for why this polls
+	# instead of checking once, and for the quoting rules imposed by
+	# do_node()/no_dsh()
+	check_ost_obj_owner() {
+		local file=$1
+		local exp_uid=$2
+		local exp_gid=$3
+		local fid=$(get_ost_fid $file)
+		local objpath=$(ost_fid2_objpath ost1 $fid)
+		local ostdev=$(ostdevname 1)
+		local check="sync; sync; sync; $DEBUGFS -c -R 'stat $objpath' \
+			$ostdev 2>/dev/null |
+			awk '/^User:/ { printf \\\"%s:%s\\\", \\\$2, \\\$4 }'"
+
+		wait_update_facet ost1 "$check" "$exp_uid:$exp_gid" 20 ||
+			error "OST obj for $file: uid:gid != $exp_uid:$exp_gid"
+	}
+
+	check_ost_obj_owner $file1 $RUNAS_ID $RUNAS_GID
+	check_ost_obj_owner $file2 0 0
+
+	fid1=$(get_ost_fid $file1)
+	fid2=$(get_ost_fid $file2)
+	[[ -n "$fid1" && -n "$fid2" ]] ||
+		error "failed to get OST FIDs: '$fid1' '$fid2'"
+
+	# force the swap to fail after fst_o's stripe has already been
+	# swapped in, written, and chowned to fst_o's owner, but before
+	# snd_o's chown/attr_set completes, to exercise the rollback path
+	# for both the LOV EAs and the OST object ownership
+	#DEFINE_OBD_FAIL_MDS_SWAP_SS_ATTR_SET is 0x177
+	do_facet mds1 $LCTL set_param fail_loc=0x177
+
+	$LUSTRE/tests/swap_single_stripe $file1 "$fid1" $file2 "$fid2" &&
+		error "swap_single_stripe should have failed"
+
+	do_facet mds1 $LCTL set_param fail_loc=0
+
+	# the swap failed, so both files must still point at their
+	# original OST objects; a buggy rollback would leave both
+	# files' layouts pointing at the same object (see LU-20534)
+	local new_fid1=$(get_ost_fid $file1)
+	local new_fid2=$(get_ost_fid $file2)
+
+	[[ "$new_fid1" == "$fid1" ]] ||
+		error "file1 layout changed after failed swap: " \
+		      "$new_fid1 != $fid1"
+	[[ "$new_fid2" == "$fid2" ]] ||
+		error "file2 layout changed after failed swap: " \
+		      "$new_fid2 != $fid2"
+	[[ "$new_fid1" != "$new_fid2" ]] ||
+		error "file1 and file2 point at the same OST object" \
+		      "after failed swap rollback"
+
+	# The layouts are back to their original pairing, so the OST
+	# objects' on-disk ownership must also be back to its original
+	# state; a buggy rollback restores the LOV EAs but leaves file2's
+	# object still chowned to file1's uid/gid from the aborted swap
+	check_ost_obj_owner $file1 $RUNAS_ID $RUNAS_GID
+	check_ost_obj_owner $file2 0 0
+}
+run_test 29c "failed single-stripe swap rolls back both files' layouts"
+
 test_100a() {
 	compression_supported || skip "server does not support data compression"
 

@@ -1,0 +1,186 @@
+.TH LLAPI_FSWAP_LAYOUT_FIDS 3 2026-08-25 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_fswap_layout_fids \- exchange one OST object between two file layouts
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_fswap_layout_fids(int " fd_src ", int " fd_volatile ,
+.BI "                     const struct lu_fid *" fid_src ,
+.BI "                     const struct lu_fid *" fid_volatile ,
+.BI "                     __u64 " dv_src ", __u64 " dv_volatile ,
+.BI "                     enum lustre_swap_layouts_flags " flags );
+.fi
+.SH DESCRIPTION
+.B llapi_fswap_layout_fids()
+atomically exchanges a single OST object between the layouts of two open
+files identified by
+.I fd_src
+and
+.IR fd_volatile .
+The objects are selected by OST object FID
+.RI ( fid_src
+in the first file,
+.I fid_volatile
+in the second) rather than by layout index, so a concurrent component
+delete/recreate cannot redirect the swap.
+.PP
+Typical use is surgical stripe migration: copy one stripe of a source file
+into a partner (often a volatile file with a single stripe on the target
+OST), then call
+.B llapi_fswap_layout_fids()
+to put the new object into the source layout. Multi-stripe partners are
+allowed by the protocol as long as
+.I fid_volatile
+names the intended object. Same-OST partners are valid (e.g. repair a
+corrupt object while remaining on that OST).
+.PP
+.I dv_src
+and
+.I dv_volatile
+are file data versions captured around the data copy. The function always
+ORs the following into the ioctl flags:
+.TP
+.B SWAP_LAYOUTS_SINGLE_STRIPE
+Exchange one object only; do not swap full layouts.
+.TP
+.B SWAP_LAYOUTS_WITH_DV12
+Transmit
+.I dv_src
+/
+.I dv_volatile
+to the MDS.
+.TP
+.BR SWAP_LAYOUTS_CHECK_DV1 " and " SWAP_LAYOUTS_CHECK_DV2
+Return
+.B -EAGAIN
+if either file's data version changed since capture (source race or
+volatile inconsistency).
+.PP
+Callers typically take
+.I dv_src
+before the data copy and
+.I dv_volatile
+after filling the partner.
+.I flags
+may carry additional
+.B SWAP_LAYOUTS_*
+bits;
+.B SWAP_LAYOUTS_CLOSE
+is rejected with
+.BR -EINVAL .
+.PP
+Both descriptors must refer to regular files on a filesystem whose MDS
+negotiated
+.B OBD_CONNECT2_ONE_OBJ_SWAP .
+Composite layouts including SEL (extension components) are supported;
+only initialized components are searched for the FIDs.
+.PP
+The kernel only rejects a swap whose components have mismatched
+.B lmm_stripe_size
+(see
+.B -EINVAL
+below), since that is visible in the LOV metadata already in hand.
+It does
+.B not
+verify that the two OST objects are the same length: object length is
+stored on the OST, not the LOV, so checking it would require an extra
+.BR getattr (2)
+round trip. The caller is responsible for pairing objects of matching
+length (e.g. by copying a full stripe's worth of data into the volatile
+partner) so the file size does not change as a side effect of the swap.
+The Size-on-MDT (SOM) cache, if any, is likewise left untouched by this
+call.
+.SH RETURN VALUES
+.B llapi_fswap_layout_fids()
+returns 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.B -EINVAL
+A FID is NULL or zero,
+.B SWAP_LAYOUTS_CLOSE
+was requested, either file lacks a layout, the layout magic is
+unrecognized, or the two OST objects being exchanged have different
+.BR lmm_stripe_size .
+.TP
+.B -ENOENT
+An FID was not found in the corresponding file layout.
+.TP
+.B -EPERM
+The two files have different owners or groups.
+.IP
+For unprivileged callers, the two files' on-disk
+.BR uid / gid
+must match so a process that can open a foreign file for write cannot
+launder another layout onto it.
+.B Root is only exempt from this check for single-stripe FID swaps:
+when
+.B SWAP_LAYOUTS_SINGLE_STRIPE
+is requested, callers with
+.B CAP_FOWNER
+(typically root) may replace a stripe across ownership without
+.BR fchown (2)ing
+a volatile partner first; the OST object is re-chowned to its new
+file's owner as part of the swap so quota accounting stays correct.
+A full layout swap
+.RB ( SWAP_LAYOUTS_SINGLE_STRIPE
+not set) still requires matching
+.BR uid / gid
+even for
+.BR CAP_FOWNER
+callers.
+.B lfs migrate
+and
+.B lfs migrate_stripe
+still fchown the partner for non-root paths.
+.TP
+.B -EAGAIN
+A data version check failed; the source or volatile changed since the
+versions were captured. Retry the copy and swap.
+.TP
+.B -EOPNOTSUPP
+The MDS does not support single-stripe swap
+.RB ( OBD_CONNECT2_ONE_OBJ_SWAP ).
+.TP
+.B -EBADF
+.I fd_src
+or
+.I fd_volatile
+is not a valid open file descriptor.
+.TP
+.B -ENOTTY
+The file is not on a Lustre mount suitable for this ioctl.
+.SH EXAMPLES
+.EX
+#include <lustre/lustreapi.h>
+
+int fd_src, fd_volatile;
+struct lu_fid fid_src, fid_volatile;
+__u64 dv_src, dv_volatile;
+int rc;
+
+fd_src = open(path, O_RDWR | O_DIRECT);
+/* create/open single-stripe volatile partner on the target OST */
+
+rc = llapi_get_data_version(fd_src, &dv_src, LL_DV_RD_FLUSH);
+/* copy the selected stripe from fd_src into fd_volatile */
+rc = llapi_get_data_version(fd_volatile, &dv_volatile, LL_DV_RD_FLUSH);
+
+/* resolve OST object FIDs for the stripe to exchange */
+rc = llapi_fswap_layout_fids(fd_src, fd_volatile, &fid_src, &fid_volatile,
+			      dv_src, dv_volatile, 0);
+if (rc == -EAGAIN) {
+	/* data version changed; retry copy and swap */
+}
+.EE
+.SH AVAILABILITY
+.B llapi_fswap_layout_fids()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.17.57.
+.\" Added in commit xxxxxxx
+.SH SEE ALSO
+.BR lfs-migrate (1),
+.BR llapi_get_data_version (3),
+.BR lustre (7),
+.BR lustreapi (7)

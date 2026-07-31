@@ -5576,8 +5576,40 @@ void lustre_assert_wire_constants(void)
 	LASSERTF((int)sizeof(((struct lustre_swap_layouts *)0)->sl_dv2) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct lustre_swap_layouts *)0)->sl_dv2));
 
+	/* Checks for struct lustre_swap_layouts_fid */
+	LASSERTF((int)sizeof(struct lustre_swap_layouts_fid) == 64, "found %lld\n",
+		 (long long)(int)sizeof(struct lustre_swap_layouts_fid));
+	LASSERTF((int)offsetof(struct lustre_swap_layouts_fid, sl_flags) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_swap_layouts_fid, sl_flags));
+	LASSERTF((int)sizeof(((struct lustre_swap_layouts_fid *)0)->sl_flags) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_swap_layouts_fid *)0)->sl_flags));
+	LASSERTF((int)offsetof(struct lustre_swap_layouts_fid, sl_fd) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_swap_layouts_fid, sl_fd));
+	LASSERTF((int)sizeof(((struct lustre_swap_layouts_fid *)0)->sl_fd) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_swap_layouts_fid *)0)->sl_fd));
+	LASSERTF((int)offsetof(struct lustre_swap_layouts_fid, sl_gid) == 12, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_swap_layouts_fid, sl_gid));
+	LASSERTF((int)sizeof(((struct lustre_swap_layouts_fid *)0)->sl_gid) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_swap_layouts_fid *)0)->sl_gid));
+	LASSERTF((int)offsetof(struct lustre_swap_layouts_fid, sl_dv1) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_swap_layouts_fid, sl_dv1));
+	LASSERTF((int)sizeof(((struct lustre_swap_layouts_fid *)0)->sl_dv1) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_swap_layouts_fid *)0)->sl_dv1));
+	LASSERTF((int)offsetof(struct lustre_swap_layouts_fid, sl_dv2) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_swap_layouts_fid, sl_dv2));
+	LASSERTF((int)sizeof(((struct lustre_swap_layouts_fid *)0)->sl_dv2) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_swap_layouts_fid *)0)->sl_dv2));
+	LASSERTF((int)offsetof(struct lustre_swap_layouts_fid, sl_fid1) == 32, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_swap_layouts_fid, sl_fid1));
+	LASSERTF((int)sizeof(((struct lustre_swap_layouts_fid *)0)->sl_fid1) == 16, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_swap_layouts_fid *)0)->sl_fid1));
+	LASSERTF((int)offsetof(struct lustre_swap_layouts_fid, sl_fid2) == 48, "found %lld\n",
+		 (long long)(int)offsetof(struct lustre_swap_layouts_fid, sl_fid2));
+	LASSERTF((int)sizeof(((struct lustre_swap_layouts_fid *)0)->sl_fid2) == 16, "found %lld\n",
+		 (long long)(int)sizeof(((struct lustre_swap_layouts_fid *)0)->sl_fid2));
+
 	/* Checks for struct mdc_swap_layouts */
-	LASSERTF((int)sizeof(struct mdc_swap_layouts) == 24, "found %lld\n",
+	LASSERTF((int)sizeof(struct mdc_swap_layouts) == 56, "found %lld\n",
 		 (long long)(int)sizeof(struct mdc_swap_layouts));
 	LASSERTF((int)offsetof(struct mdc_swap_layouts, msl_flags) == 0, "found %lld\n",
 		 (long long)(int)offsetof(struct mdc_swap_layouts, msl_flags));
@@ -5591,6 +5623,14 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mdc_swap_layouts, msl_dv2));
 	LASSERTF((int)sizeof(((struct mdc_swap_layouts *)0)->msl_dv2) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct mdc_swap_layouts *)0)->msl_dv2));
+	LASSERTF((int)offsetof(struct mdc_swap_layouts, msl_fid1) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct mdc_swap_layouts, msl_fid1));
+	LASSERTF((int)sizeof(((struct mdc_swap_layouts *)0)->msl_fid1) == 16, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdc_swap_layouts *)0)->msl_fid1));
+	LASSERTF((int)offsetof(struct mdc_swap_layouts, msl_fid2) == 40, "found %lld\n",
+		 (long long)(int)offsetof(struct mdc_swap_layouts, msl_fid2));
+	LASSERTF((int)sizeof(((struct mdc_swap_layouts *)0)->msl_fid2) == 16, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdc_swap_layouts *)0)->msl_fid2));
 
 	/* Checks for mdc_swap_layouts::msl_flags */
 	LASSERTF(SWAP_LAYOUTS_CHECK_DV1 == 1, "found %lld\n",
@@ -5607,6 +5647,8 @@ void lustre_assert_wire_constants(void)
 		 (long long)SWAP_LAYOUTS_MDS_RELEASE);
 	LASSERTF(SWAP_LAYOUTS_WITH_DV12 == 32, "found %lld\n",
 		 (long long)SWAP_LAYOUTS_WITH_DV12);
+	LASSERTF(SWAP_LAYOUTS_SINGLE_STRIPE == 64, "found %lld\n",
+		 (long long)SWAP_LAYOUTS_SINGLE_STRIPE);
 
 	/* Checks for struct hsm_state_set */
 	LASSERTF((int)sizeof(struct hsm_state_set) == 24, "found %lld\n",

@@ -1846,6 +1846,7 @@ static int mdt_swap_layouts(struct tgt_session_info *tsi)
 	struct mdt_thread_info *info;
 	struct mdc_swap_layouts *msl;
 	bool swap_objects = false;
+	bool has_ost_fids;
 	__u64 dv1 = 0;
 	__u64 dv2 = 0;
 	int rc;
@@ -1888,22 +1889,64 @@ static int mdt_swap_layouts(struct tgt_session_info *tsi)
 		swap(o1, o2);
 	}
 
+	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
+	if (rc < 0)
+		GOTO(put, rc);
+
 	/* permission check. Make sure the calling process having permission
 	 * to write both files.
 	 */
 	rc = mo_permission(info->mti_env, NULL, mdt_object_child(o1), NULL,
 			   MAY_WRITE);
 	if (rc < 0)
-		GOTO(put, rc);
+		GOTO(out_ucred, rc);
 
 	rc = mo_permission(info->mti_env, NULL, mdt_object_child(o2), NULL,
 			   MAY_WRITE);
 	if (rc < 0)
-		GOTO(put, rc);
+		GOTO(out_ucred, rc);
 
 	msl = req_capsule_client_get(info->mti_pill, &RMF_SWAP_LAYOUTS);
 	if (msl == NULL)
-		GOTO(put, rc = -EPROTO);
+		GOTO(out_ucred, rc = -EPROTO);
+
+	/* SWAP_LAYOUTS_MDS_RELEASE is server-only (HSM release). Never honor
+	 * it from the client ioctl path or uid/gid checks are skipped.
+	 */
+	msl->msl_flags &= ~SWAP_LAYOUTS_MDS_RELEASE;
+
+	/*
+	 * Extended mdc_swap_layouts carries msl_fid1/msl_fid2. Evaluate once:
+	 * SINGLE_STRIPE requires them (reject -EPROTO if short); full layout
+	 * swap ignores the FIDs either way, so the same flag selects the
+	 * mo_swap_layouts() arguments below.
+	 */
+	has_ost_fids = req_capsule_get_size(info->mti_pill, &RMF_SWAP_LAYOUTS,
+					    RCL_CLIENT) >=
+		offsetof(struct mdc_swap_layouts, msl_fid2) +
+		sizeof(msl->msl_fid2);
+
+	/*
+	 * Single-stripe swap requires OBD_CONNECT2_ONE_OBJ_SWAP and valid
+	 * OST object FIDs. Reject early so an old or confused client cannot
+	 * fall into a full layout swap by setting SINGLE_STRIPE alone.
+	 */
+	if (msl->msl_flags & SWAP_LAYOUTS_SINGLE_STRIPE) {
+		if (!OCD_HAS_FLAG2(&exp->exp_connect_data, ONE_OBJ_SWAP))
+			GOTO(out_ucred, rc = -EOPNOTSUPP);
+		if (!has_ost_fids)
+			GOTO(out_ucred, rc = -EPROTO);
+		if (fid_is_zero(&msl->msl_fid1) || fid_is_zero(&msl->msl_fid2))
+			GOTO(out_ucred, rc = -EINVAL);
+		/* Single-stripe swap only makes sense for regular files:
+		 * a directory's default striping EA (LOV_ALL_STRIPES, no
+		 * lov_ost_data_v1 slots) must never be walked as if it were
+		 * a real object list.
+		 */
+		if (!S_ISREG(lu_object_attr(&o1->mot_obj)) ||
+		    !S_ISREG(lu_object_attr(&o2->mot_obj)))
+			GOTO(out_ucred, rc = -EINVAL);
+	}
 
 	if (msl->msl_flags & SWAP_LAYOUTS_WITH_DV12) {
 		dv1 = msl->msl_dv1;
@@ -1913,12 +1956,17 @@ static int mdt_swap_layouts(struct tgt_session_info *tsi)
 			swap(dv1, dv2);
 	}
 
+	/* Note: We do NOT swap msl_fid1/msl_fid2 here even if swap_objects
+	 * is true. The client has already done the swap if needed (both
+	 * layers reorder by parent FID, so only one swap occurs). OST FIDs
+	 * stay bound to the msl payload as sorted at the client. */
+
 	lh1 = &info->mti_lh[MDT_LH_NEW];
 	lh2 = &info->mti_lh[MDT_LH_OLD];
 	rc = mdt_object_lock(info, o1, lh1, MDS_INODELOCK_LAYOUT |
 			     MDS_INODELOCK_XATTR, LCK_EX);
 	if (rc < 0)
-		GOTO(put, rc);
+		GOTO(out_ucred, rc);
 
 	rc = mdt_object_lock(info, o2, lh2, MDS_INODELOCK_LAYOUT |
 			     MDS_INODELOCK_XATTR, LCK_EX);
@@ -1926,7 +1974,9 @@ static int mdt_swap_layouts(struct tgt_session_info *tsi)
 		GOTO(unlock1, rc);
 
 	rc = mo_swap_layouts(info->mti_env, mdt_object_child(o1),
-			     mdt_object_child(o2), dv1, dv2, msl->msl_flags);
+			     mdt_object_child(o2), dv1, dv2, msl->msl_flags,
+			     has_ost_fids ? &msl->msl_fid1 : NULL,
+			     has_ost_fids ? &msl->msl_fid2 : NULL);
 	if (rc < 0)
 		GOTO(unlock2, rc);
 
@@ -1936,6 +1986,8 @@ unlock2:
 	mdt_object_unlock(info, o2, lh2, rc);
 unlock1:
 	mdt_object_unlock(info, o1, lh1, rc);
+out_ucred:
+	mdt_exit_ucred(info);
 put:
 	mdt_object_put(info->mti_env, o);
 out:

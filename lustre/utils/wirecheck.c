@@ -2590,10 +2590,22 @@ static void check_swap_layout(void)
 	CHECK_MEMBER(lustre_swap_layouts, sl_dv2);
 
 	BLANK_LINE();
+	CHECK_STRUCT(lustre_swap_layouts_fid);
+	CHECK_MEMBER(lustre_swap_layouts_fid, sl_flags);
+	CHECK_MEMBER(lustre_swap_layouts_fid, sl_fd);
+	CHECK_MEMBER(lustre_swap_layouts_fid, sl_gid);
+	CHECK_MEMBER(lustre_swap_layouts_fid, sl_dv1);
+	CHECK_MEMBER(lustre_swap_layouts_fid, sl_dv2);
+	CHECK_MEMBER(lustre_swap_layouts_fid, sl_fid1);
+	CHECK_MEMBER(lustre_swap_layouts_fid, sl_fid2);
+
+	BLANK_LINE();
 	CHECK_STRUCT(mdc_swap_layouts);
 	CHECK_MEMBER(mdc_swap_layouts, msl_flags);
 	CHECK_MEMBER(mdc_swap_layouts, msl_dv1);
 	CHECK_MEMBER(mdc_swap_layouts, msl_dv2);
+	CHECK_MEMBER(mdc_swap_layouts, msl_fid1);
+	CHECK_MEMBER(mdc_swap_layouts, msl_fid2);
 
 	BLANK_LINE();
 	COMMENT("Checks for mdc_swap_layouts::msl_flags");
@@ -2604,6 +2616,7 @@ static void check_swap_layout(void)
 	CHECK_VALUE(SWAP_LAYOUTS_CLOSE);
 	CHECK_VALUE(SWAP_LAYOUTS_MDS_RELEASE);
 	CHECK_VALUE(SWAP_LAYOUTS_WITH_DV12);
+	CHECK_VALUE(SWAP_LAYOUTS_SINGLE_STRIPE);
 }
 
 static void check_hsm_state_set(void)

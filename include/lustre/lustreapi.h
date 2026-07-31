@@ -985,10 +985,18 @@ int llapi_create_volatile(const char *directory, int open_flags)
 }
 
 int llapi_fswap_layouts_grouplock(int fd1, int fd2, __u64 dv1, __u64 dv2,
-				  int gid, __u64 flags);
-int llapi_fswap_layouts(int fd1, int fd2, __u64 dv1, __u64 dv2, __u64 flags);
+				  int gid,
+				  enum lustre_swap_layouts_flags flags);
+int llapi_fswap_layouts(int fd1, int fd2, __u64 dv1, __u64 dv2,
+			enum lustre_swap_layouts_flags flags);
 int llapi_swap_layouts(const char *path1, const char *path2, __u64 dv1,
-		       __u64 dv2, __u64 flags);
+		       __u64 dv2,
+		       enum lustre_swap_layouts_flags flags);
+int llapi_fswap_layout_fids(int fd_src, int fd_volatile,
+			    const struct lu_fid *fid_src,
+			    const struct lu_fid *fid_volatile,
+			    __u64 dv_src, __u64 dv_volatile,
+			    enum lustre_swap_layouts_flags flags);
 
 /* Changelog interface. priv is private connection state, managed internally */
 

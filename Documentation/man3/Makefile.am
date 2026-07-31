@@ -36,6 +36,7 @@ LIBMAN = 					\
 	llapi_file_open_volatile_param.3	\
 	llapi_find_param_alloc.3		\
 	llapi_find_param_free.3			\
+	llapi_fswap_layout_fids.3		\
 	llapi_get_fsname.3			\
 	llapi_get_fsname_instance.3		\
 	llapi_get_instance.3			\
