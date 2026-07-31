@@ -369,23 +369,92 @@ out:
 }
 
 /**
- * lod_stripe_count_min() - Calculate a minimum acceptable stripe count.
- * @stripe_count: number of stripes requested
- * @flags: 0 or LOD_USES_DEFAULT_STRIPE
+ * ec_raidset_count() - Number of raid sets in an EC split.
+ * @sc: split information
  *
- * Return an acceptable stripe count depending on flag LOD_USES_DEFAULT_STRIPE:
- * all stripes or 3/4 of stripes.  The code is written this way to avoid
- * returning 0 for stripe_count < 4, like "stripe_count * 3 / 4" would do.
- *
- * Parity components are a special case. Here we must always have the requested
- * number of stripes
- *
- * Returns acceptable stripecount
+ * Return: the total number of raid sets.
  */
-static int lod_stripe_count_min(__u32 stripe_count, enum lod_uses_hint flags)
+static inline int ec_raidset_count(const struct ec_split_comp *sc)
 {
-	if (flags & LCME_FL_PARITY)
-		return stripe_count;
+	return sc->esc_n0 + sc->esc_n1;
+}
+
+/**
+ * lod_stripe_count_min() - Calculate a minimum acceptable stripe count.
+ * @lod_comp: the component we are allocating
+ * @flags: 0 or LOD_USES_DEFAULT_STRIPE (plain components only)
+ * @sc: raid-set split; meaningful for EC components
+ * @include_cstripe: if true, add llc_cstripe_count into data-component mins
+ *		     (QoS does; RR does not)
+ *
+ * Parity components (LCME_FL_PARITY):
+ * - single raid set: llc_cstripe_count unique OSTs
+ * - multiple raid sets: 0 (parity can reuse data OSTs from other sets)
+ *
+ * EC-protected data components (llc_dstripe_count != 0):
+ * - single raid set: stripe_count, plus cstripe when @include_cstripe
+ * - multi-set with overstriping: esc_k0, plus cstripe when @include_cstripe
+ * - multi-set without overstriping: prefer fewer raid sets over a smaller k:
+ *   nsets >= 4 → (nsets - nsets/4) * esc_k0
+ *   nsets <  4 → esc_k0 - esc_k0/4
+ *   then plus cstripe when @include_cstripe. Uses x - x/4 so values under
+ *   4 do not collapse to 0 the way (x * 3 / 4) would.
+ *
+ * Plain (non-EC) components:
+ * - LOD_USES_DEFAULT_STRIPE: stripe_count - stripe_count/4
+ * - otherwise: stripe_count
+ *
+ * Return: minimum number of unique OSTs the allocator must place before
+ *	   EC fallbacks (reuse/shrink) or plain partial allocation may run
+ */
+static int lod_stripe_count_min(struct lod_layout_component *lod_comp,
+				enum lod_uses_hint flags,
+				struct ec_split_comp *sc, bool include_cstripe)
+{
+	__u32 stripe_count = lod_comp->llc_stripe_count;
+	int maybe_cstripe;
+	int nsets, min_stripes;
+
+	/* This is an EC components */
+	if (lod_comp->llc_flags & LCME_FL_PARITY) {
+		if (ec_raidset_count(sc) == 1)
+			return lod_comp->llc_cstripe_count;
+		return 0;
+	}
+
+	maybe_cstripe = include_cstripe ? lod_comp->llc_cstripe_count : 0;
+	/* This is a data component with a matching ec */
+	if (lod_comp->llc_dstripe_count) {
+		if (ec_raidset_count(sc) == 1)
+			return stripe_count + maybe_cstripe;
+
+		if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)
+			return sc->esc_k0 + maybe_cstripe;
+
+		/*
+		 * Multi-raidset without overstriping: allowing a reduced
+		 * minimum means create can still succeed (and shrink via
+		 * lod_ec_shrink_data_geometry) when some OSTs are offline,
+		 * e.g. --ec 6+2 on 8 OSTs with one down. Prefer fewer raid
+		 * sets over fewer stripes per set.
+		 *
+		 * nsets >= 4: keep at least 3/4 of the raid sets (at esc_k0)
+		 * nsets <  4: keep at least 3/4 of esc_k0
+		 * (stripe - stripe/4 avoids *3/4 == 0 when value < 4)
+		 */
+		nsets = ec_raidset_count(sc);
+		if (nsets >= 4)
+			min_stripes = (nsets - nsets / 4) * sc->esc_k0;
+		else
+			min_stripes = sc->esc_k0 - sc->esc_k0 / 4;
+
+		if (min_stripes > stripe_count)
+			min_stripes = stripe_count;
+		if (min_stripes < 1)
+			min_stripes = 1;
+
+		return min_stripes + maybe_cstripe;
+	}
 
 	return (flags & LOD_USES_DEFAULT_STRIPE ?
 		stripe_count - (stripe_count / 4) : stripe_count);
@@ -612,6 +681,15 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 		RETURN(rc);
 	}
 
+	if (lod_comp->llc_cstripe_count &&
+	    (lag->lag_ost_avail <= 0 ||
+	     lod_should_avoid_ost(lo, lag, ost_idx))) {
+		CDEBUG(D_OTHER,
+		       "Skip conflicting OST%d because we want unique OSTs\n",
+		       ost_idx);
+		RETURN(rc);
+	}
+
 	/*
 	 * try not allocate on OST which has been used by other
 	 * component
@@ -663,6 +741,266 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 }
 
 /**
+ * lod_ec_add_parities() - Add additional parity OSTs to parity_comp.
+ * @env: execution environment for this thread
+ * @lo: LOD object
+ * @th: transaction handle
+ * @nfound: current number of found/selected OSTs in parity_comp
+ * @sc: split information
+ * @data_comp: the data component which has already been allocated OSTs
+ * @parity_comp: the current parity comp.
+ * @stripe: striping created
+ * @ost_indices: ost indices of striping created
+ *
+ * This function is used to fill the remaining OSTs for the parity
+ * component, parity_comp, by reusing OSTs from the associated data component.
+ */
+static __u32 lod_ec_add_parities(const struct lu_env *env,
+				 struct lod_object *lo, struct thandle *th,
+				 __u32 nfound, struct ec_split_comp *sc,
+				 struct lod_layout_component *data_comp,
+				 struct lod_layout_component *parity_comp,
+				 struct dt_object **stripe, __u32 *ost_indices)
+{
+	int i, pos, tries;
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct dt_object *o;
+	int cur_rs;
+
+	if (!data_comp->llc_stripes_allocated ||
+	    !parity_comp->llc_cstripe_count)
+		return nfound;
+
+	for (pos = 0, tries = 0;
+	     nfound < parity_comp->llc_stripe_count &&
+	       tries <= data_comp->llc_stripe_count;
+	     pos = (pos + 1) % data_comp->llc_stripe_count, tries++) {
+		bool already_used;
+		int start, num;
+
+		/* Current raid set we are trying to assign parities to */
+		cur_rs = nfound / parity_comp->llc_cstripe_count;
+
+		/* make sure this OST is not part of current raid set */
+		if (cur_rs < sc->esc_n0) {
+			start = cur_rs * sc->esc_k0;
+			num = sc->esc_k0;
+		} else {
+			start = (sc->esc_n0 * sc->esc_k0) +
+			  (cur_rs - sc->esc_n0) * sc->esc_k1;
+			num = sc->esc_k1;
+		}
+		already_used = false;
+		for (i = start; i < start + num; i++) {
+			if (data_comp->llc_ost_indices[i] ==
+			    data_comp->llc_ost_indices[pos]) {
+				already_used = true;
+				break;
+			}
+		}
+		if (already_used)
+			continue;
+
+		/* We can't use it if we already used it in this ec raid set
+		 * either
+		 */
+		for (i = cur_rs * parity_comp->llc_cstripe_count;
+		     i < nfound; i++) {
+			if (ost_indices[i] ==
+			    data_comp->llc_ost_indices[pos]) {
+				already_used = true;
+				break;
+			}
+		}
+		if (already_used)
+			continue;
+
+		o = lod_qos_declare_object_on(env, lod,
+				data_comp->llc_ost_indices[pos], true, th);
+		if (IS_ERR(o)) {
+			CDEBUG(D_OTHER, "can't declare object on #%u: %d\n",
+			       data_comp->llc_ost_indices[pos],
+			       (int) PTR_ERR(o));
+			return nfound;
+		}
+		stripe[nfound] = o;
+		ost_indices[nfound] = data_comp->llc_ost_indices[pos];
+		nfound++;
+		/* Found an OST so reset the tries counter to 0 */
+		tries = 0;
+	}
+
+	return nfound;
+}
+
+/**
+ * lod_ec_check_data_usable() - Checks if a OST conflicts with data comp
+ * @idx: index of OST candidate
+ * @nfound: current number of found/selected OSTs in lod_comp
+ * @sc: split information
+ * @data_comp: the data component which has already been allocated OSTs
+ * @parity_comp: the current parity comp.
+ *
+ * This function is used when trying to add stripes to a parity component.
+ * It verifies that the current candidate idx is not already used in the
+ * corresponding data stripe set / raid set.
+ */
+static bool lod_ec_check_data_usable(__u32 idx, __u32 nfound,
+				     struct ec_split_comp *sc,
+				     struct lod_layout_component *data_comp,
+				     struct lod_layout_component *parity_comp)
+{
+	int start, num;
+	int i, cur_rs;
+
+	if (!data_comp->llc_stripes_allocated ||
+	    !parity_comp->llc_cstripe_count)
+		return true;
+
+	if (parity_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING) {
+		/* Just check the data OSTs in the current raidset */
+		cur_rs = nfound / parity_comp->llc_cstripe_count;
+
+		/* make sure this OST is not part of current raid set */
+		if (cur_rs < sc->esc_n0) {
+			start = cur_rs * sc->esc_k0;
+			num = sc->esc_k0;
+		} else {
+			start = (sc->esc_n0 * sc->esc_k0) +
+			  (cur_rs - sc->esc_n0) * sc->esc_k1;
+			num = sc->esc_k1;
+		}
+	} else {
+		/* Can not reuse any OST from data comp */
+		start = 0;
+		num = data_comp->llc_stripe_count;
+	}
+
+	for (i = start; i < start + num; i++)
+		if (data_comp->llc_ost_indices[i] == idx)
+			return false;
+
+	return true;
+}
+
+/**
+ * lod_ec_shrink_data_geometry() - Shrink EC data layout to @nfound OSTs.
+ * @nfound: number of unique OSTs already allocated
+ * @data_comp: EC-protected data component being allocated
+ * @sc: raid-set split describing the current layout (updated in place)
+ *
+ * When not enough unique OSTs are available for the requested data stripe
+ * count, convert esc_k0 raidsets into esc_k1 raidsets one stripe at a time
+ * until the geometry fits in @nfound OSTs. This avoids failing create when
+ * some OSTs are offline for a multi-raidset EC layout without overstriping.
+ *
+ * Objects already placed in stripe[0..nfound) form a dense prefix of the
+ * layout, so after reducing the total stripe count no raidset reorder is
+ * required — esc_k1 sets naturally sit at the end of the resplit geometry.
+ *
+ * Return: new stripe count (== @nfound) if the layout can be shrunk to fit,
+ *         otherwise the original stripe count (caller should still fail).
+ */
+static __u32 lod_ec_shrink_data_geometry(__u32 nfound,
+					struct lod_layout_component *data_comp,
+					struct ec_split_comp *sc)
+{
+	__u32 stripe_count = data_comp->llc_stripe_count;
+	__u32 suggested = data_comp->llc_dstripe_count;
+	__u32 orig = stripe_count;
+
+	if (nfound == 0 || nfound >= stripe_count || suggested == 0)
+		return stripe_count;
+
+	/*
+	 * Convert one esc_k0 raidset to an esc_k1 raidset per step
+	 * (drop one data stripe). Standard split has esc_k0 == esc_k1 + 1
+	 * when both sizes are present; a uniform layout has esc_n1 == 0.
+	 */
+	while (stripe_count > nfound && sc->esc_n0 > 0 && sc->esc_k0 > 1) {
+		if (sc->esc_n1 == 0) {
+			/* Uniform k0 sets → first k1 set of size k0 - 1 */
+			sc->esc_k1 = sc->esc_k0 - 1;
+			sc->esc_n0--;
+			sc->esc_n1 = 1;
+		} else if (sc->esc_k1 == sc->esc_k0 - 1) {
+			sc->esc_n0--;
+			sc->esc_n1++;
+		} else {
+			/* Unexpected geometry; fall back to a full resplit */
+			break;
+		}
+
+		/* Normalize once every set is the smaller size */
+		if (sc->esc_n0 == 0) {
+			sc->esc_k0 = sc->esc_k1;
+			sc->esc_n0 = sc->esc_n1;
+			sc->esc_k1 = 0;
+			sc->esc_n1 = 0;
+		}
+		stripe_count--;
+	}
+
+	if (stripe_count > nfound) {
+		/* Resplit from scratch around the OST count we actually have */
+		stripe_count = nfound;
+		ec_split_stripes(stripe_count, suggested, sc);
+	}
+
+	if (stripe_count != orig)
+		CDEBUG(D_OTHER,
+		       "EC data geometry shrunk %u -> %u stripes (n0=%d k0=%d n1=%d k1=%d) to fit %u OSTs\n",
+		       orig, stripe_count, sc->esc_n0, sc->esc_k0,
+		       sc->esc_n1, sc->esc_k1, nfound);
+
+	data_comp->llc_stripe_count = stripe_count;
+	return stripe_count;
+}
+
+/**
+ * lod_ec_add_data() - Add additional data OSTs to data_comp.
+ * @env: execution environment for this thread
+ * @lo: LOD object
+ * @th: transaction handle
+ * @nfound: current number of found/selected OSTs in data_comp
+ * @data_comp: the current data comp.
+ * @stripe: striping created
+ * @ost_indices: ost indices of striping created
+ *
+ * This function is used to fill the remaining OSTs for an ec protected
+ * data component, data_comp, by reusing OSTs
+ */
+static __u32 lod_ec_add_data(const struct lu_env *env, struct lod_object *lo,
+			     struct thandle *th,
+			     __u32 nfound,
+			     struct lod_layout_component *data_comp,
+			     struct dt_object **stripe,
+			     __u32 *ost_indices)
+{
+	int pos = 0;
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct dt_object *o;
+
+	if (nfound == 0)
+		return nfound;
+
+	while (nfound < data_comp->llc_stripe_count) {
+		o = lod_qos_declare_object_on(env, lod, ost_indices[pos],
+					      true, th);
+		if (IS_ERR(o)) {
+			CDEBUG(D_OTHER, "can't declare object on #%u: %d\n",
+			       ost_indices[pos], (int) PTR_ERR(o));
+			return nfound;
+		}
+		stripe[nfound] = o;
+		ost_indices[nfound] = ost_indices[pos];
+		nfound++;
+		pos++;
+	}
+	return nfound;
+}
+
+/**
  * lod_ost_alloc_rr() - Allocate a striping using round-robin algorithm.
  * @env: execution environment for this thread
  * @lo: LOD object
@@ -672,6 +1010,8 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
  * @th: transaction handle
  * @comp_idx: index of ldo_comp_entries
  * @reserve: space to reserve on the target device
+ * @sc: split_stripes
+ * @data_comp: data component if this is a parity. NULL otherwise
  *
  * Allocates a new striping using round-robin algorithm. The function refreshes
  * all the internal structures (statfs cache, array of available OSTs sorted
@@ -692,7 +1032,9 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 			    struct dt_object **stripe, __u32 *ost_indices,
 			    enum lod_uses_hint flags, struct thandle *th,
-			    int comp_idx, __u64 reserve)
+			    int comp_idx, __u64 reserve,
+			    struct ec_split_comp *sc,
+			    struct lod_layout_component *data_comp)
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device *m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
@@ -705,12 +1047,14 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	int rc, speed = 0, ost_connecting = 0;
 	int idx, stripes_per_ost = 1;
 	bool overstriped = false;
+	bool want_overstriping;
 	ENTRY;
 
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
 	lod_comp = &lo->ldo_comp_entries[comp_idx];
 	stripe_count = lod_comp->llc_stripe_count;
-	stripe_count_min = lod_stripe_count_min(stripe_count, flags);
+	stripe_count_min = lod_stripe_count_min(lod_comp, flags, sc, false);
+	want_overstriping = lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING;
 
 	if (lod_comp->llc_pool != NULL)
 		pool = lod_find_pool(m, lod_comp->llc_pool);
@@ -726,11 +1070,11 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 
 	rc = lod_qos_calc_rr(m, &m->lod_ost_descs, osts, lqr);
 	if (rc)
-		GOTO(out, rc);
+		GOTO(out_pool, rc);
 
 	rc = lod_qos_tgt_in_use_clear(env, stripe_count);
 	if (rc)
-		GOTO(out, rc);
+		GOTO(out_pool, rc);
 
 	down_read(&m->lod_ost_descs.ltd_qos.lq_rw_sem);
 	spin_lock(&lqr->lqr_alloc);
@@ -798,7 +1142,6 @@ repeat_find:
 					       speed, &stripe_idx, stripe,
 					       ost_indices, th, &overstriped,
 					       reserve);
-
 		if (rc != 0 && OST_TGT(m, ost_idx)->ltd_discon)
 			ost_connecting = 1;
 	}
@@ -817,6 +1160,21 @@ repeat_find:
 	if (!overstriped)
 		lod_comp->llc_pattern &= ~LOV_PATTERN_OVERSTRIPING;
 
+	if (lod_comp->llc_cstripe_count &&
+	    !(lod_comp->llc_flags & LCME_FL_PARITY) &&
+	    !want_overstriping &&
+	    stripe_idx > 0 && stripe_idx < stripe_count &&
+	    4 * stripe_idx >= 3 * stripe_count) {
+		CDEBUG(D_OTHER,
+		       "EC RR: shrink data stripes %u -> %u (>= 75%% of request)\n",
+		       stripe_count, stripe_idx);
+		stripe_count = stripe_idx;
+		stripe_count_min = stripe_count;
+		lod_comp->llc_stripe_count = stripe_count;
+		ec_split_stripes(lod_comp->llc_stripe_count,
+				 lod_comp->llc_dstripe_count, sc);
+	}
+
 	if (stripe_idx) {
 		lod_comp->llc_stripe_count = stripe_idx;
 		/* at least one stripe is allocated */
@@ -829,7 +1187,70 @@ repeat_find:
 			rc = -ENOSPC;
 	}
 
-out:
+	/* EC protected data/parity pairs need special handling if we could not
+	 * get enough unique OSTs.  The EC fallback functions use
+	 * llc_stripe_count as their target, so temporarily restore
+	 * the original requested count.
+	 */
+	if (lod_comp->llc_cstripe_count &&
+	    stripe_idx < stripe_count) {
+		lod_comp->llc_stripe_count = stripe_count;
+
+		/* We can only reuse data stripes for parity if there is more
+		 * than one raid set.
+		 */
+		if ((lod_comp->llc_flags & LCME_FL_PARITY) &&
+		    (ec_raidset_count(sc) > 1))
+			stripe_idx = lod_ec_add_parities(env, lo, th,
+							 stripe_idx, sc,
+							 data_comp, lod_comp,
+							 stripe, ost_indices);
+		/*
+		 * EC-protected data component is short of unique OSTs.
+		 * With overstriping (-C) reuse OSTs from earlier raid
+		 * sets. Without it (-c), shrink the EC geometry by
+		 * converting esc_k0 raidsets into esc_k1 until the
+		 * allocated OST count is enough — prefer a smaller
+		 * layout over failing create when OSTs are offline.
+		 */
+		if (!(lod_comp->llc_flags & LCME_FL_PARITY) &&
+		    (ec_raidset_count(sc) > 1) &&
+		    stripe_idx >= stripe_count_min) {
+			if (want_overstriping) {
+				stripe_idx = lod_ec_add_data(env, lo,
+							     th,
+							     stripe_idx,
+							     lod_comp,
+							     stripe,
+							     ost_indices);
+			} else {
+				/*
+				 * Shrink sets llc_stripe_count and sc
+				 * to a geometry that fits stripe_idx
+				 * unique OSTs. stripe_count tracks
+				 * the new target for the equality
+				 * check below.
+				 */
+				stripe_count =
+				  lod_ec_shrink_data_geometry(stripe_idx,
+							      lod_comp,
+							      sc);
+			}
+		}
+
+		if (stripe_idx == stripe_count) {
+			lod_comp->llc_stripe_count = stripe_idx;
+			rc = 0;
+		} else {
+			/* Still short; remember how many we got */
+			lod_comp->llc_stripe_count = stripe_idx;
+		}
+	}
+
+	if (lod_comp->llc_cstripe_count && stripe_idx < stripe_count_min)
+		rc = -ENOSPC;
+
+out_pool:
 	if (pool != NULL) {
 		up_read(&pool_tgt_rw_sem(pool));
 		/* put back ref got by lod_find_pool() */
@@ -1545,6 +1966,8 @@ out:
  * @th: transaction handle
  * @comp_idx: index of ldo_comp_entries
  * @reserve: space to reserve on the target device
+ * @sc: split_stripes
+ * @data_comp: data component if this is a parity. NULL otherwise/
  *
  * The function allocates OST objects to create a striping. The algorithm
  * used is based on weights (currently only using the free space), and it's
@@ -1574,7 +1997,9 @@ out:
 static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			     struct dt_object **stripe, __u32 *ost_indices,
 			     enum lod_uses_hint flags, struct thandle *th,
-			     int comp_idx, __u64 reserve)
+			     int comp_idx, __u64 reserve,
+			     struct ec_split_comp *sc,
+			     struct lod_layout_component *data_comp)
 {
 	struct lod_layout_component *lod_comp;
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
@@ -1598,9 +2023,15 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
 	lod_comp = &lo->ldo_comp_entries[comp_idx];
+	stripe_count_min = lod_stripe_count_min(lod_comp, flags, sc, true);
 	stripe_count = lod_comp->llc_stripe_count;
-	stripe_count_min = lod_stripe_count_min(stripe_count, flags);
-	if (stripe_count_min < 1)
+
+	/* Orphaned parity component? */
+	if ((lod_comp->llc_flags & LCME_FL_PARITY) && data_comp == NULL)
+		RETURN(-EINVAL);
+
+	/* For parities we allow stripe_count_min==0 as we will reuse OSTs */
+	if (stripe_count_min < 1 && (!(lod_comp->llc_flags & LCME_FL_PARITY)))
 		RETURN(-EINVAL);
 
 	if (lod_comp->llc_pool != NULL)
@@ -1688,11 +2119,39 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 				   osts->op_array[i] == 0)
 			continue;
 
+		if (lod_comp->llc_cstripe_count &&
+		    lod_should_avoid_ost(lo, lag, osts->op_array[i]))
+			continue;
+
 		ost->ltd_qos.ltq_usable = 1;
 		lu_tgt_qos_weight_calc(ost, false);
 		total_weight += ost->ltd_qos.ltq_weight;
 
 		good_osts++;
+	}
+	/* For EC, if we do not have enough OSTs for the full requested
+	 * number of stripes we can still permit the allocation as
+	 * long as we can allocate at least 75% of the requested number
+	 * of data stripes and one single stripe per parity.
+	 * I.e.
+	 * good >= 0.75 * stripe_count + cstripe_count
+	 * =>
+	 * 4 x good >= 3 * stripe_count + 4 * cstripe_count
+	 */
+	if (lod_comp->llc_cstripe_count &&
+	    !(lod_comp->llc_flags & LCME_FL_PARITY) &&
+	    !(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING) &&
+	    good_osts < (lod_comp->llc_stripe_count +
+			 lod_comp->llc_cstripe_count) &&
+	    4 * good_osts >= (3 * lod_comp->llc_stripe_count +
+			      4 * lod_comp->llc_cstripe_count)){
+		stripe_count = good_osts - lod_comp->llc_cstripe_count;
+		stripe_count_min = stripe_count;
+		lod_comp->llc_stripe_count = stripe_count;
+		/* stripe count changed so we must re-compute the splits */
+		ec_split_stripes(lod_comp->llc_stripe_count,
+				 lod_comp->llc_dstripe_count,
+				 sc);
 	}
 
 	CDEBUG(D_OTHER, "found %d good osts\n", good_osts);
@@ -1702,8 +2161,10 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 
 	/* If we do not have enough OSTs for the requested stripe count, do not
 	 * put more stripes per OST than requested.
+	 * For ec protected data stripes we ALWAYS allocate the full stripeset.
 	 */
-	if (stripe_count / stripes_per_ost > good_osts)
+	if (!lod_comp->llc_cstripe_count &&
+	    stripe_count / stripes_per_ost > good_osts)
 		stripe_count = good_osts * stripes_per_ost;
 
 	/* Find enough OSTs with weighted random allocation. */
@@ -1732,18 +2193,27 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 				continue;
 
 			cur_weight += ost->ltd_qos.ltq_weight;
-			CDEBUG(D_OTHER, "stripe_count=%d nfound=%d cur_weight=%llu rand=%llu total_weight=%llu\n",
+			CDEBUG(D_OTHER,
+			       "stripe_count=%d nfound=%d cur_weight=%llu rand=%llu total_weight=%llu\n",
 			       stripe_count, nfound, cur_weight, rand,
 			       total_weight);
 
+			/* TODO: this check is wrong and can cause the qos
+			 * allocator to fail.the problem is that we do not
+			 * compute total_weight and cur_weight the same way
+			 * when OSTs are offline.
+			 * Very annoying since if OSTs are offline this will
+			 * fail, and fallback to rr quite often, making
+			 * testing painful.
+			 */
 			if (cur_weight < rand)
 				continue;
 
 			CDEBUG(D_OTHER, "stripe=%d to idx=%d\n", nfound, idx);
 			/*
 			 * In case of QOS it makes sense to check components
-			 * only for FLR and if current component doesn't support
-			 * overstriping.
+			 * only for FLR and if current component doesn't
+			 * support overstriping.
 			 */
 			if (lo->ldo_mirror_count > 1 &&
 			    !(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)
@@ -1758,9 +2228,16 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 					continue;
 			}
 
+			if ((lod_comp->llc_flags & LCME_FL_PARITY) &&
+			    data_comp &&
+			    !lod_ec_check_data_usable(idx, nfound, sc,
+						 data_comp, lod_comp))
+					continue;
+
 			o = lod_qos_declare_object_on(env, lod, idx, slow, th);
 			if (IS_ERR(o)) {
-				CDEBUG(D_OTHER, "can't declare object on #%u: %d\n",
+				CDEBUG(D_OTHER,
+				       "can't declare object on #%u:%d\n",
 				       idx, (int) PTR_ERR(o));
 				continue;
 			}
@@ -1787,8 +2264,49 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			break;
 		}
 	}
-
-	if (unlikely(nfound < stripe_count_min)) {
+	/* EC protected data/parity pairs need special handling if we could not
+	 * get enough unique OSTs.
+	 */
+	if (lod_comp->llc_cstripe_count && nfound < stripe_count &&
+	    nfound >= stripe_count_min) {
+		if (lod_comp->llc_flags & LCME_FL_PARITY) {
+			/* If this was a parity allocation we have already
+			 * allocated as many unique OSTs as we could. If there
+			 * are still missing, try to re-use OSTs from the
+			 * corresponding data component.
+			 */
+			nfound = lod_ec_add_parities(env, lo, th, nfound, sc,
+						     data_comp, lod_comp,
+						     stripe, ost_indices);
+		} else if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING) {
+			/* Overstriping (-C): reuse OSTs from earlier raid
+			 * sets until the requested stripe count is met.
+			 */
+			nfound = lod_ec_add_data(env, lo, th, nfound, lod_comp,
+						 stripe, ost_indices);
+		} else {
+			/*
+			 * No overstriping (-c): shrink the EC geometry by
+			 * converting esc_k0 raidsets into esc_k1 until the
+			 * unique OSTs already allocated are enough. Prefer
+			 * a smaller layout over failing create when OSTs
+			 * are offline.
+			 */
+			stripe_count =
+				lod_ec_shrink_data_geometry(nfound,
+							    lod_comp, sc);
+		}
+		if (nfound == lod_comp->llc_stripe_count)
+			rc = 0;
+	}
+	/* For EC components we require the full stripe_count to avoid
+	 * incomplete raid sets. For plain components we allow partial
+	 * allocations down to stripe_count_min (e.g., 3/4 of the request
+	 * for LOD_USES_DEFAULT_STRIPE) to preserve QoS placement on
+	 * imbalanced filesystems.
+	 */
+	if (unlikely(nfound < (lod_comp->llc_cstripe_count ?
+			       stripe_count : stripe_count_min))) {
 		/*
 		 * when the decision to use weighted algorithm was made
 		 * we had enough appropriate OSPs, but this state can
@@ -2815,7 +3333,54 @@ static void lod_collect_avoidance(struct lod_object *lo,
 }
 
 /**
- * lod_qos_prep_create() - Create a striping for an object.
+ * lod_comp_find_linked() - Find the data/parity component linked to @comp.
+ * @lo: LOD object
+ * @comp: an EC data or parity component
+ *
+ * A data component and its parity component are paired via their
+ * "mirror_link_id". It is either a link id (both comps share the same id) or
+ * a mirror id (each comp's "mirror_link_id" points to the other's mirror id);
+ * the llapi initially assigns the link id and lod_bind_data_parity() later
+ * resolves it to the permanent mirror id. Linked comps cover the same extent.
+ *
+ * Return: the linked component of the opposite kind, or NULL if none found.
+ */
+static struct lod_layout_component *
+lod_comp_find_linked(struct lod_object *lo, struct lod_layout_component *comp)
+{
+	bool is_link_id = comp->llc_flags & LCME_FL_IS_LINK_ID;
+	bool is_parity = comp->llc_flags & LCME_FL_PARITY;
+	int j;
+
+	for (j = 0; j < lo->ldo_comp_cnt; j++) {
+		struct lod_layout_component *tmp = &lo->ldo_comp_entries[j];
+		bool tmp_is_parity = tmp->llc_flags & LCME_FL_PARITY;
+		__u16 link_id;
+
+		/* the linked comp is of the opposite kind (data/parity) */
+		if (is_parity == tmp_is_parity)
+			continue;
+
+		/* resolve the candidate's link id for the comparison */
+		if (is_link_id) {
+			if (!(tmp->llc_flags & LCME_FL_IS_LINK_ID))
+				continue;
+			link_id = tmp->llc_mirror_link_id;
+		} else {
+			link_id = mirror_id_of(tmp->llc_id);
+		}
+
+		/* linked comps share a link id and cover the same extent */
+		if (link_id == comp->llc_mirror_link_id &&
+		    lu_extent_is_equal(&tmp->llc_extent, &comp->llc_extent))
+			return tmp;
+	}
+
+	return NULL;
+}
+
+/**
+ * lod_comp_prep_create() - Create a striping for an object.
  * @env: execution environment for this thread
  * @lo: LOD object
  * @attr: attributes OST objects will be declared with
@@ -2833,23 +3398,25 @@ static void lod_collect_avoidance(struct lod_object *lo,
  * * %0 on success
  * * %negative negated errno on error
  */
-int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
-			struct lu_attr *attr, struct thandle *th,
-			int comp_idx, __u64 reserve)
+int lod_comp_prep_create(const struct lu_env *env, struct lod_object *lo,
+			 struct lu_attr *attr, struct thandle *th,
+			 int comp_idx, __u64 reserve)
 {
-	struct lod_layout_component *lod_comp;
+	struct lod_layout_component *lod_comp, *data_comp = NULL;
 	struct lod_device *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
 	struct lod_avoid_guide *lag = &lod_env_info(env)->lti_avoid;
 	struct dt_object **stripe = NULL;
 	__u32 *ost_indices = NULL;
 	enum lod_uses_hint flags = LOD_USES_ASSIGNED_STRIPE;
 	int stripe_len;
-	int i, j, rc = 0;
-	bool data_comp_found = false;
-
+	int i, rc = 0;
+	bool is_parity;
+	struct ec_split_comp sc = {0};
 	ENTRY;
 
 	LASSERT(lo);
+	if (IS_ERR_OR_NULL(d))
+		RETURN(d ? PTR_ERR(d) : -EINVAL);
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
 	lod_comp = &lo->ldo_comp_entries[comp_idx];
 	LASSERT(!(lod_comp->llc_flags & LCME_FL_EXTENSION));
@@ -2870,71 +3437,53 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		lod_check_and_spill_pool(env, d, &lod_comp->llc_pool);
 
 	/*
-	 * If this is a parity component, find its data component so we can size
-	 * it correctly (one OST per parity per raidset). Parity components need
-	 * at least llc_cstripe_count number of stripes.
-	 *
-	 * Data and parity comps are paired via their "mirror_link_id". It can
-	 * either be a link id, in which case the data/parity comp share the
-	 * same id, or it is a mirror id, in which case each component's
-	 * "mirror_link_id" field points to the other's mirror id. Initially,
-	 * the llapi assigns the link id and it is later resolved to the
-	 * (permanently-stored) mirror id by lod_bind_data_parity().
+	 * A parity or EC-protected data component is paired with its linked
+	 * component (see lod_comp_find_linked()). For a parity we size it (one
+	 * OST per parity per raid set) and remember the data component for the
+	 * raidset-aware allocator; for both we compute the raid-set split (sc)
+	 * the allocators need.
 	 */
-	if (lod_comp->llc_flags & LCME_FL_PARITY) {
-		bool is_link_id = lod_comp->llc_flags & LCME_FL_IS_LINK_ID;
+	is_parity = lod_comp->llc_flags & LCME_FL_PARITY;
+	if (is_parity || lod_comp->llc_dstripe_count) {
+		struct lod_layout_component *linked, *data, *parity;
 
-		lod_comp->llc_stripe_count = lod_comp->llc_cstripe_count;
+		/* a parity holds cstripe_count stripes per raid set */
+		if (is_parity)
+			lod_comp->llc_stripe_count =
+				lod_comp->llc_cstripe_count;
 
 		if (lod_comp->llc_mirror_link_id == 0)
 			GOTO(out, rc = -EINVAL);
 
-		for (j = 0;  j < lo->ldo_comp_cnt; j++) {
-			struct lod_layout_component *tmp_comp;
-			struct ec_split_comp sc;
-			__u16 link_id;
-
-			tmp_comp = &lo->ldo_comp_entries[j];
-
-			/* only a data component can match a parity component */
-			if (tmp_comp->llc_flags & LCME_FL_PARITY)
-				continue;
-
-			/* resolve the candidate's link id for the comparison */
-			if (is_link_id) {
-				if (!(tmp_comp->llc_flags & LCME_FL_IS_LINK_ID))
-					continue;
-				link_id = tmp_comp->llc_mirror_link_id;
-			} else {
-				link_id = mirror_id_of(tmp_comp->llc_id);
-			}
-
-			/* linked d/p components share the same link id */
-			if (link_id != lod_comp->llc_mirror_link_id)
-				continue;
-
-			/* sanity: link id matches; extents must also match */
-			if (tmp_comp->llc_extent.e_start !=
-				    lod_comp->llc_extent.e_start ||
-			    tmp_comp->llc_extent.e_end !=
-				    lod_comp->llc_extent.e_end)
-				continue;
-
-			ec_split_stripes(tmp_comp->llc_stripe_count,
-					 lod_comp->llc_dstripe_count, &sc);
-			lod_comp->llc_stripe_count =
-				(sc.esc_n0 + sc.esc_n1) *
-				lod_comp->llc_cstripe_count;
-			data_comp_found = true;
-			break;
-		}
-
-		/*
-		 * A parity component being allocated must have a matching data
-		 * component. Another case should not happen and so we error out
-		 */
-		if (!data_comp_found)
+		linked = lod_comp_find_linked(lo, lod_comp);
+		/* a parity component must have a matching data component */
+		if (is_parity && !linked)
 			GOTO(out, rc = -EINVAL);
+
+		if (linked) {
+			data = is_parity ? linked : lod_comp;
+			parity = is_parity ? lod_comp : linked;
+
+			/*
+			 * Raid-set split from the data stripe count and the
+			 * parity's data width; the allocators use it to lay
+			 * out both components.
+			 */
+			ec_split_stripes(data->llc_stripe_count,
+					 parity->llc_dstripe_count, &sc);
+
+			if (is_parity) {
+				/* one OST per raid set and parity */
+				data_comp = data;
+				lod_comp->llc_stripe_count =
+					(sc.esc_n0 + sc.esc_n1) *
+					lod_comp->llc_cstripe_count;
+			} else if (data->llc_pattern &
+				   LOV_PATTERN_OVERSTRIPING) {
+				/* TODO: should be set from userspace */
+				parity->llc_pattern |= LOV_PATTERN_OVERSTRIPING;
+			}
+		}
 	}
 
 	if (likely(!lod_comp->llc_stripe)) {
@@ -2947,11 +3496,41 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		 * could be changed if some OSTs are [de]activated manually.
 		 */
 		lod_qos_statfs_update(env, d, &d->lod_ost_descs);
-		stripe_len = lod_get_stripe_count(d, lo, comp_idx,
+		/*
+		 * For EC components keep the requested stripe count (the
+		 * RR/QoS paths may shrink geometry if OSTs are short).
+		 * Only reject here when the LOV EA cannot hold that many
+		 * stripes. lod_get_stripe_count() normally also clamps to
+		 * ld_active_tgt_count when overstriping is false; pass
+		 * overstriping=true so max_stripes is the EA capacity, not
+		 * the OST count. A plain -c 24 on 16 OSTs is clamped; an
+		 * EC -c 24 must not hard-fail with -E2BIG for the same.
+		 * Use a local flags so LOD_USES_DEFAULT_STRIPE is not set
+		 * on the caller's flags as a side effect.
+		 */
+		if (lod_comp->llc_cstripe_count) {
+			__u16 max_stripes;
+			enum lod_uses_hint ea_flags =
+				LOD_USES_ASSIGNED_STRIPE;
+
+			max_stripes = lod_get_stripe_count(d, lo,
+					comp_idx, LOV_MAX_STRIPE_COUNT,
+					true, &ea_flags);
+			if (lod_comp->llc_stripe_count > max_stripes) {
+				CDEBUG(D_OTHER,
+				       "EC stripe count %u exceeds LOV EA capacity %u\n",
+				       lod_comp->llc_stripe_count,
+				       max_stripes);
+				GOTO(out, rc = -E2BIG);
+			}
+			stripe_len = lod_comp->llc_stripe_count;
+		} else {
+			stripe_len = lod_get_stripe_count(d, lo, comp_idx,
 						  lod_comp->llc_stripe_count,
 						  lod_comp->llc_pattern &
 						  LOV_PATTERN_OVERSTRIPING,
 						  &flags);
+		}
 
 		if (stripe_len == 0)
 			GOTO(out, rc = -ERANGE);
@@ -2987,11 +3566,14 @@ repeat:
 			lod_collect_avoidance(lo, lag, comp_idx);
 
 			rc = lod_ost_alloc_qos(env, lo, stripe, ost_indices,
-					       flags, th, comp_idx, reserve);
+					       flags, th, comp_idx, reserve,
+					       &sc, data_comp);
+
 			if (rc == -EAGAIN)
 				rc = lod_ost_alloc_rr(env, lo, stripe,
 						      ost_indices, flags, th,
-						      comp_idx, reserve);
+						      comp_idx, reserve, &sc,
+						      data_comp);
 		} else {
 			rc = lod_ost_alloc_specific(env, lo, stripe,
 						    ost_indices, flags, th,
@@ -3003,13 +3585,15 @@ repeat:
 			if (rc == -EAGAIN) {
 				rc = lod_ost_alloc_qos(env, lo, stripe,
 						       ost_indices, flags, th,
-						       comp_idx, reserve);
+						       comp_idx, reserve,
+						       &sc, data_comp);
 				if (rc == -EAGAIN)
 					rc = lod_ost_alloc_rr(env, lo, stripe,
 							      ost_indices,
 							      flags, th,
 							      comp_idx,
-							      reserve);
+							      reserve, &sc,
+							      data_comp);
 			}
 		}
 put_ldts:
@@ -3119,7 +3703,7 @@ int lod_prepare_create(const struct lu_env *env, struct lod_object *lo,
 		CDEBUG(D_OTHER, "comp[%d] %lld "DEXT"\n", i, size, PEXT(extent));
 
 		if (!lo->ldo_is_composite || size >= extent->e_start) {
-			rc = lod_qos_prep_create(env, lo, attr, th, i, 0);
+			rc = lod_comp_prep_create(env, lo, attr, th, i, 0);
 			if (rc)
 				break;
 		}

@@ -3168,7 +3168,7 @@ struct ec_split_comp {
  * Arbitrary limit on the minimum size we will attempt to split up into
  * smaller chunks for ec computation.
  */
-#define EC_MIN_SPLIT_SIZE 5
+#define EC_MIN_SPLIT_SIZE 4
 /*
  * We have data consisting of 'total' stripes. Create a mapping where
  * we split this into smaller chunks based on what the

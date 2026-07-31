@@ -2775,6 +2775,12 @@ static void test52(void)
 	int fd;
 	int rc;
 
+	if (num_osts < 6) {
+		fprintf(stderr, "%s requires at least 6 OSTs, skipping\n",
+			__func__);
+		return;
+	}
+
 	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T52FILE);
 
 	rc = unlink(path);
@@ -2784,15 +2790,15 @@ static void test52(void)
 	layout = llapi_layout_alloc();
 	ASSERTF(layout != NULL, "errno = %d", errno);
 
-	/* Mirror 1: Regular data component [0, EOF] with 6 stripes */
-	rc = llapi_layout_stripe_count_set(layout, 6);
+	/* Mirror 1: Regular data component [0, EOF] with 4 stripes */
+	rc = llapi_layout_stripe_count_set(layout, 4);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	rc = llapi_layout_comp_extent_set(layout, 0, LUSTRE_EOF);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
-	/* Mirror 2: EC component [0, EOF] with EC(2,6) */
-	rc = llapi_layout_comp_add_ec(layout, 1, 0, LUSTRE_EOF, 6, 2);
+	/* Mirror 2: EC component [0, EOF] with EC(4,2) */
+	rc = llapi_layout_comp_add_ec(layout, 1, 0, LUSTRE_EOF, 4, 2);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	/* Set mirror count for the layout (2 mirrors total) */
@@ -2827,8 +2833,8 @@ static void test52(void)
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	__verify_comp_extent(layout, 0, LUSTRE_EOF, "M2 EC parity");
-	/* EC(6,2) - dstripe=6, cstripe=2, binds to M1 */
-	__verify_parity_comp(layout, 6, 2, 1, "M2 EC parity");
+	/* EC(4,2) - dstripe=4, cstripe=2, binds to M1 */
+	__verify_parity_comp(layout, 4, 2, 1, "M2 EC parity");
 
 	llapi_layout_free(layout);
 }
@@ -2841,6 +2847,12 @@ static void test53(void)
 	int rc;
 	struct llapi_layout *layout;
 	char path[PATH_MAX];
+
+	if (num_osts < 6) {
+		fprintf(stderr, "%s requires at least 6 OSTs, skipping\n",
+			__func__);
+		return;
+	}
 
 	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T53FILE);
 
@@ -2939,6 +2951,12 @@ static void test54(void)
 	int rc;
 	struct llapi_layout *layout;
 	char path[PATH_MAX];
+
+	if (num_osts < 3) {
+		fprintf(stderr, "%s requires at least 3 OSTs, skipping\n",
+			__func__);
+		return;
+	}
 
 	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T54FILE);
 
@@ -3100,6 +3118,12 @@ static void test55(void)
 	struct llapi_layout *layout;
 	char path[PATH_MAX];
 
+	if (num_osts < 3) {
+		fprintf(stderr, "%s requires at least 3 OSTs, skipping\n",
+			__func__);
+		return;
+	}
+
 	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T55FILE);
 
 	rc = unlink(path);
@@ -3175,6 +3199,12 @@ static void test56(void)
 	int rc;
 	struct llapi_layout *layout;
 	char path[PATH_MAX];
+
+	if (num_osts < 6) {
+		fprintf(stderr, "%s requires at least 6 OSTs, skipping\n",
+			__func__);
+		return;
+	}
 
 	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T56FILE);
 
@@ -3305,6 +3335,12 @@ static void test57(void)
 	struct llapi_layout *layout;
 	char path[PATH_MAX];
 	__u32 mirror_id;
+
+	if (num_osts < 6) {
+		fprintf(stderr, "%s requires at least 6 OSTs, skipping\n",
+			__func__);
+		return;
+	}
 
 	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T57FILE);
 
@@ -3456,6 +3492,12 @@ static void test58(void)
 	int rc;
 	struct llapi_layout *layout;
 	char path[PATH_MAX];
+
+	if (num_osts < 3) {
+		fprintf(stderr, "%s requires at least 3 OSTs, skipping\n",
+			__func__);
+		return;
+	}
 
 	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T58FILE);
 
@@ -3791,6 +3833,12 @@ static void test60(void)
 	uint64_t data_stripe_size, ec_stripe_size;
 	char path[PATH_MAX];
 
+	if (num_osts < 6) {
+		fprintf(stderr, "%s requires at least 6 OSTs, skipping\n",
+			__func__);
+		return;
+	}
+
 	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T60FILE);
 
 	rc = unlink(path);
@@ -3801,7 +3849,7 @@ static void test60(void)
 	ASSERTF(layout != NULL, "errno = %d", errno);
 
 	/* Set stripe count and size for data component */
-	rc = llapi_layout_stripe_count_set(layout, 6);
+	rc = llapi_layout_stripe_count_set(layout, 4);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	rc = llapi_layout_stripe_size_set(layout, 4*1024*1024);
@@ -3811,7 +3859,7 @@ static void test60(void)
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	/* Add EC component with matching extent */
-	rc = llapi_layout_comp_add_ec(layout, 1, 0, LUSTRE_EOF, 6, 2);
+	rc = llapi_layout_comp_add_ec(layout, 1, 0, LUSTRE_EOF, 4, 2);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	/* Navigate to first component and get its stripe size */
@@ -3998,6 +4046,12 @@ static void test63(void)
 	int fd;
 	int rc;
 
+	if (num_osts < 6) {
+		fprintf(stderr, "%s requires at least 6 OSTs, skipping\n",
+			__func__);
+		return;
+	}
+
 	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T63FILE);
 
 	rc = unlink(path);
@@ -4007,23 +4061,23 @@ static void test63(void)
 	layout = llapi_layout_alloc();
 	ASSERTF(layout != NULL, "errno = %d", errno);
 
-	/* Mirror 1 (DATA1): [0, EOF] with 4 stripes */
-	rc = llapi_layout_stripe_count_set(layout, 4);
+	/* Mirror 1 (DATA1): [0, EOF] with 2 stripes */
+	rc = llapi_layout_stripe_count_set(layout, 2);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	rc = llapi_layout_comp_extent_set(layout, 0, LUSTRE_EOF);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
-	/* Mirror 2 (PARITY1): [0, EOF] with EC(4,2) - bind to M1 */
-	rc = llapi_layout_comp_add_ec(layout, 1, 0, LUSTRE_EOF, 4, 2);
+	/* Mirror 2 (PARITY1): [0, EOF] with EC(2,1) - bind to M1 */
+	rc = llapi_layout_comp_add_ec(layout, 1, 0, LUSTRE_EOF, 2, 1);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
-	/* Mirror 3 (DATA2): [0, EOF] with 6 stripes */
+	/* Mirror 3 (DATA2): [0, EOF] with 2 stripes */
 	rc = llapi_layout_add_first_comp(layout);
 	ASSERTF(rc == 0, "llapi_layout_add_first_comp failed: errno = %d",
 		errno);
 
-	rc = llapi_layout_stripe_count_set(layout, 6);
+	rc = llapi_layout_stripe_count_set(layout, 2);
 	ASSERTF(rc == 0, "llapi_layout_stripe_count_set failed: errno = %d",
 		errno);
 
@@ -4031,8 +4085,8 @@ static void test63(void)
 	ASSERTF(rc == 0, "llapi_layout_comp_extent_set failed: errno = %d",
 		errno);
 
-	/* Mirror 4 (PARITY2): [0, EOF] with EC(6,2) - bind to M3 */
-	rc = llapi_layout_comp_add_ec(layout, 3, 0, LUSTRE_EOF, 6, 2);
+	/* Mirror 4 (PARITY2): [0, EOF] with EC(2,1) - bind to M3 */
+	rc = llapi_layout_comp_add_ec(layout, 3, 0, LUSTRE_EOF, 2, 1);
 	ASSERTF(rc == 0, "llapi_layout_comp_add_ec failed: errno = %d", errno);
 
 	/* Set mirror count for the layout (4 mirrors total) */
@@ -4061,11 +4115,11 @@ static void test63(void)
 	__verify_comp_extent(layout, 0, LUSTRE_EOF, "M1 DATA1");
 	__verify_ec_data_comp(layout, 2, "M1 DATA1");
 
-	/* M2 PARITY1: [0, EOF] with EC(4,2) - binds to M1 */
+	/* M2 PARITY1: [0, EOF] with EC(2,1) - binds to M1 */
 	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
 	ASSERTF(rc == 0, "errno = %d", errno);
 	__verify_comp_extent(layout, 0, LUSTRE_EOF, "M2 PARITY1");
-	__verify_parity_comp(layout, 4, 2, 1, "M2 PARITY1");
+	__verify_parity_comp(layout, 2, 1, 1, "M2 PARITY1");
 
 	/* M3 DATA2: [0, EOF] - regular data component */
 	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
@@ -4073,11 +4127,11 @@ static void test63(void)
 	__verify_comp_extent(layout, 0, LUSTRE_EOF, "M3 DATA2");
 	__verify_ec_data_comp(layout, 4, "M3 DATA2");
 
-	/* M4 PARITY2: [0, EOF] with EC(6,2) - binds to M3 */
+	/* M4 PARITY2: [0, EOF] with EC(2,1) - binds to M3 */
 	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
 	ASSERTF(rc == 0, "errno = %d", errno);
 	__verify_comp_extent(layout, 0, LUSTRE_EOF, "M4 PARITY2");
-	__verify_parity_comp(layout, 6, 2, 3, "M4 PARITY2");
+	__verify_parity_comp(layout, 2, 1, 3, "M4 PARITY2");
 
 	llapi_layout_free(layout);
 }
@@ -4091,6 +4145,12 @@ static void test64(void)
 	struct llapi_layout *layout;
 	char path[PATH_MAX];
 
+	if (num_osts < 6) {
+		fprintf(stderr, "%s requires at least 6 OSTs, skipping\n",
+			__func__);
+		return;
+	}
+
 	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T64FILE);
 
 	rc = unlink(path);
@@ -4100,29 +4160,29 @@ static void test64(void)
 	layout = llapi_layout_alloc();
 	ASSERTF(layout != NULL, "errno = %d", errno);
 
-	/* Mirror 1 (DATA1): [0, EOF] with 4 stripes */
-	rc = llapi_layout_stripe_count_set(layout, 4);
+	/* Mirror 1 (DATA1): [0, EOF] with 2 stripes */
+	rc = llapi_layout_stripe_count_set(layout, 2);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	rc = llapi_layout_comp_extent_set(layout, 0, LUSTRE_EOF);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
-	/* Mirror 2 (DATA2): [0, EOF] with 6 stripes */
+	/* Mirror 2 (DATA2): [0, EOF] with 2 stripes */
 	rc = llapi_layout_add_first_comp(layout);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
-	rc = llapi_layout_stripe_count_set(layout, 6);
+	rc = llapi_layout_stripe_count_set(layout, 2);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	rc = llapi_layout_comp_extent_set(layout, 0, LUSTRE_EOF);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
-	/* Mirror 3 (PARITY1): [0, EOF] with EC(4,2) - bind to M1 */
-	rc = llapi_layout_comp_add_ec(layout, 1, 0, LUSTRE_EOF, 4, 2);
+	/* Mirror 3 (PARITY1): [0, EOF] with EC(2,1) - bind to M1 */
+	rc = llapi_layout_comp_add_ec(layout, 1, 0, LUSTRE_EOF, 2, 1);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
-	/* Mirror 4 (PARITY2): [0, EOF] with EC(6,2) - bind to M2 */
-	rc = llapi_layout_comp_add_ec(layout, 2, 0, LUSTRE_EOF, 6, 2);
+	/* Mirror 4 (PARITY2): [0, EOF] with EC(2,1) - bind to M2 */
+	rc = llapi_layout_comp_add_ec(layout, 2, 0, LUSTRE_EOF, 2, 1);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	/* Set mirror count for the layout (5 mirrors total) */
@@ -4157,17 +4217,17 @@ static void test64(void)
 	__verify_comp_extent(layout, 0, LUSTRE_EOF, "M3 DATA2");
 	__verify_ec_data_comp(layout, 4, "M2 DATA2");
 
-	/* M3 PARITY1: [0, EOF] with EC(4,2) - binds to M1 */
+	/* M3 PARITY1: [0, EOF] with EC(2,1) - binds to M1 */
 	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
 	ASSERTF(rc == 0, "errno = %d", errno);
 	__verify_comp_extent(layout, 0, LUSTRE_EOF, "M2 PARITY1");
-	__verify_parity_comp(layout, 4, 2, 1, "M2 PARITY1");
+	__verify_parity_comp(layout, 2, 1, 1, "M2 PARITY1");
 
-	/* M4 PARITY2: [0, EOF] with EC(6,2) - binds to M3 */
+	/* M4 PARITY2: [0, EOF] with EC(2,1) - binds to M3 */
 	rc = llapi_layout_comp_use(layout, LLAPI_LAYOUT_COMP_USE_NEXT);
 	ASSERTF(rc == 0, "errno = %d", errno);
 	__verify_comp_extent(layout, 0, LUSTRE_EOF, "M4 PARITY2");
-	__verify_parity_comp(layout, 6, 2, 2, "M4 PARITY2");
+	__verify_parity_comp(layout, 2, 1, 2, "M4 PARITY2");
 
 	llapi_layout_free(layout);
 }
@@ -4181,6 +4241,12 @@ static void test65(void)
 	struct llapi_layout *layout1, *layout2, *merged_layout, *filelayout;
 	char path[PATH_MAX];
 
+	if (num_osts < 7) {
+		fprintf(stderr, "%s requires at least 7 OSTs, skipping\n",
+			__func__);
+		return;
+	}
+
 	snprintf(path, sizeof(path), "%s/%s", lustre_dir, T65FILE);
 
 	rc = unlink(path);
@@ -4189,95 +4255,95 @@ static void test65(void)
 	/*
 	 * Create layout1: DATA1 (2 comps) + PARITY1 (2 comps)
 	 *   M1 (DATA1):   [0, 1GiB] + [1GiB, EOF]
-	 *   M2 (PARITY1): [0, 1GiB] EC(4,2) + [1GiB, EOF] EC(4,2): binds to M1
+	 *   M2 (PARITY1): [0, 1GiB] EC(2,1) + [1GiB, EOF] EC(2,1): binds to M1
 	 */
 	layout1 = llapi_layout_alloc();
 	ASSERTF(layout1 != NULL, "errno = %d", errno);
 
-	/* M1 DATA1 comp1: [0, 1GiB] with 4 stripes */
-	rc = llapi_layout_stripe_count_set(layout1, 4);
+	/* M1 DATA1 comp1: [0, 1GiB] with 2 stripes */
+	rc = llapi_layout_stripe_count_set(layout1, 2);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	rc = llapi_layout_comp_extent_set(layout1, 0, 1024 * 1024 * 1024ULL);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
-	/* M1 DATA1 comp2: [1GiB, EOF] with 4 stripes */
+	/* M1 DATA1 comp2: [1GiB, EOF] with 2 stripes */
 	rc = llapi_layout_comp_add(layout1);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
-	rc = llapi_layout_stripe_count_set(layout1, 4);
+	rc = llapi_layout_stripe_count_set(layout1, 2);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	rc = llapi_layout_comp_extent_set(layout1, 1024 * 1024 * 1024ULL,
 					  LUSTRE_EOF);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
-	/* M2 PARITY1 comp1: [0, 1GiB] with EC(4,2) - bind to M1 */
-	rc = llapi_layout_comp_add_ec(layout1, 1, 0, 1024 * 1024 * 1024ULL, 4,
-				      2);
+	/* M2 PARITY1 comp1: [0, 1GiB] with EC(2,1) - bind to M1 */
+	rc = llapi_layout_comp_add_ec(layout1, 1, 0, 1024 * 1024 * 1024ULL, 2,
+				      1);
 	ASSERTF(rc == 0, "llapi_layout_comp_add_ec failed: errno = %d", errno);
 
-	/* M2 PARITY1 comp2: [1GiB, EOF] with EC(4,2) - bind to M1 */
+	/* M2 PARITY1 comp2: [1GiB, EOF] with EC(2,1) - bind to M1 */
 	rc = llapi_layout_comp_add_ec(layout1, 1, 1024 * 1024 * 1024ULL,
-				      LUSTRE_EOF, 4, 2);
+				      LUSTRE_EOF, 2, 1);
 	ASSERTF(rc == 0, "llapi_layout_comp_add_ec failed: errno = %d", errno);
 
 	/*
 	 * Create layout2: DATA1 (2 comps) + DATA2 (2 comps) + PARITY1 (2 comps)
 	 *   M1 (DATA1):   [0, 1GiB] + [1GiB, EOF]
 	 *   M2 (DATA2):   [0, 512MiB] + [512MiB, EOF]
-	 *   M3 (PARITY1): [0, 1GiB] EC(6,2) + [1GiB, EOF] EC(6,2): binds to M1
+	 *   M3 (PARITY1): [0, 1GiB] EC(2,1) + [1GiB, EOF] EC(2,1): binds to M1
 	 */
 	layout2 = llapi_layout_alloc();
 	ASSERTF(layout2 != NULL, "errno = %d", errno);
 
-	/* M1 DATA1 comp1: [0, 1GiB] with 6 stripes */
-	rc = llapi_layout_stripe_count_set(layout2, 6);
+	/* M1 DATA1 comp1: [0, 1GiB] with 2 stripes */
+	rc = llapi_layout_stripe_count_set(layout2, 2);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	rc = llapi_layout_comp_extent_set(layout2, 0, 1024 * 1024 * 1024ULL);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
-	/* M1 DATA1 comp2: [1GiB, EOF] with 6 stripes */
+	/* M1 DATA1 comp2: [1GiB, EOF] with 2 stripes */
 	rc = llapi_layout_comp_add(layout2);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
-	rc = llapi_layout_stripe_count_set(layout2, 6);
+	rc = llapi_layout_stripe_count_set(layout2, 2);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	rc = llapi_layout_comp_extent_set(layout2, 1024 * 1024 * 1024ULL,
 					  LUSTRE_EOF);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
-	/* M2 DATA2 comp1: [0, 512MiB] with 8 stripes */
+	/* M2 DATA2 comp1: [0, 512MiB] with 1 stripe */
 	rc = llapi_layout_add_first_comp(layout2);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
-	rc = llapi_layout_stripe_count_set(layout2, 8);
+	rc = llapi_layout_stripe_count_set(layout2, 1);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	rc = llapi_layout_comp_extent_set(layout2, 0, 512 * 1024 * 1024ULL);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
-	/* M2 DATA2 comp2: [512MiB, EOF] with 8 stripes */
+	/* M2 DATA2 comp2: [512MiB, EOF] with 1 stripe */
 	rc = llapi_layout_comp_add(layout2);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
-	rc = llapi_layout_stripe_count_set(layout2, 8);
+	rc = llapi_layout_stripe_count_set(layout2, 1);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
 	rc = llapi_layout_comp_extent_set(layout2, 512 * 1024 * 1024ULL,
 					  LUSTRE_EOF);
 	ASSERTF(rc == 0, "errno = %d", errno);
 
-	/* M3 PARITY1 comp1: [0, 1GiB] with EC(6,2) - bind to M1 DATA1 */
-	rc = llapi_layout_comp_add_ec(layout2, 1, 0, 1024 * 1024 * 1024ULL, 6,
-				      2);
+	/* M3 PARITY1 comp1: [0, 1GiB] with EC(2,1) - bind to M1 DATA1 */
+	rc = llapi_layout_comp_add_ec(layout2, 1, 0, 1024 * 1024 * 1024ULL, 2,
+				      1);
 	ASSERTF(rc == 0, "llapi_layout_comp_add_ec failed: errno = %d", errno);
 
-	/* M3 PARITY1 comp2: [1GiB, EOF] with EC(6,2) - bind to M1 DATA1 */
+	/* M3 PARITY1 comp2: [1GiB, EOF] with EC(2,1) - bind to M1 DATA1 */
 	rc = llapi_layout_comp_add_ec(layout2, 1, 1024 * 1024 * 1024ULL,
-				      LUSTRE_EOF, 6, 2);
+				      LUSTRE_EOF, 2, 1);
 	ASSERTF(rc == 0, "llapi_layout_comp_add_ec failed: errno = %d", errno);
 
 	/* Merge layout2 into layout1 */
@@ -4309,11 +4375,11 @@ static void test65(void)
 	 * Expected layout after merge (10 components, 5 mirrors):
 	 *   From layout1:
 	 *     M1 (DATA1):   [0, 1GiB] + [1GiB, EOF] -> binds to M2
-	 *     M2 (PARITY1): [0, 1GiB] + [1GiB, EOF] EC(4,2) -> binds to M1
+	 *     M2 (PARITY1): [0, 1GiB] + [1GiB, EOF] EC(2,1) -> binds to M1
 	 *   From layout2 (mirror IDs offset by 2):
 	 *     M3 (DATA1):   [0, 1GiB] + [1GiB, EOF] -> binds to M5
 	 *     M4 (DATA2):   [0, 512MiB] + [512MiB, EOF] -> no EC binding
-	 *     M5 (PARITY1): [0, 1GiB] + [1GiB, EOF] EC(6,2) -> binds to M3
+	 *     M5 (PARITY1): [0, 1GiB] + [1GiB, EOF] EC(2,1) -> binds to M3
 	 */
 
 	/* M1 DATA1 comp1: [0, 1GiB] */
@@ -4330,19 +4396,19 @@ static void test65(void)
 			     "M1 DATA1 comp2");
 	__verify_ec_data_comp(filelayout, 2, "M1 DATA1 comp2");
 
-	/* M2 PARITY1 comp1: [0, 1GiB] with EC(4,2) - binds to M1 */
+	/* M2 PARITY1 comp1: [0, 1GiB] with EC(2,1) - binds to M1 */
 	rc = llapi_layout_comp_use(filelayout, LLAPI_LAYOUT_COMP_USE_NEXT);
 	ASSERTF(rc == 0, "errno = %d", errno);
 	__verify_comp_extent(filelayout, 0, 1024 * 1024 * 1024ULL,
 			     "M2 PARITY1 comp1");
-	__verify_parity_comp(filelayout, 4, 2, 1, "M2 PARITY1 comp1");
+	__verify_parity_comp(filelayout, 2, 1, 1, "M2 PARITY1 comp1");
 
-	/* M2 PARITY1 comp2: [1GiB, EOF] with EC(4,2) - binds to M1 */
+	/* M2 PARITY1 comp2: [1GiB, EOF] with EC(2,1) - binds to M1 */
 	rc = llapi_layout_comp_use(filelayout, LLAPI_LAYOUT_COMP_USE_NEXT);
 	ASSERTF(rc == 0, "errno = %d", errno);
 	__verify_comp_extent(filelayout, 1024 * 1024 * 1024ULL, LUSTRE_EOF,
 			     "M2 PARITY1 comp2");
-	__verify_parity_comp(filelayout, 4, 2, 1, "M2 PARITY1 comp2");
+	__verify_parity_comp(filelayout, 2, 1, 1, "M2 PARITY1 comp2");
 
 	/* M3 DATA1 comp1: [0, 1GiB] - from layout2 */
 	rc = llapi_layout_comp_use(filelayout, LLAPI_LAYOUT_COMP_USE_NEXT);
@@ -4372,19 +4438,19 @@ static void test65(void)
 			     "M4 DATA2 comp2");
 	__verify_ec_data_comp(filelayout, 0, "M4 DATA2 comp2");
 
-	/* M5 PARITY1 comp1: [0, 1GiB] with EC(6,2) - binds to M3 */
+	/* M5 PARITY1 comp1: [0, 1GiB] with EC(2,1) - binds to M3 */
 	rc = llapi_layout_comp_use(filelayout, LLAPI_LAYOUT_COMP_USE_NEXT);
 	ASSERTF(rc == 0, "errno = %d", errno);
 	__verify_comp_extent(filelayout, 0, 1024 * 1024 * 1024ULL,
 			     "M5 PARITY1 comp1");
-	__verify_parity_comp(filelayout, 6, 2, 3, "M5 PARITY1 comp1");
+	__verify_parity_comp(filelayout, 2, 1, 3, "M5 PARITY1 comp1");
 
-	/* M5 PARITY1 comp2: [1GiB, EOF] with EC(6,2) - binds to M3 */
+	/* M5 PARITY1 comp2: [1GiB, EOF] with EC(2,1) - binds to M3 */
 	rc = llapi_layout_comp_use(filelayout, LLAPI_LAYOUT_COMP_USE_NEXT);
 	ASSERTF(rc == 0, "errno = %d", errno);
 	__verify_comp_extent(filelayout, 1024 * 1024 * 1024ULL, LUSTRE_EOF,
 			     "M5 PARITY1 comp2");
-	__verify_parity_comp(filelayout, 6, 2, 3, "M5 PARITY1 comp2");
+	__verify_parity_comp(filelayout, 2, 1, 3, "M5 PARITY1 comp2");
 
 	llapi_layout_free(filelayout);
 }
@@ -4477,7 +4543,8 @@ static void test67(void)
 
 	/* EC requires at least 3 OSTs (2 data + 1 parity minimum) */
 	if (num_osts < 3) {
-		fprintf(stderr, "test64 requires at least 3 OSTs, skipping\n");
+		fprintf(stderr, "%s requires at least 3 OSTs, skipping\n",
+			__func__);
 		return;
 	}
 

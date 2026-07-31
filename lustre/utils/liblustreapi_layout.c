@@ -4887,15 +4887,15 @@ llapi_ec_resync_or_verify_comp(int fd, struct llapi_layout *layout,
 	 * We have data_comp->llc_stripe_count number of stripes in the
 	 * in the data comp we want to split this into raid sets of
 	 * approximately ec_comp->llc_dstripe_count stripes each.
-	 * Call ec_split_stripes and find a mapping into smaller raidsets.
+	 * Call ec_split_stripes and find a mapping into smaller raid sets.
 	 */
 	ec_split_stripes(data_comp->llc_stripe_count,
 			 ec_comp->llc_dstripe_count, &sc);
 
 	/*
 	 * We have now split the total number of data stripes into
-	 * c0 number of raidsets with k stripes each and
-	 * c1 number of raidsets with k-1 stripes each.
+	 * c0 number of raid sets with k stripes each and
+	 * c1 number of raid sets with k-1 stripes each.
 	 * c1 may be 0.
 	 * Compute and update the parities one raid set at a time.
 	 */
@@ -5010,7 +5010,7 @@ stripeset_with_data:
 		if (i == sc.esc_n0)
 			k = sc.esc_k1;
 
-		/* Skip raidsets that are covered by an initial hole */
+		/* Skip raid sets that are covered by an initial hole */
 		if (data_off > data_pos + k * data_comp->llc_stripe_size)
 			goto skip;
 
@@ -5096,9 +5096,9 @@ static int llapi_ec_check_comp_match(struct llapi_layout_comp *data_comp,
  *     The raid set covers a specific range of each row.
  *     A raid set covers the same range for every row.
  *
- *     The stripe set is split into raidsets so that there will be
- *       c0 number of raidsets with k0 stripes each and
- *       c1 number of raidsets with k1 stripes each.
+ *     The stripe set is split into raid sets so that there will be
+ *       c0 number of raid sets with k0 stripes each and
+ *       c1 number of raid sets with k1 stripes each.
  *       k1 == k0 - 1
  *       c1 may be 0.
  *
@@ -5257,7 +5257,7 @@ static int llapi_ec_check_comp_match(struct llapi_layout_comp *data_comp,
  *                 + parity
  *
  *
- * If there is a hole that spans the entire raidset then we can skip
+ * If there is a hole that spans the entire raid set then we can skip
  * computing the parities and leave it as a hole in the ec comp as well.
  * Example, assume there is a hole spanning the entire RAID set #1 above, this
  * will result in a parity layout as:
@@ -5289,7 +5289,7 @@ static int llapi_ec_check_comp_match(struct llapi_layout_comp *data_comp,
  * In both cases we pad the remainder of the raid set with 0 when we compute
  * the parity.
  *
- * Example: the extent ends partway through the second stripe in raidset #2:
+ * Example: the extent ends partway through the second stripe in raid set #2:
  * The raid set is padded with 0 so that we have a full set of stripes to
  * compute the parities over.
  * +------------------------+  \

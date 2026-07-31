@@ -811,9 +811,9 @@ int lod_use_defined_striping(const struct lu_env *, struct lod_object *,
 int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 			 const struct lu_buf *buf);
 void lod_qos_set_pool(struct lod_object *lo, int pos, const char *pool_name);
-int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
-			struct lu_attr *attr, struct thandle *th,
-			int comp_idx, __u64 reserve);
+int lod_comp_prep_create(const struct lu_env *env, struct lod_object *lo,
+			 struct lu_attr *attr, struct thandle *th,
+			 int comp_idx, __u64 reserve);
 __u16 lod_comp_entry_stripe_count(struct lod_object *lo,
 				  int comp_idx, bool is_dir);
 __u16 lod_get_stripe_count_plain(struct lod_device *lod, struct lod_object *lo,

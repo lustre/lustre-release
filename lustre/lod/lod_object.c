@@ -7065,8 +7065,8 @@ static int lod_declare_instantiate_components(const struct lu_env *env,
 	LASSERT(info->lti_count < lo->ldo_comp_cnt);
 
 	for (i = 0; i < info->lti_count; i++) {
-		rc = lod_qos_prep_create(env, lo, NULL, th,
-					 info->lti_comp_idx[i], reserve);
+		rc = lod_comp_prep_create(env, lo, NULL, th,
+					  info->lti_comp_idx[i], reserve);
 		if (rc)
 			break;
 	}

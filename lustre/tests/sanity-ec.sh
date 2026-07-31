@@ -15,8 +15,13 @@ init_test_env "$@"
 init_logging
 
 ALWAYS_EXCEPT="$SANITY_EC_EXCEPT "
-always_except LU-19631 12a 12b
+always_except LU-19631 12a
 # tests 12a: EC parity calculation produces incorrect content (LU-19631)
+if [[ "$ost1_FSTYPE" == "zfs" ]]; then
+	# test 5b: EC resync hole-punches stale parity, but osd-zfs has no
+	# fallocate hole-punch, so resync fails with EOPNOTSUPP (LU-20435)
+	always_except LU-20435 5b 12b
+fi
 
 build_test_filter
 
@@ -89,10 +94,23 @@ verify_comp_parity() {
 # Enable erasure coding and restore on exit
 #
 enable_ec() {
+	(( OSTCOUNT >= 3 )) || skip "needs >= 3 OSTs for EC"
+
 	local ec_enable=$($LCTL get_param -n llite.*.enable_erasure_coding)
 
 	$LCTL set_param llite.*.enable_erasure_coding=1
 	stack_trap "$LCTL set_param -n llite.*.enable_erasure_coding=$ec_enable"
+
+	# Scale a generic EC layout to the number of available OSTs so the
+	# tests run on any configuration with a small number of OSTs instead
+	# of hard-coding a fixed geometry that needs a large OST count.
+	# The raidset allocator requires a unique OST for every data stripe
+	# plus one per parity in a single raidset, so keep data + parity <=
+	# OSTCOUNT. Tests that need a specific geometry set their own values.
+	EC_CSTRIPE=$((OSTCOUNT > 4 ? 2 : 1))
+	EC_DSTRIPE=$((OSTCOUNT > 7 ? 6 : OSTCOUNT - EC_CSTRIPE))
+	EC_MINSTRIPE=$((EC_DSTRIPE + EC_CSTRIPE))
+	EC_ARG="--ec $EC_DSTRIPE+$EC_CSTRIPE"
 }
 
 #
@@ -224,10 +242,8 @@ test_1a() {
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
 	# Single component with EC
-	$LFS setstripe -E -1 -c 8 --ec 8+2 $tf ||
+	$LFS setstripe -E -1 -c $EC_DSTRIPE $EC_ARG $tf ||
 		error "setstripe failed"
 
 	verify_mirror_count $tf 2
@@ -241,7 +257,7 @@ test_1a() {
 
 	# Verify parity mirror (mirror 2, component 1)
 	verify_comp_parity $tf ${ids[1]}
-	verify_ec_stripe_count $tf ${ids[1]} 8 2
+	verify_ec_stripe_count $tf ${ids[1]} $EC_DSTRIPE $EC_CSTRIPE
 	verify_comp_extent $tf ${ids[1]} 0 EOF
 
 	# Verify stripe size matches between data and EC components
@@ -254,10 +270,8 @@ test_1b() {
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
 	# Order independence: --ec before -E
-	$LFS setstripe --ec 8+2 -E -1 -c 8 $tf ||
+	$LFS setstripe $EC_ARG -E -1 -c $EC_DSTRIPE $tf ||
 		error "setstripe failed"
 
 	verify_mirror_count $tf 2
@@ -271,7 +285,7 @@ test_1b() {
 
 	# Verify parity mirror (mirror 2, component 1)
 	verify_comp_parity $tf ${ids[1]}
-	verify_ec_stripe_count $tf ${ids[1]} 8 2
+	verify_ec_stripe_count $tf ${ids[1]} $EC_DSTRIPE $EC_CSTRIPE
 	verify_comp_extent $tf ${ids[1]} 0 EOF
 }
 run_test 1b "setstripe with --ec before -E (order independence)"
@@ -281,10 +295,8 @@ test_1c() {
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
-	# Test colon separator: --ec 8:2 instead of 8+2
-	$LFS setstripe -E -1 -c 8 --ec 8:2 $tf ||
+	# Test colon separator: --ec 4:2 instead of 4+2
+	$LFS setstripe -E -1 -c $EC_DSTRIPE --ec $EC_DSTRIPE:$EC_CSTRIPE $tf ||
 		error "setstripe with colon separator failed"
 
 	verify_mirror_count $tf 2
@@ -298,20 +310,18 @@ test_1c() {
 
 	# Verify parity mirror (mirror 2, component 1)
 	verify_comp_parity $tf ${ids[1]}
-	verify_ec_stripe_count $tf ${ids[1]} 8 2
+	verify_ec_stripe_count $tf ${ids[1]} $EC_DSTRIPE $EC_CSTRIPE
 	verify_comp_extent $tf ${ids[1]} 0 EOF
 }
-run_test 1c "setstripe with colon separator (--ec 8:2)"
+run_test 1c "setstripe with colon separator (--ec dstripe:cstripe)"
 
 test_1d() {
 	enable_ec
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
 	# Multiple components, single EC spec
-	$LFS setstripe -E 128M -E -1 --ec 8+2 $tf ||
+	$LFS setstripe -E 128M -E -1 $EC_ARG $tf ||
 		error "setstripe failed"
 
 	verify_mirror_count $tf 2
@@ -327,12 +337,12 @@ test_1d() {
 	# Verify parity mirror components (mirror 2)
 	# First parity component
 	verify_comp_parity $tf ${ids[2]}
-	verify_ec_stripe_count $tf ${ids[2]} 8 2
+	verify_ec_stripe_count $tf ${ids[2]} $EC_DSTRIPE $EC_CSTRIPE
 	verify_comp_extent $tf ${ids[2]} 0 134217728
 
 	# Second parity component
 	verify_comp_parity $tf ${ids[3]}
-	verify_ec_stripe_count $tf ${ids[3]} 8 2
+	verify_ec_stripe_count $tf ${ids[3]} $EC_DSTRIPE $EC_CSTRIPE
 	verify_comp_extent $tf ${ids[3]} 134217728 EOF
 }
 run_test 1d "setstripe with multiple components and single EC spec"
@@ -342,10 +352,8 @@ test_1e() {
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
 	# EC specified on first component, should inherit to second
-	$LFS setstripe -E 128M --ec 8+2 -E -1 -c 4 $tf ||
+	$LFS setstripe -E 128M $EC_ARG -E -1 -c 2 $tf ||
 		error "setstripe failed"
 
 	verify_mirror_count $tf 2
@@ -359,30 +367,28 @@ test_1e() {
 	verify_comp_extent $tf ${ids[1]} 134217728 EOF
 
 	# Verify parity mirror components (mirror 2)
-	# First component has EC(8+2) from the spec
+	# First component keeps the spec EC($EC_DSTRIPE+$EC_CSTRIPE)
 	verify_comp_parity $tf ${ids[2]}
-	verify_ec_stripe_count $tf ${ids[2]} 8 2
+	verify_ec_stripe_count $tf ${ids[2]} $EC_DSTRIPE $EC_CSTRIPE
 	verify_comp_extent $tf ${ids[2]} 0 134217728
 
-	# Second component has EC(4+2) - reduced from EC(8+2) because
-	# the data component has -c 4, so we can't have 8 data stripes
+	# Second component reduced to EC(2+$EC_CSTRIPE) because the data
+	# component has -c 2 (fewer than $EC_DSTRIPE data stripes)
 	verify_comp_parity $tf ${ids[3]}
-	verify_ec_stripe_count $tf ${ids[3]} 4 2
+	verify_ec_stripe_count $tf ${ids[3]} 2 $EC_CSTRIPE
 	verify_comp_extent $tf ${ids[3]} 134217728 EOF
 }
 run_test 1e "setstripe with EC inheriting to second component"
 
 test_1f() {
+	(( $OSTCOUNT >= 6 )) || skip "needs >= 6 OSTs"
+
 	enable_ec
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
-	# Different EC for different components
-	# Note: second component has -c 4, so EC will be adjusted to 4+2
-	# (can't have 8 data stripes with only 4 total stripes)
-	$LFS setstripe -E 128M --ec 4+2 -E -1 -c 4 --ec 8+2 $tf ||
+	# Different EC for different components: first 2+1, second 4+2 with -c 4
+	$LFS setstripe -E 128M --ec 2+1 -E -1 -c 4 --ec 4+2 $tf ||
 		error "setstripe failed"
 
 	verify_mirror_count $tf 2
@@ -396,9 +402,9 @@ test_1f() {
 	verify_comp_extent $tf ${ids[1]} 134217728 EOF
 
 	# Verify parity mirror components (mirror 2)
-	# First component should have EC(4+2)
+	# First component should have EC(2+1)
 	verify_comp_parity $tf ${ids[2]}
-	verify_ec_stripe_count $tf ${ids[2]} 4 2
+	verify_ec_stripe_count $tf ${ids[2]} 2 1
 	verify_comp_extent $tf ${ids[2]} 0 134217728
 
 	# Second component has EC adjusted to 4+2 (data component has -c 4)
@@ -409,11 +415,11 @@ test_1f() {
 run_test 1f "setstripe with different EC for different components"
 
 test_1g() {
+	(( OSTCOUNT >= 5 )) || skip "needs >= 5 OSTs"
+
 	enable_ec
 	local tf=$DIR/$tfile
 	local ids
-
-	stack_trap "rm -f $tf"
 
 	# Different parity counts
 	# Note: second component has -c 4, so EC will be adjusted to 4+1
@@ -445,17 +451,17 @@ test_1g() {
 run_test 1g "setstripe with different parity counts"
 
 test_1h() {
+	(( OSTCOUNT >= 7 )) || skip "needs >= 7 OSTs"
+
 	enable_ec
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
 	# Test -N flag with explicit stripe counts and --ec
 	# This should create:
 	# Mirror 1: data mirror 2 comps ([0, 1M] with -c 1, [1M, EOF] with -c 1)
-	# Mirror 2: data mirror 2 comps ([0, 1M] with -c 8, [1M, EOF] with -c 4)
-	# Mirror 3: parity 2 EC comps ([0, 1M] with EC(8+2), [1M, EOF] with EC(4+1))
+	# Mirror 2: data mirror 2 comps ([0, 1M] with -c 4, [1M, EOF] with -c 2)
+	# Mirror 3: parity 2 EC comps ([0, 1M] EC(4+2), [1M, EOF] EC(2+1))
 	#
 	# This test verifies that when using -N with multiple mirrors and --ec,
 	# the EC parity components correctly bind to the data components in the
@@ -463,7 +469,7 @@ test_1h() {
 	# mirrors (Mirror 1).
 
 	$LFS setstripe -N -E 1M -c 1 -E -1 -c 1 \
-		-N -E 1M -c 8 --ec 8+2 -E -1 -c 4 --ec 4+1 $tf ||
+		-N -E 1M -c 4 --ec 4+2 -E -1 -c 2 --ec 2+1 $tf ||
 		error "setstripe failed"
 
 	verify_mirror_count $tf 3
@@ -481,14 +487,14 @@ test_1h() {
 	verify_comp_extent $tf ${ids[3]} 1048576 EOF
 
 	# Verify Mirror 3: parity mirror with EC
-	# First component should have EC(8+2) with dstripe=8
+	# First component should have EC(4+2) with dstripe=4
 	verify_comp_parity $tf ${ids[4]}
-	verify_ec_stripe_count $tf ${ids[4]} 8 2
+	verify_ec_stripe_count $tf ${ids[4]} 4 2
 	verify_comp_extent $tf ${ids[4]} 0 1048576
 
-	# Second component should have EC(4+1) with dstripe=4
+	# Second component should have EC(2+1) with dstripe=2
 	verify_comp_parity $tf ${ids[5]}
-	verify_ec_stripe_count $tf ${ids[5]} 4 1
+	verify_ec_stripe_count $tf ${ids[5]} 2 1
 	verify_comp_extent $tf ${ids[5]} 1048576 EOF
 }
 run_test 1h "setstripe with -N flag and explicit stripe counts with --ec"
@@ -498,12 +504,10 @@ test_1i() {
 	local td=$DIR/$tdir
 	local ids
 
-	stack_trap "rm -rf $td"
-
 	test_mkdir $td
 
 	# Set default EC layout on directory
-	$LFS setstripe -E 128M -E -1 --ec 8+2 $td ||
+	$LFS setstripe -E 128M -E -1 $EC_ARG $td ||
 		error "setstripe on directory failed"
 
 	# Create file in directory - should inherit EC layout
@@ -521,11 +525,11 @@ test_1i() {
 
 	# Verify parity mirror components (mirror 2)
 	verify_comp_parity $td/$tfile ${ids[2]}
-	verify_ec_stripe_count $td/$tfile ${ids[2]} 8 2
+	verify_ec_stripe_count $td/$tfile ${ids[2]} $EC_DSTRIPE $EC_CSTRIPE
 	verify_comp_extent $td/$tfile ${ids[2]} 0 134217728
 
 	verify_comp_parity $td/$tfile ${ids[3]}
-	verify_ec_stripe_count $td/$tfile ${ids[3]} 8 2
+	verify_ec_stripe_count $td/$tfile ${ids[3]} $EC_DSTRIPE $EC_CSTRIPE
 	verify_comp_extent $td/$tfile ${ids[3]} 134217728 EOF
 
 	# Create another file to verify inheritance works consistently
@@ -536,6 +540,8 @@ test_1i() {
 run_test 1i "default EC layout on directory"
 
 test_1j() {
+	(( $OSTCOUNT >= 6 )) || skip "needs >= 6 OSTs"
+
 	enable_ec
 	local tf=$DIR/$tfile
 	local ids
@@ -545,7 +551,7 @@ test_1j() {
 	stack_trap "rm -f $tf"
 
 	# Test with explicit stripe size
-	$LFS setstripe -E -1 -S 4M -c 8 --ec 8+2 $tf ||
+	$LFS setstripe -E -1 -S 4M -c 4 --ec 4+2 $tf ||
 		error "setstripe with explicit stripe size failed"
 
 	verify_mirror_count $tf 2
@@ -559,7 +565,7 @@ test_1j() {
 
 	# Verify parity mirror (mirror 2, component 1)
 	verify_comp_parity $tf ${ids[1]}
-	verify_ec_stripe_count $tf ${ids[1]} 8 2
+	verify_ec_stripe_count $tf ${ids[1]} 4 2
 	verify_comp_extent $tf ${ids[1]} 0 EOF
 
 	# Verify stripe size matches between data and EC components
@@ -644,7 +650,7 @@ test_1l() {
 	local tf=$subdir/$tfile
 	local ids
 
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
+	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
 
 	enable_ec
 
@@ -652,10 +658,10 @@ test_1l() {
 
 	# Two EC mirrors, each a PFL with mixed EC params
 	#   mirror 1: [0,128M) 2+1, [128M,EOF) 4+2
-	#   mirror 2: [0,64M)  4+2, [64M,EOF)  3+2
+	#   mirror 2: [0,64M)  4+1, [64M,EOF)  3+2
 	# yields 4 mirrors (2 data + 2 parity) and 8 components.
 	$LFS setstripe -N -E 128M --ec 2+1 -E -1 --ec 4+2 \
-		       -N -E 64M --ec 4+2 -E -1 --ec 3+2 $td ||
+		       -N -E 64M --ec 4+1 -E -1 --ec 3+2 $td ||
 		error "setstripe complex EC layout for $td failed"
 
 	# A subdir inherits the complex default, and a file created in it must
@@ -686,9 +692,9 @@ test_1l() {
 	verify_comp_extent $tf ${ids[4]} 0 67108864
 	verify_comp_extent $tf ${ids[5]} 67108864 EOF
 
-	# Mirror 2 parity components (4+2, then 3+2)
+	# Mirror 2 parity components (4+1, then 3+2)
 	verify_comp_parity $tf ${ids[6]}
-	verify_ec_stripe_count $tf ${ids[6]} 4 2
+	verify_ec_stripe_count $tf ${ids[6]} 4 1
 	verify_comp_extent $tf ${ids[6]} 0 67108864
 
 	verify_comp_parity $tf ${ids[7]}
@@ -702,10 +708,8 @@ test_2a() {
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
 	# Single data mirror with EC using -N
-	$LFS setstripe -N -E 128M -E -1 --ec 8+2 $tf ||
+	$LFS setstripe -N -E 128M -E -1 $EC_ARG $tf ||
 		error "setstripe failed"
 
 	verify_mirror_count $tf 2
@@ -720,26 +724,25 @@ test_2a() {
 
 	# Verify parity mirror (mirror 2)
 	verify_comp_parity $tf ${ids[2]}
-	verify_ec_stripe_count $tf ${ids[2]} 8 2
+	verify_ec_stripe_count $tf ${ids[2]} $EC_DSTRIPE $EC_CSTRIPE
 	verify_comp_extent $tf ${ids[2]} 0 134217728
 
 	verify_comp_parity $tf ${ids[3]}
-	verify_ec_stripe_count $tf ${ids[3]} 8 2
+	verify_ec_stripe_count $tf ${ids[3]} $EC_DSTRIPE $EC_CSTRIPE
 	verify_comp_extent $tf ${ids[3]} 134217728 EOF
 }
 run_test 2a "setstripe with -N and EC"
 
 test_2b() {
+	(( OSTCOUNT >= 7 )) || skip "needs >= 7 OSTs"
+
 	enable_ec
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
 	# Two data mirrors, one with EC
-	$LFS setstripe -N -E 128M -E -1 --ec 8+2 \
-			-N -E 256M -E -1 \
-			$tf || error "setstripe failed"
+	$LFS setstripe -N -E 128M -E -1 --ec 4+2 \
+			-N -E 256M -E -1 $tf || error "setstripe failed"
 
 	verify_mirror_count $tf 3
 	verify_comp_count $tf 6
@@ -753,11 +756,11 @@ test_2b() {
 
 	# Verify mirror 2 (parity for mirror 1)
 	verify_comp_parity $tf ${ids[2]}
-	verify_ec_stripe_count $tf ${ids[2]} 8 2
+	verify_ec_stripe_count $tf ${ids[2]} 4 2
 	verify_comp_extent $tf ${ids[2]} 0 134217728
 
 	verify_comp_parity $tf ${ids[3]}
-	verify_ec_stripe_count $tf ${ids[3]} 8 2
+	verify_ec_stripe_count $tf ${ids[3]} 4 2
 	verify_comp_extent $tf ${ids[3]} 134217728 EOF
 
 	# Verify mirror 3 (data without EC)
@@ -767,15 +770,15 @@ test_2b() {
 run_test 2b "setstripe with -N: two data mirrors, one with EC"
 
 test_2c() {
+	(( OSTCOUNT >= 8 )) || skip "needs >= 8 OSTs"
+
 	enable_ec
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
 	# Two data mirrors, both with EC
-	$LFS setstripe -N -E 128M --ec 4+2 -E -1 --ec 8+2 \
-			-N -E 256M --ec 6+1 -E -1 \
+	$LFS setstripe -N -E 128M --ec 2+2 -E -1 --ec 4+2 \
+			-N -E 256M --ec 3+1 -E -1 \
 			$tf || error "setstripe failed"
 
 	verify_mirror_count $tf 4
@@ -790,11 +793,11 @@ test_2c() {
 
 	# Verify mirror 2 (parity for mirror 1)
 	verify_comp_parity $tf ${ids[2]}
-	verify_ec_stripe_count $tf ${ids[2]} 4 2
+	verify_ec_stripe_count $tf ${ids[2]} 2 2
 	verify_comp_extent $tf ${ids[2]} 0 134217728
 
 	verify_comp_parity $tf ${ids[3]}
-	verify_ec_stripe_count $tf ${ids[3]} 8 2
+	verify_ec_stripe_count $tf ${ids[3]} 4 2
 	verify_comp_extent $tf ${ids[3]} 134217728 EOF
 
 	# Verify mirror 3 (data)
@@ -803,24 +806,24 @@ test_2c() {
 
 	# Verify mirror 4 (parity for mirror 3)
 	verify_comp_parity $tf ${ids[6]}
-	verify_ec_stripe_count $tf ${ids[6]} 6 1
+	verify_ec_stripe_count $tf ${ids[6]} 3 1
 	verify_comp_extent $tf ${ids[6]} 0 268435456
 
 	verify_comp_parity $tf ${ids[7]}
-	verify_ec_stripe_count $tf ${ids[7]} 6 1
+	verify_ec_stripe_count $tf ${ids[7]} 3 1
 	verify_comp_extent $tf ${ids[7]} 268435456 EOF
 }
 run_test 2c "setstripe with -N: two data mirrors, both with EC"
 
 test_2d() {
+	(( OSTCOUNT >= 6 )) || skip "needs >= 6 OSTs"
+
 	enable_ec
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
 	# Multiple identical EC mirrors using -N count
-	$LFS setstripe -N2 -E 128M -E -1 --ec 8+2 $tf ||
+	$LFS setstripe -N2 -E 128M -E -1 --ec 2+1 $tf ||
 		error "setstripe failed"
 
 	verify_mirror_count $tf 4
@@ -835,11 +838,11 @@ test_2d() {
 
 	# Verify mirror 2 (parity for mirror 1)
 	verify_comp_parity $tf ${ids[2]}
-	verify_ec_stripe_count $tf ${ids[2]} 8 2
+	verify_ec_stripe_count $tf ${ids[2]} 2 1
 	verify_comp_extent $tf ${ids[2]} 0 134217728
 
 	verify_comp_parity $tf ${ids[3]}
-	verify_ec_stripe_count $tf ${ids[3]} 8 2
+	verify_ec_stripe_count $tf ${ids[3]} 2 1
 	verify_comp_extent $tf ${ids[3]} 134217728 EOF
 
 	# Verify mirror 3 (data, identical to mirror 1)
@@ -848,25 +851,25 @@ test_2d() {
 
 	# Verify mirror 4 (parity for mirror 3, identical to mirror 2)
 	verify_comp_parity $tf ${ids[6]}
-	verify_ec_stripe_count $tf ${ids[6]} 8 2
+	verify_ec_stripe_count $tf ${ids[6]} 2 1
 	verify_comp_extent $tf ${ids[6]} 0 134217728
 
 	verify_comp_parity $tf ${ids[7]}
-	verify_ec_stripe_count $tf ${ids[7]} 8 2
+	verify_ec_stripe_count $tf ${ids[7]} 2 1
 	verify_comp_extent $tf ${ids[7]} 134217728 EOF
 }
 run_test 2d "setstripe with -N2: multiple identical EC mirrors"
 
 test_2e() {
+	(( OSTCOUNT >= 8 )) || skip "needs >= 8 OSTs"
+
 	enable_ec
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
 	# Mixed: regular mirror + EC mirror
-	$LFS setstripe -N -E -1 -c 4 \
-			-N -E -1 -c 8 --ec 8+2 \
+	$LFS setstripe -N -E -1 -c 2 \
+			-N -E -1 -c 4 --ec 4+2 \
 			$tf || error "setstripe failed"
 
 	verify_mirror_count $tf 3
@@ -883,22 +886,22 @@ test_2e() {
 
 	# Verify mirror 3 (parity for mirror 2)
 	verify_comp_parity $tf ${ids[2]}
-	verify_ec_stripe_count $tf ${ids[2]} 8 2
+	verify_ec_stripe_count $tf ${ids[2]} 4 2
 	verify_comp_extent $tf ${ids[2]} 0 EOF
 }
 run_test 2e "setstripe with -N: mixed regular and EC mirrors"
 
 test_2f() {
+	(( OSTCOUNT >= 8 )) || skip "needs >= 8 OSTs"
+
 	enable_ec
 	local td=$DIR/$tdir
 	local ids
 
-	stack_trap "rm -rf $td"
-
 	test_mkdir $td
 
 	# Set default EC layout on directory using mirror mode (-N)
-	$LFS setstripe -N -E 128M -E -1 --ec 8+2 $td ||
+	$LFS setstripe -N -E 128M -E -1 --ec 4+2 $td ||
 		error "setstripe with -N on directory failed"
 
 	# Create file in directory - should inherit EC layout
@@ -916,16 +919,16 @@ test_2f() {
 
 	# Verify parity mirror (mirror 2)
 	verify_comp_parity $td/$tfile ${ids[2]}
-	verify_ec_stripe_count $td/$tfile ${ids[2]} 8 2
+	verify_ec_stripe_count $td/$tfile ${ids[2]} 4 2
 	verify_comp_extent $td/$tfile ${ids[2]} 0 134217728
 
 	verify_comp_parity $td/$tfile ${ids[3]}
-	verify_ec_stripe_count $td/$tfile ${ids[3]} 8 2
+	verify_ec_stripe_count $td/$tfile ${ids[3]} 4 2
 	verify_comp_extent $td/$tfile ${ids[3]} 134217728 EOF
 
 	# Test with multiple data mirrors + EC
 	$LFS setstripe -d $td || error "delete default layout failed"
-	$LFS setstripe -N -E -1 -c 4 -N -E -1 --ec 8+2 $td ||
+	$LFS setstripe -N -E -1 -c 2 -N -E -1 --ec 4+2 $td ||
 		error "setstripe with mixed mirrors on directory failed"
 
 	touch $td/${tfile}.mixed || error "touch mixed file failed"
@@ -942,9 +945,7 @@ test_3a() {
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
-	$LFS mirror create -N -E 128M -E -1 --ec 8+2 $tf ||
+	$LFS mirror create -N -E 128M -E -1 $EC_ARG $tf ||
 		error "failed to create mirrored file with EC"
 
 	verify_mirror_count $tf 2
@@ -958,19 +959,19 @@ test_3a() {
 	verify_comp_parity $tf ${ids[3]}
 
 	# Verify EC stripe counts
-	verify_ec_stripe_count $tf ${ids[2]} 8 2
-	verify_ec_stripe_count $tf ${ids[3]} 8 2
+	verify_ec_stripe_count $tf ${ids[2]} $EC_DSTRIPE $EC_CSTRIPE
+	verify_ec_stripe_count $tf ${ids[3]} $EC_DSTRIPE $EC_CSTRIPE
 }
 run_test 3a "lfs mirror create with single EC mirror"
 
 test_3b() {
+	(( OSTCOUNT >= 6 )) || skip "needs >= 6 OSTs"
+
 	enable_ec
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
-	$LFS mirror create -N2 -E 128M -E -1 --ec 8+2 $tf ||
+	$LFS mirror create -N2 -E 128M -E -1 --ec 2+1 $tf ||
 		error "failed to create mirrored file with -N2"
 
 	verify_mirror_count $tf 4
@@ -986,10 +987,10 @@ test_3b() {
 	verify_comp_parity $tf ${ids[7]}
 
 	# Verify EC stripe counts
-	verify_ec_stripe_count $tf ${ids[2]} 8 2
-	verify_ec_stripe_count $tf ${ids[3]} 8 2
-	verify_ec_stripe_count $tf ${ids[6]} 8 2
-	verify_ec_stripe_count $tf ${ids[7]} 8 2
+	verify_ec_stripe_count $tf ${ids[2]} 2 1
+	verify_ec_stripe_count $tf ${ids[3]} 2 1
+	verify_ec_stripe_count $tf ${ids[6]} 2 1
+	verify_ec_stripe_count $tf ${ids[7]} 2 1
 }
 run_test 3b "lfs mirror create with -N2 and EC"
 
@@ -998,9 +999,7 @@ test_3c() {
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
-	$LFS mirror create -N -E 128M -E -1 --ec 8+2 \
+	$LFS mirror create -N -E 128M -E -1 $EC_ARG \
 			   -N -E 256M -E -1 $tf ||
 		error "failed to create mixed mirror file"
 
@@ -1015,20 +1014,20 @@ test_3c() {
 	verify_comp_parity $tf ${ids[3]}
 
 	# Verify EC stripe counts
-	verify_ec_stripe_count $tf ${ids[2]} 8 2
-	verify_ec_stripe_count $tf ${ids[3]} 8 2
+	verify_ec_stripe_count $tf ${ids[2]} $EC_DSTRIPE $EC_CSTRIPE
+	verify_ec_stripe_count $tf ${ids[3]} $EC_DSTRIPE $EC_CSTRIPE
 }
 run_test 3c "lfs mirror create with mixed EC and regular mirrors"
 
 test_3d() {
+	(( OSTCOUNT >= 6 )) || skip "needs >= 6 OSTs"
+
 	enable_ec
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
-	$LFS mirror create -N -E 128M -E -1 --ec 8+2 \
-			   -N -E 256M -E -1 --ec 4+1 $tf ||
+	$LFS mirror create -N -E 128M -E -1 --ec 2+1 \
+			   -N -E 256M -E -1 --ec 2+1 $tf ||
 		error "failed to create file with different EC configs"
 
 	verify_mirror_count $tf 4
@@ -1044,21 +1043,21 @@ test_3d() {
 	verify_comp_parity $tf ${ids[7]}
 
 	# Verify EC stripe counts
-	verify_ec_stripe_count $tf ${ids[2]} 8 2
-	verify_ec_stripe_count $tf ${ids[3]} 8 2
-	verify_ec_stripe_count $tf ${ids[6]} 4 1
-	verify_ec_stripe_count $tf ${ids[7]} 4 1
+	verify_ec_stripe_count $tf ${ids[2]} 2 1
+	verify_ec_stripe_count $tf ${ids[3]} 2 1
+	verify_ec_stripe_count $tf ${ids[6]} 2 1
+	verify_ec_stripe_count $tf ${ids[7]} 2 1
 }
 run_test 3d "lfs mirror create with different EC configs per mirror"
 
 test_3e() {
+	(( OSTCOUNT >= 6 )) || skip "needs >= 6 OSTs"
+
 	enable_ec
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
-	$LFS mirror create -N -E 64M --ec 4+1 -E 128M --ec 8+2 -E -1 $tf ||
+	$LFS mirror create -N -E 64M --ec 4+1 -E 128M --ec 4+2 -E -1 $tf ||
 		error "failed to create file with multiple EC specs"
 
 	verify_mirror_count $tf 2
@@ -1074,8 +1073,8 @@ test_3e() {
 
 	# Verify EC stripe counts
 	verify_ec_stripe_count $tf ${ids[3]} 4 1
-	verify_ec_stripe_count $tf ${ids[4]} 8 2
-	verify_ec_stripe_count $tf ${ids[5]} 8 2
+	verify_ec_stripe_count $tf ${ids[4]} 4 2
+	verify_ec_stripe_count $tf ${ids[5]} 4 2
 }
 run_test 3e "lfs mirror create with multiple EC specs in one mirror"
 
@@ -1084,12 +1083,9 @@ test_3f() {
 	local tf=$DIR/$tfile
 	local ids
 
-	stack_trap "rm -f $tf"
-
-	# Test EC inheritance with "holes" - components without --ec
-	# First component uses 4+2, second has no --ec (should inherit 4+2
-	# from first), third uses 8+2
-	$LFS mirror create -N -E 128M --ec 4+2 -E 512M -E -1 --ec 8+2 $tf ||
+	# Test EC inheritance with "holes" - the middle component has no --ec
+	# and should inherit the EC layout from the first component
+	$LFS mirror create -N -E 128M $EC_ARG -E 512M -E -1 $EC_ARG $tf ||
 		error "failed to create file with EC holes"
 
 	verify_mirror_count $tf 2
@@ -1105,11 +1101,11 @@ test_3f() {
 
 	# Verify EC stripe counts
 	# First component: 4+2 (explicitly set)
-	verify_ec_stripe_count $tf ${ids[3]} 4 2
-	# Second component: 4+2 (inherited from first --ec 4+2)
-	verify_ec_stripe_count $tf ${ids[4]} 4 2
-	# Third component: 8+2 (explicitly set)
-	verify_ec_stripe_count $tf ${ids[5]} 8 2
+	verify_ec_stripe_count $tf ${ids[3]} $EC_DSTRIPE $EC_CSTRIPE
+	# Second component inherits EC from the first
+	verify_ec_stripe_count $tf ${ids[4]} $EC_DSTRIPE $EC_CSTRIPE
+	# Third component: explicitly set
+	verify_ec_stripe_count $tf ${ids[5]} $EC_DSTRIPE $EC_CSTRIPE
 }
 run_test 3f "EC inheritance with holes"
 
@@ -1534,10 +1530,8 @@ test_6b() {
 
 	local tf=$DIR/$tfile
 
-	stack_trap "rm -f $tf"
-
 	# Create EC file: data mirror + parity mirror
-	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf ||
+	$LFS setstripe -E -1 -c $EC_DSTRIPE $EC_ARG $tf ||
 		error "create EC file failed"
 
 	verify_mirror_count $tf 2
@@ -1560,7 +1554,7 @@ test_6b() {
 
 	# Verify EC parameters on parity component
 	verify_comp_parity $tf $parity_comp_id
-	verify_ec_stripe_count $tf $parity_comp_id 4 2
+	verify_ec_stripe_count $tf $parity_comp_id $EC_DSTRIPE $EC_CSTRIPE
 
 	# Write to file - should select data mirror as primary
 	dd if=/dev/urandom of=$tf bs=1M count=2 ||
@@ -1594,20 +1588,17 @@ test_6b() {
 run_test 6b "EC write selects data mirror, not parity mirror"
 
 test_6c() {
+	(( OSTCOUNT >= 8 )) || skip "needs >= 8 OSTs"
+
 	enable_ec
 
-	(( OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
-
 	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
 
 	# Create file with 2 data mirrors + 1 EC mirror (data + parity)
 	# Mirror 1 (data): stripe on OST0,1
 	# Mirror 2 (data): stripe on OST2,3
 	# Mirror 3 (data): EC data component with 2 stripes
 	# Mirror 4 (parity): EC parity component with 2+2
-	# EC 2+2 keeps the OST requirement at >= 4 to match the skip above.
 	$LFS setstripe -N -E -1 -c 2 -o 0,1 \
 		-N -E -1 -c 2 -o 2,3 \
 		-N -E -1 -c 2 --ec 2+2 $tf ||
@@ -2157,19 +2148,23 @@ test_12a() {
 	echo "fa9fe1782aee74e978e806fb6a0e7a4a1c83610f $tf_data" |
 		sha1sum -c - || error "wrong content in data mirror"
 
-	# Expected content of the ec mirror (2 parity stripes for 2 data stripes):
-	# Parity stripe 0: XOR of data stripe 0 (0x01) and data stripe 2 (0x03) = 0x9a
-	# Parity stripe 1: XOR of data stripe 1 (0x02) and data stripe 3 (0x00) = 0xfa
-	#  000000 9a 9a 9a 9a 9a 9a 9a 9a 9a 9a 9a 9a 9a 9a 9a 9a
-	#  *
-	#  400000 fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa fa
-	#  *
-	#  800000
+	# Expected content of the ec mirror.
+	# With --ec 2+2 on a 4-stripe file, ec_split_stripes creates
+	# 2 raid sets of 2 data stripes each, with 2 parity stripes per set
+	# (4 parity stripes total, 16 MiB parity mirror).
+	#
+	# Raid set 0: data stripes 0 (0x01) and 1 (0x02) -> parity stripes 0, 1
+	# Raid set 1: data stripes 2 (0x03) and 3 (0x00) -> parity stripes 2, 3
+	#
+	#  000000 7b 7b 7b ...  (parity stripe 0)
+	#  400000 f5 f5 f5 ...  (parity stripe 1)
+	#  800000 8f 8f 8f ...  (parity stripe 2)
+	#  c00000 01 01 01 ...  (parity stripe 3)
 
 	# Verify we have expected content in the ec mirror
 	rm -f $tf_ec
 	$LFS mirror read --mirror-id 2 -o $tf_ec $tf
-	echo "aca75f6b8ae9a16aa64f8ca38160bfa39bd2a785 $tf_ec" |
+	echo "f1a95d68d4c98de8833bb4ce63756a338df99795 $tf_ec" |
 	    sha1sum -c - || error "wrong content in ec mirror"
 }
 run_test 12a "resync stale parities"
@@ -3006,6 +3001,8 @@ run_test 26b "EC data integrity with patterned data and 4M stripes"
 
 # Test 27: PFL lazy instantiation with EC
 test_27a() {
+	(( OSTCOUNT >= 5 )) || skip "needs >= 5 OSTs"
+
 	enable_ec
 
 	local tf=$DIR/$tdir/$tfile
@@ -3013,7 +3010,6 @@ test_27a() {
 	local flags
 
 	test_mkdir $DIR/$tdir
-	stack_trap "rm -rf $DIR/$tdir"
 
 	# Create EC file with PFL: [0, 1M], [1M, 8M], [8M, EOF]
 	# Use 4+1 so parity count stays valid for all component stripe counts
@@ -3099,6 +3095,197 @@ test_27a() {
 		error "data mirror content mismatch"
 }
 run_test 27a "PFL lazy instantiation with EC across multiple components"
+
+test_27b() {
+	(( OSTCOUNT >= 6 )) || skip "needs >= 6 OSTs"
+
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	# Create a a stripeset using all available OSTs and
+	# multiple raidsets.
+	$LFS setstripe -E -1 -S 1M -c ${OSTCOUNT} --ec 4+2 $tf ||
+		error "setstripe failed when using ALL OSTs"
+}
+run_test 27b "test we can create -c n --ec 4+2 with n OSTs"
+
+test_27c() {
+	(( OSTCOUNT >= 6 )) || skip "needs >= 6 OSTs"
+
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local aoet=$((OSTCOUNT + 2))
+	local sc
+
+	# Without overstriping, -c n+2 is reduced to the available OSTs
+	# (75% EC floor / geometry shrink) rather than failing create.
+	$LFS setstripe -E -1 -S 1M -c ${aoet} --ec 4+2 $tf ||
+		error "setstripe -c ${aoet} --ec 4+2 failed"
+	sc=$($LFS getstripe $tf | awk '/lmm_stripe_count:/{print $2; exit}')
+	(( sc > 0 && sc <= OSTCOUNT )) ||
+		error "expected 0 < stripe count <= $OSTCOUNT, got '$sc'"
+	rm -f $tf
+
+	# With overstriping, n+2 stripes are allocated as requested
+	$LFS setstripe -E -1 -S 1M -C ${aoet} --ec 4+2 $tf ||
+		error "setstripe -C ${aoet} --ec 4+2 failed"
+	sc=$($LFS getstripe $tf | awk '/lmm_stripe_count:/{print $2; exit}')
+	(( sc == aoet )) ||
+		error "expected stripe count $aoet with -C, got '$sc'"
+}
+run_test 27c "test creating with n+2 OSTs"
+
+#
+# Get a range of OSTs from a component.
+# NOTE: Tail numbering starts at 1, not 0
+#
+get_osts_by_comp() {
+	local filename="$1"
+	local component="$2"
+	local stripe_idx="$3"
+	local stripe_cnt="$4"
+
+	$LFS getstripe --component-id=$component "$filename" |
+	    grep "l_ost_idx" |
+	    tail -n +$((stripe_idx + 1)) | head -n +$stripe_cnt |
+	    sed -e "s/^.*l_ost_idx: *//" -e "s/\,.*$//"
+}
+
+#
+# Verifies the allocation of a raidset that OSTS are not reused
+#
+verify_raidset_allocation() {
+	local filename="$1"
+	local raidset="$2"
+	local dstripe_idx="$3"
+	local dstripe_cnt="$4"
+	local cstripe_idx="$5"
+	local cstripe_cnt="$6"
+
+	local dosts=$(get_osts_by_comp "$filename" 65537 \
+		$dstripe_idx $dstripe_cnt)
+	local costs=$(get_osts_by_comp "$filename" 131074 \
+		$cstripe_idx $cstripe_cnt)
+	declare -A all_osts
+	for ost in $dosts $costs; do
+		all_osts[$ost]=$ost
+	done
+	local nosts=${#all_osts[*]}
+
+	if (( nosts != cstripe_cnt + dstripe_cnt )); then
+		echo "Raidset # $raidset"
+		echo "Current allocation:"
+		$LFS getstripe "$filename"
+		echo "Data stripes:" $dosts
+		echo "Parity stripes:" $costs
+		return 1
+	fi
+
+	return 0
+}
+
+test_27d() {
+	(( OSTCOUNT >= 6 )) || skip "needs >= 6 OSTs"
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	# Test -C 8 --ec 5+2
+	# Will result in 2x4+2 raidsets
+	$LFS setstripe -E -1 -S 1M -C 8 --ec 4+2 $tf ||
+		error "setstripe failed to create test file"
+
+	# First raidset are data stripes 0-3 and parity stripes 0-1
+	verify_raidset_allocation $tf 0 0 4 0 2 ||
+	    error "Failed. OST reused within a single raidset"
+
+	# Second raidset are data stripes 4-7 and parity stripes 2-3
+	verify_raidset_allocation $tf 1 4 4 2 2 ||
+	    error "Failed. OST reused within a single raidset"
+}
+run_test 27d "test raidset OSTs allocations are valid for -C 8 --ec 4+2"
+
+test_27e() {
+	(( OSTCOUNT >= 7 )) || skip "needs >= 7 OSTs"
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	# Test -C 13 --ec 5+2
+	# Will result in 1x5+2 2x4+2 raidsets
+	$LFS setstripe -E -1 -S 1M -C 13 --ec 5+2 $tf ||
+		error "setstripe failed to create test file"
+
+	# First raidset are data stripes 0-4 and parity stripes 0-1
+	verify_raidset_allocation $tf 0 0 5 0 2 ||
+	    error "Failed. OST reused within a single raidset"
+
+	# Second raidset are data stripes 5-8 and parity stripes 2-3
+	verify_raidset_allocation $tf 1 5 4 2 2 ||
+	    error "Failed. OST reused within a single raidset"
+
+	# Third raidset are data stripes 5-8 and parity stripes 2-3
+	verify_raidset_allocation $tf 2 9 4 4 2 ||
+	    error "Failed. OST reused within a single raidset"
+}
+run_test 27e "test raidset OSTs allocations are valid for -C 13 --ec 5+2"
+
+test_27f() {
+	(( OSTCOUNT >= 7 )) || skip "needs >= 7 OSTs"
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	# Test -C 20 --ec 5+2
+	# Will result in 4x5+2 raidsets
+	$LFS setstripe -E -1 -S 1M -C 20 --ec 5+2 $tf ||
+		error "setstripe failed to create test file"
+
+	# First raidset are data stripes 0-4 and parity stripes 0-1
+	verify_raidset_allocation $tf 0 0 5 0 2 ||
+	    error "Failed. OST reused within a single raidset"
+
+	# Second raidset are data stripes 5-9 and parity stripes 2-3
+	verify_raidset_allocation $tf 1 5 5 2 2 ||
+	    error "Failed. OST reused within a single raidset"
+
+	# Third raidset are data stripes 10-14 and parity stripes 4-6
+	verify_raidset_allocation $tf 2 10 5 4 2 ||
+	    error "Failed. OST reused within a single raidset"
+
+	# Fourth raidset are data stripes 15-19 and parity stripes 7-8
+	verify_raidset_allocation $tf 3 15 5 6 2 ||
+	    error "Failed. OST reused within a single raidset"
+}
+run_test 27f "test raidset OSTs allocations are valid for -C 20 --ec 5+2"
+
+test_27g() {
+	(( OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	# Create a single raidset EC file with data mirror + parity mirror
+	local aoet=$(($OSTCOUNT - 2))
+	$LFS setstripe -E -1 -S 1M -c ${aoet} --ec ${aoet}+2 $tf ||
+		error "setstripe --ec ${aoet}+2 failed"
+}
+run_test 27g "test we can create -c (n-2) --ec (n-2)+2 with n OSTs"
+
+test_27h() {
+	(( OSTCOUNT >= 5 )) || skip "needs >= 5 OSTs"
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	# Create a single raidset EC file with data mirror + parity mirror
+	local aoet=$(($OSTCOUNT - 2))
+	$LFS setstripe -E -1 -S 1M -c ${aoet} --ec ${aoet}+3 $tf &&
+		error "setstripe --ec ${aoet}+3 failed" || true
+}
+run_test 27h "test stripe creation fails when parity needs one stripe too many"
 
 # Test 28: file operations (hardlink, rename, symlink) on EC files
 test_28a() {
@@ -3350,36 +3537,33 @@ run_test 30c "data survives OST restart cycle, resync works after recovery"
 
 test_30d() {
 	# test that reading from ec mirror reads the full set of parities
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
+	(( OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
 
 	enable_ec
 
 	local tf=$DIR/$tfile
 
 	# Create a simple EC file with data mirror + parity mirror
-	$LFS setstripe -E -1 -S 64k -c 8 --ec 2+2 $tf ||
+	$LFS setstripe -E -1 -S 64k -c 4 --ec 2+2 $tf ||
 		error "setstripe --ec 2+2 failed"
 
-	# Write some data to the file
-	# The file now spans 5 full stripe sets plus an extra stripe
-	# The resulting parity should then be for 6 full stripe sets
-	# of parities.
+	# Write some data to the file at block 40
 	tr "\000" "\002" < /dev/zero | dd bs=64k count=1 seek=40  \
 		iflag=fullblock of=$tf 2>/dev/null
 
 	rm -f $TMP/$tfile.parity
 	stack_trap "rm -f $TMP/$tfile.parity"
 
-	# stripe size 64k
-	# 8 data stripes, ec 2+2
-	# 4 raid sets with 2 parities each
-	# a total of 6 stripe sets
-	# parity mirror size should be 6 * 4 * 2 * 64k plus
+	# stripe size 64k, 4 data stripes, ec 2+2
+	# With EC_MIN_SPLIT_SIZE=4, 4 data stripes split into 2 raid
+	# sets of 2, giving 4 parity stripes per row.
+	# seek=40: data reaches row 10, so 11 rows of parity.
+	# parity mirror size = 11 * 4 * 64k = 2883584
 	$LFS mirror read --mirror-id 2 -o $TMP/$tfile.parity $tf
-	stat $TMP/$tfile.parity | grep "Size: 3145728" ||
+	stat $TMP/$tfile.parity | grep "Size: 2883584" ||
 	    error "Wrong size of parity mirror"
 }
-run_test 30d "test that size of parity mirror is (5+1)*4*2*64k"
+run_test 30d "test that size of parity mirror is 11*4*64k"
 
 test_31a() {
 	# Inject OBD_FAIL_OST_BRW_WRITE_BULK on a parity OST during
@@ -3438,14 +3622,14 @@ run_test 31a "data mirror intact after write failure on parity OST during resync
 
 test_31b() {
 	# test that reading from ec mirror reads the full set of parities
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
+	(( OSTCOUNT >= 6 )) || skip "needs >= 6 OSTs"
 
 	enable_ec
 
 	local tf=$DIR/$tfile
 
 	# Create a simple EC file with data mirror + parity mirror
-	$LFS setstripe -E -1 -S 1M -c 8 --ec 4+2 $tf ||
+	$LFS setstripe -E -1 -S 1M -c 4 --ec 4+2 $tf ||
 		error "setstripe --ec 4+2 failed"
 
 	# Write some data to the file
@@ -3455,26 +3639,26 @@ test_31b() {
 	stack_trap "rm -f $TMP/$tfile.parity"
 
 	# stripe size 1M
-	# 8 data stripes, ec 4+2
-	# 2 raid sets with 2 parities each
-	# parity mirror size should be 2 * 2 * 1M
+	# 4 data stripes, ec 4+2
+	# 1 raid set with 2 parities
+	# parity mirror size should be 1 * 2 * 1M
 	$LFS mirror read --mirror-id 2 -o $TMP/$tfile.parity $tf
-	stat $TMP/$tfile.parity | grep "Size: 4194304" ||
+	stat $TMP/$tfile.parity | grep "Size: 2097152" ||
 	    error "Wrong size of parity mirror"
 }
-run_test 31b "test that size of parity mirror is 2*2*1M"
+run_test 31b "test that size of parity mirror is 1*2*1M"
 
 test_31c() {
 	# test that reading from ec mirror reads the full set of parities
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
+	(( OSTCOUNT >= 6 )) || skip "needs >= 6 OSTs"
 
 	enable_ec
 
 	local tf=$DIR/$tfile
 
 	# Create a simple EC file with data mirror + parity mirror
-	$LFS setstripe -E -1 -S 64k -c 8 --ec 4+3 $tf ||
-		error "setstripe --ec 4+3 failed"
+	$LFS setstripe -E -1 -S 64k -c 4 --ec 4+2 $tf ||
+		error "setstripe --ec 4+2 failed"
 
 	# Write some data to the file
 	echo "Hello" > $tf || error "error writing to file"
@@ -3483,25 +3667,25 @@ test_31c() {
 	stack_trap "rm -f $TMP/$tfile.parity"
 
 	# stripe size 64k
-	# 8 data stripes, ec 4+3
-	# 2 raid sets with 3 parities each
-	# parity mirror size should be 2 * 3 * 64k
+	# 4 data stripes, ec 4+2
+	# 1 raid set with 2 parities
+	# parity mirror size should be 1 * 2 * 64k
 	$LFS mirror read --mirror-id 2 -o $TMP/$tfile.parity $tf
-	stat $TMP/$tfile.parity | grep "Size: 393216" ||
+	stat $TMP/$tfile.parity | grep "Size: 131072" ||
 	    error "Wrong size of parity mirror"
 }
-run_test 31c "test that size of parity mirror is 2*3*64k"
+run_test 31c "test that size of parity mirror is 1*2*64k"
 
 test_31d() {
 	# test that reading from ec mirror reads the full set of parities
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
+	(( OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
 
 	enable_ec
 
 	local tf=$DIR/$tfile
 
 	# Create a simple EC file with data mirror + parity mirror
-	$LFS setstripe -E -1 -S 64k -c 8 --ec 2+2 $tf ||
+	$LFS setstripe -E -1 -S 64k -c 4 --ec 2+2 $tf ||
 		error "setstripe --ec 2+2 failed"
 
 	# Write some data to the file
@@ -3511,14 +3695,15 @@ test_31d() {
 	stack_trap "rm -f $TMP/$tfile.parity"
 
 	# stripe size 64k
-	# 8 data stripes, ec 2+2
-	# 4 raid sets with 2 parities each
-	# parity mirror size should be 4 * 2 * 64k
+	# 4 data stripes, ec 2+2
+	# With EC_MIN_SPLIT_SIZE=4, split into 2 raid sets of 2,
+	# each with 2 parities = 4 parity stripes
+	# parity mirror size should be 2 * 2 * 64k
 	$LFS mirror read --mirror-id 2 -o $TMP/$tfile.parity $tf
-	stat $TMP/$tfile.parity | grep "Size: 524288" ||
+	stat $TMP/$tfile.parity | grep "Size: 262144" ||
 	    error "Wrong size of parity mirror"
 }
-run_test 31d "test that size of parity mirror is 4*2*64k"
+run_test 31d "test that size of parity mirror is 2*2*64k"
 
 test_31e() {
 	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
