@@ -225,13 +225,21 @@ void ll_secctx_name_free(struct ll_sb_info *sbi)
 int ll_secctx_name_store(struct inode *in)
 {
 	struct ll_sb_info *sbi = ll_i2sbi(in);
+	char *secctx_name = NULL;
+	ssize_t remaining = 0;
 	int rc = 0;
 
 	if (!ll_security_xattr_wanted(in))
 		return 0;
 
-	/* get size of xattr name */
-	rc = security_inode_listsecurity(in, NULL, 0);
+	/* get size of xattr name: a NULL buffer drops the needed size from
+	 * remaining
+	 */
+	rc = security_inode_listsecurity(in, &secctx_name, &remaining);
+	if (rc < 0)
+		return rc;
+
+	rc = -remaining;
 	if (rc <= 0)
 		return rc;
 
@@ -244,15 +252,15 @@ int ll_secctx_name_store(struct inode *in)
 
 	/* save the xattr name */
 	sbi->ll_secctx_name_size = rc;
-	rc = security_inode_listsecurity(in, sbi->ll_secctx_name,
-					 sbi->ll_secctx_name_size);
-	if (rc <= 0)
+	secctx_name = sbi->ll_secctx_name;
+	remaining = sbi->ll_secctx_name_size;
+	rc = security_inode_listsecurity(in, &secctx_name, &remaining);
+	if (rc < 0)
 		goto err_free;
 
-	if (rc > sbi->ll_secctx_name_size) {
-		rc = -ERANGE;
+	rc = sbi->ll_secctx_name_size - remaining;
+	if (rc <= 0)
 		goto err_free;
-	}
 
 	/* sanity check */
 	sbi->ll_secctx_name[rc] = '\0';

@@ -3870,6 +3870,34 @@ AC_DEFUN([LC_HAVE_DCACHE_ANON_UNION_D_ALIAS],[
 ]) # LC_HAVE_DCACHE_ANON_UNION_D_ALIAS
 
 #
+# LC_HAVE_SECURITY_INODE_LISTSECURITY_PTR_ARGS
+#
+# Linux commit v7.1-rc1-1-gf71ece9712b7
+#  security,fs,nfs,net: update security_inode_listsecurity() interface
+# changed security_inode_listsecurity() to update the buffer pointer and
+# remaining size in place and to return 0 or -errno
+#
+AC_DEFUN([LC_SRC_HAVE_SECURITY_INODE_LISTSECURITY_PTR_ARGS],[
+	LB2_LINUX_TEST_SRC([security_inode_listsecurity_ptr_args], [
+		#include <linux/security.h>
+	],[
+		char *buffer = NULL;
+		ssize_t remaining = 0;
+		int rc = security_inode_listsecurity(NULL, &buffer,
+						     &remaining);
+
+		(void)rc;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_SECURITY_INODE_LISTSECURITY_PTR_ARGS],[
+	LB2_MSG_LINUX_TEST_RESULT([if security_inode_listsecurity() updates buffer and remaining size],
+	[security_inode_listsecurity_ptr_args], [
+		AC_DEFINE(HAVE_SECURITY_INODE_LISTSECURITY_PTR_ARGS, 1,
+			  [security_inode_listsecurity() updates buffer and remaining size])
+	])
+]) # LC_HAVE_SECURITY_INODE_LISTSECURITY_PTR_ARGS
+
+#
 # LC_EXPORTS_KVFREE_ATOMIC
 #
 # Linux commit v7.1-rc2-2-gdad0d91cc2c3e
@@ -4126,6 +4154,9 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	# 7.1
 	LC_SRC_HAVE_DCACHE_ANON_UNION_D_ALIAS
 
+	# 7.2
+	LC_SRC_HAVE_SECURITY_INODE_LISTSECURITY_PTR_ARGS
+
 	# 7.3
 	LC_SRC_HAVE_IOPS_CREATE_NO_EXCL
 ])
@@ -4356,6 +4387,9 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 7.1
 	LC_HAVE_DCACHE_ANON_UNION_D_ALIAS
+
+	# 7.2
+	LC_HAVE_SECURITY_INODE_LISTSECURITY_PTR_ARGS
 
 	# 7.3
 	LC_HAVE_IOPS_CREATE_NO_EXCL
