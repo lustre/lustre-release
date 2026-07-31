@@ -147,6 +147,8 @@ static int mdd_init0(const struct lu_env *env, struct mdd_device *mdd,
 		RETURN(rc);
 	mdd->mdd_md_dev.md_lu_dev.ld_ops = &mdd_lu_ops;
 	mdd->mdd_md_dev.md_ops = &mdd_ops;
+	/* unused except in mdd_prepare() and mdd_device shutdown() */
+	obd_obt_init(mdd2obd_dev(mdd));
 
 	rc = mdd_connect_to_next(env, mdd, lustre_cfg_string(lcfg, 3));
 	if (rc != 0)
