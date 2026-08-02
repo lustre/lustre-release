@@ -550,7 +550,11 @@ create_nodemap() {
 remove_nodemap() {
 	local nm=$1
 
-	do_facet mgs $LCTL set_param -P -d nodemap.$nm.sepol
+	# "-P -d" fails when the nodemap has no sepol, which is the case
+	# whenever this runs from the cleanup_21b EXIT trap before test_21b
+	# got as far as setting one.  Unguarded, that aborts the rest of the
+	# trap and leaks the nodemap.
+	do_facet mgs $LCTL set_param -P -d nodemap.$nm.sepol || true
 	do_facet mgs $LCTL nodemap_del $nm
 
 	wait_update_facet --verbose mds1 \
@@ -866,7 +870,16 @@ run_test 21b "Send sepol for metadata ops"
 test_21c() {
 	local send_sepol
 
-	stack_trap "do_facet mgs $LCTL set_param -P sptlrpc.send_sepol=0;
+	# delete the persistent entry, then reset the running value on the
+	# clients.  "set_param -P -d" marks the matching sections skipped in
+	# the config log in place, so a "-P ...=0" issued just before it can
+	# be skipped before any node applies it, and send_sepol is a ptlrpc
+	# module global that umount does not reset.  Only clients have
+	# sptlrpc.send_sepol, so restore it there rather than on all nodes.
+	stack_trap "do_facet mgs $LCTL set_param -P -d sptlrpc.send_sepol ||
+			true;
+		    do_nodes ${CLIENTS:-$HOSTNAME} \
+			$LCTL set_param sptlrpc.send_sepol=0;
 		    umount_client $MOUNT; mount_client $MOUNT $MOUNT_OPTS" EXIT
 
 	# persist send_sepol=-1 via MGS config log
