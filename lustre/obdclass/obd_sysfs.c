@@ -281,7 +281,7 @@ health_check_show(struct kobject *kobj, struct attribute *attr, char *buf)
 				 test_bit(OBDF_ATTACHED, obd->obd_flags) &&
 				 test_bit(OBDF_SET_UP, obd->obd_flags) &&
 				 !test_bit(OBDF_STOPPING, obd->obd_flags) &&
-				 !obd->obd_read_only) {
+				 !test_bit(OBDF_READ_ONLY, obd->obd_flags)) {
 		LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
 
 		class_incref(obd, __func__, current);

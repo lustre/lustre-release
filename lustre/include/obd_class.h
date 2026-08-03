@@ -585,7 +585,7 @@ static inline int obd_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 #ifdef CONFIG_LUSTRE_FS_SERVER
 			if (lu_device_is_dt(dev) &&
 			    lu2dt_dev(dev)->dd_rdonly)
-				obd->obd_read_only = 1;
+				set_bit(OBDF_READ_ONLY, obd->obd_flags);
 #endif
 
 			rc = ldto_device_init(&env, dev, ldt->ldt_name, NULL);
