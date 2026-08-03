@@ -35,20 +35,6 @@
 #include <lustre_compat/linux/posix_acl_xattr.h>
 #include <obd_support.h>
 
-#ifdef HAVE_4ARGS_VFS_SYMLINK
-#define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
-		       vfs_symlink(dir, dentry, path, mode)
-#else
-#define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
-		       vfs_symlink(dir, dentry, path)
-#endif
-
-#ifdef HAVE_BVEC_ITER
-#define bio_start_sector(bio) (bio->bi_iter.bi_sector)
-#else
-#define bio_start_sector(bio) (bio->bi_sector)
-#endif
-
 #ifdef HAVE_STRUCT_FILE_LOCK_CORE
 #define C_FLC_TYPE	c.flc_type
 #define C_FLC_PID	c.flc_pid
@@ -228,11 +214,5 @@ static inline void ll_security_release_secctx(char *secdata, u32 seclen,
 #define vfs_mkdir(ns, dir, de, mode)		vfs_mkdir(dir, de, mode)
 #define ll_set_acl(ns, inode, acl, type)	ll_set_acl(inode, acl, type)
 #endif
-
-#ifdef HAVE_RADIX_TREE_REPLACE_SLOT_3ARGS
-# define radix_tree_rcu	__rcu
-#else /* !HAVE_RADIX_TREE_REPLACE_SLOT_3ARGS */
-# define radix_tree_rcu
-#endif /* HAVE_RADIX_TREE_REPLACE_SLOT_3ARGS */
 
 #endif /* _LUSTRE_COMPAT_H */
