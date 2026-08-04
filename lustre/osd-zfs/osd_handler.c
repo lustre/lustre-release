@@ -522,11 +522,15 @@ static int osd_objset_statfs(struct osd_device *osd, struct obd_statfs *osfs)
 	 *
 	 * Reserve 0.78% of total space, at least 16MB for small filesystems,
 	 * for internal files to be created/unlinked when space is tight.
+	 * Don't reserve more than is free, or a small dataset quota makes
+	 * os_blocks less than the used space, or even underflow.
 	 */
 	BUILD_BUG_ON(OSD_STATFS_RESERVED_SIZE <= 0);
 	reserved = OSD_STATFS_RESERVED_SIZE >> bshift;
 	if (likely(osfs->os_blocks >= reserved << OSD_STATFS_RESERVED_SHIFT))
 		reserved = osfs->os_blocks >> OSD_STATFS_RESERVED_SHIFT;
+	else
+		reserved = min(reserved, osfs->os_bfree);
 
 	osfs->os_blocks -= reserved;
 	osfs->os_bfree  -= min(reserved, osfs->os_bfree);

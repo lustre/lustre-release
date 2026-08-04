@@ -126,10 +126,11 @@ static inline u64 tgt_grant_chunk(struct obd_export *exp,
 }
 
 static int tgt_check_export_grants(struct obd_export *exp, u64 *dirty,
-				   u64 *pending, u64 *granted, u64 maxsize)
+				   u64 *pending, u64 *granted, u64 peaksize)
 {
 	struct tg_export_data *ted = &exp->exp_target_data;
 	int level = D_CACHE;
+	int rc = -EFAULT;
 
 	if (ted->ted_grant < 0 || ted->ted_pending < 0 || ted->ted_dirty < 0)
 		level = D_ERROR;
@@ -137,18 +138,18 @@ static int tgt_check_export_grants(struct obd_export *exp, u64 *dirty,
 		     exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp,
 		     ted->ted_dirty, ted->ted_pending, ted->ted_grant);
 
-	if (ted->ted_grant + ted->ted_pending > maxsize) {
-		CERROR("%s: cli %s/%p ted_grant(%ld) + ted_pending(%ld) > maxsize(%llu)\n",
+	if (ted->ted_grant + ted->ted_pending > peaksize) {
+		CERROR("%s: cli %s/%p ted_grant(%ld) + ted_pending(%ld) > peaksize(%llu): rc = %d\n",
 			exp->exp_obd->obd_name,
 			exp->exp_client_uuid.uuid, exp, ted->ted_grant,
-			ted->ted_pending, maxsize);
-		return -EFAULT;
+			ted->ted_pending, peaksize, rc);
+		return rc;
 	}
-	if (ted->ted_dirty > maxsize) {
-		CERROR("%s: cli %s/%p ted_dirty(%ld) > maxsize(%llu)\n",
+	if (ted->ted_dirty > peaksize) {
+		CERROR("%s: cli %s/%p ted_dirty(%ld) > peaksize(%llu): rc = %d\n",
 			exp->exp_obd->obd_name, exp->exp_client_uuid.uuid,
-			exp, ted->ted_dirty, maxsize);
-		return -EFAULT;
+			exp, ted->ted_dirty, peaksize, rc);
+		return rc;
 	}
 	*granted += ted->ted_grant + ted->ted_pending;
 	*pending += ted->ted_pending;
@@ -163,7 +164,7 @@ static int tgt_check_export_grants(struct obd_export *exp, u64 *dirty,
  * and verifies accuracy of global grant accounting. If an inconsistency is
  * found, a CERROR is printed with the function name \func that was passed as
  * argument. LBUG is only called in case of serious counter corruption (i.e.
- * value larger than the device size).
+ * value larger than any size the device has had since it was mounted).
  * Those sanity checks can be pretty expensive and are disabled if the OBD
  * device has more than 100 connected exports by default.
  *
@@ -178,14 +179,15 @@ void tgt_grant_sanity_check(struct obd_device *obd, const char *func)
 	struct tg_grants_data *tgd;
 	struct obd_export *exp;
 	struct tg_export_data *ted;
-	u64		   maxsize;
-	u64		   tot_dirty = 0;
-	u64		   tot_pending = 0;
-	u64		   tot_granted = 0;
-	u64		   fo_tot_granted;
-	u64		   fo_tot_pending;
-	u64		   fo_tot_dirty;
-	int		   error;
+	u64 maxsize;
+	u64 peaksize;
+	u64 tot_dirty = 0;
+	u64 tot_pending = 0;
+	u64 tot_granted = 0;
+	u64 fo_tot_granted;
+	u64 fo_tot_pending;
+	u64 fo_tot_dirty;
+	int error;
 
 	/* the target is gone, there is no grant accounting left to check */
 	lut = obt ? obt->obt_lut : NULL;
@@ -209,6 +211,7 @@ void tgt_grant_sanity_check(struct obd_device *obd, const char *func)
 
 	spin_lock(&tgd->tgd_osfs_lock);
 	maxsize = tgd->tgd_osfs.os_blocks * tgd->tgd_osfs.os_bsize;
+	peaksize = tgd->tgd_osfs_peaksize;
 	spin_unlock(&tgd->tgd_osfs_lock);
 
 	spin_lock(&obd->obd_dev_lock);
@@ -224,7 +227,7 @@ void tgt_grant_sanity_check(struct obd_device *obd, const char *func)
 
 	list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
 		error = tgt_check_export_grants(exp, &tot_dirty, &tot_pending,
-						&tot_granted, maxsize);
+						&tot_granted, peaksize);
 		if (error < 0) {
 			spin_unlock(&obd->obd_dev_lock);
 			spin_unlock(&tgd->tgd_grant_lock);
@@ -237,7 +240,7 @@ void tgt_grant_sanity_check(struct obd_device *obd, const char *func)
 	 * commit time */
 	list_for_each_entry(exp, &obd->obd_unlinked_exports, exp_obd_chain) {
 		error = tgt_check_export_grants(exp, &tot_dirty, &tot_pending,
-						&tot_granted, maxsize);
+						&tot_granted, peaksize);
 		if (error < 0) {
 			spin_unlock(&obd->obd_dev_lock);
 			spin_unlock(&tgd->tgd_grant_lock);
@@ -298,6 +301,7 @@ int tgt_statfs_internal(const struct lu_env *env, struct lu_target *lut,
 	spin_lock(&tgd->tgd_osfs_lock);
 	if (tgd->tgd_osfs_age < max_age || max_age == 0) {
 		u64 unstable;
+		u64 size;
 		int blockbits;
 
 		/* statfs data are too old, get up-to-date one.
@@ -382,6 +386,9 @@ int tgt_statfs_internal(const struct lu_env *env, struct lu_target *lut,
 		/* finally udpate cached statfs data */
 		tgd->tgd_osfs = *osfs;
 		tgd->tgd_osfs_age = ktime_get_seconds();
+		size = osfs->os_blocks * osfs->os_bsize;
+		if (unlikely(size > tgd->tgd_osfs_peaksize))
+			tgd->tgd_osfs_peaksize = size;
 
 		tgd->tgd_statfs_inflight--; /* stop tracking */
 		if (tgd->tgd_statfs_inflight == 0)

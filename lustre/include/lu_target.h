@@ -132,6 +132,11 @@ struct tg_grants_data {
 	u64			 tgd_osfs_inflight;
 	/* statfs optimization: we cache a bit  */
 	struct obd_statfs	 tgd_osfs;
+	/* largest device size seen since mount, in bytes. The backing device
+	 * can shrink at runtime (e.g. a lowered ZFS dataset quota), so space
+	 * granted while it was larger is not a sign of counter corruption.
+	 */
+	u64			 tgd_osfs_peaksize;
 };
 
 struct lu_target {

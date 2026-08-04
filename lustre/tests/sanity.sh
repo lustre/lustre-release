@@ -36479,49 +36479,89 @@ test_804() {
 }
 run_test 804 "verify agent entry for remote entry"
 
-cleanup_805() {
-	do_facet $SINGLEMDS zfs set quota=$old $fsset
-	unlinkmany $DIR/$tdir/f- 1000000
-	trap 0
-}
-
 test_805a() {
+	[[ "$mds1_FSTYPE" == "zfs" ]] || skip "ZFS specific test"
 	local zfs_version=$(do_facet mds1 cat /sys/module/zfs/version)
-	[ "$mds1_FSTYPE" != "zfs" ] && skip "ZFS specific test"
-	[ $(version_code $zfs_version) -lt $(version_code 0.7.2) ] &&
+	(( $(version_code $zfs_version) >= $(version_code 0.7.2) )) ||
 		skip "netfree not implemented before 0.7"
-	[[ $MDS1_VERSION -ge $(version_code 2.10.57) ]] ||
-		skip "Need MDS version at least 2.10.57"
+	(( MDS1_VERSION >= $(version_code 2.10.59-3-g106abc184d) )) ||
+		skip "need MDS >= 2.10.59.3 for netfree"
 
-	local fsset
-	local freekb
-	local usedkb
-	local old
-	local quota
-	local pref="osd-zfs.$FSNAME-MDT0000."
+	local pref=osd-zfs.$FSNAME-MDT0000
+	local fsset=$(do_facet mds1 $LCTL get_param -n $pref.mntdev)
+	local old=$(do_facet mds1 zfs get -H -o value quota $fsset)
 
-	# limit available space on MDS dataset to meet nospace issue
-	# quickly. then ZFS 0.7.2 can use reserved space if asked
-	# properly (using netfree flag in osd_declare_destroy()
-	fsset=$(do_facet $SINGLEMDS lctl get_param -n $pref.mntdev)
-	old=$(do_facet $SINGLEMDS zfs get -H quota $fsset | \
-		gawk '{print $3}')
-	freekb=$(do_facet $SINGLEMDS lctl get_param -n $pref.kbytesfree)
-	usedkb=$(do_facet $SINGLEMDS lctl get_param -n $pref.kbytestotal)
-	let "usedkb=usedkb-freekb"
-	let "freekb=freekb/2"
-	if let "freekb > 5000"; then
-		let "freekb=5000"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
+	stack_trap "rm -rf $DIR/$tdir"
+
+	# limit available space on the MDT dataset to hit ENOSPC quickly,
+	# then ZFS 0.7.2 can use reserved space if asked properly (using
+	# netfree flag in osd_declare_destroy())
+	local totalkb=$(do_facet mds1 $LCTL get_param -n $pref.kbytestotal)
+	local freekb=$(do_facet mds1 $LCTL get_param -n $pref.kbytesfree)
+	local usedkb=$((totalkb - freekb))
+	local limitkb=$((freekb / 2 < 5000 ? freekb / 2 : 5000))
+	local quota=$(((usedkb + limitkb) * 1024))
+	local check_grant=false
+
+	# The quota also shrinks the MDT below the grant already given to
+	# clients, which used to LBUG in tgt_grant_sanity_check() (LU-20523)
+	if (( MDS1_VERSION >= $(version_code 2.17.58.3) )); then
+		check_grant=true
+		mkdir $DIR/$tdir/dom || error "mkdir dom failed"
+		$LFS setstripe -E 1M -L mdt -E EOF -c1 $DIR/$tdir/dom ||
+			error "setstripe DoM failed"
+
+		# Each DoM write adds up to ~2MB of grant and deleting the
+		# file frees its space, so the client ends up with more grant
+		# than the MDT uses.  osd-zfs reports only the used space as
+		# the size once less than 16MB is free, keep 4MB over that
+		# for the grant used by the write after the shrink.
+		local want=$(((usedkb + 4096) * 1024))
+		local max=$((want / 1048576 + 64))
+		local -a grant=(0)
+		local i
+
+		for ((i = 0; i < max && grant <= want; i++)); do
+			local tf=$DIR/$tdir/dom/f-$i
+			dd if=/dev/zero of=$tf bs=1M count=1 conv=fsync ||
+				error "write dom/f-$i failed"
+			rm $tf || error "rm $tf failed"
+			grant=($($LCTL get_param -n \
+				 mdc.$FSNAME-MDT0000-*.cur_grant_bytes))
+		done
+		(( grant > want )) ||
+			error "grant $grant <= $want after $i writes"
+		echo "MDT used ${usedkb}KB, grant ${grant}B after $i writes"
+		wait_delete_completed_mds
+		wait_zfs_commit mds1
 	fi
-	do_facet $SINGLEMDS zfs set quota=$(((usedkb+freekb)*1024)) $fsset
-	trap cleanup_805 EXIT
-	mkdir_on_mdt0 $DIR/$tdir
+
+	echo "quota $old -> $quota"
+	stack_trap "do_facet mds1 zfs set quota=$old $fsset"
+	do_facet mds1 zfs set quota=$quota $fsset ||
+		error "set quota=$quota on $fsset failed"
+
+	if $check_grant; then
+		# Only the grant paths refresh the statfs data cached for
+		# grants, so a DoM write applies the shrink
+		sleep 2
+		dd if=/dev/zero of=$DIR/$tdir/dom/$tfile bs=4k count=1 \
+			conv=fsync || error "write dom/$tfile failed"
+
+		# MDS_STATFS runs tgt_grant_sanity_check().  With DNE
+		# "stat -f" may go to another MDT, "lfs df" hits them all
+		do_facet mds1 $LCTL clear
+		sleep 2
+		$LFS df --mdt $MOUNT || error "lfs df --mdt failed"
+		do_facet mds1 "$LCTL dk" | grep "tot_granted .* > maxsize" ||
+			error "grant sanity check did not see the shrunk MDT"
+	fi
+
 	$LFS setstripe -E 1M -c2 -E 4M -c2 -E -1 -c2 $DIR/$tdir ||
 		error "Can't set PFL layout"
 	createmany -m $DIR/$tdir/f- 1000000 && error "ENOSPC wasn't met"
 	rm -rf $DIR/$tdir || error "not able to remove"
-	do_facet $SINGLEMDS zfs set quota=$old $fsset
-	trap 0
 }
 run_test 805a "ZFS can remove from full fs"
 
