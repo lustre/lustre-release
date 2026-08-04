@@ -65,6 +65,7 @@ THETESTS += rw_seq_cst_vs_drop_caches
 THETESTS += mmap_sanity writemany reads flocks_test flock_deadlock
 THETESTS += write_time_limit rwv lgetxattr_size_check checkfiemap
 THETESTS += listxattr_size_check check_fhandle_syscalls badarea_io
+THETESTS += dirent_ino
 THETESTS += llapi_layout_test orphan_linkea_check llapi_hsm_test
 THETESTS += group_lock_test llapi_fid_test sendfile_grouplock mmap_cat
 THETESTS += sorted_readdir

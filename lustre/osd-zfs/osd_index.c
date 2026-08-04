@@ -1510,8 +1510,23 @@ static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
 		if (!rc) {
 			fid_cpu_to_le(&lde->lde_fid, fid);
 			lde->lde_attrs = LUDA_FID;
-		} else if (rc != -ENOENT) {
-			/* ENOENT happens at the root of filesystem, ignore */
+		} else if (rc == -ENOENT) {
+			const struct lu_fid *sfid =
+				lu_object_fid(&it->ozi_obj->oo_dt.do_lu);
+
+			if (fid_is_root(sfid) || fid_is_update_log_dir(sfid)) {
+				/* entries of the OSD root ZAP */
+				lu_local_obj_fid(fid, OSD_FS_ROOT_OID);
+				fid_cpu_to_le(&lde->lde_fid, fid);
+				lde->lde_attrs = LUDA_FID;
+			} else {
+				/* parent unknown: sane and local, so the
+				 * LFSCK dotdot check stays a no-op
+				 */
+				fid_cpu_to_le(&lde->lde_fid, sfid);
+				lde->lde_attrs = LUDA_UNKNOWN;
+			}
+		} else {
 			RETURN(rc);
 		}
 
