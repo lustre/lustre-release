@@ -219,7 +219,7 @@ static void lnet_record_response_latency(struct lnet_msg *msg,
 	enum lnet_latency_op op;
 	s64 rtt_ns;
 
-	if (!rspt)
+	if (!lnet_latency_stats_enabled || !rspt)
 		return;
 
 	if (msg->msg_ev.status != 0 || LNetMDHandleIsInvalid(rspt->rspt_mdh))
@@ -297,8 +297,8 @@ incr_stats:
 	 * response instead. Resends are skipped so retry wait does not inflate
 	 * the metric.
 	 */
-	if (ev->type == LNET_EVENT_SEND && msg->msg_type == LNET_MSG_PUT &&
-	    msg->msg_retry_count == 0) {
+	if (lnet_latency_stats_enabled && ev->type == LNET_EVENT_SEND &&
+	    msg->msg_type == LNET_MSG_PUT && msg->msg_retry_count == 0) {
 		s64 lat_ns = ktime_to_ns(ktime_sub(msg->msg_t_end,
 						   msg->msg_t_start));
 
@@ -1197,7 +1197,8 @@ lnet_finalize(struct lnet_msg *msg, int status)
 	/* lnet_finalize() is the single completion point for every message,
 	 * so it is where the latency window closes.
 	 */
-	msg->msg_t_end = ktime_get();
+	if (lnet_latency_stats_enabled)
+		msg->msg_t_end = ktime_get();
 
 	if (lnet_is_health_check(msg)) {
 		/*

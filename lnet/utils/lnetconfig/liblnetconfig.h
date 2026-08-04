@@ -641,6 +641,31 @@ int lustre_lnet_show_drop_asym_route(int seq_no, struct cYAML **show_rc,
 				     struct cYAML **err_rc);
 
 /*
+ * lustre_lnet_config_latency_stats
+ *   Enable or disable accumulation of per-operation latency statistics.
+ *   Enabled by default.
+ *
+ *   enable - non-0 enables, 0 disables
+ *   seq_no - sequence number of the request
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_config_latency_stats(int enable, int seq_no,
+				     struct cYAML **err_rc);
+
+/*
+ * lustre_lnet_show_latency_stats
+ *    show current latency statistics setting
+ *
+ *   seq_no - sequence number of the request
+ *   show_rc - [OUT] struct cYAML tree containing the setting
+ *   err_rc - [OUT] struct cYAML tree describing the error. Freed by
+ *   caller
+ */
+int lustre_lnet_show_latency_stats(int seq_no, struct cYAML **show_rc,
+				   struct cYAML **err_rc);
+
+/*
  * lustre_lnet_config_buffers
  *   Send down an IOCTL to configure routing buffer sizes.  A value of 0 means
  *   default that particular buffer to default size. A value of -1 means

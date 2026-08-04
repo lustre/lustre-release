@@ -264,6 +264,14 @@ drop them\. Asymmetrical route is when a message from a remote peer is coming
 through a router that would not be used by this node to reach the remote peer\.
 .
 .TP
+\fBlnetctl set\fR latency_stats \fI[0, 1]\fR
+0 value indicates to stop accumulating per\-operation latency statistics\. 1
+value indicates to accumulate them (default)\. The latency statistics are
+reported by \fBlnetctl net show \-v\fR and \fBlnetctl peer show \-v\fR\.
+The global counters and the per\-interface element statistics are not affected
+by this setting\.
+.
+.TP
 \fBlnetctl set\fR response_tracking \fI[0, 1, 2, 3]\fR
 Set the behavior of response tracking\.
   0 - Only LNet pings and discovery pushes utilize response tracking\.

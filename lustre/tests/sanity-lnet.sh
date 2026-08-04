@@ -6576,7 +6576,9 @@ test_475() {
 	nid=$($LCTL list_nids | head -n 1)
 	[[ -n $nid ]] || error "No local NID"
 
-	# Latency stats are on by default. Start from a known-zero baseline.
+	# Capture survives reinit_dlc(), so an earlier test may have left it
+	# off. Start from a known-enabled, known-zero baseline.
+	do_lnetctl set latency_stats 1 || error "set latency_stats 1 failed"
 	do_lnetctl stats reset || error "stats reset failed"
 
 	# Pinging ourselves drives a GET round trip on the local NI and the
@@ -6611,6 +6613,43 @@ test_475() {
 		error "local NI get_rtt_samples is $samples after reset"
 }
 run_test 475 "per-operation latency stats populate and reset"
+
+test_476() {
+	local nid out samples i
+
+	reinit_dlc || return $?
+	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
+
+	nid=$($LCTL list_nids | head -n 1)
+	[[ -n $nid ]] || error "No local NID"
+
+	# With capture disabled, pinging must not add latency samples.
+	do_lnetctl set latency_stats 0 || error "set latency_stats 0 failed"
+	do_lnetctl stats reset || error "stats reset failed"
+	for i in $(seq 1 10); do
+		do_lnetctl ping $nid > /dev/null || error "ping $nid failed"
+	done
+	out=$($LNETCTL peer show -v 4 --nid $nid)
+	samples=$(sum_lat_field "$out" get_rtt_samples)
+	((samples == 0)) ||
+		error "get_rtt_samples is $samples with capture off"
+
+	# The setting must be visible to "lnetctl global show".
+	out=$($LNETCTL global show)
+	[[ $out =~ latency_stats:[[:space:]]*0 ]] ||
+		error "latency_stats not reported as 0 by global show"
+
+	# Re-enabling capture, pinging must add samples again.
+	do_lnetctl set latency_stats 1 || error "set latency_stats 1 failed"
+	for i in $(seq 1 10); do
+		do_lnetctl ping $nid > /dev/null || error "ping $nid failed"
+	done
+	out=$($LNETCTL peer show -v 4 --nid $nid)
+	samples=$(sum_lat_field "$out" get_rtt_samples)
+	((samples > 0)) ||
+		error "get_rtt_samples is $samples with capture on"
+}
+run_test 476 "lnetctl set latency_stats toggles capture"
 
 test_500() {
 	reinit_dlc || return $?

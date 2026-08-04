@@ -191,6 +191,11 @@ module_param(lnet_retry_count, retry_count, 0644);
 MODULE_PARM_DESC(lnet_retry_count,
 		 "Maximum number of times to retry transmitting a message");
 
+unsigned int lnet_latency_stats_enabled = 1;
+module_param(lnet_latency_stats_enabled, uint, 0644);
+MODULE_PARM_DESC(lnet_latency_stats_enabled,
+		 "Accumulate per-operation latency statistics");
+
 unsigned int lnet_response_tracking = 3;
 static int response_tracking_set(const char *val, const struct kernel_param *kp);
 

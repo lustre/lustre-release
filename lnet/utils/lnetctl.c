@@ -56,6 +56,7 @@ static int jt_del_peer_nid(int argc, char **argv);
 static int jt_set_max_intf(int argc, char **argv);
 static int jt_set_discovery(int argc, char **argv);
 static int jt_set_drop_asym_route(int argc, char **argv);
+static int jt_set_latency_stats(int argc, char **argv);
 static int jt_list_peer(int argc, char **argv);
 static int jt_add_udsp(int argc, char **argv);
 static int jt_del_udsp(int argc, char **argv);
@@ -103,6 +104,7 @@ command_t cmd_list[] = {
 	{"set", jt_set, 0, "set {tiny_buffers | small_buffers | large_buffers"
 			   " | routing | numa_range | max_interfaces"
 			   " | discovery | drop_asym_route | retry_count"
+			   " | latency_stats"
 			   " | transaction_timeout | health_sensitivity"
 			   " | recovery_interval | router_sensitivity"
 			   " | response_tracking | recovery_limit}"},
@@ -236,6 +238,10 @@ command_t set_cmds[] = {
 	 "drop/accept asymmetrical route messages\n"
 	 "\t0 - accept asymmetrical route messages (default)\n"
 	 "\t1 - drop asymmetrical route messages\n"},
+	{"latency_stats", jt_set_latency_stats, 0,
+	 "enable/disable per-operation latency statistics\n"
+	 "\t0 - disable latency statistics\n"
+	 "\t1 - enable latency statistics (default)\n"},
 	{"retry_count", jt_set_retry_count, 0, "number of retries\n"
 	 "\t0 - turn of retries\n"
 	 "\t>0 - number of retries\n"},
@@ -818,6 +824,35 @@ static int jt_set_drop_asym_route(int argc, char **argv)
 	}
 
 	rc = lustre_lnet_config_drop_asym_route(value, -1, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR)
+		cYAML_print_tree2file(stderr, err_rc);
+
+	cYAML_free_tree(err_rc);
+
+	return rc;
+}
+
+static int jt_set_latency_stats(int argc, char **argv)
+{
+	long value;
+	int rc;
+	struct cYAML *err_rc = NULL;
+
+	rc = check_cmd(set_cmds, "set", "latency_stats", 2, argc, argv);
+	if (rc)
+		return rc;
+
+	rc = parse_long(argv[1], &value);
+	if (rc != 0) {
+		cYAML_build_error(-1, -1, "parser", "set",
+				  "cannot parse latency_stats value",
+				  &err_rc);
+		cYAML_print_tree2file(stderr, err_rc);
+		cYAML_free_tree(err_rc);
+		return -1;
+	}
+
+	rc = lustre_lnet_config_latency_stats(value, -1, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR)
 		cYAML_print_tree2file(stderr, err_rc);
 
@@ -4230,6 +4265,12 @@ static int jt_show_global(int argc, char **argv)
 		goto out;
 	}
 
+	rc = lustre_lnet_show_latency_stats(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(stderr, err_rc);
+		goto out;
+	}
+
 	rc = lustre_lnet_show_retry_count(-1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(stderr, err_rc);
@@ -4483,6 +4524,14 @@ static int yaml_import_global_settings(char *key, unsigned long value,
 			rc = lustre_lnet_show_drop_asym_route(-1, &show_rc,
 							      &err_rc);
 		}
+	} else if (strcmp("latency_stats", key) == 0) {
+		if (cmd == 'a') {
+			rc = lustre_lnet_config_latency_stats(value, -1,
+							      &err_rc);
+		} else if (cmd == 's') {
+			rc = lustre_lnet_show_latency_stats(-1, &show_rc,
+							    &err_rc);
+		}
 	} else if (strcmp("retry_count", key) == 0) {
 		if (cmd == 'a') {
 			rc = lustre_lnet_config_retry_count(value, -1,
@@ -4564,6 +4613,7 @@ static char *global_params[] = {
 	"max_intf",
 	"discovery",
 	"drop_asym_route",
+	"latency_stats",
 	"retry_count",
 	"transaction_timeout",
 	"health_sensitivity",
@@ -6062,6 +6112,13 @@ show_others:
 	}
 
 	rc = lustre_lnet_show_drop_asym_route(-1, &show_rc, &err_rc);
+	if (rc != LUSTRE_CFG_RC_NO_ERR) {
+		cYAML_print_tree2file(f, err_rc);
+		cYAML_free_tree(err_rc);
+		err_rc = NULL;
+	}
+
+	rc = lustre_lnet_show_latency_stats(-1, &show_rc, &err_rc);
 	if (rc != LUSTRE_CFG_RC_NO_ERR) {
 		cYAML_print_tree2file(f, err_rc);
 		cYAML_free_tree(err_rc);

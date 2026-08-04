@@ -3818,6 +3818,28 @@ int lustre_lnet_config_drop_asym_route(int drop, int seq_no,
 
 }
 
+int lustre_lnet_config_latency_stats(int enable, int seq_no,
+				     struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_NO_ERR;
+	char err_str[LNET_MAX_STR_LEN] = "\"success\"";
+	char val[LNET_MAX_STR_LEN];
+
+	snprintf(val, sizeof(val), "%u", (enable) ? 1 : 0);
+
+	rc = write_sysfs_file(modparam_path, "lnet_latency_stats_enabled", val,
+			      1, strlen(val) + 1);
+	if (rc)
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot configure latency stats: %s\"",
+			 strerror(errno));
+
+	cYAML_build_error(rc, seq_no, ADD_CMD, "latency_stats",
+			  err_str, err_rc);
+
+	return rc;
+}
+
 int lustre_lnet_config_numa_range(int range, int seq_no, struct cYAML **err_rc)
 {
 	return ioctl_set_value(range, IOC_LIBCFS_SET_NUMA_RANGE,
@@ -5140,6 +5162,29 @@ int lustre_lnet_show_drop_asym_route(int seq_no, struct cYAML **show_rc,
 				       show_rc, err_rc, l_errno);
 }
 
+int lustre_lnet_show_latency_stats(int seq_no, struct cYAML **show_rc,
+				   struct cYAML **err_rc)
+{
+	int rc = LUSTRE_CFG_RC_OUT_OF_MEM;
+	char val[LNET_MAX_STR_LEN];
+	int latency_stats = -1, l_errno = 0;
+	char err_str[LNET_MAX_STR_LEN] = "\"out of memory\"";
+
+	rc = read_sysfs_file(modparam_path, "lnet_latency_stats_enabled", val,
+			     1, sizeof(val));
+	if (rc) {
+		l_errno = -errno;
+		snprintf(err_str, sizeof(err_str),
+			 "\"cannot get latency stats setting: %d\"", rc);
+	} else {
+		latency_stats = atoi(val);
+	}
+
+	return build_global_yaml_entry(err_str, sizeof(err_str), seq_no,
+				       "latency_stats", latency_stats,
+				       show_rc, err_rc, l_errno);
+}
+
 int lustre_lnet_show_numa_range(int seq_no, struct cYAML **show_rc,
 				struct cYAML **err_rc)
 {
@@ -6223,7 +6268,7 @@ static int handle_yaml_config_global_settings(struct cYAML *tree,
 {
 	struct cYAML *max_intf, *numa, *discovery, *retry, *tto, *seq_no,
 		     *sen, *recov, *rsen, *drop_asym_route, *rsp_tracking,
-		     *recov_limit;
+		     *recov_limit, *latency_stats;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -6254,6 +6299,13 @@ static int handle_yaml_config_global_settings(struct cYAML *tree,
 	if (drop_asym_route)
 		rc = lustre_lnet_config_drop_asym_route(
 			drop_asym_route->cy_valueint,
+			seq_no ? seq_no->cy_valueint : -1,
+			err_rc);
+
+	latency_stats = cYAML_get_object_item(tree, "latency_stats");
+	if (latency_stats)
+		rc = lustre_lnet_config_latency_stats(
+			latency_stats->cy_valueint,
 			seq_no ? seq_no->cy_valueint : -1,
 			err_rc);
 
@@ -6313,7 +6365,8 @@ static int handle_yaml_del_global_settings(struct cYAML *tree,
 					   struct cYAML **show_rc,
 					   struct cYAML **err_rc)
 {
-	struct cYAML *max_intf, *numa, *discovery, *seq_no, *drop_asym_route;
+	struct cYAML *max_intf, *numa, *discovery, *seq_no, *drop_asym_route,
+		     *latency_stats;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -6347,6 +6400,12 @@ static int handle_yaml_del_global_settings(struct cYAML *tree,
 		rc = lustre_lnet_config_drop_asym_route(
 			0, seq_no ? seq_no->cy_valueint : -1, err_rc);
 
+	/* latency statistics are enabled by default */
+	latency_stats = cYAML_get_object_item(tree, "latency_stats");
+	if (latency_stats)
+		rc = lustre_lnet_config_latency_stats(
+			1, seq_no ? seq_no->cy_valueint : -1, err_rc);
+
 	return rc;
 }
 
@@ -6356,7 +6415,7 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 {
 	struct cYAML *max_intf, *numa, *discovery, *retry, *tto, *seq_no,
 		     *sen, *recov, *rsen, *drop_asym_route, *rsp_tracking,
-		     *recov_limit;
+		     *recov_limit, *latency_stats;
 	int rc = 0;
 
 	seq_no = cYAML_get_object_item(tree, "seq_no");
@@ -6383,6 +6442,12 @@ static int handle_yaml_show_global_settings(struct cYAML *tree,
 	drop_asym_route = cYAML_get_object_item(tree, "drop_asym_route");
 	if (drop_asym_route)
 		rc = lustre_lnet_show_drop_asym_route(
+			seq_no ? seq_no->cy_valueint : -1,
+			show_rc, err_rc);
+
+	latency_stats = cYAML_get_object_item(tree, "latency_stats");
+	if (latency_stats)
+		rc = lustre_lnet_show_latency_stats(
 			seq_no ? seq_no->cy_valueint : -1,
 			show_rc, err_rc);
 
