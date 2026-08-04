@@ -7473,6 +7473,48 @@ test_121() {
 }
 run_test 121 "trunc append race"
 
+# A txg sync performs no metadata operation and so revokes no DLM lock.  If a
+# directory's size is derived from anything that only settles at txg sync, two
+# mounts end up disagreeing about a directory nobody touched - LU-15842
+check_dir_size_same() {
+	local dir=$1
+	local size1 size2
+
+	# no cancel_lru_locks here: this getattr has to reach the MDT before
+	# the sync below, and dropping the locks first only widens the window
+	# for a txg sync to land and settle both stats on the same value
+	size1=$(stat -c %s $DIR/$dir) || error "stat $DIR/$dir failed"
+
+	# force_sync lands in osd_sync(), which waits for the txg, so there is
+	# nothing left to sleep for
+	sync_all_data_mdts
+
+	cancel_lru_locks mdc
+	size2=$(stat -c %s $DIR2/$dir) || error "stat $DIR2/$dir failed"
+
+	(( size1 == size2 )) ||
+		error "$dir size differs across mounts: $size1 != $size2"
+}
+
+test_122() {
+	(( MDS1_VERSION >= $(version_code 2.17.57) )) ||
+		skip "need MDS >= 2.17.57 for a coherent directory size"
+
+	# plain mkdir, not test_mkdir: with MDSCOUNT > 1 that one stripes by
+	# default and the single-MDT case would never run
+	mkdir $DIR/$tdir || error "mkdir $tdir failed"
+	check_dir_size_same $tdir
+
+	(( MDSCOUNT > 1 )) || return 0
+
+	$LFS mkdir -i 1 $DIR/$tdir.remote || error "mkdir $tdir.remote failed"
+	check_dir_size_same $tdir.remote
+
+	$LFS mkdir -c -1 $DIR/$tdir.stripe || error "mkdir $tdir.stripe failed"
+	check_dir_size_same $tdir.stripe
+}
+run_test 122 "directory size is consistent across mounts"
+
 test_200() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 

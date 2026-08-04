@@ -937,6 +937,10 @@ static int osd_attr_get(const struct lu_env *env, struct dt_object *dt,
 	uint64_t blocks;
 	uint32_t blksize;
 	int rc = 0;
+	/* the copy from oo_attr below overwrites la_valid, so the caller's
+	 * request for the dirent count has to be taken before that
+	 */
+	bool dirent_cnt = attr->la_valid & LA_DIRENT_CNT;
 
 	down_read(&obj->oo_guard);
 
@@ -971,13 +975,27 @@ static int osd_attr_get(const struct lu_env *env, struct dt_object *dt,
 	 * we can't call sa_object_size() holding rwlock
 	 */
 	sa_object_size(obj->oo_sa_hdl, &blksize, &blocks);
-	/* we do not control size of indices, so always calculate
-	 * it from number of blocks reported by DMU
-	 */
 	if (S_ISDIR(attr->la_mode)) {
-		attr->la_size = 512 * blocks;
-		rc = -zap_count(osd->od_os, obj->oo_dn->dn_object,
-				&attr->la_dirent_count);
+		dnode_t *dn = obj->oo_dn;
+
+		/* We keep no logical size for a directory ZAP, so report its
+		 * logical length.  Do not derive it from the DMU block count:
+		 * that comes from the on-disk dnode and only settles when the
+		 * txg syncs, which revokes no DLM lock, so two clients end up
+		 * disagreeing about the size of an idle directory (LU-15842).
+		 * This is what dmu_object_info_from_dnode() computes for
+		 * doi_max_offset, read directly because that helper also takes
+		 * dn_mtx and sums the block pointers on every getattr.
+		 */
+		attr->la_size = (dn->dn_maxblkid + 1) * dn->dn_datablksz;
+		if (dirent_cnt) {
+			rc = -zap_count(osd->od_os, dn->dn_object,
+					&attr->la_dirent_count);
+			if (!rc)
+				attr->la_valid |= LA_DIRENT_CNT;
+		} else {
+			attr->la_dirent_count = LU_DIRENT_COUNT_UNSET;
+		}
 	}
 	/* Block size may be not set; suggest maximal I/O transfers. */
 	if (blksize == 0)

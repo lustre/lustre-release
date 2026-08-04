@@ -1992,6 +1992,17 @@ t32_verify_quota() {
 	return 0
 }
 
+# osd-zfs reports a directory's size from the ZAP's logical extent, which the
+# size recorded in the image predates (LU-15842), so drop that column before
+# comparing.  t32_check() only restores images matching mds1_FSTYPE, so an
+# ldiskfs run compares ldiskfs against ldiskfs and keeps checking it.  Rebuild
+# every record so the two sides stay comparable if ls repads the size field.
+t32_normalize_list() {
+	[[ $mds1_FSTYPE == zfs ]] || { cat; return; }
+
+	awk '{ if ($2 ~ /^d/) $6 = "DIRSIZE"; $1 = $1; print }'
+}
+
 get_project_quota() {
 	local spec=$4
 	local uuid=$3
@@ -2667,8 +2678,10 @@ t32_test() {
 			else
 				pushd $tmp/mnt/lustre
 			fi
-			$r cat $list_file | sort -k 6 >$tmp/list.orig
-			BLOCKSIZE=1024 ls -Rni --time-style=+%s | sort -k 6 |
+			$r cat $list_file | t32_normalize_list |
+				sort -k 6 >$tmp/list.orig
+			BLOCKSIZE=1024 ls -Rni --time-style=+%s |
+				t32_normalize_list | sort -k 6 |
 				sed 's/\. / /' >$tmp/list || {
 				error_noexit "ls"
 				return 1
