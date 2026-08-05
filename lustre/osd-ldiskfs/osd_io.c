@@ -22,6 +22,7 @@
 #include <linux/types.h>
 /* prerequisite for linux/xattr.h */
 #include <linux/fs.h>
+#include <lustre_compat/linux/bio.h>
 #include <linux/mm.h>
 #include <linux/swap.h>
 #include <linux/pagevec.h>
@@ -497,13 +498,12 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 
 			bio_start_page_idx = page_idx;
 			/* allocate new bio */
-			bio = cfs_bio_alloc(bdev,
-					    min_t(unsigned short, BIO_MAX_VECS,
-						  (block_idx_end - block_idx +
-						   blocks_left_page - 1)),
-					    iobuf->dr_rw ? REQ_OP_WRITE
-							 : REQ_OP_READ,
-					    GFP_NOIO);
+			bio = bio_alloc(bdev,
+					min_t(unsigned short, BIO_MAX_VECS,
+					      (block_idx_end - block_idx +
+					       blocks_left_page - 1)),
+					iobuf->dr_rw ? REQ_OP_WRITE
+						     : REQ_OP_READ, GFP_NOIO);
 			if (!bio) {
 				rc = -ENOMEM;
 				CERROR("%s: cannot allocate bio %u pages: rc = %d\n",

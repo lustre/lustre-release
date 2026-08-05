@@ -1528,19 +1528,6 @@ void ll_release_user_pages(struct page **pages, int npages)
 }
 EXPORT_SYMBOL(ll_release_user_pages);
 
-#ifdef HAVE_FAULT_IN_IOV_ITER_READABLE
-#define ll_iov_iter_fault_in_readable(iov, bytes) \
-	fault_in_iov_iter_readable(iov, bytes)
-#else
-#define ll_iov_iter_fault_in_readable(iov, bytes) \
-	iov_iter_fault_in_readable(iov, bytes)
-#endif
-
-#ifndef HAVE_KTHREAD_USE_MM
-#define kthread_use_mm(mm) use_mm(mm)
-#define kthread_unuse_mm(mm) unuse_mm(mm)
-#endif
-
 static inline size_t folio_from_iter(struct page *pg,
 				     unsigned long offset, size_t bytes,
 				     struct iov_iter *iter)
@@ -1676,7 +1663,7 @@ static ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
 
 	/* fault in the entire userspace iovec */
 	if (rw == WRITE) {
-		if (unlikely(ll_iov_iter_fault_in_readable(iter, count)))
+		if (unlikely(fault_in_iov_iter_readable(iter, count)))
 			GOTO(out, status = -EFAULT);
 	}
 

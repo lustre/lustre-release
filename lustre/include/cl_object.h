@@ -2628,11 +2628,6 @@ int ll_allocate_dio_buffer(struct cl_dio_pages *cdp, size_t io_size);
 void ll_free_dio_buffer(struct cl_dio_pages *cdp);
 ssize_t ll_dio_user_copy(struct cl_sub_dio *sdio);
 
-#ifndef HAVE_KTHREAD_USE_MM
-#define kthread_use_mm(mm) use_mm(mm)
-#define kthread_unuse_mm(mm) unuse_mm(mm)
-#endif
-
 /** \defgroup cl_env cl_env
  *
  * lu_env handling for a client.

@@ -63,23 +63,6 @@
 #define C_FLC_OWNER	fl_owner
 #endif
 
-static inline struct bio *cfs_bio_alloc(struct block_device *bdev,
-					unsigned short nr_vecs,
-					__u32 op, gfp_t gfp_mask)
-{
-	struct bio *bio;
-#ifdef HAVE_BIO_ALLOC_WITH_BDEV
-	bio = bio_alloc(bdev, nr_vecs, op, gfp_mask);
-#else
-	bio = bio_alloc(gfp_mask, nr_vecs);
-	if (bio) {
-		bio_set_dev(bio, bdev);
-		bio->bi_opf = op;
-	}
-#endif /* HAVE_BIO_ALLOC_WITH_BDEV */
-	return bio;
-}
-
 #ifdef HAVE_DENTRY_D_CHILDREN
 #define d_no_children(dentry)	(hlist_empty(&(dentry)->d_children))
 #define d_for_each_child(child, dentry) \

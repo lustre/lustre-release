@@ -791,6 +791,11 @@ AC_DEFUN([LC_SRC_HAVE_KTHREAD_USE_MM], [
 AC_DEFUN([LC_HAVE_KTHREAD_USE_MM], [
 	LB2_MSG_LINUX_TEST_RESULT([if have kthread_use_mm], [kthread_use_mm], [
 		AC_DEFINE(HAVE_KTHREAD_USE_MM, 1, ['kthread_use_mm' exists])
+	],[
+		AC_DEFINE([kthread_use_mm(mm)], [use_mm(mm)],
+			[use_mm() -> kthread_use_mm()])
+		AC_DEFINE([kthread_unuse_mm(mm)], [unuse_mm(mm)],
+			[unuse_mm() -> kthread_unuse_mm()])
 	])
 ]) # LC_HAVE_KTHREAD_USE_MM
 
@@ -1221,6 +1226,10 @@ AC_DEFUN([LC_HAVE_FAULT_IN_IOV_ITER_READABLE], [
 	[fault_in_iov_iter_readable], [
 		AC_DEFINE(HAVE_FAULT_IN_IOV_ITER_READABLE, 1,
 			['fault_in_iov_iter_readable' exists])
+	],[
+		AC_DEFINE([fault_in_iov_iter_readable(iter, count)],
+			  [iov_iter_fault_in_readable(iter, count)],
+			  [iov_iter_fault_in_readable()->fault_in_iov_iter_readable()])
 	])
 ]) # LC_HAVE_FAULT_IN_IOV_ITER_READABLE
 
@@ -2301,13 +2310,8 @@ AC_DEFUN([LC_SRC_HAVE_CLASS_CREATE_MODULE_ARG], [
 AC_DEFUN([LC_HAVE_CLASS_CREATE_MODULE_ARG], [
 	LB2_MSG_LINUX_TEST_RESULT([if 'class_create' does not have module arg],
 	[class_create_without_module_arg], [
-		AC_DEFINE([ll_class_create(name)],
-			  [class_create((name))],
-			  ['class_create' does not have module arg])
-	],[
-		AC_DEFINE([ll_class_create(name)],
-			  [class_create(THIS_MODULE, (name))],
-			  ['class_create' expects module arg])
+		AC_DEFINE([HAVE_CLASS_CREATE_NO_ARG], 1,
+			['class_create' does not have module arg])
 	])
 ]) # LC_HAVE_CLASS_CREATE_MODULE_ARG
 
