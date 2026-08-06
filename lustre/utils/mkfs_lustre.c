@@ -762,13 +762,6 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 		return EINVAL;
 	}
 
-	if (ldd->ldd_mount_type == LDD_MT_ZFS &&
-	    (ldd->ldd_flags & LDD_F_SV_TYPE_OST)) {
-		rc = add_param(ldd->ldd_params, PARAM_AUTODEGRADE, "on");
-		if (rc)
-			return rc;
-	}
-
 	if (strlen(new_fsname) > 0) {
 		if (!(mop->mo_flags & (MO_FORCEFORMAT | MO_RENAME)) &&
 		    (!(ldd->ldd_flags & (LDD_F_VIRGIN | LDD_F_WRITECONF)))) {
@@ -1006,6 +999,19 @@ int main(int argc, char *const argv[])
 		ret = EINVAL;
 		goto out;
 	}
+
+#ifndef TUNEFS
+	/*
+	 * only mkfs.lustre enables autodegrade by default; the leading space
+	 * add_param() writes anchors the match at a parameter boundary
+	 */
+	if (ldd->ldd_mount_type == LDD_MT_ZFS && IS_OST(ldd) &&
+	    !strstr(ldd->ldd_params, " " PARAM_AUTODEGRADE)) {
+		ret = add_param(ldd->ldd_params, PARAM_AUTODEGRADE, "on");
+		if (ret != 0)
+			goto out;
+	}
+#endif
 
 	/* These are the permanent mount options (always included) */
 	ret = osd_prepare_lustre(&mop,

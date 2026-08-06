@@ -5,7 +5,7 @@
 .\"
 .\" This file may be copied under the terms of the GNU Public License, v2.
 .\"
-.TH TUNEFS.LUSTRE 8 2024-08-28 Lustre "Lustre Configuration Utilities"
+.TH TUNEFS.LUSTRE 8 2026-08-13 Lustre "Lustre Configuration Utilities"
 .SH NAME
 tunefs.lustre \- modify the Lustre configuration information on a disk
 .SH SYNOPSIS
@@ -128,6 +128,18 @@ Default stripe count
 .I --param failover.mode=failout
 .RS
 Return errors instead of waiting for recovery
+.RE
+.I --param autodegrade=on
+.RS
+Avoid allocating new objects on this OST while its ZFS pool is degraded.
+Unlike
+.BR mkfs.lustre (8),
+tunefs.lustre never sets this by default, so an existing value is kept
+unless it is changed or erased here.
+.B --erase-params
+drops it along with all other parameters, so re-add
+.B --param autodegrade=on
+to keep the OST degrading itself.
 .RE
 .RE
 .TP

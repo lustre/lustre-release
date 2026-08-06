@@ -5,7 +5,7 @@
 .\"
 .\" This file may be copied under the terms of the GNU Public License.
 .\"
-.TH MKFS.LUSTRE 8 2024-08-28 Lustre "Lustre Configuration Utilities"
+.TH MKFS.LUSTRE 8 2026-08-13 Lustre "Lustre Configuration Utilities"
 .SH NAME
 mkfs.lustre \- format a disk for a Lustre service
 .SH SYNOPSIS
@@ -188,6 +188,11 @@ Default stripe count
 .I --param failover.mode=failout
 .RS
 Return errors instead of waiting for recovery
+.RE
+.I --param autodegrade=on
+.RS
+Avoid allocating new objects on this OST while its ZFS pool is degraded.
+Enabled by default on a ZFS OST, unless an explicit value is given here.
 .RE
 .RE
 .TP

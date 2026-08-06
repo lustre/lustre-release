@@ -13076,6 +13076,61 @@ test_165() {
 }
 run_test 165 "automatic at_min scaling based on expected clients"
 
+test_166() {
+	[[ "$ost1_FSTYPE" == zfs ]] || skip "zfs only test"
+	(( $OST1_VERSION >= $(version_code 2.17.57) )) ||
+		skip "need OST >= 2.17.57 to handle autodegrade properly"
+
+	local ostdev=$(ostdevname 1)
+	local val
+
+	stopall
+	stack_trap "reformat_and_config"
+
+	# --replace keeps the index registered, so ost1 is still mountable;
+	# mkfs.lustre must not override an explicit value
+	add ost1 $(mkfs_opts ost1 $ostdev) --param autodegrade=off \
+		--reformat --replace $ostdev $(ostvdevname 1) ||
+		error "add ost1 failed"
+	import_zpool ost1
+	val=$(do_facet ost1 "$ZFS get -H -o value lustre:autodegrade $ostdev")
+	[[ "$val" == "off" ]] || error "autodegrade is '$val', expected 'off'"
+
+	# mkfs.lustre enables autodegrade on a ZFS OST by default
+	add ost1 $(mkfs_opts ost1 $ostdev) --reformat --replace $ostdev \
+		$(ostvdevname 1) || error "add ost1 failed"
+	import_zpool ost1
+	val=$(do_facet ost1 "$ZFS get -H -o value lustre:autodegrade $ostdev")
+	[[ "$val" == "on" ]] || error "autodegrade is '$val', expected 'on'"
+
+	# tunefs.lustre must not override an explicit value
+	do_facet ost1 "$TUNEFS --param autodegrade=off $ostdev" ||
+		error "$TUNEFS --param autodegrade=off failed"
+	val=$(do_facet ost1 "$ZFS get -H -o value lustre:autodegrade $ostdev")
+	[[ "$val" == "off" ]] || error "autodegrade is '$val', expected 'off'"
+
+	# tunefs.lustre must be able to erase autodegrade
+	do_facet ost1 "$TUNEFS --erase-param autodegrade $ostdev" ||
+		error "$TUNEFS --erase-param autodegrade failed"
+	val=$(do_facet ost1 "$ZFS get -H -o value lustre:autodegrade $ostdev")
+	[[ "$val" == "-" ]] || error "autodegrade is '$val', expected unset"
+
+	# a key ending in autodegrade= must not suppress the default
+	add ost1 $(mkfs_opts ost1 $ostdev) --param ost.autodegrade=on \
+		--reformat --replace $ostdev $(ostvdevname 1) ||
+		error "add ost1 failed"
+	import_zpool ost1
+	val=$(do_facet ost1 "$ZFS get -H -o value lustre:autodegrade $ostdev")
+	[[ "$val" == "on" ]] || error "autodegrade is '$val', expected 'on'"
+
+	# --erase-params drops autodegrade along with all other parameters
+	do_facet ost1 "$TUNEFS --erase-params $ostdev" ||
+		error "$TUNEFS --erase-params failed"
+	val=$(do_facet ost1 "$ZFS get -H -o value lustre:autodegrade $ostdev")
+	[[ "$val" == "-" ]] || error "autodegrade is '$val', expected unset"
+}
+run_test 166 "mkfs.lustre and tunefs.lustre handle autodegrade properly"
+
 cleanup_200() {
 	local modopts=$1
 	stopall
