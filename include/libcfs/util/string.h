@@ -18,9 +18,13 @@
 #ifndef __LIBCFS_UTIL_STRING_H__
 #define __LIBCFS_UTIL_STRING_H__
 
+#include <errno.h>
 #include <stddef.h>
 #include <stdarg.h>
 #include <string.h>
+#include <sys/random.h>
+#include <unistd.h>
+#include <stdio.h>
 
 #include <linux/types.h>
 #include <linux/lnet/lnet-types.h>
@@ -54,6 +58,34 @@ static inline int scnprintf(char *buf, size_t bufsz, const char *format, ...)
 	va_end(args);
 
 	return ret;
+}
+
+/**
+ * cfs_random() - Return a random 32-bit value.
+ *
+ * Drop-in replacement for random(3) which, unlike random(3), does not
+ * need to be seeded first.
+ *
+ * getrandom() called with a 4-byte buffer and no flags cannot fail, apart
+ * from EINTR, which just means the CRNG was not initialized yet and the call
+ * was interrupted while waiting for it. So retry in that case instead of
+ * making every caller handle an error path.
+ *
+ * The returned value is suitable for unique file names and group lock ids,
+ * but must not be used for cryptographic purposes.
+ *
+ * Return: a random 32-bit value.
+ */
+static inline unsigned int cfs_random(void)
+{
+	unsigned int rnumber = 0;
+	ssize_t ret;
+
+	do {
+		ret = getrandom(&rnumber, sizeof(rnumber), 0);
+	} while (ret < 0 && errno == EINTR);
+
+	return rnumber;
 }
 
 struct netstrfns {

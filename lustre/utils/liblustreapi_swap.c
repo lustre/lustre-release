@@ -14,11 +14,13 @@
 
 #include <stdlib.h>
 #include <errno.h>
+#include <limits.h>
 #include <sys/time.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <libcfs/util/string.h>
 #include <lustre/lustreapi.h>
 
 /**
@@ -126,7 +128,7 @@ static int create_volatile(const char *directory, int mdt_idx,
 	}
 
 	do {
-		rnumber = random();
+		rnumber = cfs_random();
 		if (mdt_idx == -1)
 			rc = snprintf(file_path, sizeof(file_path),
 				      "%s/" LUSTRE_VOLATILE_HDR "::%.4X",
@@ -374,11 +376,12 @@ int llapi_fswap_layouts_grouplock(int fd1, int fd2, __u64 dv1, __u64 dv2,
 
 int llapi_fswap_layouts(int fd1, int fd2, __u64 dv1, __u64 dv2, __u64 flags)
 {
-	int	rc;
-	int	grp_id;
+	int grp_id;
+	int rc;
 
+	/* mask the sign bit, as the group id is passed as an int */
 	do
-		grp_id = random();
+		grp_id = cfs_random() & INT_MAX;
 	while (grp_id == 0);
 
 	rc = llapi_fswap_layouts_grouplock(fd1, fd2, dv1, dv2, grp_id, flags);

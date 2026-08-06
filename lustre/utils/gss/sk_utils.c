@@ -739,7 +739,8 @@ read_sk:
 
 			/* add random chars at end of key if requested... */
 			if (randomize)
-				snprintf(rand, sizeof(rand), "%.4lX", random());
+				snprintf(rand, sizeof(rand), "%.4X",
+					 cfs_random());
 			rc = snprintf(description, sizeof(description),
 				      "lustre:%s%s%s", config->skc_fsname,
 				      randomize || mntdir ? ":" : "",

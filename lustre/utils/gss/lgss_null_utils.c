@@ -7,6 +7,7 @@
 
 #include <string.h>
 #include <time.h>
+#include <libcfs/util/string.h>
 #include "lgss_utils.h"
 
 static int lgss_null_prepare_cred(struct lgss_cred *cred)
@@ -19,7 +20,7 @@ static int lgss_null_prepare_cred(struct lgss_cred *cred)
 	cred->lc_mech_token.length = sizeof(uint64_t);
 
 	/* random token so it's not cached by the other side */
-	tmp = random();
+	tmp = cfs_random();
 	tmp <<= 32;
 
 	/* Sec part flags needed on the other end */

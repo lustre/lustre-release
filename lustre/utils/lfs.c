@@ -736,17 +736,17 @@ migrate_open_files(const char *name, enum llapi_migration_flags migration_flags,
 		   struct llapi_layout *layout, int *fd_src_ptr,
 		   int *fd_dst_ptr, char **err_str)
 {
-	int			 fd_src = -1;
-	int			 fd_dst = -1;
-	int			 rflags;
-	int			 mdt_index;
-	int                      random_value;
-	char			 parent[PATH_MAX];
-	char			 volatile_file[PATH_MAX];
-	char			*ptr;
-	int			 rc;
-	struct stat		 st;
-	struct stat		 stv;
+	char volatile_file[PATH_MAX];
+	unsigned int random_value;
+	char parent[PATH_MAX];
+	int fd_src = -1;
+	int fd_dst = -1;
+	struct stat stv;
+	struct stat st;
+	int mdt_index;
+	int rflags;
+	char *ptr;
+	int rc;
 
 	/*
 	 * Ensure param and layout are mutually exclusive.
@@ -813,7 +813,7 @@ source_open:
 
 		if (rflags & O_DIRECT)
 			open_flags |= O_DIRECT;
-		random_value = random();
+		random_value = cfs_random();
 		rc = snprintf(volatile_file, sizeof(volatile_file),
 			      "%s/%s:%.4X:%.4X:fd=%.2d", parent,
 			      LUSTRE_VOLATILE_HDR, mdt_index,
@@ -1093,10 +1093,10 @@ static int migrate_block(int fd_src, int fd_dst,
 	int rc;
 	int rc2;
 
+	/* mask the sign bit, as the group id is passed as an int */
 	do
-		gid = random();
+		gid = cfs_random() & INT_MAX;
 	while (gid == 0);
-
 
 	/* The grouplock blocks all concurrent accesses to the file. */
 	rc = llapi_group_lock(fd_src, gid);
@@ -2965,7 +2965,7 @@ again:
 				 * volatile file.
 				 */
 				do {
-					rnumber = random();
+					rnumber = cfs_random();
 					rc = snprintf(file_path,
 						      sizeof(file_path),
 						      "%s/" LUSTRE_VOLATILE_HDR ":%.4X:%.4X:fd=%.2d",

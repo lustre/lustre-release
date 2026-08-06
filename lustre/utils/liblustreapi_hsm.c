@@ -40,6 +40,7 @@
 #endif
 #include <utime.h>
 
+#include <libcfs/util/string.h>
 #include <linux/lnet/lnetctl.h>
 #include <linux/lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>
@@ -1048,7 +1049,7 @@ static int create_restore_volatile(struct hsm_copyaction_private *hcp,
 		unsigned int rnumber;
 
 		do {
-			rnumber = random();
+			rnumber = cfs_random();
 			if (mdt_index == -1)
 				rc = snprintf(file_path, sizeof(file_path),
 				       "%s/"LUSTRE_VOLATILE_HDR"::%.4X:fd=%.2d",
