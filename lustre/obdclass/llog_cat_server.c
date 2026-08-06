@@ -738,7 +738,7 @@ static int llog_cat_size_cb(const struct lu_env *env,
 	} else if (rc == LLOG_DEL_RECORD) {
 		/* clear wrong catalog entry */
 		rc = llog_cat_cleanup(env, cat_llh, NULL, rec->lrh_index);
-	} else {
+	} else if (!rc) {
 		size = llog_size(env, llh);
 		*cum_size += size;
 
