@@ -1120,14 +1120,14 @@ run_test 21 "glimpse should report accurate i_blocks"
 
 get_osc_lock_count() {
 	local lock_count=0
+	local idx
+	local count
+	local osc_name
 
 	for idx in "$@"; do
-		local osc_name
-		local count
-
-		osc_name=${FSNAME}-OST$(printf "%04x" $((idx-1)))-osc-'[-0-9a-f]*'
-		count=$($LCTL get_param -n ldlm.namespaces.$osc_name.lock_count)
-		lock_count=$((lock_count + count))
+		osc_name=${FSNAME}-OST$(printf "%04x" $((idx-1)))-osc-[-0-9a-f]
+		count=$(total_used_locks "$osc_name")
+		lock_count=$((lock_count + ${count:-0}))
 	done
 	echo $lock_count
 }
