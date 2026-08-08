@@ -5058,7 +5058,7 @@ test_256() {
 		echo "unreachable")
 
 	[[ "$boot_before" == "$boot_after" ]] ||
-		error "$victim rebooted ($boot_before -> $boot_after) — \
+		error "$victim rebooted ($boot_before -> $boot_after) - \
 lmv_hsm_ct_register kuc pipe double-fput (LU-20311)"
 }
 run_test 256 "HSM copytool register on DNE with stopped MDT must not panic"

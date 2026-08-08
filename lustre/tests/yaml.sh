@@ -215,7 +215,15 @@ EOF
 	if [[ -z "$*" ]]; then
 		printf '            error:\n'
 	else
-		printf '            error: "%q"\n' "$*"
+		local msg="$*"
+
+		# A single-quoted YAML scalar takes no backslash escapes, so
+		# '' is the only thing that needs quoting, and the message
+		# cannot introduce syntax.  YAML rejects a raw control
+		# character in any scalar, and a newline or carriage return
+		# would also end the line, so fold them all to a space first.
+		msg="${msg//[[:cntrl:]]/ }"
+		printf "            error: '%s'\n" "${msg//\'/\'\'}"
 	fi
 }
 
