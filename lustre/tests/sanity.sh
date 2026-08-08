@@ -1088,6 +1088,30 @@ test_23d() {
 }
 run_test 23d "file offset is correct after appending writes"
 
+# LU-20253 tiny writes must update the cached inode size
+test_23e() {
+	local file=$DIR/$tfile
+	local size
+
+	statx_supported || skip_env "Test must be statx() syscall supported"
+
+	# the first write dirties the page via the normal write path,
+	# which merges the size into the inode
+	dd if=/dev/zero of=$file bs=128 count=1 conv=notrunc ||
+		error "first write failed"
+	# the page is now dirty, so a second sub-page write takes the
+	# tiny write path (ll_do_tiny_write)
+	dd if=/dev/zero of=$file bs=128 count=1 seek=1 conv=notrunc ||
+		error "second write failed"
+
+	# cached-always statx does not trigger a glimpse, so it reports
+	# i_size as seen by in-kernel users (e.g. overlayfs)
+	size=$($STATX --cached=always -c %s $file)
+	(( size == 256 )) ||
+		error "cached size after tiny write is $size, expected 256"
+}
+run_test 23e "tiny write updates the size seen by cached statx"
+
 # rename sanity
 test_24a() {
 	echo '-- same directory rename'
