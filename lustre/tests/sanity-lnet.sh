@@ -92,19 +92,52 @@ setup_fakeif() {
 	ip link add 'test1pl' type veth peer name $FAKE_IF $netns_arg
 	echo "ip link set 'test1pl' up"
 	ip link set 'test1pl' up
-	echo "$netns_exec ip addr add \"${FAKE_IP}/31\" dev $FAKE_IF"
-	$netns_exec ip addr add "${FAKE_IP}/31" dev $FAKE_IF
-	echo "$netns_exec ip -6 addr add \"${FAKE_IPV6}/64\" dev $FAKE_IF"
-	$netns_exec ip -6 addr add "${FAKE_IPV6}/64" dev $FAKE_IF
+
+	# A device takes its disable_ipv6 setting when it is registered,
+	# so $FAKE_IF may refuse an IPv6 address on a node whose other
+	# interfaces carry one. This function owns the veth, so write 0
+	# to the per-device disable_ipv6 knob instead of giving up on
+	# IPv6. A node booted with ipv6.disable=1 keeps every device
+	# disabled no matter what is written here, so re-read the
+	# setting rather than assume the write took effect.
+	local disabled=$($netns_exec cat \
+			 /proc/sys/net/ipv6/conf/$FAKE_IF/disable_ipv6 \
+			 2>/dev/null)
+	if [[ $disabled != 0 ]]; then
+		$netns_exec sysctl -qw \
+			net.ipv6.conf.$FAKE_IF.disable_ipv6=0 2>/dev/null
+		disabled=$($netns_exec cat \
+			 /proc/sys/net/ipv6/conf/$FAKE_IF/disable_ipv6 \
+			 2>/dev/null)
+	fi
+
+	local addrs=("${FAKE_IP}/31")
+	local addr
+
+	FAKE_IF_HAS_IPV6=false
+	if [[ $disabled == 0 ]]; then
+		addrs+=("${FAKE_IPV6}/64")
+		FAKE_IF_HAS_IPV6=true
+	elif $FORCE_LARGE_NID; then
+		cleanup_fakeif
+		skip "IPv6 disabled on $FAKE_IF, $FAKE_NID needs it"
+	else
+		echo "IPv6 disabled on $FAKE_IF. Configure it for IPv4 only"
+	fi
+
+	for addr in "${addrs[@]}"; do
+		echo "$netns_exec ip addr add \"$addr\" dev $FAKE_IF"
+		$netns_exec ip addr add "$addr" dev $FAKE_IF
+	done
 	echo "$netns_exec ip link set $FAKE_IF up"
 	$netns_exec ip link set $FAKE_IF up
 
-	local ip4=$($netns_exec ip -o -4 a s $FAKE_IF 2>/dev/null |
-		    grep $FAKE_IP)
-	local ip6=$($netns_exec ip -o -6 a s $FAKE_IF 2>/dev/null |
-		    grep $FAKE_IPV6)
+	for addr in "${addrs[@]}"; do
+		$netns_exec ip -o a s $FAKE_IF 2>/dev/null |
+			grep -q "${addr%/*}" ||
+			error "Failed to add ${addr%/*} to $FAKE_IF"
+	done
 
-	[[ -n $ip4 && -n $ip6 ]] || error "Failed setup $FAKE_IF"
 	wait_update $HOSTNAME \
 		"$netns_exec ip -o a s $FAKE_IF | grep -c tentative" \
 		"0" "10"
@@ -297,11 +330,14 @@ if [[ -z ${INTERFACES[@]} ]]; then
 	error "Did not identify any LNet interfaces"
 fi
 
+HAVE_IPV6=false
+! intf_has_ipv6 ${INTERFACES[0]} || HAVE_IPV6=true
+
 # If we don't have IPv6 addresses then make sure the test suite runs in
 # "IPv4 mode". If we have IPv6, but not IPv4, then make sure we run in
 # "IPv6 mode". In a mixed environment we take whatever has been specified
 # by the test environment configuration.
-if ! intf_has_ipv6 ${INTERFACES[0]}; then
+if ! $HAVE_IPV6; then
 	FORCE_LARGE_NID=false
 	LNET_CONFIG_INIT_OPT="--all"
 	LNET_CONFIG_OPT=""
@@ -2365,7 +2401,7 @@ run_test 157 "Check import failure with malformed ip2nets YAML"
 test_158() {
 	[[ $NETTYPE == tcp* ]] || skip "Need tcp nettype"
 
-	intf_has_ipv6 ${INTERFACES[0]} || skip "Interface has no IPv6"
+	$HAVE_IPV6 || skip "Interface has no IPv6"
 
 	reinit_dlc || return $?
 
@@ -2394,7 +2430,7 @@ run_test 158 "Check import of ip2nets with single IPv6 address"
 test_159() {
 	[[ $NETTYPE == tcp* ]] || skip "Need tcp nettype"
 
-	intf_has_ipv6 ${INTERFACES[0]} || skip "Interface has no IPv6"
+	$HAVE_IPV6 || skip "Interface has no IPv6"
 
 	reinit_dlc || return $?
 
@@ -2423,11 +2459,17 @@ run_test 159 "Check import of ip2nets with IPv6 /128 CIDR notation"
 test_160() {
 	[[ $NETTYPE == tcp* ]] || skip "Need tcp nettype"
 
-	intf_has_ipv6 ${INTERFACES[0]} || skip "Interface has no IPv6"
+	$HAVE_IPV6 || skip "Interface has no IPv6"
 
 	cleanup_lnet || error "Failed to unload modules before test execution"
 
 	setup_fakeif || error "Failed to add fake IF"
+
+	# The ip2nets rules below match $FAKE_IF on ${FAKE_IPV6}
+	$FAKE_IF_HAS_IPV6 || {
+		cleanup_fakeif
+		skip "$FAKE_IF has no IPv6"
+	}
 
 	reinit_dlc || return $?
 
@@ -2492,7 +2534,7 @@ run_test 160 "Check correct application of multiple IPv6 ip2nets rules"
 test_161() {
 	[[ $NETTYPE == tcp* ]] || skip "Need tcp nettype"
 
-	intf_has_ipv6 ${INTERFACES[0]} || skip "Interface has no IPv6"
+	$HAVE_IPV6 || skip "Interface has no IPv6"
 
 	reinit_dlc || return $?
 
@@ -2533,7 +2575,7 @@ run_test 161 "Check import of ip2nets with various IPv6 prefix lengths"
 test_162() {
 	[[ $NETTYPE == tcp* ]] || skip "Need tcp nettype"
 
-	intf_has_ipv6 ${INTERFACES[0]} || skip "Interface has no IPv6"
+	$HAVE_IPV6 || skip "Interface has no IPv6"
 
 	reinit_dlc || return $?
 
