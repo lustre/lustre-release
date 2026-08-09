@@ -607,6 +607,11 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	lut->lut_reply_data = o;
 
 	rc = tgt_reply_data_init(env, lut);
+	/* fail here rather than inside tgt_reply_data_init(), so any reply
+	 * data restored is still in place when out_put tears the exports down
+	 */
+	if (rc == 0 && CFS_FAIL_CHECK(OBD_FAIL_TGT_REPLY_DATA_INIT))
+		rc = -EBADSLT;
 	if (rc < 0)
 		GOTO(out, rc);
 

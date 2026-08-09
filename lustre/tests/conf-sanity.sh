@@ -12387,6 +12387,66 @@ test_138() {
 }
 run_test 138 "MDT mount failure must not LBUG destroying recovery exports"
 
+cleanup_139() {
+	do_facet mds1 "$LCTL set_param fail_loc=0" || true
+	cleanup || true
+}
+
+test_139() {
+	(( MDS1_VERSION >= $(version_code 2.17.56) )) ||
+		skip "need MDS >= 2.17.56 for OBD_FAIL_TGT_REPLY_DATA_INIT"
+
+	stopall
+	combined_mgs_mds || start_mgs
+
+	setup
+	stack_trap cleanup_139
+
+	# a modifying RPC, so the client has a reply_data record for
+	# tgt_reply_data_init() to attach to the export it rebuilds
+	touch $DIR/$tfile || error "touch failed"
+
+	local old_debug=$(do_facet mds1 "$LCTL get_param -n debug")
+
+	stack_trap "do_facet mds1 \"$LCTL set_param debug='$old_debug'\""
+
+	# keep the client's last_rcvd slot across the umount
+	#define OBD_FAIL_TGT_CLIENT_DEL 0x718
+	do_facet mds1 "$LCTL set_param fail_loc=0x718 debug=+ha"
+	stop_mds || error "stop mds failed"
+
+	# fail tgt_init() after tgt_server_data_init() has succeeded, so the
+	# recovery exports are still connected when out_put tears the target
+	# down
+	#define OBD_FAIL_TGT_REPLY_DATA_INIT 0x728
+	do_facet mds1 "$LCTL set_param fail_loc=0x728"
+	do_facet mds1 "$LCTL dk >/dev/null"
+	start_mds && error "MDT mount should have failed"
+	do_facet mds1 "$LCTL set_param fail_loc=0"
+
+	# a restored record means ted_reply_list is populated and the reply
+	# slots are set, which is the state out_put has to tear down
+	do_facet mds1 "$LCTL dk > $TMP/$tfile.dk"
+	do_facet mds1 "grep -q 'restore reply' $TMP/$tfile.dk" ||
+		error "no reply data restored (log on mds1: $TMP/$tfile.dk)"
+	do_facet mds1 "rm -f $TMP/$tfile.dk"
+
+	start_mds || error "MDT mount failed"
+	check_mount || error "check_mount failed"
+
+	wait_recovery_complete mds1 || error "MDS recovery not completed"
+
+	local clients=$(do_facet mds1 \
+		"$LCTL get_param -n mdt.$FSNAME-MDT0000.recovery_status" |
+		awk '/completed_clients/ { print $2 }')
+
+	# MDT0001..N are counted as clients too, so the MDSCOUNT - 1 peers
+	# plus this client make MDSCOUNT
+	[[ "$clients" == */* ]] && (( ${clients%%/*} >= MDSCOUNT )) ||
+		error "client not recovered after the failed mount: '$clients'"
+}
+run_test 139 "failed mount after reply_data init keeps its clients"
+
 test_140() {
 	(( MDS1_VERSION >= $(version_code 2.15.55) )) ||
 		skip "need MDS version at least 2.15.55"

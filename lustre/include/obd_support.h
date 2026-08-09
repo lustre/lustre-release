@@ -540,6 +540,7 @@ extern bool obd_enable_fname_encoding;
 #define OBD_FAIL_TGT_NO_GRANT		 0x725
 #define OBD_FAIL_TGT_TXN_NO_CANCEL	 0x726
 #define OBD_FAIL_TGT_STATFS_BSIZE	 0x727
+#define OBD_FAIL_TGT_REPLY_DATA_INIT	 0x728
 
 #define OBD_FAIL_MDC_REVALIDATE_PAUSE    0x800
 #define OBD_FAIL_MDC_ENQUEUE_PAUSE       0x801
