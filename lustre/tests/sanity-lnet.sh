@@ -4209,17 +4209,28 @@ check_router_ni_status() {
 	local actual_remote
 	local chk_intvl
 	local timeout
-	local i
+	local idle_period
+	local deadline
+	local samples=0
 
 	chk_intvl=$(cat /sys/module/lnet/parameters/alive_router_check_interval)
 	timeout=$(cat /sys/module/lnet/parameters/router_ping_timeout)
+
+	# A router marks an NI down only after its net has been idle for
+	# alive_router_check_interval + router_ping_timeout. Any ping received
+	# on that net restarts the interval, so allow for a few of them. Poll
+	# on both a wall clock budget and a sample count so that slow do_node
+	# calls cannot shorten the wait.
+	idle_period=$((chk_intvl + timeout))
 
 	actual_local=$(do_node $router "$LNETCTL net show --net $LOCAL_NET" |
 		       awk '/status/{print $NF}')
 	actual_remote=$(do_node $router "$LNETCTL net show --net $REMOTE_NET" |
 			awk '/status/{print $NF}')
 
-	for ((i = 0; i < $((chk_intvl + timeout)); i++)); do
+	deadline=$((SECONDS + 3 * idle_period))
+
+	while ((SECONDS < deadline || samples < idle_period)); do
 		if [[ $actual_local == $expected_local ]] &&
 		   [[ $actual_remote == $expected_remote ]]; then
 			break
@@ -4234,6 +4245,7 @@ check_router_ni_status() {
 		actual_remote=$(do_node $router \
 				"$LNETCTL net show --net $REMOTE_NET" |
 				awk '/status/{print $NF}')
+		samples=$((samples + 1))
 	done
 
 	[[ $actual_local == $expected_local ]] ||
