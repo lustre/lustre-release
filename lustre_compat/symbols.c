@@ -11,6 +11,7 @@
 
 #include <linux/kprobes.h>
 #include <linux/memcontrol.h>
+#include <lustre_compat/linux/kallsyms.h>
 #include <lustre_compat/linux/mm.h>
 #include <lustre_compat/linux/security.h>
 #include <lustre_compat/linux/vmalloc.h>

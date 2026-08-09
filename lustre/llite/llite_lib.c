@@ -169,16 +169,9 @@ static struct ll_sb_info *ll_init_sbi(struct lustre_sb_info *lsi)
 	atomic_set(&sbi->ll_ra_info.ra_async_inflight, 0);
 
 	set_bit(LL_SBI_VERBOSE, sbi->ll_flags);
-#ifdef CONFIG_ENABLE_CHECKSUM
 	set_bit(LL_SBI_CHECKSUM, sbi->ll_flags);
-#endif
-#ifdef CONFIG_ENABLE_FLOCK
 	set_bit(LL_SBI_FLOCK, sbi->ll_flags);
-#endif
-
-#ifdef HAVE_LRU_RESIZE_SUPPORT
 	set_bit(LL_SBI_LRU_RESIZE, sbi->ll_flags);
-#endif
 	set_bit(LL_SBI_LAZYSTATFS, sbi->ll_flags);
 
 	/* metadata statahead is enabled by default */
@@ -509,10 +502,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt)
 	if (llite_enable_flr_ec)
 		data->ocd_connect_flags2 |= OBD_CONNECT2_FLR_EC;
 
-#ifdef HAVE_LRU_RESIZE_SUPPORT
 	if (test_bit(LL_SBI_LRU_RESIZE, sbi->ll_flags))
 		data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
-#endif
+
 	data->ocd_connect_flags |= OBD_CONNECT_ACL_FLAGS;
 
 	data->ocd_cksum_types = obd_cksum_types_supported_client();
@@ -769,9 +761,8 @@ retry_connect:
 	else
 		data->ocd_cksum_types = obd_cksum_types_supported_client();
 
-#ifdef HAVE_LRU_RESIZE_SUPPORT
 	data->ocd_connect_flags |= OBD_CONNECT_LRU_RESIZE;
-#endif
+
 	/* always ping even if server suppress_pings */
 	if (test_bit(LL_SBI_ALWAYS_PING, sbi->ll_flags))
 		data->ocd_connect_flags &= ~OBD_CONNECT_PINGLESS;

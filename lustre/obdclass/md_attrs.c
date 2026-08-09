@@ -11,6 +11,7 @@
  * Author: Johann Lombardi <johann.lombardi@intel.com>
  */
 
+#include <lustre_compat/linux/string.h>
 #include <llog_swab.h>
 #include <lustre_swab.h>
 #include <obd.h>

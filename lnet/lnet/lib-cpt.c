@@ -59,50 +59,6 @@ struct cfs_cpt_table {
 struct cfs_cpt_table *cfs_cpt_tab __read_mostly;
 EXPORT_SYMBOL(cfs_cpt_tab);
 
-/*
- * modparam for setting number of partitions
- *
- *  0 : estimate best value based on cores or NUMA nodes
- *  1 : disable multiple partitions
- * >1 : specify number of partitions
- */
-module_param(cpu_npartitions, int, 0444);
-MODULE_PARM_DESC(cpu_npartitions, "# of CPU partitions");
-
-/*
- * modparam for setting CPU partitions patterns:
- *
- * i.e:	"0[0-3] 1[4,5,7]", number before bracket is CPU partition ID,
- *	number in bracket is processor ID (core or HT)
- *
- * i.e:	"N 0[0,1] 1[2,3]" the first character 'N' means numbers in bracket
- *	are NUMA node ID, number before bracket is CPU partition ID.
- *
- * i.e:	"N C[0-1]" or "C[0-1]", the character 'C' means numbers in bracket are
- *	relative core numbers to exclude, all other cores
- *	are included. If 'N' is specified then the core numbers are relative to
- *	the NUMA nodes, otherwise, they cores are relative to each partition.
- *	As per the first example, the first two cores of each NUMA node
- *	will be excluded, all other cores on all nodes are included with
- *	one partition per node. In the second example, the first two cores of
- *	each partition will be excluded, all other cores on all partitions are
- *	included. The partition count is specified with cpu_npartitions.
- *
- * i.e:	"N X[0-1]" or "X[0-1]", the character 'X' means that the numbers in
- *	brackets are processor IDs to be excluded from the CPT that they belong
- *	to. If 'N' was specified it will use the default NUMA node layout,
- *	otherwise it uses the default configuration for the cpu_npartitions
- *	specified.
- *
- * i.e:	"N", shortcut expression to create CPT from NUMA & CPU topology
- *	This is the default behavior if the cpu_pattern and cpu_npartitions
- *	are not specified.
- *
- * NB: If user specified cpu_pattern, cpu_npartitions will be ignored
- */
-module_param(cpu_pattern, charp, 0444);
-MODULE_PARM_DESC(cpu_pattern, "CPU partitions pattern");
-
 struct cfs_cpt_table *cfs_cpt_table_alloc(int ncpt)
 {
 	struct cfs_cpt_table *cptab;

@@ -19,7 +19,7 @@
 #define _LPROCFS_STATUS_H
 
 #include <linux/fs.h>
-#include <linux/debugfs.h>
+#include <lustre_compat/linux/debugfs.h>
 #include <linux/kref.h>
 #include <lustre_compat/linux/proc_fs.h>
 #include <linux/rwsem.h>

@@ -25,6 +25,7 @@
 #include <linux/hash.h>
 #include <linux/netdevice.h>
 #include <linux/libcfs/libcfs_debug.h>
+#include <linux/libcfs/libcfs_fail.h>
 #include <linux/libcfs/libcfs_private.h>
 
 #include <linux/lnet/api.h>

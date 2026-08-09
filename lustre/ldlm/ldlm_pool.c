@@ -81,8 +81,6 @@
 #include <obd_support.h>
 #include "ldlm_internal.h"
 
-#ifdef HAVE_LRU_RESIZE_SUPPORT
-
 /*
  * 50 ldlm locks for 1MB of RAM.
  * If changed, HANDLE_HASH_SIZE is to be adjusted.
@@ -1393,72 +1391,3 @@ void ldlm_pools_fini(void)
 
 	ldlm_pools_init_done = false;
 }
-
-#else /* !HAVE_LRU_RESIZE_SUPPORT */
-int ldlm_pool_setup(struct ldlm_pool *pl, int limit)
-{
-	return 0;
-}
-
-time64_t ldlm_pool_recalc(struct ldlm_pool *pl, bool force)
-{
-	return 0;
-}
-
-int ldlm_pool_shrink(struct ldlm_pool *pl,
-		     int nr, gfp_t gfp_mask)
-{
-	return 0;
-}
-
-int ldlm_pool_init(struct ldlm_pool *pl, struct ldlm_namespace *ns,
-		   int idx, enum ldlm_side client)
-{
-	return 0;
-}
-
-void ldlm_pool_fini(struct ldlm_pool *pl)
-{
-}
-
-void ldlm_pool_add(struct ldlm_pool *pl, struct ldlm_lock *lock)
-{
-}
-
-void ldlm_pool_del(struct ldlm_pool *pl, struct ldlm_lock *lock)
-{
-}
-
-__u64 ldlm_pool_get_slv(struct ldlm_pool *pl)
-{
-	return 1;
-}
-
-void ldlm_pool_set_clv(struct ldlm_pool *pl, __u64 clv)
-{
-}
-
-__u32 ldlm_pool_get_limit(struct ldlm_pool *pl)
-{
-	return 0;
-}
-
-void ldlm_pool_set_limit(struct ldlm_pool *pl, __u32 limit)
-{
-}
-
-__u32 ldlm_pool_get_lvf(struct ldlm_pool *pl)
-{
-	return 0;
-}
-
-int ldlm_pools_init(void)
-{
-	return 0;
-}
-
-void ldlm_pools_fini(void)
-{
-}
-
-#endif /* HAVE_LRU_RESIZE_SUPPORT */

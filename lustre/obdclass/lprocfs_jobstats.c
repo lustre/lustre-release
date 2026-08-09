@@ -13,6 +13,7 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <lustre_compat/linux/rbtree.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
 

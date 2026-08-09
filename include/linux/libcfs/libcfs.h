@@ -23,13 +23,17 @@
 #include <uapi/linux/lnet/libcfs_ioctl.h>
 #include <linux/libcfs/libcfs_debug.h>
 #include <linux/libcfs/libcfs_private.h>
-#include <linux/libcfs/libcfs_fail.h>
 
 #define LIBCFS_VERSION LUSTRE_VERSION_STRING
 
 typedef s32 timeout_t;
 
 int libcfs_setup(void);
+
+static inline unsigned long cfs_time_seconds(time64_t seconds)
+{
+	return nsecs_to_jiffies64(seconds * NSEC_PER_SEC);
+}
 
 #ifdef HAVE_CONST_CTR_TABLE
 #define DEFINE_CTL_TABLE_INIT(__name, init)\

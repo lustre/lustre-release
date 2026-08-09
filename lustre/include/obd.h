@@ -22,8 +22,9 @@
 #include <linux/spinlock.h>
 #include <linux/sysfs.h>
 #include <lustre_compat/linux/xarray.h>
-#include <lustre_compat/linux/linux-misc.h>
 
+#include <linux/libcfs/libcfs.h>
+#include <linux/libcfs/libcfs_fail.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_lib.h>
 #include <lustre_export.h>

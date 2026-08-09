@@ -167,9 +167,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 		data->ocd_connect_flags |= OBD_CONNECT_AT |
 					   OBD_CONNECT_FULL20 |
 					   OBD_CONNECT_INDEX |
-#ifdef HAVE_LRU_RESIZE_SUPPORT
 					   OBD_CONNECT_LRU_RESIZE |
-#endif
 					   OBD_CONNECT_MDS |
 					   OBD_CONNECT_SKIP_ORPHAN |
 					   OBD_CONNECT_FID |

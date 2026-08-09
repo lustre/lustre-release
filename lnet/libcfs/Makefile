@@ -9,7 +9,7 @@ obj-m += libcfs.o
 # Debug objects
 libcfs-y := debug.o fail.o module.o tracefile.o
 
-# Compat: core (lustre_compat/module.c, symbols.c, misc.c)
+# Compat: core (lustre_compat/{symbols.c,misc.c})
 include $(src)/../../lustre_compat/Makefile
 libcfs-y += $(patsubst %,../../lustre_compat/%,$(module_objs))
 

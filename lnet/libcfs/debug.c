@@ -26,7 +26,6 @@
 #endif
 
 #include <linux/libcfs/libcfs.h>
-#include <lustre_compat/linux/linux-misc.h>
 #include "tracefile.h"
 
 static char debug_file_name[1024];
@@ -556,7 +555,7 @@ static int panic_notifier(struct notifier_block *self, unsigned long unused1,
 	libcfs_panic_in_progress = 1;
 	mb();
 
-#ifdef LNET_DUMP_ON_PANIC
+#ifdef CONFIG_LNET_DUMP_ON_PANIC
 	/* This is currently disabled because it spews far too much to the
 	 * console on the rare cases it is ever triggered. */
 

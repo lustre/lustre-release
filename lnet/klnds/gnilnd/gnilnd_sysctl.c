@@ -15,7 +15,7 @@
 
 #define DEBUG_SUBSYSTEM S_LND
 
-#include <lustre_compat/linux/linux-misc.h>
+#include <linux/libcfs/libcfs.h>
 
 #include "gnilnd.h"
 

@@ -63,7 +63,7 @@ AC_ARG_ENABLE([panic_dumplog],
 	[], [enable_panic_dumplog="no"])
 AC_MSG_RESULT([$enable_panic_dumplog])
 AS_IF([test "x$enable_panic_dumplog" = xyes], [
-	AC_DEFINE(LNET_DUMP_ON_PANIC, 1, [use dumplog on panic])
+	AC_DEFINE(CONFIG_LNET_DUMP_ON_PANIC, 1, [use dumplog on panic])
 	AC_SUBST(ENABLE_PANIC_DUMPLOG, yes)
 ], [
 	AC_SUBST(ENABLE_PANIC_DUMPLOG, no)
@@ -636,6 +636,13 @@ AC_DEFUN([LIBCFS_HAVE_TASK_IS_RUNNING], [
 	[task_is_running], [
 		AC_DEFINE(HAVE_TASK_IS_RUNNING, 1,
 			[task_is_running() is defined])
+	],[
+		AC_DEFINE(task_is_running(task),
+			[(READ_ONCE((task)->state) == TASK_RUNNING)],
+			[create compat task_is_running()])
+		AC_DEFINE(get_current_state(),
+			[(READ_ONCE(current->state))],
+			[create compat get_current_state()])
 	])
 ]) # LIBCFS_HAVE_TASK_IS_RUNNING
 

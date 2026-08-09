@@ -26,11 +26,9 @@
 #include <asm/kgdb.h>
 #endif
 
-#include <lustre_compat.h>
-#include <lustre_compat/linux/timer.h>
-#include <lustre_compat/linux/linux-misc.h>
+#include <lustre_compat/linux/kallsyms.h>
 #include <lustre_compat/linux/mm.h>
-#include <lustre_compat/linux/xarray.h>
+#include <lustre_compat/linux/module.h>
 #include <lustre_compat/linux/shrinker.h>
 #include <lustre_compat/linux/vmalloc.h>
 #include <lustre_crypto.h>

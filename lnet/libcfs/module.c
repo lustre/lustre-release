@@ -12,7 +12,7 @@
  */
 
 #include <linux/init.h>
-#include <linux/module.h>
+#include <lustre_compat/linux/module.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/string.h>
@@ -35,7 +35,7 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <linux/libcfs/libcfs.h>
-#include <lustre_compat/linux/linux-misc.h>
+#include <linux/libcfs/libcfs_fail.h>
 #include <linux/lnet/lib-lnet.h>
 #include "tracefile.h"
 
@@ -664,6 +664,17 @@ static void __exit libcfs_exit(void)
 {
 	debug_module_exit();
 }
+
+/* For backwards compatibility */
+int cpu_npartitions;
+EXPORT_SYMBOL(cpu_npartitions);
+module_param(cpu_npartitions, int, 0444);
+MODULE_PARM_DESC(cpu_npartitions, "# of CPU partitions");
+
+char *cpu_pattern = "N";
+EXPORT_SYMBOL(cpu_pattern);
+module_param(cpu_pattern, charp, 0444);
+MODULE_PARM_DESC(cpu_pattern, "CPU partitions pattern");
 
 MODULE_AUTHOR("OpenSFS, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre helper library");

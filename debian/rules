@@ -271,8 +271,8 @@ configure-stamp: autogen-stamp debian/control.main debian/control.modules.in
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "efalnd"; then \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --enable-efa"; \
 	fi; \
-	options="gss crypto pinger checksum flock lru-resize"; \
-	options="$${options} mindf fail-alloc invariants lu_ref pgstate-track"; \
+	options="gss crypto pinger"; \
+	options="$${options} mindf fail-alloc invariants pgstate-track"; \
 	options="$${options} libcfs-cdebug libcfs-trace libcfs-assert"; \
 	options="$${options} panic_dumplog readline libpthread"; \
 	options="$${options} backoff gni efence"; \
@@ -631,8 +631,8 @@ kdist_config: prep-deb-files patch-stamp
 	if echo "$${DEB_BUILD_PROFILES}" | grep -q "efalnd"; then \
 		export EXTRAFLAGS="$${EXTRAFLAGS} --enable-efa"; \
 	fi; \
-	options="gss crypto pinger checksum flock lru-resize"; \
-	options="$${options} mindf fail-alloc invariants lu_ref pgstate-track"; \
+	options="gss crypto pinger"; \
+	options="$${options} mindf fail-alloc invariants pgstate-track"; \
 	options="$${options} libcfs-cdebug libcfs-trace libcfs-assert"; \
 	options="$${options} panic_dumplog readline libpthread"; \
 	options="$${options} backoff gni efence"; \

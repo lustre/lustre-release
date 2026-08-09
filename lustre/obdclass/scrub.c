@@ -17,6 +17,7 @@
 #define DEBUG_SUBSYSTEM S_LFSCK
 
 #include <linux/kthread.h>
+#include <linux/libcfs/libcfs_fail.h>
 #include <lustre_scrub.h>
 #include <lustre_lib.h>
 #include <lustre_fid.h>

@@ -25,6 +25,7 @@
  * Examples: osd (lustre/osd) is an implementation of dt interface.
  */
 
+#include <linux/libcfs/libcfs_fail.h>
 #include <obd_support.h>
 #include <lu_object.h>
 #include <lustre_quota.h>

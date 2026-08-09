@@ -116,21 +116,6 @@ debs: debs_common
 	elif test "x$(ENABLE_PINGER)" = "xno"; then
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nopinger"
 	fi
-	if test "x$(ENABLE_CHECKSUM)" = "xyes"; then
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} checksum"
-	elif test "x$(ENABLE_CHECKSUM)" = "xno"; then
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nochecksum"
-	fi
-	if test "x$(ENABLE_FLOCK)" = "xyes"; then
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} flock"
-	elif test "x$(ENABLE_FLOCK)" = "xno"; then
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} noflock"
-	fi
-	if test "x$(ENABLE_LRU_RESIZE)" = "xyes"; then
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} lru-resize"
-	elif test "x$(ENABLE_LRU_RESIZE)" = "xno"; then
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nolru-resize"
-	fi
 	if test "x$(ENABLE_MINDF)" = "xyes"; then
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} mindf"
 	elif test "x$(ENABLE_MINDF)" = "xno"; then
@@ -145,11 +130,6 @@ debs: debs_common
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} invariants"
 	elif test "x$(ENABLE_INVARIANTS)" = "xno"; then
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} noinvariants"
-	fi
-	if test "x$(ENABLE_LU_REF)" = "xyes"; then
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} lu_ref"
-	elif test "x$(ENABLE_LU_REF)" = "xno"; then
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nolu_ref"
 	fi
 	if test "x$(ENABLE_PGSTAT_TRACK)" = "xyes"; then
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} pgstate-track"

@@ -29,8 +29,11 @@
 #include <linux/list.h>
 #include <linux/mm.h>
 #include <linux/module.h>
+#include <lustre_compat/linux/net.h>
 #include <linux/pagemap.h>
 #include <linux/refcount.h>
+#include <linux/sched.h>
+#include <linux/sched/mm.h>
 #include <linux/stat.h>
 #include <linux/string.h>
 #include <linux/syscalls.h>

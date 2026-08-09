@@ -813,6 +813,7 @@ use_ioctl:
 static struct mod_paths {
 	char *name, *path;
 } mod_paths[] = {
+	{ .name = "libcfs",	.path = "lnet/libcfs" },
 	{ .name = "libcfs",	.path = "libcfs/libcfs" },
 	{ .name = "lnet",	.path = "lnet/lnet" },
 	{ .name = "ko2iblnd",	.path = "lnet/klnds/o2iblnd" },
