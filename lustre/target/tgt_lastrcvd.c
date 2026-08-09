@@ -2262,6 +2262,7 @@ int tgt_reply_data_init(const struct lu_env *env, struct lu_target *tgt)
 			rc = tgt_set_reply_slot(tgt, idx);
 			if (rc != 0) {
 				mutex_unlock(&ted->ted_lcd_lock);
+				class_export_put(exp);
 				GOTO(out, rc);
 			}
 			trd->trd_reply = *lrd;
