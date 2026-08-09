@@ -473,7 +473,9 @@ nrs_tbf_cli_fini(struct nrs_tbf_client *cli)
 {
 	LASSERT(list_empty(&cli->tc_list));
 	LASSERT(!test_bit(NRS_TBF_CLI_HEAP_BIT, &cli->tc_state));
-	LASSERT(!test_and_set_bit(NRS_TBF_CLI_DEL_BIT, &cli->tc_state));
+	if (test_and_set_bit(NRS_TBF_CLI_DEL_BIT, &cli->tc_state))
+		LASSERTF(0, "TBF client %s: delete bit already set\n",
+			 nrs_tbf_cli2str(cli));
 
 	TBF_CLI_DEBUG(cli, "TBF class fini");
 	spin_lock(&cli->tc_rule_lock);

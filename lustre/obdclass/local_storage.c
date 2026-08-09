@@ -712,9 +712,11 @@ struct local_oid_storage *dt_los_find(struct ls_device *ls, __u64 seq)
 void dt_los_put(struct local_oid_storage *los)
 {
 	/* should never happen, only local_oid_storage_fini should
-	 * drop refcount to zero
+	 * drop refcount to zero.
 	 */
-	LASSERT(!refcount_dec_and_test(&los->los_refcount));
+	if (refcount_dec_and_test(&los->los_refcount))
+		LASSERTF(0, "los seq %#llx: refcount reached zero\n",
+			 los->los_seq);
 }
 
 /* after Lustre 2.3 release there may be old file to store last generated FID
