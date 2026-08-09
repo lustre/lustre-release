@@ -13,6 +13,7 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <obd.h>
+#include <obd_class.h>
 #include <obd_target.h>
 #include <obd_cksum.h>
 #include "tgt_internal.h"
@@ -614,6 +615,22 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 out:
 	dt_txn_callback_del(lut->lut_bottom, &lut->lut_txn_cb);
 out_put:
+	/* Exports rebuilt from last_rcvd by tgt_clients_data_init() are
+	 * destroyed on the zombie workqueue, so they can still be running
+	 * mdt_destroy_export() against lut while the frees below happen.
+	 * Drain them here, while lut is still valid: class_disconnect_exports()
+	 * splices obd_exports away, which is what lets obd_exports_barrier()
+	 * assert on it.
+	 *
+	 * OBDF_FAIL first, for the same reason err_client sets it: without it
+	 * these count as permanent disconnects and tgt_client_del() erases the
+	 * last_rcvd record of every client we are trying to keep.
+	 */
+	set_bit(OBDF_FAIL, obd->obd_flags);
+	class_disconnect_exports(obd);
+	obd_exports_barrier(obd);
+	obd_zombie_barrier();
+
 	obt->obt_lut = NULL;
 	obt->obt_magic = 0;
 	if (lut->lut_last_rcvd != NULL) {
