@@ -11928,6 +11928,19 @@ test_138() {
 
 	start_mds || error "MDT mount failed"
 	check_mount || error "check_mount failed"
+
+	# the failed mount must not have erased the client's last_rcvd
+	# record: it has to still be recoverable afterwards.  Wait for
+	# recovery to finish first - while it is running, recovery_status
+	# prints completed_clients without the /total this parses.
+	wait_recovery_complete mds1 || error "MDS recovery not completed"
+
+	local clients=$(do_facet mds1 \
+		"$LCTL get_param -n mdt.$FSNAME-MDT0000.recovery_status" |
+		awk '/completed_clients/ { print $2 }')
+
+	[[ "$clients" == */* ]] && (( ${clients%%/*} > 0 )) ||
+		error "no client recovered after the failed mount: '$clients'"
 }
 run_test 138 "MDT mount failure must not LBUG destroying recovery exports"
 

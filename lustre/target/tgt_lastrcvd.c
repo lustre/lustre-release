@@ -2023,6 +2023,10 @@ int tgt_server_data_init(const struct lu_env *env, struct lu_target *tgt)
 	RETURN(0);
 
 err_client:
+	/* the mount is failing, not the clients: keep their last_rcvd
+	 * records so they can still recover on the next attempt
+	 */
+	set_bit(OBDF_FAIL, tgt->lut_obd->obd_flags);
 	class_disconnect_exports(tgt->lut_obd);
 	return rc;
 }
