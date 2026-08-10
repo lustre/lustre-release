@@ -8039,7 +8039,7 @@ test_88b() {
 }
 run_test 88b "check the default mount options can be overridden"
 
-test_89() { # LU-7131
+test_89a() { # LU-7131
 	[[ "$MDS1_VERSION" -ge $(version_code 2.9.54) ]] ||
 		skip "Need MDT version at least 2.9.54"
 
@@ -8118,7 +8118,45 @@ test_89() { # LU-7131
 
 	reformat_and_config
 }
-run_test 89 "check tunefs --param and --erase-param{s} options"
+run_test 89a "check tunefs --param and --erase-param{s} options"
+
+test_89b() {
+	(( MDS1_VERSION >= $(version_code 2.17.57) )) ||
+		skip "Need MDS version at least 2.17.57"
+	[[ "$mds1_FSTYPE" == ldiskfs ]] || skip "ldiskfs only test"
+
+	local cmt="tunefs_quota_test1"
+	local cmt2="tunefs_quota_test2"
+	local mdsdev=$(mdsdevname 1)
+
+	stopall
+	stack_trap "reformat_and_config"
+
+	# --quota must not discard the other options given with it
+	do_facet mds1 "$TUNEFS --quota --comment='$cmt' $mdsdev" ||
+		error "tunefs --quota --comment=$cmt failed"
+	do_facet mds1 "$TUNEFS $mdsdev" | grep "^Comment: $cmt$" ||
+		error "--quota discarded --comment=$cmt"
+
+	# mkfs.lustre always formats with "-O quota", clear it to make
+	# tunefs.lustre create the quota inodes
+	do_facet mds1 "$TUNE2FS -O ^quota $mdsdev" ||
+		error "$TUNE2FS -O ^quota failed"
+	do_facet mds1 "$DUMPE2FS -h $mdsdev" |
+		grep -E "^(User|Group) quota inode" &&
+		error "user/group quota inodes were not cleared"
+
+	# --quota must create the user/group quota inodes and keep
+	# the other options
+	do_facet mds1 "$TUNEFS --quota --comment='$cmt2' $mdsdev" ||
+		error "tunefs --quota --comment=$cmt2 failed"
+	do_facet mds1 "$DUMPE2FS -h $mdsdev" |
+		grep -E "^(User|Group) quota inode" ||
+		error "user/group quota inodes were not created"
+	do_facet mds1 "$TUNEFS $mdsdev" | grep "^Comment: $cmt2$" ||
+		error "--quota discarded --comment=$cmt2"
+}
+run_test 89b "tunefs --quota keeps the other options and creates quota inodes"
 
 # $1 test directory
 # $2 (optional) value of max_mod_rpcs_in_flight to set

@@ -1151,12 +1151,6 @@ int main(int argc, char *const argv[])
 			goto out;
 	}
 
-	/* Enable quota accounting */
-	if (mop.mo_flags & MO_QUOTA) {
-		ret = osd_enable_quota(&mop);
-		goto out;
-	}
-
 write:
 
 #endif /* !TUNEFS */
@@ -1168,6 +1162,18 @@ write:
 		fprintf(stderr, "failed to write local files\n");
 		goto out;
 	}
+
+#ifdef TUNEFS
+	/*
+	 * Enable quota accounting after osd_write_ldd() so that
+	 * the quota usage is scanned only once.
+	 */
+	if (mop.mo_flags & MO_QUOTA) {
+		ret = osd_enable_quota(&mop);
+		if (ret)
+			goto out;
+	}
+#endif
 out:
 	osd_fini();
 	ret2 = loop_cleanup(&mop);
