@@ -1310,7 +1310,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 	LASSERT(ll_get_cfg_instance(cfg->cfg_sb) == cfg->cfg_instance);
 
 	/* get dynamic nids setting */
-	dynamic_nids = mgc->obd_dynamic_nids;
+	dynamic_nids = test_bit(OBDF_DYNAMIC_NIDS, mgc->obd_flags);
 
 	if (!IS_SERVER(s2lsi(cfg->cfg_sb))) {
 		pos = snprintf(inst, sizeof(inst), "%016lx", cfg->cfg_instance);
@@ -1452,7 +1452,8 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
 			rc = client_import_add_nids_to_conn(imp, nidlist, nids,
 							    &uuid);
 			if (rc == -ENOENT &&
-			    (dynamic_nids || obd->obd_dynamic_nids))
+			    (dynamic_nids ||
+			     test_bit(OBDF_DYNAMIC_NIDS, obd->obd_flags)))
 				rc = mgc_create_new_conn(imp, nidlist, nids,
 							 &uuid);
 			/* If import connection instance > 0 and differs from

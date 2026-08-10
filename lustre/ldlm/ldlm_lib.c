@@ -566,7 +566,7 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		 * detects that while process IR log for that OBD
 		 */
 		spin_lock(&obd->obd_dev_lock);
-		obd->obd_dynamic_nids = 1;
+		set_bit(OBDF_DYNAMIC_NIDS, obd->obd_flags);
 		spin_unlock(&obd->obd_dev_lock);
 	}
 	if (rc) {

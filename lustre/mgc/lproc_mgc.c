@@ -64,7 +64,7 @@ static ssize_t dynamic_nids_show(struct kobject *kobj, struct attribute *attr,
 	ssize_t count;
 
 	ENTRY;
-	count = snprintf(buf, PAGE_SIZE, "%u\n", obd->obd_dynamic_nids);
+	count = snprintf(buf, PAGE_SIZE, "%u\n", test_bit(OBDF_DYNAMIC_NIDS, obd->obd_flags));
 
 	RETURN(count);
 }
@@ -83,7 +83,10 @@ static ssize_t dynamic_nids_store(struct kobject *kobj, struct attribute *attr,
 		return rc;
 
 	spin_lock(&obd->obd_dev_lock);
-	obd->obd_dynamic_nids = val;
+	if (val)
+		set_bit(OBDF_DYNAMIC_NIDS, obd->obd_flags);
+	else
+		clear_bit(OBDF_DYNAMIC_NIDS, obd->obd_flags);
 	spin_unlock(&obd->obd_dev_lock);
 
 	RETURN(count);
