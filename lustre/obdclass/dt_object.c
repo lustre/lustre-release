@@ -1275,7 +1275,7 @@ void dt_index_page_adjust(struct folio **folios, const u32 npages,
 
 		pgidx = nlupgs / LU_PAGE_COUNT;
 		LASSERT(pgidx < npages);
-		kaddr = kmap_local_page(pages[pgidx]);
+		kaddr = kmap_local_folio(folios[pgidx], 0);
 		lp = kaddr;
 		remain_nlupgs = LU_PAGE_COUNT - nlupgs_mod;
 
