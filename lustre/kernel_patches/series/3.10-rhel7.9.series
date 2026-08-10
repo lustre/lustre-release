@@ -1,4 +1,0 @@
-vfs-project-quotas-rhel7.patch
-jbd2-revoke-rhashtable-rhel7.patch
-block-Ensure-we-only-enable-integrity-metadata-for-reads-and-writes-rhel7.patch
-rwsem-remove-wakeup-optimization.patch

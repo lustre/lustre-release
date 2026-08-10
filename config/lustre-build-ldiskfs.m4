@@ -47,7 +47,6 @@ AS_IF([test x$RHEL_KERNEL = xyes], [
 	86)     LDISKFS_SERIES="4.18-rhel8.6.series"    ;;
 	85)     LDISKFS_SERIES="4.18-rhel8.5.series"    ;;
 	84)     LDISKFS_SERIES="4.18-rhel8.4.series"    ;;
-	79)	LDISKFS_SERIES="3.10-rhel7.9.series"	;;
 	esac
 ], [test x$SUSE_KERNEL = xyes], [
 	AS_VERSION_COMPARE([$LINUXRELEASE],[5.3.18],[
