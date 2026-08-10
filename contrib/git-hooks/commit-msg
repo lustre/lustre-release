@@ -33,6 +33,7 @@ init() {
 			Tested-by \
 			Reported-by \
 			Reviewed-by \
+			Suggested-by \
 			CC \
 		| tr ' ' '|')
 
