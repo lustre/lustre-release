@@ -39,7 +39,7 @@
 #include <sys/dmu_objset.h>
 #include <lustre_scrub.h>
 
-/**
+/*
  * By design including kmem.h overrides the Linux slab interfaces to provide
  * the Illumos kmem cache interfaces.  To override this and gain access to
  * the Linux interfaces these preprocessor macros must be undefined.
@@ -89,7 +89,7 @@ extern const struct dt_body_operations osd_body_scrub_ops;
 extern const struct dt_body_operations osd_body_ops;
 extern struct kmem_cache *osd_object_kmem;
 
-/**
+/*
  * Iterator's in-memory data structure for quota file.
  */
 struct osd_it_quota {
@@ -127,7 +127,7 @@ struct luz_direntry {
 	struct lu_fid		lzd_fid;
 } __attribute__((packed));
 
-/**
+/*
  * Iterator's in-memory data structure for ZAPs
  *
  * ZFS does not store . and .. on a disk, instead they are
@@ -551,9 +551,9 @@ static inline int osd_invariant(const struct osd_object *obj)
 }
 
 /**
- * Put the osd object once done with it.
- *
- * \param obj osd object that needs to be put
+ * osd_object_put() - Put the osd object once done with it.
+ * @env: Lustre execution environment
+ * @obj: osd object that needs to be put
  */
 static inline void osd_object_put(const struct lu_env *env,
 				  struct osd_object *obj)
@@ -718,7 +718,7 @@ int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
 int osd_last_seq_get(const struct lu_env *env, struct dt_device *dt,
 		     __u64 *seq);
 
-/**
+/*
  * Basic transaction credit op
  */
 enum dt_txn_op {
