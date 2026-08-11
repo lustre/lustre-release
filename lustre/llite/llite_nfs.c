@@ -157,6 +157,9 @@ ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *paren
 			 * .lustre inode.
 			 */
 			d_add(dot, tmp);
+		} else if (is_dot_lustre) {
+			/* Cached .lustre dentry already holds the inode. */
+			iput(inode);
 		}
 		inode_unlock(d_inode(sb->s_root));
 
@@ -173,6 +176,9 @@ ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *paren
 					goto free_dot;
 				}
 				d_add(obf, inode);
+			} else {
+				/* Cached dentry already holds the inode. */
+				iput(inode);
 			}
 			inode_unlock(d_inode(dot));
 free_dot:
