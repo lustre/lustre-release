@@ -1125,7 +1125,6 @@ unsigned long osc_lru_reserve(struct client_obd *cli, unsigned long npages)
 	unsigned long reserved = 0;
 	unsigned long max_pages;
 	unsigned long c;
-	int rc;
 
 again:
 	c = atomic_long_read(cli->cl_lru_left);
@@ -1149,10 +1148,15 @@ again:
 	}
 
 	if (reserved != npages) {
+		int rc;
+
 		cond_resched();
 		rc = l_wait_event_abortable(
 			osc_lru_waitq,
 			atomic_long_read(cli->cl_lru_left) > 0);
+		if (rc < 0)
+			return 0; /* reserve nothing */
+
 		goto again;
 	}
 

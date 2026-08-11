@@ -2285,7 +2285,6 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 		handle_short_read(rc, aa->aa_page_count, aa->aa_ppga);
 
 	if (body->oa.o_valid & OBD_MD_FLCKSUM) {
-		static int cksum_counter;
 		u32 server_cksum = body->oa.o_cksum;
 		int nob = rc;
 		char *via = "";
@@ -2337,11 +2336,9 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 				       aa->aa_ppga[page_count-1]->bp_count - 1,
 				       client_cksum, client_cksum2,
 				       server_cksum, cksum_type);
-			cksum_counter = 0;
 			aa->aa_oa->o_cksum = client_cksum;
 			rc = -EAGAIN;
 		} else {
-			cksum_counter++;
 			CDEBUG(D_PAGE, "checksum %x confirmed\n", client_cksum);
 			rc = 0;
 		}
