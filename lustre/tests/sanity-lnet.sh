@@ -4833,15 +4833,23 @@ test_233() {
 }
 run_test 233 "Check for successful resends"
 
+# Every NI configured on ${NETTYPE} must report ${para}: ${value}. ${expect}
+# is the number of NIs that must report it. It defaults to the NIs configured
+# on that net, for callers that configure a subset of ${INTERFACES[@]}.
 check_parameter() {
 	local para=$1
 	local value=$2
+	local expect=$3
 
-	echo "check parameter ${para} value ${value}"
+	local out=$(do_lnetctl net show --net ${NETTYPE} -v | tee /dev/stderr)
 
-	return $(( $(do_lnetctl net show -v | \
-		     tee /dev/stderr | \
-		     grep -c "^ \+${para}: ${value}$") != ${#INTERFACES[@]} ))
+	: ${expect:=$(grep -c "nid:" <<<"${out}")}
+
+	echo "check parameter ${para} value ${value} on ${expect} NI(s)"
+
+	((expect > 0)) || return 1
+
+	return $(( $(grep -c "^ \+${para}: ${value}$" <<<"${out}") != expect ))
 }
 
 test_234() {
