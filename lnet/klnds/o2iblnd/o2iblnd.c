@@ -12,6 +12,7 @@
  */
 #include <linux/ethtool.h>
 #include <lustre_compat/linux/inetdevice.h>
+#include <lustre_compat/net/netdev_lock.h>
 #include <linux/kernel.h>
 #include <linux/sunrpc/addr.h>
 #include <net/addrconf.h>
@@ -2986,10 +2987,27 @@ kiblnd_dev_failover(struct kib_dev *dev, struct net *ns)
 		dev->ibd_failed_failover = 0;
 
 		if (set_fatal) {
-			netdev = dev_get_by_name(ns, dev->ibd_ifname);
-			if (netdev && (lnet_get_link_status(netdev) == 1))
-				kiblnd_set_ni_fatal_on(dev->ibd_hdev, 0);
-			dev_put(netdev);
+			rwlock_t *g_lock = &kiblnd_data.kib_global_lock;
+
+			/* rtnl_lock() spans the query and the update,
+			 * because the netdev notifier also runs under it.
+			 * netdev_lock_ops() pairs with it, because
+			 * ethtool_op_get_link() asserts the instance lock
+			 * on an ops locked device.
+			 */
+			rtnl_lock();
+			netdev = __dev_get_by_name(ns, dev->ibd_ifname);
+			if (netdev) {
+				netdev_lock_ops(netdev);
+				if (lnet_get_link_status_locked(netdev) == 1) {
+					write_lock_irqsave(g_lock, flags);
+					kiblnd_set_ni_fatal_on(dev->ibd_hdev,
+							       0);
+					write_unlock_irqrestore(g_lock, flags);
+				}
+				netdev_unlock_ops(netdev);
+			}
+			rtnl_unlock();
 		}
 	}
 
@@ -3711,17 +3729,29 @@ kiblnd_startup(struct lnet_ni *ni)
 	/* for health check */
 	if (ibdev->ibd_hdev->ibh_state == IBLND_DEV_PORT_DOWN)
 		kiblnd_set_ni_fatal_on(ibdev->ibd_hdev, 1);
-
-	netdev = dev_get_by_name(ni->ni_net_ns, net->ibn_dev->ibd_ifname);
-
-	if (netdev &&
-	    ((netdev->reg_state == NETREG_UNREGISTERING) ||
-	     (netdev->operstate != IF_OPER_UP) ||
-	    (lnet_get_link_status(netdev) == 0))) {
-		kiblnd_set_ni_fatal_on(ibdev->ibd_hdev, 1);
-	}
-	dev_put(netdev);
 	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+
+	/* The net is on ibd_nets before the query, so the netdev notifier
+	 * sees a link event that arrives during it. rtnl_lock() spans the
+	 * query and the update, because that notifier also runs under it.
+	 * netdev_lock_ops() pairs with it, because ethtool_op_get_link()
+	 * asserts the instance lock on an ops locked device.
+	 */
+	rtnl_lock();
+	netdev = __dev_get_by_name(ni->ni_net_ns, ibdev->ibd_ifname);
+	if (netdev) {
+		netdev_lock_ops(netdev);
+		if ((netdev->reg_state == NETREG_UNREGISTERING) ||
+		    (netdev->operstate != IF_OPER_UP) ||
+		    (lnet_get_link_status_locked(netdev) == 0)) {
+			write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
+			kiblnd_set_ni_fatal_on(ibdev->ibd_hdev, 1);
+			write_unlock_irqrestore(&kiblnd_data.kib_global_lock,
+						flags);
+		}
+		netdev_unlock_ops(netdev);
+	}
+	rtnl_unlock();
 
 	net->ibn_init = IBLND_INIT_ALL;
 	kfree(ifaces);

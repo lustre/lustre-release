@@ -44,6 +44,7 @@
 
 #include <net/sock.h>
 #include <linux/in.h>
+#include <linux/rtnetlink.h>
 
 #include <rdma/rdma_cm.h>
 #include <rdma/ib_cm.h>
