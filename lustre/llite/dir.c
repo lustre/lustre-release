@@ -1796,11 +1796,14 @@ int quotactl_ioctl(struct super_block *sb, struct if_quotactl *qctl)
 			/* collect space usage from OSTs */
 			oqctl_tmp->qc_dqblk.dqb_curspace = 0;
 			rc = obd_quotactl(sbi->ll_dt_exp, oqctl_tmp);
-			if (!rc || rc == -EREMOTEIO) {
-				oqctl->qc_dqblk.dqb_curspace =
-					oqctl_tmp->qc_dqblk.dqb_curspace;
+			/*
+			 * Keep partial OST usage on error, but leave
+			 * QIF_SPACE clear.
+			 */
+			oqctl->qc_dqblk.dqb_curspace =
+				oqctl_tmp->qc_dqblk.dqb_curspace;
+			if (!rc)
 				oqctl->qc_dqblk.dqb_valid |= QIF_SPACE;
-			}
 
 			/* collect space & inode usage from MDTs */
 			oqctl_tmp->qc_cmd = Q_GETOQUOTA;

@@ -3175,6 +3175,109 @@ test_16b()
 }
 run_test 16b "lfs quota should skip the nonexistent MDT/OST"
 
+set_mds_osc_state_16c()
+{
+	local facet
+	local index
+	local osc
+	local state
+
+	state=$1
+
+	for index in $(seq $MDSCOUNT); do
+		facet=mds$index
+		osc=$(get_osc_import_name $facet ost1)
+		do_facet $facet $LCTL --device %$osc $state || return 1
+	done
+}
+
+cleanup_16c()
+{
+	local ostdev
+
+	$cleanup_done_16c && return 0
+
+	ostdev=$(ostdevname 1)
+	facet_up ost1 ||
+		start ost1 $ostdev $OST_MOUNT_OPTS || return 1
+	set_mds_osc_state_16c activate || return 1
+	# The remounted client cannot connect until recovery has evicted the
+	# stale export from the previous mount.
+	wait_recovery_complete ost1 || return 1
+	mount_client $MOUNT || return 1
+
+	cleanup_done_16c=true
+}
+
+test_16c()
+{
+	local testfile
+	local full_space
+	local partial_space
+
+	testfile=$DIR/$tdir/$tfile
+
+	(( $CLIENT_VERSION >= $(version_code 2.17.57.44) )) ||
+		skip "need client >= 2.17.57.44 for partial OST usage"
+	(( $OSTCOUNT > 1 )) || skip "needs >= 2 OSTs"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+
+	setup_quota_test || error "setup quota failed with $?"
+
+	$LFS setquota -u $TSTUSR -B 500M -I 10K $MOUNT ||
+		error "failed to set quota for user $TSTUSR"
+
+	# Leave OST0000 empty and put all test data on OST0001.
+	$LFS setstripe -c 1 -i 1 $testfile ||
+		error "failed to create $testfile on OST0001"
+	chown $TSTUSR.$TSTUSR $testfile ||
+		error "failed to change ownership of $testfile"
+	$RUNAS $DD of=$testfile count=50 oflag=sync ||
+		quota_error u $TSTUSR "write on OST0001 failed"
+
+	full_space=$($LFS quota -u $TSTUSR --space -q $MOUNT) ||
+		quota_error u $TSTUSR "failed to get complete space usage"
+	full_space=${full_space%%$'\n'*}
+	full_space=$(tr -d '[:space:]' <<<$full_space)
+	[[ $full_space =~ ^[0-9]+$ ]] ||
+		error "invalid complete space usage '$full_space'"
+	(( full_space > 0 )) || error "complete space usage is zero"
+
+	cleanup_done_16c=false
+	stack_trap "cleanup_16c || true" EXIT
+	set_mds_osc_state_16c deactivate ||
+		error "failed to deactivate OST0000 on the MDTs"
+	stop ost1 || error "failed to stop OST0000"
+
+	# Recreate the client import while OST0000 is unavailable.  Locally
+	# deactivating the OSC would also clear ltd_activate and would not
+	# exercise the -ENETDOWN path in lov_quotactl().
+	remount_client $MOUNT
+
+	wait_osc_import_state client ost1 "\(DISCONN\|IDLE\)" ||
+		error "client did not detect stopped OST0000"
+
+	# An incomplete query returns an error, but still prints the subtotal.
+	partial_space=$($LFS quota -u $TSTUSR --space -q $MOUNT 2>/dev/null ||
+			true)
+	partial_space=${partial_space%%$'\n'*}
+	[[ $partial_space == \[*\] ]] ||
+		error "space usage '$partial_space' is not marked incomplete"
+	partial_space=$(tr -d '[][:space:]' <<<$partial_space)
+	[[ $partial_space =~ ^[0-9]+$ ]] ||
+		error "invalid partial space usage '$partial_space'"
+	(( partial_space >= full_space )) ||
+		error "partial usage $partial_space misses active OST usage " \
+		      "$full_space"
+
+	cleanup_16c || error "failed to restore OST0000"
+	wait_osc_import_state mds ost1 FULL ||
+		error "MDTs did not reconnect to OST0000"
+	wait_osc_import_ready client ost1 ||
+		error "client import for OST0000 is not ready"
+}
+run_test 16c "lfs quota should preserve usage with an unavailable OST"
+
 test_17sub() {
 	local err_code=$1
 	local BLKS=1    # 1M less than limit
