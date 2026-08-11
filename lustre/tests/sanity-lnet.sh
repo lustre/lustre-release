@@ -126,9 +126,12 @@ cleanup_netns() {
 	cleanup_fakeif
 }
 
+# Arguments are lnet module options. Expand them unquoted at the call
+# site: modprobe takes one option per argument, and an empty quoted
+# argument would suppress load_module()'s MODOPTS_LNET fallback.
 configure_dlc() {
 	echo "Loading LNet and configuring DLC"
-	load_lnet || return $?
+	load_lnet "$@" || return $?
 	do_lnetctl lnet configure $LNET_CONFIG_OPT
 }
 
@@ -1188,7 +1191,20 @@ test_40() {
 run_test 40 "LNetAddPeer merges a pre-existing non-primary peer NID"
 
 test_50() {
-	reinit_dlc || return $?
+	# The default pool is LNET_NRB_LARGE 1 MiB buffers, about 1 GiB,
+	# which a small test node cannot spare. The *_router_buffers
+	# parameters are read-only, so they have to be set at load time.
+	# Keep the site options first so that these ones win.
+	local mod_opts="$MODOPTS_LNET"
+	mod_opts+=" tiny_router_buffers=16"
+	mod_opts+=" small_router_buffers=8"
+	mod_opts+=" large_router_buffers=4"
+
+	cleanup_lnet || error "Failed to unload modules before test execution"
+
+	configure_dlc $mod_opts || error "configure_dlc failed $?"
+
+	define_global_yaml
 
 	local param
 
@@ -1206,7 +1222,7 @@ EOF
 	do_lnetctl import $tyaml ||
 		error "Import failed rc = $?"
 
-	# Get default buffer sizes for later
+	# Get the configured buffer sizes for later
 	local tiny=$($LNETCTL export --backup |
 		     awk '/\s+tiny:/{print $NF}')
 	local small=$($LNETCTL export --backup |
@@ -1268,6 +1284,8 @@ EOF
 		error "Expect small buffers $small found $small2"
 	((large2 == large)) ||
 		error "Expect large buffers $large found $large2"
+
+	cleanup_lnet
 }
 run_test 50 "Enable/disable routing via yaml import"
 
