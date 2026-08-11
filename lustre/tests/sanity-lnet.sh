@@ -1940,7 +1940,10 @@ test_109() {
 	FAKE_IF_ALIAS="${FAKE_IF}"
 	FAKE_IF_ALIAS+=":0"
 
-	ifconfig "$FAKE_IF_ALIAS" "$FAKE_IP_ALIAS" up ||
+	echo "ip addr add \"${FAKE_IP_ALIAS}/31\" dev $FAKE_IF" \
+		"label $FAKE_IF_ALIAS"
+	ip addr add "${FAKE_IP_ALIAS}/31" dev "$FAKE_IF" \
+		label "$FAKE_IF_ALIAS" ||
 		error "Failed to add fake IF alias"
 
 	reinit_dlc || return $?
@@ -1955,9 +1958,6 @@ test_109() {
 	# add interface with shorter name first
 	add_net "tcp" "$FAKE_IF" || return $?
 	add_net "tcp" "$FAKE_IF_ALIAS" || return $?
-
-	ifconfig "$FAKE_IF_ALIAS" "$FAKE_IP_ALIAS" down ||
-		error "Failed to clean up fake IF alias"
 
 	cleanup_fakeif
 	cleanup_lnet
