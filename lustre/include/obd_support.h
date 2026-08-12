@@ -950,7 +950,7 @@ do {									\
 do {									      \
 	if (is_vmalloc_addr(ptr)) {					      \
 		OBD_FREE_PRE(ptr, size, "vfreed");			      \
-		compat_vfree_atomic(ptr);				      \
+		kvfree_atomic(ptr);					      \
 		POISON_PTR(ptr);					      \
 	} else {							      \
 		OBD_FREE(ptr, size);					      \

@@ -210,7 +210,7 @@ do {									\
 	if (likely(ptr)) {						\
 		LIBCFS_FREE_PRE(ptr, (size), "kfreed");			\
 		if (unlikely(s > LIBCFS_VMALLOC_SIZE))			\
-			compat_vfree_atomic(ptr);			\
+			kvfree_atomic(ptr);				\
 		else							\
 			kfree(ptr);					\
 	}								\

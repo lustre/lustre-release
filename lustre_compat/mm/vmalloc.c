@@ -2,6 +2,8 @@
 
 #include <lustre_compat/linux/vmalloc.h>
 #include <lustre_compat/linux/workqueue.h>
+#include <lustre_compat/linux/mm.h>
+#include <lustre_compat/linux/slab.h>
 
 /*
  * This is opencoding of vfree_atomic from Linux kernel added in 4.10 with
@@ -18,6 +20,7 @@
 	for ((pos) = (node); (pos) && ((n) = (pos)->next, true); (pos) = (n))
 #endif
 
+#ifndef HAVE_KVFREE_ATOMIC_EXPORTED
 struct vfree_deferred {
 	struct llist_head list;
 	struct work_struct wq;
@@ -30,7 +33,7 @@ static void free_work(struct work_struct *w)
 	struct llist_node *t, *llnode;
 
 	llist_for_each_safe(llnode, t, llist_del_all(&p->list))
-		vfree((void *)llnode);
+		kvfree((void *)llnode);
 }
 
 void __init init_compat_vfree_atomic(void)
@@ -63,3 +66,4 @@ void compat_vfree_atomic(const void *addr)
 		schedule_work(&p->wq);
 }
 EXPORT_SYMBOL(compat_vfree_atomic);
+#endif /* HAVE_VFREE_ATOMIC_EXPORTED */

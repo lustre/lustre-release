@@ -3758,6 +3758,18 @@ AC_DEFUN([LC_HAVE_DCACHE_ANON_UNION_D_ALIAS],[
 ]) # LC_HAVE_DCACHE_ANON_UNION_D_ALIAS
 
 #
+# LC_EXPORTS_KVFREE_ATOMIC
+#
+# Linux commit v7.1-rc2-2-gdad0d91cc2c3e
+# mm/slab: Add kvfree_atomic() helper
+#
+AC_DEFUN([LC_EXPORTS_KVFREE_ATOMIC], [
+LB_CHECK_EXPORT([kvfree_atomic], [mm/slub.c],
+	[AC_DEFINE(HAVE_KVFREE_ATOMIC_EXPORTED, 1,
+		['kvfree_atomic()' is exported])])
+]) # LC_EXPORTS_KVFREE_ATOMIC
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -4225,6 +4237,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 
 	# 6.0 - Check export
 	LC_HAVE_ADD_TO_PAGE_CACHE_LOCKED
+
+	# 7.1 - Check export
+	LC_EXPORTS_KVFREE_ATOMIC
 
 ]) # LC_PROG_LINUX
 
