@@ -295,7 +295,7 @@ static int __init lustre_init(void)
 					    sizeof(struct ll_inode_info), 0,
 					    SLAB_HWCACHE_ALIGN |
 					    SLAB_RECLAIM_ACCOUNT |
-					    SLAB_MEM_SPREAD | SLAB_ACCOUNT,
+					    SLAB_ACCOUNT,
 					    NULL);
 	if (ll_inode_cachep == NULL)
 		GOTO(out_cache, rc = -ENOMEM);
