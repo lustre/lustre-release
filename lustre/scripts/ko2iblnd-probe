@@ -26,4 +26,4 @@ if [ -d $INFINIBAND ]; then
 	fi
 fi
 
-exec /sbin/modprobe --ignore-install ko2iblnd$PROFILE $CMDLINE_OPTS
+exec /sbin/modprobe --ignore-install ko2iblnd$PROFILE "$@"
