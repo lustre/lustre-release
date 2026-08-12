@@ -10779,8 +10779,8 @@ test_123ag() { # LU-15142
 	local orig_val
 
 	remote_mgs_nodsh && skip "remote MGS with nodsh"
-	(( $MGS_VERSION >= $(version_code 2.14.55) )) ||
-		skip "Need server version least 2.14.55"
+	(( $MGS_VERSION >= $(version_code v2_14_55-123-g2a5b50d207) )) ||
+		skip "Need MGS >= 2.14.55.123 to skip deleted params"
 
 	[ -d $MOUNT/.lustre ] || setup
 
