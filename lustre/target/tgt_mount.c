@@ -1605,6 +1605,9 @@ static void tgt_import_update(struct work_struct *ws)
 	genradix_prealloc(&nfd.nfd_radix, MTI_NIDS_MAX, GFP_KERNEL);
 	nfd.nfd_lmd = NULL;
 	nfd.nfd_pos = 0;
+	/* this notification always carries large NIDs */
+	nfd.nfd_skip_ipv6 = false;
+	nfd.nfd_has_ipv6 = false;
 
 	LNetFetchNIDs(server_nid2radix, LNET_NET_ANY, &nfd);
 	if (nfd.nfd_pos == 0) {
