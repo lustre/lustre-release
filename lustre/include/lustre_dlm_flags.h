@@ -305,7 +305,9 @@
 /**
  * Don't put lock into the LRU list, so that it is not canceled due
  * to aging.  Used by MGC locks, they are cancelled only at unmount or
- * by callback.
+ * by callback.  Code which sets this flag on a granted lock must also
+ * remove the lock from the LRU in the same resource lock section.  See
+ * the comment at ldlm_lock_add_to_lru_nolock().
  */
 #define LDLM_FL_NO_LRU                  0x0001000000000000ULL // bit  48
 #define ldlm_is_no_lru(_l)              LDLM_TEST_FLAG((_l), 1ULL << 48)

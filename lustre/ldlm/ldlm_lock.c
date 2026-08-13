@@ -280,10 +280,35 @@ int ldlm_lock_remove_from_lru_check(struct ldlm_lock *lock, ktime_t last_use,
 	RETURN(rc);
 }
 
-/* Adds LDLM lock \a lock to namespace LRU. Assumes LRU is already locked.  */
+/* Adds LDLM lock \a lock to namespace LRU, unless the lock is excluded from
+ * the LRU. Assumes LRU is already locked.
+ */
 void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock)
 {
 	struct ldlm_namespace *ns;
+
+	/* A lock excluded from the LRU must never be filed on it, whatever
+	 * the caller believes about its list membership.
+	 *
+	 * The other half of the invariant belongs to the code which sets
+	 * LDLM_FL_NO_LRU on a granted lock. That code must set the flag and
+	 * remove the lock from the LRU in one resource lock section, because
+	 * ldlm_prepare_lru_list() does not test the flag. In the same section
+	 * it must also refuse the exemption when LDLM_FL_CANCELING or
+	 * LDLM_FL_CBPENDING is already set. ldlm_prepare_lru_list() sets both
+	 * flags under the resource lock at the instant it takes a lock off
+	 * the LRU. A removal which returns 0 therefore cannot tell a setter
+	 * whether the lock was never listed or is already on a cancel list.
+	 * The flag does not stop a cancellation which is already under way.
+	 *
+	 * ldlm_lfru_demote_lock() moves a lock between the policy lists
+	 * without this function. It runs under ns_lock alone, so it can move
+	 * a lock which already carries the flag. Such a lock is on the LRU
+	 * in that window in any case. The removal by the setter ends the
+	 * window.
+	 */
+	if (lock->l_flags & LDLM_FL_NO_LRU)
+		return;
 
 	LASSERT(list_empty(&lock->l_lru));
 	LASSERT(lock->l_resource->lr_type != LDLM_FLOCK);
@@ -294,7 +319,9 @@ void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock)
 		ns->ns_lock_cache_ops->llco_add_lock(ns, lock);
 }
 
-/* Adds LDLM lock \a lock to namespace LRU. Obtains necessary LRU locks first */
+/* Adds LDLM lock \a lock to namespace LRU, unless the lock is excluded from
+ * the LRU. Obtains necessary LRU locks first
+ */
 static void ldlm_lock_add_to_lru(struct ldlm_lock *lock)
 {
 	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
@@ -906,6 +933,12 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, enum ldlm_mode mode)
 
 		/* If this is a client-side namespace and this was the last
 		 * reference, put it on the LRU.
+		 *
+		 * The LDLM_FL_NO_LRU test above must stay, although
+		 * ldlm_lock_add_to_lru() refuses such a lock again. Without
+		 * the test an excluded lock takes this branch. The debug line
+		 * below then reports an addition which did not happen, and
+		 * ldlm_pool_recalc() runs for a lock which entered no LRU.
 		 */
 		ldlm_lock_add_to_lru(lock);
 		unlock_res_and_lock(lock);
