@@ -1,0 +1,517 @@
+commit 05e487a01b40da4e9f952eafa68bfde28074a385
+Author:     Bobi Jam <bobijam@whamcloud.com>
+AuthorDate: Mon Jul 10 19:40:34 2023 +0800
+
+With LVM it is possible to create an LV with SSD storage at the
+beginning of the LV and HDD storage at the end of the LV, and use that
+to separate ext4 metadata allocations (that need small random IOs)
+from data allocations (that are better suited for large sequential
+IOs) depending on the type of underlying storage.  Between 0.5-1.0% of
+the filesystem capacity would need to be high-IOPS storage in order to
+hold all of the internal metadata.
+
+This would improve performance for inode and other metadata access,
+such as ls, find, e2fsck, and in general improve file access latency,
+modification, truncate, unlink, transaction commit, etc.
+
+This patch split largest free order group lists and average fragment
+size lists into other two lists for IOPS/fast storage groups, and
+CR_POWER2_ALIGNED / CR_GOAL_LEN_FAST group scanning for metadata
+block allocation in following order:
+
+if (allocate metadata blocks)
+      if (cr == CR_POWER2_ALIGNED)
+              try to find group in largest free order IOPS group list
+      if (cr == CR_GOAL_LEN_FAST)
+              try to find group in fragment size IOPS group list
+      if (above two find failed)
+              fall through normal group lists as before
+if (allocate data blocks)
+      try to find group in normal group lists as before
+      if (failed to find group in normal group && mb_enable_iops_data)
+              try to find group in IOPS groups
+
+Non-metadata block allocation does not allocate from the IOPS groups
+if non-IOPS groups are not used up.
+
+Add for mke2fs an option to mark which blocks are in the IOPS region
+of storage at format time:
+
+  -E iops=0-1024G,4096-8192G
+
+so the ext4 mballoc code can then use the EXT4_BG_IOPS flag in the
+group descriptors to decide which groups to allocate dynamic
+filesystem metadata.
+
+Ported to rhel10.2 (kernel 6.12): s_mb_avg_fragment_size and
+s_mb_largest_free_orders are now xarrays; group scanning is split into
+ext4_mb_scan_groups_* helpers. IOPS variants are added as parallel
+xarrays using the same xa_insert/xa_erase pattern.
+
+--
+v2->v3: add sysfs mb_enable_iops_data to enable data block allocation
+        from IOPS groups.
+v1->v2: for metadata block allocation, search in IOPS list then normal
+        list.
+
+Signed-off-by: Bobi Jam <bobijam@whamcloud.com>
+Reviewed-by: Li Dongyang <dongyangli@ddn.com>
+Reviewed-by: Andreas Dilger <adilger@whamcloud.com>
+Reviewed-by: Oleg Drokin <green@whamcloud.com>
+Change-Id: Ice2d25b8db19f67e70690f9ccebc419f253b12bd
+Reviewed-on: https://review.whamcloud.com/51625
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+index 6fa6ee4..f47c425 100644
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -440,6 +440,7 @@ struct flex_groups {
+ #define EXT4_BG_INODE_UNINIT	0x0001 /* Inode table/bitmap not in use */
+ #define EXT4_BG_BLOCK_UNINIT	0x0002 /* Block bitmap not in use */
+ #define EXT4_BG_INODE_ZEROED	0x0004 /* On-disk itable initialized to zero */
+ #define EXT4_BG_TRIMMED		0x0008 /* block group was trimmed */
++#define EXT4_BG_IOPS		0x0010 /* In IOPS/fast storage */
+
+ /*
+@@ -1219,6 +1222,7 @@ struct ext4_inode_info {
+ #define EXT2_FLAGS_UNSIGNED_HASH	0x0002  /* Unsigned dirhash in use */
+ #define EXT2_FLAGS_TEST_FILESYS		0x0004	/* to test development code */
+ #define EXT2_FLAGS_TRACK_TRIM		0x0008  /* Track trim status in each bg */
++#define EXT2_FLAGS_HAS_IOPS		0x0080	/* has IOPS storage */
+
+ /*
+  * Mount flags set via mount options or defaults
+@@ -1636,7 +1640,9 @@ struct ext4_sb_info {
+ 	struct work_struct s_discard_work;
+ 	atomic_t s_retry_alloc_pending;
+ 	struct xarray *s_mb_avg_fragment_size;
++	struct xarray *s_mb_avg_fragment_size_iops;
+ 	struct xarray *s_mb_largest_free_orders;
++	struct xarray *s_mb_largest_free_orders_iops;
+
+ 	/* tunables */
+ 	unsigned long s_stripe;
+@@ -1654,6 +1660,7 @@ struct ext4_sb_info {
+ 	unsigned int s_mb_prefetch;
+ 	unsigned int s_mb_prefetch_limit;
+ 	unsigned int s_mb_best_avail_max_trim_order;
++	unsigned int s_mb_enable_iops_data;
+ 	unsigned int s_sb_update_sec;
+ 	unsigned int s_sb_update_kb;
+
+@@ -3719,6 +3726,7 @@ struct ext4_group_info {
+ #define EXT4_GROUP_INFO_IBITMAP_CORRUPT		\
+ 	(1 << EXT4_GROUP_INFO_IBITMAP_CORRUPT_BIT)
+ #define EXT4_GROUP_INFO_BBITMAP_READ_BIT	4
++#define EXT4_GROUP_INFO_IOPS_BIT		5
+
+ #define EXT4_MB_GRP_NEED_INIT(grp)	\
+ 	(test_bit(EXT4_GROUP_INFO_NEED_INIT_BIT, &((grp)->bb_state)))
+@@ -3728,6 +3736,10 @@ struct ext4_group_info {
+ 	(test_bit(EXT4_GROUP_INFO_IBITMAP_CORRUPT_BIT, &((grp)->bb_state)))
+ #define EXT4_MB_GRP_TEST_AND_SET_READ(grp)	\
+ 	(test_and_set_bit(EXT4_GROUP_INFO_BBITMAP_READ_BIT, &((grp)->bb_state)))
++#define EXT4_MB_GRP_TEST_IOPS(grp)	\
++	(test_bit(EXT4_GROUP_INFO_IOPS_BIT, &((grp)->bb_state)))
++#define EXT4_MB_GRP_SET_IOPS(grp)	\
++	(set_bit(EXT4_GROUP_INFO_IOPS_BIT, &((grp)->bb_state)))
+
+ #define EXT4_MAX_CONTENTION		8
+ #define EXT4_CONTENTION_THRESHOLD	2
+diff --git a/fs/ext4/extents.c b/fs/ext4/extents.c
+index 51e90fe..3251ddf 100644
+--- a/fs/ext4/extents.c
++++ b/fs/ext4/extents.c
+@@ -4797,11 +4797,12 @@ int ext4_ext_map_blocks(handle_t *handle, struct inode *inode,
+ 	ar.len = EXT4_NUM_B2C(sbi, offset+allocated);
+ 	ar.goal -= offset;
+ 	ar.logical -= offset;
+-	if (S_ISREG(inode->i_mode))
++	if (S_ISREG(inode->i_mode) &&
++	    !(EXT4_I(inode)->i_flags & EXT4_EA_INODE_FL))
+ 		ar.flags = EXT4_MB_HINT_DATA;
+ 	else
+ 		/* disable in-core preallocation for non-regular files */
+ 		ar.flags = 0;
+ 	if (flags & EXT4_GET_BLOCKS_NO_NORMALIZE)
+ 		ar.flags |= EXT4_MB_HINT_NOPREALLOC;
+ 	if (flags & EXT4_GET_BLOCKS_DELALLOC_RESERVE)
+diff --git a/fs/ext4/indirect.c b/fs/ext4/indirect.c
+index d451243..0c43035 100644
+--- a/fs/ext4/indirect.c
++++ b/fs/ext4/indirect.c
+@@ -610,7 +610,8 @@ int ext4_ind_map_blocks(handle_t *handle, struct inode *inode,
+ 	memset(&ar, 0, sizeof(ar));
+ 	ar.inode = inode;
+ 	ar.logical = map->m_lblk;
+-	if (S_ISREG(inode->i_mode))
++	if (S_ISREG(inode->i_mode) &&
++	    !(EXT4_I(inode)->i_flags & EXT4_EA_INODE_FL))
+ 		ar.flags = EXT4_MB_HINT_DATA;
+ 	if (flags & EXT4_GET_BLOCKS_DELALLOC_RESERVE)
+ 		ar.flags |= EXT4_MB_DELALLOC_RESERVED;
+diff --git a/fs/ext4/mballoc.c b/fs/ext4/mballoc.c
+index dcf6531..f0e383b 100644
+--- a/fs/ext4/mballoc.c
++++ b/fs/ext4/mballoc.c
+@@ -846,6 +846,7 @@ static void
+ mb_update_avg_fragment_size(struct super_block *sb, struct ext4_group_info *grp)
+ {
+ 	struct ext4_sb_info *sbi = EXT4_SB(sb);
++	struct xarray *afs;
+ 	int new, old;
+
+ 	if (!test_opt2(sb, MB_OPTIMIZE_SCAN))
+@@ -857,8 +858,14 @@ mb_update_avg_fragment_size(struct super_block *sb, struct ext4_group_info *grp)
+ 	if (new == old)
+ 		return;
+
++	if (sbi->s_es->s_flags & cpu_to_le32(EXT2_FLAGS_HAS_IOPS) &&
++	    EXT4_MB_GRP_TEST_IOPS(grp))
++		afs = sbi->s_mb_avg_fragment_size_iops;
++	else
++		afs = sbi->s_mb_avg_fragment_size;
++
+ 	if (old >= 0)
+-		xa_erase(&sbi->s_mb_avg_fragment_size[old], grp->bb_group);
++		xa_erase(&afs[old], grp->bb_group);
+
+ 	grp->bb_avg_fragment_size_order = new;
+ 	if (new >= 0) {
+@@ -867,10 +874,11 @@ mb_update_avg_fragment_size(struct super_block *sb, struct ext4_group_info *grp)
+ 		 * Although allocation for insertion may fails, it's not fatal
+ 		 * as we have linear traversal to fall back on.
+ 		 */
+-		int err = xa_insert(&sbi->s_mb_avg_fragment_size[new],
+-				    grp->bb_group, grp, GFP_ATOMIC);
++		int err = xa_insert(&afs[new], grp->bb_group, grp, GFP_ATOMIC);
+ 		if (err)
+-			mb_debug(sb, "insert group: %u to s_mb_avg_fragment_size[%d] failed, err %d",
+-				 grp->bb_group, new, err);
++			mb_debug(sb, "insert group: %u to s_mb_avg_fragment_size%s[%d] failed, err %d",
++				 grp->bb_group,
++				 afs == sbi->s_mb_avg_fragment_size_iops ? "_iops" : "",
++				 new, err);
+ 	}
+ }
+@@ -921,6 +929,73 @@ ext4_mb_scan_groups_largest_free_order_range(struct ext4_allocation_context *ac,
+ 	return ext4_mb_scan_groups_xa_range(ac, xa, start, end);
+ }
+
++/*
++ * Scan IOPS largest_free_order xarrays for metadata allocation.
++ */
++static int ext4_mb_scan_groups_iops_p2_aligned(struct ext4_allocation_context *ac,
++					       ext4_group_t group)
++{
++	struct ext4_sb_info *sbi = EXT4_SB(ac->ac_sb);
++	int i, ret = 0;
++	ext4_group_t start, end;
++
++	if (!sbi->s_mb_largest_free_orders_iops)
++		return 0;
++
++	start = group;
++	end = ext4_get_groups_count(ac->ac_sb);
++wrap_around_p2:
++	for (i = ac->ac_2order; i < MB_NUM_ORDERS(ac->ac_sb); i++) {
++		struct xarray *xa = &sbi->s_mb_largest_free_orders_iops[i];
++
++		if (xa_empty(xa))
++			continue;
++		ret = ext4_mb_scan_groups_xa_range(ac, xa, start, end);
++		if (ret || ac->ac_status != AC_STATUS_CONTINUE)
++			return ret;
++	}
++	if (start) {
++		end = start;
++		start = 0;
++		goto wrap_around_p2;
++	}
++	return ret;
++}
++
++/*
++ * Scan IOPS avg_fragment_size xarrays for metadata allocation.
++ */
++static int ext4_mb_scan_groups_iops_goal_fast(struct ext4_allocation_context *ac,
++					      ext4_group_t group)
++{
++	struct ext4_sb_info *sbi = EXT4_SB(ac->ac_sb);
++	int i, ret = 0;
++	ext4_group_t start, end;
++
++	if (!sbi->s_mb_avg_fragment_size_iops)
++		return 0;
++
++	start = group;
++	end = ext4_get_groups_count(ac->ac_sb);
++wrap_around_gf:
++	i = mb_avg_fragment_size_order(ac->ac_sb, ac->ac_g_ex.fe_len);
++	for (; i < MB_NUM_ORDERS(ac->ac_sb); i++) {
++		struct xarray *xa = &sbi->s_mb_avg_fragment_size_iops[i];
++
++		if (xa_empty(xa))
++			continue;
++		ret = ext4_mb_scan_groups_xa_range(ac, xa, start, end);
++		if (ret || ac->ac_status != AC_STATUS_CONTINUE)
++			return ret;
++	}
++	if (start) {
++		end = start;
++		start = 0;
++		goto wrap_around_gf;
++	}
++	return ret;
++}
++
+ /*
+  * Choose next group by traversing largest_free_order lists. Updates *new_cr if
+  * cr level needs an update.
+@@ -1164,6 +1239,7 @@ static int ext4_mb_scan_groups(struct ext4_allocation_context *ac)
+ {
+ 	int ret = 0;
+ 	ext4_group_t start;
++	bool alloc_metadata = !(ac->ac_flags & EXT4_MB_HINT_DATA);
+ 	struct ext4_sb_info *sbi = EXT4_SB(ac->ac_sb);
+ 	ext4_group_t ngroups = ext4_get_groups_count(ac->ac_sb);
+
+@@ -1190,6 +1266,21 @@ static int ext4_mb_scan_groups(struct ext4_allocation_context *ac)
+ 	if (ret || ac->ac_status != AC_STATUS_CONTINUE)
+ 		return ret;
+
++	/*
++	 * For metadata allocations on IOPS-capable filesystems, prefer IOPS
++	 * groups before falling through to the normal group lists.
++	 */
++	if (alloc_metadata &&
++	    sbi->s_es->s_flags & cpu_to_le32(EXT2_FLAGS_HAS_IOPS)) {
++		if (ac->ac_criteria == CR_POWER2_ALIGNED)
++			ret = ext4_mb_scan_groups_iops_p2_aligned(ac, start);
++		else if (ac->ac_criteria == CR_GOAL_LEN_FAST)
++			ret = ext4_mb_scan_groups_iops_goal_fast(ac, start);
++		if (ret || ac->ac_status != AC_STATUS_CONTINUE)
++			return ret;
++		cond_resched();
++	}
++
+ 	switch (ac->ac_criteria) {
+ 	case CR_POWER2_ALIGNED:
+ 		return ext4_mb_scan_groups_p2_aligned(ac, start);
+@@ -1198,6 +1289,22 @@ static int ext4_mb_scan_groups(struct ext4_allocation_context *ac)
+ 	case CR_BEST_AVAIL_LEN:
+ 		return ext4_mb_scan_groups_best_avail(ac, start);
+ 	default:
++		/*
++		 * For data allocations when all non-IOPS groups are exhausted
++		 * (CR_ANY_FREE), try IOPS groups if enabled.
++		 */
++		if (sbi->s_es->s_flags & cpu_to_le32(EXT2_FLAGS_HAS_IOPS) &&
++		    !alloc_metadata && sbi->s_mb_enable_iops_data &&
++		    ac->ac_criteria == CR_ANY_FREE) {
++			if (ac->ac_2order) {
++				ret = ext4_mb_scan_groups_iops_p2_aligned(ac, start);
++				if (ret || ac->ac_status != AC_STATUS_CONTINUE)
++					return ret;
++			}
++			ret = ext4_mb_scan_groups_iops_goal_fast(ac, start);
++			if (ret || ac->ac_status != AC_STATUS_CONTINUE)
++				return ret;
++		}
+ 		/*
+ 		 * TODO: For CR_GOAL_LEN_SLOW, we can arrange groups in an
+ 		 * rb tree sorted by bb_free. But until that happens, we should
+@@ -1217,6 +1322,7 @@ static void
+ mb_set_largest_free_order(struct super_block *sb, struct ext4_group_info *grp)
+ {
+ 	struct ext4_sb_info *sbi = EXT4_SB(sb);
++	struct xarray *lfo;
+ 	int new, old = grp->bb_largest_free_order;
+
+ 	for (new = MB_NUM_ORDERS(sb) - 1; new >= 0; new--)
+@@ -1227,8 +1333,14 @@ mb_set_largest_free_order(struct super_block *sb, struct ext4_group_info *grp)
+ 	if (new == old)
+ 		return;
+
++	if (sbi->s_es->s_flags & cpu_to_le32(EXT2_FLAGS_HAS_IOPS) &&
++	    EXT4_MB_GRP_TEST_IOPS(grp))
++		lfo = sbi->s_mb_largest_free_orders_iops;
++	else
++		lfo = sbi->s_mb_largest_free_orders;
++
+ 	if (old >= 0) {
+-		struct xarray *xa = &sbi->s_mb_largest_free_orders[old];
++		struct xarray *xa = &lfo[old];
+
+ 		if (!xa_empty(xa) && xa_load(xa, grp->bb_group))
+ 			xa_erase(xa, grp->bb_group);
+@@ -1241,10 +1353,11 @@ mb_set_largest_free_order(struct super_block *sb, struct ext4_group_info *grp)
+ 		 * Although allocation for insertion may fails, it's not fatal
+ 		 * as we have linear traversal to fall back on.
+ 		 */
+-		int err = xa_insert(&sbi->s_mb_largest_free_orders[new],
+-				    grp->bb_group, grp, GFP_ATOMIC);
++		int err = xa_insert(&lfo[new], grp->bb_group, grp, GFP_ATOMIC);
+ 		if (err)
+-			mb_debug(sb, "insert group: %u to s_mb_largest_free_orders[%d] failed, err %d",
++			mb_debug(sb, "insert group: %u to s_mb_largest_free_orders%s[%d] failed, err %d",
+-				 grp->bb_group, new, err);
++				 grp->bb_group,
++				 lfo == sbi->s_mb_largest_free_orders_iops ? "_iops" : "",
++				 new, err);
+ 	}
+ }
+@@ -2777,6 +2890,10 @@ static int ext4_mb_good_group_nolock(struct ext4_allocation_context *ac,
+ 		goto out;
+ 	if (unlikely(EXT4_MB_GRP_BBITMAP_CORRUPT(grp)))
+ 		goto out;
++	if (sbi->s_es->s_flags & cpu_to_le32(EXT2_FLAGS_HAS_IOPS) &&
++	    (ac->ac_flags & EXT4_MB_HINT_DATA) &&
++	    EXT4_MB_GRP_TEST_IOPS(grp) && !sbi->s_mb_enable_iops_data)
++		goto out;
+ 	if (should_lock) {
+ 		__acquire(ext4_group_lock_ptr(sb, group));
+ 		ext4_unlock_group(sb, group);
+@@ -3611,6 +3728,9 @@ int ext4_mb_add_groupinfo(struct super_block *sb, ext4_group_t group,
+ 	INIT_LIST_HEAD(&meta_group_info[i]->bb_prealloc_list);
+ 	init_rwsem(&meta_group_info[i]->alloc_sem);
+ 	meta_group_info[i]->bb_free_root = RB_ROOT;
++	if (sbi->s_es->s_flags & cpu_to_le32(EXT2_FLAGS_HAS_IOPS) &&
++	    desc->bg_flags & cpu_to_le16(EXT4_BG_IOPS))
++		EXT4_MB_GRP_SET_IOPS(meta_group_info[i]);
+ 	meta_group_info[i]->bb_largest_free_order = -1;  /* uninit */
+ 	meta_group_info[i]->bb_avg_fragment_size_order = -1;  /* uninit */
+ 	meta_group_info[i]->bb_group = group;
+@@ -3833,6 +3953,18 @@ static inline void ext4_mb_avg_fragment_size_destroy(struct ext4_sb_info *sbi)
+ 	sbi->s_mb_avg_fragment_size = NULL;
+ }
+
++static inline void ext4_mb_avg_fragment_size_iops_destroy(struct ext4_sb_info *sbi)
++{
++	if (!sbi->s_mb_avg_fragment_size_iops)
++		return;
++
++	for (int i = 0; i < MB_NUM_ORDERS(sbi->s_sb); i++)
++		xa_destroy(&sbi->s_mb_avg_fragment_size_iops[i]);
++
++	kfree(sbi->s_mb_avg_fragment_size_iops);
++	sbi->s_mb_avg_fragment_size_iops = NULL;
++}
++
+ static inline void ext4_mb_largest_free_orders_destroy(struct ext4_sb_info *sbi)
+ {
+ 	if (!sbi->s_mb_largest_free_orders)
+@@ -3845,6 +3977,18 @@ static inline void ext4_mb_largest_free_orders_destroy(struct ext4_sb_info *sbi)
+ 	sbi->s_mb_largest_free_orders = NULL;
+ }
+
++static inline void ext4_mb_largest_free_orders_iops_destroy(struct ext4_sb_info *sbi)
++{
++	if (!sbi->s_mb_largest_free_orders_iops)
++		return;
++
++	for (int i = 0; i < MB_NUM_ORDERS(sbi->s_sb); i++)
++		xa_destroy(&sbi->s_mb_largest_free_orders_iops[i]);
++
++	kfree(sbi->s_mb_largest_free_orders_iops);
++	sbi->s_mb_largest_free_orders_iops = NULL;
++}
++
+ int ext4_mb_init(struct super_block *sb)
+ {
+ 	struct ext4_sb_info *sbi = EXT4_SB(sb);
+@@ -3899,6 +4043,18 @@ int ext4_mb_init(struct super_block *sb)
+ 	for (i = 0; i < MB_NUM_ORDERS(sb); i++)
+ 		xa_init(&sbi->s_mb_avg_fragment_size[i]);
+
++	if (sbi->s_es->s_flags & cpu_to_le32(EXT2_FLAGS_HAS_IOPS)) {
++		sbi->s_mb_avg_fragment_size_iops =
++			kmalloc_array(MB_NUM_ORDERS(sb), sizeof(struct xarray),
++				GFP_KERNEL);
++		if (!sbi->s_mb_avg_fragment_size_iops) {
++			ret = -ENOMEM;
++			goto out;
++		}
++		for (i = 0; i < MB_NUM_ORDERS(sb); i++)
++			xa_init(&sbi->s_mb_avg_fragment_size_iops[i]);
++	}
++
+ 	sbi->s_mb_largest_free_orders =
+ 		kmalloc_array(MB_NUM_ORDERS(sb), sizeof(struct xarray),
+ 			GFP_KERNEL);
+@@ -3909,6 +4065,20 @@ int ext4_mb_init(struct super_block *sb)
+ 	for (i = 0; i < MB_NUM_ORDERS(sb); i++)
+ 		xa_init(&sbi->s_mb_largest_free_orders[i]);
+
++	if (sbi->s_es->s_flags & cpu_to_le32(EXT2_FLAGS_HAS_IOPS)) {
++		sbi->s_mb_largest_free_orders_iops =
++			kmalloc_array(MB_NUM_ORDERS(sb), sizeof(struct xarray),
++				GFP_KERNEL);
++		if (!sbi->s_mb_largest_free_orders_iops) {
++			ret = -ENOMEM;
++			goto out;
++		}
++		for (i = 0; i < MB_NUM_ORDERS(sb); i++)
++			xa_init(&sbi->s_mb_largest_free_orders_iops[i]);
++	}
++
++	sbi->s_mb_enable_iops_data = 0;
++
+ 	spin_lock_init(&sbi->s_md_lock);
+ 	atomic_set(&sbi->s_mb_free_pending, 0);
+ 	INIT_LIST_HEAD(&sbi->s_freed_data_list[0]);
+@@ -4014,7 +4184,9 @@ out_free_last_groups:
+ 	sbi->s_mb_last_groups = NULL;
+ out:
+ 	ext4_mb_avg_fragment_size_destroy(sbi);
++	ext4_mb_avg_fragment_size_iops_destroy(sbi);
+ 	ext4_mb_largest_free_orders_destroy(sbi);
++	ext4_mb_largest_free_orders_iops_destroy(sbi);
+ 	kfree(sbi->s_mb_prealloc_table);
+ 	sbi->s_mb_prealloc_table = NULL;
+ 	kfree(sbi->s_mb_offsets);
+@@ -4084,7 +4256,9 @@ void ext4_mb_release(struct super_block *sb)
+ 		rcu_read_unlock();
+ 	}
+ 	ext4_mb_avg_fragment_size_destroy(sbi);
++	ext4_mb_avg_fragment_size_iops_destroy(sbi);
+ 	ext4_mb_largest_free_orders_destroy(sbi);
++	ext4_mb_largest_free_orders_iops_destroy(sbi);
+ 	kfree(sbi->s_mb_offsets);
+ 	kfree(sbi->s_mb_maxs);
+ 	iput(sbi->s_buddy_cache);
+diff --git a/fs/ext4/sysfs.c b/fs/ext4/sysfs.c
+index bdc949e..0cd9b12 100644
+--- a/fs/ext4/sysfs.c
++++ b/fs/ext4/sysfs.c
+@@ -222,5 +222,6 @@ EXT4_RW_ATTR_SBI_UI(mb_stats, s_mb_stats);
+ EXT4_RW_ATTR_SBI_UI(mb_max_to_scan, s_mb_max_to_scan);
+ EXT4_RW_ATTR_SBI_UI(mb_min_to_scan, s_mb_min_to_scan);
++EXT4_RW_ATTR_SBI_UI(mb_enable_iops_data, s_mb_enable_iops_data);
+ EXT4_RW_ATTR_SBI_UI(mb_order2_req, s_mb_order2_reqs);
+ EXT4_RW_ATTR_SBI_UI(mb_small_req, s_mb_small_req);
+ EXT4_RW_ATTR_SBI_UI(mb_large_req, s_mb_large_req);
+@@ -305,6 +306,7 @@ static struct attribute *ext4_attrs[] = {
+ 	ATTR_LIST(mb_stats),
+ 	ATTR_LIST(mb_max_to_scan),
+ 	ATTR_LIST(mb_min_to_scan),
++	ATTR_LIST(mb_enable_iops_data),
+ 	ATTR_LIST(mb_order2_req),
+ 	ATTR_LIST(mb_small_req),
+ 	ATTR_LIST(mb_large_req),
+@@ -369,6 +371,7 @@ EXT4_ATTR_FEATURE(dirdata);
+ #if IS_ENABLED(CONFIG_UNICODE) && defined(CONFIG_FS_ENCRYPTION)
+ EXT4_ATTR_FEATURE(encrypted_casefold);
+ #endif
++EXT4_ATTR_FEATURE(iops);
+
+ static struct attribute *ext4_feat_attrs[] = {
+ 	ATTR_LIST(lazy_itable_init),
+@@ -390,6 +393,7 @@ static struct attribute *ext4_feat_attrs[] = {
+ #if IS_ENABLED(CONFIG_UNICODE) && defined(CONFIG_FS_ENCRYPTION)
+ 	ATTR_LIST(encrypted_casefold),
+ #endif
++	ATTR_LIST(iops),
+ 	NULL,
+ };
+ ATTRIBUTE_GROUPS(ext4_feat);
