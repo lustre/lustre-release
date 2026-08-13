@@ -1,0 +1,113 @@
+.TH LLAPI_FIND_PARAM_ALLOC 3 2026-08-13 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_find_param_alloc, llapi_find_param_free \- allocate and free struct find_param objects.
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.B struct find_param *llapi_find_param_alloc(void);
+.PP
+.BI "void llapi_find_param_free(struct find_param *" param );
+.fi
+.SH DESCRIPTION
+.B llapi_find_param_alloc()
+returns a pointer to a newly-allocated
+.BR "struct find_param" .
+The
+.B struct find_param
+contains the parameters that select which files match a search and how
+matching files are displayed.  It may be used in subsequent calls to
+.BR llapi_find (3),
+.BR llapi_getstripe (3),
+and the other functions declared in
+.B <lustre/lustreapi.h>
+that take a
+.B struct find_param
+argument.
+.PP
+The returned
+.B struct find_param
+object is zero-filled; the caller sets the fields that describe the
+desired search before passing it to one of the functions listed above.
+Applications should obtain a
+.B struct find_param
+from
+.B llapi_find_param_alloc()
+rather than declaring one directly, so that the allocation always
+matches the size of the
+.B struct find_param
+used by the running library, even if the application was built against
+an older
+.B <lustre/lustreapi.h>
+header.  The pointer should be freed with
+.B llapi_find_param_free()
+when it is no longer needed.
+.PP
+.B llapi_find_param_free()
+frees the memory associated with
+.IR param ,
+which must have been returned by an earlier call to
+.BR llapi_find_param_alloc() .
+If
+.I param
+is
+.BR NULL ,
+no action is taken.  Memory referenced by fields of the structure is
+not freed and remains owned by the caller.  It should be used in
+preference to
+.BR free (3)
+so that applications remain compatible with future versions of the
+library that may perform additional cleanup.
+.SH RETURN VALUES
+.B llapi_find_param_alloc()
+returns a valid pointer on success or
+.B NULL
+on failure with
+.B errno
+set to an appropriate error code.
+.PP
+.B llapi_find_param_free()
+returns no value.
+.SH ERRORS
+.TP 15
+.B ENOMEM
+Insufficient storage space is available.
+.SH EXAMPLES
+List all regular files below
+.IR path :
+.PP
+.EX
+#include <lustre/lustreapi.h>
+
+int find_regular_files(char *path)
+{
+	struct find_param *param;
+	int rc;
+
+	param = llapi_find_param_alloc();
+	if (!param)
+		return -errno;
+
+	param->fp_max_depth = -1;
+	param->fp_type = S_IFREG;
+
+	rc = llapi_find(path, param);
+
+	llapi_find_param_free(param);
+
+	return rc;
+}
+.EE
+.SH AVAILABILITY
+.B llapi_find_param_alloc()
+and
+.B llapi_find_param_free()
+are part of the
+.BR lustre (7)
+user application interface library since release 2.18.0.
+.\" Added in commit v2_17_56-xx-gxxxxxxxxxx
+.SH SEE ALSO
+.BR lfs-find (1),
+.BR llapi_find (3),
+.BR llapi_getstripe (3),
+.BR lustreapi (7)

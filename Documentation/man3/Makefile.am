@@ -25,6 +25,8 @@ LIBMAN = 					\
 	llapi_file_create_foreign.3		\
 	llapi_file_get_stripe.3			\
 	llapi_file_open.3			\
+	llapi_find_param_alloc.3		\
+	llapi_find_param_free.3			\
 	llapi_get_fsname.3			\
 	llapi_get_fsname_instance.3		\
 	llapi_get_instance.3			\

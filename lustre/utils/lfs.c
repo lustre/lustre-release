@@ -4492,10 +4492,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 {
 	struct lfs_setstripe_args lsa = { 0 };
 	struct llapi_stripe_param *param = NULL;
-	struct find_param migrate_mdt_param = {
-		.fp_max_depth = -1,
-		.fp_mdt_index = -1,
-	};
+	struct find_param *migrate_mdt_param = NULL;
 	char *fname;
 	int result = 0;
 	int result2 = 0;
@@ -4677,6 +4674,17 @@ static int lfs_setstripe_internal(int argc, char **argv,
 	{ .val = 'z',	.name = "extension-size", .has_arg = required_argument},
 	{ .val = LFS_MIGRATE_NOFIX, .name = "clear-fixed", .has_arg = no_argument},
 	{ .name = NULL } };
+
+	migrate_mdt_param = llapi_find_param_alloc();
+	if (!migrate_mdt_param) {
+		result = -errno;
+		fprintf(stderr,
+			"%s %s: cannot allocate memory for parameters: %s\n",
+			progname, argv[0], strerror(-result));
+		goto error;
+	}
+	migrate_mdt_param->fp_max_depth = -1;
+	migrate_mdt_param->fp_mdt_index = -1;
 
 	setstripe_args_init(&lsa);
 
@@ -4935,7 +4943,7 @@ static int lfs_setstripe_internal(int argc, char **argv,
 			break;
 		case 'd':
 			if (migrate_mode) {
-				migrate_mdt_param.fp_max_depth = 1;
+				migrate_mdt_param->fp_max_depth = 1;
 			} else {
 				/* delete the default striping pattern */
 				delete = 1;
@@ -5386,7 +5394,7 @@ create_mirror:
 					progname, argv[0]);
 				goto usage_error;
 			}
-			migrate_mdt_param.fp_verbose = VERBOSE_DETAIL;
+			migrate_mdt_param->fp_verbose = VERBOSE_DETAIL;
 			migration_flags |= LLAPI_MIGRATION_VERBOSE;
 			break;
 		case 'x':
@@ -5878,8 +5886,8 @@ create_mirror:
 			lmu->lum_magic = LMV_USER_MAGIC;
 		}
 
-		migrate_mdt_param.fp_lmv_md = lmu;
-		migrate_mdt_param.fp_migrate = 1;
+		migrate_mdt_param->fp_lmv_md = lmu;
+		migrate_mdt_param->fp_migrate = 1;
 	} else if (!layout && !from_yaml && !from_copy) {
 		if (lsa_args_stripe_count_check(&lsa))
 			goto usage_error;
@@ -6055,7 +6063,7 @@ create_mirror:
 		}
 
 		if (migrate_mdt_mode) {
-			result = llapi_migrate_mdt(fname, &migrate_mdt_param);
+			result = llapi_migrate_mdt(fname, migrate_mdt_param);
 		} else if (migrate_mode) {
 			if (from_copy) {
 				/*
@@ -6229,7 +6237,8 @@ create_mirror:
 		umask(previous_umask);
 
 	free(param);
-	free(migrate_mdt_param.fp_lmv_md);
+	free(migrate_mdt_param->fp_lmv_md);
+	llapi_find_param_free(migrate_mdt_param);
 	llapi_layout_free(layout);
 	lfs_mirror_list_free(mirror_list);
 	return result2;
@@ -6267,6 +6276,7 @@ usage_error:
 	result = CMD_HELP;
 error:
 	free(param);
+	llapi_find_param_free(migrate_mdt_param);
 	llapi_layout_free(layout);
 	lfs_mirror_list_free(mirror_list);
 	if (files_from_fp != NULL && files_from_fp != stdin)
@@ -7104,12 +7114,8 @@ static int lfs_find(int argc, char **argv)
 	int c, rc;
 	int ret = 0;
 	time_t t;
-	struct find_param param = {
-		.fp_max_depth = -1,
-		.fp_min_depth = 0,
-		.fp_quiet = 1,
-		.fp_time_margin = FP_DEFAULT_TIME_MARGIN,
-	};
+	struct find_param *param = NULL;
+
 	struct option long_opts[] = {
 	{ .val = 'A',	.name = "atime",	.has_arg = required_argument },
 	{ .val = LFS_ATTRS_OPT,
@@ -7263,6 +7269,19 @@ static int lfs_find(int argc, char **argv)
 	int isoption;
 	char *endptr;
 
+	param = llapi_find_param_alloc();
+	if (!param) {
+		ret = -errno;
+		fprintf(stderr,
+			"%s %s: cannot allocate memory for parameters: %s\n",
+			progname, argv[0], strerror(-ret));
+		return ret;
+	}
+	param->fp_max_depth = -1;
+	param->fp_min_depth = 0;
+	param->fp_quiet = 1;
+	param->fp_time_margin = FP_DEFAULT_TIME_MARGIN;
+
 	time(&t);
 
 	/* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
@@ -7309,34 +7328,34 @@ static int lfs_find(int argc, char **argv)
 				neg_opt = 2;
 			break;
 		case 'A':
-			xtime = &param.fp_atime;
-			xsign = &param.fp_asign;
-			param.fp_exclude_atime = !!neg_opt;
+			xtime = &param->fp_atime;
+			xsign = &param->fp_asign;
+			param->fp_exclude_atime = !!neg_opt;
 			/* no break, this falls through to 'B' for btime */
 			fallthrough;
 		case 'B':
 			if (c == 'B') {
-				xtime = &param.fp_btime;
-				xsign = &param.fp_bsign;
-				param.fp_exclude_btime = !!neg_opt;
+				xtime = &param->fp_btime;
+				xsign = &param->fp_bsign;
+				param->fp_exclude_btime = !!neg_opt;
 			}
 			/* no break, this falls through to 'C' for ctime */
 			fallthrough;
 		case 'C':
 			if (c == 'C') {
-				xtime = &param.fp_ctime;
-				xsign = &param.fp_csign;
-				param.fp_exclude_ctime = !!neg_opt;
+				xtime = &param->fp_ctime;
+				xsign = &param->fp_csign;
+				param->fp_exclude_ctime = !!neg_opt;
 			}
 			/* no break, this falls through to 'M' for mtime */
 			fallthrough;
 		case 'M':
 			if (c == 'M') {
-				xtime = &param.fp_mtime;
-				xsign = &param.fp_msign;
-				param.fp_exclude_mtime = !!neg_opt;
+				xtime = &param->fp_mtime;
+				xsign = &param->fp_msign;
+				param->fp_exclude_mtime = !!neg_opt;
 			}
-			rc = set_time(&param, &t, xtime, xsign, optarg);
+			rc = set_time(param, &t, xtime, xsign, optarg);
 			if (rc == INT_MAX) {
 				ret = -1;
 				goto err;
@@ -7344,134 +7363,134 @@ static int lfs_find(int argc, char **argv)
 			*xsign = rc;
 			break;
 		case LFS_ATTRS_OPT:
-			ret = name2attrs(optarg, &param.fp_attrs,
-					 &param.fp_neg_attrs);
+			ret = name2attrs(optarg, &param->fp_attrs,
+					 &param->fp_neg_attrs);
 			if (ret)
 				goto err;
-			param.fp_exclude_attrs = !!neg_opt;
+			param->fp_exclude_attrs = !!neg_opt;
 			break;
 		case 'b':
 			if (optarg[0] == '+') {
-				param.fp_blocks_sign = -1;
+				param->fp_blocks_sign = -1;
 				optarg++;
 			} else if (optarg[0] == '-') {
-				param.fp_blocks_sign =  1;
+				param->fp_blocks_sign =  1;
 				optarg++;
 			}
 
-			param.fp_blocks_units = 512;
-			ret = llapi_parse_size(optarg, &param.fp_blocks,
-					       &param.fp_blocks_units, 0);
+			param->fp_blocks_units = 512;
+			ret = llapi_parse_size(optarg, &param->fp_blocks,
+					       &param->fp_blocks_units, 0);
 			if (ret) {
 				fprintf(stderr, "error: bad blocks '%s'\n",
 					optarg);
 				goto err;
 			}
-			param.fp_check_blocks = 1;
-			param.fp_exclude_blocks = !!neg_opt;
+			param->fp_check_blocks = 1;
+			param->fp_exclude_blocks = !!neg_opt;
 			break;
 		case LFS_COMP_COUNT_OPT:
 			if (optarg[0] == '+') {
-				param.fp_comp_count_sign = -1;
+				param->fp_comp_count_sign = -1;
 				optarg++;
 			} else if (optarg[0] == '-') {
-				param.fp_comp_count_sign =  1;
+				param->fp_comp_count_sign =  1;
 				optarg++;
 			}
 
 			errno = 0;
-			param.fp_comp_count = strtoul(optarg, &endptr, 0);
+			param->fp_comp_count = strtoul(optarg, &endptr, 0);
 			if (errno != 0 || *endptr != '\0' ||
-			    param.fp_comp_count > UINT32_MAX) {
+			    param->fp_comp_count > UINT32_MAX) {
 				fprintf(stderr,
 					"error: bad component count '%s'\n",
 					optarg);
 				goto err;
 			}
-			param.fp_check_comp_count = 1;
-			param.fp_exclude_comp_count = !!neg_opt;
+			param->fp_check_comp_count = 1;
+			param->fp_exclude_comp_count = !!neg_opt;
 			break;
 		case LFS_COMP_FLAGS_OPT:
-			rc = comp_str2flags(optarg, &param.fp_comp_flags,
-					    &param.fp_comp_neg_flags);
+			rc = comp_str2flags(optarg, &param->fp_comp_flags,
+					    &param->fp_comp_neg_flags);
 			if (rc) {
 				fprintf(stderr,
 					"error: bad component flags '%s'\n",
 					optarg);
 				goto err;
 			}
-			param.fp_check_comp_flags = 1;
+			param->fp_check_comp_flags = 1;
 			if (neg_opt) {
-				__u32 flags = param.fp_comp_neg_flags;
+				__u32 flags = param->fp_comp_neg_flags;
 
-				param.fp_comp_neg_flags = param.fp_comp_flags;
-				param.fp_comp_flags = flags;
+				param->fp_comp_neg_flags = param->fp_comp_flags;
+				param->fp_comp_flags = flags;
 			}
 			break;
 		case LFS_COMP_START_OPT:
 			if (optarg[0] == '+') {
-				param.fp_comp_start_sign = -1;
+				param->fp_comp_start_sign = -1;
 				optarg++;
 			} else if (optarg[0] == '-') {
-				param.fp_comp_start_sign =  1;
+				param->fp_comp_start_sign =  1;
 				optarg++;
 			}
 
-			rc = llapi_parse_size(optarg, &param.fp_comp_start,
-					      &param.fp_comp_start_units, 0);
+			rc = llapi_parse_size(optarg, &param->fp_comp_start,
+					      &param->fp_comp_start_units, 0);
 			if (rc) {
 				fprintf(stderr,
 					"error: bad component start '%s'\n",
 					optarg);
 				goto err;
 			}
-			param.fp_check_comp_start = 1;
-			param.fp_exclude_comp_start = !!neg_opt;
+			param->fp_check_comp_start = 1;
+			param->fp_exclude_comp_start = !!neg_opt;
 			break;
 		case LFS_MIRROR_STATE_OPT:
-			rc = mirror_str2state(optarg, &param.fp_mirror_state,
-					      &param.fp_mirror_neg_state);
+			rc = mirror_str2state(optarg, &param->fp_mirror_state,
+					      &param->fp_mirror_neg_state);
 			if (rc) {
 				fprintf(stderr,
 					"error: bad mirrored file state '%s'\n",
 					optarg);
 				goto err;
 			}
-			param.fp_check_mirror_state = 1;
+			param->fp_check_mirror_state = 1;
 			if (neg_opt) {
-				__u16 state = param.fp_mirror_neg_state;
+				__u16 state = param->fp_mirror_neg_state;
 
-				param.fp_mirror_neg_state =
-					param.fp_mirror_state;
-				param.fp_mirror_state = state;
+				param->fp_mirror_neg_state =
+					param->fp_mirror_state;
+				param->fp_mirror_state = state;
 			}
 			break;
 		case 'c':
 			if (optarg[0] == '+') {
-				param.fp_stripe_count_sign = -1;
+				param->fp_stripe_count_sign = -1;
 				optarg++;
 			} else if (optarg[0] == '-') {
-				param.fp_stripe_count_sign =  1;
+				param->fp_stripe_count_sign =  1;
 				optarg++;
 			}
 
 			errno = 0;
-			param.fp_stripe_count = strtoul(optarg, &endptr, 0);
+			param->fp_stripe_count = strtoul(optarg, &endptr, 0);
 			if (errno != 0 || *endptr != '\0' ||
-			    param.fp_stripe_count > LOV_MAX_STRIPE_COUNT) {
+			    param->fp_stripe_count > LOV_MAX_STRIPE_COUNT) {
 				fprintf(stderr,
 					"error: bad stripe_count '%s'\n",
 					optarg);
 				ret = -1;
 				goto err;
 			}
-			param.fp_check_stripe_count = 1;
-			param.fp_exclude_stripe_count = !!neg_opt;
+			param->fp_check_stripe_count = 1;
+			param->fp_exclude_stripe_count = !!neg_opt;
 			break;
 		case 'd':
 			errno = 0;
-			param.fp_min_depth = strtoul(optarg, 0, 0);
-			if (errno != 0 || param.fp_min_depth > PATH_MAX / 2) {
+			param->fp_min_depth = strtoul(optarg, 0, 0);
+			if (errno != 0 || param->fp_min_depth > PATH_MAX / 2) {
 				fprintf(stderr,
 					"error: bad mindepth '%s'\n",
 					optarg);
@@ -7481,8 +7500,8 @@ static int lfs_find(int argc, char **argv)
 			break;
 		case 'D':
 			errno = 0;
-			param.fp_max_depth = strtol(optarg, 0, 0);
-			if (errno != 0 || param.fp_max_depth < 0) {
+			param->fp_max_depth = strtol(optarg, 0, 0);
+			if (errno != 0 || param->fp_max_depth < 0) {
 				fprintf(stderr,
 					"error: bad maxdepth '%s'\n",
 					optarg);
@@ -7492,24 +7511,24 @@ static int lfs_find(int argc, char **argv)
 			break;
 		case 'E':
 			if (optarg[0] == '+') {
-				param.fp_comp_end_sign = -1;
+				param->fp_comp_end_sign = -1;
 				optarg++;
 			} else if (optarg[0] == '-') {
-				param.fp_comp_end_sign =  1;
+				param->fp_comp_end_sign =  1;
 				optarg++;
 			}
 
 			if (arg_is_eof(optarg)) {
-				param.fp_comp_end = LUSTRE_EOF;
-				param.fp_comp_end_units = 1;
+				param->fp_comp_end = LUSTRE_EOF;
+				param->fp_comp_end_units = 1;
 				rc = 0;
 			} else {
 				rc = llapi_parse_size(optarg,
-						&param.fp_comp_end,
-						&param.fp_comp_end_units, 0);
+						&param->fp_comp_end,
+						&param->fp_comp_end_units, 0);
 				/* assume units of KB if too small */
-				if (param.fp_comp_end < 4096)
-					param.fp_comp_end *= 1024;
+				if (param->fp_comp_end < 4096)
+					param->fp_comp_end *= 1024;
 			}
 			if (rc) {
 				fprintf(stderr,
@@ -7517,8 +7536,8 @@ static int lfs_find(int argc, char **argv)
 					optarg);
 				goto err;
 			}
-			param.fp_check_comp_end = 1;
-			param.fp_exclude_comp_end = !!neg_opt;
+			param->fp_check_comp_end = 1;
+			param->fp_exclude_comp_end = !!neg_opt;
 			break;
 		case LFS_LAYOUT_FOREIGN_OPT: {
 			/* all types by default */
@@ -7535,18 +7554,20 @@ static int lfs_find(int argc, char **argv)
 							"%s %s: unknown foreign type '%s'\n",
 							progname, argv[0],
 							optarg);
-						return CMD_HELP;
+						ret = CMD_HELP;
+						goto err;
 					}
 				} else if (type >= UINT32_MAX) {
 					fprintf(stderr,
 						"%s %s: invalid foreign type '%s'\n",
 						progname, argv[0], optarg);
-					return CMD_HELP;
+					ret = CMD_HELP;
+					goto err;
 				}
 			}
-			param.fp_foreign_type = type;
-			param.fp_check_foreign = 1;
-			param.fp_exclude_foreign = !!neg_opt;
+			param->fp_foreign_type = type;
+			param->fp_check_foreign = 1;
+			param->fp_exclude_foreign = !!neg_opt;
 			break;
 		}
 		case LFS_NEWERXY_OPT: {
@@ -7684,7 +7705,7 @@ static int lfs_find(int argc, char **argv)
 			}
 
 			negidx = !!neg_opt;
-			newery = &param.fp_newery[xidx][negidx];
+			newery = &param->fp_newery[xidx][negidx];
 
 			if (*newery == 0) {
 				*newery = ref;
@@ -7694,32 +7715,32 @@ static int lfs_find(int argc, char **argv)
 				else
 					*newery = *newery > ref ? *newery : ref;
 			}
-			param.fp_newerxy = 1;
+			param->fp_newerxy = 1;
 			break;
 		}
 		case 'g':
 		case 'G':
-			rc = name2gid(&param.fp_gid, optarg);
-			if (rc && str2quotaid(&param.fp_gid, optarg)) {
+			rc = name2gid(&param->fp_gid, optarg);
+			if (rc && str2quotaid(&param->fp_gid, optarg)) {
 				fprintf(stderr, "invalid group/GID '%s'\n",
 					optarg);
 				ret = -1;
 				goto err;
 			}
-			param.fp_exclude_gid = !!neg_opt;
-			param.fp_check_gid = 1;
+			param->fp_exclude_gid = !!neg_opt;
+			param->fp_check_gid = 1;
 			break;
 		case 'H':
-			rc = mdthash_input(optarg, &param.fp_hash_inflags,
-					   &param.fp_hash_exflags,
-					   &param.fp_hash_type);
+			rc = mdthash_input(optarg, &param->fp_hash_inflags,
+					   &param->fp_hash_exflags,
+					   &param->fp_hash_type);
 			if (rc) {
 				ret = -1;
 				goto err;
 			}
-			if (param.fp_hash_inflags || param.fp_hash_exflags)
-				param.fp_check_hash_flag = 1;
-			param.fp_exclude_hash_type = !!neg_opt;
+			if (param->fp_hash_inflags || param->fp_hash_exflags)
+				param->fp_check_hash_flag = 1;
+			param->fp_exclude_hash_type = !!neg_opt;
 			break;
 		case 'k': {
 			unsigned long pct = strtoul(optarg, &endptr, 10);
@@ -7732,73 +7753,74 @@ static int lfs_find(int argc, char **argv)
 					optarg);
 				goto err;
 			}
-			param.fp_skip_percent = pct;
+			param->fp_skip_percent = pct;
 			break;
 		}
 		case 'l':
-			param.fp_lazy = 1;
+			param->fp_lazy = 1;
 			break;
 		case 'L':
-			ret = llapi_lov_string_pattern(optarg, &param.fp_layout);
+			ret = llapi_lov_string_pattern(optarg,
+							&param->fp_layout);
 			if (ret)
 				goto err;
-			param.fp_exclude_layout = !!neg_opt;
-			param.fp_check_layout = 1;
+			param->fp_exclude_layout = !!neg_opt;
+			param->fp_check_layout = 1;
 			break;
 		case LFS_LINKS_OPT:
 			if (optarg[0] == '+') {
-				param.fp_nlink_sign = -1;
+				param->fp_nlink_sign = -1;
 				optarg++;
 			} else if (optarg[0] == '-') {
-				param.fp_nlink_sign =  1;
+				param->fp_nlink_sign =  1;
 				optarg++;
 			}
 			errno = 0;
-			param.fp_nlink = strtoul(optarg, &endptr, 0);
-			if (errno != 0 || *endptr != '\0' || !param.fp_nlink) {
+			param->fp_nlink = strtoul(optarg, &endptr, 0);
+			if (errno != 0 || *endptr != '\0' || !param->fp_nlink) {
 				fprintf(stderr, "error: bad link count '%s'\n",
 					optarg);
 				ret = -1;
 				goto err;
 			}
-			param.fp_exclude_nlink = !!neg_opt;
+			param->fp_exclude_nlink = !!neg_opt;
 			break;
 		case 'u':
 		case 'U':
-			rc = name2uid(&param.fp_uid, optarg);
-			if (rc && str2quotaid(&param.fp_uid, optarg)) {
+			rc = name2uid(&param->fp_uid, optarg);
+			if (rc && str2quotaid(&param->fp_uid, optarg)) {
 				fprintf(stderr, "invalid username/UID '%s'\n",
 					optarg);
 				ret = -1;
 				goto err;
 			}
-			param.fp_exclude_uid = !!neg_opt;
-			param.fp_check_uid = 1;
+			param->fp_exclude_uid = !!neg_opt;
+			param->fp_check_uid = 1;
 			break;
 		case 'n':
-			param.fp_pattern = (char *)optarg;
-			param.fp_exclude_pattern = !!neg_opt;
+			param->fp_pattern = (char *)optarg;
+			param->fp_exclude_pattern = !!neg_opt;
 			break;
 		case 'N':
 			if (optarg[0] == '+') {
-				param.fp_mirror_count_sign = -1;
+				param->fp_mirror_count_sign = -1;
 				optarg++;
 			} else if (optarg[0] == '-') {
-				param.fp_mirror_count_sign =  1;
+				param->fp_mirror_count_sign =  1;
 				optarg++;
 			}
 
 			errno = 0;
-			param.fp_mirror_count = strtoul(optarg, &endptr, 0);
+			param->fp_mirror_count = strtoul(optarg, &endptr, 0);
 			if (errno != 0 || *endptr != '\0' ||
-			    param.fp_mirror_count > LUSTRE_MIRROR_COUNT_MAX) {
+			    param->fp_mirror_count > LUSTRE_MIRROR_COUNT_MAX) {
 				fprintf(stderr,
 					"error: bad mirror count '%s'\n",
 					optarg);
 				goto err;
 			}
-			param.fp_check_mirror_count = 1;
-			param.fp_exclude_mirror_count = !!neg_opt;
+			param->fp_check_mirror_count = 1;
+			param->fp_exclude_mirror_count = !!neg_opt;
 			break;
 		case 'm':
 		case 'i':
@@ -7812,15 +7834,15 @@ static int lfs_find(int argc, char **argv)
 			regex_t reg;
 			regmatch_t pmatch[3];
 
-			param.fp_exclude_obd = !!neg_opt;
+			param->fp_exclude_obd = !!neg_opt;
 			if (c == 'm') {
-				p_num = &param.fp_num_mdts;
-				p_alloc = &param.fp_num_alloc_mdts;
-				pp_uuid = &param.fp_mdt_uuid;
+				p_num = &param->fp_num_mdts;
+				p_alloc = &param->fp_num_alloc_mdts;
+				pp_uuid = &param->fp_mdt_uuid;
 			} else {
-				p_num = &param.fp_num_obds;
-				p_alloc = &param.fp_num_alloc_obds;
-				pp_uuid = &param.fp_obd_uuid;
+				p_num = &param->fp_num_obds;
+				p_alloc = &param->fp_num_alloc_obds;
+				pp_uuid = &param->fp_obd_uuid;
 			}
 			regcomp(&reg, pattern, REG_EXTENDED);
 
@@ -7910,17 +7932,17 @@ static int lfs_find(int argc, char **argv)
 			 * We do check for empty pool because empty pool
 			 * is used to find V1 LOV attributes
 			 */
-			snprintf(param.fp_poolname, sizeof(param.fp_poolname),
+			snprintf(param->fp_poolname, sizeof(param->fp_poolname),
 				 "%s", optarg);
-			param.fp_exclude_pool = !!neg_opt;
-			param.fp_check_pool = 1;
+			param->fp_exclude_pool = !!neg_opt;
+			param->fp_check_pool = 1;
 			break;
 		case '0':
-			param.fp_zero_end = 1;
+			param->fp_zero_end = 1;
 			break;
 		case LFS_THREAD_OPT:
-			param.fp_thread_count = strtol(optarg, &endptr, 0);
-			if (*endptr != '\0' || param.fp_thread_count < 1) {
+			param->fp_thread_count = strtol(optarg, &endptr, 0);
+			if (*endptr != '\0' || param->fp_thread_count < 1) {
 				fprintf(stderr,
 					"error: bad thread count '%s'\n",
 					optarg);
@@ -7931,88 +7953,88 @@ static int lfs_find(int argc, char **argv)
 		case 'P': /* we always print, this option is a no-op */
 			break;
 		case LFS_PRINTF_OPT:
-			param.fp_format_printf_str = strdup(optarg);
+			param->fp_format_printf_str = strdup(optarg);
 			break;
 		case LFS_PRINTF_LS:
-			param.fp_format_printf_str =
+			param->fp_format_printf_str =
 				strdup("%i\t%k\t%M\t%n\t%u\t%g\t%s\t%t\t%p\n");
 			break;
 		case LFS_PROJID_OPT:
-			rc = name2projid(&param.fp_projid, optarg);
-			if (rc && str2quotaid(&param.fp_projid, optarg)) {
+			rc = name2projid(&param->fp_projid, optarg);
+			if (rc && str2quotaid(&param->fp_projid, optarg)) {
 				fprintf(stderr, "invalid project id: '%s'\n",
 					optarg);
 				ret = -1;
 				goto err;
 			}
-			param.fp_exclude_projid = !!neg_opt;
-			param.fp_check_projid = 1;
+			param->fp_exclude_projid = !!neg_opt;
+			param->fp_check_projid = 1;
 			break;
 		case 's':
 			if (optarg[0] == '+') {
-				param.fp_size_sign = -1;
+				param->fp_size_sign = -1;
 				optarg++;
 			} else if (optarg[0] == '-') {
-				param.fp_size_sign =  1;
+				param->fp_size_sign =  1;
 				optarg++;
 			}
 
-			param.fp_size_units = 512;
-			ret = llapi_parse_size(optarg, &param.fp_size,
-					       &param.fp_size_units, 0);
+			param->fp_size_units = 512;
+			ret = llapi_parse_size(optarg, &param->fp_size,
+					       &param->fp_size_units, 0);
 			if (ret) {
 				fprintf(stderr, "error: bad file size '%s'\n",
 					optarg);
 				goto err;
 			}
-			param.fp_check_size = 1;
-			param.fp_exclude_size = !!neg_opt;
+			param->fp_check_size = 1;
+			param->fp_exclude_size = !!neg_opt;
 			break;
 		case 'S':
 			if (optarg[0] == '+') {
-				param.fp_stripe_size_sign = -1;
+				param->fp_stripe_size_sign = -1;
 				optarg++;
 			} else if (optarg[0] == '-') {
-				param.fp_stripe_size_sign =  1;
+				param->fp_stripe_size_sign =  1;
 				optarg++;
 			}
 
-			ret = llapi_parse_size(optarg, &param.fp_stripe_size,
-					       &param.fp_stripe_size_units, 0);
+			ret = llapi_parse_size(optarg, &param->fp_stripe_size,
+					       &param->fp_stripe_size_units, 0);
 			/* assume units of KB if too small to be valid */
-			if (param.fp_stripe_size < 4096)
-				param.fp_stripe_size *= 1024;
+			if (param->fp_stripe_size < 4096)
+				param->fp_stripe_size *= 1024;
 			if (ret) {
 				fprintf(stderr, "error: bad stripe_size '%s'\n",
 					optarg);
 				goto err;
 			}
-			param.fp_check_stripe_size = 1;
-			param.fp_exclude_stripe_size = !!neg_opt;
+			param->fp_check_stripe_size = 1;
+			param->fp_exclude_stripe_size = !!neg_opt;
 			break;
 		case 't':
-			param.fp_exclude_type = !!neg_opt;
+			param->fp_exclude_type = !!neg_opt;
 			switch (optarg[0]) {
 			case 'b':
-				param.fp_type = S_IFBLK;
+				param->fp_type = S_IFBLK;
 				break;
 			case 'c':
-				param.fp_type = S_IFCHR;
+				param->fp_type = S_IFCHR;
 				break;
 			case 'd':
-				param.fp_type = S_IFDIR;
+				param->fp_type = S_IFDIR;
 				break;
 			case 'f':
-				param.fp_type = S_IFREG;
+				param->fp_type = S_IFREG;
 				break;
 			case 'l':
-				param.fp_type = S_IFLNK;
+				param->fp_type = S_IFLNK;
 				break;
 			case 'p':
-				param.fp_type = S_IFIFO;
+				param->fp_type = S_IFIFO;
 				break;
 			case 's':
-				param.fp_type = S_IFSOCK;
+				param->fp_type = S_IFSOCK;
 				break;
 			default:
 				fprintf(stderr, "%s: bad type '%s'\n",
@@ -8022,17 +8044,17 @@ static int lfs_find(int argc, char **argv)
 			}
 			break;
 		case LFS_FIND_PERM:
-			param.fp_exclude_perm = !!neg_opt;
-			param.fp_perm_sign = LFS_FIND_PERM_EXACT;
+			param->fp_exclude_perm = !!neg_opt;
+			param->fp_perm_sign = LFS_FIND_PERM_EXACT;
 			if (*optarg == '/') {
-				param.fp_perm_sign = LFS_FIND_PERM_ANY;
+				param->fp_perm_sign = LFS_FIND_PERM_ANY;
 				optarg++;
 			} else if (*optarg == '-') {
-				param.fp_perm_sign = LFS_FIND_PERM_ALL;
+				param->fp_perm_sign = LFS_FIND_PERM_ALL;
 				optarg++;
 			}
 
-			if (str2mode_t(optarg, &param.fp_perm)) {
+			if (str2mode_t(optarg, &param->fp_perm)) {
 				fprintf(stderr, "error: invalid mode '%s'\n",
 					optarg);
 				ret = -1;
@@ -8041,51 +8063,51 @@ static int lfs_find(int argc, char **argv)
 			break;
 		case 'T':
 			if (optarg[0] == '+') {
-				param.fp_mdt_count_sign = -1;
+				param->fp_mdt_count_sign = -1;
 				optarg++;
 			} else if (optarg[0] == '-') {
-				param.fp_mdt_count_sign =  1;
+				param->fp_mdt_count_sign =  1;
 				optarg++;
 			}
 
 			errno = 0;
-			param.fp_mdt_count = strtoul(optarg, &endptr, 0);
+			param->fp_mdt_count = strtoul(optarg, &endptr, 0);
 			if (errno != 0 || *endptr != '\0' ||
-			    param.fp_mdt_count >= UINT32_MAX) {
+			    param->fp_mdt_count >= UINT32_MAX) {
 				fprintf(stderr, "error: bad mdt_count '%s'\n",
 					optarg);
 				ret = -1;
 				goto err;
 			}
-			param.fp_check_mdt_count = 1;
-			param.fp_exclude_mdt_count = !!neg_opt;
+			param->fp_check_mdt_count = 1;
+			param->fp_exclude_mdt_count = !!neg_opt;
 			break;
 		case LFS_XATTRS_MATCH_OPT:
 			ret = compile_xattr_match_regex(optarg, neg_opt,
-							&param);
+							param);
 			if (ret)
 				goto err;
 			break;
 		case 'z':
 			if (optarg[0] == '+') {
-				param.fp_ext_size_sign = -1;
+				param->fp_ext_size_sign = -1;
 				optarg++;
 			} else if (optarg[0] == '-') {
-				param.fp_ext_size_sign =  1;
+				param->fp_ext_size_sign =  1;
 				optarg++;
 			}
 
-			ret = llapi_parse_size(optarg, &param.fp_ext_size,
-					       &param.fp_ext_size_units, 0);
+			ret = llapi_parse_size(optarg, &param->fp_ext_size,
+					       &param->fp_ext_size_units, 0);
 			if (ret) {
 				fprintf(stderr, "error: bad ext-size '%s'\n",
 					optarg);
 				goto err;
 			}
-			param.fp_ext_size /= SEL_UNIT_SIZE;
-			param.fp_ext_size_units /= SEL_UNIT_SIZE;
-			param.fp_check_ext_size = 1;
-			param.fp_exclude_ext_size = !!neg_opt;
+			param->fp_ext_size /= SEL_UNIT_SIZE;
+			param->fp_ext_size_units /= SEL_UNIT_SIZE;
+			param->fp_check_ext_size = 1;
+			param->fp_exclude_ext_size = !!neg_opt;
 			break;
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
@@ -8095,8 +8117,8 @@ static int lfs_find(int argc, char **argv)
 			goto err;
 		}
 	}
-	if (!param.fp_verbose)
-		param.fp_verbose = VERBOSE_DEFAULT;
+	if (!param->fp_verbose)
+		param->fp_verbose = VERBOSE_DEFAULT;
 
 	if (pathstart == -1) {
 		fprintf(stderr, "error: %s: no filename|pathname\n",
@@ -8108,21 +8130,21 @@ static int lfs_find(int argc, char **argv)
 		pathend = argc;
 	}
 
-	if (param.fp_min_depth > param.fp_max_depth) {
+	if (param->fp_min_depth > param->fp_max_depth) {
 		fprintf(stderr, "error: %s: mindepth %u > maxdepth %u\n",
-			argv[0], param.fp_min_depth, param.fp_max_depth);
+			argv[0], param->fp_min_depth, param->fp_max_depth);
 		ret = CMD_HELP;
 		goto err;
 	}
 
 	/* Set default thread count if not specified */
-	if (param.fp_thread_count == 0) {
-		param.fp_thread_count =
+	if (param->fp_thread_count == 0) {
+		param->fp_thread_count =
 			calculate_default_thread_count(argv[pathstart]);
 	}
 
 	do {
-		rc = llapi_find(argv[pathstart], &param);
+		rc = llapi_find(argv[pathstart], param);
 		if (rc) {
 			if (!ret)
 				ret = rc;
@@ -8133,20 +8155,22 @@ static int lfs_find(int argc, char **argv)
 	} while (++pathstart < pathend);
 
 err:
-	if (param.fp_obd_uuid && param.fp_num_alloc_obds)
-		free(param.fp_obd_uuid);
+	if (param->fp_obd_uuid && param->fp_num_alloc_obds)
+		free(param->fp_obd_uuid);
 
-	if (param.fp_mdt_uuid && param.fp_num_alloc_mdts)
-		free(param.fp_mdt_uuid);
+	if (param->fp_mdt_uuid && param->fp_num_alloc_mdts)
+		free(param->fp_mdt_uuid);
 
-	if (param.fp_format_printf_str)
-		free(param.fp_format_printf_str);
+	if (param->fp_format_printf_str)
+		free(param->fp_format_printf_str);
 
-	if (param.fp_xattr_match_info) {
-		xattr_match_info_free(param.fp_xattr_match_info);
-		free(param.fp_xattr_match_info);
-		param.fp_xattr_match_info = NULL;
+	if (param->fp_xattr_match_info) {
+		xattr_match_info_free(param->fp_xattr_match_info);
+		free(param->fp_xattr_match_info);
+		param->fp_xattr_match_info = NULL;
 	}
+
+	llapi_find_param_free(param);
 
 	return ret;
 }
@@ -8568,7 +8592,7 @@ static int lfs_getstripe_internal(int argc, char **argv,
 static int lfs_tgts(int argc, char **argv)
 {
 	char mntdir[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
-	struct find_param param;
+	struct find_param *param = NULL;
 	int index = 0, rc = 0;
 
 	if (argc > 2)
@@ -8581,40 +8605,65 @@ static int lfs_tgts(int argc, char **argv)
 		return rc;
 	}
 
+	param = llapi_find_param_alloc();
+	if (!param) {
+		rc = -errno;
+		fprintf(stderr,
+			"%s %s: cannot allocate memory for parameters: %s\n",
+			progname, argv[0], strerror(-rc));
+		return rc;
+	}
+
 	while (!llapi_search_mounts(path, index++, mntdir, NULL)) {
 		/* Check if we have a mount point */
 		if (mntdir[0] == '\0')
 			continue;
 
-		memset(&param, 0, sizeof(param));
 		if (!strcmp(argv[0], "mdts"))
-			param.fp_get_lmv = 1;
+			param->fp_get_lmv = 1;
 
-		rc = llapi_ostlist(mntdir, &param);
+		rc = llapi_ostlist(mntdir, param);
 		if (rc) {
 			fprintf(stderr, "error: %s: failed on %s\n",
 				argv[0], mntdir);
 		}
 		if (path[0] != '\0')
 			break;
+		memset(param, 0, sizeof(*param));
 		memset(mntdir, 0, PATH_MAX);
 	}
+
+	llapi_find_param_free(param);
 
 	return rc;
 }
 
 static int lfs_getstripe(int argc, char **argv)
 {
-	struct find_param param = { 0 };
+	int ret = 0;
+	struct find_param *param = NULL;
 
-	param.fp_max_depth = 1;
-	return lfs_getstripe_internal(argc, argv, &param);
+	param = llapi_find_param_alloc();
+	if (!param) {
+		ret = -errno;
+		fprintf(stderr,
+			"%s %s: cannot allocate memory for parameters: %s\n",
+			progname, argv[0], strerror(-ret));
+		return ret;
+	}
+	param->fp_max_depth = 1;
+
+	ret = lfs_getstripe_internal(argc, argv, param);
+
+	llapi_find_param_free(param);
+
+	return ret;
 }
 
 /* functions */
 static int lfs_getdirstripe(int argc, char **argv)
 {
-	struct find_param param = { 0 };
+	struct find_param *param = NULL;
 	struct option long_opts[] = {
 	{ .val = 'c',	.name = "mdt-count",	 .has_arg = no_argument },
 	{ .val = 'D',	.name = "default",	 .has_arg = no_argument },
@@ -8637,20 +8686,28 @@ static int lfs_getdirstripe(int argc, char **argv)
 	{ .name = NULL } };
 	int c, rc = 0;
 
-	param.fp_get_lmv = 1;
+	param = llapi_find_param_alloc();
+	if (!param) {
+		rc = -errno;
+		fprintf(stderr,
+			"%s %s: cannot allocate memory for parameters: %s\n",
+			progname, argv[0], strerror(-rc));
+		return rc;
+	}
+	param->fp_get_lmv = 1;
 
 	while ((c = getopt_long(argc, argv,
 				"cDFhHimO:rRtTvXy", long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'c':
 		case 'T':
-			param.fp_verbose |= VERBOSE_STRIPE_COUNT;
+			param->fp_verbose |= VERBOSE_STRIPE_COUNT;
 			break;
 		case 'D':
-			param.fp_get_default_lmv = 1;
+			param->fp_get_default_lmv = 1;
 			break;
 		case 'F':
-			param.fp_verbose |= VERBOSE_DFID;
+			param->fp_verbose |= VERBOSE_DFID;
 			break;
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		case 't':
@@ -8659,65 +8716,69 @@ static int lfs_getdirstripe(int argc, char **argv)
 			fallthrough;
 #endif
 		case 'H':
-			param.fp_verbose |= VERBOSE_HASH_TYPE;
+			param->fp_verbose |= VERBOSE_HASH_TYPE;
 			break;
 		case LFS_HEX_IDX_OPT:
-			param.fp_hex_idx = 1;
+			param->fp_hex_idx = 1;
 			break;
 		case 'i':
 			fallthrough;
 		case 'm':
-			param.fp_verbose |= VERBOSE_STRIPE_OFFSET;
+			param->fp_verbose |= VERBOSE_STRIPE_OFFSET;
 			break;
 		case 'O':
-			if (param.fp_obd_uuid) {
+			if (param->fp_obd_uuid) {
 				fprintf(stderr,
 					"%s: only one obduuid allowed",
 					progname);
-				return CMD_HELP;
+				rc = CMD_HELP;
+				goto out;
 			}
-			param.fp_obd_uuid = (struct obd_uuid *)optarg;
+			param->fp_obd_uuid = (struct obd_uuid *)optarg;
 			break;
 		case 'r':
-			param.fp_recursive = 1;
+			param->fp_recursive = 1;
 			break;
 		case 'R':
-			param.fp_raw = 1;
+			param->fp_raw = 1;
 			break;
 		case 'v':
-			param.fp_verbose |= VERBOSE_DEFAULT | VERBOSE_DETAIL;
+			param->fp_verbose |= VERBOSE_DEFAULT | VERBOSE_DETAIL;
 			break;
 		case 'X':
-			param.fp_verbose |= VERBOSE_INHERIT;
+			param->fp_verbose |= VERBOSE_INHERIT;
 			break;
 		case LFS_INHERIT_RR_OPT:
-			param.fp_verbose |= VERBOSE_INHERIT_RR;
+			param->fp_verbose |= VERBOSE_INHERIT_RR;
 			break;
 		case 'y':
-			param.fp_yaml = 1;
+			param->fp_yaml = 1;
 			break;
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
 			fallthrough;
 		case 'h':
-			return CMD_HELP;
+			rc = CMD_HELP;
+			goto out;
 		}
 	}
 
-	if (optind >= argc)
-		return CMD_HELP;
+	if (optind >= argc) {
+		rc = CMD_HELP;
+		goto out;
+	}
 
-	if (param.fp_recursive)
-		param.fp_max_depth = -1;
+	if (param->fp_recursive)
+		param->fp_max_depth = -1;
 
-	if (!param.fp_verbose)
-		param.fp_verbose = VERBOSE_DEFAULT;
+	if (!param->fp_verbose)
+		param->fp_verbose = VERBOSE_DEFAULT;
 
 	do {
 		int rc2;
 
-		rc2 = llapi_getstripe(argv[optind], &param);
+		rc2 = llapi_getstripe(argv[optind], param);
 		if (rc2) {
 			fprintf(stderr, "%s: %s for '%s' failed: %s\n",
 				progname, argv[0], argv[optind],
@@ -8726,6 +8787,9 @@ static int lfs_getdirstripe(int argc, char **argv)
 				rc = rc2;
 		}
 	} while (++optind < argc);
+
+out:
+	llapi_find_param_free(param);
 
 	return rc;
 }
@@ -9804,10 +9868,7 @@ static int lfs_unlink_foreign(int argc, char **argv)
 static int lfs_mv(int argc, char **argv)
 {
 	struct lmv_user_md lmu = { LMV_USER_MAGIC };
-	struct find_param param = {
-		.fp_max_depth = -1,
-		.fp_mdt_index = -1,
-	};
+	struct find_param *param = NULL;
 	char *end;
 	int c;
 	int rc = 0;
@@ -9816,6 +9877,17 @@ static int lfs_mv(int argc, char **argv)
 	{ .val = 'm',	.name = "mdt-index",	.has_arg = required_argument },
 	{ .val = 'v',	.name = "verbose",	.has_arg = no_argument },
 	{ .name = NULL } };
+
+	param = llapi_find_param_alloc();
+	if (!param) {
+		rc = -errno;
+		fprintf(stderr,
+			"%s %s: cannot allocate memory for parameters: %s\n",
+			progname, argv[0], strerror(-rc));
+		return rc;
+	}
+	param->fp_max_depth = -1;
+	param->fp_mdt_index = -1;
 
 	while ((c = getopt_long(argc, argv, "m:M:v", long_opts, NULL)) != -1) {
 		switch (c) {
@@ -9831,40 +9903,46 @@ static int lfs_mv(int argc, char **argv)
 			    lmu.lum_stripe_offset >= UINT32_MAX) {
 				fprintf(stderr, "%s mv: bad MDT index '%s'\n",
 					progname, optarg);
-				return CMD_HELP;
+				rc = CMD_HELP;
+				goto out;
 			}
 			break;
 		case 'v':
-			param.fp_verbose = VERBOSE_DETAIL;
+			param->fp_verbose = VERBOSE_DETAIL;
 			break;
 		default:
 			fprintf(stderr, "%s mv: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
-			return CMD_HELP;
+			rc = CMD_HELP;
+			goto out;
 		}
 	}
 
 	if (lmu.lum_stripe_offset == LMV_OFFSET_DEFAULT) {
 		fprintf(stderr, "%s mv: MDT index must be specified\n",
 			progname);
-		return CMD_HELP;
+		rc = CMD_HELP;
+		goto out;
 	}
 
 	if (optind >= argc) {
 		fprintf(stderr, "%s mv: DIR must be specified\n", progname);
-		return CMD_HELP;
+		rc = CMD_HELP;
+		goto out;
 	}
 
 	lmu.lum_hash_type = LMV_HASH_TYPE_UNKNOWN;
 
 	/* initialize migrate mdt parameters */
-	param.fp_lmv_md = &lmu;
-	param.fp_migrate = 1;
-	rc = llapi_migrate_mdt(argv[optind], &param);
+	param->fp_lmv_md = &lmu;
+	param->fp_migrate = 1;
+	rc = llapi_migrate_mdt(argv[optind], param);
 	if (rc != 0)
 		fprintf(stderr, "%s mv: cannot migrate '%s' to MDT%04x: %s\n",
 			progname, argv[optind], lmu.lum_stripe_offset,
 			strerror(-rc));
+out:
+	llapi_find_param_free(param);
 	return rc;
 }
 

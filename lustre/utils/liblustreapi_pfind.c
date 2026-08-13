@@ -3763,3 +3763,33 @@ cleanup:
 
 	return rc;
 }
+
+/**
+ * llapi_find_param_alloc() - Allocate a find_param struct.
+ *
+ * The returned structure should be freed with llapi_find_param_free().
+ *
+ * Return:
+ * * on success, pointer to a zeroed struct find_param
+ * * on failure, %NULL with errno set to %ENOMEM
+ */
+struct find_param *llapi_find_param_alloc(void)
+{
+	struct find_param *param;
+
+	param = calloc(1, sizeof(*param));
+	if (!param)
+		errno = ENOMEM;
+
+	return param;
+}
+
+/**
+ * llapi_find_param_free() - Free a find_param struct.
+ *
+ * @param: Pointer to find_param structure
+ */
+void llapi_find_param_free(struct find_param *param)
+{
+	free(param);
+}

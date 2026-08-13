@@ -557,6 +557,8 @@ int llapi_getstripe(char *path, struct find_param *param);
 int llapi_find(char *path, struct find_param *param);
 int llapi_find_with_cb(char *path, struct find_param *param,
 		       llapi_find_cb_t cb_init, llapi_find_cb_t cb_fini);
+struct find_param *llapi_find_param_alloc(void);
+void llapi_find_param_free(struct find_param *param);
 
 int llapi_file_fget_mdtidx(int fd, int *mdtidx);
 int llapi_dir_set_default_lmv(const char *name,
