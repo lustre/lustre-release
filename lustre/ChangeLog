@@ -5,7 +5,7 @@ TBD Whamcloud
        * Server primary kernels built and tested during release cycle:
          RHEL 10
          -------
-         6.12.0-211.40.1.el10  (RHEL10.2)
+         6.12.0-211.47.1.el10  (RHEL10.2)
          6.12.0-124.56.1.el10  (RHEL10.1)
          6.12.0-55.43.1.el10   (RHEL10.0)
          RHEL 9
@@ -62,7 +62,7 @@ TBD Whamcloud
        * Client primary kernels built and tested during release cycle:
          RHEL 10
          -------
-         6.12.0-211.40.1.el10  (RHEL10.2)
+         6.12.0-211.47.1.el10  (RHEL10.2)
          6.12.0-124.56.1.el10  (RHEL10.1)
          6.12.0-55.43.1.el10   (RHEL10.0)
          RHEL 9
