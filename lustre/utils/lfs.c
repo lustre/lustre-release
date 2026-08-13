@@ -8168,7 +8168,7 @@ static int lfs_find(int argc, char **argv)
 			break;
 		case LFS_PRINTF_LS:
 			param->fp_format_printf_str =
-				strdup("%i\t%k\t%M\t%n\t%u\t%g\t%s\t%t\t%p\n");
+				strdup("%18i %10k %M %4n %-8u %-8g %13s %t %p\n");
 			break;
 		case LFS_PROJID_OPT:
 			rc = name2projid(&param->fp_projid, optarg);

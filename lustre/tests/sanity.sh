@@ -10339,10 +10339,10 @@ run_test 56Eaa "test lfs find -printf added functions"
 
 test_56Eab() {
 	touch $DIR/$tfile
-	local lfs_ls=($($LFS find $DIR -name $tfile -ls))
-	local find_ls=($(find $DIR -name $tfile -ls))
+	local lfs_ls=($($LFS find $DIR -name $tfile -ls | sort -n))
+	local find_ls=($(find $DIR -name $tfile -ls | sort -n))
 
-# "-1" is last field, since dates are not printed exactly the same.
+	# "-1" is last field, since dates are not printed exactly the same.
 	for ((i = -1; i < 7; i++)); do
 		[[ "${lfs_ls[i]}" == "${find_ls[i]}" ]] ||
 			error "expected '${lfs_ls[i]}' but got '${find_ls[i]}'"

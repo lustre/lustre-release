@@ -1,4 +1,4 @@
-.TH LFS-FIND 1 2026-03-06 Lustre "Lustre User Utilities"
+.TH LFS-FIND 1 2026-09-11 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-find \- Lustre client utility to list files with specific attributes
 .SH SYNOPSIS
@@ -336,10 +336,17 @@ Use file size and blocks from MDT, if available, to avoid extra RPCs.
 Print files in a format similar to
 .RB ' "ls -l" ',
 showing the inode number, allocated blocks, permissions, link count,
-owner, group, size, file type, and path.
+owner, group, size, modification time, and path.
 This is equivalent to specifying the
-.B \'--printf '%i\\\\t%k\\\\t%M\\\\t%n\\\\t%u\\\\t%g\\\\t%s\\\\t%t\\\\t%p\\\\n'
-option.
+.B --printf\ '%18i\ %10k\ %M\ %4n\ %-8u\ %-8g\ %13s\ %t\ %p\\\\n'
+option.  This option is for human convenience,
+but the exact formatting is not guaranteed to be constant or match
+.RB ' "find -ls" '
+or
+.RB ' "ls -l" '
+exactly.
+In particular the timestamp format may change, so if a consistent output is
+needed as input to a parser then the format should be explicitly specified.
 .TP
 .BR --links
 File has
@@ -549,6 +556,18 @@ A literal backslash.
 .TP
 .B %%
 A literal percent sign.
+.TP
+.BI % \fR[ -0\fR] WIDTH
+Specify the field width, to print the value padded with spaces to at least
+.I WIDTH
+characters wide.
+If the value has more characters than the specified
+.I WIDTH
+then it will print the full value.  With a leading zero,
+.BI %0 WIDTH m
+will pad the file mode with leading zeroes. If negative,
+.BI %- WIDTH
+will align the value to the left of the field, positive values to the right.
 .TP
 .B %a
 File\'s last access time in the format returned by the C \`ctime\' function.
