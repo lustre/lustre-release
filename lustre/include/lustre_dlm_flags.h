@@ -307,7 +307,10 @@
  * to aging.  Used by MGC locks, they are cancelled only at unmount or
  * by callback.  Code which sets this flag on a granted lock must also
  * remove the lock from the LRU in the same resource lock section.  See
- * the comment at ldlm_lock_add_to_lru_nolock().
+ * the comment at ldlm_lock_add_to_lru_nolock().  The flag has two kinds
+ * of owner.  An enqueue which passes it owns it for the life of the
+ * lock.  ldlm_lock_pin_lru() owns it only until the last matching
+ * ldlm_lock_unpin_lru(), which clears it again.
  */
 #define LDLM_FL_NO_LRU                  0x0001000000000000ULL // bit  48
 #define ldlm_is_no_lru(_l)              LDLM_TEST_FLAG((_l), 1ULL << 48)
@@ -416,6 +419,19 @@
 #define LDLM_FL_SRV_ENQ_MASK	(LDLM_FL_LOCK_CHANGED		|\
 				 LDLM_FL_BLOCKED_MASK		|\
 				 LDLM_FL_NO_TIMEOUT)
+
+/** l_flags bits which make a lock unusable for the client LRU
+ * A lock in any of these states is under cancellation or under conversion.
+ * It must not be pinned, and it must not be filed on the LRU, while that
+ * runs. A cancelled lock never comes back. A converted lock does, because
+ * ldlm_cli_inodebits_convert() clears LDLM_FL_CBPENDING and LDLM_FL_BL_AST
+ * and files the lock again with fewer ibits.
+ */
+#define LDLM_FL_LRU_UNUSABLE_MASK	(LDLM_FL_DESTROYED	|\
+					 LDLM_FL_CANCELING	|\
+					 LDLM_FL_CBPENDING	|\
+					 LDLM_FL_BL_AST		|\
+					 LDLM_FL_CONVERTING)
 
 /** test for ldlm_lock flag bit set */
 #define LDLM_TEST_FLAG(_l, _b)    (((_l)->l_flags & (_b)) != 0)

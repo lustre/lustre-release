@@ -358,6 +358,132 @@ void ldlm_lock_touch_in_lru(struct ldlm_lock *lock)
 }
 
 /**
+ * ldlm_lock_pin_lru() - hold a client lock out of voluntary LRU reclaim
+ * @lock: lock to pin; the caller holds a reference on it and holds neither
+ *	  the lock nor the resource spinlock
+ *
+ * Excludes @lock from the client cache policy, the LRU age reaper and the
+ * ldlm pool shrinker until the matching ldlm_lock_unpin_lru(). Adds no reader
+ * or writer reference, so a blocking callback, an eviction and a namespace
+ * cleanup all still cancel @lock immediately and no remote peer ever waits on
+ * a pin. Pins nest; the exemption ends when the last one is dropped.
+ *
+ * A pin changes no lock coverage. It adds no mode reference, and it changes
+ * no policy data. An extent, a client page and the bulk IO accounting of the
+ * osc layer therefore see no change.
+ *
+ * A pin does hold an ldlm_lock_get() reference, which
+ * ldlm_lock_unpin_lru() drops.
+ * The caller can therefore drop its own reference while the pin lives.
+ *
+ * The caller calls ldlm_lock_unpin_lru() on a return of 0, and on no other
+ * return.
+ *
+ * Context: takes the resource and namespace spinlocks. Does not sleep.
+ * Return:
+ * * %0		pinned, ldlm_lock_unpin_lru() must be called
+ * * %-ESTALE	not pinned, and no pin can help: the namespace is a server
+ *		one, the resource is a flock one, the lock is not granted,
+ *		or the lock is under cancellation or conversion
+ * * %-EALREADY	not pinned, and no pin is necessary: another owner already
+ *		holds the lock out of the LRU, and this interface does not
+ *		clear that exemption
+ * * %-EOVERFLOW no pin left in the counter; not pinned
+ */
+int ldlm_lock_pin_lru(struct ldlm_lock *lock)
+{
+	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
+	int rc = 0;
+
+	ENTRY;
+	/* A flock resource has no LRU, and ldlm_lock_add_to_lru_nolock()
+	 * asserts on one. Refuse such a lock here, so that the unpin cannot
+	 * file it.
+	 */
+	lock_res_and_lock(lock);
+	if (!ns_is_client(ns) || !ldlm_is_granted(lock) ||
+	    lock->l_resource->lr_type == LDLM_FLOCK ||
+	    LDLM_HAVE_MASK(lock, LRU_UNUSABLE)) {
+		rc = -ESTALE;
+	} else if ((lock->l_flags & LDLM_FL_NO_LRU) && lock->l_lru_pins == 0) {
+		rc = -EALREADY;
+	} else if (lock->l_lru_pins == U16_MAX) {
+		rc = -EOVERFLOW;
+	} else {
+		if (lock->l_lru_pins++ == 0) {
+			lock->l_flags |= LDLM_FL_NO_LRU;
+			ldlm_lock_remove_from_lru(lock);
+			LDLM_DEBUG(lock, "pinned out of lru");
+		}
+		/* one reference for each pin, not one for the exemption */
+		ldlm_lock_get(lock);
+	}
+	unlock_res_and_lock(lock);
+
+	RETURN(rc);
+}
+EXPORT_SYMBOL(ldlm_lock_pin_lru);
+
+/**
+ * ldlm_lock_unpin_lru() - drop a pin taken by ldlm_lock_pin_lru()
+ * @lock: pinned lock; the caller holds neither the lock nor the resource
+ *	  spinlock
+ *
+ * On the last pin the lock returns to the LRU as recently used, but only if
+ * it is still granted, unreferenced and not already listed. A lock cancelled
+ * or destroyed while pinned is left alone.
+ *
+ * Drops the ldlm_lock_get() reference of the pin. @lock is no longer safe
+ * to use after this call, unless the caller holds a reference of its own.
+ *
+ * An unpin which returns the lock to the LRU also runs the pool
+ * recalculation, which on a client can select a batch of unrelated locks of
+ * this namespace for cancellation. The recalculation gives that batch to the
+ * ldlm blocking thread, which sends the CANCEL RPCs.
+ * ldlm_lock_decref_internal() calls the recalculation from the same position
+ * for the same reason.
+ *
+ * The relist is an access for the cache policy. Under the default LFRU
+ * policy it increments l_lru_score, and it can move the LFRU thresholds of
+ * the namespace. A lock which the caller pins on each IO therefore scores
+ * higher than the same lock without a pin.
+ *
+ * Context: takes the resource and namespace spinlocks. May sleep, and so must
+ *	    not be called from atomic context.
+ */
+void ldlm_lock_unpin_lru(struct ldlm_lock *lock)
+{
+	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
+	bool relisted = false;
+
+	ENTRY;
+	lock_res_and_lock(lock);
+	LASSERT(lock->l_lru_pins > 0);
+	if (--lock->l_lru_pins == 0) {
+		lock->l_flags &= ~LDLM_FL_NO_LRU;
+		if (ns_is_client(ns) && ldlm_is_granted(lock) &&
+		    !LDLM_HAVE_MASK(lock, LRU_UNUSABLE) &&
+		    !lock->l_readers && !lock->l_writers &&
+		    list_empty(&lock->l_lru)) {
+			lock->l_last_used = ktime_get();
+			ldlm_lock_add_to_lru(lock);
+			relisted = true;
+		}
+	}
+	unlock_res_and_lock(lock);
+
+	if (relisted)
+		ldlm_pool_recalc(&ns->ns_pool, true);
+
+	/* the pool recalculation uses the namespace, so the reference of
+	 * the pin goes last
+	 */
+	ldlm_lock_put(lock);
+	EXIT;
+}
+EXPORT_SYMBOL(ldlm_lock_unpin_lru);
+
+/**
  * Helper to destroy a locked lock.
  *
  * Used by ldlm_lock_destroy and ldlm_lock_destroy_nolock
@@ -2859,7 +2985,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 	switch (resource->lr_type) {
 	case LDLM_EXTENT:
 		libcfs_debug_msg(msgdata,
-				 "%pV ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: " DLDLMRES " rrc: %d type: %s [%llu->%llu] (req %llu->%llu) gid %llu flags: %#llx nid: %s remote: %#llx expref: %d pid: %u timeout: %lld lvb_type: %d lru_score: %d lru_type: %d\n",
+				 "%pV ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: " DLDLMRES " rrc: %d type: %s [%llu->%llu] (req %llu->%llu) gid %llu flags: %#llx nid: %s remote: %#llx expref: %d pid: %u timeout: %lld lvb_type: %d lru_score: %d lru_type: %d lru_pins: %u\n",
 				 &vaf,
 				 ldlm_lock_to_ns_name(lock), lock,
 				 lock->l_handle.h_cookie,
@@ -2879,7 +3005,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 exp ? refcount_read(&exp->exp_handle.h_ref) : -99,
 				 lock->l_pid, lock->l_callback_timestamp,
 				 lock->l_lvb_type, lock->l_lru_score,
-				 lock->l_lru_type);
+				 lock->l_lru_type, lock->l_lru_pins);
 		break;
 
 	case LDLM_FLOCK:
@@ -2907,7 +3033,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 	case LDLM_IBITS:
 		if (!lock->l_remote_handle.cookie)
 			libcfs_debug_msg(msgdata,
-				 "%pV ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: " DLDLMRES " bits %#lx/%#lx rrc: %d type: %s flags: %#llx pid: %u initiator: MDT%d lru_score: %d lru_type: %d\n",
+				 "%pV ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: " DLDLMRES " bits %#lx/%#lx rrc: %d type: %s flags: %#llx pid: %u initiator: MDT%d lru_score: %d lru_type: %d lru_pins: %u\n",
 				 &vaf,
 				 ldlm_lock_to_ns_name(lock),
 				 lock, lock->l_handle.h_cookie,
@@ -2922,10 +3048,11 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 ldlm_typename[resource->lr_type],
 				 lock->l_flags, lock->l_pid,
 				 lock->l_policy_data.l_inodebits.li_initiator_id,
-				 lock->l_lru_score, lock->l_lru_type);
+				 lock->l_lru_score, lock->l_lru_type,
+				 lock->l_lru_pins);
 		else
 			libcfs_debug_msg(msgdata,
-				 "%pV ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: " DLDLMRES " bits %#lx/%#lx rrc: %d type: %s gid %llu flags: %#llx nid: %s remote: %#llx expref: %d pid: %u timeout: %lld lvb_type: %d lru_score: %d lru_type: %d\n",
+				 "%pV ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: " DLDLMRES " bits %#lx/%#lx rrc: %d type: %s gid %llu flags: %#llx nid: %s remote: %#llx expref: %d pid: %u timeout: %lld lvb_type: %d lru_score: %d lru_type: %d lru_pins: %u\n",
 				 &vaf,
 				 ldlm_lock_to_ns_name(lock),
 				 lock, lock->l_handle.h_cookie,
@@ -2944,12 +3071,12 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 exp ? refcount_read(&exp->exp_handle.h_ref) : -99,
 				 lock->l_pid, lock->l_callback_timestamp,
 				 lock->l_lvb_type, lock->l_lru_score,
-				 lock->l_lru_type);
+				 lock->l_lru_type, lock->l_lru_pins);
 		break;
 
 	default:
 		libcfs_debug_msg(msgdata,
-				 "%pV ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: " DLDLMRES " rrc: %d type: %s flags: %#llx nid: %s remote: %#llx expref: %d pid: %u timeout: %lld lvb_type: %d lru_score: %d lru_type: %d\n",
+				 "%pV ns: %s lock: %p/%#llx lrc: %d/%d,%d mode: %s/%s res: " DLDLMRES " rrc: %d type: %s flags: %#llx nid: %s remote: %#llx expref: %d pid: %u timeout: %lld lvb_type: %d lru_score: %d lru_type: %d lru_pins: %u\n",
 				 &vaf,
 				 ldlm_lock_to_ns_name(lock),
 				 lock, lock->l_handle.h_cookie,
@@ -2965,7 +3092,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 				 exp ? refcount_read(&exp->exp_handle.h_ref) : -99,
 				 lock->l_pid, lock->l_callback_timestamp,
 				 lock->l_lvb_type, lock->l_lru_score,
-				 lock->l_lru_type);
+				 lock->l_lru_type, lock->l_lru_pins);
 		break;
 	}
 	va_end(args);

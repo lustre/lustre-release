@@ -982,7 +982,14 @@ struct ldlm_lock {
 	 */
 	u8			l_lru_score;
 	u16			l_lvb_len;
-	/* u16			l_unused; */
+	/**
+	 * Number of live IOs holding this lock out of the client LRU.
+	 * Protected by the resource lock. Each pin holds an ldlm_lock_get()
+	 * reference, but no mode reference: l_readers and l_writers are
+	 * unaffected, so a blocking callback, an eviction and a namespace
+	 * cleanup still cancel the lock without waiting.
+	 */
+	u16			l_lru_pins;
 
 	/*
 	 * Temporary storage for a LVB received during an enqueue operation.
@@ -1644,6 +1651,8 @@ struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *lh,
 				     __u64 flags);
 void ldlm_cancel_callback(struct ldlm_lock *ll);
 int ldlm_lock_remove_from_lru(struct ldlm_lock *ll);
+int ldlm_lock_pin_lru(struct ldlm_lock *lock);
+void ldlm_lock_unpin_lru(struct ldlm_lock *lock);
 int ldlm_lock_set_data(const struct lustre_handle *lockh, void *data);
 struct ldlm_lock *ldlm_lock_new_testing(struct ldlm_resource *resource);
 
