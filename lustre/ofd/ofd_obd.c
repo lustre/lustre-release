@@ -1054,7 +1054,7 @@ static int ofd_echo_create(const struct lu_env *env, struct obd_export *exp,
 
 	rc = ofd_validate_seq(exp, seq);
 	if (rc != 0)
-		RETURN(rc);
+		GOTO(out_sem, rc);
 
 	oseq = ofd_seq_load(env, ofd, seq);
 	if (IS_ERR(oseq)) {
