@@ -28471,6 +28471,38 @@ test_251a() {
 }
 run_test 251a "Handling short read and write correctly"
 
+test_251c() {
+	local fast_read_sav=$($LCTL get_param -n llite.*.fast_read 2>/dev/null)
+	local rc
+
+	$LFS setstripe -c 1 $DIR/$tfile || error "setstripe failed"
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 conv=fsync ||
+		error "dd write failed"
+	stack_trap "rm -f $DIR/$tfile"
+
+	if [[ -n "$fast_read_sav" ]]; then
+		stack_trap "$LCTL set_param -n llite.*.fast_read=$fast_read_sav"
+		$LCTL set_param -n llite.*.fast_read=0
+	fi
+	cancel_lru_locks osc
+
+	#define OBD_FAIL_LLITE_LOST_LAYOUT 0x1407
+	# a layout mismatch on every attempt uses up the IO restart budget
+	stack_trap "$LCTL set_param fail_loc=0"
+	$LCTL set_param fail_loc=0x1407
+
+	rc=0
+	timeout 300s $MULTIOP $DIR/$tfile o:O_RDWR:w1048576c || rc=$?
+	((rc == 5)) || error "write returned $rc, expected EIO(5)"
+
+	rc=0
+	timeout 300s $MULTIOP $DIR/$tfile or1048576c || rc=$?
+	((rc == 5)) || error "read returned $rc, expected EIO(5)"
+
+	$LCTL set_param fail_loc=0
+}
+run_test 251c "IO restart budget exhaustion reports an error"
+
 test_252() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 	remote_ost_nodsh && skip "remote OST with nodsh"

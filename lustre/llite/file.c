@@ -2307,6 +2307,19 @@ out:
 		goto restart;
 	}
 
+	/*
+	 * The restart budget is gone.  Bytes already moved are reported as
+	 * a short IO, but a request which moved nothing must not look like
+	 * success or, for a read, like EOF.
+	 */
+	if (retries < 0 && result == 0 && rc == 0) {
+		rc = -EIO;
+		CERROR("%s: "DFID" %s of %zu bytes at %lld restarted %d times without progress: rc = %d\n",
+		       sbi->ll_fsname, PFID(ll_inode2fid(inode)),
+		       iot == CIT_READ ? "read" : "write", bytes, *ppos,
+		       RETRY_ATTEMPTS, rc);
+	}
+
 	/* update inode size */
 	if (io->ci_type == CIT_WRITE)
 		ll_merge_attr(env, inode);
