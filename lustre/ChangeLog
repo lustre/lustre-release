@@ -3,81 +3,124 @@ TBD Whamcloud
        * See https://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
          for currently supported client and server kernel versions.
        * Server primary kernels built and tested during release cycle:
-         6.12.0-211.40.1.el10 (RHEL10.2)
-         6.12.0-124.56.1.el10 (RHEL10.1)
-         5.14.0-687.17.1.el9  (RHEL9.8)
-         5.14.0-611.55.1.el9  (RHEL9.7)
-         4.18.0-553.137.1.el8 (RHEL8.10)
+         RHEL 10
+         -------
+         6.12.0-211.40.1.el10  (RHEL10.2)
+         6.12.0-124.56.1.el10  (RHEL10.1)
+         6.12.0-55.43.1.el10   (RHEL10.0)
+         RHEL 9
+         ------
+         5.14.0-687.17.1.el9   (RHEL9.8)
+         5.14.0-611.55.1.el9   (RHEL9.7)
+         RHEL 8
+         ------
+         4.18.0-553.155.1.el8  (RHEL8.10)
        * Other server kernels known to build and work at some point (others may also work):
-         4.18.0-348.23.1.el8  (RHEL8.5)
-         4.18.0-372.32.1.el8  (RHEL8.6)
-         4.18.0-425.10.1.el8  (RHEL8.7)
-         4.18.0-477.27.1.el8  (RHEL8.8)
-         4.18.0-513.24.1.el8  (RHEL8.9)
-         5.14.0-162.23.1.el9  (RHEL9.1)
-         5.14.0-284.30.1.el9  (RHEL9.2)
-         5.14.0-362.24.1.el9  (RHEL9.3)
-         5.14.0-427.42.1.el9  (RHEL9.4)
-         5.14.0-503.40.1.el9  (RHEL9.5)
-         5.14.0-570.62.1.el9  (RHEL9.6)
-         5.14.21-150500.55.65 (SLES15 SP5)
-         5.4.0-48             (Ubuntu 20.04)
-         6.8.0-38             (Ubuntu 24.04)
-         6.10.0-15            (Ubuntu 24.04)
-         6.19.14-108.fc42     (Fedora 42)
-         7.0.9-205.fc44.x86_64 (Fedora 44)
-         vanilla linux 5.4.0  (ZFS + ldiskfs)
-         vanilla linux 5.4.21  (ZFS + ldiskfs)
-         vanilla linux 5.4.136  (ZFS + ldiskfs)
-         vanilla linux 6.1.36 (ZFS + ldiskfs)
-         vanilla linux 6.6.13 (ZFS + ldiskfs)
-         vanilla linux 6.12.95 (ZFS + ldiskfs)
+         RHEL 8
+         ------
+         4.18.0-513.24.1.el8   (RHEL8.9)
+         4.18.0-477.27.1.el8   (RHEL8.8)
+         4.18.0-425.10.1.el8   (RHEL8.7)
+         4.18.0-372.32.1.el8   (RHEL8.6)
+         4.18.0-348.23.1.el8   (RHEL8.5)
+         RHEL 9
+         ------
+         5.14.0-570.62.1.el9   (RHEL9.6)
+         5.14.0-503.40.1.el9   (RHEL9.5)
+         5.14.0-427.42.1.el9   (RHEL9.4)
+         5.14.0-362.24.1.el9   (RHEL9.3)
+         5.14.0-284.30.1.el9   (RHEL9.2)
+         5.14.0-162.23.1.el9   (RHEL9.1)
+         SLES 15
+         -------
+         5.14.21-150500.55.65  (SLES15 SP5)
+         Ubuntu
+         ------
+         6.10.0-15             (Ubuntu 24.04)
+         6.8.0-38              (Ubuntu 24.04)
+         5.4.0-48              (Ubuntu 20.04)
+         Fedora
+         ------
+         7.0.9-205.fc44        (Fedora 44)
+         6.19.14-108.fc42      (Fedora 42)
+         Vanilla
+         -------
+         vanilla linux 7.0.8   (ldiskfs)
          vanilla linux 6.18.22 (ZFS + ldiskfs)
-         vanilla linux 7.0.8  (ldiskfs)
-         5.10.0-60.94.0.118.oe2203 (openEuler 22.03 LTS)
-         5.10.0-136.32.0.108.oe2203sp1 (openEuler 22.03 LTS SP1)
+         vanilla linux 6.12.95 (ZFS + ldiskfs)
+         vanilla linux 6.6.13  (ZFS + ldiskfs)
+         vanilla linux 6.1.36  (ZFS + ldiskfs)
+         vanilla linux 5.4.136 (ZFS + ldiskfs)
+         vanilla linux 5.4.21  (ZFS + ldiskfs)
+         vanilla linux 5.4.0   (ZFS + ldiskfs)
+         OpenEuler
+         ---------
          5.10.0-153.19.0.95.oe2203sp2 (openEuler 22.03 LTS SP2)
+         5.10.0-136.32.0.108.oe2203sp1 (openEuler 22.03 LTS SP1)
+         5.10.0-60.94.0.118.oe2203 (openEuler 22.03 LTS)
        * ldiskfs needs an ldiskfs patch series for that kernel, ZFS does not
        * Client primary kernels built and tested during release cycle:
-         6.12.0-211.40.1.el10 (RHEL10.2)
-         6.12.0-124.56.1.el10 (RHEL10.1)
-         6.12.0-55.43.1.el10  (RHEL10.0)
-         5.14.0-687.17.1.el9  (RHEL9.8)
-         5.14.0-611.55.1.el9  (RHEL9.7)
-         4.18.0-553.137.1.el8 (RHEL8.10)
-         5.15.0-88            (Ubuntu 22.04)
-         6.8.0-35             (Ubuntu 24.04)
-         6.4.0-150700.53.60   (SLES15 SP7)
-         6.4.0-150600.23.78   (SLES15 SP6)
-         5.14.21-150500.55.73 (SLES15 SP5)
+         RHEL 10
+         -------
+         6.12.0-211.40.1.el10  (RHEL10.2)
+         6.12.0-124.56.1.el10  (RHEL10.1)
+         6.12.0-55.43.1.el10   (RHEL10.0)
+         RHEL 9
+         ------
+         5.14.0-687.17.1.el9   (RHEL9.8)
+         5.14.0-611.55.1.el9   (RHEL9.7)
+         RHEL 8
+         ------
+         4.18.0-553.155.1.el8  (RHEL8.10)
+         SLES 15
+         -------
+         6.4.0-150700.53.60    (SLES15 SP7)
+         Ubuntu
+         ------
+         6.8.0-35              (Ubuntu 24.04)
        * Other clients known to build on these kernels at some point (others may also work):
-         4.18.0-348.23.1.el8  (RHEL8.5)
-         4.18.0-372.32.1.el8  (RHEL8.6)
-         4.18.0-425.10.1.el8  (RHEL8.7)
-         4.18.0-477.27.1.el8  (RHEL8.8)
-         4.18.0-513.24.1.el8  (RHEL8.9)
-         5.14.0-70.30.1.el9   (RHEL9.0)
-         5.14.0-162.23.1.el9  (RHEL9.1)
-         5.14.0-284.30.1.el9  (RHEL9.2)
-         5.14.0-362.24.1.el9  (RHEL9.3)
-         5.14.0-427.42.1.el9  (RHEL9.4)
-         5.14.0-503.40.1.el9  (RHEL9.5)
-         5.14.0-570.62.1.el9  (RHEL9.6)
-         5.3.18-24.96         (SLES15 SP2)
-         5.3.18-150300.59.93  (SLES15 SP3)
+         RHEL 8
+         ------
+         4.18.0-513.24.1.el8   (RHEL8.9)
+         4.18.0-477.27.1.el8   (RHEL8.8)
+         4.18.0-425.10.1.el8   (RHEL8.7)
+         4.18.0-372.32.1.el8   (RHEL8.6)
+         4.18.0-348.23.1.el8   (RHEL8.5)
+         RHEL 9
+         ------
+         5.14.0-570.62.1.el9   (RHEL9.6)
+         5.14.0-503.40.1.el9   (RHEL9.5)
+         5.14.0-427.42.1.el9   (RHEL9.4)
+         5.14.0-362.24.1.el9   (RHEL9.3)
+         5.14.0-284.30.1.el9   (RHEL9.2)
+         5.14.0-162.23.1.el9   (RHEL9.1)
+         5.14.0-70.30.1.el9    (RHEL9.0)
+         SLES 15
+         -------
+         6.4.0-150600.23.78    (SLES15 SP6)
+         5.14.21-150500.55.73  (SLES15 SP5)
          5.14.21-150400.24.100 (SLES15 SP4)
-         5.4.0-37             (Ubuntu 20.04)
-         5.8.0-53             (Ubuntu 20.04.2 HWE)
-         5.11.0-31            (Ubuntu 20.04.3 HWE)
-         7.0.0-15             (Ubuntu 24.04)
-         5.11.0               (vanilla kernel.org)
-         6.15.6               (vanilla kernel.org)
-         6.16.1               (vanilla kernel.org)
-         6.17.6               (vanilla kernel.org)
-         6.18.22              (vanilla kernel.org)
-         6.19.12              (vanilla kernel.org)
-         7.0.8                (vanilla kernel.org)
-         5.10.0               (openEuler 22.03 LTS)
+         5.3.18-150300.59.93   (SLES15 SP3)
+         5.3.18-24.96          (SLES15 SP2)
+         Ubuntu
+         ------
+         7.0.0-15              (Ubuntu 24.04)
+         5.15.0-88             (Ubuntu 22.04)
+         5.11.0-31             (Ubuntu 20.04.3 HWE)
+         5.8.0-53              (Ubuntu 20.04.2 HWE)
+         5.4.0-37              (Ubuntu 20.04)
+         Vanilla
+         -------
+         7.0.8                 (vanilla kernel.org)
+         6.19.12               (vanilla kernel.org)
+         6.18.22               (vanilla kernel.org)
+         6.17.6                (vanilla kernel.org)
+         6.16.1                (vanilla kernel.org)
+         6.15.6                (vanilla kernel.org)
+         5.11.0                (vanilla kernel.org)
+         OpenEuler
+         ---------
+         5.10.0                (openEuler 22.03 LTS)
        * Recommended e2fsprogs version: 1.47.3-wc3 or newer
        * Recommended ZFS version: 2.4.0
        * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
@@ -87,7 +130,6 @@ TBD Whamcloud
          the re-exporting nodes to be mounted with "32bitapi" mount option
 
 --------------------------------------------------------------------------------
-
 
 2025-12-29 Whamcloud
        * version 2.17.0
