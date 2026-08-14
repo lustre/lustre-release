@@ -71,7 +71,7 @@ struct inode *search_inode_for_lustre(struct super_block *sb,
 
 	op_data->op_fid1 = *fid;
 	op_data->op_mode = eadatalen;
-	op_data->op_valid = OBD_MD_FLEASIZE;
+	op_data->op_valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA | OBD_MD_MEA;
 
 	/* mds_fid2dentry ignores f_type */
 	rc = md_getattr(sbi->ll_md_exp, op_data, &req);
