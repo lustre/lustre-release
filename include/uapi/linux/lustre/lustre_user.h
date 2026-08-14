@@ -3224,6 +3224,15 @@ ec_split_stripes(int total, int suggested, struct ec_split_comp *sc)
 {
 	int num_buckets;
 
+	/* Single stripe raidset */
+	if (suggested == 1) {
+		sc->esc_k0 = 1;
+		sc->esc_n0 = total;
+		sc->esc_k1 = 0;
+		sc->esc_n1 = 0;
+		return;
+	}
+
 	/* If total is very small then just map it into a single chunk */
 	if (suggested >= total || total < EC_MIN_SPLIT_SIZE) {
 		sc->esc_k0 = total;

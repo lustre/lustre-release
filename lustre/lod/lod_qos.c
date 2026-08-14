@@ -3482,7 +3482,6 @@ int lod_comp_prep_create(const struct lu_env *env, struct lod_object *lo,
 			 */
 			ec_split_stripes(data->llc_stripe_count,
 					 parity->llc_dstripe_count, &sc);
-
 			if (is_parity) {
 				/* one OST per raid set and parity */
 				data_comp = data;

@@ -1281,10 +1281,10 @@ test_4b() {
 	enable_ec
 	local tf=$DIR/$tfile
 
-	# Invalid: data stripe count = 1 (must be at least 2)
+	# Invalid: parity stripe count = 0 (k == 1 is allowed)
 	$LFS setstripe -E -1 --ec 1+0 $tf 2>&1 |
-		grep -qi "invalid data stripe count" ||
-		error "should reject EC with data count < 2"
+		grep -qi "invalid parity stripe count" ||
+		error "should reject EC with parity count = 0"
 
 	# Invalid: data stripe count = 0
 	$LFS setstripe -E -1 --ec 0+1 $tf 2>&1 |
@@ -1293,7 +1293,7 @@ test_4b() {
 
 	! [[ -f $tf ]] || error "file should not have been created"
 }
-run_test 4b "reject invalid EC parameters: data count < 2"
+run_test 4b "reject invalid EC parameters: zero data or parity count"
 
 test_4c() {
 	enable_ec

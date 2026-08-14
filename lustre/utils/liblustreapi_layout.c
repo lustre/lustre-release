@@ -2556,11 +2556,13 @@ static int layout_ec_verify_stripes(__u64 stripe_count, __u8 k, __u8 p)
 	/*
 	 * The total number of parities we will need across all the raid
 	 * sets can not exceed the number of stripes in the data comp
-	 * it protects.
+	 * it protects. Exception: k == 1 (plain memcpy mirrors) may use
+	 * p > 1, so nsets * p may exceed the data stripe count.
 	 */
 	ec_split_stripes(stripe_count, k, &sc);
-	if (sc.esc_n0 * sc.esc_k0 + sc.esc_n1 * sc.esc_k1 != stripe_count ||
-	    (sc.esc_n0 + sc.esc_n1) * p  > stripe_count)
+	if (sc.esc_n0 * sc.esc_k0 + sc.esc_n1 * sc.esc_k1 != stripe_count)
+		return -EINVAL;
+	if (k != 1 && (sc.esc_n0 + sc.esc_n1) * p > stripe_count)
 		return -EINVAL;
 
 	return 0;
@@ -4459,7 +4461,9 @@ static int llapi_ec_compute_parities(int fd, struct llapi_layout *layout,
 	}
 
 	if (num_data_stripes == 1) {
-		memcpy(stripe_ptrs[1], stripe_ptrs[0], stripe_size);
+		for (i = 0; i < p; i++)
+			memcpy(stripe_ptrs[1 + i], stripe_ptrs[0],
+			       stripe_size);
 	} else {
 		gf_gen_cauchy1_matrix(encode_matrix, m, k);
 
@@ -5476,11 +5480,15 @@ static int llapi_ec_check_comp_match(struct llapi_layout_comp *data_comp,
 	/*
 	 * If there are more parities than there are data stripes then the
 	 * resulting erasure coding will no longer fit in the extent.
+	 * k == 1 is exempt: each parity is a memcpy of the data stripe
+	 * and may use p > 1.
 	 */
 	ec_split_stripes(data_comp->llc_stripe_count,
 			 ec_comp->llc_dstripe_count, &sc);
-	if (data_comp->llc_stripe_count <
-	    (uint64_t)(sc.esc_n0 + sc.esc_n1) * ec_comp->llc_cstripe_count) {
+	if (ec_comp->llc_dstripe_count != 1 &&
+	    data_comp->llc_stripe_count <
+	    (uint64_t)(sc.esc_n0 + sc.esc_n1) *
+	    ec_comp->llc_cstripe_count) {
 		llapi_error(LLAPI_MSG_ERROR, -EINVAL, "too many parities");
 		return -EINVAL;
 	}
@@ -5541,11 +5549,10 @@ static int llapi_ec_check_comp_match(struct llapi_layout_comp *data_comp,
  * take up 4 times more data than the actual data and the corresponding range
  * of the file.
  *
- * As a special case, if there is only a single data stripe then we just store
- * a copy of the data as the first (and only) parity instead of computing it
- * just as if it was a normal mirror component of a single stripe.
- * In this case there can only be a single "parity" stripe for the same reason
- * as above.
+ * As a special case, if there is only a single data stripe (k == 1) then we
+ * just store a copy of the data as each parity instead of computing it,
+ * just as if it was a normal mirror of a single stripe. p may be greater
+ * than 1 in this case (e.g. --ec 1+2).
  *
  * The data stripe consists of llc_stripe_count number of stripes.
  * This might be a large number, much larger than what we want to compute the

@@ -415,10 +415,22 @@ set and one 7+2 RAID Set.
 .PP
 The
 .I DATA_STRIPES
-value must be at least 2, and
+value must be at least 1, and
 .I PARITY_STRIPES
-must be at least 1 and less than or equal to
-.I DATA_STRIPES.
+must be at least 1.  For
+.I DATA_STRIPES
+greater than 1,
+.I PARITY_STRIPES
+must also be less than or equal to
+.IR DATA_STRIPES .
+When
+.I DATA_STRIPES
+is 1 (for example
+.BR --ec\ 1+2 ),
+each parity stripe is a plain byte-for-byte copy
+of that single data stripe, so
+.I PARITY_STRIPES
+may exceed 1.
 The supported limits are 32 data stripes and 4 parity stripes.
 The sum
 .I DATA_STRIPES
@@ -427,13 +439,6 @@ The sum
 must not exceed 256.  This is a theoretical limit of the underlying
 Cauchy matrix construction over GF(2^8) and applies even with
 .BR --ec-expert .
-.PP
-For 1-stripe components the EC mirror will be created with only 1
-parity stripe (ie. only single device redundancy). If 2 (or more)
-device redundancy is required for all components, then files should be
-created with
-.I STRIPE_COUNT=2
-(or more) data stripes.
 .PP
 .B EC Option Inheritance and Order Independence
 .PP

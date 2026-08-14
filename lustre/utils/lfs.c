@@ -4596,8 +4596,7 @@ static int parse_ec_stripe_count(const char *optarg, uint8_t *data_count,
 	/* Parse data count */
 	errno = 0;
 	data = strtoul(optarg, &end, 0);
-	if (errno != 0 || end != sep || data == 0 || data < 2 ||
-	    data > UINT8_MAX) {
+	if (errno != 0 || end != sep || data == 0 || data > UINT8_MAX) {
 		fprintf(stderr,
 			"error: invalid data stripe count in '%s'\n", optarg);
 		return -EINVAL;
@@ -4613,8 +4612,12 @@ static int parse_ec_stripe_count(const char *optarg, uint8_t *data_count,
 		return -EINVAL;
 	}
 
-	/* Validate EC parameters */
-	if (parity > data) {
+	/*
+	 * Validate EC parameters. k == 1 is special: each parity is a
+	 * plain copy of the single data stripe (memcpy), so p may be
+	 * greater than k (e.g. --ec 1+2). For k >= 2, p must be <= k.
+	 */
+	if (parity > data && data != 1) {
 		fprintf(stderr,
 			"error: parity count (%lu) must be less than or equal to data count (%lu)\n",
 			parity, data);
