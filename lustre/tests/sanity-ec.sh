@@ -2277,7 +2277,7 @@ run_test 12c "resync skips holed stripe sets"
 
 test_12d() {
 	# Sparse file at raidset granularity: with 3+2 and -c 6 each stripe
-	# set holds two raidsets (k=3). Raidsets 0, 2, and 3 written; raidset
+	# set holds two raidsets (k=3). Raidsets 0 and 2 written; raidset
 	# 1 is a hole. Resync must skip the holed raidset and punch parity.
 	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
 	enable_ec
@@ -2414,6 +2414,82 @@ test_12f() {
 	$LFS mirror verify $tf || error "mirror verify failed after resync"
 }
 run_test 12f "short write resync parity spans [0, 4k) verify"
+
+test_12g() {
+	# EC-only stale resync must emit --stats YAML (lamigo liveness).
+	(( OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs"
+	enable_ec
+
+	local tf=${DIR}/${tdir}/$tfile
+	local output_file=${DIR}/${tdir}/${tfile}.stats
+
+	test_mkdir $DIR/$tdir
+	stack_trap "rm -f $tf $output_file"
+
+	$LFS setstripe -E -1 -S 4M -c 2 --ec 2+1 $tf ||
+		error "setstripe --ec 2+1 failed"
+
+	tr "\000" "\001" < /dev/zero | dd bs=1M count=8 \
+		iflag=fullblock of=$tf 2>/dev/null ||
+		error "failed to write $tf"
+	[[ "$($LFS getstripe $tf)" =~ lcme_flags:.*stale ]] ||
+		error "expected stale parity after write"
+
+	$LFS mirror resync --stats --stats-interval=1 $tf | tee $output_file
+	rc=${PIPESTATUS[0]}
+	(( rc == 0 )) || error "resync failed rc = $rc"
+	[[ ! "$($LFS getstripe $tf)" =~ lcme_flags:.*stale ]] ||
+		error "stale component after resync"
+
+	grep -q "copied:" $output_file ||
+		error "no stats output from EC resync"
+	verify_yaml_available || skip_env "YAML verification not installed"
+	verify_yaml < $output_file || error "stats is not valid YAML"
+}
+run_test 12g "lfs mirror resync --stats for EC parity"
+
+test_12h() {
+	# -W must throttle EC parity writes, not only FLR data copies.
+	(( OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs"
+	enable_ec
+
+	local tf=${DIR}/${tdir}/$tfile
+	local output_file=${DIR}/${tdir}/${tfile}.stats
+	# 16 MiB data, 2+1: two raidsets write ~8 MiB of parity.
+	local data_mb=16
+	local parity_mb=8
+
+	test_mkdir $DIR/$tdir
+	stack_trap "rm -f $tf $output_file"
+
+	$LFS setstripe -E -1 -S 4M -c 2 --ec 2+1 $tf ||
+		error "setstripe --ec 2+1 failed"
+
+	tr "\000" "\001" < /dev/zero | dd bs=1M count=$data_mb \
+		iflag=fullblock of=$tf 2>/dev/null ||
+		error "failed to write $tf"
+	[[ "$($LFS getstripe $tf)" =~ lcme_flags:.*stale ]] ||
+		error "expected stale parity after write"
+
+	local start=$SECONDS
+	$LFS mirror resync --stats --stats-interval=1 -W 1M $tf |
+		tee $output_file
+	rc=${PIPESTATUS[0]}
+	(( rc == 0 )) || error "resync failed rc = $rc"
+	local elapsed=$((SECONDS - start))
+	[[ ! "$($LFS getstripe $tf)" =~ lcme_flags:.*stale ]] ||
+		error "stale component after resync"
+
+	(( elapsed >= parity_mb * 95 / 100 )) ||
+		error "'lfs mirror resync -W' too fast ($elapsed < 0.95 * $parity_mb)?"
+
+	(( elapsed <= parity_mb * 120 / 100 )) ||
+		error_not_in_vm "'lfs mirror resync -W' slow ($elapsed > 1.2 * $parity_mb)"
+
+	(( elapsed <= parity_mb * 350 / 100 )) ||
+		error "'lfs mirror resync -W' too slow in VM ($elapsed > 3.5 * $parity_mb)"
+}
+run_test 12h "lfs mirror resync -W for EC parity"
 
 test_13() {
 	local tf=${DIR}/${tdir}/$tfile

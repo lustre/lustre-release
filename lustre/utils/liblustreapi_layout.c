@@ -4261,6 +4261,54 @@ out_free:
 /* Max byte range to zero-fill when punch is unsupported (e.g. osd-zfs) */
 #define EC_PUNCH_OR_CLEAR_MAX_ZERO_LEN	(4096ULL * ONE_MB)
 
+/*
+ * Periodic --stats / -W state for EC resync. NULL means neither option
+ * is enabled. Matches the FLR counters in llapi_mirror_resync_many_params().
+ */
+struct llapi_resync_progress {
+	struct timespec	lrpr_start_time;
+	struct timespec	lrpr_last_print;
+	unsigned long	lrpr_stats_interval_sec;
+	uint64_t	lrpr_bandwidth_bytes_sec;
+	uint64_t	lrpr_total_bytes_read;
+	uint64_t	lrpr_total_bytes_written;
+	uint64_t	lrpr_write_estimation_bytes;
+};
+
+static void
+llapi_resync_progress_account(struct llapi_resync_progress *progress,
+			      uint64_t bytes_read, uint64_t bytes_written)
+{
+	struct timespec now;
+
+	if (!progress)
+		return;
+
+	progress->lrpr_total_bytes_read += bytes_read;
+	progress->lrpr_total_bytes_written += bytes_written;
+
+	if (!progress->lrpr_bandwidth_bytes_sec &&
+	    !progress->lrpr_stats_interval_sec)
+		return;
+
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	llapi_bandwidth_throttle(&now, &progress->lrpr_start_time,
+				 progress->lrpr_bandwidth_bytes_sec,
+				 progress->lrpr_total_bytes_written);
+
+	/* Equality would force a 100% line; emit that only after all I/O. */
+	if (progress->lrpr_stats_interval_sec &&
+	    progress->lrpr_total_bytes_written !=
+	    progress->lrpr_write_estimation_bytes)
+		llapi_stats_log(&now, &progress->lrpr_start_time,
+				&progress->lrpr_last_print,
+				progress->lrpr_stats_interval_sec,
+				progress->lrpr_total_bytes_read,
+				progress->lrpr_total_bytes_written,
+				progress->lrpr_total_bytes_written,
+				progress->lrpr_write_estimation_bytes);
+}
+
 /**
  * llapi_ec_compute_parities() - Compute parities for a single RAID set
  * @fd: file descriptor to read data from
@@ -4275,6 +4323,7 @@ out_free:
  * @stripe_ptrs: array of pointers to stripe buffers (data + parity)
  * @encode_matrix: encoding matrix for erasure coding
  * @g_tbls: Galois field tables for EC computation
+ * @progress: optional resync progress (stats / bandwidth); may be NULL
  *
  * This function reads data stripes from the file starting at @data_pos and
  * computes the corresponding parity stripes using erasure coding. For a single
@@ -4297,7 +4346,8 @@ static int llapi_ec_compute_parities(int fd, struct llapi_layout *layout,
 		uint64_t ec_pos, int num_ec_stripes,
 		int data_id, uint64_t stripe_size, uint64_t end_pos,
 		uint8_t *stripe_ptrs[],
-		uint8_t *encode_matrix, uint8_t *g_tbls)
+		uint8_t *encode_matrix, uint8_t *g_tbls,
+		struct llapi_resync_progress *progress)
 {
 	uint64_t bytes_left;
 	int rc, i, k, p, m;
@@ -4355,6 +4405,7 @@ static int llapi_ec_compute_parities(int fd, struct llapi_layout *layout,
 			read_buf += bytes_read;
 			data_pos += bytes_read;
 			to_read -= bytes_read;
+			llapi_resync_progress_account(progress, bytes_read, 0);
 		}
 	}
 
@@ -4381,13 +4432,15 @@ static int llapi_ec_compute_parities(int fd, struct llapi_layout *layout,
  * @len: length in bytes of the range to punch or zero-fill
  * @buf: scratch buffer for zero writes when punch is unsupported
  * @buf_len: size of @buf; also the preferred write chunk size
+ * @progress: optional resync progress (stats / bandwidth); may be NULL
  *
  * Tries llapi_mirror_punch() first.  On -EOPNOTSUPP (e.g. osd-zfs), writes
  * zeros via @buf instead.  Other punch errors propagate.
  */
 static int llapi_mirror_punch_or_clear(int fd, uint32_t mirror_id,
 				       uint64_t pos, uint64_t len,
-				       uint8_t *buf, size_t buf_len)
+				       uint8_t *buf, size_t buf_len,
+				       struct llapi_resync_progress *progress)
 {
 	int rc;
 
@@ -4395,8 +4448,11 @@ static int llapi_mirror_punch_or_clear(int fd, uint32_t mirror_id,
 		return 0;
 
 	rc = llapi_mirror_punch(fd, mirror_id, pos, len);
-	if (rc == 0)
+	if (rc == 0) {
+		/* One ioctl, but still tick stats so lamigo sees liveness. */
+		llapi_resync_progress_account(progress, 0, 0);
 		return 0;
+	}
 	if (rc != -EOPNOTSUPP)
 		return rc;
 	if (len > EC_PUNCH_OR_CLEAR_MAX_ZERO_LEN) {
@@ -4409,14 +4465,19 @@ static int llapi_mirror_punch_or_clear(int fd, uint32_t mirror_id,
 	}
 
 	memset(buf, 0, buf_len);
-	llapi_printf(LLAPI_MSG_DEBUG,
-		     "punch unsupported on mirror %u range [%llu, %llu), zero-filling\n",
-		     mirror_id, (unsigned long long)pos,
-		     (unsigned long long)(pos + len));
-
 	while (len > 0) {
 		size_t chunk = min_t(size_t, len, buf_len);
 		ssize_t written;
+
+		/* Cap at ~1s of -W; throttle sleeps after the write, so a
+		 * huge chunk would still burst the OST. Same as FLR buflen. */
+		if (progress && progress->lrpr_bandwidth_bytes_sec &&
+		    progress->lrpr_bandwidth_bytes_sec < chunk) {
+			chunk = (progress->lrpr_bandwidth_bytes_sec + ONE_MB - 1) &
+				~(ONE_MB - 1);
+			if (chunk == 0 || chunk > len)
+				chunk = min_t(size_t, len, ONE_MB);
+		}
 
 		written = llapi_mirror_write(fd, mirror_id, buf,
 					     chunk, pos);
@@ -4426,22 +4487,30 @@ static int llapi_mirror_punch_or_clear(int fd, uint32_t mirror_id,
 			return -EIO;
 		pos += written;
 		len -= written;
+		llapi_resync_progress_account(progress, 0, written);
 	}
 	return 0;
 }
 
 /**
- * llapi_ec_verify_zero_content() - Confirm [@pos, @pos + @len) reads back as
- * zero-filled content
- * @buf/@buf_len: page-aligned scratch buffer for llapi_mirror_read(); @buf_len
- *	should be a multiple of the page size to satisfy O_DIRECT requirements.
+ * llapi_ec_verify_zero_content() - Confirm a range reads as zeroes
+ * @fd: file descriptor
+ * @mirror_id: mirror to read
+ * @pos: start of the range
+ * @len: length in bytes
+ * @buf: page-aligned scratch for llapi_mirror_read()
+ * @buf_len: size of @buf; page-multiple for O_DIRECT
+ * @progress: optional resync progress; may be NULL
  *
- * Used when SEEK_DATA reports data inside an expected hole (e.g. zero-filled
+ * Fallback when SEEK_DATA reports data in an expected hole (zero-filled
  * extents on ZFS).
+ *
+ * Return: 0 on success, negative errno on read failure or non-zero content
  */
 static int
 llapi_ec_verify_zero_content(int fd, uint32_t mirror_id, uint64_t pos,
-			     uint64_t len, uint8_t *buf, size_t buf_len)
+			     uint64_t len, uint8_t *buf, size_t buf_len,
+			     struct llapi_resync_progress *progress)
 {
 	static const uint8_t zero_page[4096];
 	uint64_t end;
@@ -4487,29 +4556,32 @@ llapi_ec_verify_zero_content(int fd, uint32_t mirror_id, uint64_t pos,
 		}
 
 		pos += bytes_read;
+		llapi_resync_progress_account(progress, bytes_read, 0);
 	}
 
 	return 0;
 }
 
 /**
- * llapi_ec_verify_hole_by_seek_or_zero_content() - Verify a parity range is
- * holed by SEEK_DATA or zero-filled content
- * @pos/@len: byte range [@pos, @pos + @len) expected to contain no parity data
- * @buf/@buf_len: scratch buffer passed to llapi_ec_verify_zero_content()
+ * llapi_ec_verify_hole_by_seek_or_zero_content() - Check expected hole
+ * @fd: file descriptor
+ * @mirror_id: parity mirror to inspect
+ * @pos: start of range expected to be a hole
+ * @len: length in bytes
+ * @buf: scratch buffer for the zero-content fallback
+ * @buf_len: size of @buf
+ * @progress: optional resync progress; may be NULL
  *
- * SEEK_DATA from @pos. If no data is found inside [@pos, end), the range is a
- * hole.  Otherwise read back the reported data extent and confirm it is
- * zero-filled.
+ * SEEK_DATA from @pos. If nothing falls in [@pos, @pos + @len), the range is a
+ * hole. Otherwise read the overlap and require zeroes (ZFS).
  *
- * Return:
- * * %0 on success
- * * %negative error code on seek/read failure or non-zero data in range
+ * Return: 0 on success, negative errno on seek/read failure or non-zero data
  */
 static int
 llapi_ec_verify_hole_by_seek_or_zero_content(int fd, uint32_t mirror_id,
 					     uint64_t pos, uint64_t len,
-					     uint8_t *buf, size_t buf_len)
+					     uint8_t *buf, size_t buf_len,
+					     struct llapi_resync_progress *progress)
 {
 	uint64_t end;
 	off_t data_off;
@@ -4541,13 +4613,14 @@ llapi_ec_verify_hole_by_seek_or_zero_content(int fd, uint32_t mirror_id,
 	/* SEEK_DATA hit data inside the range; confirm it is all zero */
 	data_len = end - data_pos;
 	return llapi_ec_verify_zero_content(fd, mirror_id, data_pos,
-					    data_len, buf, buf_len);
+					    data_len, buf, buf_len, progress);
 }
 
 static int
 llapi_ec_write_parities(int fd, uint64_t stripe_size, int k, int p,
 			uint64_t ec_pos, int ec_id, uint8_t *stripe_ptrs[],
-			struct ec_parity_coverage *cov)
+			struct ec_parity_coverage *cov,
+			struct llapi_resync_progress *progress)
 {
 	int rc, i;
 	int m = k + p;
@@ -4568,7 +4641,8 @@ llapi_ec_write_parities(int fd, uint64_t stripe_size, int k, int p,
 		zero_len = min_t(size_t, zero_len, DEFAULT_IO_BUFLEN);
 		rc = llapi_mirror_punch_or_clear(fd, mirror_id_of(ec_id),
 						 ec_pos, punch_len,
-						 stripe_ptrs[0], zero_len);
+						 stripe_ptrs[0], zero_len,
+						 progress);
 		if (rc < 0) {
 			llapi_error(LLAPI_MSG_ERROR, rc,
 				"could not clear parity raidset mirror=%u range [%llu, %llu)",
@@ -4598,10 +4672,7 @@ llapi_ec_write_parities(int fd, uint64_t stripe_size, int k, int p,
 				goto out;
 			}
 			assert(bytes_written == c->len);
-			llapi_printf(LLAPI_MSG_DEBUG,
-				     "Wrote parity #%d range [%llu, %llu)\n",
-				     i - k, (unsigned long long)write_off,
-				     (unsigned long long)(write_off + c->len));
+			llapi_resync_progress_account(progress, 0, bytes_written);
 		}
 	}
 
@@ -4621,6 +4692,7 @@ llapi_ec_write_parities(int fd, uint64_t stripe_size, int k, int p,
  * @ec_id: mirror id of the EC parity component
  * @stripe_ptrs: array of stripe buffers; stripe_ptrs[k..k+p-1] hold the
  *	expected (in-memory) parities to compare against
+ * @progress: optional resync progress; may be NULL
  *
  * For each of the @p parity stripes, reads @stripe_size bytes from the parity
  * mirror and compares them byte-for-byte against stripe_ptrs[k + i] (the
@@ -4639,7 +4711,8 @@ llapi_ec_write_parities(int fd, uint64_t stripe_size, int k, int p,
  */
 static int llapi_ec_verify_parities(int fd, uint64_t stripe_size, int k, int p,
 				    uint64_t ec_pos, int ec_id,
-				    uint8_t *stripe_ptrs[])
+				    uint8_t *stripe_ptrs[],
+				    struct llapi_resync_progress *progress)
 {
 	int rc;
 	int i;
@@ -4666,6 +4739,7 @@ static int llapi_ec_verify_parities(int fd, uint64_t stripe_size, int k, int p,
 			memset(read_buf + bytes_read, 0,
 			       stripe_size - bytes_read);
 		}
+		llapi_resync_progress_account(progress, bytes_read, 0);
 		if (memcmp(read_buf, expected, stripe_size)) {
 			rc = -EINVAL;
 			llapi_error(LLAPI_MSG_ERROR, rc,
@@ -4975,29 +5049,35 @@ out_free:
 
 /**
  * llapi_ec_hole_range_verify_or_clear() - Verify or clear a parity hole range
- * @is_verify: verify only, or punch/zero-fill via llapi_mirror_punch_or_clear()
+ * @fd: file descriptor
+ * @ec_mirror_id: parity mirror
+ * @ec_pos: start of the hole range
+ * @hole_len: length in bytes
+ * @is_verify: true to inspect, false to punch/zero-fill
+ * @buf: scratch buffer (zero-fill or zero-content read)
+ * @buf_len: size of @buf
+ * @progress: optional resync progress; may be NULL
  *
- * Clear or verify that [@ec_pos, @ec_pos + @hole_len) is a hole on the parity
- * mirror.  Resync uses llapi_mirror_punch_or_clear(); verify checks SEEK_DATA,
- * and falls back to checking contents for zero-filled extents.
- *
- * @buf/@buf_len: scratch buffer; zero-filled when punch is unsupported.
+ * Resync punches the range. Verify uses SEEK_DATA, then zero-content reads
+ * if SEEK_DATA reports data (ZFS).
  */
 static int
 llapi_ec_hole_range_verify_or_clear(int fd, uint32_t ec_mirror_id,
 				    uint64_t ec_pos, uint64_t hole_len,
 				    bool is_verify, uint8_t *buf,
-				    size_t buf_len)
+				    size_t buf_len,
+				    struct llapi_resync_progress *progress)
 {
 	int rc = 0;
 
 	if (is_verify)
 		rc = llapi_ec_verify_hole_by_seek_or_zero_content(fd,
 				ec_mirror_id, ec_pos, hole_len,
-				buf, buf_len);
+				buf, buf_len, progress);
 	else
 		rc = llapi_mirror_punch_or_clear(fd, ec_mirror_id, ec_pos,
-						 hole_len, buf, buf_len);
+						 hole_len, buf, buf_len,
+						 progress);
 
 	if (rc)
 		llapi_error(LLAPI_MSG_ERROR, rc,
@@ -5011,6 +5091,7 @@ llapi_ec_hole_range_verify_or_clear(int fd, uint32_t ec_mirror_id,
 /**
  * llapi_ec_resync_or_verify_raidset() - One RAID set: verify or resync parities
  * @is_verify: compare on-disk parities to computed values, or write them
+ * @progress: optional resync progress (stats / bandwidth); may be NULL
  *
  * Empty RAID sets (no data via SEEK_DATA) only punch/verify holes on the
  * parity mirror. Otherwise compute parities; verify uses full stripes,
@@ -5025,7 +5106,8 @@ llapi_ec_resync_or_verify_raidset(int fd, struct llapi_layout *layout,
 				  uint8_t *stripe_ptrs[],
 				  uint8_t *encode_matrix,
 				  uint8_t *g_tbls,
-				  uint64_t end_pos, bool is_verify)
+				  uint64_t end_pos, bool is_verify,
+				  struct llapi_resync_progress *progress)
 {
 	int rc = 0;
 	uint64_t data_raidset_size = k * data_comp->llc_stripe_size;
@@ -5065,21 +5147,23 @@ llapi_ec_resync_or_verify_raidset(int fd, struct llapi_layout *layout,
 			 DEFAULT_IO_BUFLEN);
 	rc = llapi_ec_hole_range_verify_or_clear(fd, ec_mirror_id, ec_pos,
 						 ec_raidset_size, is_verify,
-						 stripe_ptrs[0], zero_len);
+						 stripe_ptrs[0], zero_len,
+						 progress);
 	goto out_free;
 
 raidset_with_data:
 	rc = llapi_ec_compute_parities(fd, layout, data_pos, k, ec_pos, p,
 				       data_comp->llc_mirror_id,
 				       data_comp->llc_stripe_size, end_pos,
-				       stripe_ptrs, encode_matrix, g_tbls);
+				       stripe_ptrs, encode_matrix, g_tbls,
+				       progress);
 	if (rc)
 		goto out_free;
 
 	if (is_verify) {
 		rc = llapi_ec_verify_parities(fd, data_comp->llc_stripe_size, k,
 					      p, ec_pos, ec_comp->llc_id,
-					      stripe_ptrs);
+					      stripe_ptrs, progress);
 	} else {
 		rc = ec_compute_parity_coverage_raidset(fd, data_comp->llc_mirror_id,
 			data_pos, k, data_comp->llc_stripe_size, end_pos, &cov);
@@ -5088,7 +5172,7 @@ raidset_with_data:
 
 		rc = llapi_ec_write_parities(fd, data_comp->llc_stripe_size, k,
 					     p, ec_pos, ec_comp->llc_id,
-					     stripe_ptrs, cov);
+					     stripe_ptrs, cov, progress);
 	}
 
 out_free:
@@ -5109,6 +5193,7 @@ out_free:
  * @ec_comp: EC parity component to update
  * @is_verify: if true, compare the computed parities against the stored ones
  *             (verify) instead of writing them back (resync)
+ * @progress: optional resync progress (stats / bandwidth); may be NULL
  *
  * This function resyncs the erasure coding parities for a single component
  * by splitting the stripe set into smaller RAID sets and computing parities
@@ -5138,7 +5223,8 @@ static int
 llapi_ec_resync_or_verify_comp(int fd, struct llapi_layout *layout,
 			       struct llapi_layout_comp *data_comp,
 			       struct llapi_layout_comp *ec_comp,
-			       bool is_verify)
+			       bool is_verify,
+			       struct llapi_resync_progress *progress)
 {
 	int rc = 0, i, k, p, m;
 	struct stat stbuf;
@@ -5265,16 +5351,13 @@ one_more_stripeset:
 			goto stripeset_with_data;
 		num_hole_stripe_sets = (data_off - data_pos) / stripe_set_size;
 	}
-	llapi_printf(LLAPI_MSG_DEBUG,
-		     "Skip %llu holed stripe sets (%s parity)\n",
-		     (unsigned long long)num_hole_stripe_sets,
-		     is_verify ? "verify" : "punch");
 
 	zero_len = min_t(size_t, sc.esc_k0 * data_comp->llc_stripe_size,
 			 DEFAULT_IO_BUFLEN);
 	rc = llapi_ec_hole_range_verify_or_clear(fd, ec_mirror_id, ec_pos,
 					num_hole_stripe_sets * ec_size,
-					is_verify, stripe_ptrs[0], zero_len);
+					is_verify, stripe_ptrs[0], zero_len,
+					progress);
 	if (rc)
 		goto out_free;
 
@@ -5292,7 +5375,8 @@ stripeset_with_data:
 
 		rc = llapi_ec_resync_or_verify_raidset(
 			fd, layout, data_comp, data_pos, k, ec_comp, ec_pos, p,
-			stripe_ptrs, encode_matrix, g_tbls, end_pos, is_verify);
+			stripe_ptrs, encode_matrix, g_tbls, end_pos, is_verify,
+			progress);
 		if (rc)
 			goto out_free;
 
@@ -5584,6 +5668,33 @@ int llapi_ec_resync_many_params(int fd, struct llapi_layout *layout,
 {
 	int rc, i;
 	struct llapi_layout_comp *ec_comp, *data_comp;
+	struct llapi_resync_progress progress = { 0 };
+	struct llapi_resync_progress *progress_ptr = NULL;
+	struct stat stbuf;
+
+	if (stats_interval_sec || bandwidth_bytes_sec) {
+		rc = fstat(fd, &stbuf);
+		if (rc < 0)
+			return -errno;
+
+		/* comp_array is already stale EC only. Sum logical extents
+		 * clipped to EOF, not actual parity I/O (~p/k). Same
+		 * overestimate as FLR: good enough for % done / liveness. */
+		for (i = 0; i < comp_size; i++) {
+			uint64_t end = min_t(uint64_t, comp_array[i].lrc_end,
+					     stbuf.st_size);
+
+			if (end > comp_array[i].lrc_start)
+				progress.lrpr_write_estimation_bytes +=
+					end - comp_array[i].lrc_start;
+		}
+
+		clock_gettime(CLOCK_MONOTONIC, &progress.lrpr_start_time);
+		progress.lrpr_last_print = progress.lrpr_start_time;
+		progress.lrpr_stats_interval_sec = stats_interval_sec;
+		progress.lrpr_bandwidth_bytes_sec = bandwidth_bytes_sec;
+		progress_ptr = &progress;
+	}
 
 	for (i = 0; i < comp_size; i++) {
 		/* Find the stale ec comp */
@@ -5615,12 +5726,26 @@ int llapi_ec_resync_many_params(int fd, struct llapi_layout *layout,
 			goto out;
 
 		rc = llapi_ec_resync_or_verify_comp(fd, layout, data_comp,
-						    ec_comp, false);
+						    ec_comp, false,
+						    progress_ptr);
 		if (rc) {
 			llapi_error(LLAPI_MSG_ERROR, rc,
 			      "failed to sync ec comp");
 			goto out;
 		}
+	}
+
+	if (stats_interval_sec) {
+		struct timespec now;
+
+		clock_gettime(CLOCK_MONOTONIC, &now);
+		llapi_stats_log(&now, &progress.lrpr_start_time,
+				&progress.lrpr_last_print,
+				stats_interval_sec,
+				progress.lrpr_total_bytes_read,
+				progress.lrpr_total_bytes_written,
+				progress.lrpr_write_estimation_bytes,
+				progress.lrpr_write_estimation_bytes);
 	}
 	return 0;
 
@@ -5673,7 +5798,7 @@ int llapi_ec_verify_comps(int fd, struct llapi_layout *layout, __u32 *ecs,
 			goto out;
 
 		rc = llapi_ec_resync_or_verify_comp(fd, layout, data_comp,
-						    ec_comp, true);
+						    ec_comp, true, NULL);
 		if (rc) {
 			llapi_error(LLAPI_MSG_ERROR, rc,
 				    "ec verify failed for comp 0x%08x",
