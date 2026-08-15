@@ -12440,16 +12440,20 @@ run_test 86 "nodemap_del racing with nodemap debugfs readers"
 
 check_contains() {
 	local val="$1"; shift
+	local role
+
 	for role in "$@"; do
-		[[ "$val" =~ "$role" ]] ||
+		[[ ",$val," == *",$role,"* ]] ||
 			error "rbac should contain '$role', got '$val'"
 	done
 }
 
 check_not_contains() {
 	local val="$1"; shift
+	local role
+
 	for role in "$@"; do
-		[[ "$val" =~ "$role" ]] &&
+		[[ ",$val," == *",$role,"* ]] &&
 			error "rbac should NOT contain '$role', got '$val'"
 	done
 }
@@ -12457,12 +12461,19 @@ check_not_contains() {
 test_93() {
 	local nm=c0
 	local val
+	local drbac
+	local all_rbac
+	local restore_rbac
+	local role
 
-	(( MGS_VERSION >= $(version_code 2.17.52) )) ||
-		skip "Need MGS >= 2.17.52 for incremental RBAC role updates"
+	(( MGS_VERSION >= $(version_code v2_17_53-11-gfa27265591) )) ||
+		skip "Need MGS >= 2.17.53.11 for incremental RBAC role updates"
 
 	stack_trap cleanup_local_client_nodemap EXIT
 	setup_local_client_nodemap $nm 1 1
+	# c0 inherits the default RBAC and, unlike the default nodemap output,
+	# includes local_admin. Save it before changing c0's RBAC below.
+	drbac=$(do_facet mgs $LCTL get_param -n nodemap.$nm.rbac)
 
 	# Start with only file_perms
 	do_facet mgs $LCTL nodemap_modify --name $nm \
@@ -12475,8 +12486,7 @@ test_93() {
 		error "rbac should be 'file_perms', got '$val'"
 
 	# Add dne_ops
-	do_facet mgs $LCTL nodemap_modify --name $nm \
-		--property rbac=+dne_ops ||
+	do_facet mgs $LCTL nodemap_modify --name $nm --property rbac=+dne_ops ||
 		error "incrementally adding dne_ops failed"
 	wait_nm_sync $nm rbac
 
@@ -12538,7 +12548,7 @@ test_93() {
 	wait_nm_sync $nm rbac
 
 	val=$(do_facet mgs $LCTL get_param -n nodemap.$nm.rbac)
-	[[ -z "$val" ]] || error "rbac should be empty (none), got '$val'"
+	[[ "$val" == "none" ]] || error "rbac should be none, got '$val'"
 
 	# Set to all
 	do_facet mgs $LCTL nodemap_modify --name $nm \
@@ -12548,6 +12558,137 @@ test_93() {
 
 	val=$(do_facet mgs $LCTL get_param -n nodemap.$nm.rbac)
 	check_contains "$val" file_perms dne_ops quota_ops byfid_ops chlg_ops fscrypt_admin
+	all_rbac=$val
+
+	# Incremental updates from "all" on the default nodemap.
+	if (( MGS_VERSION >= $(version_code 2.17.57.103) )); then
+		echo "running incremental RBAC updates on default nodemap"
+
+		# The default nodemap rejects an explicit local_admin token.
+		# Restore an original value containing that bit through all
+		# followed by removals, so the token remains an inherited
+		# ceiling rather than an explicit request.
+		restore_rbac=${drbac:-none}
+		if [[ ",$drbac," == *,local_admin,* ]]; then
+			restore_rbac=all
+			for role in ${all_rbac//,/ }; do
+				[[ "$role" == local_admin ]] && continue
+				[[ ",$drbac," == *",$role,"* ]] ||
+					restore_rbac="$restore_rbac,-$role"
+			done
+		fi
+		stack_trap "do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=$restore_rbac; wait_nm_sync default rbac" EXIT
+
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=none ||
+			error "setting rbac none on default nodemap failed"
+		wait_nm_sync default rbac
+		val=$(do_facet mgs $LCTL get_param -n nodemap.default.rbac)
+		[[ "$val" == "none" ]] ||
+			error "rbac should be 'none', got '$val'"
+
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=all ||
+			error "setting rbac all on default nodemap failed"
+		wait_nm_sync default rbac
+
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=-file_perms ||
+			error "removing file_perms on default failed"
+		wait_nm_sync default rbac
+
+		val=$(do_facet mgs $LCTL get_param -n nodemap.default.rbac)
+		check_contains "$val" dne_ops quota_ops byfid_ops
+		check_not_contains "$val" file_perms local_admin
+
+		# leftover local_admin is kept as the inheritance ceiling
+		# but is never shown on default
+		do_facet mds1 $LCTL nodemap_add -d -p default nm_93_sub ||
+			error "creating dynamic child of default failed"
+		stack_trap "do_facet mds1 $LCTL nodemap_del nm_93_sub \
+			|| true" EXIT
+		val=$(do_facet mds1 $LCTL get_param -n nodemap.nm_93_sub.rbac)
+		check_contains "$val" local_admin dne_ops
+		check_not_contains "$val" file_perms
+		do_facet mds1 $LCTL nodemap_modify --name nm_93_sub \
+			--property rbac=local_admin ||
+			error "child should keep local_admin after -file_perms"
+
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=+all,-dne_ops ||
+			error "incremental +all,-dne_ops on default failed"
+		wait_nm_sync default rbac
+
+		val=$(do_facet mgs $LCTL get_param -n nodemap.default.rbac)
+		check_not_contains "$val" dne_ops local_admin
+		check_contains "$val" file_perms quota_ops byfid_ops
+
+		# explicit local_admin on default must be refused
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=+local_admin &&
+			error "+local_admin on default nodemap should fail"
+
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=local_admin &&
+			error "=local_admin on default nodemap should fail"
+
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=all,+local_admin &&
+			error "all,+local_admin on default nodemap should fail"
+
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=+all,+local_admin &&
+			error "+all,+local_admin on default nodemap should fail"
+
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=+local_admin,+all &&
+			error "+local_admin,+all on default nodemap should fail"
+
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=local_admin,all &&
+			error "local_admin,all on default nodemap should fail"
+
+		# -local_admin is a drop, not an explicit request.
+		# +all then restores leftover local_admin as the ceiling.
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=-local_admin,+all ||
+			error "-local_admin,+all on default nodemap failed"
+		wait_nm_sync default rbac
+
+		val=$(do_facet mgs $LCTL get_param -n nodemap.default.rbac)
+		check_not_contains "$val" local_admin
+
+		# leftover ceiling is still stored. Recreate the child:
+		# MGS nodemap_modify revokes the nodemap lock and drops
+		# dynamic nodemaps.
+		do_facet mds1 $LCTL nodemap_add -d -p default nm_93_sub ||
+			error "recreating child after leftover +all failed"
+		val=$(do_facet mds1 $LCTL get_param -n nodemap.nm_93_sub.rbac)
+		check_contains "$val" local_admin
+		do_facet mds1 $LCTL nodemap_modify --name nm_93_sub \
+			--property rbac=local_admin ||
+			error "child should still keep leftover local_admin"
+
+		# explicit -local_admin drops the leftover ceiling
+		do_facet mgs $LCTL nodemap_modify --name default \
+			--property rbac=all,+local_admin,-local_admin ||
+			error "all,+local_admin,-local_admin on default failed"
+		wait_nm_sync default rbac
+
+		val=$(do_facet mgs $LCTL get_param -n nodemap.default.rbac)
+		check_not_contains "$val" local_admin
+
+		do_facet mds1 $LCTL nodemap_add -d -p default nm_93_sub ||
+			error "recreating child after -local_admin failed"
+		val=$(do_facet mds1 $LCTL get_param -n nodemap.nm_93_sub.rbac)
+		check_not_contains "$val" local_admin
+		do_facet mds1 $LCTL nodemap_modify --name nm_93_sub \
+			--property rbac=local_admin &&
+			error "child should lose local_admin after -local_admin"
+
+		echo "incremental RBAC updates on default nodemap passed"
+	fi
 }
 run_test 93 "incremental RBAC role modifications"
 

@@ -4189,7 +4189,8 @@ int nodemap_idx_cluster_roles_modify(struct lu_nodemap *nodemap,
 	return rc;
 }
 
-int nodemap_set_rbac(const char *name, enum nodemap_rbac_roles rbac)
+int nodemap_set_rbac(const char *name, enum nodemap_rbac_roles rbac,
+		     bool local_admin_req)
 {
 	struct lu_nodemap *nodemap = NULL;
 	enum nodemap_rbac_roles old_rbac;
@@ -4203,17 +4204,21 @@ int nodemap_set_rbac(const char *name, enum nodemap_rbac_roles rbac)
 	if (!check_privs_for_op(nodemap, NODEMAP_RAISE_PRIV_RBAC, rbac))
 		GOTO(put, rc = -EPERM);
 
+	/* Reject explicit local_admin on default, but keep leftover
+	 * local_admin as the inheritance ceiling for children.
+	 */
+	if (is_default_nodemap(nodemap) && (rbac & NODEMAP_RBAC_LOCAL_ADMIN) &&
+	    local_admin_req) {
+		rc = -EINVAL;
+		CERROR("%s: local_admin is not valid on the default nodemap: rc = %d\n",
+		       name, rc);
+		GOTO(put, rc);
+	}
+
 	old_rbac = nodemap->nmf_rbac;
 	/* if value does not change, do nothing */
 	if (rbac == old_rbac)
 		GOTO(put, rc = 0);
-
-	/* local_admin only makes sense on non default nodemap
-	 * where root can be mapped or offset
-	 */
-	if (rbac != NODEMAP_RBAC_ALL &&
-	    is_default_nodemap(nodemap) && (rbac & NODEMAP_RBAC_LOCAL_ADMIN))
-		GOTO(put, rc = -EINVAL);
 
 	nodemap->nmf_rbac = rbac;
 	rc = nodemap_idx_cluster_roles_modify(nodemap, old_rbac,
@@ -5853,6 +5858,52 @@ static const char *rbac_bit2str(int bit)
 }
 
 /**
+ * rbac_local_admin_requested() - Check if local_admin was explicitly requested
+ * @str: RBAC role string to parse
+ *
+ * Determines whether the "local_admin" role is explicitly requested in @str,
+ * as opposed to being implicitly granted by the "all" keyword. Role names may
+ * be prefixed with '+' or '-' to explicitly add or remove a role.
+ *
+ * Return:
+ * * %true    if "local_admin" was explicitly named in the string
+ * * %false   if "local_admin" was not named, or was explicitly removed with '-'
+ */
+static bool rbac_local_admin_requested(const char *str)
+{
+	bool requested = false;
+
+	while (*str != '\0') {
+		char op = 0;
+		int len;
+
+		while (isspace(*str) || *str == ',')
+			str++;
+		if (*str == '\0')
+			break;
+
+		if (*str == '+' || *str == '-') {
+			op = *str++;
+			while (isspace(*str))
+				str++;
+		}
+
+		for (len = 0; str[len] != '\0' && !isspace(str[len]) &&
+		     str[len] != '+' && str[len] != '-' && str[len] != ',';
+		     len++)
+			;
+
+		if (len == sizeof("local_admin") - 1 &&
+		    strncasecmp(str, "local_admin", len) == 0)
+			requested = op != '-';
+
+		str += len;
+	}
+
+	return requested;
+}
+
+/**
  * cfg_nodemap_fileset_cmd() - Fileset command handler and entry point for
  * all "lctl nodemap_fileset*" ops
  * @lcfg: lustre cfg for fileset operation
@@ -6127,6 +6178,7 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 	{
 		enum nodemap_rbac_roles rbac = NODEMAP_RBAC_NONE;
 		u64 rbac_mask = 0;
+		bool local_admin_req;
 
 		if (strchr(param, '+') != NULL || strchr(param, '-') != NULL) {
 			struct lu_nodemap *nodemap_tmp;
@@ -6146,8 +6198,9 @@ static int cfg_nodemap_cmd(enum lcfg_command_type cmd, const char *nodemap_name,
 			break;
 		}
 		rbac = (enum nodemap_rbac_roles)rbac_mask;
+		local_admin_req = rbac_local_admin_requested(param);
 
-		rc = nodemap_set_rbac(nodemap_name, rbac);
+		rc = nodemap_set_rbac(nodemap_name, rbac, local_admin_req);
 		break;
 	}
 	case LCFG_NODEMAP_RAISE_PRIVS:

@@ -888,33 +888,27 @@ static int nodemap_rbac_seq_show(struct seq_file *m, void *data)
 		return rc;
 	}
 
-	if (nodemap->nmf_rbac == NODEMAP_RBAC_ALL) {
-		for (i = 0; i < ARRAY_SIZE(nodemap_rbac_names); i++) {
-			/* local_admin only makes sense on non default nodemap
-			 * where root can be mapped or offset
-			 */
-			if (nodemap_rbac_names[i].nrn_mode ==
-			      NODEMAP_RBAC_LOCAL_ADMIN &&
-			    is_default_nodemap(nodemap))
-				continue;
-			seq_printf(m, "%s%s", i == 0 ? "" : ",",
-				   nodemap_rbac_names[i].nrn_name);
-		}
-		seq_puts(m, "\n");
-	} else if (nodemap->nmf_rbac == NODEMAP_RBAC_NONE) {
+	if (nodemap->nmf_rbac == 0 || nodemap->nmf_rbac == NODEMAP_RBAC_NONE) {
 		seq_puts(m, "none\n");
-	} else {
-		for (i = 0; i < ARRAY_SIZE(nodemap_rbac_names); i++) {
-			if (nodemap->nmf_rbac &
-			    nodemap_rbac_names[i].nrn_mode) {
-				seq_printf(m, "%s%s", sep,
-					   nodemap_rbac_names[i].nrn_name);
-				sep = ",";
-			}
-		}
-		seq_puts(m, "\n");
+		goto putref;
 	}
 
+	for (i = 0; i < ARRAY_SIZE(nodemap_rbac_names); i++) {
+		/* local_admin only makes sense on non default nodemap
+		 * where root can be mapped or offset
+		 */
+		if (nodemap_rbac_names[i].nrn_mode ==
+		      NODEMAP_RBAC_LOCAL_ADMIN &&
+		    is_default_nodemap(nodemap))
+			continue;
+		if (!(nodemap->nmf_rbac & nodemap_rbac_names[i].nrn_mode))
+			continue;
+		seq_printf(m, "%s%s", sep, nodemap_rbac_names[i].nrn_name);
+		sep = ",";
+	}
+	seq_puts(m, "\n");
+
+putref:
 	nodemap_putref(nodemap);
 	return 0;
 }

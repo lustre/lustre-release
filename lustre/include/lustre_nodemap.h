@@ -254,7 +254,8 @@ int nodemap_set_trust_client_ids(const char *name, bool trust_client_ids);
 int nodemap_set_deny_unknown(const char *name, bool deny_unknown);
 int nodemap_set_mapping_mode(const char *name,
 			     enum nodemap_mapping_modes map_mode);
-int nodemap_set_rbac(const char *name, enum nodemap_rbac_roles rbac);
+int nodemap_set_rbac(const char *name, enum nodemap_rbac_roles rbac,
+		     bool local_admin_req);
 int nodemap_add_offset(const char *nodemap_name, char *offset);
 int nodemap_del_offset(const char *nodemap_name);
 int nodemap_set_squash_uid(const char *name, uid_t uid);
