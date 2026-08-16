@@ -85,6 +85,9 @@ struct tg_export_data {
 	spinlock_t		ted_fmd_lock; /* protects ted_fmd_list */
 	struct list_head	ted_fmd_list; /* FIDs being modified */
 	int			ted_fmd_count;/* items in ted_fmd_list */
+
+	/** GSSIAM authentication cache entry */
+	struct upcall_cache_entry *ted_gssiam_entry;
 };
 
 /**

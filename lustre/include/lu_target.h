@@ -18,8 +18,10 @@
 #include <lustre_export.h>
 #include <lustre_update.h>
 #include <lustre_disk.h>
+#include <lustre_gssiam.h>
 #include <lustre_lfsck.h>
 #include <lu_object.h>
+#include <upcall_cache.h>
 
 /* Each one represents a distribute transaction replay
  * operation, and updates on each MDTs are linked to
@@ -230,6 +232,20 @@ struct lu_target {
 	/* target grants fields */
 	struct tg_grants_data	 lut_tgd;
 
+	/* target gssiam security flavor */
+	struct tgt_srv_gssiam {
+		struct upcall_cache     *tsi_gssiam_cache;
+		int (*tsi_gssiam_authenticate_remote)(
+				struct lu_target *lut,
+				struct upcall_cache *cache,
+				struct upcall_cache_entry *entry);
+		int (*tsi_verify_gssiam)(struct lu_target *lut,
+					 struct obd_export *exp,
+					 const struct lustre_gssiam_desc *lid,
+					struct lustre_gssiam_info **gssiam_info,
+					 time64_t *expire);
+	} lut_tsi;
+
 	/* target tunables */
 	const struct attribute	**lut_attrs;
 
@@ -246,6 +262,22 @@ lut_recovery_stats(struct lu_target *lut, enum lut_recovery_phase phase)
 {
 	return &lut->lut_recovery_stats[phase];
 }
+
+extern struct upcall_cache *tgt_gssiam_cache;
+int tgt_gssiam_verify(struct lu_target *lut, struct obd_export *exp,
+		      const struct lustre_gssiam_desc *lid,
+		      struct lustre_gssiam_info **gssiam_info_ptr,
+		      time64_t *gssiam_expire);
+int tgt_gssiam_rpc_authenticate(struct obd_export *exp,
+				struct upcall_cache *cache,
+				struct upcall_cache_entry *entry);
+struct upcall_cache_entry *tgt_gssiam_get_entry(struct upcall_cache *cache,
+				const struct lustre_gssiam_desc *lid,
+					const struct obd_uuid *uuid);
+
+void tgt_gssiam_attach_cache_entry(struct obd_export *exp,
+				   struct upcall_cache_entry *entry);
+void tgt_gssiam_detach_cache_entry(struct obd_export *exp);
 
 #define LUT_FMD_MAX_NUM_DEFAULT 128
 #define LUT_FMD_MAX_AGE_DEFAULT (obd_timeout + 10)

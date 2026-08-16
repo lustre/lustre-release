@@ -31,6 +31,12 @@ static void gssiam_delete_sec_context(void *internal_ctx_id)
 	nodemap = xchg(&ctx->gsc_gssiam_nodemap, NULL);
 	if (nodemap)
 		nodemap_putref(nodemap);
+
+	if (ctx->gsc_gssiam_entry) {
+		/* We can use the global tgt_gssiam_cache */
+		upcall_cache_put_entry(tgt_gssiam_cache, ctx->gsc_gssiam_entry);
+		ctx->gsc_gssiam_entry = NULL;
+	}
 }
 
 static struct gss_api_ops gssiam_ops = {
@@ -132,10 +138,14 @@ static struct lu_nodemap *gssiam_get_nodemap(struct obd_device *target,
 		nodemap_putref(nodemap);
 	}
 
+	if (!gssiam_info->lii_desc.lid_principal ||
+	    !*gssiam_info->lii_desc.lid_principal)
+		return ERR_PTR(-EINVAL);
+
 	gssiam_nodemap_name(nm_name, sizeof(nm_name),
-			    gssiam_info->lii_desc.lid_token,
-			    gssiam_info->lii_desc.lid_token_len, subdir,
-			    gssiam_info->lii_desc.lid_projid,
+			    gssiam_info->lii_desc.lid_principal,
+			    strlen(gssiam_info->lii_desc.lid_principal),
+			    subdir, gssiam_info->lii_desc.lid_projid,
 			    gssiam_info->lii_auth_permission);
 
 	nodemap = nodemap_lookup_unlocked(nm_name);
@@ -275,6 +285,8 @@ int gssiam_install_ctx(struct obd_export *exp, struct ptlrpc_request *req)
 
 	gssiam_ctx_install_nodemap(grctx, exp);
 
+	tgt_gssiam_attach_cache_entry(exp, grctx->src_ctx->gsc_gssiam_entry);
+
 	rscp = container_of(grctx->src_ctx, struct gss_rsc, sc_ctx);
 	/*
 	 * The GSSIAM gss_svc_ctx is highly ephemeral. Once the identity is
@@ -288,13 +300,96 @@ int gssiam_install_ctx(struct obd_export *exp, struct ptlrpc_request *req)
 }
 
 static int gssiam_verify_target(struct obd_device *target,
-			  struct lustre_gssiam_desc *lid,
-			  struct lustre_gssiam_info **gssiam_info,
-			  time64_t *gssiam_expire, __u32 *major)
+			 struct obd_export *exp,
+			 struct lustre_gssiam_desc *lid,
+			 struct lustre_gssiam_info **gssiam_info,
+			 time64_t *gssiam_expire, __u32 *major)
 {
-	/* XXX following patches will reset other values */
-	*major = GSS_S_FAILURE;
-	return -EOPNOTSUPP;
+	struct obd_device_target *obt = target ? (void *)&target->u : NULL;
+	struct lu_target *lut;
+	int rc;
+
+	lut = (obt && obt->obt_magic == OBT_MAGIC) ? obt->obt_lut : NULL;
+	if (!lut || !lut->lut_tsi.tsi_verify_gssiam)
+		rc = -EOPNOTSUPP;
+	else
+		rc = lut->lut_tsi.tsi_verify_gssiam(lut, exp, lid, gssiam_info,
+						 gssiam_expire);
+
+	if (rc == -EAGAIN)
+		*major = GSS_S_CREDENTIALS_EXPIRED;
+	else if (rc)
+		*major = GSS_S_DEFECTIVE_CREDENTIAL;
+	else
+		*major = GSS_S_COMPLETE;
+
+	return rc;
+}
+
+/**
+ * gssiam_extract_h_exp() - Extract existing export from request body
+ * @req: The PTLRPC request
+ * @target: The target OBD device
+ * @h_exp_out: Pointer to return the obd_export reference
+ *
+ * During an initial mount, an export typically does not exist yet when the
+ * GSSIAM context initialization handshake occurs. However, if the security
+ * context is being renegotiated or refreshed after the connection has
+ * already been established (e.g., token expiration, credential renewal,
+ * policy change, or during reconnection/recovery), the RPC request body
+ * will contain a valid connection handle.
+ *
+ * This function attempts to unpack the request body and look up the existing
+ * export associated with that connection handle so the new GSSIAM context
+ * can be bound to the live connection.
+ *
+ * Return: 0 on success (including when no export is found), or negative error.
+ */
+static int gssiam_extract_h_exp(struct ptlrpc_request *req,
+				struct obd_device *target,
+				struct obd_export **h_exp_out)
+{
+	struct obd_export *h_exp = NULL;
+	struct ptlrpc_body *body;
+	int rc;
+
+	*h_exp_out = NULL;
+
+	if (!req->rq_reqbuf || req->rq_reqbuf->lm_bufcount < 2)
+		return 0;
+
+	req->rq_reqmsg = lustre_msg_buf(req->rq_reqbuf, 1, 0);
+	rc = __lustre_unpack_msg(req->rq_reqmsg,
+				 req->rq_reqbuf->lm_buflens[1]);
+	if (rc < 0)
+		return rc;
+
+	body = lustre_msg_buf(req->rq_reqmsg, MSG_PTLRPC_BODY_OFF,
+			      sizeof(*body));
+	if (body) {
+		struct lustre_handle handle = body->pb_handle;
+
+		if (req_capsule_req_need_swab(&req->rq_pill))
+			__swab64s(&handle.cookie);
+
+		h_exp = class_conn2export(&handle);
+		if (h_exp) {
+			if (h_exp->exp_obd == target &&
+			    h_exp->exp_connection &&
+			    nid_same(&h_exp->exp_connection->c_peer.nid,
+				     &req->rq_peer.nid)) {
+				CDEBUG(D_SEC,
+				       "%s: found export %p from handle %llx\n",
+				       target->obd_name, h_exp, handle.cookie);
+				*h_exp_out = h_exp;
+			} else {
+				class_export_put(h_exp);
+				h_exp = NULL;
+			}
+		}
+	}
+
+	return 0;
 }
 
 int gssiam_handle_init(struct ptlrpc_request *req, struct gss_svc_reqctx *grctx,
@@ -315,6 +410,8 @@ int gssiam_handle_init(struct ptlrpc_request *req, struct gss_svc_reqctx *grctx,
 	time64_t gssiam_expire = ktime_get_seconds() +
 				 rsccache->uc_entry_expire;
 	struct lu_nodemap *nodemap;
+	struct obd_export *exp = NULL;
+	struct obd_export *h_exp = NULL;
 	int rc;
 
 	if (rawobj_extract(&subdir_obj, secdata, seclen)) {
@@ -379,8 +476,13 @@ int gssiam_handle_init(struct ptlrpc_request *req, struct gss_svc_reqctx *grctx,
 
 	memcpy(lid->lid_subdir, subdir_obj.data, subdir_obj.len);
 
-	rc = gssiam_verify_target(target, lid, &gssiam_info, &gssiam_expire,
-				  &major);
+	rc = gssiam_extract_h_exp(req, target, &h_exp);
+	if (rc < 0)
+		GOTO(out, rc);
+	exp = h_exp ? h_exp : req->rq_export;
+
+	rc = gssiam_verify_target(target, exp, lid, &gssiam_info,
+				  &gssiam_expire, &major);
 	if (rc) {
 		CERROR("%s: GSSIAM verify failed: rc = %d\n", target->obd_name,
 		       rc);
@@ -450,6 +552,12 @@ int gssiam_handle_init(struct ptlrpc_request *req, struct gss_svc_reqctx *grctx,
 			LUSTRE_NODEMAP_NAME_LENGTH + 1);
 	}
 
+	if (rscp->sc_ctx.gsc_gssiam_entry)
+		upcall_cache_put_entry(tgt_gssiam_cache,
+				       rscp->sc_ctx.gsc_gssiam_entry);
+	rscp->sc_ctx.gsc_gssiam_entry = gssiam_info->lii_gssiam_entry;
+	gssiam_info->lii_gssiam_entry = NULL;
+
 	upcall_cache_update_entry(rsccache, rscp->sc_uc_entry, gssiam_expire,
 				  0);
 
@@ -457,6 +565,12 @@ int gssiam_handle_init(struct ptlrpc_request *req, struct gss_svc_reqctx *grctx,
 	upcall_cache_get_entry_raw(rscp->sc_uc_entry);
 	grctx->src_ctx = &rscp->sc_ctx;
 	grctx->src_init = 1;
+
+	/* If the real export already exists (e.g. flavor change),
+	 * update its nodemap.
+	 */
+	if (h_exp)
+		gssiam_ctx_install_nodemap(grctx, exp);
 
 	/* Pack reply */
 	rc = lustre_pack_reply_v2(req, 1, &replen, NULL, 0);
@@ -498,6 +612,9 @@ out:
 		rc = SECSVC_OK;
 	}
 
+	if (h_exp)
+		class_export_put(h_exp);
+
 	if (lid) {
 		OBD_FREE(lid->lid_token, lid->lid_token_len);
 		OBD_FREE(lid->lid_subdir, subdir_obj.len + 1);
@@ -508,6 +625,9 @@ out:
 			 gssiam_info->lii_desc.lid_token_len);
 		OBD_FREE_STR(gssiam_info->lii_desc.lid_subdir);
 		OBD_FREE_STR(gssiam_info->lii_desc.lid_principal);
+		if (gssiam_info->lii_gssiam_entry)
+			upcall_cache_put_entry(tgt_gssiam_cache,
+				gssiam_info->lii_gssiam_entry);
 		OBD_FREE_PTR(gssiam_info);
 	}
 	return rc;

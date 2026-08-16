@@ -16,8 +16,6 @@
 #include <lustre_disk.h>
 #include <linux/rbtree.h>
 
-#define DEFAULT_NODEMAP "default"
-
 /* Default nobody uid, gid and projid values */
 #define NODEMAP_NOBODY_UID 65534
 #define NODEMAP_NOBODY_GID 65534

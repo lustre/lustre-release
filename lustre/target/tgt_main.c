@@ -845,10 +845,8 @@ int __init tgt_mod_init(void)
 		RETURN(result);
 
 	result = register_filesystem(&lustre_tgt_fstype);
-	if (result) {
-		lu_kmem_fini(tgt_caches);
-		RETURN(result);
-	}
+	if (result)
+		GOTO(out_caches, result);
 
 	tgt_page_to_corrupt = folio_alloc(GFP_KERNEL, 0);
 	if (IS_ERR_OR_NULL(tgt_page_to_corrupt))
@@ -863,11 +861,28 @@ int __init tgt_mod_init(void)
 
 	update_info_init();
 
+	result = tgt_gssiam_init();
+	if (result != 0)
+		GOTO(out_update_info, result);
+
 	RETURN(0);
+
+out_update_info:
+	update_info_fini();
+	barrier_fini();
+	lu_context_key_degister(&tgt_session_key);
+	lu_context_key_degister(&tgt_thread_key);
+	if (tgt_page_to_corrupt != NULL)
+		folio_put(tgt_page_to_corrupt);
+	unregister_filesystem(&lustre_tgt_fstype);
+out_caches:
+	lu_kmem_fini(tgt_caches);
+	RETURN(result);
 }
 
 void tgt_mod_exit(void)
 {
+	tgt_gssiam_fini();
 	barrier_fini();
 	if (tgt_page_to_corrupt != NULL)
 		folio_put(tgt_page_to_corrupt);

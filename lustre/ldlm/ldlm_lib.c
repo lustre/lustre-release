@@ -31,6 +31,7 @@
 #include <lustre_dlm.h>
 #include <lustre_net.h>
 #include <lustre_sec.h>
+#include <lustre_gssiam.h>
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include "ldlm_internal.h"
 
@@ -887,6 +888,8 @@ int server_disconnect_export(struct obd_export *exp)
 		spin_unlock(&svcpt->scp_rep_lock);
 	}
 	spin_unlock(&exp->exp_lock);
+
+	tgt_gssiam_detach_cache_entry(exp);
 
 	RETURN(rc);
 }
@@ -1882,6 +1885,7 @@ void target_destroy_export(struct obd_export *exp)
 	LASSERT(atomic_read(&exp->exp_rpc_count) == 0);
 	LASSERT(atomic_read(&exp->exp_cb_count) == 0);
 	LASSERT(atomic_read(&exp->exp_replay_count) == 0);
+	tgt_gssiam_detach_cache_entry(exp);
 }
 EXPORT_SYMBOL(target_destroy_export);
 

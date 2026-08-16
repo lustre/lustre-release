@@ -48,6 +48,7 @@ struct ptlrpc_sec;
 struct ptlrpc_svc_ctx;
 struct ptlrpc_cli_ctx;
 struct ptlrpc_ctx_ops;
+struct upcall_cache_entry;
 struct req_msg_field;
 
 /**
@@ -1239,6 +1240,7 @@ struct gss_svc_ctx {
 				gsc_reverse:1;
 	char		       *gsc_nm_name;
 	struct lu_nodemap      *gsc_gssiam_nodemap;
+	struct upcall_cache_entry *gsc_gssiam_entry;
 };
 
 int sptlrpc_svc_install_rvs_ctx(struct obd_import *imp,

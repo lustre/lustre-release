@@ -56,6 +56,8 @@
 #include <lustre_dlm.h>
 #include <lustre_quota.h>
 #include <lustre_nodemap.h>
+#include <upcall_cache.h>
+
 #include <lustre_log.h>
 #include <llog_swab.h>
 #include <lustre_swab.h>
@@ -3035,6 +3037,31 @@ struct lu_context_key ofd_thread_key = {
 	.lct_exit = ofd_key_exit
 };
 
+static int ofd_gssiam_authenticate_remote(struct lu_target *lut,
+					   struct upcall_cache *cache,
+					   struct upcall_cache_entry *entry)
+{
+	struct ofd_device *ofd;
+	struct seq_server_site *ss;
+	struct obd_export *exp = NULL;
+
+	if (!lut || !lut->lut_obd || !lut->lut_obd->obd_lu_dev)
+		return -EINVAL;
+
+	ofd = ofd_dev(lut->lut_obd->obd_lu_dev);
+	if (IS_ERR_OR_NULL(ofd))
+		return -EINVAL;
+
+	ss = &ofd->ofd_seq_site;
+	if (ss->ss_client_seq)
+		exp = ss->ss_client_seq->lcs_exp;
+
+	if (exp)
+		return tgt_gssiam_rpc_authenticate(exp, cache, entry);
+
+	return -EAGAIN;
+}
+
 /**
  * ofd_init0() - main starting point of OFD initialization.
  * @env: execution environment
@@ -3164,6 +3191,11 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 		m->ofd_skip_lfsck = 1;
 	if (test_bit(LMD_FLG_LOCAL_RECOV, lmd_flags))
 		m->ofd_lut.lut_local_recovery = 1;
+
+	m->ofd_lut.lut_tsi.tsi_gssiam_cache = tgt_gssiam_cache;
+	m->ofd_lut.lut_tsi.tsi_gssiam_authenticate_remote =
+		ofd_gssiam_authenticate_remote;
+	m->ofd_lut.lut_tsi.tsi_verify_gssiam = tgt_gssiam_verify;
 
 	tgd->tgd_reserved_pcnt = 0;
 

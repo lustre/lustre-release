@@ -4150,6 +4150,15 @@ enum gssiam_auth_type {
 	GSSIAM_AUTH_EXPIRED		= 0x00000004,
 };
 
+struct gssiam_auth_rep {
+	__u32 gar_permission;
+	__u32 gar_projid;
+	__u64 gar_expire;
+	__u32 gar_options;
+	__u32 gar_padding;
+	char  gar_principal[];
+};
+
 #if defined(__cplusplus)
 }
 #endif

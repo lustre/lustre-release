@@ -41,8 +41,16 @@ struct gssiam_desc {
 
 	/* The opaque IAM authentication token provided by the client */
 	void                      *gd_token;
-	/* The specific subdirectory the client is requesting access to */
+	/* The raw subdirectory requested by the client (e.g. "/foo").
+	 * Used as the upcall_cache key and in gssiam_nodemap_name() to
+	 * ensure cache hits and nodemap name consistency across all targets.
+	 */
 	char                      *gd_subdir;
+	/* The resolved canonical subdirectory path from MDT0's root namespace
+	 * (e.g. "/exports/user1/foo"). Populated only on MDT0; NULL on non-MDT0
+	 * targets. Used by l_gssiam_auth and nodemap_fileset_add() on MDT0.
+	 */
+	char                      *gd_resolved_subdir;
 	/* The translated user identity/principal string mapped by IAM */
 	char                      *gd_principal;
 	/* The mapped project ID associated with this authenticated session */
@@ -87,10 +95,10 @@ __u64 lustre_hash_fnv_1a_64_multi(int count, const void *const bufs[],
 
 static inline
 __u64 lustre_gssiam_hash_key(const void *token, __kernel_size_t token_len,
-			     const char *subdir)
+			     const char *subdir, __u32 options)
 {
-	const void *bufs[3] = {token, &token_len, subdir};
-	__kernel_size_t sizes[3] = {0, 0, 0};
+	const void *bufs[4] = {token, &token_len, subdir, &options};
+	__kernel_size_t sizes[4] = {0, 0, 0, sizeof(options)};
 
 	if (token)
 		sizes[0] = token_len;
@@ -100,7 +108,7 @@ __u64 lustre_gssiam_hash_key(const void *token, __kernel_size_t token_len,
 	if (subdir)
 		sizes[2] = strlen(subdir);
 
-	return lustre_hash_fnv_1a_64_multi(3, bufs, sizes);
+	return lustre_hash_fnv_1a_64_multi(4, bufs, sizes);
 }
 
 static inline void
@@ -110,13 +118,22 @@ gssiam_nodemap_name(char *nm_name, size_t nm_size, const void *token,
 {
 	__u64 gssiam_hash;
 
-	gssiam_hash = lustre_gssiam_hash_key(token, token_len, subdir);
+	gssiam_hash = lustre_gssiam_hash_key(token, token_len, subdir,
+					     auth_permission);
 	gssiam_hash = lustre_hash_fnv_1a_64_continue(gssiam_hash, &projid,
 						     sizeof(projid));
-	gssiam_hash = lustre_hash_fnv_1a_64_continue(gssiam_hash,
-						     &auth_permission,
-						     sizeof(auth_permission));
 	snprintf(nm_name, nm_size, "%llx", (unsigned long long)gssiam_hash);
 }
+
+#ifdef __KERNEL__
+struct obd_device;
+/* GSSIAM projid resolution callback for co-located MDT0 */
+typedef int (*tgt_gssiam_projid_cb_t)(struct obd_device *mdt0_obd,
+				      const char *path,
+				      __u32 *projid,
+				      char **resolved_path);
+void tgt_gssiam_register_projid_cb(tgt_gssiam_projid_cb_t cb);
+void tgt_gssiam_unregister_projid_cb(void);
+#endif
 
 #endif /* _LUSTRE_GSSIAM_H */

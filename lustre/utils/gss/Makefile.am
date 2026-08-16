@@ -6,6 +6,10 @@ AM_CFLAGS := -fPIC \
 
 sbin_PROGRAMS = l_gssiam_upcall
 
+if SERVER
+sbin_PROGRAMS += l_gssiam_auth
+endif
+
 if GSS_KEYRING
 sbin_PROGRAMS += lsvcgssd lgss_keyring l_getauth
 if GSS_SSK
@@ -90,6 +94,13 @@ l_gssiam_upcall_SOURCES = \
 l_gssiam_upcall_CFLAGS = $(AM_CFLAGS) $(CFLAGS) -D _NEW_BUILD_ -I$(top_srcdir)/lustre/utils
 l_gssiam_upcall_LDADD = $(top_builddir)/lib/libcfs/libcfs.la
 
+l_gssiam_auth_SOURCES = \
+	l_gssiam_auth.c \
+	err_util.c
+
+l_gssiam_auth_CFLAGS = $(AM_CFLAGS) $(CFLAGS) -D _NEW_BUILD_ -I$(top_srcdir)/lustre/utils -I$(top_srcdir)/lustre/include
+l_gssiam_auth_LDADD = $(top_builddir)/lib/libcfs/libcfs.la
+l_gssiam_auth_LDFLAGS =
 if GSS_SSK
 l_getauth_SOURCES += sk_utils.c sk_utils.h lgss_sk_utils.c
 l_getauth_LDADD += -lcrypto -lssl

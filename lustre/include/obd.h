@@ -925,6 +925,7 @@ static inline bool obd_mdt_recovery_abort(struct obd_device *obd)
 #define KEY_MAX_PAGES_PER_RPC_WRITE     "max_pages_per_rpc_write"
 
 #define KEY_UNEVICT_CACHE_SHRINK	"unevict_cache_shrink"
+#define KEY_GSSIAM_AUTHENTICATE	"gssiam_authenticate"
 
 /* Flags for op_xvalid */
 enum op_xvalid {

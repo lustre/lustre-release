@@ -1,0 +1,86 @@
+.TH L_GSSIAM_AUTH 8 2026-03-24 Lustre "Lustre Configuration Utilities"
+.SH NAME
+l_gssiam_auth \- Handle Lustre GSSIAM security flavor server authentication
+.SH SYNOPSIS
+.SY l_gssiam_auth
+.RB [ -v
+.IR VALIDITY_DURATION ]
+.I KEY
+.I TOKEN_ENCODED
+.I SUBDIR
+.I UPCALL_NAME
+.I OPTIONS
+.YS
+.SH CONFIGURATION
+The behavior of the auth upcall and downcall mechanism is configured via
+sysfs/lctl tunables on the server.
+.SS Server Tunables
+.TP
+.B sptlrpc.gssiam_server.gssiam_auth_upcall
+Specifies the path to the executable invoked by the MDS to validate GSSIAM
+tokens. The default is
+.B /usr/sbin/l_gssiam_auth
+and can be changed using:
+.RS
+.B lctl set_param sptlrpc.gssiam_server.gssiam_auth_upcall=/path/to/auth_upcall
+.RE
+.TP
+.B sptlrpc.gssiam_server.gssiam_auth_downcall
+A write-only sysfs file used by the auth upcall to return validation results
+(permissions, Project ID, expiration) back to the MDS.
+.SH DESCRIPTION
+.B l_gssiam_auth
+is the server-side counterpart invoked by the MDS. When the MDS receives an
+GSSIAM
+.B SEC_CTX_INIT
+RPC from a client containing a token and subdirectory, it calls the binary
+defined in gssiam_auth_upcall, which defaults to l_gssiam_auth,
+to validate the token against the enterprise GSSIAM service. If the token is
+valid and authorized for the requested subdirectory,
+.B l_gssiam_auth
+returns the mapped user permissions (Read-Only, Read-Write, etc.) and the
+associated Project ID via the
+.B gssiam_auth_downcall
+interface.
+.SH OPTIONS
+.TP
+.B -v \fIVALIDITY_DURATION\fR
+(Optional) Specifies the validity duration of the token in seconds.
+Defaults to 600.
+.TP
+.B \fIKEY\fR
+The hash key pre-computed by the kernel for this authentication request.
+This key must be returned in the downcall to identify the cache entry.
+.TP
+.B \fITOKEN_ENCODED\fR
+The base64url encoded GSSIAM token provided by the client.
+.TP
+.B \fISUBDIR\fR
+The specific subdirectory (fileset) the client is attempting to access.
+.TP
+.B \fIUPCALL_NAME\fR
+The name of the upcall cache (e.g., gssiam_server) used to construct the
+sptlrpc/<upcall_name>/gssiam_auth_downcall path.
+.TP
+.B \fIOPTIONS\fR
+The options bitmask provided by the client's mount command (e.g., client read-only flag).
+.SH EXAMPLES
+Configure the server authentication upcall path:
+.RS
+.EX
+.B lctl set_param sptlrpc.gssiam_server.gssiam_auth_upcall=/sbin/my_gssiam_auth
+.EE
+.RE
+.SH AVAILABILITY
+The
+.B l_gssiam_auth
+command is part of the
+.BR lustre (7)
+filesystem package since release 2.17.57.
+.\" Added in commit v2_17_57
+.SH SEE ALSO
+.BR lustre (7),
+.BR l_getidentity (8),
+.BR l_gssiam_upcall (8),
+.BR lctl (8),
+.BR lctl-set_param (8)

@@ -1149,7 +1149,7 @@ static int nodemap_parent_seq_show(struct seq_file *seq, void *data)
 		if (nodemap->nm_parent_nm)
 			pname = nodemap->nm_parent_nm->nm_name;
 		else
-			pname = DEFAULT_NODEMAP;
+			pname = LUSTRE_DEFAULT_NODEMAP;
 	} else {
 		pname = "";
 	}

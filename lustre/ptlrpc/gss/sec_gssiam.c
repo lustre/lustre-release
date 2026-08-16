@@ -579,7 +579,8 @@ static struct ptlrpc_sec *gssiam_create_sec(struct obd_import *imp,
  * On the server side, the SEC_CTX_INIT request is processed and verified
  * by executing an external upcall (e.g., l_gssiam_upcall) to authorize
  * the client's request. A later patch adds the server-side verification
- * (e.g., via tgt_verify_gssiam() and external upcall).
+ * (e.g., via tgt_verify_gssiam() and external upcall) within the
+ * server-side function tgt_gssiam_verify().
  *
  * Return: 0 on success, negative errno on failure.
  */

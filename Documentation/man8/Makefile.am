@@ -130,6 +130,7 @@ else
 # installs and ships, but it is also included in the client utilities set.
 SERVER_MANFILES =				\
 	l_get%					\
+	l_gssiam_auth.8				\
 	lctl-barrier.8				\
 	lctl-changelog%				\
 	lctl-clear_conf.8			\

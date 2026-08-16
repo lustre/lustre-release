@@ -3548,6 +3548,19 @@ static void check_gssiam_auth_type(void)
 	CHECK_VALUE_X(GSSIAM_AUTH_EXPIRED);
 }
 
+static void
+check_gssiam_auth_rep(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(gssiam_auth_rep);
+	CHECK_MEMBER(gssiam_auth_rep, gar_permission);
+	CHECK_MEMBER(gssiam_auth_rep, gar_projid);
+	CHECK_MEMBER(gssiam_auth_rep, gar_expire);
+	CHECK_MEMBER(gssiam_auth_rep, gar_options);
+	CHECK_MEMBER(gssiam_auth_rep, gar_padding);
+	CHECK_MEMBER_IS_FLEXIBLE(gssiam_auth_rep, gar_principal);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -4024,6 +4037,7 @@ main(int argc, char **argv)
 	check_lu_pcc_state();
 
 	check_gssiam_auth_type();
+	check_gssiam_auth_rep();
 
 	printf("}\n");
 

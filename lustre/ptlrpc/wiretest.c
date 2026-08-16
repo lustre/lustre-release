@@ -7658,4 +7658,33 @@ void lustre_assert_wire_constants(void)
 		 (unsigned int)GSSIAM_AUTH_RW);
 	LASSERTF(GSSIAM_AUTH_EXPIRED == 0x00000004UL, "found 0x%.8xUL\n",
 		 (unsigned int)GSSIAM_AUTH_EXPIRED);
+
+	/* Checks for struct gssiam_auth_rep */
+	LASSERTF((int)sizeof(struct gssiam_auth_rep) == 24, "found %lld\n",
+		 (long long)(int)sizeof(struct gssiam_auth_rep));
+	LASSERTF((int)offsetof(struct gssiam_auth_rep, gar_permission) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct gssiam_auth_rep, gar_permission));
+	LASSERTF((int)sizeof(((struct gssiam_auth_rep *)0)->gar_permission) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gssiam_auth_rep *)0)->gar_permission));
+	LASSERTF((int)offsetof(struct gssiam_auth_rep, gar_projid) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct gssiam_auth_rep, gar_projid));
+	LASSERTF((int)sizeof(((struct gssiam_auth_rep *)0)->gar_projid) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gssiam_auth_rep *)0)->gar_projid));
+	LASSERTF((int)offsetof(struct gssiam_auth_rep, gar_expire) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct gssiam_auth_rep, gar_expire));
+	LASSERTF((int)sizeof(((struct gssiam_auth_rep *)0)->gar_expire) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct gssiam_auth_rep *)0)->gar_expire));
+	LASSERTF((int)offsetof(struct gssiam_auth_rep, gar_options) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct gssiam_auth_rep, gar_options));
+	LASSERTF((int)sizeof(((struct gssiam_auth_rep *)0)->gar_options) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gssiam_auth_rep *)0)->gar_options));
+	LASSERTF((int)offsetof(struct gssiam_auth_rep, gar_padding) == 20, "found %lld\n",
+		 (long long)(int)offsetof(struct gssiam_auth_rep, gar_padding));
+	LASSERTF((int)sizeof(((struct gssiam_auth_rep *)0)->gar_padding) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct gssiam_auth_rep *)0)->gar_padding));
+	LASSERTF((int)offsetof(struct gssiam_auth_rep, gar_principal) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct gssiam_auth_rep, gar_principal));
+	LASSERTF((int)sizeof(*((struct gssiam_auth_rep *)0)->gar_principal) == 1, "found %lld\n",
+		 (long long)(int)sizeof(*((struct gssiam_auth_rep *)0)->gar_principal));
+	BUILD_BUG_ON(offsetof(struct gssiam_auth_rep, gar_principal) != sizeof(struct gssiam_auth_rep));
 }

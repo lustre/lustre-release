@@ -2192,7 +2192,8 @@ out:
 	if (new_config->nmc_default_nodemap == NULL) {
 		/* new MGS won't have a default nm on disk, so create it here */
 		struct lu_nodemap *nodemap =
-			nodemap_create(DEFAULT_NODEMAP, new_config, 1, false);
+			nodemap_create(LUSTRE_DEFAULT_NODEMAP, new_config, 1,
+				       false);
 		if (IS_ERR(nodemap)) {
 			rc = PTR_ERR(nodemap);
 		} else {

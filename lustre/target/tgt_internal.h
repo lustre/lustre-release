@@ -264,6 +264,9 @@ void barrier_fini(void);
 
 extern struct file_system_type lustre_tgt_fstype;
 
+int tgt_gssiam_init(void);
+void tgt_gssiam_fini(void);
+
 /* FMD tracking data */
 struct tgt_fmd_data {
 	struct list_head fmd_list;	  /* linked to tgt_fmd_list */

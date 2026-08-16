@@ -3017,6 +3017,200 @@ int mdt_io_set_info(struct tgt_session_info *tsi)
 	RETURN(rc);
 }
 
+/**
+ * mdt_resolve_gssiam_projid() - Resolve the PROJID for an GSSIAM subdirectory.
+ * @info: MDT thread info.
+ * @mdt: MDT device.
+ * @path: The subdirectory path requested by the GSSIAM client.
+ * @projid: [out] The resolved PROJID.
+ * @final_path: [out] final resolved path after combining with default fileset.
+ *
+ * This function traverses the MDT file system from the root to the specified
+ * GSSIAM subdirectory and retrieves its PROJID attribute. This PROJID is then
+ * used to configure the dynamic nodemap for the client identity, ensuring
+ * that all files created by the client inherit the correct project ID.
+ *
+ * Return: 0 on success, or a negative errno on failure.
+ */
+static
+int mdt_resolve_gssiam_projid(struct mdt_thread_info *info,
+			      struct mdt_device *mdt, const char *path,
+			      __u32 *projid, char **final_path)
+{
+	const struct lu_env *env = info->mti_env;
+	struct mdt_object *obj;
+	struct lu_fid fid;
+	struct md_attr *ma;
+	char *combined_path = NULL;
+	int combined_len = 0;
+	const char *resolve_path = path;
+	struct lu_nodemap *nodemap;
+	int rc;
+
+	ENTRY;
+
+	nodemap = nodemap_lookup_unlocked(LUSTRE_DEFAULT_NODEMAP);
+	if (!IS_ERR_OR_NULL(nodemap)) {
+		bool ro = false;
+
+		rc = nodemap_fileset_get_root(nodemap, path, &combined_path,
+					      &combined_len, &ro);
+		nodemap_putref(nodemap);
+		if (rc)
+			GOTO(out, rc);
+
+		resolve_path = combined_path;
+	}
+
+	/**
+	 * The subdirectory mount code is already doing this pathname lookup to
+	 * resolve the "root" directory FID to return to the client, so we
+	 * leverage the same function to resolve the projid.
+	 */
+	rc = mdt_lookup_fileset(info, resolve_path, &fid);
+	if (rc)
+		GOTO(out, rc);
+
+	obj = mdt_object_find(env, mdt, &fid);
+	if (IS_ERR(obj))
+		GOTO(out, rc = PTR_ERR(obj));
+
+	/* For remote directories, invalidate the local OSP attribute cache
+	 * to ensure fresh attributes are fetched from the master MDT, since
+	 * MDT0 does not hold a distributed lock on the remote object.
+	 */
+	if (mdt_object_remote(obj))
+		mo_invalidate(env, mdt_object_child(obj));
+
+	ma = &info->mti_attr;
+	ma->ma_valid = 0;
+	ma->ma_need = MA_INODE;
+	rc = mo_attr_get(env, mdt_object_child(obj), ma);
+	if (rc == 0) {
+		if (ma->ma_attr.la_valid & LA_PROJID)
+			*projid = ma->ma_attr.la_projid;
+		else
+			*projid = 0;
+	}
+	mdt_object_put(env, obj);
+
+	if (rc == 0 && final_path && combined_path) {
+		OBD_STRDUP(*final_path, combined_path);
+		if (!*final_path)
+			rc = -ENOMEM;
+	}
+
+out:
+	if (combined_path)
+		OBD_FREE(combined_path, combined_len);
+
+	RETURN(rc);
+}
+
+/**
+ * mdt_get_gssiam_projid() - Allocate env and resolve PROJID for GSSIAM subdir
+ * @mdt: MDT device.
+ * @path: The subdirectory path requested by the GSSIAM client.
+ * @projid: [out] The resolved PROJID.
+ * @resolved_path: [out] Optional resolved canonical subdirectory path.
+ *
+ * Return: 0 on success, or a negative errno on failure.
+ */
+static int mdt_get_gssiam_projid(struct mdt_device *mdt, const char *path,
+				 __u32 *projid, char **resolved_path)
+{
+	struct lu_env env;
+	struct mdt_thread_info *mti;
+	int rc;
+
+	ENTRY;
+
+	rc = lu_env_init(&env, LCT_MD_THREAD);
+	if (rc)
+		RETURN(rc);
+
+	mti = lu_context_key_get(&env.le_ctx, &mdt_thread_key);
+	if (!mti) {
+		lu_env_fini(&env);
+		RETURN(-ENOMEM);
+	}
+
+	mti->mti_mdt = mdt;
+	mti->mti_env = &env;
+
+	rc = mdt_resolve_gssiam_projid(mti, mdt, path, projid, resolved_path);
+	lu_env_fini(&env);
+
+	RETURN(rc);
+}
+
+/**
+ * mdt_gssiam_authenticate_remote() - Authenticate GSSIAM token via MDT0 RPC.
+ * @lut: The local target device.
+ * @cache: The GSSIAM upcall cache.
+ * @entry: The upcall cache entry to be authenticated.
+ *
+ * When GSSIAM authentication is triggered on a non-MDT0 target, this function
+ * locates the export to MDT0 and forwards the authentication request to MDT0
+ * via tgt_gssiam_rpc_authenticate().
+ *
+ * Return: 0 on success, -EAGAIN if the export to MDT0 is not yet available
+ *         (tgt_gssiam_do_upcall() then has the client retry), or a negative
+ *         errno on failure.
+ */
+static int mdt_gssiam_authenticate_remote(struct lu_target *lut,
+					   struct upcall_cache *cache,
+					   struct upcall_cache_entry *entry)
+{
+	struct mdt_device *mdt;
+	struct seq_server_site *ss;
+	struct obd_export *exp = NULL;
+
+	if (!lut || !lut->lut_obd || !lut->lut_obd->obd_lu_dev)
+		return -EINVAL;
+
+	mdt = mdt_dev(lut->lut_obd->obd_lu_dev);
+	if (IS_ERR_OR_NULL(mdt))
+		return -EINVAL;
+
+	ss = mdt_seq_site(mdt);
+	if (ss->ss_client_seq)
+		exp = ss->ss_client_seq->lcs_exp;
+
+	if (exp)
+		return tgt_gssiam_rpc_authenticate(exp, cache, entry);
+
+	return -EAGAIN;
+}
+
+/**
+ * mdt_gssiam_projid_cb() - Resolve Project ID and canonical path on MDT0.
+ * @mdt0_obd: The OBD device for MDT0.
+ * @path: The subdirectory path to resolve (e.g. "/exports/user1").
+ * @projid: Output pointer to store the resolved Project ID.
+ * @resolved_path: Output pointer to store the resolved canonical path.
+ *
+ * This callback is invoked by the target GSSIAM framework to resolve the
+ * Project ID and canonical path for a given subdirectory on MDT0.
+ *
+ * Return: 0 on success, or a negative errno on failure.
+ */
+static int mdt_gssiam_projid_cb(struct obd_device *mdt0_obd,
+				const char *path,
+				__u32 *projid,
+				char **resolved_path)
+{
+	struct mdt_device *mdt0;
+
+	if (!mdt0_obd || !mdt0_obd->obd_lu_dev)
+		return -EINVAL;
+
+	mdt0 = mdt_dev(mdt0_obd->obd_lu_dev);
+	if (IS_ERR_OR_NULL(mdt0))
+		return -EINVAL;
+
+	return mdt_get_gssiam_projid(mdt0, path, projid, resolved_path);
+}
 
 static int mdt_set_info(struct tgt_session_info *tsi)
 {
@@ -7025,6 +7219,11 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 		GOTO(err_cache, rc);
 	}
 
+	m->mdt_lut.lut_tsi.tsi_gssiam_cache = tgt_gssiam_cache;
+	m->mdt_lut.lut_tsi.tsi_gssiam_authenticate_remote =
+		mdt_gssiam_authenticate_remote;
+	m->mdt_lut.lut_tsi.tsi_verify_gssiam = tgt_gssiam_verify;
+
 	rc = mdt_tunables_init(m, dev);
 	if (rc) {
 		CERROR("Can't init MDT lprocfs, rc %d\n", rc);
@@ -8328,6 +8527,165 @@ static int mdt_rpc_fid2path(struct mdt_thread_info *info, void *key, int keylen,
 	RETURN(rc);
 }
 
+/**
+ * mdt_get_info_gssiam_authenticate() - Handle a remote GSSIAM authentication
+ * request.
+ * @tsi: The target session info.
+ *
+ * This function is the RPC handler for GSSIAM authentication requests forwarded
+ * from other MDTs to MDT0. It extracts the GSSIAM token and subdirectory from
+ * the request, verifies them locally using the GSSIAM upcall cache, and
+ * resolves the appropriate PROJID. The result (permission, expiration, and
+ * PROJID) is then packed into the reply message.
+ *
+ * Return: 0 on success, or a negative errno on failure.
+ */
+static int mdt_get_info_gssiam_authenticate(struct tgt_session_info *tsi)
+{
+	struct mdt_device *mdt = mdt_dev(tsi->tsi_tgt->lut_obd->obd_lu_dev);
+	struct gssiam_auth_rep *rep;
+	struct lustre_gssiam_desc lid = { 0 };
+	struct upcall_cache_entry *entry = NULL;
+	char *token;
+	char *subdir;
+	__u32 *p;
+	__u32 token_len;
+	int val_size;
+	int rc = 0;
+
+	if (IS_ERR_OR_NULL(mdt) || mdt_seq_site(mdt)->ss_node_id != 0)
+		return err_serious(-EINVAL);
+
+	if (!(exp_connect_flags(tsi->tsi_exp) &
+	      (OBD_CONNECT_MDS_MDS | OBD_CONNECT_LIGHTWEIGHT))) {
+		rc = -EPERM;
+		CERROR("%s: non-server peer attempting GSSIAM auth forward: "
+		       "rc = %d\n", tsi->tsi_tgt->lut_obd->obd_name, rc);
+		return err_serious(rc);
+	}
+
+	val_size = req_capsule_get_size(tsi->tsi_pill, &RMF_GETINFO_VAL,
+					RCL_CLIENT);
+	p = req_capsule_client_get(tsi->tsi_pill, &RMF_GETINFO_VAL);
+	if (!p || val_size < sizeof(__u32)) {
+		rc = -EPROTO;
+		CERROR("%s: invalid token buffer size=%d: rc = %d\n",
+		       tsi->tsi_tgt->lut_obd->obd_name, val_size, rc);
+		return err_serious(rc);
+	}
+
+	token_len = le32_to_cpu(*p);
+	token = (char *)(p + 1);
+
+	if (val_size < sizeof(__u32) + token_len) {
+		rc = -EPROTO;
+		CERROR("%s: invalid token_len=%u size=%d: rc = %d\n",
+		       tsi->tsi_tgt->lut_obd->obd_name, token_len, val_size,
+		       rc);
+		return err_serious(rc);
+	}
+
+	subdir = token + token_len;
+	if (strnlen(subdir, val_size - sizeof(__u32) - token_len) ==
+	    val_size - sizeof(__u32) - token_len) {
+		rc = -EPROTO;
+		CERROR("%s: invalid subdir: token %u size %d rc = %d\n",
+		       tsi->tsi_tgt->lut_obd->obd_name, token_len,
+		       val_size, rc);
+		return err_serious(rc);
+	}
+
+	CDEBUG(D_SEC, "%s: GSSIAM auth RPC: token_len=%u subdir='%s'\n",
+	       tsi->tsi_tgt->lut_obd->obd_name, token_len, subdir);
+
+	lid.lid_token = token;
+	lid.lid_token_len = token_len;
+	lid.lid_subdir = subdir;
+	lid.lid_options = 0;
+
+	/* tgt_gssiam_get_entry() is the single source of truth for auth.
+	 * On a cache miss, it automatically triggers the upcall chain:
+	 * do_upcall -> mdt_gssiam_projid_cb(), which resolves the projid
+	 * from the MDT0 root namespace and invokes the local usermode helper
+	 * (l_gssiam_auth) to perform the authentication in this thread's
+	 * context.
+	 *
+	 * An expired token comes back as a valid entry with
+	 * GSSIAM_AUTH_EXPIRED set.  Errors are -EIDRM when the helper
+	 * failed, -ETIMEDOUT or -EINTR when it did not answer in time,
+	 * -ENOMEM, or -EREMCHG when no helper is configured.
+	 */
+	entry = tgt_gssiam_get_entry(tgt_gssiam_cache, &lid,
+				     &tsi->tsi_tgt->lut_obd->obd_uuid);
+
+	/* Determine dynamically sized reply based on principal length */
+	if (!IS_ERR(entry) && entry->u.gssiam.gd_principal)
+		val_size = sizeof(*rep) +
+			   strlen(entry->u.gssiam.gd_principal) + 1;
+	else
+		val_size = sizeof(*rep) + 1;
+
+	req_capsule_set_size(tsi->tsi_pill, &RMF_GETINFO_VAL, RCL_SERVER,
+			     val_size);
+	rc = req_capsule_server_pack(tsi->tsi_pill);
+	if (rc) {
+		if (!IS_ERR(entry))
+			upcall_cache_put_entry(tgt_gssiam_cache, entry);
+		return err_serious(rc);
+	}
+
+	rep = req_capsule_server_get(tsi->tsi_pill, &RMF_GETINFO_VAL);
+	memset(rep, 0, val_size);
+
+	/* --- 1. Handle upcall_cache errors / expiration --- */
+	if (IS_ERR(entry)) {
+		int err = PTR_ERR(entry);
+
+		/* Have the client retry when the helper may answer later */
+		if (err == -ETIMEDOUT || err == -EINTR || err == -ENOMEM)
+			rep->gar_permission = cpu_to_le32(GSSIAM_AUTH_EXPIRED);
+		else
+			rep->gar_permission = cpu_to_le32(GSSIAM_AUTH_DENY);
+
+		rep->gar_projid = cpu_to_le32(MDT_INVALID_PROJID);
+		return 0;
+	}
+
+	/* --- 2. 100% GUARANTEED VALID ENTRY --- */
+	if (entry->u.gssiam.gd_principal &&
+	    entry->u.gssiam.gd_principal[0] != '\0' &&
+	    (entry->u.gssiam.gd_auth_permission &
+	     (GSSIAM_AUTH_RO | GSSIAM_AUTH_RW)) &&
+	    !(entry->u.gssiam.gd_auth_permission &
+	      GSSIAM_AUTH_EXPIRED)) {
+		time64_t now = ktime_get_seconds();
+
+		rep->gar_permission =
+				cpu_to_le32(entry->u.gssiam.gd_auth_permission);
+		rep->gar_expire = (entry->ue_expire > now) ?
+			cpu_to_le64(entry->ue_expire - now) : cpu_to_le64(0);
+		rep->gar_projid = cpu_to_le32(entry->u.gssiam.gd_auth_projid);
+		rep->gar_options = 0;
+		rep->gar_padding = 0;
+		strscpy(rep->gar_principal, entry->u.gssiam.gd_principal,
+			val_size - sizeof(*rep));
+	} else {
+		/* Helper succeeded but explicitly set DENY in entry */
+		if (entry->u.gssiam.gd_auth_permission & GSSIAM_AUTH_EXPIRED)
+			rep->gar_permission = cpu_to_le32(GSSIAM_AUTH_EXPIRED);
+		else
+			rep->gar_permission = cpu_to_le32(GSSIAM_AUTH_DENY);
+		rep->gar_expire = 0;
+		rep->gar_projid = cpu_to_le32(MDT_INVALID_PROJID);
+		rep->gar_options = 0;
+		rep->gar_padding = 0;
+		rep->gar_principal[0] = '\0';
+	}
+
+	upcall_cache_put_entry(tgt_gssiam_cache, entry);
+	return 0;
+}
+
 int mdt_get_info(struct tgt_session_info *tsi)
 {
 	char *key;
@@ -8380,6 +8738,8 @@ int mdt_get_info(struct tgt_session_info *tsi)
 	} else if (KEY_IS(KEY_CHANGELOG_USER)) {
 		req_capsule_extend(tsi->tsi_pill, &RQF_MDS_GET_INFO);
 		rc = mdt_changelog_get_user_info(tsi);
+	} else if (KEY_IS(KEY_GSSIAM_AUTHENTICATE)) {
+		rc = mdt_get_info_gssiam_authenticate(tsi);
 	} else {
 		rc = err_serious(-EOPNOTSUPP);
 	}
@@ -8782,6 +9142,9 @@ static int __init mdt_init(void)
 				 LUSTRE_MDT_NAME, &mdt_device_type);
 	if (rc)
 		GOTO(mds_fini, rc);
+
+	tgt_gssiam_register_projid_cb(mdt_gssiam_projid_cb);
+
 lu_fini:
 	if (rc)
 		lu_kmem_fini(mdt_caches);
@@ -8793,6 +9156,7 @@ mds_fini:
 
 static void __exit mdt_exit(void)
 {
+	tgt_gssiam_unregister_projid_cb();
 	class_unregister_type(LUSTRE_MDT_NAME);
 	mds_mod_exit();
 	lu_kmem_fini(mdt_caches);

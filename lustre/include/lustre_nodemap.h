@@ -27,6 +27,7 @@
 #include <linux/rhashtable.h>
 
 #define LUSTRE_NODEMAP_NAME "nodemap"
+#define LUSTRE_DEFAULT_NODEMAP "default"
 
 #define LUSTRE_NODEMAP_DEFAULT_ID	0
 #define LUSTRE_NODEMAP_MAX_ID		UINT_MAX

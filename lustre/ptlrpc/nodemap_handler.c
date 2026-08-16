@@ -24,8 +24,6 @@
 #define HASH_NODEMAP_CUR_BITS 3
 #define HASH_NODEMAP_MAX_BITS 7
 
-#define DEFAULT_NODEMAP "default"
-
 /* Copy of config active flag to avoid locking in mapping functions */
 bool nodemap_active;
 
@@ -4892,7 +4890,7 @@ static int nodemap_del_internal(const char *nodemap_name,
 	int			 rc = 0;
 	int			 rc2 = 0;
 
-	if (strcmp(nodemap_name, DEFAULT_NODEMAP) == 0)
+	if (strcmp(nodemap_name, LUSTRE_DEFAULT_NODEMAP) == 0)
 		RETURN(-EINVAL);
 
 	nodemap = nodemap_lookup_unlocked(nodemap_name);
@@ -5700,7 +5698,7 @@ int nodemap_mod_init(void)
 		GOTO(out, rc = PTR_ERR(new_config));
 	}
 
-	nodemap = nodemap_create(DEFAULT_NODEMAP, new_config, 1, false);
+	nodemap = nodemap_create(LUSTRE_DEFAULT_NODEMAP, new_config, 1, false);
 	if (IS_ERR(nodemap)) {
 		nodemap_config_dealloc(new_config);
 		nodemap_procfs_exit();
@@ -5816,7 +5814,7 @@ static bool nodemap_is_dynamic(const char *nodemap_name)
 	struct lu_nodemap *nodemap;
 	bool isdyn = false;
 
-	if (!nodemap_name || strcmp(nodemap_name, DEFAULT_NODEMAP) == 0)
+	if (!nodemap_name || strcmp(nodemap_name, LUSTRE_DEFAULT_NODEMAP) == 0)
 		RETURN(false);
 
 	nodemap = nodemap_lookup_unlocked(nodemap_name);
