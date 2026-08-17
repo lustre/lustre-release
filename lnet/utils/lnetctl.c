@@ -2229,7 +2229,7 @@ static int yaml_lnet_config_ni(char *net_id, char *ip2net,
 		/* Use NI addresses instead of interface */
 		if (strchr(intf->intf_name, '@') ||
 		    (strcmp(intf->intf_name, "<?>") == 0 &&
--                    flags == NLM_F_REPLACE)) {
+		     flags == NLM_F_REPLACE)) {
 			yaml_scalar_event_initialize(&event, NULL,
 						     (yaml_char_t *)YAML_STR_TAG,
 						     (yaml_char_t *)"nid",
