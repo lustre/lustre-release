@@ -158,13 +158,21 @@ struct kefa_tunables {
 /* global singelton EFA data */
 struct kefa_data {
 	enum efalnd_init_state init_state;	/* init state of global data */
-	struct list_head efa_ni_list;		/* list of EFA NIs */
 	struct kefa_sched **scheds;		/* global schedulers */
 	struct kefa_cm_deamon **cm_daemons;	/* Connection manager daemons */
 	struct rhashtable peer_ni;
 	atomic_t peer_ni_count;
 	atomic_t nthreads;			/* # live threads */
+	int ni_count;				/* # active NIs */
 	bool shutdown;				/* signal shutdown to threads */
+	struct list_head ib_devs;		/* tracked IB devices */
+	struct mutex ib_devs_mutex;		/* protects ib_devs list */
+};
+
+struct kefa_ib_dev {
+	struct list_head node;
+	struct ib_device *ibdev;
+	struct kefa_ni *efa_ni;		/* NI bound to this device, or NULL */
 };
 
 struct kefa_obj_pool {
@@ -276,11 +284,11 @@ struct kefa_tx {
 
 /* Per Lnet network data */
 struct kefa_ni {
-	struct list_head lnd_node;	/* node in LND NI list */
 	struct list_head cm_node;	/* node in connection manager daemon */
 	struct kefa_dev *efa_dev;	/* underlying IB device */
 	struct lnet_ni *lnet_ni;	/* LNet interface */
 	u64 ni_epoch;			/* my epoch */
+	bool initialized;		/* startup completed successfully */
 	struct kefa_obj_pool tx_pool;
 	DECLARE_HASHTABLE(conns, EFALND_CONN_HASH_BITS);
 	rwlock_t conn_lock;

@@ -2699,7 +2699,7 @@ failed:
 }
 
 static void
-kefalnd_dev_destroy(struct kefa_dev *efa_dev, bool put_module)
+kefalnd_dev_destroy(struct kefa_dev *efa_dev)
 {
 	kefalnd_destroy_fmr_pool(&efa_dev->fmr_pool);
 
@@ -2712,22 +2712,15 @@ kefalnd_dev_destroy(struct kefa_dev *efa_dev, bool put_module)
 	if (!IS_ERR_OR_NULL(efa_dev->pd))
 		ib_dealloc_pd(efa_dev->pd);
 
-	if (put_module && efa_dev->ib_dev)
-		module_put(efa_dev->ib_dev->ops.owner);
-
-	if (efa_dev->ib_dev)
-		ib_device_put(efa_dev->ib_dev);
-
 	LIBCFS_FREE(efa_dev, sizeof(*efa_dev));
 }
 
 static struct kefa_dev *
-kefalnd_dev_init(struct kefa_ni *efa_ni, char *ifname, __be32 ip_addr)
+kefalnd_dev_init(struct kefa_ni *efa_ni, struct ib_device *ibdev, __be32 ip_addr)
 {
 	struct lnet_ioctl_config_efalnd_tunables *tunables;
 	struct lnet_ni *lnet_ni = efa_ni->lnet_ni;
 	struct kefa_dev *efa_dev = NULL;
-	bool took_module_ref = false;
 	int cq_depth, qp_depth;
 	int dev_numa_node, rc;
 
@@ -2738,28 +2731,17 @@ kefalnd_dev_init(struct kefa_ni *efa_ni, char *ifname, __be32 ip_addr)
 		return ERR_PTR(-ENOMEM);
 
 	memset(efa_dev, 0, sizeof(*efa_dev));
-	strscpy(efa_dev->ifname, ifname, sizeof(efa_dev->ifname));
+	strscpy(efa_dev->ifname, dev_name(&ibdev->dev),
+		sizeof(efa_dev->ifname));
 	efa_dev->efa_ni = efa_ni;
 	efa_dev->ifip = ip_addr;
-	efa_dev->ib_dev = ib_device_get_by_name(efa_dev->ifname, RDMA_DRIVER_EFA);
-	if (!efa_dev->ib_dev) {
-		CERROR("Failed to find EFA IB device %s\n", efa_dev->ifname);
-		rc = -ENODEV;
-		goto failed;
-	}
+	efa_dev->ib_dev = ibdev;
 
 	if (!efa_dev->ib_dev->kverbs_provider) {
 		EFA_DEV_ERR(efa_dev, "EFA driver does not support Kverbs\n");
 		rc = -EINVAL;
 		goto failed;
 	}
-
-	if (!try_module_get(efa_dev->ib_dev->ops.owner)) {
-		EFA_DEV_ERR(efa_dev, "Failed to take reference on EFA driver\n");
-		rc = -ENODEV;
-		goto failed;
-	}
-	took_module_ref = true;
 
 	rc = kefalnd_dev_query(efa_dev);
 	if (rc)
@@ -2805,22 +2787,8 @@ kefalnd_dev_init(struct kefa_ni *efa_ni, char *ifname, __be32 ip_addr)
 	return efa_dev;
 
 failed:
-	kefalnd_dev_destroy(efa_dev, took_module_ref);
+	kefalnd_dev_destroy(efa_dev);
 	return ERR_PTR(rc);
-}
-
-static struct kefa_dev *
-kefalnd_dev_search(char *ifname)
-{
-	struct kefa_ni *efa_ni;
-
-	list_for_each_entry(efa_ni, &kefalnd.efa_ni_list, lnd_node) {
-		if (strncmp(efa_ni->efa_dev->ifname, ifname,
-			    sizeof(efa_ni->efa_dev->ifname)) == 0)
-			return efa_ni->efa_dev;
-	}
-
-	return NULL;
 }
 
 static int
@@ -2919,6 +2887,82 @@ static void kefalnd_create_efa_nid(struct kefa_ni *efa_ni)
 	}
 }
 
+#ifdef HAVE_INT_IB_CLIENT_ADD
+static int kefalnd_ib_client_add(struct ib_device *ibdev)
+#else
+static void kefalnd_ib_client_add(struct ib_device *ibdev)
+#endif
+{
+	struct kefa_ib_dev *entry;
+
+	if (ibdev->ops.driver_id != RDMA_DRIVER_EFA)
+#ifdef HAVE_INT_IB_CLIENT_ADD
+		return 0;
+#else
+		return;
+#endif
+
+	LIBCFS_ALLOC(entry, sizeof(*entry));
+	if (!entry)
+#ifdef HAVE_INT_IB_CLIENT_ADD
+		return -ENOMEM;
+#else
+		return;
+#endif
+
+	entry->ibdev = ibdev;
+	mutex_lock(&kefalnd.ib_devs_mutex);
+	list_add_tail(&entry->node, &kefalnd.ib_devs);
+	mutex_unlock(&kefalnd.ib_devs_mutex);
+#ifdef HAVE_INT_IB_CLIENT_ADD
+	return 0;
+#endif
+}
+
+static void kefalnd_ib_client_remove(struct ib_device *ibdev, void *data)
+{
+	struct kefa_ib_dev *entry, *tmp;
+
+	mutex_lock(&kefalnd.ib_devs_mutex);
+	list_for_each_entry_safe(entry, tmp, &kefalnd.ib_devs, node) {
+		if (entry->ibdev == ibdev) {
+			WARN_ONCE(entry->efa_ni,
+				  "efalnd: removing device %s with active NI\n",
+				  dev_name(&ibdev->dev));
+			list_del(&entry->node);
+			LIBCFS_FREE(entry, sizeof(*entry));
+			break;
+		}
+	}
+	mutex_unlock(&kefalnd.ib_devs_mutex);
+}
+
+static struct ib_client kefalnd_ib_client = {
+	.name	= "kefalnd",
+	.add	= kefalnd_ib_client_add,
+	.remove	= kefalnd_ib_client_remove,
+};
+
+/**
+ * kefalnd_find_ib_dev - find an IB device entry by name
+ * @name: RDMA device name (e.g. "efa_0")
+ *
+ * Returns the entry or NULL.
+ */
+static struct kefa_ib_dev *
+kefalnd_find_ib_dev(const char *name)
+__must_hold(&kefalnd.ib_devs_mutex)
+{
+	struct kefa_ib_dev *entry;
+
+	list_for_each_entry(entry, &kefalnd.ib_devs, node) {
+		if (strncmp(dev_name(&entry->ibdev->dev), name,
+			    KEFA_IFNAME_SIZE) == 0)
+			return entry;
+	}
+	return NULL;
+}
+
 static void
 kefalnd_base_shutdown(void)
 {
@@ -2928,6 +2972,8 @@ kefalnd_base_shutdown(void)
 
 	CDEBUG(D_MALLOC, "Before LND cleanup: kmem[%lld]\n",
 	       libcfs_kmem_read());
+
+	ib_unregister_client(&kefalnd_ib_client);
 
 	kefalnd.shutdown = true;
 
@@ -2976,7 +3022,8 @@ kefalnd_base_startup(void)
 	}
 
 	memset(&kefalnd, 0, sizeof(kefalnd));
-	INIT_LIST_HEAD(&kefalnd.efa_ni_list);
+	INIT_LIST_HEAD(&kefalnd.ib_devs);
+	mutex_init(&kefalnd.ib_devs_mutex);
 	rc = rhashtable_init(&kefalnd.peer_ni, &peer_ni_params);
 	if (rc)
 		goto err_module;
@@ -3026,10 +3073,16 @@ kefalnd_base_startup(void)
 	CDEBUG(D_MALLOC, "After LND startup: kmem[%lld]\n",
 	       libcfs_kmem_read());
 
+	rc = ib_register_client(&kefalnd_ib_client);
+	if (rc)
+		goto err_cm;
+
 	kefalnd.init_state = EFALND_INIT_ALL;
 	kefalnd.shutdown = false;
 	return 0;
 
+err_cm:
+	cfs_percpt_free(kefalnd.cm_daemons);
 err_sched:
 	cfs_percpt_free(kefalnd.scheds);
 err_hash:
@@ -3045,6 +3098,8 @@ kefalnd_shutdown(struct lnet_ni *ni)
 {
 	struct kefa_ni *efa_ni = ni->ni_data;
 	struct kefa_dev *efa_dev = efa_ni->efa_dev;
+	struct kefa_ib_dev *ib_entry;
+	struct ib_device *ibdev;
 
 	LASSERT(kefalnd.init_state == EFALND_INIT_ALL);
 
@@ -3061,29 +3116,43 @@ kefalnd_shutdown(struct lnet_ni *ni)
 	kefalnd_destroy_tx_pool(efa_ni);
 	kefalnd_destroy_all_conns(efa_ni);
 
-	/* Remove the underlaying device if exists */
-	if (efa_dev)
-		kefalnd_dev_destroy(efa_dev, true);
+	/* Unbind NI from the device entry */
+	mutex_lock(&kefalnd.ib_devs_mutex);
+	ib_entry = kefalnd_find_ib_dev(ni->ni_interface);
+	if (ib_entry && ib_entry->efa_ni == efa_ni)
+		ib_entry->efa_ni = NULL;
+	mutex_unlock(&kefalnd.ib_devs_mutex);
 
-	if (!list_empty(&efa_ni->lnd_node))
-		list_del_init(&efa_ni->lnd_node);
+	/* Release device resources */
+	if (efa_dev) {
+		ibdev = efa_dev->ib_dev;
+		kefalnd_dev_destroy(efa_dev);
+		module_put(ibdev->ops.owner);
+		ib_device_put(ibdev);
+	}
 
 	/* remove the NI itself */
 	ni->ni_data = NULL;
+
+	if (efa_ni->initialized)
+		kefalnd.ni_count--;
+
 	LIBCFS_FREE(efa_ni, sizeof(*efa_ni));
 
 	CDEBUG(D_MALLOC, "After NI[%s] cleanup: kmem[%lld]\n",
 	       libcfs_nidstr(&ni->ni_nid), libcfs_kmem_read());
 
 	/* if there are no more NIs - destroy the global efalnd */
-	if (list_empty(&kefalnd.efa_ni_list))
+	if (kefalnd.ni_count == 0)
 		kefalnd_base_shutdown();
 }
 
 static int
 kefalnd_startup(struct lnet_ni *ni)
 {
+	struct kefa_ib_dev *ib_entry;
 	struct kefa_dev *efa_dev;
+	struct ib_device *ibdev;
 	struct kefa_ni *efa_ni;
 	__be32 ip_addr;
 	char *ifname;
@@ -3116,7 +3185,6 @@ kefalnd_startup(struct lnet_ni *ni)
 	hash_init(efa_ni->conns);
 	rwlock_init(&efa_ni->conn_lock);
 	INIT_LIST_HEAD(&efa_ni->cleanup_conns);
-	INIT_LIST_HEAD(&efa_ni->lnd_node);
 	INIT_LIST_HEAD(&efa_ni->cm_node);
 
 	kefalnd_tunables_setup(ni);
@@ -3126,18 +3194,44 @@ kefalnd_startup(struct lnet_ni *ni)
 		goto failed;
 	}
 
-	efa_dev = kefalnd_dev_search(ifname);
-	if (efa_dev) {
-		CERROR("Device[%s] already exists\n", ifname);
-		rc = -EINVAL;
+	mutex_lock(&kefalnd.ib_devs_mutex);
+	ib_entry = kefalnd_find_ib_dev(ifname);
+	if (!ib_entry) {
+		mutex_unlock(&kefalnd.ib_devs_mutex);
+		CERROR("EFA IB device %s not found\n", ifname);
+		rc = -ENODEV;
 		goto failed;
 	}
+	if (ib_entry->efa_ni) {
+		mutex_unlock(&kefalnd.ib_devs_mutex);
+		CERROR("Device[%s] already in use\n", ifname);
+		rc = -EBUSY;
+		goto failed;
+	}
+	if (!ib_device_try_get(ib_entry->ibdev)) {
+		mutex_unlock(&kefalnd.ib_devs_mutex);
+		CERROR("Failed to get reference on EFA IB device %s\n", ifname);
+		rc = -ENODEV;
+		goto failed;
+	}
+	if (!try_module_get(ib_entry->ibdev->ops.owner)) {
+		ib_device_put(ib_entry->ibdev);
+		mutex_unlock(&kefalnd.ib_devs_mutex);
+		CERROR("Failed to get reference on EFA driver module\n");
+		rc = -ENODEV;
+		goto failed;
+	}
+	ib_entry->efa_ni = efa_ni;
+	ibdev = ib_entry->ibdev;
+	mutex_unlock(&kefalnd.ib_devs_mutex);
 
 	/* initialize the device */
-	efa_dev = kefalnd_dev_init(efa_ni, ifname, ip_addr);
+	efa_dev = kefalnd_dev_init(efa_ni, ibdev, ip_addr);
 	if (IS_ERR(efa_dev)) {
 		rc = PTR_ERR(efa_dev);
 		CERROR("Failed to initialize device[%s]. err[%d]\n", ifname, rc);
+		module_put(ibdev->ops.owner);
+		ib_device_put(ibdev);
 		goto failed;
 	}
 
@@ -3179,7 +3273,9 @@ kefalnd_startup(struct lnet_ni *ni)
 		goto failed;
 
 	kefalnd_add_ni_to_cm_daemon(efa_ni);
-	list_add_tail(&efa_ni->lnd_node, &kefalnd.efa_ni_list);
+
+	efa_ni->initialized = true;
+	kefalnd.ni_count++;
 
 	CDEBUG(D_MALLOC, "After NI[%s] startup: kmem[%lld]\n",
 	       ni->ni_interface, libcfs_kmem_read());

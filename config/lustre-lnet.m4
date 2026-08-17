@@ -606,15 +606,6 @@ AS_IF([test $ENABLE_EFA = "no"], [
 
 	# Check mandatory kernel definitions
 
-	LB_CHECK_COMPILE([if 'ib_device_get_by_name' exists],
-	ib_device_get_by_name, [
-		#include <rdma/ib_verbs.h>
-	],[
-		ib_device_get_by_name(NULL, 0);
-	],[],[
-		AC_MSG_ERROR([EFA LND is not supported with this Linux kerenel])
-	])
-
 	LB_CHECK_COMPILE([if 'RDMA_DRIVER_EFA' exists],
 	rdma_driver_efa, [
 		#include <rdma/ib_verbs.h>
@@ -656,6 +647,21 @@ AS_IF([test $ENABLE_EFA = "no"], [
 		AC_DEFINE(HAVE_EFA_IB_DMA_PCI_P2P_DMA_SUPPORTED, 1,
 			[ib_dma_pci_p2p_dma_supported() is defined])
 	])
+
+	tmp_flags="$EXTRA_KCFLAGS"
+	EXTRA_KCFLAGS="-Werror"
+	LB_CHECK_COMPILE([if ib_client add() returns int],
+	ib_client_add_returns_int, [
+		#include <rdma/ib_verbs.h>
+		static int test_add(struct ib_device *dev) { return 0; }
+		static struct ib_client test_client = { .add = test_add };
+	],[
+		(void)test_client;
+	],[
+		AC_DEFINE(HAVE_INT_IB_CLIENT_ADD, 1,
+			[ib_client add() callback returns int])
+	])
+	EXTRA_KCFLAGS="$tmp_flags"
 
 	EFALND="efalnd"
 	AC_SUBST(EFALND)
