@@ -21,6 +21,11 @@ struct lustre_gssiam_desc {
 };
 
 struct upcall_cache_entry;
+struct lustre_gssiam_info {
+	struct lustre_gssiam_desc	lii_desc;
+	struct upcall_cache_entry	*lii_gssiam_entry;
+	__u32				lii_auth_permission;
+};
 
 /**
  * struct gssiam_desc - GSSIAM cached authentication descriptor
@@ -63,5 +68,55 @@ struct gssiam_desc {
 	/* Length of the gd_token buffer */
 	__u32                     gd_token_len;
 };
+
+static inline
+__u64 lustre_hash_fnv_1a_64_multi(int count, const void *const bufs[],
+				  const __kernel_size_t sizes[])
+{
+	__u64 hash = LUSTRE_FNV_1A_64_OFFSET_BIAS;
+	int i;
+
+	for (i = 0; i < count; i++) {
+		if (bufs[i] && sizes[i] > 0)
+			hash = lustre_hash_fnv_1a_64_continue(hash, bufs[i],
+							      sizes[i]);
+	}
+
+	return hash;
+}
+
+static inline
+__u64 lustre_gssiam_hash_key(const void *token, __kernel_size_t token_len,
+			     const char *subdir)
+{
+	const void *bufs[3] = {token, &token_len, subdir};
+	__kernel_size_t sizes[3] = {0, 0, 0};
+
+	if (token)
+		sizes[0] = token_len;
+
+	sizes[1] = sizeof(token_len);
+
+	if (subdir)
+		sizes[2] = strlen(subdir);
+
+	return lustre_hash_fnv_1a_64_multi(3, bufs, sizes);
+}
+
+static inline void
+gssiam_nodemap_name(char *nm_name, size_t nm_size, const void *token,
+		    __kernel_size_t token_len, const char *subdir,
+		    __u32 projid, __u32 auth_permission)
+{
+	__u64 gssiam_hash;
+
+	gssiam_hash = lustre_gssiam_hash_key(token, token_len, subdir);
+	gssiam_hash = lustre_hash_fnv_1a_64_continue(gssiam_hash, &projid,
+						     sizeof(projid));
+	gssiam_hash = lustre_hash_fnv_1a_64_continue(gssiam_hash,
+						     &auth_permission,
+						     sizeof(auth_permission));
+	snprintf(nm_name, nm_size, "%llx", (unsigned long long)gssiam_hash);
+}
 
 #endif /* _LUSTRE_GSSIAM_H */

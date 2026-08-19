@@ -179,13 +179,22 @@ int nm_member_add(struct lu_nodemap *nodemap, struct obd_export *exp)
 static void nm_member_exp_revoke(struct obd_export *exp, bool force_ost)
 {
 	struct obd_type *type = exp->exp_obd->obd_type;
+	bool is_lo = false;
 
 	if (!force_ost && strcmp(type->typ_name, LUSTRE_MDT_NAME) != 0)
 		return;
 	if (test_bit(OBDF_RECOVERING, exp->exp_obd->obd_flags))
 		return;
-	if (!exp->exp_connection ||
-	    nid_is_lo0(&exp->exp_connection->c_peer.nid) ||
+
+	spin_lock(&exp->exp_lock);
+	if (!exp->exp_connection) {
+		spin_unlock(&exp->exp_lock);
+		return;
+	}
+	is_lo = nid_is_lo0(&exp->exp_connection->c_peer.nid);
+	spin_unlock(&exp->exp_lock);
+
+	if (is_lo ||
 	    is_lwp_on_ost(exp->exp_client_uuid.uuid) ||
 	    is_lwp_on_mdt(exp->exp_client_uuid.uuid))
 		return;

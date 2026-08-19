@@ -36,6 +36,27 @@ bool nodemap_active;
 DEFINE_MUTEX(active_config_lock);
 struct nodemap_config *active_config;
 
+static bool nodemap_can_delete_gssiam(struct lu_nodemap *nodemap)
+{
+	if (!nodemap->nmf_gssiam_managed)
+		return false;
+
+	if (!list_empty(&nodemap->nm_member_list))
+		return false;
+
+	/*
+	 * Do not delete a dynamic GSSIAM nodemap if another thread has
+	 * an active reference on it (e.g. while configuring it in
+	 * gssiam_get_nodemap()). Only the 2 references from nmc_nodemap_hash
+	 * and nmc_nodemap_sha_hash (plus the 1 caller's temporary refcount)
+	 * should be present when idle (see nodemap_create()).
+	 */
+	return refcount_read(&nodemap->nm_refcount) <= 3;
+}
+
+static int nodemap_del_internal(const char *nodemap_name,
+				  bool *out_clean_llog_fileset, bool force);
+
 static void nodemap_fileset_init(struct lu_nodemap *nodemap);
 static int nodemap_copy_fileset(struct lu_nodemap *dst, struct lu_nodemap *src);
 
@@ -284,7 +305,10 @@ static bool allow_op_on_nm(struct lu_nodemap *nodemap)
  * - nm_capabilities
  * - nmf_deny_mount
  * If nmf_raise_privs grants corresponding privilege, any change on these
- * properties is permitted. Otherwise, only lowering privileges is possible,
+ * properties is permitted. A GSSIAM-managed root nodemap directly under
+ * 'default' is permitted to configure its nmf_raise_privs mask to delegate
+ * admin privileges to authorized child identities. Otherwise, only lowering
+ * privileges is possible,
  * which means:
  * - nmf_allow_root_access from 1 (parent) to 0
  * - nmf_trust_client_ids from 1 (parent) to 0
@@ -312,6 +336,18 @@ static bool check_privs_for_op(struct lu_nodemap *nodemap,
 
 	if (!nodemap->nm_parent_nm)
 		return false;
+
+	/* The GSSIAM-managed root nodemap (e.g. 'gssiam' created under
+	 * 'default') is configured directly by the server kernel subsystem.
+	 * Allow setting its raise-privilege property (nmf_raise_privs)
+	 * without requiring the 'default' nodemap to have raise_privs enabled.
+	 * Per-identity child nodemaps under 'gssiam' will still be checked
+	 * against 'gssiam's configured raise_privs below.
+	 */
+	if (nodemap->nmf_gssiam_managed &&
+	    is_default_nodemap(nodemap->nm_parent_nm) &&
+	    priv == NODEMAP_RAISE_PRIV_RAISE)
+		return true;
 
 	if ((nodemap->nm_parent_nm->nmf_raise_privs & priv) &&
 	    priv != NODEMAP_RAISE_PRIV_RBAC)
@@ -825,6 +861,7 @@ EXPORT_SYMBOL(nodemap_add_member);
 void nodemap_del_member(struct obd_export *exp)
 {
 	struct lu_nodemap *nodemap;
+	bool delete_nm = false;
 
 	ENTRY;
 
@@ -843,10 +880,14 @@ void nodemap_del_member(struct obd_export *exp)
 
 	mutex_lock(&nodemap->nm_member_list_lock);
 	nm_member_del(nodemap, exp);
+	delete_nm = nodemap_can_delete_gssiam(nodemap);
 	mutex_unlock(&nodemap->nm_member_list_lock);
 
 out:
 	mutex_unlock(&active_config_lock);
+
+	if (delete_nm)
+		nodemap_del_internal(nodemap->nm_name, NULL, true);
 
 	if (nodemap)
 		nodemap_putref(nodemap);
@@ -904,6 +945,48 @@ out:
 	RETURN(rc);
 }
 EXPORT_SYMBOL(nodemap_member_switch);
+
+/**
+ * nodemap_export_refresh() - Refresh the nodemap assigned to an export
+ * @nodemap: New nodemap to assign to the export (caller retains reference)
+ * @exp: Target export structure whose nodemap is being updated
+ *
+ * Switches @exp to @nodemap. The caller retains its reference to @nodemap,
+ * while __nodemap_member_switch() takes a fresh reference for the export.
+ */
+void nodemap_export_refresh(struct lu_nodemap *nodemap, struct obd_export *exp)
+{
+	struct lu_nodemap *old_nm;
+	char nm_name[LUSTRE_NODEMAP_NAME_LENGTH + 1];
+	bool delete_old_nm = false;
+
+	mutex_lock(&active_config_lock);
+	old_nm = exp->exp_target_data.ted_nodemap;
+	if (old_nm == nodemap) {
+		mutex_unlock(&active_config_lock);
+		return;
+	}
+
+	if (old_nm) {
+		nodemap_getref(old_nm);
+		mutex_lock(&old_nm->nm_member_list_lock);
+		__nodemap_member_switch(exp, nodemap, false, false);
+		delete_old_nm = nodemap_can_delete_gssiam(old_nm);
+		if (delete_old_nm)
+			strscpy(nm_name, old_nm->nm_name, sizeof(nm_name));
+		mutex_unlock(&old_nm->nm_member_list_lock);
+	} else {
+		class_export_get(exp);
+		__nodemap_member_switch(exp, nodemap, false, false);
+	}
+
+	mutex_unlock(&active_config_lock);
+	if (old_nm)
+		nodemap_putref(old_nm);
+	if (delete_old_nm)
+		nodemap_del_internal(nm_name, NULL, true);
+}
+EXPORT_SYMBOL(nodemap_export_refresh);
 
 /**
  * nodemap_add_idmap_helper() - add an idmap to the proper nodemap trees
@@ -4606,6 +4689,52 @@ out_putref:
 EXPORT_SYMBOL(nodemap_set_deny_mount);
 
 /**
+ * nodemap_set_gssiam_managed() - Mark a nodemap as GSSIAM-managed.
+ * @name:	Name of the nodemap.
+ * @gssiam_managed: True if managed by GSSIAM, false otherwise.
+ *
+ * This function sets the GSSIAM-managed flag on a nodemap. When
+ * enabled, it indicates that this nodemap's policy is governed
+ * by the GSSIAM service.
+ *
+ * Return: 0 on success, or negative error code on failure.
+ */
+int nodemap_set_gssiam_managed(const char *name, bool gssiam_managed)
+{
+	struct lu_nodemap *nodemap = NULL;
+	bool old_val;
+	int rc;
+
+	nodemap = nodemap_lookup_unlocked(name);
+	if (IS_ERR(nodemap))
+		RETURN(PTR_ERR(nodemap));
+
+	if (is_default_nodemap(nodemap))
+		GOTO(out_putref, rc = -EINVAL);
+	if (!allow_op_on_nm(nodemap))
+		GOTO(out_putref, rc = -EPERM);
+
+	/* skip update and lock revocation if no change */
+	if (nodemap->nmf_gssiam_managed == gssiam_managed)
+		GOTO(out_putref, rc = 0);
+
+	old_val = nodemap->nmf_gssiam_managed;
+	nodemap->nmf_gssiam_managed = gssiam_managed;
+	rc = nodemap_idx_nodemap_update(nodemap);
+	if (rc) {
+		nodemap->nmf_gssiam_managed = old_val;
+		GOTO(out_putref, rc);
+	}
+
+	nm_member_revoke_locks(nodemap);
+
+out_putref:
+	nodemap_putref(nodemap);
+	return rc;
+}
+EXPORT_SYMBOL(nodemap_set_gssiam_managed);
+
+/**
  * nodemap_set_gss_identify() - Set the nmf_gss_identify flag to true or false.
  * @name: nodemap name
  * @gss_identify: if true, identify clients based on the GSS token
@@ -4742,17 +4871,19 @@ out_putref:
 EXPORT_SYMBOL(nodemap_add);
 
 /**
- * nodemap_del() - Delete a nodemap
+ * nodemap_del_internal() - Delete a nodemap
  * @nodemap_name: name of nodemmap
  * @out_clean_llog_fileset: set to true if the llog fileset entry needs to be
  * cleaned up on the MGS side.
+ * @force: allow to delete any nodemap.
  *
  * Return:
  * * %0		success
  * * %-EINVAL		invalid input
  * * %-ENOENT		no existing nodemap
  */
-int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset)
+static int nodemap_del_internal(const char *nodemap_name,
+				bool *out_clean_llog_fileset, bool force)
 {
 	struct lu_nodemap	*nodemap;
 	struct lu_nid_range	*range;
@@ -4767,6 +4898,14 @@ int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset)
 	nodemap = nodemap_lookup_unlocked(nodemap_name);
 	if (IS_ERR(nodemap))
 		GOTO(out, rc = PTR_ERR(nodemap));
+
+	if (!force && nodemap->nmf_gssiam_managed) {
+		rc = -EPERM;
+		CWARN("%s: is managed by security flavor: rc = %d\n",
+		      nodemap_name, rc);
+		nodemap_putref(nodemap);
+		RETURN(rc);
+	}
 
 	if (!allow_op_on_nm(nodemap)) {
 		nodemap_putref(nodemap);
@@ -4785,7 +4924,7 @@ int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset)
 			/* do our best and report any error on sub-nodemaps
 			 * but do not forward rc
 			 */
-			rc2 = nodemap_del(name, NULL);
+			rc2 = nodemap_del_internal(name, NULL, force);
 			if (rc2 != 0)
 				CERROR("%s: cannot del sub-nodemap '%s': rc = %d\n",
 				       nodemap_name, name, rc2);
@@ -4872,7 +5011,46 @@ int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset)
 out:
 	return rc;
 }
+
+/**
+ * nodemap_del() - Delete a nodemap by name
+ * @nodemap_name: Name of nodemap to delete
+ * @out_clean_llog_fileset: Output flag set to true if llog fileset needs
+ * cleanup
+ *
+ * Return:
+ * * %0 on success
+ * * %-EPERM if nodemap is GSSIAM-managed and force is not set
+ * * %-EINVAL if default nodemap is specified
+ * * %-ENOENT if nodemap not found
+ * * %negative errno on other error
+ */
+int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset)
+{
+	return nodemap_del_internal(nodemap_name, out_clean_llog_fileset,
+				    false);
+}
 EXPORT_SYMBOL(nodemap_del);
+
+/**
+ * nodemap_del_force() - Force delete a nodemap by name
+ * @nodemap_name: Name of nodemap to delete
+ * @out_clean_llog_fileset: Output flag set to true if llog fileset needs
+ * cleanup
+ *
+ * Similar to nodemap_del(), but allows deletion of GSSIAM-managed nodemaps.
+ *
+ * Return:
+ * * %0 on success
+ * * %-EINVAL if default nodemap is specified
+ * * %-ENOENT if nodemap not found
+ * * %negative errno on other error
+ */
+int nodemap_del_force(const char *nodemap_name, bool *out_clean_llog_fileset)
+{
+	return nodemap_del_internal(nodemap_name, out_clean_llog_fileset, true);
+}
+EXPORT_SYMBOL(nodemap_del_force);
 
 /**
  * nodemap_has_dynamic_nodemaps() - Check if any dynamic nodemaps exist
@@ -4915,7 +5093,6 @@ void nodemap_clear_dynamic_nodemaps(void)
 		list_for_each_entry_safe(dyn_nm, dyn_nm_tmp,
 					 &nodemap->nm_subnodemaps,
 					 nm_parent_entry) {
-
 			/* nodemap_del() recursively deletes sub-dyn-nodemaps.
 			 * GSSIAM nodemaps are skipped here so they can be
 			 * migrated to the new configuration in

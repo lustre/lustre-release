@@ -226,6 +226,7 @@ int nodemap_activate(const bool value);
 struct lu_nodemap *nodemap_lookup_unlocked(const char *name);
 int nodemap_add(const char *nodemap_name, bool dynamic);
 int nodemap_del(const char *nodemap_name, bool *out_clean_llog_fileset);
+int nodemap_del_force(const char *nodemap_name, bool *out_clean_llog_fileset);
 void nodemap_clear_dynamic_nodemaps(void);
 bool nodemap_has_dynamic_nodemaps(void);
 int nodemap_add_member(struct ptlrpc_svc_ctx *svc_ctx, struct lnet_nid *nid,
@@ -235,6 +236,7 @@ int nodemap_member_switch(struct obd_export *exp, char *new_nm_name,
 			  bool gssonly);
 int nodemap_gssiam_attrs_update(const char *name, __u32 projid,
 				bool readonly, bool allow_root);
+void nodemap_export_refresh(struct lu_nodemap *nodemap, struct obd_export *exp);
 int nodemap_parse_range(const char *range_string, struct lnet_nid range[2],
 			u8 *netmask);
 int nodemap_parse_idmap(const char *nodemap_name, char *idmap_str,
@@ -264,6 +266,7 @@ int nodemap_set_raise_privs(const char *name, enum nodemap_raise_privs privs,
 			    enum nodemap_rbac_roles rbac_raise);
 int nodemap_set_readonly_mount(const char *name, bool readonly_mount);
 int nodemap_set_deny_mount(const char *name, bool deny_mount);
+int nodemap_set_gssiam_managed(const char *name, bool gssiam_managed);
 int nodemap_set_gss_identify(const char *name, bool gss_identify);
 bool nodemap_can_setquota(struct lu_nodemap *nodemap, __u32 qc_cmd,
 			  __u32 qc_type, __u32 id);

@@ -111,12 +111,14 @@ struct ptlrpc_sec_policy *sptlrpc_wireflavor2policy(__u32 flavor)
 			policy = NULL;
 		read_unlock(&policy_lock);
 
-		if (policy != NULL || number != SPTLRPC_POLICY_GSS)
+		if (policy != NULL || (number != SPTLRPC_POLICY_GSS &&
+				       number != SPTLRPC_POLICY_GSSIAM))
 			break;
 
-		/* try to load gss module, happens only if policy at index
-		 * SPTLRPC_POLICY_GSS is not already referenced in
-		 * global array policies[]
+		/**
+		 * Try to load ptlrpc_gss module, happens only if policy at
+		 * index SPTLRPC_POLICY_GSS or SPTLRPC_POLICY_GSSIAM is not
+		 * already referenced in global array policies[]
 		 */
 		mutex_lock(&load_mutex);
 		/* The fact that request_module() returns 0 does not guarantee
@@ -1429,13 +1431,14 @@ EXPORT_SYMBOL(sptlrpc_sec_get);
 
 void sptlrpc_sec_put(struct ptlrpc_sec *sec)
 {
-	if (sec) {
-		LASSERT(atomic_read(&(sec)->ps_refcount) > 0);
+	if (!sec)
+		return;
 
-		if (atomic_dec_and_test(&sec->ps_refcount)) {
-			sptlrpc_gc_del_sec(sec);
-			sec_cop_destroy_sec(sec);
-		}
+	LASSERT(atomic_read(&(sec)->ps_refcount) > 0);
+
+	if (atomic_dec_and_test(&sec->ps_refcount)) {
+		sptlrpc_gc_del_sec(sec);
+		sec_cop_destroy_sec(sec);
 	}
 }
 EXPORT_SYMBOL(sptlrpc_sec_put);
@@ -2337,6 +2340,33 @@ nm_switch:
 	return rc;
 }
 EXPORT_SYMBOL(sptlrpc_target_export_check);
+
+/**
+ * sptlrpc_target_export_sec_install() - install security context into export
+ *
+ * @exp: export to install the security context
+ * @req: pointer to struct ptlrpc_request (incoming connect request)
+ *
+ * Extract the security context from the request (if any) and install it
+ * onto the export. This is typically called during connection establishment.
+ *
+ * Return 0 on success.
+ */
+int sptlrpc_target_export_sec_install(struct obd_export *exp,
+				      struct ptlrpc_request *req)
+{
+	struct ptlrpc_sec_policy *policy;
+	int rc = 0;
+
+	if (req->rq_svc_ctx) {
+		policy = req->rq_svc_ctx->sc_policy;
+		if (policy && policy->sp_sops->install_export_ctx)
+			rc = policy->sp_sops->install_export_ctx(exp, req);
+	}
+
+	return rc;
+}
+EXPORT_SYMBOL(sptlrpc_target_export_sec_install);
 
 void sptlrpc_target_update_exp_flavor(struct obd_device *obd,
 				      struct sptlrpc_rule_set *rset)

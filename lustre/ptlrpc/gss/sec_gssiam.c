@@ -1032,6 +1032,28 @@ static struct ptlrpc_svc_ctx gssiam_svc_ctx = {
 	.sc_policy      = &sptlrpc_gssiam_policy,
 };
 
+/**
+ * gssiam_is_null_svc_ctx() - Check if a service context uses Null framing
+ * @ctx: service context to check
+ *
+ * In GSSIAM's Hybrid RPC Model, regular Data/Metadata RPCs use
+ * standard Null framing for performance and are assigned the static,
+ * shared service context (&gssiam_svc_ctx) by null_accept_common().
+ *
+ * Only GSS-framed handshake requests (SEC_CTX_INIT and Connect RPCs) are
+ * assigned a dynamically allocated struct gss_svc_reqctx by gss_svc_accept().
+ *
+ * This helper returns true if @ctx points to the shared &gssiam_svc_ctx
+ * (Null-framed), allowing callers to distinguish it from a real GSS
+ * service context before attempting container_of() / gss_svc_ctx2reqctx().
+ *
+ * Return: true if @ctx is the static Null-framed service context
+ */
+bool gssiam_is_null_svc_ctx(struct ptlrpc_svc_ctx *ctx)
+{
+	return ctx == &gssiam_svc_ctx;
+}
+
 static int gssiam_alloc_rs(struct ptlrpc_request *req, int msgsize)
 {
 	if (req->rq_svc_ctx != &gssiam_svc_ctx)
@@ -1075,6 +1097,42 @@ static void gssiam_invalidate_ctx(struct ptlrpc_svc_ctx *ctx)
 	gss_svc_invalidate_ctx(ctx);
 }
 
+/**
+ * gssiam_check_nodemap() - Verify that the nodemap assigned to context exists
+ * @req: The incoming request being processed.
+ *
+ * Return:
+ * * %SECSVC_OK		Nodemap exists, or check is not applicable.
+ * * %SECSVC_COMPLETE	Nodemap is missing; an error reply has been
+ *			packed to force client re-initialization.
+ * * %SECSVC_DROP	Failed to pack error reply.
+ */
+static int gssiam_check_nodemap(struct ptlrpc_request *req)
+{
+#ifdef CONFIG_LUSTRE_FS_SERVER
+	struct lu_nodemap *nm;
+	struct ptlrpc_svc_ctx *ctx = req->rq_svc_ctx;
+
+	if (!ctx || !ctx->sc_nodemap)
+		return SECSVC_OK;
+
+	nm = nodemap_lookup_unlocked(ctx->sc_nodemap);
+	if (IS_ERR(nm)) {
+		CWARN("gssiam: nodemap %s missing: rc = %ld\n",
+		      ctx->sc_nodemap, PTR_ERR(nm));
+		ptlrpc_req_drop_rs(req);
+		if (gss_pack_err_notify(req, GSS_S_NO_CONTEXT, 0))
+			return SECSVC_DROP;
+
+		return SECSVC_COMPLETE;
+	}
+
+	nodemap_putref(nm);
+#endif
+
+	return SECSVC_OK;
+}
+
 /* server operations */
 static int gssiam_accept(struct ptlrpc_request *req)
 {
@@ -1096,13 +1154,20 @@ static int gssiam_accept(struct ptlrpc_request *req)
 
 		ghdr = lustre_msg_buf(req->rq_reqbuf, 0, sizeof(*ghdr));
 		if (ghdr && ghdr->gh_version == PTLRPC_GSS_VERSION) {
+			int rc;
+
 			if (ghdr->gh_svc != SPTLRPC_SVC_NULL) {
 				CERROR("%s: invalid gssiam svc %u: rc = %d\n",
 				       libcfs_nidstr(&req->rq_peer.nid),
 				       ghdr->gh_svc, -EPROTO);
 				return SECSVC_DROP;
 			}
-			return gss_svc_accept(&sptlrpc_gssiam_policy, req);
+
+			rc = gss_svc_accept(&sptlrpc_gssiam_policy, req);
+			if (rc == SECSVC_OK && req->rq_svc_ctx)
+				rc = gssiam_check_nodemap(req);
+
+			return rc;
 		}
 	}
 
@@ -1117,6 +1182,9 @@ static struct ptlrpc_sec_sops gssiam_sops = {
 	.authorize	= gssiam_authorize,
 	.free_ctx	= gssiam_free_ctx,
 	.free_rs	= gssiam_free_rs,
+#ifdef CONFIG_LUSTRE_FS_SERVER
+	.install_export_ctx = gssiam_install_ctx,
+#endif
 	.invalidate_ctx	= gssiam_invalidate_ctx,
 };
 

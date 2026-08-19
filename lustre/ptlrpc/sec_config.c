@@ -24,6 +24,7 @@
 #include <lustre_log.h>
 #include <lustre_disk.h>
 #include <lustre_dlm.h>
+#include <lustre_nodemap.h>
 #include <uapi/linux/lustre/lustre_param.h>
 #include <lustre_sec.h>
 
@@ -465,6 +466,44 @@ struct sptlrpc_conf {
 static struct mutex sptlrpc_conf_lock;
 static LIST_HEAD(sptlrpc_confs);
 
+#ifdef CONFIG_LUSTRE_FS_SERVER
+bool sptlrpc_has_gssiam_rules(void)
+{
+	struct sptlrpc_conf *conf;
+	struct sptlrpc_conf_tgt *conf_tgt;
+	struct sptlrpc_rule *rule;
+	bool found = false;
+
+	mutex_lock(&sptlrpc_conf_lock);
+	list_for_each_entry(conf, &sptlrpc_confs, sc_list) {
+		int i;
+
+		for (i = 0; i < conf->sc_rset.srs_nrule; i++) {
+			rule = &conf->sc_rset.srs_rules[i];
+			if (rule->sr_flvr.sf_rpc == SPTLRPC_FLVR_GSSIAM) {
+				found = true;
+				goto out;
+			}
+		}
+
+		list_for_each_entry(conf_tgt, &conf->sc_tgts, sct_list) {
+			for (i = 0; i < conf_tgt->sct_rset.srs_nrule; i++) {
+				rule = &conf_tgt->sct_rset.srs_rules[i];
+				if (rule->sr_flvr.sf_rpc ==
+						SPTLRPC_FLVR_GSSIAM) {
+					found = true;
+					goto out;
+				}
+			}
+		}
+	}
+out:
+	mutex_unlock(&sptlrpc_conf_lock);
+	return found;
+}
+EXPORT_SYMBOL(sptlrpc_has_gssiam_rules);
+#endif
+
 static void sptlrpc_conf_free_rsets(struct sptlrpc_conf *conf)
 {
 	struct sptlrpc_conf_tgt *conf_tgt, *conf_tgt_next;
@@ -662,7 +701,14 @@ int sptlrpc_process_config(struct lustre_cfg *lcfg)
 	if (rc)
 		return rc;
 
-	return __sptlrpc_process_config(target, fsname, &rule, NULL);
+	rc = __sptlrpc_process_config(target, fsname, &rule, NULL);
+#ifdef CONFIG_LUSTRE_FS_SERVER
+	/* Tries to clean up the GSSIAM nodemap. */
+	if (!rc && !sptlrpc_has_gssiam_rules())
+		nodemap_del_force("gssiam", NULL);
+#endif
+
+	return rc;
 }
 EXPORT_SYMBOL(sptlrpc_process_config);
 

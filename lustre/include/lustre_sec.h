@@ -383,6 +383,9 @@ void sptlrpc_conf_log_update_end(const char *logname);
 void sptlrpc_conf_client_adapt(struct obd_device *obd);
 int  sptlrpc_conf_target_get_rules(struct obd_device *obd,
 				   struct sptlrpc_rule_set *rset);
+#ifdef CONFIG_LUSTRE_FS_SERVER
+bool sptlrpc_has_gssiam_rules(void);
+#endif
 void sptlrpc_target_choose_flavor(struct sptlrpc_rule_set *rset,
 				  enum lustre_sec_part from,
 				  struct lnet_nid *nid,
@@ -747,6 +750,12 @@ struct ptlrpc_sec_sops {
 	 * \see gss_svc_invalidate_ctx().
 	 */
 	void (*invalidate_ctx)(struct ptlrpc_svc_ctx *ctx);
+
+	/**
+	 * Install security context onto the export after connection.
+	 */
+	int (*install_export_ctx)(struct obd_export *exp,
+				  struct ptlrpc_request *req);
 
 	/**
 	 * Allocate a ptlrpc_reply_state.
@@ -1188,7 +1197,8 @@ int  sptlrpc_target_export_check(struct obd_export *exp,
 				 struct ptlrpc_request *req);
 void sptlrpc_target_update_exp_flavor(struct obd_device *obd,
 				      struct sptlrpc_rule_set *rset);
-
+int  sptlrpc_target_export_sec_install(struct obd_export *exp,
+				       struct ptlrpc_request *req);
 /*
  * context and reverse context
  */
@@ -1228,6 +1238,7 @@ struct gss_svc_ctx {
 				gsc_remote:1,
 				gsc_reverse:1;
 	char		       *gsc_nm_name;
+	struct lu_nodemap      *gsc_gssiam_nodemap;
 };
 
 int sptlrpc_svc_install_rvs_ctx(struct obd_import *imp,

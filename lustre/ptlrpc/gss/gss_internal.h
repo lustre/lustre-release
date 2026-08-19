@@ -415,10 +415,12 @@ static inline void cleanup_sk_module(void) { return; }
 int __init sptlrpc_gssiam_init(void);
 void sptlrpc_gssiam_exit(void);
 
+bool gssiam_is_null_svc_ctx(struct ptlrpc_svc_ctx *ctx);
 #ifdef CONFIG_LUSTRE_FS_SERVER
 int gssiam_handle_init(struct ptlrpc_request *req, struct gss_svc_reqctx *grctx,
 		       struct obd_device *target, rawobj_t *in_token,
 		       __u32 **secdata, __u32 *seclen);
+int gssiam_install_ctx(struct obd_export *exp, struct ptlrpc_request *req);
 #else
 static inline int gssiam_handle_init(struct ptlrpc_request *req,
 				     struct gss_svc_reqctx *grctx,

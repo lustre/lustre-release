@@ -121,8 +121,8 @@ err_layout:
 static void __exit ptlrpc_exit(void)
 {
 #ifdef CONFIG_LUSTRE_FS_SERVER
-	nodemap_mod_exit();
 	tgt_mod_exit();
+	nodemap_mod_exit();
 #endif
 	ptlrpc_nrs_fini();
 	sptlrpc_fini();

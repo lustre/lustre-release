@@ -2430,9 +2430,9 @@ struct lmv_foreign_md {
  **/
 #define LUSTRE_FNV_1A_64_PRIME	0x100000001b3ULL
 #define LUSTRE_FNV_1A_64_OFFSET_BIAS 0xcbf29ce484222325ULL
-static inline __u64 lustre_hash_fnv_1a_64(const void *buf, __kernel_size_t size)
+static inline __u64 lustre_hash_fnv_1a_64_continue(__u64 hash, const void *buf,
+						  __kernel_size_t size)
 {
-	__u64 hash = LUSTRE_FNV_1A_64_OFFSET_BIAS;
 	const unsigned char *p = buf;
 	__kernel_size_t i;
 
@@ -2442,6 +2442,12 @@ static inline __u64 lustre_hash_fnv_1a_64(const void *buf, __kernel_size_t size)
 	}
 
 	return hash;
+}
+
+static inline __u64 lustre_hash_fnv_1a_64(const void *buf, __kernel_size_t size)
+{
+	return lustre_hash_fnv_1a_64_continue(LUSTRE_FNV_1A_64_OFFSET_BIAS,
+					      buf, size);
 }
 
 /* CRUSH placement group count */

@@ -1020,6 +1020,9 @@ int tgt_connect_check_sptlrpc(struct ptlrpc_request *req, struct obd_export *exp
 		}
 	}
 
+	if (!rc)
+		rc = sptlrpc_target_export_sec_install(exp, req);
+
 	return rc;
 }
 

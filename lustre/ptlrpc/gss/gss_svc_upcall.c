@@ -76,6 +76,7 @@
 
 static DEFINE_SPINLOCK(__ctx_index_lock);
 static __u64 __ctx_index;
+static struct workqueue_struct *gss_cleanup_wq;
 
 unsigned int krb5_allow_old_client_csum;
 
@@ -477,12 +478,21 @@ void __rsc_free(struct gss_rsc *rsc)
 	lgss_delete_sec_context(&rsc->sc_ctx.gsc_mechctx);
 }
 
-static void rsc_entry_free(struct upcall_cache *cache,
-			   struct upcall_cache_entry *entry)
+static void rsc_entry_free_work(struct work_struct *w)
+{
+	struct gss_rsc *rsc = container_of(w, struct gss_rsc, sc_work);
+	struct upcall_cache_entry *entry = rsc->sc_uc_entry;
+
+	__rsc_free(rsc);
+	OBD_FREE(entry, sizeof(*entry));
+}
+
+static void rsc_entry_free_delay(struct upcall_cache_entry *entry)
 {
 	struct gss_rsc *rsc = &entry->u.rsc;
 
-	__rsc_free(rsc);
+	INIT_WORK(&rsc->sc_work, rsc_entry_free_work);
+	queue_work(gss_cleanup_wq, &rsc->sc_work);
 }
 
 static inline int rsc_entry_hash(struct gss_rsc *rsc)
@@ -686,7 +696,7 @@ void rsc_entry_put(struct upcall_cache *cache, struct gss_rsc *rsc)
 
 struct upcall_cache_ops rsc_upcall_cache_ops = {
 	.init_entry	  = rsc_entry_init,
-	.free_entry	  = rsc_entry_free,
+	.free_delay	  = rsc_entry_free_delay,
 	.upcall_compare	  = rsc_upcall_compare,
 	.downcall_compare = rsc_downcall_compare,
 	.do_upcall	  = rsc_do_upcall,
@@ -1044,6 +1054,14 @@ void gss_svc_upcall_destroy_ctx(struct gss_svc_ctx *ctx)
 {
 	struct gss_rsc *rscp = container_of(ctx, struct gss_rsc, sc_ctx);
 
+#ifdef CONFIG_LUSTRE_FS_SERVER
+	struct lu_nodemap *nodemap;
+
+	nodemap = xchg(&ctx->gsc_gssiam_nodemap, NULL);
+	if (nodemap)
+		nodemap_putref(nodemap);
+#endif
+
 	UC_CACHE_SET_INVALID(rscp->sc_uc_entry);
 	rscp->sc_uc_entry->ue_expire = 1;
 }
@@ -1098,6 +1116,10 @@ int __init gss_init_svc_upcall(void)
 	 */
 	get_random_bytes(&__ctx_index, sizeof(__ctx_index));
 
+	gss_cleanup_wq = alloc_workqueue("gss_cleanup_wq", 0, 0);
+	if (!gss_cleanup_wq)
+		return -ENOMEM;
+
 	rsicache = upcall_cache_init(RSI_CACHE_NAME, RSI_UPCALL_PATH,
 				     UC_RSICACHE_HASH_SIZE,
 				     600, /* entry expire: 10 mn */
@@ -1107,7 +1129,7 @@ int __init gss_init_svc_upcall(void)
 	if (IS_ERR(rsicache)) {
 		rc = PTR_ERR(rsicache);
 		rsicache = NULL;
-		return rc;
+		goto out_wq;
 	}
 	rsccache = upcall_cache_init(RSC_CACHE_NAME, RSC_UPCALL_PATH,
 				     UC_RSCCACHE_HASH_SIZE,
@@ -1120,7 +1142,7 @@ int __init gss_init_svc_upcall(void)
 		rsicache = NULL;
 		rc = PTR_ERR(rsccache);
 		rsccache = NULL;
-		return rc;
+		goto out_wq;
 	}
 
 	if (check_gssd_socket())
@@ -1128,10 +1150,19 @@ int __init gss_init_svc_upcall(void)
 		       "Init channel not opened by lsvcgssd, GSS might not work on server side until daemon is active\n");
 
 	return 0;
+
+out_wq:
+	destroy_workqueue(gss_cleanup_wq);
+	gss_cleanup_wq = NULL;
+	return rc;
 }
 
 void gss_exit_svc_upcall(void)
 {
 	upcall_cache_cleanup(rsicache);
 	upcall_cache_cleanup(rsccache);
+	if (gss_cleanup_wq) {
+		destroy_workqueue(gss_cleanup_wq);
+		gss_cleanup_wq = NULL;
+	}
 }
