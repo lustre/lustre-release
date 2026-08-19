@@ -918,19 +918,39 @@ static struct cfs_hash_ops jobid_hash_ops = {
 
 /**
  * lustre_get_jobid() - Generate the job identifier string for this process for
- *                      tracking purposes.
+ * tracking purposes.
  * @jobid: Buffer for jobid string [out]
- * @joblen: length of @jobid
+ * @joblen: length of @jobid.  Must be at least 2; no more than
+ *   %LUSTRE_JOBID_SIZE bytes of jobid are produced
  *
  * Fill in @jobid string based on the value of obd_jobid_var:
- * JOBSTATS_DISABLE:      none
- * JOBSTATS_NODELOCAL:    content of obd_jobid_name (jobid_interpret_string())
- * JOBSTATS_PROCNAME_UID: process name/UID
- * JOBSTATS_SESSION       per-session value set by
- *                            /sys/fs/lustre/jobid_this_session
- * anything else:         look up obd_jobid_var in the processes environment
  *
- * Return: %0 on success, %-errno on error
+ * * %JOBSTATS_DISABLE - none
+ * * %JOBSTATS_NODELOCAL - content of obd_jobid_name
+ *   (jobid_interpret_string())
+ * * %JOBSTATS_PROCNAME_UID - process name/UID
+ * * %JOBSTATS_SESSION - per-session value set by
+ *   /sys/fs/lustre/jobid_this_session
+ * * anything else - name of an environment variable to look up in the
+ *   process environment, but only for a process that is not a Lustre or
+ *   kernel service thread (jobid_name_is_valid())
+ *
+ * The per-session and process environment cases expand obd_jobid_name
+ * instead when the direct lookup fails, and also when obd_jobid_name
+ * contains the jobid escape handled by jobid_interpret_string(), in
+ * which case the direct lookup is not attempted at all.
+ *
+ * A %0 return does not mean @jobid was filled in: several paths,
+ * including a service thread with an environment jobid_var, leave the
+ * string undefined, so callers must initialize @jobid themselves.
+ *
+ * Return:
+ * * %-EINVAL if @joblen is less than 2
+ * * %-errno on other errors
+ * * %0 or the length reported by a direct per-session or per-process
+ *   jobid lookup on success.  That length is strlen(@jobid) for the
+ *   per-session case and the cached length for the process environment
+ *   one, which can exceed both strlen(@jobid) and @joblen
  */
 int lustre_get_jobid(char *jobid, size_t joblen)
 {
