@@ -640,9 +640,6 @@ AC_DEFUN([LIBCFS_HAVE_TASK_IS_RUNNING], [
 		AC_DEFINE(task_is_running(task),
 			[(READ_ONCE((task)->state) == TASK_RUNNING)],
 			[create compat task_is_running()])
-		AC_DEFINE(get_current_state(),
-			[(READ_ONCE(current->state))],
-			[create compat get_current_state()])
 	])
 ]) # LIBCFS_HAVE_TASK_IS_RUNNING
 

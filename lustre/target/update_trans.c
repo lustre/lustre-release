@@ -1524,16 +1524,15 @@ out_put:
 static int distribute_txn_commit_thread(void *_arg)
 {
 	struct target_distribute_txn_data *tdtd = _arg;
-	struct lu_env		*env = &tdtd->tdtd_env;
+	struct lu_env *env = &tdtd->tdtd_env;
 	LIST_HEAD(list);
-	int			 rc;
+	int rc;
 	struct top_multiple_thandle *tmt;
 	struct top_multiple_thandle *tmp;
-	__u64			 batchid = 0, committed;
+	u64 batchid = 0, committed;
+	long timeout = MAX_SCHEDULE_TIMEOUT;
 
 	ENTRY;
-
-
 	CDEBUG(D_HA, "%s: start commit thread committed batchid %llu\n",
 	       tdtd->tdtd_lut->lut_obd->obd_name,
 	       tdtd->tdtd_committed_batchid);
@@ -1590,10 +1589,26 @@ static int distribute_txn_commit_thread(void *_arg)
 		       tdtd->tdtd_committed_batchid);
 		/* update globally committed on a storage */
 		if (batchid > tdtd->tdtd_committed_batchid) {
+			bool restore = false;
+
+			if (!task_is_running(current)) {
+				__set_current_state(TASK_RUNNING);
+				restore = true;
+			}
 			rc = distribute_txn_commit_batchid_update(env, tdtd,
-							     batchid);
-			if (rc == 0)
+								  batchid);
+			if (rc == 0) {
 				batchid = 0;
+				timeout = MAX_SCHEDULE_TIMEOUT;
+			} else {
+				if (timeout == MAX_SCHEDULE_TIMEOUT)
+					timeout = cfs_time_seconds(1);
+				else if (timeout < cfs_time_seconds(30))
+					timeout += cfs_time_seconds(1);
+			}
+			/* enable schedule() before retrying */
+			if (restore)
+				__set_current_state(TASK_IDLE);
 		}
 		/* cancel the records for committed batchid's */
 		/* XXX: should we postpone cancel's till the end of recovery? */
@@ -1609,7 +1624,7 @@ static int distribute_txn_commit_thread(void *_arg)
 		}
 
 		if (!task_is_running(current))
-			schedule();
+			schedule_timeout(timeout);
 
 		if (CFS_FAIL_PRECHECK(OBD_FAIL_OUT_OBJECT_MISS)) {
 			set_current_state(TASK_UNINTERRUPTIBLE);
