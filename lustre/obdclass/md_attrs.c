@@ -21,8 +21,8 @@
  * lustre_lma_init() - Initialize new @lma.
  * @lma: is the new LMA structure to be initialized
  * @fid: is the FID of the object this LMA belongs to
- * @compat: featores that MDS can ignore
- * @incompat: features that MDS must understand to access object
+ * @compat: LMAC_* features that can be ignored if not understood
+ * @incompat: LMAI_* features that must be understood to access object
  */
 void lustre_lma_init(struct lustre_mdt_attrs *lma, const struct lu_fid *fid,
 		     __u32 compat, __u32 incompat)
@@ -54,6 +54,16 @@ void lustre_lma_swab(struct lustre_mdt_attrs *lma)
 }
 EXPORT_SYMBOL(lustre_lma_swab);
 
+/**
+ * lustre_loa_init() - Initialize new @loa.
+ * @loa: is the new LOA structure to be initialized
+ * @fid: is the FID of the object this LOA belongs to
+ * @compat: LMAC_* features that can be ignored if not understood
+ * @incompat: LMAI_* features that must be understood to access object
+ *
+ * The embedded LMA is initialized by lustre_lma_init(); the OST-object PFID
+ * EA part (parent FID, stripe and layout component information) is zeroed.
+ */
 void lustre_loa_init(struct lustre_ost_attrs *loa, const struct lu_fid *fid,
 		     __u32 compat, __u32 incompat)
 {
@@ -65,9 +75,9 @@ void lustre_loa_init(struct lustre_ost_attrs *loa, const struct lu_fid *fid,
 EXPORT_SYMBOL(lustre_loa_init);
 
 /**
- * lustre_loa_swab() - Swab, if needed, LOA (for OST-object only) structure
- *                     with LMA EA and PFID EA combined together are stored
- *                     on-disk in little-endian order.
+ * lustre_loa_swab() - Swab, if needed, the LOA structure, which combines the
+ *                     LMA EA with the OST-object PFID EA and is stored on-disk
+ *                     in little-endian order.
  *
  * @loa: the pointer to the LOA structure to be swabbed.
  * @to_cpu: to indicate swab for CPU order or not.
@@ -130,12 +140,17 @@ void lustre_hsm_swab(struct hsm_attrs *attrs)
 /**
  * lustre_buf2hsm() - Swab and extract HSM attributes from on-disk xattr.
  * @buf: is a buffer containing the on-disk HSM extended attribute.
- * @rc: is the size of the HSM xattr stored in @buf
- * @mh: the md_hsm structure where to extract HSM attributes.
+ * @rc: is the size of the HSM xattr stored in @buf, or the negative errno
+ *      from fetching it
+ * @mh: the md_hsm structure where to extract HSM attributes; it is only
+ *      filled in when %0 is returned
  *
  * Return:
  * * %0 on success
- * * %negative on failure
+ * * %-ENODATA if the object has no HSM xattr, i.e. @rc is %0 or %-ENODATA.
+ *   This is a normal outcome rather than an error, and callers are expected
+ *   to handle it as such.
+ * * %negative errno propagated from @rc if fetching the xattr failed
  */
 int lustre_buf2hsm(void *buf, int rc, struct md_hsm *mh)
 {
