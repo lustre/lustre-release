@@ -137,18 +137,6 @@ static inline int ll_vfs_removexattr(struct dentry *dentry, struct inode *inode,
 #define LL_BDI_CAP_FLAGS	(BDI_CAP_CGROUP_WRITEBACK | \
 				 BDI_CAP_WRITEBACK | BDI_CAP_WRITEBACK_ACCT)
 
-#ifndef FALLOC_FL_COLLAPSE_RANGE
-#define FALLOC_FL_COLLAPSE_RANGE 0x08 /* remove a range of a file */
-#endif
-
-#ifndef FALLOC_FL_ZERO_RANGE
-#define FALLOC_FL_ZERO_RANGE 0x10 /* convert range to zeros */
-#endif
-
-#ifndef FALLOC_FL_INSERT_RANGE
-#define FALLOC_FL_INSERT_RANGE 0x20 /* insert space within file */
-#endif
-
 #ifdef HAVE_AOPS_MIGRATE_FOLIO
 #define folio_migr	folio
 #else
