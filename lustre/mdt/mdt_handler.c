@@ -4867,6 +4867,7 @@ void mdt_thread_info_reset(struct mdt_thread_info *info)
 	info->mti_big_acl_used = 0;
 	info->mti_som_strict = 0;
 	info->mti_intent_lock = 0;
+	info->mti_layout_replaced = 0;
 
 	/* spec pointers may alias the previous request pill */
 	memset(&info->mti_spec, 0, sizeof(info->mti_spec));

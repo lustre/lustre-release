@@ -2592,6 +2592,59 @@ static int lod_dir_declare_xattr_set(const struct lu_env *env,
 	RETURN(rc);
 }
 
+/**
+ * lod_ost_offline() - Check whether an OST is unreachable
+ * @lod: LOD device
+ * @idx: OST index
+ *
+ * An OST is offline if it was deactivated or disconnected (ltd_discon), or
+ * if its OSP import is not connected.  LOD only updates ltd_discon on its
+ * next statfs of the OST, so check the import itself too.  A full,
+ * read-only or no-create OST is not offline.
+ *
+ * Return: %true if the OST is offline
+ */
+static bool lod_ost_offline(struct lod_device *lod, __u32 idx)
+{
+	struct lod_tgt_desc *ost;
+	struct obd_import *imp;
+
+	if (validate_lod_and_idx(lod, idx) != 0)
+		return true;
+
+	ost = OST_TGT(lod, idx);
+	if (ost->ltd_discon)
+		return true;
+
+	imp = ost->ltd_exp ? class_exp2cliimp(ost->ltd_exp) : NULL;
+
+	return !imp || READ_ONCE(imp->imp_state) != LUSTRE_IMP_FULL;
+}
+
+/**
+ * lod_sub_th_declared() - Check whether a sub-transaction was declared
+ * @th: top transaction handle
+ * @dt: remote sub-object
+ *
+ * The OSP sub-transaction of an OST is created only when an update on it
+ * is declared, so an update must not be executed on an OST without one.
+ *
+ * Return: %true if @th has a sub-transaction for the device of @dt
+ */
+static bool lod_sub_th_declared(struct thandle *th, struct dt_object *dt)
+{
+	struct top_thandle *tth;
+
+	if (th->th_top == NULL || !th->th_complex)
+		return true;
+
+	tth = container_of(th, struct top_thandle, tt_super);
+
+	return tth->tt_multiple_thandle &&
+	       lookup_sub_thandle(tth->tt_multiple_thandle,
+				  lu2dt_dev(dt->do_lu.lo_dev));
+}
+
 static int
 lod_obj_stripe_replace_parent_fid_cb(const struct lu_env *env,
 				     struct lod_object *lo,
@@ -2654,6 +2707,46 @@ lod_obj_stripe_replace_parent_fid_cb(const struct lu_env *env,
 }
 
 /**
+ * lod_obj_stripe_replace_parent_fid_offline_cb() - Skip offline OSTs then
+ * replace parent FID.
+ * @env: execution environment
+ * @lo: LOD object
+ * @dt: stripe object
+ * @th: transaction handle
+ * @comp_idx: component index
+ * @stripe_idx: stripe index within the component
+ * @data: stripe callback data
+ *
+ * An RPC to an offline OST would wait for it while the caller holds the
+ * layout lock; LFSCK repairs the parent FID later.  Skip at execute too
+ * if the OST was offline at declare and has reconnected since, as nothing
+ * was declared for it.
+ *
+ * Return: %0 on success or skip, %negative errno on failure
+ */
+static int
+lod_obj_stripe_replace_parent_fid_offline_cb(const struct lu_env *env,
+		struct lod_object *lo, struct dt_object *dt, struct thandle *th,
+		int comp_idx, int stripe_idx,
+		struct lod_obj_stripe_cb_data *data)
+{
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	int type = LU_SEQ_RANGE_OST;
+	__u32 idx;
+	int rc;
+
+	rc = lod_fld_lookup(env, lod, lu_object_fid(&dt->do_lu), &idx, &type);
+	if (rc < 0)
+		return rc;
+	if (lod_ost_offline(lod, idx) ||
+	    (!data->locd_declare && !lod_sub_th_declared(th, dt)))
+		return 0;
+
+	return lod_obj_stripe_replace_parent_fid_cb(env, lo, dt, th, comp_idx,
+						    stripe_idx, data);
+}
+
+/**
  * lod_replace_parent_fid() - Reset parent FID on OST object
  * @env: execution environment
  * @dt: dt_object whose stripes's parent FID will be reset
@@ -2698,7 +2791,7 @@ static int lod_replace_parent_fid(const struct lu_env *env,
 	}
 
 	data.locd_declare = declare;
-	data.locd_stripe_cb = lod_obj_stripe_replace_parent_fid_cb;
+	data.locd_stripe_cb = lod_obj_stripe_replace_parent_fid_offline_cb;
 	data.locd_buf = buf;
 	rc = lod_obj_for_each_stripe(env, lo, th, &data);
 
@@ -2774,7 +2867,8 @@ static int lod_comp_md_size(struct lod_object *lo, bool is_dir)
 								   is_dir);
 			if (!is_dir && is_composite)
 				lod_comp_shrink_stripe_count(&comp_entries[i],
-							     &stripe_count);
+							     &stripe_count,
+							     false);
 			if (is_dir && comp_entries[i].llc_ostlist.op_count)
 				magic = LOV_MAGIC_SPECIFIC;
 
@@ -6287,9 +6381,7 @@ int lod_declare_striped_create(const struct lu_env *env, struct dt_object *dt,
 		if (rc)
 			GOTO(out, rc);
 
-		/*
-		 * declare storage for striping data
-		 */
+		/* declare storage for striping data */
 		info->lti_buf.lb_len = lod_comp_md_size(lo, false);
 	} else {
 		/* LOD can not choose OST objects for remote objects, i.e.
@@ -7977,6 +8069,9 @@ static inline int lod_check_ost_avail(const struct lu_env *env,
 		return rc;
 	}
 
+	if (validate_lod_and_idx(lod, idx) != 0)
+		return 0;
+
 	ost = OST_TGT(lod, idx);
 	if (ost->ltd_active == 0) {
 		CDEBUG(D_LAYOUT, DFID ": mirror %d OST%d unavail\n",
@@ -8294,10 +8389,156 @@ static int lod_dir_layout_check(const struct lu_env *env,
 	RETURN(-EALREADY);
 }
 
+/**
+ * lod_layout_has_unavailable_stripe() - Check for stripes on offline OSTs
+ * @env: execution environment
+ * @lo: LOD object with loaded striping
+ * @mirror_idx: mirror to check, or -1 to check all components
+ *
+ * Only a deactivated or disconnected OST (lod_ost_offline()) makes a
+ * stripe unavailable.  An OST that is full, read-only or not accepting creates
+ * can still be truncated and must not trigger a layout replacement.
+ *
+ * Return:
+ * * %1 if any stripe sits on an offline OST
+ * * %0 if all checked stripes are usable
+ * * %negative errno if the OST lookup fails
+ */
+static int lod_layout_has_unavailable_stripe(const struct lu_env *env,
+					     struct lod_object *lo,
+					     int mirror_idx)
+{
+	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct lod_layout_component *lod_comp;
+	int i, j, rc;
+
+	for (i = 0; i < lo->ldo_comp_cnt; i++) {
+		lod_comp = &lo->ldo_comp_entries[i];
+
+		if (mirror_idx >= 0 &&
+		    (i < lo->ldo_mirrors[mirror_idx].lme_start ||
+		     i > lo->ldo_mirrors[mirror_idx].lme_end))
+			continue;
+
+		if (lod_comp->llc_magic == LOV_MAGIC_FOREIGN)
+			continue;
+
+		if (lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)
+			continue;
+
+		if (lov_pattern(lod_comp->llc_pattern) & LOV_PATTERN_MDT)
+			continue;
+
+		if (!lod_comp_inited(lod_comp) || !lod_comp->llc_stripe)
+			continue;
+
+		for (j = 0; j < lod_comp->llc_stripe_count; j++) {
+			struct dt_object *stripe = lod_comp->llc_stripe[j];
+			int type = LU_SEQ_RANGE_OST;
+			__u32 idx;
+
+			if (!stripe)
+				continue;
+
+			rc = lod_fld_lookup(env, lod,
+					    lu_object_fid(&stripe->do_lu),
+					    &idx, &type);
+			if (rc < 0)
+				return rc;
+
+			if (lod_ost_offline(lod, idx)) {
+				CDEBUG(D_LAYOUT, DFID": OST%04x offline\n",
+				       PFID(lod_object_fid(lo)), idx);
+				return 1;
+			}
+		}
+	}
+
+	return 0;
+}
+
+/**
+ * lod_layout_unavailable_check() - Check for stripes on offline OSTs.
+ * @env: execution environment
+ * @dt: LOD object to check
+ * @mlc: layout change parameters
+ *
+ * Non-FLR layouts (plain or PFL) are scanned component by component.  For
+ * FLR layouts only the mirror lod_primary_pick() would write to is checked,
+ * so an offline OST in another mirror does not cause a replacement.
+ *
+ * Return:
+ * * %0 if all checked stripes are usable
+ * * %1 if any checked stripe sits on an offline OST
+ * * %negative errno on failure
+ */
+static int lod_layout_unavailable_check(const struct lu_env *env,
+					struct dt_object *dt,
+					struct md_layout_change *mlc)
+{
+	struct lod_object *lo = lod_dt_obj(dt);
+	struct lu_extent extent = { .e_start = 0, .e_end = OBD_OBJECT_EOF };
+	int mirror_idx = -1;
+	int rc;
+
+	ENTRY;
+
+	rc = lod_striping_load(env, lo);
+	if (rc)
+		RETURN(rc);
+
+	mutex_lock(&lo->ldo_layout_mutex);
+	if (lod_is_flr(lo)) {
+		mirror_idx = lod_primary_pick(env, lo, &extent);
+		if (mirror_idx < 0)
+			GOTO(out_unlock, rc = mirror_idx);
+	}
+	rc = lod_layout_has_unavailable_stripe(env, lo, mirror_idx);
+	if (rc > 0)
+		CDEBUG(D_LAYOUT, DFID": layout unavailable (mirror %d)\n",
+		       PFID(lod_object_fid(lo)), mirror_idx);
+
+out_unlock:
+	mutex_unlock(&lo->ldo_layout_mutex);
+	RETURN(rc);
+}
+
+/**
+ * lod_layout_check() - Perform additional layout checks.
+ * @env: execution environment
+ * @dt: LOD object
+ * @mlc: layout check parameters (see enum md_layout_opc)
+ *
+ * Return:
+ * * %0 if the object does not conform (action needed)
+ * * %-EALREADY if the object already conforms
+ * * %negative errno on failure
+ */
 static int lod_layout_check(const struct lu_env *env,
 			    struct dt_object *dt,
 			    struct md_layout_change *mlc)
 {
+	if (mlc->mlc_opc == MD_LAYOUT_UNAVAILABLE) {
+		struct lod_device *lod;
+		int rc;
+
+		if (!S_ISREG(dt->do_lu.lo_header->loh_attr))
+			return -EALREADY;
+
+		/* osp.active=0 is not reflected until the next statfs
+		 * refresh.  An unreachable OST can still be counted as
+		 * active, so the active count can't skip the walk.
+		 */
+		lod = lu2lod_dev(dt->do_lu.lo_dev);
+		lod_qos_statfs_update(env, lod, &lod->lod_ost_descs);
+
+		rc = lod_layout_unavailable_check(env, dt, mlc);
+		if (rc < 0)
+			return rc;
+		/* 0 = usable -> already conforms; >0 = unavailable */
+		return rc ? 0 : -EALREADY;
+	}
+
 	if (S_ISDIR(dt->do_lu.lo_header->loh_attr))
 		return lod_dir_layout_check(env, dt, mlc);
 
@@ -9639,6 +9880,133 @@ static mlc_handler dir_mlc_ops[MD_LAYOUT_MAX] = {
 	[MD_LAYOUT_SHRINK] = lod_dir_layout_shrink,
 };
 
+/**
+ * lod_declare_layout_instantiate() - Declare layout instantiation
+ * on @dt from @mlc->mlc_source pattern.
+ * @env: execution environment
+ * @dt: target DT object to instantiate
+ * @mlc: layout change with @mlc_source; see also @mlc_no_inherit
+ * @th: transaction handle
+ *
+ * Generate LOVEA from the source layout into per-thread @info->lti_ea_buf and
+ * declare stripe creation on @dt. Pre-allocation size is stored in
+ * @info->lti_layout_attr for execute.
+ *
+ * as_template omits placement hints (-i/-o) and existing OST stripes so
+ * new stripes use QoS/RR, and rewrites EC pairs to unbound link-id form.
+ * SEL magic is coerced to COMP_V1 for lod_qos_parse_config().
+ *
+ * Return: %0 on success, %negative errno on failure
+ */
+static int lod_declare_layout_instantiate(const struct lu_env *env,
+					  struct dt_object *dt,
+					  struct md_layout_change *mlc,
+					  struct thandle *th)
+{
+	struct lod_thread_info *info = lod_env_info(env);
+	struct dt_object *source_dt;
+	struct lod_object *source_lo;
+	struct lu_attr *layout_attr = &info->lti_layout_attr;
+	struct lu_buf *buf = &info->lti_buf;
+	struct lov_comp_md_v1 *lcm;
+	int lmm_size = 0;
+	int i;
+	int rc;
+
+	ENTRY;
+
+	source_dt = lu2dt_obj(lu_object_next(&mlc->mlc_source->mo_lu));
+	source_lo = lod_dt_obj(source_dt);
+	rc = lod_striping_load(env, source_lo);
+	if (rc)
+		RETURN(rc);
+
+	mutex_lock(&source_lo->ldo_layout_mutex);
+	memset(layout_attr, 0, sizeof(*layout_attr));
+	layout_attr->la_valid = LA_SIZE;
+	/* Composite: size for components that may be instantiated on target. */
+	if (source_lo->ldo_is_composite) {
+		__u64 alloc_size = 0;
+
+		for (i = 0; i < source_lo->ldo_comp_cnt; i++) {
+			struct lod_layout_component *lod_comp =
+				&source_lo->ldo_comp_entries[i];
+			__u64 start_off;
+
+			if (!lod_comp_inited(lod_comp))
+				continue;
+
+			start_off = lod_comp->llc_extent.e_start;
+			if (alloc_size <= start_off)
+				alloc_size = start_off + 1;
+		}
+		layout_attr->la_size = alloc_size;
+	}
+
+	/*
+	 * lti_buf carries the logical LOVEA size; leave lti_ea_buf.lb_len
+	 * as the allocation size for lu_buf_free. This is a parse-time
+	 * view only: QoS reuses lti_ea_buf, then declare uses lb_len.
+	 */
+	lmm_size = lod_comp_md_size(source_lo, false);
+	rc = lod_ea_store_resize(info, lmm_size);
+	if (rc)
+		GOTO(out_unlock, rc);
+
+	buf->lb_buf = info->lti_ea_buf.lb_buf;
+	rc = lod_generate_lovea_template(env, source_lo, buf->lb_buf,
+					 &lmm_size);
+	if (rc)
+		GOTO(out_unlock, rc);
+	buf->lb_len = lmm_size;
+
+	/*
+	 * lod_qos_parse_config() accepts COMP_V1 hints, not on-disk SEL.
+	 * Keep LCME_FL_EXTENSION; lod_generate_and_set_lovea() rebuilds
+	 * LOVEA from components and stamps SEL on disk.
+	 */
+	lcm = buf->lb_buf;
+	if (lcm->lcm_magic == cpu_to_le32(LOV_MAGIC_SEL))
+		lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_COMP_V1);
+
+out_unlock:
+	mutex_unlock(&source_lo->ldo_layout_mutex);
+	if (rc)
+		RETURN(rc);
+
+	/* drop ah_init defaults so parse does not inherit their pool */
+	if (mlc->mlc_no_inherit)
+		lod_striping_free(env, lod_dt_obj(dt));
+
+	RETURN(lod_declare_striped_create(env, dt, layout_attr, buf, th));
+}
+
+/**
+ * lod_layout_instantiate() - Instantiate layout on @dt from @mlc->mlc_source
+ * pattern prepared in declare phase.
+ * @env: execution environment
+ * @dt: target DT object to instantiate
+ * @mlc: layout change with @mlc_source pattern
+ * @th: transaction handle
+ *
+ * Return: %0 on success, %negative errno on failure
+ */
+static int lod_layout_instantiate(const struct lu_env *env,
+				  struct dt_object *dt,
+				  struct md_layout_change *mlc,
+				  struct thandle *th)
+{
+	struct lu_attr *layout_attr = &lod_env_info(env)->lti_layout_attr;
+	int rc;
+
+	ENTRY;
+
+	LASSERT(layout_attr->la_valid & LA_SIZE);
+
+	rc = lod_striped_create(env, dt, layout_attr, NULL, th);
+	RETURN(rc);
+}
+
 static int lod_declare_layout_change(const struct lu_env *env,
 		struct dt_object *dt, struct md_layout_change *mlc,
 		struct thandle *th)
@@ -9658,6 +10026,11 @@ static int lod_declare_layout_change(const struct lu_env *env,
 	if (!S_ISREG(dt->do_lu.lo_header->loh_attr) || !dt_object_exists(dt) ||
 	    dt_object_remote(dt_object_child(dt)))
 		RETURN(-EINVAL);
+
+	if (mlc->mlc_opc == MD_LAYOUT_INSTANTIATE) {
+		rc = lod_declare_layout_instantiate(env, dt, mlc, th);
+		RETURN(rc);
+	}
 
 	if (mlc->mlc_opc == MD_LAYOUT_WRITE) {
 		struct layout_intent *intent = mlc->mlc_intent;
@@ -9734,6 +10107,11 @@ static int lod_layout_change(const struct lu_env *env, struct dt_object *dt,
 	if (S_ISDIR(dt->do_lu.lo_header->loh_attr)) {
 		LASSERT(dir_mlc_ops[mlc->mlc_opc]);
 		rc = dir_mlc_ops[mlc->mlc_opc](env, dt, mlc, th);
+		RETURN(rc);
+	}
+
+	if (mlc->mlc_opc == MD_LAYOUT_INSTANTIATE) {
+		rc = lod_layout_instantiate(env, dt, mlc, th);
 		RETURN(rc);
 	}
 

@@ -125,6 +125,11 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
 	mdc_setattr_pack(&req->rq_pill, op_data, ea, ealen);
 
 	req_capsule_set_size(&req->rq_pill, &RMF_ACL, RCL_SERVER, 0);
+	/* truncate may replace the layout and return it in the reply */
+	if (exp_connect_layout_replace(exp) &&
+	    op_data->op_attr.ia_valid & ATTR_SIZE)
+		req_capsule_set_size(&req->rq_pill, &RMF_MDT_MD, RCL_SERVER,
+				     exp->exp_obd->u.cli.cl_default_mds_easize);
 
 	ptlrpc_request_set_replen(req);
 

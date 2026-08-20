@@ -725,18 +725,28 @@ lod_comp_inited(const struct lod_layout_component *entry)
  * that their lov_ost_data_v1 array is not needed, we'd use this function
  * to reduce the LOVEA buffer size.
  *
- * Note: if llc_ostlist contains value, we'd need lov_ost_data_v1 array to
- * save the specified OST index list.
+ * @as_template: shrink as uninstantiated template (omit OST stripe slots
+ * and any llc_ostlist; QoS/RR will re-pick)
+ *
+ * Note: for non-template uninstantiated components, if llc_ostlist contains
+ * value, we'd need lov_ost_data_v1 array to save the specified OST index list.
  */
 static inline void
 lod_comp_shrink_stripe_count(struct lod_layout_component *lod_comp,
-			     __u16 *stripe_count)
+			     __u16 *stripe_count, bool as_template)
 {
 	/**
 	 * Need one lov_ost_data_v1 to store invalid ost_idx, please refer to
-	 * lod_parse_striping()
+	 * lod_parse_striping().  DoM components never carry OST objects; force
+	 * stripe_count to 0 so LOVEA size matches (INIT DoM is always 0) and
+	 * lod_gen_component_ea() does not reserve uninitialised ost slots.
 	 */
-	if (!lod_comp_inited(lod_comp) && lod_comp->llc_ostlist.op_count == 0)
+	if ((lov_pattern(lod_comp->llc_pattern) & LOV_PATTERN_MDT)) {
+		*stripe_count = 0;
+		return;
+	}
+	if (as_template ||
+	    (!lod_comp_inited(lod_comp) && lod_comp->llc_ostlist.op_count == 0))
 		*stripe_count = 1;
 }
 
@@ -759,6 +769,8 @@ int lod_verify_striping(const struct lu_env *env, struct lod_device *d,
 			bool is_from_disk);
 int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 		       struct lov_mds_md *lmm, int *lmm_size, bool is_dir);
+int lod_generate_lovea_template(const struct lu_env *env, struct lod_object *lo,
+				struct lov_mds_md *lmm, int *lmm_size);
 int lod_ea_store_resize(struct lod_thread_info *info, size_t size);
 void lod_layout_scrub(struct lod_layout_component *comps, int cnt);
 void lod_lovea_scrub(struct lov_comp_md_v1 *lcm, size_t size);

@@ -1850,10 +1850,10 @@ out:
 /*
  * Create an orphan object use local root.
  */
-static struct mdt_object *mdt_orphan_open(struct mdt_thread_info *info,
-					  struct mdt_device *mdt,
-					  const struct lu_fid *fid,
-					  struct md_attr *attr, fmode_t fmode)
+struct mdt_object *mdt_orphan_open(struct mdt_thread_info *info,
+				   struct mdt_device *mdt,
+				   const struct lu_fid *fid,
+				   struct md_attr *attr, fmode_t fmode)
 {
 	const struct lu_env *env = info->mti_env;
 	struct md_op_spec *spec = &info->mti_spec;
@@ -1881,7 +1881,8 @@ static struct mdt_object *mdt_orphan_open(struct mdt_thread_info *info,
 	if (IS_ERR(obj))
 		GOTO(out, rc = PTR_ERR(obj));
 
-	spec->sp_cr_lookup = 0;
+	/* Defensive: start from a clean md_op_spec for the volatile create. */
+	memset(spec, 0, sizeof(*spec));
 	spec->sp_feat = &dt_directory_features;
 	spec->sp_cr_flags = MDS_OPEN_VOLATILE | fmode;
 	if (attr->ma_valid & MA_LOV) {

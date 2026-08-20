@@ -175,6 +175,28 @@ int cl_file_inode_init(struct inode *inode, struct lustre_md *md)
 			result = PTR_ERR(clob);
 		}
 	} else {
+		/*
+		 * MDS replaced the layout (MS_LAYOUT_REPLACED), or only its
+		 * OST objects that map no file offset below the truncate
+		 * size, which mbo_size returns: discard the stale dirty pages
+		 * past that size before cl_conf_set().
+		 * Otherwise the CL_FSYNC_LOCAL prune in vvp_prune() would
+		 * write them back to unavailable OSTs.  This also covers
+		 * pages dirtied before the reply when cl_conf_set() returns
+		 * -EBUSY and the layout change is deferred to
+		 * ll_layout_lock_set(), which always uses CL_FSYNC_LOCAL.
+		 * A stripe is at least one page, so the page holding the
+		 * size is in an object that is kept.
+		 */
+		if ((md->body->mbo_valid & OBD_MD_TSTATE) &&
+		    (md->body->mbo_t_state & MS_LAYOUT_REPLACED) &&
+		    (md->body->mbo_valid & OBD_MD_FLSIZE))
+			cl_sync_file_range(inode,
+					   round_up(md->body->mbo_size,
+						    PAGE_SIZE),
+					   LLONG_MAX, CL_FSYNC_DISCARD, 1,
+					   IO_PRIO_NORMAL);
+
 		result = cl_conf_set(env, lli->lli_clob, &conf);
 		if (result == -EBUSY) {
 			/* ignore the error since I/O will handle it later */

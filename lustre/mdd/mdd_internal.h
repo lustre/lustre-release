@@ -285,6 +285,8 @@ int mdd_dir_layout_shrink(const struct lu_env *env,
 			  struct md_layout_change *mlc);
 int mdd_dir_layout_split(const struct lu_env *env, struct md_object *o,
 			 struct md_layout_change *mlc);
+int mdd_layout_instantiate(const struct lu_env *env, struct md_object *obj,
+			   struct md_layout_change *mlc);
 
 int mdd_changelog_write_rec(const struct lu_env *env,
 			    struct llog_handle *loghandle,

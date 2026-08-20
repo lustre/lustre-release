@@ -9724,6 +9724,39 @@ wait_osp_active() {
 	done
 }
 
+# Restore OSP active=1 on $SINGLEMDS and wait for the import to reconnect.
+# $1: ost facet, e.g. ost1
+mds_osp_reactivate() {
+	local ost_facet=$1
+	local ost=$(convert_facet2label $ost_facet)
+
+	do_facet $SINGLEMDS "$LCTL set_param -n osp.${ost}-osc-MDT*.active=1" ||
+		error "failed to reactivate $ost"
+	wait_osc_import_state $SINGLEMDS $ost_facet FULL
+}
+
+# Stop an OST so its objects can't be reached, wait until $SINGLEMDS sees
+# its import disconnected, and restart it when the test ends.  Dirty data
+# is written and the client cache dropped first, since writes to a stopped
+# OST can only wait for it to return.  Pass a second argument to keep
+# client dirty pages (e.g. to exercise trunc(0) discard on layout replace).
+# $1: ost facet, e.g. ost1
+# $2: optional; if set, skip sync/cancel_lru_locks
+stop_ost_unavailable() {
+	local facet=$1
+	local keep_dirty=$2
+
+	if [[ -z "$keep_dirty" ]]; then
+		sync
+		cancel_lru_locks osc
+	fi
+	stack_trap "start $facet $(ostdevname ${facet#ost}) $OST_MOUNT_OPTS &&
+		wait_recovery_complete $facet &&
+		wait_osp_import $SINGLEMDS $facet FULL" EXIT
+	stop $facet || error "stop $facet failed"
+	wait_osp_import $SINGLEMDS $facet "\(DISCONN\|CONNECTING\)"
+}
+
 oos_full() {
 	local -a availa
 	local -a granta

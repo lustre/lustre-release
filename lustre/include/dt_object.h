@@ -1120,18 +1120,22 @@ struct dt_object_operations {
 				struct thandle *th);
 
 	/**
-	 * Perform additional layout checks before
-	 * layout changing op. Currently used for PCC-RO and
-	 * dir migration.
+	 * Perform additional layout checks before a layout-changing
+	 * op. Used for PCC-RO, dir migration, and
+	 * MD_LAYOUT_UNAVAILABLE.
 	 *
 	 * \param[in] env	execution environment
 	 * \param[in] dt	DT object
 	 * \param[in] layout	data structure to describe the changes to
 	 *			the DT object's layout
 	 *
-	 * \retval 0		success
-	 * \retval -ne		-EALREADY if the object conforms the layout
-	 *			Otherwise, return error code
+	 * Return polarity is "does the object still need changing?":
+	 * 0 means it does not conform (caller should change it);
+	 * -EALREADY means it already conforms (nothing to do).
+	 *
+	 * \retval 0		object does not conform; action needed
+	 * \retval -EALREADY	object already conforms the layout
+	 * \retval -ne		error code
 	 */
 	int (*do_layout_check)(const struct lu_env *env, struct dt_object *dt,
 			       struct md_layout_change *mlc);

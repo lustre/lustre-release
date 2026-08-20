@@ -197,13 +197,19 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
 	struct ptlrpc_request  *req = mdt_info_req(mti);
 	struct obd_export *exp = req->rq_export;
 	struct mdt_device *mdt = mti->mti_mdt;
+	struct md_attr *ma = &mti->mti_attr;
 	struct mdt_object *obj;
 	struct mdt_body *body;
+	bool trunc0;
 	int rc;
 
 	mdt_req_from_lrd(req, mti->mti_reply_data);
 	if (req->rq_status)
 		return;
+
+	trunc0 = exp_connect_layout_replace(exp) &&
+		 ma->ma_attr.la_valid & LA_SIZE && !ma->ma_attr.la_size &&
+		 !(ma->ma_attr_flags & MDS_TRUNC_KEEP_LEASE);
 
 	body = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
 	obj = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid1);
@@ -218,14 +224,18 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
 		RETURN_EXIT;
 	}
 
-	mti->mti_attr.ma_need = MA_INODE;
-	mti->mti_attr.ma_valid = 0;
+	ma->ma_need = MA_INODE;
+	/* trunc(0) may have replaced the layout; the original reply is lost */
+	if (trunc0)
+		mdt_prep_ma_buf_from_rep(mti, obj, ma, 0);
+	ma->ma_valid = 0;
 
-	rc = mdt_attr_get_complex(mti, obj, &mti->mti_attr);
+	rc = mdt_attr_get_complex(mti, obj, ma);
 	if (rc == -ENOENT)
-		mdt_fake_ma(&mti->mti_attr);
-	mdt_pack_attr2body(mti, body, &mti->mti_attr.ma_attr,
-			   mdt_object_fid(obj));
+		mdt_fake_ma(ma);
+	mdt_pack_attr2body(mti, body, &ma->ma_attr, mdt_object_fid(obj));
+	if (trunc0 && !rc && (ma->ma_valid & MA_LOV))
+		mdt_pack_layout_replaced(body, ma);
 
 	mdt_object_put(mti->mti_env, obj);
 }

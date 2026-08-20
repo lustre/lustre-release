@@ -925,6 +925,7 @@ struct ptlrpc_body_v2 {
 				OBD_CONNECT2_SUM_STATFS | \
 				OBD_CONNECT2_OVERSTRIPING | \
 				OBD_CONNECT2_FLR |\
+				OBD_CONNECT2_LAYOUT_REPLACE | \
 				OBD_CONNECT2_LOCK_CONVERT | \
 				OBD_CONNECT2_ARCHIVE_ID_ARRAY | \
 				OBD_CONNECT2_INC_XID | \
@@ -1969,7 +1970,8 @@ enum {
 
 /* 64 possible states */
 enum md_transient_state {
-	MS_RESTORE	= (1 << 0),	/* restore is running */
+	MS_RESTORE		= (1 << 0), /* restore is running */
+	MS_LAYOUT_REPLACED	= (1 << 1), /* layout was replaced */
 };
 
 struct mdt_body {

@@ -2468,7 +2468,7 @@ run_test 27wa "check $LFS setstripe -c -i options"
 test_27x() {
 	remote_ost_nodsh && skip "remote OST with nodsh"
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
 
 	OFFSET=$(($OSTCOUNT - 1))
 	OSTIDX=0
@@ -2476,17 +2476,227 @@ test_27x() {
 
 	test_mkdir $DIR/$tdir
 	$LFS setstripe -c 1 $DIR/$tdir	# 1 stripe per file
-	do_facet ost$((OSTIDX + 1)) lctl set_param -n obdfilter.$OST.degraded 1
+	stack_trap "do_facet ost$((OSTIDX + 1)) $LCTL set_param -n \
+		obdfilter.$OST.degraded=0; sleep_maxage"
+	do_facet ost$((OSTIDX + 1)) $LCTL set_param -n obdfilter.$OST.degraded 1
 	sleep_maxage
 	createmany -o $DIR/$tdir/$tfile $OSTCOUNT
-	for i in $(seq 0 $OFFSET); do
-		[ $($LFS getstripe $DIR/$tdir/$tfile$i | grep -A 10 obdidx |
-			awk '{print $1}' | grep -w "$OSTIDX") ] &&
-		error "OST0 was degraded but new created file still use it"
+	for ((i = 0; i <= $OFFSET; i++)); do
+		local on_ost0=$($LFS getstripe -y $DIR/$tdir/$tfile$i |
+			awk '/l_ost_idx: '$OSTIDX'/ { print $3 }')
+		[[ -z "$on_ost0" ]] ||
+			error "OST0 was degraded but new file still use it"
 	done
-	do_facet ost$((OSTIDX + 1)) lctl set_param -n obdfilter.$OST.degraded 0
+	true
 }
 run_test 27x "create files while OST0 is degraded"
+
+# check_27xt_layout <file> <type> <ostidx> <on|off>
+check_27xt_layout() {
+	local file=$1
+	local t=$2
+	local ostidx=$3
+	local want=$4
+	local idx
+
+	case $t in
+	plain)
+		idx=$($LFS getstripe -i $file)
+		;;
+	dom)
+		[[ $($LFS getstripe -I1 -L $file) == "mdt" ]] ||
+			error "$t: no DoM"
+		(( $($LFS getstripe -I1 -E $file) == 1048576 )) ||
+			error "$t: DoM extent changed"
+		idx=$($LFS getstripe -I2 -i $file)
+		;;
+	sel)
+		(($($LFS find --comp-flags extension $file | wc -l) == 1)) ||
+			error "$t: no extension component"
+		idx=$($LFS getstripe -I1 -i $file)
+		;;
+	*)
+		error "unknown layout type '$t'"
+		;;
+	esac
+
+	if [[ $want == on ]]; then
+		(( idx == ostidx )) || error "$t: expected OST$ostidx, got $idx"
+	else
+		(( idx != ostidx )) || error "$t: still on inactive OST$ostidx"
+	fi
+}
+
+test_27xt() {
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	(( MDS1_VERSION >= $(version_code 2.17.60.2) )) ||
+		skip "Need MDS >= 2.17.60.2 for trunc(0) layout replace"
+	(( OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+
+	local ostidx=0
+	local ost=$(ostname_from_index $ostidx)
+	local file=$DIR/$tdir/$tfile
+	local pool=$TESTNAME
+	local -a types=(plain sel)
+	local -A gen_before
+	local t gen_after
+	local dom_size=$(do_facet mds1 $LCTL get_param -n \
+			 lod.${FSNAME}-MDT0000-mdtlov.dom_stripesize)
+
+	# ROOT pool must not leak into replace (victim is under local ROOT).
+	# Restore ROOT layout before the pool is destroyed (stack_trap LIFO).
+	pool_add $pool || error "pool_add failed"
+	pool_add_targets $pool 1 || error "pool_add_targets failed"
+	save_layout_restore_at_exit $MOUNT
+	$LFS setstripe -p $pool $MOUNT || error "setstripe ROOT pool failed"
+
+	# Pin to MDT0: OSP active is toggled only on $SINGLEMDS
+	test_mkdir -p -c 1 -i 0 $DIR/$tdir
+	# tdir default stops files inheriting the ROOT pool
+	$LFS setstripe -c 1 -i $ostidx $DIR/$tdir ||
+		error "setstripe tdir failed"
+
+	# plain: single stripe on OST0
+	$LFS setstripe -i $ostidx -c 1 $file.plain ||
+		error "setstripe plain failed"
+	# sel: as_template LOVEA is LOV_MAGIC_SEL; instantiate must accept it
+	$LFS setstripe -E -1 -z 64M -c 1 -i $ostidx $file.sel ||
+		error "setstripe SEL failed"
+	# dom: component 1 = DoM, component 2 = OST0
+	if (( dom_size >= 1048576 )); then
+		$LFS setstripe -E 1M -L mdt -E eof -c 1 -S 1M -i $ostidx \
+			$file.dom || error "setstripe DoM failed"
+		types+=(dom)
+	else
+		echo "dom_stripesize=$dom_size < 1M, skip DoM layout"
+	fi
+
+	for t in "${types[@]}"; do
+		# DoM needs 2M to reach the OST component
+		dd if=/dev/zero of=$file.$t bs=1M count=2 ||
+			error "write $t failed"
+		check_27xt_layout $file.$t $t $ostidx on
+		gen_before[$t]=$($LFS getstripe -g $file.$t | head -1)
+	done
+
+	# Leave OSC dirty pages on plain across OST stop.  Layout replace
+	# discards them (CL_FSYNC_DISCARD) before prune; without that,
+	# prune's CL_FSYNC_LOCAL would writeback to the stopped OST.
+	# Hold OBD_FAIL_OSC_NO_FLUSH through stop so writeback cannot
+	# drain the dirty cache; clear it before trunc(0), because it
+	# fails any non-discard writeback, including prune's empty LOCAL.
+	sync
+	cancel_lru_locks osc
+	#define OBD_FAIL_OSC_NO_FLUSH		0x41a
+	$LCTL set_param -n fail_loc=0x41a || error "set fail_loc failed"
+	stack_trap "$LCTL set_param -n fail_loc=0"
+	dd if=/dev/zero of=$file.plain bs=64k count=1 conv=notrunc ||
+		error "dirty write failed"
+
+	# one deactivation covers all layouts; keep the dirty plain cache
+	stop_ost_unavailable ost$((ostidx + 1)) keep_dirty
+	$LCTL set_param -n fail_loc=0
+
+	for t in "${types[@]}"; do
+		# drop one reply so the resent trunc(0) is reconstructed
+		#define OBD_FAIL_MDS_REINT_NET_REP	0x119
+		[[ $t != sel ]] ||
+			do_facet $SINGLEMDS $LCTL set_param fail_loc=0x80000119
+		$TRUNCATE $file.$t 0 || error "$t: truncate failed"
+
+		gen_after=$($LFS getstripe -g $file.$t | head -1)
+		(( gen_after != gen_before[$t] )) ||
+			error "$t: layout gen unchanged: ${gen_before[$t]}"
+
+		check_27xt_layout $file.$t $t $ostidx off
+		[[ $t != plain ]] ||
+			[[ -z $($LFS getstripe -p $file.plain 2>/dev/null) ]] ||
+			error "plain: inherited pool $($LFS getstripe -p $file.plain)"
+	done
+
+	$LCTL set_param -n fail_loc=0
+	for t in "${types[@]}"; do
+		echo "post-truncate" > $file.$t || error "$t: write failed"
+	done
+}
+run_test 27xt "truncate(0) replaces layouts on stopped OST"
+
+test_27xv() {
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	(( MDS1_VERSION >= $(version_code 2.17.60.2) )) ||
+		skip "Need MDS >= 2.17.60.2 for trunc layout replace locking"
+	(( OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+
+	local file=$DIR/$tdir/$tfile
+	local gen
+	local pid
+	local fd
+	local xpid
+	local i
+
+	# Pin to MDT0: the OSP import is checked only on $SINGLEMDS
+	test_mkdir -p -c 1 -i 0 $DIR/$tdir
+	$LFS setstripe -i 0 -c 1 $file || error "setstripe $file failed"
+	dd if=/dev/zero of=$file bs=1M count=1 || error "write $file failed"
+	gen=$($LFS getstripe -g $file | head -1)
+
+	# setxattr from another client, so its lock conflicts with the
+	# truncate's saved UPDATE lock.  Mount it before the OST is stopped,
+	# so the OST is restarted before it is unmounted.
+	if ! is_mounted $MOUNT2; then
+		mount_client $MOUNT2 || error "mount $MOUNT2 failed"
+		stack_trap "umount_client $MOUNT2"
+	fi
+	# keep the file open there, so setxattr needs no lookup, which would
+	# wait for the truncate before setxattr reaches the MDS
+	exec {fd}<$DIR2/$tdir/$tfile || error "open $DIR2/$tdir/$tfile failed"
+	stack_trap "exec $fd<&-"
+
+	stop_ost_unavailable ost1
+
+	# With sync_lock_cancel=blocking (the default with DNE) a saved lock is
+	# downgraded to TXN, which other locks from this MDT do not wait for.
+	# Keep it PW until the reply, as with sync_lock_cancel=never.
+	local slc=$(do_facet $SINGLEMDS $LCTL get_param -n \
+		    mdt.$FSNAME-MDT0000.sync_lock_cancel)
+	do_facet $SINGLEMDS $LCTL set_param \
+		mdt.$FSNAME-MDT0000.sync_lock_cancel=never
+	stack_trap "do_facet $SINGLEMDS $LCTL set_param \
+		mdt.$FSNAME-MDT0000.sync_lock_cancel=$slc"
+
+	# Hold truncate after its UPDATE lock is taken and before the layout
+	# is replaced, while setxattr waits for UPDATE|XATTR on the same file.
+	# If the replace takes the layout lock in a second enqueue, it queues
+	# behind setxattr, which waits for the UPDATE lock: neither finishes.
+	#define OBD_FAIL_MDS_LAYOUT_REPLACE_PAUSE 0x178
+	do_facet $SINGLEMDS "$LCTL set_param fail_val=5 fail_loc=0x80000178"
+	stack_trap "do_facet $SINGLEMDS $LCTL set_param fail_loc=0 fail_val=0"
+	$TRUNCATE $file 0 &
+	pid=$!
+	sleep 2
+	kill -0 $pid 2>/dev/null || error "truncate was not held by fail_loc"
+	setfattr -n user.$tfile -v race /proc/self/fd/$fd &
+	xpid=$!
+	# a deadlocked RPC ignores signals, so do not wait for it
+	for ((i = 0; i < 30; i++)); do
+		kill -0 $xpid 2>/dev/null || break
+		sleep 1
+	done
+	! kill -0 $xpid 2>/dev/null ||
+		error "setxattr and truncate deadlocked on the MDS"
+	wait $xpid || error "setxattr failed"
+	wait $pid || error "truncate failed"
+
+	(( $($LFS getstripe -g $file | head -1) != gen )) ||
+		error "layout gen unchanged: $gen"
+	(( $($LFS getstripe -i $file) != 0 )) ||
+		error "layout still on OST0"
+	[[ $(getfattr --only-values -n user.$tfile $file) == race ]] ||
+		error "user.$tfile not set"
+}
+run_test 27xv "truncate layout replace vs. concurrent setxattr"
 
 test_27y() {
 	[[ $OSTCOUNT -lt 2 ]] && skip_env "needs >= 2 OSTs"

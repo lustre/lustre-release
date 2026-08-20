@@ -507,7 +507,8 @@ struct mdt_thread_info {
 				   mti_som_strict:1,
 	/* Batch processing environment */
 				   mti_batch_env:1,
-				   mti_intent_lock:1;
+				   mti_intent_lock:1,
+				   mti_layout_replaced:1;
 
 	/* opdata for mdt_reint_open(), has the same as
 	 * ldlm_reply:lock_policy_res1.  mdt_update_last_rcvd() stores this
@@ -775,6 +776,25 @@ static inline bool mdt_lmm_is_flr(struct lov_mds_md *lmm)
 	       le16_to_cpu(lcm->lcm_mirror_count) > 0;
 }
 
+static inline bool mdt_lmm_has_nosync(struct lov_mds_md *lmm)
+{
+	struct lov_comp_md_v1 *comp_v1;
+	__u32 magic;
+	int i;
+
+	magic = le32_to_cpu(lmm->lmm_magic);
+	if (magic != LOV_MAGIC_COMP_V1 && magic != LOV_MAGIC_SEL)
+		return false;
+
+	comp_v1 = (struct lov_comp_md_v1 *)lmm;
+	for (i = 0; i < le16_to_cpu(comp_v1->lcm_entry_count); i++) {
+		if (le32_to_cpu(comp_v1->lcm_entries[i].lcme_flags) &
+		    LCME_FL_NOSYNC)
+			return true;
+	}
+	return false;
+}
+
 static inline bool lmm_is_overstriping(struct lov_mds_md *lmm)
 {
 	if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V1 ||
@@ -915,6 +935,7 @@ int mdt_pack_acl2body(struct mdt_thread_info *info, struct mdt_body *repbody,
 #endif
 void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
 			const struct lu_attr *attr, const struct lu_fid *fid);
+void mdt_pack_layout_replaced(struct mdt_body *repbody, struct md_attr *ma);
 int mdt_pack_size2body(struct mdt_thread_info *info,
 			const struct lu_fid *fid,  struct lustre_handle *lh);
 int mdt_getxattr(struct mdt_thread_info *info);
@@ -943,6 +964,11 @@ int mdt_revoke_remote_lookup_lock(struct mdt_thread_info *info,
 int mdt_get_info(struct tgt_session_info *tsi);
 int mdt_attr_get_complex(struct mdt_thread_info *info,
 			 struct mdt_object *o, struct md_attr *ma);
+struct mdt_object *mdt_orphan_open(struct mdt_thread_info *info,
+				   struct mdt_device *mdt,
+				   const struct lu_fid *fid,
+				   struct md_attr *attr, fmode_t fmode);
+
 int mdt_big_xattr_get(struct mdt_thread_info *info, struct mdt_object *o,
 		      const char *name);
 int __mdt_stripe_get(struct mdt_thread_info *info, struct mdt_object *o,

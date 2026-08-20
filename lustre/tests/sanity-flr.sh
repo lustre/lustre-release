@@ -3221,6 +3221,109 @@ test_50d() {
 }
 run_test 50d "mirror rsync keep holes"
 
+# Return sorted space-separated OST indices for all stripes in an FLR mirror.
+get_flr_mirror_osts() {
+	local file=$1 mirror=$2
+
+	$LFS getstripe --yaml -v --mirror-index=$mirror $file |
+		awk '/l_ost_idx/ { print $3 }' | sort -n | xargs
+}
+
+test_50e() {
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	(( MDS1_VERSION >= $(version_code 2.17.60.2) )) ||
+		skip "Need MDS >= 2.17.60.2 for trunc(0) layout replace"
+	# 2 mirrors x 2 stripes need 4 live OSTs after one is stopped;
+	# otherwise RR last-resort may place on the DISCONN OST (-EAGAIN).
+	(( OSTCOUNT >= 5 )) || skip_env "needs >= 5 OSTs"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+
+	local file=$DIR/$tdir/$tfile
+	local ostidx=0
+	local ost=$(ostname_from_index $ostidx)
+	local osp_active="osp.${ost}-osc-MDT*.active"
+	local -A exp_osts=([pri]="0 1" [sec]="2 3")
+	local -A gen_before
+	local t osts gen_after
+
+	# Pin to MDT0: OSP active is toggled only on $SINGLEMDS
+	test_mkdir -p -c 1 -i 0 $DIR/$tdir
+	stack_trap "mds_osp_reactivate ost$((ostidx + 1))"
+
+	# pri: mirror 1 on OST0/1, mirror 2 on OST2/3
+	$LFS setstripe -N -E eof -o 0,1 -N -E eof -o 2,3 $file.pri ||
+		error "setstripe pri failed"
+	# sec: mirror 1 on OST2/3, mirror 2 on OST0/1
+	$LFS setstripe -N -E eof -o 2,3 -N -E eof -o 0,1 $file.sec ||
+		error "setstripe sec failed"
+
+	for t in pri sec; do
+		# write picks mirror 1 as primary and stales mirror 2
+		dd if=/dev/zero of=$file.$t bs=1M count=1 ||
+			error "$t: write failed"
+		osts=$(get_flr_mirror_osts $file.$t 1)
+		[[ "$osts" == "${exp_osts[$t]}" ]] ||
+			error "$t: primary OSTs $osts, expected ${exp_osts[$t]}"
+		$LFS getstripe --mirror-id=2 $file.$t |
+			grep -q "lcme_flags:.*stale" ||
+			error "$t: mirror 2 not stale"
+		gen_before[$t]=$(get_file_layout_version $file.$t)
+	done
+
+	# rsync: leading hole, so resync truncates stale mirror 2 to 0
+	$LFS setstripe -N -E eof -o 0,1 -N -E eof -o 2,3 $file.rsync ||
+		error "setstripe rsync failed"
+	dd if=/dev/urandom of=$file.rsync bs=1M seek=1 count=1 ||
+		error "rsync: write failed"
+	local sum=$(md5sum < $file.rsync)
+
+	# rsync: OST0 deactivated on the MDS (as when draining it) but still
+	# readable, so resync can read mirror 1 while the MDS sees it offline
+	do_facet $SINGLEMDS "$LCTL set_param -n $osp_active=0" ||
+		error "failed to deactivate $ost"
+	sleep_maxage
+
+	# rsync: mirror truncate under lease must not replace mirror 1
+	$LFS mirror resync $file.rsync || error "rsync: resync failed"
+	osts=$(get_flr_mirror_osts $file.rsync 1)
+	[[ "$osts" == "${exp_osts[pri]}" ]] ||
+		error "rsync: mirror 1 OSTs $osts, expected ${exp_osts[pri]}"
+	[[ "$(md5sum < $file.rsync)" == "$sum" ]] ||
+		error "rsync: data changed after resync"
+	mds_osp_reactivate ost$((ostidx + 1))
+
+	# one stopped OST covers both mirror placements
+	stop_ost_unavailable ost$((ostidx + 1))
+
+	for t in pri sec; do
+		$TRUNCATE $file.$t 0 || error "$t: truncate failed"
+	done
+
+	# pri: primary mirror on stopped OST, layout replaced
+	gen_after=$(get_file_layout_version $file.pri)
+	(( gen_after != gen_before[pri] )) ||
+		error "pri: layout gen unchanged: $gen_after"
+	osts=$(get_flr_mirror_osts $file.pri 1)
+	[[ " $osts " != *" $ostidx "* ]] ||
+		error "pri: primary OSTs $osts, still on OST$ostidx"
+	# no mirror of the new layout may be put on the stopped OST
+	! $LFS getstripe -y $file.pri | grep -qw "l_ost_idx: $ostidx" ||
+		error "pri: new layout uses stopped OST$ostidx"
+
+	# sec: only stale mirror on inactive OST, layout kept
+	gen_after=$(get_file_layout_version $file.sec)
+	(( gen_after == gen_before[sec] )) ||
+		error "sec: layout gen ${gen_before[sec]} -> $gen_after"
+	osts=$(get_flr_mirror_osts $file.sec 1)
+	[[ "$osts" == "${exp_osts[sec]}" ]] ||
+		error "sec: primary OSTs $osts, expected ${exp_osts[sec]}"
+
+	for t in pri sec; do
+		echo "post-truncate" > $file.$t || error "$t: write failed"
+	done
+}
+run_test 50e "truncate(0) replaces layout only if primary mirror inactive"
+
 test_60a() {
 	$LCTL get_param osc.*.import | grep -q 'connect_flags:.*seek' ||
 		skip "OST does not support SEEK_HOLE"

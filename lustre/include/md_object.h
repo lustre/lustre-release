@@ -159,6 +159,8 @@ enum md_layout_opc {
 	MD_LAYOUT_SHRINK,	/* shrink striped directory (destroy stripes) */
 	MD_LAYOUT_SPLIT,	/* split directory (allocate new stripes) */
 	MD_LAYOUT_VERSION,	/* check layout version */
+	MD_LAYOUT_UNAVAILABLE,	/* check for stripes on inactive OSTs */
+	MD_LAYOUT_INSTANTIATE,	/* instantiate layout from @mlc_source */
 	MD_LAYOUT_MAX,
 };
 
@@ -167,6 +169,8 @@ enum md_layout_opc {
  */
 struct md_layout_change {
 	enum md_layout_opc			 mlc_opc;
+	/* INSTANTIATE: do not inherit target's existing default striping */
+	bool					 mlc_no_inherit;
 	union {
 		struct lu_buf			 mlc_buf;
 		__u32				 mlc_layout_ver;
@@ -178,6 +182,8 @@ struct md_layout_change {
 			struct lustre_som_attrs	 mlc_som;
 			size_t			 mlc_resync_count;
 			__u32			*mlc_resync_ids;
+			/* template layout source */
+			struct md_object	*mlc_source;
 		}; /* file */
 		struct {
 			/* parent obj in plain dir split */
@@ -286,7 +292,19 @@ struct md_object_operations {
 				 struct md_object *obj,
 				 struct md_layout_change *layout);
 	/**
-	 * Additonal layout checks
+	 * moo_layout_check() - Perform additional layout checks.
+	 *
+	 * @env: execution environment
+	 * @obj: MD object
+	 * @layout: layout check parameters (see enum md_layout_opc)
+	 *
+	 * Used before layout-changing operations (PCC-RO, directory
+	 * migration, etc.).
+	 *
+	 * Return:
+	 * * %0 if the object does not conform (action needed)
+	 * * %-EALREADY if the object already conforms to the layout
+	 * * %negative errno on failure
 	 */
 	int (*moo_layout_check)(const struct lu_env *env,
 				struct md_object *obj,

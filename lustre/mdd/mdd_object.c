@@ -3733,8 +3733,13 @@ stop:
 	lu_buf_free(snd_hsm_buf);
 
 	if (!rc) {
-		(void) mdd_object_pfid_replace(env, fst_o);
-		(void) mdd_object_pfid_replace(env, snd_o);
+		/* the objects of an orphan or volatile partner are destroyed
+		 * with it, and may be on an OST that is not reachable
+		 */
+		if (!(fst_o->mod_flags & (ORPHAN_OBJ | VOLATILE_OBJ)))
+			(void) mdd_object_pfid_replace(env, fst_o);
+		if (!(snd_o->mod_flags & (ORPHAN_OBJ | VOLATILE_OBJ)))
+			(void) mdd_object_pfid_replace(env, snd_o);
 	} else if (rc == -EAGAIN && retried++ < MAX_TRANS_RETRIED) {
 		/**
 		 * -EAGAIN means transaction execution phase detect the layout
@@ -4185,6 +4190,8 @@ mdd_layout_change(const struct lu_env *env, struct md_object *o,
 	case MD_LAYOUT_RESYNC:
 	case MD_LAYOUT_RESYNC_DONE:
 		break;
+	case MD_LAYOUT_INSTANTIATE:
+		RETURN(mdd_layout_instantiate(env, o, mlc));
 	default:
 		RETURN(-ENOTSUPP);
 	}
@@ -4885,6 +4892,64 @@ static int mdd_object_unlock(const struct lu_env *env,
 	struct mdd_object *mdd_obj = md2mdd_obj(obj);
 
 	return dt_object_unlock(env, mdd_object_child(mdd_obj), einfo, policy);
+}
+
+/**
+ * mdd_layout_instantiate() - Instantiate layout on @obj from
+ * @mlc->mlc_source pattern.
+ *
+ * Instantiates a fresh layout on a second object: the source is used only
+ * as a striping template (new OST objects, not a clone of existing FIDs).
+ * Drives layout_change so LOD generates LOVEA and creates stripes.
+ */
+int mdd_layout_instantiate(const struct lu_env *env, struct md_object *obj,
+			   struct md_layout_change *mlc)
+{
+	struct mdd_object *target_obj = md2mdd_obj(obj);
+	struct mdd_object *source_obj;
+	struct mdd_device *mdd;
+	struct thandle *handle;
+	int rc;
+
+	ENTRY;
+
+	if (!mlc->mlc_source)
+		RETURN(-EINVAL);
+
+	source_obj = md2mdd_obj(mlc->mlc_source);
+	mdd = mdd_obj2mdd_dev(target_obj);
+
+	if (!S_ISREG(mdd_object_type(target_obj)))
+		RETURN(-EINVAL);
+
+	if (!S_ISREG(mdd_object_type(source_obj)))
+		RETURN(-EINVAL);
+
+	handle = mdd_trans_create(env, mdd);
+	if (IS_ERR(handle))
+		RETURN(PTR_ERR(handle));
+
+	/* Stripe creation may touch OST objects; track sub-updates. */
+	handle->th_complex = 1;
+
+	/* Target is a volatile victim: skip mdd_declare_layout_change()
+	 * so we do not reserve unused CL_LAYOUT llog credits.
+	 */
+	rc = mdo_declare_layout_change(env, target_obj, mlc, handle);
+	if (rc)
+		GOTO(out_stop, rc);
+
+	rc = mdd_trans_start(env, mdd, handle);
+	if (rc)
+		GOTO(out_stop, rc);
+
+	mdd_write_lock(env, target_obj, DT_TGT_CHILD);
+	rc = mdo_layout_change(env, target_obj, mlc, handle);
+	mdd_write_unlock(env, target_obj);
+
+out_stop:
+	rc = mdd_trans_stop(env, mdd, rc, handle);
+	RETURN(rc);
 }
 
 const struct md_object_operations mdd_obj_ops = {

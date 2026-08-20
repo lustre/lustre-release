@@ -710,6 +710,7 @@ int lod_fill_mirrors(struct lod_object *lo)
  * from the default stripe template, which is collected in @lod_ah_init(),
  * either from parent object or root object; for file case, it's from the @lo
  * object
+ * @as_template: see lod_generate_lovea_flags()
  *
  * Return:
  * * %0 if on disk structure is created successfully
@@ -718,7 +719,7 @@ int lod_fill_mirrors(struct lod_object *lo)
 static int lod_gen_component_ea(const struct lu_env *env,
 				struct lod_object *lo, int comp_idx,
 				struct lov_mds_md *lmm, int *lmm_size,
-				bool is_dir)
+				bool is_dir, bool as_template)
 {
 	struct lod_thread_info	*info = lod_env_info(env);
 	const struct lu_fid	*fid  = lu_object_fid(&lo->ldo_obj.do_lu);
@@ -727,6 +728,8 @@ static int lod_gen_component_ea(const struct lu_env *env,
 	struct lod_layout_component *lod_comp;
 	__u32	magic;
 	__u16 stripe_count;
+	/* omit placement hints (-i/-o) so QoS/RR picks a new layout */
+	bool omit_placement = as_template;
 	int	i, rc = 0;
 	ENTRY;
 
@@ -753,14 +756,18 @@ static int lod_gen_component_ea(const struct lu_env *env,
 
 	lmm->lmm_stripe_size = cpu_to_le32(lod_comp->llc_stripe_size);
 	lmm->lmm_stripe_count = cpu_to_le16(lod_comp->llc_stripe_count);
+
 	/**
 	 * for dir and uninstantiated component, lmm_layout_gen stores
 	 * default stripe offset.
 	 */
-	lmm->lmm_layout_gen =
-		(is_dir || !lod_comp_inited(lod_comp)) ?
-			cpu_to_le16(lod_comp->llc_stripe_offset) :
-			cpu_to_le16(lod_comp->llc_layout_gen);
+	if (omit_placement) {
+		lmm->lmm_layout_gen = cpu_to_le16(LOV_OFFSET_DEFAULT);
+	} else if (is_dir || !lod_comp_inited(lod_comp)) {
+		lmm->lmm_layout_gen = cpu_to_le16(lod_comp->llc_stripe_offset);
+	} else {
+		lmm->lmm_layout_gen = cpu_to_le16(lod_comp->llc_layout_gen);
+	}
 
 	if (magic == LOV_MAGIC_V1) {
 		objs = &lmm->lmm_objects[0];
@@ -788,10 +795,13 @@ static int lod_gen_component_ea(const struct lu_env *env,
 	}
 
 	if (!is_dir && lo->ldo_is_composite)
-		lod_comp_shrink_stripe_count(lod_comp, &stripe_count);
+		lod_comp_shrink_stripe_count(lod_comp, &stripe_count,
+					     as_template);
 
+	/* DoM / released / dir defaults: no OST object array */
 	if ((is_dir && magic != LOV_MAGIC_SPECIFIC) ||
-	    lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED)
+	    (lod_comp->llc_pattern & LOV_PATTERN_F_RELEASED) ||
+	    (lov_pattern(lod_comp->llc_pattern) & LOV_PATTERN_MDT))
 		GOTO(done, rc = 0);
 
 	/* generate ost_idx of this component stripe */
@@ -800,7 +810,8 @@ static int lod_gen_component_ea(const struct lu_env *env,
 		__u32 ost_idx = (__u32)-1UL;
 		int type = LU_SEQ_RANGE_OST;
 
-		if (lod_comp->llc_stripe && lod_comp->llc_stripe[i]) {
+		if (!as_template && lod_comp->llc_stripe &&
+		    lod_comp->llc_stripe[i]) {
 			object = lod_comp->llc_stripe[i];
 			/* instantiated component */
 			info->lti_fid = *lu_object_fid(&object->do_lu);
@@ -829,7 +840,7 @@ static int lod_gen_component_ea(const struct lu_env *env,
 				       PFID(&info->lti_fid), rc);
 				RETURN(rc);
 			}
-		} else if (lod_comp->llc_ostlist.op_array &&
+		} else if (!as_template && lod_comp->llc_ostlist.op_array &&
 			   lod_comp->llc_ostlist.op_count) {
 			/* user specified ost list */
 			ost_idx = lod_comp->llc_ostlist.op_array[i];
@@ -885,8 +896,7 @@ static int lod_gen_component_ea_foreign(const struct lu_env *env,
 }
 
 /**
- * lod_generate_lovea() - Generate on-disk lov_mds_md structure based on the
- * information in the lod_object->ldo_comp_entries.
+ * lod_generate_lovea_flags() - Generate on-disk lov_mds_md from @lo.
  * @env: execution environment for this thread
  * @lo: LOD object
  * @lmm: buffer to cotain the on-disk lov_mds_md
@@ -895,13 +905,20 @@ static int lod_gen_component_ea_foreign(const struct lu_env *env,
  * from the default stripe template, which is collected in @lod_ah_init(),
  * either from parent object or root object; for file case, it's from the @lo
  * object
+ * @as_template: generate LOVEA as a re-allocatable template: omit placement
+ * hints (stripe_offset/-o) and existing OST stripes, clear LCME_FL_INIT/STALE,
+ * set LCM_FL_NONE, and re-emit EC pairs as unbound (IS_LINK_ID + shared link
+ * id) for create-time pairing.  Caller may coerce SEL to COMP_V1 for
+ * parse_config.
  *
  * Return:
  * * %0 if on disk structure is created successfully
  * * %negative error number on failure
  */
-int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
-		       struct lov_mds_md *lmm, int *lmm_size, bool is_dir)
+static int lod_generate_lovea_flags(const struct lu_env *env,
+				    struct lod_object *lo,
+				    struct lov_mds_md *lmm, int *lmm_size,
+				    bool is_dir, bool as_template)
 {
 	struct lov_comp_md_entry_v1 *lcme;
 	struct lov_comp_md_v1 *lcm;
@@ -910,6 +927,8 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 	bool is_composite, is_foreign = false;
 	int i, rc = 0, offset;
 	ENTRY;
+
+	LASSERT(!as_template || !is_dir);
 
 	if (is_dir) {
 		comp_cnt = lo->ldo_def_striping->lds_def_comp_cnt;
@@ -946,7 +965,8 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 	LASSERT(comp_cnt != 0 && comp_entries != NULL);
 
 	if (!is_composite) {
-		rc = lod_gen_component_ea(env, lo, 0, lmm, lmm_size, is_dir);
+		rc = lod_gen_component_ea(env, lo, 0, lmm, lmm_size, is_dir,
+					  as_template);
 		RETURN(rc);
 	}
 
@@ -956,10 +976,10 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 	lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_COMP_V1);
 	lcm->lcm_entry_count = cpu_to_le16(comp_cnt);
 	lcm->lcm_mirror_count = cpu_to_le16(mirror_cnt - 1);
-	if (mirror_cnt > 1)
-		lcm->lcm_flags = cpu_to_le16(lo->ldo_flr_state);
+	if (as_template || mirror_cnt <= 1)
+		lcm->lcm_flags = cpu_to_le16(LCM_FL_NONE);
 	else
-		lcm->lcm_flags = LCM_FL_NONE;
+		lcm->lcm_flags = cpu_to_le16(lo->ldo_flr_state);
 
 	offset = sizeof(*lcm) + sizeof(*lcme) * comp_cnt;
 	LASSERT(offset % sizeof(__u64) == 0);
@@ -967,6 +987,7 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 	for (i = 0; i < comp_cnt; i++) {
 		struct lod_layout_component *lod_comp;
 		struct lov_mds_md *sub_md;
+		__u16 link_id;
 		int size;
 
 		lod_comp = &comp_entries[i];
@@ -982,12 +1003,36 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 		 * layout (resolved by lod_bind_data_parity() later at create).
 		 * A directory default is a template that persists the unbound
 		 * EC link, so keep it here for directories.
+		 *
+		 * as_template: convert bound EC pairs (cross-ref mirror ids)
+		 * back to unbound (IS_LINK_ID + shared link id = data mirror
+		 * id) so lod_qos_prep_create() can pair before IDs exist.
 		 */
-		if (!is_dir)
+		link_id = lod_comp->llc_mirror_link_id;
+		if (!is_dir) {
 			lcme->lcme_flags &= ~cpu_to_le32(LCME_FL_IS_LINK_ID);
+			if (as_template) {
+				lcme->lcme_flags &= ~cpu_to_le32(
+						LCME_FL_INIT | LCME_FL_STALE);
+				/* EC-linked data or parity */
+				if (link_id) {
+					/*
+					 * Shared link id = data mirror id.
+					 * Parity already stores it; EC data
+					 * still holds the peer's; rewrite.
+					 */
+					if (!(lod_comp->llc_flags &
+					      LCME_FL_PARITY))
+						link_id = mirror_id_of(
+							lod_comp->llc_id);
+					lcme->lcme_flags |= cpu_to_le32(
+						LCME_FL_IS_LINK_ID);
+				}
+			}
+		}
 		lcme->lcme_time_and_id = cpu_to_le64(
-				lcme_timestamp_and_id_pack(lod_comp->llc_timestamp,
-					lod_comp->llc_mirror_link_id));
+				lcme_timestamp_and_id_pack(
+					lod_comp->llc_timestamp, link_id));
 		if (lod_comp->llc_flags & LCME_FL_EXTENSION && !is_dir)
 			lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_SEL);
 
@@ -1018,7 +1063,7 @@ int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 							  sub_md, &size);
 		} else {
 			rc = lod_gen_component_ea(env, lo, i, sub_md,
-						  &size, is_dir);
+						  &size, is_dir, as_template);
 		}
 		if (rc)
 			GOTO(out, rc);
@@ -1036,6 +1081,44 @@ out:
 	if (rc == 0)
 		*lmm_size = offset;
 	RETURN(rc);
+}
+
+/**
+ * lod_generate_lovea() - Generate on-disk lov_mds_md from @lo.
+ * @env: execution environment for this thread
+ * @lo: LOD object
+ * @lmm: buffer to contain the on-disk lov_mds_md
+ * @lmm_size: buffer size/lmm size [in|out]
+ * @is_dir: generate lov ea for dir or file
+ *
+ * Return:
+ * * %0 if on disk structure is created successfully
+ * * %negative error number on failure
+ */
+int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
+		       struct lov_mds_md *lmm, int *lmm_size, bool is_dir)
+{
+	return lod_generate_lovea_flags(env, lo, lmm, lmm_size, is_dir, false);
+}
+
+/**
+ * lod_generate_lovea_template() - Generate a re-allocatable LOVEA template.
+ * @env: execution environment for this thread
+ * @lo: LOD object whose pattern is the template source
+ * @lmm: buffer to contain the on-disk lov_mds_md
+ * @lmm_size: buffer size/lmm size [in|out]
+ *
+ * Same packing as lod_generate_lovea() with as_template set: omit placement
+ * hints and existing OST stripes so QoS/RR can allocate a fresh layout.
+ *
+ * Return:
+ * * %0 if on disk structure is created successfully
+ * * %negative error number on failure
+ */
+int lod_generate_lovea_template(const struct lu_env *env, struct lod_object *lo,
+				struct lov_mds_md *lmm, int *lmm_size)
+{
+	return lod_generate_lovea_flags(env, lo, lmm, lmm_size, false, true);
 }
 
 /**

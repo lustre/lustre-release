@@ -872,15 +872,126 @@ put_parent:
 	return rc;
 }
 
+/**
+ * mdt_replace_unavailable_layout() - Replace layout with inactive OST stripes.
+ * @info: MDT thread info
+ * @mo: MDT object whose layout may be replaced
+ *
+ * When a file layout references stripes on inactive OSTs, create a volatile
+ * victim, instantiate a fresh layout from @mo's pattern (QoS/RR), and swap
+ * layouts with the victim.
+ *
+ * The caller holds UPDATE|LAYOUT|XATTR EX on @mo, taken in one enqueue.
+ * It observed an unavailable layout without MDS_INODELOCK_LAYOUT, so
+ * re-check under the lock so a concurrent trunc(0) that already replaced
+ * the layout does not allocate a second set of objects and bump the
+ * generation again.
+ *
+ * Skip replace when any component has LCME_FL_NOSYNC: that flag freezes
+ * the mirror's objects, and swap would discard them.
+ *
+ * Return:
+ * * %1 if the layout was replaced
+ * * %0 if replacement was not performed
+ * * %negative errno on failure
+ */
+static int
+mdt_replace_unavailable_layout(struct mdt_thread_info *info,
+			       struct mdt_object *mo)
+{
+	const struct lu_env *env = info->mti_env;
+	struct mdt_object *victim;
+	struct md_attr *orp_ma;
+	struct lu_fid victim_fid;
+	struct md_layout_change mlc_unavail = {
+		.mlc_opc = MD_LAYOUT_UNAVAILABLE,
+	};
+	struct md_layout_change mlc_create = {
+		.mlc_opc = MD_LAYOUT_INSTANTIATE,
+		.mlc_no_inherit = true, /* orphan parent is local ROOT */
+	};
+	int rc, rc2;
+
+	ENTRY;
+
+	if (!S_ISREG(lu_object_attr(&mo->mot_obj)))
+		RETURN(0);
+
+	rc = mo_layout_check(env, mdt_object_child(mo), &mlc_unavail);
+	if (rc)
+		RETURN(rc == -EALREADY ? 0 : rc);
+
+	rc = mdt_big_xattr_get(info, mo, XATTR_NAME_LOV);
+	if (rc < 0 && rc != -ENODATA)
+		RETURN(rc);
+	if (rc > 0 && mdt_lmm_has_nosync(info->mti_big_lov)) {
+		CDEBUG(D_LAYOUT, "%s: "DFID": skip replace, nosync mirror present\n",
+		       mdt_obd_name(info->mti_mdt),
+		       PFID(mdt_object_fid(mo)));
+		RETURN(0);
+	}
+
+	rc = dt_fid_alloc(env, info->mti_mdt->mdt_bottom,
+			  &victim_fid, NULL, NULL);
+	if (rc < 0)
+		RETURN(rc);
+
+	/* mti_attr is setattr's; reuse union slot for orphan open/close */
+	orp_ma = &info->mti_u.hsm.attr;
+	memset(orp_ma, 0, sizeof(*orp_ma));
+	orp_ma->ma_attr.la_mode = S_IFREG | 0200;
+	orp_ma->ma_attr.la_valid = LA_MODE | LA_UID | LA_GID;
+	orp_ma->ma_valid = MA_INODE;
+
+	victim = mdt_orphan_open(info, info->mti_mdt, &victim_fid, orp_ma,
+				 MDS_FMODE_WRITE);
+	if (IS_ERR(victim))
+		RETURN(PTR_ERR(victim));
+
+	mlc_create.mlc_source = mdt_object_child(mo);
+	rc = mo_layout_change(env, mdt_object_child(victim), &mlc_create);
+	if (rc)
+		GOTO(out_close, rc);
+
+	rc = mo_swap_layouts(env, mdt_object_child(mo),
+			     mdt_object_child(victim), 0, 0,
+			     SWAP_LAYOUTS_MDS_RELEASE, NULL, NULL);
+	/* replay skips replace, so commit the swap before replying */
+	if (rc == 0) {
+		rc2 = mo_object_sync(env, mdt_object_child(mo));
+		if (rc2 < 0)
+			CERROR("%s: cannot sync replaced layout "DFID": rc = %d\n",
+			       mdt_obd_name(info->mti_mdt),
+			       PFID(mdt_object_fid(mo)), rc2);
+	}
+
+out_close:
+	rc2 = mo_close(env, mdt_object_child(victim), orp_ma, MDS_FMODE_WRITE);
+	if (rc2 < 0)
+		CERROR("%s: error closing volatile file "DFID": rc = %d\n",
+		       mdt_obd_name(info->mti_mdt), PFID(&victim_fid), rc2);
+	mdt_object_put(env, victim);
+
+	if (rc == 0) {
+		CDEBUG(D_LAYOUT, "%s: "DFID": unavailable layout replaced via victim "DFID"\n",
+		       mdt_obd_name(info->mti_mdt), PFID(mdt_object_fid(mo)),
+		       PFID(&victim_fid));
+		RETURN(1);
+	}
+
+	RETURN(rc);
+}
+
 static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
-			struct md_attr *ma)
+			struct md_attr *ma, bool replace_layout)
 {
 	struct mdt_lock_handle  *lh;
 	int do_vbr = ma->ma_attr.la_valid &
 			(LA_MODE | LA_UID | LA_GID | LA_PROJID | LA_FLAGS);
 	enum mds_ibits_locks lockpart = MDS_INODELOCK_UPDATE;
+	enum ldlm_mode mode = LCK_PW;
 	struct ldlm_enqueue_info *einfo = &info->mti_einfo;
-	int rc;
+	int rc, rc2;
 
 	ENTRY;
 	if (ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID))
@@ -894,10 +1005,18 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 			RETURN(-EACCES);
 		lockpart |= MDS_INODELOCK_XATTR;
 	}
+	/* Take the layout bits in the same enqueue as UPDATE: a second lock
+	 * on @mo while UPDATE is held or saved could queue behind a waiter
+	 * that needs both, e.g. setxattr (LU-3601).
+	 */
+	if (replace_layout) {
+		lockpart |= MDS_INODELOCK_LAYOUT | MDS_INODELOCK_XATTR;
+		mode = LCK_EX;
+	}
 
 	lh = &info->mti_lh[MDT_LH_PARENT];
 	rc = mdt_object_stripes_lock(info, NULL, mo, lh, einfo, lockpart,
-				     LCK_PW);
+				     mode);
 	if (rc != 0)
 		RETURN(rc);
 
@@ -927,6 +1046,25 @@ static int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
 	if (rc != 0)
 		GOTO(out_unlock, rc);
 	mdt_dom_obj_lvb_update(info->mti_env, mo, NULL, false);
+
+	/* after setattr auth, since replace destroys OST objects */
+	if (replace_layout) {
+		CFS_FAIL_TIMEOUT(OBD_FAIL_MDS_LAYOUT_REPLACE_PAUSE,
+				 cfs_fail_val);
+		rc2 = mdt_replace_unavailable_layout(info, mo);
+		if (rc2 > 0) {
+			info->mti_layout_replaced = 1;
+		} else if (rc2 < 0) {
+			/* size is already set, so keep the old layout,
+			 * e.g. no OSTs have space for the new layout
+			 */
+			CDEBUG_LIMIT(rc2 == -ENOSPC || rc2 == -EFBIG ?
+				     D_LAYOUT : D_ERROR,
+				     "%s: "DFID": trunc(0) layout replace failed: rc = %d\n",
+				     mdt_obd_name(info->mti_mdt),
+				     PFID(mdt_object_fid(mo)), rc2);
+		}
+	}
 	EXIT;
 out_unlock:
 	mdt_object_stripes_unlock(info, mo, lh, einfo, rc);
@@ -981,6 +1119,24 @@ int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
 	}
 
 	RETURN(rc);
+}
+
+/**
+ * mdt_pack_layout_replaced() - Return the replaced layout in setattr reply
+ * @repbody: reply body to fill in
+ * @ma: attributes of the truncated file, with the new layout in ma_lmm
+ *
+ * Tell the client that trunc(0) replaced the layout, so it discards the
+ * cached pages of the old layout instead of writing them back to OSTs
+ * that are unavailable.
+ */
+void mdt_pack_layout_replaced(struct mdt_body *repbody, struct md_attr *ma)
+{
+	repbody->mbo_eadatasize = ma->ma_lmm_size;
+	repbody->mbo_size = 0;
+	repbody->mbo_t_state |= MS_LAYOUT_REPLACED;
+	repbody->mbo_valid |= OBD_MD_FLEASIZE | OBD_MD_FLSIZE | OBD_MD_TSTATE;
+	mdt_dump_lmm(D_INFO, ma->ma_lmm, repbody->mbo_valid);
 }
 
 static int mdt_reint_setattr(struct mdt_thread_info *info,
@@ -1079,6 +1235,8 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 	}
 
 	if ((ma->ma_valid & MA_INODE) && ma->ma_attr.la_valid) {
+		bool replace_layout = false;
+
 		if (ma->ma_valid & MA_LOV)
 			GOTO(out_put, rc = -EPROTO);
 
@@ -1095,7 +1253,38 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 			}
 		}
 
-		rc = mdt_attr_set(info, mo, ma);
+		/* This check is an optimistic filter so healthy trunc(0)
+		 * skips LAYOUT EX. Replace re-checks under the lock.
+		 * A lease holder (e.g. lfs mirror resync) truncates only
+		 * one mirror, so the other mirrors must be kept.
+		 * Skip on replay: instantiate would osp_precreate_reserve()
+		 * while opd_pre_recovering, stalling the recovery thread.
+		 */
+		if (ma->ma_attr.la_valid & LA_SIZE &&
+		    ma->ma_attr.la_size == 0 &&
+		    !(ma->ma_attr_flags & MDS_TRUNC_KEEP_LEASE) &&
+		    exp_connect_layout_replace(info->mti_exp) &&
+		    !req_is_replay(mdt_info_req(info))) {
+			struct md_layout_change mlc_unavail = {
+				.mlc_opc = MD_LAYOUT_UNAVAILABLE,
+			};
+
+			rc = mo_layout_check(info->mti_env,
+					mdt_object_child(mo), &mlc_unavail);
+			if (rc == 0) {
+				CDEBUG(D_LAYOUT, "%s: "DFID": unavailable layout, replacing\n",
+				       mdt_obd_name(info->mti_mdt),
+				       PFID(mdt_object_fid(mo)));
+				replace_layout = true;
+			} else if (rc != -EALREADY) {
+				CDEBUG_LIMIT(D_ERROR,
+					     "%s: "DFID": trunc(0) layout check failed: rc = %d\n",
+					     mdt_obd_name(info->mti_mdt),
+					     PFID(mdt_object_fid(mo)), rc);
+			}
+		}
+
+		rc = mdt_attr_set(info, mo, ma, replace_layout);
 		if (rc)
 			GOTO(out_put, rc);
 	} else if ((ma->ma_valid & (MA_LOV | MA_LMV)) &&
@@ -1189,12 +1378,16 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 		rc = mdt_add_dirty_flag(info, mo, ma);
 
 	ma->ma_need = MA_INODE;
+	if (info->mti_layout_replaced)
+		mdt_prep_ma_buf_from_rep(info, mo, ma, 0);
 	ma->ma_valid = 0;
 	rc = mdt_attr_get_complex(info, mo, ma);
 	if (rc != 0)
 		GOTO(out_put, rc);
 
 	mdt_pack_attr2body(info, repbody, &ma->ma_attr, mdt_object_fid(mo));
+	if (info->mti_layout_replaced && (ma->ma_valid & MA_LOV))
+		mdt_pack_layout_replaced(repbody, ma);
 
 	EXIT;
 out_put:

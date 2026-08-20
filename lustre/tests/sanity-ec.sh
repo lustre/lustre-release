@@ -11392,6 +11392,45 @@ test_74a() {
 }
 run_test 74a "EC reads racing with OST deactivation"
 
+test_74b() {
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	(( MDS1_VERSION >= $(version_code 2.17.60.2) )) ||
+		skip "Need MDS >= 2.17.60.2 for trunc(0) layout replace"
+	# 2+1 needs 3 OSTs; one spare so replace can allocate a new
+	(( OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	enable_ec
+
+	local file=$DIR/$tdir/$tfile
+
+	# Pin to MDT0: OSP active is toggled only on $SINGLEMDS
+	test_mkdir -p -c 1 -i 0 $DIR/$tdir
+	$LFS setstripe -E -1 -c 2 --ec 2+1 $file || error "setstripe EC failed"
+	dd if=/dev/zero of=$file bs=1M count=1 || error "write failed"
+
+	local ostidx=$($LFS getstripe --mirror-id=1 $file |
+		awk '/l_ost_idx:/ { print $5; exit }' | tr -d ',')
+	[[ -n "$ostidx" ]] || error "no data OST"
+	local gen_before=$($LFS getstripe -g $file | head -1)
+	local n
+
+	stop_ost_unavailable ost$((ostidx + 1))
+
+	$TRUNCATE $file 0 || error "truncate failed"
+
+	local gen_after=$($LFS getstripe -g $file | head -1)
+	(( gen_after != gen_before )) ||
+		error "layout gen unchanged: $gen_before"
+
+	# no data or parity object may be left on, or put on, the stopped OST
+	n=$($LFS getstripe $file |
+	    awk '/l_ost_idx: '$ostidx',/ { n++ } END { print n + 0 }')
+	(( n == 0 )) || error "still on stopped OST$ostidx"
+
+	echo "post-truncate" > $file || error "write after trunc failed"
+}
+run_test 74b "truncate(0) replaces EC layout on stopped OST"
+
 test_75a() {
 	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
 	enable_ec
