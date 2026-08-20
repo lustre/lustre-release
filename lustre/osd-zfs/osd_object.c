@@ -1974,6 +1974,7 @@ static int osd_create(const struct lu_env *env, struct dt_object *dt,
 	if (osd->od_projectused_dn) {
 		if (!(obj->oo_attr.la_valid & LA_PROJID))
 			obj->oo_attr.la_projid = ZFS_DEFAULT_PROJID;
+		obj->oo_attr.la_valid |= LA_PROJID;
 		obj->oo_with_projid = 1;
 	}
 #endif
