@@ -1126,7 +1126,7 @@ static DEFINE_SPINLOCK(max_requests_total_lock);
 /* Limit total max_requests to 1/8 total memory */
 static int mdt_hsm_max_requests_update(struct coordinator *cdt, u64 new)
 {
-	u64 max_ram = compat_totalram_pages() * PAGE_SIZE / 8;
+	u64 max_ram = totalram_pages() * PAGE_SIZE / 8;
 	int rc = 0;
 
 	if (new == cdt->cdt_max_requests)

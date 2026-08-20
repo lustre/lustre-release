@@ -139,12 +139,12 @@ static inline __u32 memfs_get_flags(struct inode *inode)
 
 static inline unsigned long memfs_default_max_blocks(void)
 {
-	return compat_totalram_pages() / 2;
+	return totalram_pages() / 2;
 }
 
 static inline unsigned long memfs_default_max_inodes(void)
 {
-	unsigned long nr_pages = compat_totalram_pages();
+	unsigned long nr_pages = totalram_pages();
 
 	/*
 	 * return min(nr_pages - totalhigh_pages(), nr_pages / 2);

@@ -26,6 +26,11 @@
 #include <asm/kgdb.h>
 #endif
 
+/* No you can't turn this into a Makefile variable since this
+ * would be applied to the libcfs module.
+ */
+#define COMPAT_BUILD	1
+
 #include <lustre_compat/linux/kallsyms.h>
 #include <lustre_compat/linux/mm.h>
 #include <lustre_compat/linux/module.h>

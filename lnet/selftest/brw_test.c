@@ -519,7 +519,7 @@ struct srpc_service brw_test_service = {
 
 void brw_init_test_service(void)
 {
-	unsigned long cache_size = compat_totalram_pages() >> 4;
+	unsigned long cache_size = totalram_pages() >> 4;
 
 	/* brw prealloc cache should don't eat more than half memory */
 	cache_size /= ((LNET_MTU >> PAGE_SHIFT) + 1);

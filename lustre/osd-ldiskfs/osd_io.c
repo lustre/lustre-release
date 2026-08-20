@@ -2923,7 +2923,7 @@ static loff_t osd_lseek(const struct lu_env *env, struct dt_object *dt,
 		RETURN(PTR_ERR(file));
 
 	result = file->f_op->llseek(file, offset, whence);
-	compat_security_file_free(file);
+	security_file_free(file);
 	/*
 	 * If 'offset' is beyond end of object file then treat it as not error
 	 * but valid case for SEEK_HOLE and return 'offset' as result.
@@ -3147,7 +3147,7 @@ static int osd_execute_fallocate(const struct lu_env *env,
 	old_size = i_size_read(inode);
 	file->f_mode |= FMODE_64BITHASH;
 	rc = file->f_op->fallocate(file, mode, start, end - start);
-	compat_security_file_free(file);
+	security_file_free(file);
 	/* simulate ldiskfs failing after it already zeroed part of the range */
 	if (rc == 0 && CFS_FAIL_CHECK(OBD_FAIL_OSD_FALLOCATE_ERR))
 		rc = -EIO;

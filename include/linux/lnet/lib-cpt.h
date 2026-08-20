@@ -327,23 +327,23 @@ struct workqueue_struct *cfs_cpt_bind_workqueue(const char *wq_name,
 	struct workqueue_attrs *attrs;
 	struct workqueue_struct *wq;
 
-	attrs = compat_alloc_workqueue_attrs();
+	attrs = alloc_workqueue_attrs();
 	if (!attrs)
 		return ERR_PTR(-ENOMEM);
 
 	wq = alloc_workqueue("%s", WQ_UNBOUND | flags, nthrs, wq_name);
 	if (!wq) {
-		compat_free_workqueue_attrs(attrs);
+		free_workqueue_attrs(attrs);
 		return ERR_PTR(-ENOMEM);
 	}
 
 	if (mask) {
 		cpumask_copy(attrs->cpumask, *mask);
 		cpus_read_lock();
-		compat_apply_workqueue_attrs(wq, attrs);
+		apply_workqueue_attrs(wq, attrs);
 		cpus_read_unlock();
 	}
-	compat_free_workqueue_attrs(attrs);
+	free_workqueue_attrs(attrs);
 
 	return wq;
 }

@@ -1075,7 +1075,7 @@ static void vvp_set_batch_dirty(struct folio_batch *fbatch)
 				 "all pages must have the same mapping.  page %px, mapping %px, first mapping %px\n",
 				 page, page->mapping, mapping);
 			WARN_ON_ONCE(!PagePrivate(page) && !PageUptodate(page));
-			compat_account_page_dirtied(page, mapping);
+			account_page_dirtied(page, mapping);
 			__xa_set_mark(&mapping->i_pages, folio_index_page(page),
 				      PAGECACHE_TAG_DIRTY);
 			dirtied++;

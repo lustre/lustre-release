@@ -6,12 +6,17 @@
 #include <linux/mm.h>
 
 unsigned long compat_totalram_pages(void);
+#ifndef COMPAT_BUILD
+#define totalram_pages()	compat_totalram_pages()
+#endif
 
-#ifndef HAVE_ACCOUNT_PAGE_DIRTIED_EXPORT
+#if defined(HAVE_ACCOUNT_PAGE_DIRTIED) && \
+    !defined(HAVE_ACCOUNT_PAGE_DIRTIED_EXPORT)
 unsigned int compat_account_page_dirtied(struct page *page,
 					 struct address_space *mapping);
-#else
-#define compat_account_page_dirtied	account_page_dirtied
+#ifndef COMPAT_BUILD
+#define account_page_dirtied	compat_account_page_dirtied
+#endif
 #endif
 
 #endif /* _LINUX_MM_LUSTRE_H */

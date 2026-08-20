@@ -156,7 +156,7 @@ struct file *osd_get_filp_for_inode(struct osd_thread_info *oti,
 	struct file *file = &oti->oti_file;
 	int rc;
 
-	rc = compat_security_file_alloc(file);
+	rc = security_file_alloc(file);
 	if (rc)
 		return ERR_PTR(rc);
 
@@ -1085,7 +1085,7 @@ again:
 	} while (rc >= 0 && oclb.oclb_items > 0 && !oclb.oclb_found &&
 		 filp->f_pos != LDISKFS_HTREE_EOF_64BIT);
 	CFS_FAIL_CHECK_RESET(OBD_FAIL_OFD_IGET_FAIL, 0);
-	compat_security_file_free(filp);
+	security_file_free(filp);
 out:
 	if (rc < 0)
 		CDEBUG(D_LFSCK,
@@ -5440,7 +5440,7 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
 	file = osd_get_filp_for_inode(osd_oti_get(env), inode);
 
 	rc = vfs_fsync_range(file, start, end, 0);
-	compat_security_file_free(file);
+	security_file_free(file);
 
 	RETURN(rc);
 }
@@ -7162,7 +7162,7 @@ struct osd_it_ea *osd_it_dir_init(const struct lu_env *env,
 	oie->oie_obj = NULL;
 
 	file = &oie->oie_file;
-	rc = compat_security_file_alloc(file);
+	rc = security_file_alloc(file);
 	if (rc)
 		GOTO(out_free, rc);
 

@@ -20,6 +20,7 @@
 #include <linux/slab.h>
 #include <linux/types.h>
 #include <linux/percpu_counter.h>
+#include <lustre_compat/linux/vmalloc.h>
 #include <linux/libcfs/libcfs_debug.h>
 #include <linux/libcfs/libcfs_private.h>
 
@@ -885,7 +886,7 @@ do {									      \
 #define __OBD_VMALLOC_VERBOSE(ptr, cptab, cpt, size)			      \
 do {									      \
 	(ptr) = cptab == NULL ?						      \
-		__compat_vmalloc(size, GFP_NOFS | __GFP_ZERO) :		      \
+		__vmalloc(size, GFP_NOFS | __GFP_ZERO) :		      \
 		cfs_cpt_vzalloc(cptab, cpt, size);			      \
 	if (unlikely((ptr) == NULL)) {                                        \
 		CERROR("vmalloc of '" #ptr "' (%d bytes) failed\n",           \

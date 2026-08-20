@@ -6,6 +6,7 @@
  */
 
 #include <crypto/hash.h>
+#include <linux/module.h>
 #include <linux/scatterlist.h>
 #include <linux/pagemap.h>
 #include <linux/libcfs/libcfs.h>

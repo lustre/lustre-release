@@ -312,7 +312,7 @@ static ssize_t req_buffer_history_max_store(struct kobject *kobj,
 	 * will be upgraded */
 	bufpages = (roundup_pow_of_two(svc->srv_buf_size) + PAGE_SIZE - 1) >>
 							PAGE_SHIFT;
-	limit = compat_totalram_pages() / (2 * bufpages);
+	limit = totalram_pages() / (2 * bufpages);
 	/* do not allow history to consume more than half max number of rqbds */
 	if ((svc->srv_nrqbds_max == 0 && val > limit) ||
 	    (svc->srv_nrqbds_max != 0 && val > svc->srv_nrqbds_max / 2))

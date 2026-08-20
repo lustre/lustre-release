@@ -168,7 +168,7 @@ static ssize_t max_dirty_mb_store(struct kobject *kobj,
 
 	pages_number = round_up(pages_number, 1024 * 1024) >> PAGE_SHIFT;
 	if (pages_number >= MiB_TO_PAGES(OSC_MAX_DIRTY_MB_MAX) ||
-	    pages_number > compat_totalram_pages() / 4) /* 1/4 of RAM */
+	    pages_number > totalram_pages() / 4) /* 1/4 of RAM */
 		return -ERANGE;
 
 	spin_lock(&cli->cl_loi_list_lock);

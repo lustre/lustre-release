@@ -27,6 +27,7 @@
  * @{
  */
 #include <linux/kobject.h>
+#include <lustre_compat/linux/mm.h>
 #include <linux/rhashtable.h>
 #include <linux/uio.h>
 #include <linux/pm_qos.h>
@@ -42,6 +43,17 @@
 #include <lustre_req_layout.h>
 #include <obd_support.h>
 #include <uapi/linux/lustre/lustre_ver.h>
+
+/*
+ * Memory
+ */
+#if BITS_PER_LONG == 32
+/* limit to lowmem on 32-bit systems */
+#define NUM_CACHEPAGES \
+	min(totalram_pages(), 1UL << (30 - PAGE_SHIFT) * 3 / 4)
+#else
+#define NUM_CACHEPAGES totalram_pages()
+#endif
 
 /* MD flags we _always_ use */
 #define PTLRPC_MD_OPTIONS  0

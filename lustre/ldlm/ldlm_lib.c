@@ -491,11 +491,11 @@ int client_obd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 	if (!strcmp(name, LUSTRE_MDC_NAME)) {
 		cli->cl_max_rpcs_in_flight = OBD_MAX_RIF_DEFAULT;
-	} else if (compat_totalram_pages() >> (20 - PAGE_SHIFT) <= 128 /* MB */) {
+	} else if (totalram_pages() >> (20 - PAGE_SHIFT) <= 128 /* MB */) {
 		cli->cl_max_rpcs_in_flight = 2;
-	} else if (compat_totalram_pages() >> (20 - PAGE_SHIFT) <= 256 /* MB */) {
+	} else if (totalram_pages() >> (20 - PAGE_SHIFT) <= 256 /* MB */) {
 		cli->cl_max_rpcs_in_flight = 3;
-	} else if (compat_totalram_pages() >> (20 - PAGE_SHIFT) <= 512 /* MB */) {
+	} else if (totalram_pages() >> (20 - PAGE_SHIFT) <= 512 /* MB */) {
 		cli->cl_max_rpcs_in_flight = 4;
 	} else {
 		if (osc_on_mdt(obd->obd_name))

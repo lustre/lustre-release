@@ -15,11 +15,6 @@
 #define __LIBCFS_LIBCFS_H__
 
 #include <linux/kernel.h>
-#include <linux/module.h>
-#include <linux/workqueue.h>
-#include <linux/sched.h>
-#include <linux/sched/signal.h>
-
 #include <uapi/linux/lnet/libcfs_ioctl.h>
 #include <linux/libcfs/libcfs_debug.h>
 #include <linux/libcfs/libcfs_private.h>
@@ -55,17 +50,6 @@ void lnet_debugfs_fini(void **statep);
 /* helper for sysctl handlers */
 int debugfs_doint(const struct ctl_table *table, int write,
 		  void __user *buffer, size_t *lenp, loff_t *ppos);
-
-/*
- * Memory
- */
-#if BITS_PER_LONG == 32
-/* limit to lowmem on 32-bit systems */
-#define NUM_CACHEPAGES \
-	min(compat_totalram_pages(), 1UL << (30 - PAGE_SHIFT) * 3 / 4)
-#else
-#define NUM_CACHEPAGES compat_totalram_pages()
-#endif
 
 #define wait_var_event_warning(var, condition, format, ...)		\
 do {									\
