@@ -1762,6 +1762,108 @@ nodemap_test_cleanup() {
 	return 0
 }
 
+setup_local_client_nodemap() {
+	local nm_name=${1:-"c0"}
+	local nm_admin_val=${2:-0}
+	local nm_trusted_val=${3:-0}
+	local nm_cli=${4:-$HOSTNAME}
+	local needremount=false
+	local needremount2=false
+	local rc
+
+	if $SHARED_KEY; then
+		export SK_UNIQUE_NM=true
+		export FILESET="/"
+
+		if $(do_node $nm_cli cat /proc/mounts | grep lustre |
+			grep -wq $MOUNT); then
+			zconf_umount $nm_cli $MOUNT ||
+				error "umount $MOUNT failed"
+			needremount=true
+		fi
+		if $(do_node $nm_cli cat /proc/mounts | grep lustre |
+			grep -wq $MOUNT2); then
+			zconf_umount $nm_cli $MOUNT2 ||
+				error "umount $MOUNT2 failed"
+			needremount2=true
+		fi
+
+		# Load per-NM key on servers
+		do_nodes $(comma_list $(all_server_nodes)) \
+			"$LGSS_SK -t server -l $SK_PATH/nodemap/${nm_name}.key"
+	fi
+
+	do_facet mgs $LCTL nodemap_del $nm_name || true
+	wait_nm_sync $nm_name id ''
+
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value 1
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value 1
+	wait_nm_sync default trusted_nodemap
+
+	client_ip=$(host_nids_address $nm_cli $NETTYPE)
+	client_nid=$(h2nettype $client_ip)
+	do_facet mgs $LCTL nodemap_add $nm_name
+	do_facet mgs $LCTL nodemap_add_range \
+		--name $nm_name --range $client_nid ||
+		error "Add range $client_nid to $nm_name failed rc = $?"
+	do_facet mgs $LCTL nodemap_modify --name $nm_name \
+		--property admin --value $nm_admin_val
+	do_facet mgs $LCTL nodemap_modify --name $nm_name \
+		--property trusted --value $nm_trusted_val
+
+	do_facet mgs $LCTL nodemap_activate 1
+	wait_nm_sync active
+
+	$needremount && {
+		zconf_mount $nm_cli $MOUNT ${MOUNT_OPTS} ||
+			error "remount $MOUNT failed"
+	}
+	$needremount2 && {
+		zconf_mount $nm_cli $MOUNT2 ${MOUNT_OPTS} ||
+			error "remount $MOUNT2 failed"
+	}
+	wait_ssk
+}
+
+cleanup_local_client_nodemap() {
+	local nm_name=${1:-"c0"}
+	local needremount2=false
+
+	if $SHARED_KEY; then
+		if is_mounted $MOUNT; then
+			umount_client $MOUNT || error "umount $MOUNT failed"
+		fi
+		if is_mounted $MOUNT2; then
+			umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+			needremount2=true
+		fi
+	fi
+
+	do_facet mgs $LCTL nodemap_del $nm_name || true
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property admin --value 0
+	do_facet mgs $LCTL nodemap_modify --name default \
+		--property trusted --value 0
+
+	do_facet mgs $LCTL nodemap_activate 0
+	wait_nm_sync active 0
+
+	if $SHARED_KEY; then
+		unset FILESET
+		export SK_UNIQUE_NM=false
+	fi
+	if ! is_mounted $MOUNT; then
+		mount_client $MOUNT ${MOUNT_OPTS} || error "re-mount failed"
+	fi
+	$needremount2 && {
+		mount_client $MOUNT2 ${MOUNT_OPTS} ||
+			error "remount $MOUNT2 failed"
+	}
+	wait_ssk
+}
+
 nodemap_clients_admin_trusted() {
 	local admin=$1
 	local tr=$2
@@ -3113,82 +3215,50 @@ run_test 27ac "test nodemap llog and IAM fileset compatibility"
 test_27ad() { #LU-20087
 	local offset_start=100000
 	local offset_limit=100000
-	local nm="test27ad_nm"
-	local client=${clients_arr[0]}
-	local activedefault
-	local def_trusted def_admin
+	local expected=$((ID0 + offset_start))
+	local nm="c0"
 
 	(( MDS1_VERSION >= $(version_code v2_16_50-191-ge3051ad0f1) )) ||
 		skip "need MDS >= 2.16.50 for nodemap range offset"
 
-	local client_ip=$(host_nids_address $client $NETTYPE)
-	local client_nid=$(h2nettype $client_ip)
-
-	def_trusted=$(do_facet mgs $LCTL \
-		get_param -n nodemap.default.trusted_nodemap 2>/dev/null)
-	def_admin=$(do_facet mgs $LCTL \
-		get_param -n nodemap.default.admin_nodemap 2>/dev/null)
-	def_trusted=${def_trusted:-0}
-	def_admin=${def_admin:-0}
-	stack_trap "do_facet mgs $LCTL nodemap_modify --name default \
-		--property trusted --value $def_trusted; \
-		do_facet mgs $LCTL nodemap_modify --name default \
-		--property admin --value $def_admin" EXIT
-
-	do_facet mgs $LCTL nodemap_modify --name default \
-		--property trusted --value 1 ||
-		error "set default trusted=1 failed"
-	do_facet mgs $LCTL nodemap_modify --name default \
-		--property admin --value 1 ||
-		error "set default admin=1 failed"
-
-	activedefault=$(do_facet mgs $LCTL get_param -n nodemap.active)
-	if ((activedefault != 1)); then
-		do_facet mgs $LCTL nodemap_activate 1
-		wait_nm_sync active
-		stack_trap cleanup_active EXIT
-	fi
-
-	mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
-	chmod 777 $DIR/$tdir || error "chmod $tdir failed"
-	chown $((offset_start + ID0)):$((offset_start + ID0)) $DIR/$tdir ||
-		error "chown $tdir failed"
-
-	do_facet mgs $LCTL nodemap_add $nm ||
-		error "unable to add nodemap $nm"
-	stack_trap "do_facet mgs $LCTL nodemap_del $nm 2>/dev/null || true" EXIT
-
-	do_facet mgs $LCTL nodemap_add_range --name $nm \
-		--range $client_nid ||
-		error "unable to add range $client_nid to $nm"
-	do_facet mgs $LCTL nodemap_add_offset --name $nm \
-		--offset $offset_start --limit $offset_limit ||
-		error "cannot set offset on $nm"
-
-	wait_nm_sync $nm offset
-
-	do_nodes $(all_mdts_nodes) \
+	do_nodes $(comma_list $(all_mdts_nodes)) \
 		"$LCTL set_param mdt.*.identity_upcall=NONE" ||
 		error "disable identity_upcall failed"
 
-	do_node $client "$RUNAS_CMD -u $ID0 -g $ID0 \
-		touch $DIR/$tdir/$tfile" ||
-		error "cannot create $tfile as UID/GID $ID0"
+	stack_trap "rm -rf $DIR/$tdir" EXIT
 
-	do_node $client "$LFS project -p $ID0 $DIR/$tdir/$tfile" ||
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	if is_mounted $MOUNT2; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed"
+		stack_trap "mount_client $MOUNT2 ${MOUNT_OPTS}" EXIT
+	fi
+
+	setup_local_client_nodemap $nm 1 1
+	stack_trap "cleanup_local_client_nodemap $nm" EXIT
+	do_facet mgs $LCTL nodemap_add_offset --name $nm \
+		--offset $offset_start --limit $offset_limit ||
+		error "cannot set offset on $nm"
+	wait_nm_sync $nm offset
+
+	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS ||
+		error "remount $MOUNT failed"
+	wait_ssk
+
+	mkdir -p $DIR/$tdir || error "mkdir $tdir failed"
+	chown $ID0:$ID0 $DIR/$tdir || error "chown $tdir failed"
+
+	$RUNAS_CMD -u $ID0 -g $ID0 touch $DIR/$tdir/$tfile ||
+		error "cannot create $tfile as UID/GID $ID0"
+	$LFS project -p $ID0 $DIR/$tdir/$tfile ||
 		error "cannot set projid $ID0 on $tfile"
 
-	do_facet mgs $LCTL nodemap_del $nm ||
-		error "failed to delete nodemap $nm"
-	wait_nm_sync $nm id ''
+	do_facet mgs $LCTL nodemap_del_offset --name $nm ||
+		error "cannot del offset on $nm"
+	wait_nm_sync $nm offset
+	cancel_lru_locks mdc
 
-	do_node $client "sync ; echo 3 > /proc/sys/vm/drop_caches" ||
-		error "drop_caches failed on $client"
-
-	local expected=$((ID0 + offset_start))
-
-	do_node $client $CHECKSTAT -u \\\#$expected -g \\\#$expected \
-		-j $expected $DIR/$tdir/$tfile ||
+	$CHECKSTAT -u \#$expected -g \#$expected -j $expected \
+		$DIR/$tdir/$tfile ||
 		error "expected UID/GID/PROJID = $expected (ID0+$offset_start)"
 }
 run_test 27ad "test nodemap offset applied to file UID/GID/PROJID"
@@ -6666,71 +6736,6 @@ test_54() {
 }
 run_test 54 "Encryption policies with fscrypt"
 
-setup_local_client_nodemap() {
-	local nm_name=${1:-"c0"}
-	local nm_admin_val=${2:-0}
-	local nm_trusted_val=${3:-0}
-	local nm_cli=${4:-$HOSTNAME}
-	local needremount=false
-	local needremount2=false
-	local rc
-
-	if $SHARED_KEY; then
-		export SK_UNIQUE_NM=true
-		export FILESET="/"
-
-		if $(do_node $nm_cli cat /proc/mounts | grep lustre |
-			grep -wq $MOUNT); then
-			zconf_umount $nm_cli $MOUNT ||
-				error "umount $MOUNT failed"
-			needremount=true
-		fi
-		if $(do_node $nm_cli cat /proc/mounts | grep lustre |
-			grep -wq $MOUNT2); then
-			zconf_umount $nm_cli $MOUNT2 ||
-				error "umount $MOUNT2 failed"
-			needremount2=true
-		fi
-
-		# Load per-NM key on servers
-		do_nodes $(comma_list $(all_server_nodes)) \
-			"$LGSS_SK -t server -l $SK_PATH/nodemap/${nm_name}.key"
-	fi
-
-	do_facet mgs $LCTL nodemap_del $nm_name || true
-	wait_nm_sync $nm_name id ''
-
-	do_facet mgs $LCTL nodemap_modify --name default \
-		--property admin --value 1
-	do_facet mgs $LCTL nodemap_modify --name default \
-		--property trusted --value 1
-	wait_nm_sync default trusted_nodemap
-
-	client_ip=$(host_nids_address $nm_cli $NETTYPE)
-	client_nid=$(h2nettype $client_ip)
-	do_facet mgs $LCTL nodemap_add $nm_name
-	do_facet mgs $LCTL nodemap_add_range \
-		--name $nm_name --range $client_nid ||
-		error "Add range $client_nid to $nm_name failed rc = $?"
-	do_facet mgs $LCTL nodemap_modify --name $nm_name \
-		--property admin --value $nm_admin_val
-	do_facet mgs $LCTL nodemap_modify --name $nm_name \
-		--property trusted --value $nm_trusted_val
-
-	do_facet mgs $LCTL nodemap_activate 1
-	wait_nm_sync active
-
-	$needremount && {
-		zconf_mount $nm_cli $MOUNT ${MOUNT_OPTS} ||
-			error "remount $MOUNT failed"
-	}
-	$needremount2 && {
-		zconf_mount $nm_cli $MOUNT2 ${MOUNT_OPTS} ||
-			error "remount $MOUNT2 failed"
-	}
-	wait_ssk
-}
-
 set_nodemap_rbac() {
 	local nm_name=$1
 	local rbac=$2
@@ -6738,43 +6743,6 @@ set_nodemap_rbac() {
 	do_facet mgs $LCTL nodemap_modify --name $nm_name --property rbac \
 		--value $rbac || error "setting $nm_name rbac $rbac failed"
 	wait_nm_sync $nm_name rbac
-}
-
-cleanup_local_client_nodemap() {
-	local nm_name=${1:-"c0"}
-	local needremount2=false
-
-	if $SHARED_KEY; then
-		if is_mounted $MOUNT; then
-			umount_client $MOUNT || error "umount $MOUNT failed"
-		fi
-		if is_mounted $MOUNT2; then
-			umount_client $MOUNT2 || error "umount $MOUNT2 failed"
-			needremount2=true
-		fi
-	fi
-
-	do_facet mgs $LCTL nodemap_del $nm_name || true
-	do_facet mgs $LCTL nodemap_modify --name default \
-		--property admin --value 0
-	do_facet mgs $LCTL nodemap_modify --name default \
-		--property trusted --value 0
-
-	do_facet mgs $LCTL nodemap_activate 0
-	wait_nm_sync active 0
-
-	if $SHARED_KEY; then
-		unset FILESET
-		export SK_UNIQUE_NM=false
-	fi
-	if ! is_mounted $MOUNT; then
-		mount_client $MOUNT ${MOUNT_OPTS} || error "re-mount failed"
-	fi
-	$needremount2 && {
-		mount_client $MOUNT2 ${MOUNT_OPTS} ||
-			error "remount $MOUNT2 failed"
-	}
-	wait_ssk
 }
 
 cleanup_local_client_nodemap_with_mounts() {
