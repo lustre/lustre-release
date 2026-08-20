@@ -7336,7 +7336,8 @@ static int lnet_peer_ni_cmd(struct sk_buff *skb, struct genl_info *info)
 			GOTO(report_err, rc);
 		}
 
-		if (!(info->nlhdr->nlmsg_flags & NLM_F_CREATE)) {
+		if (!(info->nlhdr->nlmsg_flags &
+		      (NLM_F_CREATE | NLM_F_REPLACE))) {
 			bool force = info->nlhdr->nlmsg_flags & NLM_F_EXCL;
 
 			rc = lnet_del_peer_ni(&pnid, &LNET_ANY_NID,

@@ -6332,6 +6332,40 @@ test_305() {
 }
 run_test 305 "Resolve hostname before lnetctl ping"
 
+test_306() {
+	reinit_dlc || return $?
+
+	local peer_nid=1.1.1.1@tcp
+
+	do_lnetctl peer add --prim_nid $peer_nid ||
+		error "peer add failed $?"
+
+	do_lnetctl peer show --nid $peer_nid ||
+		error "peer $peer_nid not found"
+
+	local peer_state=$(do_lnetctl peer show -v 4 --nid $peer_nid |
+			    awk '/peer state/{print $NF}')
+
+	# Request a state that differs from the current one so that a kernel
+	# silently ignoring --state is caught.
+	# Toggle LNET_PEER_BAD_CONFIG
+	local new_state=$((peer_state ^ (1 << 21)))
+
+	do_lnetctl peer set --nid $peer_nid --state $new_state ||
+		error "peer set failed $?"
+
+	do_lnetctl peer show --nid $peer_nid ||
+		error "peer $peer_nid disappeared after state change"
+
+	local got_state=$(do_lnetctl peer show -v 4 --nid $peer_nid |
+			   awk '/peer state/{print $NF}')
+	((got_state == new_state)) ||
+		error "peer state not applied: expected $new_state, got $got_state"
+
+	return 0
+}
+run_test 306 "lnetctl peer set --state must not delete the peer"
+
 static_config() {
 	local module=$1
 	local setting=$2
