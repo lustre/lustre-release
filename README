@@ -34,11 +34,11 @@ For in-tree documentation, see the following directories:
 +-----------+
 
 The low-volume list for announcements of new releases is at:
-    http://lists.lustre.org/listinfo.cgi/lustre-announce-lustre.org
+    https://lists.lustre.org/mailman/listinfo/lustre-announce_lists.lustre.org
 The generic Lustre discussion mailing list is available at:
-    http://lists.lustre.org/listinfo.cgi/lustre-discuss-lustre.org
+    https://lists.lustre.org/mailman/listinfo/lustre-discuss_lists.lustre.org
 The Lustre developer mailing list is at:
-    http://lists.lustre.org/pipermail/lustre-devel-lustre.org
+    https://lists.lustre.org/mailman/listinfo/lustre-devel_lists.lustre.org
 
 To report bugs, please visit:
     https://jira.whamcloud.com/
@@ -55,7 +55,7 @@ Mirror is available at:
 Detailed instructions for building, configuring and running Lustre:
     http://wiki.lustre.org/Compiling_Lustre
 and
-    https://wiki.whamcloud.com/display/PUB/Getting+started+with+Lustre.
+    https://wiki.whamcloud.com/display/PUB/Getting+started+with+Lustre
 
 
 To build Lustre:
@@ -63,6 +63,10 @@ To build Lustre:
     bash autogen.sh
     ./configure
     make
+OR
+    make rpms
+OR
+    make debs
 
 To see all available make targets:
 
@@ -78,7 +82,7 @@ and Lustre test environment variables:
     https://wiki.whamcloud.com/display/PUB/Lustre+Test+Tools+Environment+Variables
 
 
-To play with a test Lustre filesystem:
+To play with a **temporary** test Lustre filesystem:
 
     ./lustre/tests/llmount.sh
 
