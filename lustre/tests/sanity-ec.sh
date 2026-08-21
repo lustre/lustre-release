@@ -16,7 +16,6 @@ init_logging
 
 ALWAYS_EXCEPT="$SANITY_EC_EXCEPT "
 
-# tests 12a: EC parity calculation produces incorrect content (LU-19631)
 # tests 41d: a degraded mmap read never completes.  The OSC alternates
 # between "too many resent retries" and osc_brw_redo_request() forever,
 # so -EIO never reaches the LOV layer and CIT_FAULT never switches to
@@ -26,7 +25,6 @@ ALWAYS_EXCEPT="$SANITY_EC_EXCEPT "
 # reconstructs wrong data.  Measured at 2 failures in 10 runs, and it
 # still fails 1 in 10 with the proactive dead-OST detection applied, so
 # it is not the reconstruction bug the other offset tests hit (LU-12668)
-always_except LU-19631 12a
 always_except LU-20708 41d
 always_except LU-20709 53a
 
