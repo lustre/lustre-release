@@ -238,7 +238,7 @@ static int do_fiemap(int fd)
 		}
 		pf->fm_start = 0;
 		pf->fm_length = FIEMAP_MAX_OFFSET;
-		pf->fm_flags = FIEMAP_FLAG_SYNC;
+		pf->fm_flags = FIEMAP_FLAG_SYNC | FIEMAP_FLAG_DEVICE_ORDER;
 		pf->fm_extent_count = extents;
 
 		if (ioctl(fd, FS_IOC_FIEMAP, pf) < 0) {
