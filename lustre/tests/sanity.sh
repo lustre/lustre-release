@@ -32328,6 +32328,231 @@ test_398u() { # LU-19536
 }
 run_test 398u "DIO pool ENOMEM triggers drain and retry"
 
+cleanup_398v() {
+	local params=$1
+	local rc=0
+
+	[[ -e "$params" ]] || return 0
+	restore_lustre_params < "$params" ||
+		{ error_noexit "cannot restore OSC parameters"; rc=1; }
+	rm -f "$params" ||
+		{ error_noexit "cannot remove $params"; rc=1; }
+
+	return $rc
+}
+
+client_grant_398v() {
+	local osc=$1
+	local values
+
+	values=$($LCTL get_param -n "$osc.cur_grant_bytes" \
+		"$osc.cur_dirty_grant_bytes" "$osc.cur_lost_grant_bytes") ||
+		return 1
+	calc_sum <<< "$values"
+}
+
+server_grant_398v() {
+	local values
+
+	values=$(do_facet ost1 "$LCTL get_param \
+		obdfilter.${FSNAME}-OST0000.tot_granted \
+		obdfilter.${FSNAME}-OST0000.tot_pending \
+		obdfilter.${FSNAME}-OST0000.grant_precreate") ||
+		return 1
+	awk -F= '
+		/tot_granted=/ { total += $2; found++ }
+		/tot_pending=/ { total -= $2; found++ }
+		/grant_precreate=/ { total -= $2; found++ }
+		END {
+			if (found != 3)
+				exit 1
+			printf("%0.0f", total)
+		}
+	' <<< "$values"
+}
+
+test_398v() { # LU-19536
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+
+	local file=$DIR/$tfile
+	local params=$TMP/$TESTSUITE-$TESTNAME.params
+	local instance
+	local imp
+	local osc
+	local extent_tax
+	local grant
+	local grant_block_size
+	local max_dirty
+	local needed
+	local rpc_bytes
+	local rpc_grant
+	local rpc_pages
+	local client_grant_before
+	local client_grant_after
+	local server_grant_before
+	local server_grant_after
+	local client_grant_change
+	local server_grant_change
+
+	instance=$($LFS getname -i "$DIR") ||
+		error "cannot find client mount instance"
+	imp="$FSNAME-OST0000-osc-$instance"
+	osc="osc.$imp"
+
+	: > "$params" || error "cannot create $params"
+	stack_trap "cleanup_398v '$params'" EXIT
+	save_lustre_params client "$osc.max_pages_per_rpc" >> "$params" ||
+		error "cannot save max_pages_per_rpc"
+	save_lustre_params client "$osc.max_rpcs_in_flight" >> "$params" ||
+		error "cannot save max_rpcs_in_flight"
+	save_lustre_params client "$osc.grant_shrink" >> "$params" ||
+		error "cannot save grant_shrink"
+	save_lustre_params client "$osc.max_dirty_mb" >> "$params" ||
+		error "cannot save max_dirty_mb"
+
+	$LCTL set_param "$osc.max_pages_per_rpc=1M" ||
+		error "cannot set max_pages_per_rpc"
+	$LCTL set_param "$osc.max_rpcs_in_flight=8" ||
+		error "cannot set max_rpcs_in_flight"
+	$LCTL set_param "$osc.grant_shrink=0" ||
+		error "cannot disable grant shrink"
+
+	extent_tax=$(import_param "$imp" grant_extent_tax) ||
+		error "cannot read grant_extent_tax"
+	grant_block_size=$(import_param "$imp" grant_block_size) ||
+		error "cannot read grant_block_size"
+	rpc_pages=$($LCTL get_param -n "$osc.max_pages_per_rpc") ||
+		error "cannot read max_pages_per_rpc"
+	[[ "$extent_tax" =~ ^[0-9]+$ ]] ||
+		error "invalid grant_extent_tax: $extent_tax"
+	[[ "$grant_block_size" =~ ^[0-9]+$ ]] ||
+		error "invalid grant_block_size: $grant_block_size"
+	[[ "$rpc_pages" =~ ^[0-9]+$ ]] ||
+		error "invalid max_pages_per_rpc: $rpc_pages"
+	rpc_bytes=$((rpc_pages * PAGE_SIZE))
+	(( rpc_bytes >= 1024 * 1024 &&
+	   rpc_bytes % (1024 * 1024) == 0 )) ||
+		skip "RPC size $rpc_bytes is not a whole MiB"
+	rpc_grant=$((((rpc_bytes + grant_block_size - 1) /
+		       grant_block_size) * grant_block_size + extent_tax))
+	needed=$rpc_grant
+
+	$LFS setstripe -i 0 -c 1 "$file" || error "setstripe $file"
+	stack_trap "rm -f $file"
+
+	# Connect the import and acquire grant before taking the baseline.
+	dd if=/dev/zero of="$file" bs=$((8 * rpc_bytes)) count=1 \
+		oflag=direct status=none ||
+		error "grant warmup DIO failed"
+	sync || error "sync after grant warmup failed"
+
+	grant=$($LCTL get_param -n "$osc.cur_grant_bytes") ||
+		error "cannot read cur_grant_bytes after warmup"
+	(( grant >= needed )) ||
+		skip "need $needed bytes grant, have $grant"
+
+	rm -f "$file" || error "cannot remove warmup file"
+	$LFS setstripe -i 0 -c 1 "$file" || error "recreate $file"
+
+	# Set this last because client_adjust_max_dirty() may raise it when
+	# max_pages_per_rpc or max_rpcs_in_flight changes.
+	$LCTL set_param "$osc.max_dirty_mb=$((rpc_bytes / 1024 / 1024))" ||
+		error "cannot set max_dirty_mb"
+	max_dirty=$($LCTL get_param -n "$osc.max_dirty_mb") ||
+		error "cannot read max_dirty_mb"
+	[[ "$max_dirty" =~ ^[0-9]+$ ]] ||
+		error "invalid max_dirty_mb: $max_dirty"
+	(( max_dirty == rpc_bytes / 1024 / 1024 )) ||
+		error "max_dirty_mb was adjusted after being set"
+
+	$LCTL set_param "$osc.rpc_stats=clear" ||
+		error "cannot clear OSC RPC statistics"
+
+	# Compare only the grant change caused by this write. An absolute
+	# suite-wide check also includes unrelated clients and idle imports.
+	client_grant_before=$(client_grant_398v "$osc") ||
+		error "cannot read initial client grant"
+	server_grant_before=$(server_grant_398v) ||
+		error "cannot read initial server grant"
+	echo "grant before DIO: client=$client_grant_before" \
+		"server=$server_grant_before" \
+		"delta=$((server_grant_before - client_grant_before))"
+
+	#define OBD_FAIL_OST_BRW_PAUSE_BULK 0x214
+	stack_trap \
+		"do_facet ost1 $LCTL set_param fail_loc=0 fail_val=0"
+	do_facet ost1 $LCTL set_param fail_val=2 fail_loc=0x214 ||
+		error "cannot pause OST bulk completion"
+
+	# Four RPCs would all overlap without dirty-limit fallback.
+	dd if=/dev/zero of="$file" bs=$((4 * rpc_bytes)) count=1 \
+		oflag=direct status=none ||
+		error "DIO write failed"
+	do_facet ost1 $LCTL set_param fail_loc=0 fail_val=0 ||
+		error "cannot clear OST bulk pause"
+
+	client_grant_after=$(client_grant_398v "$osc") ||
+		error "cannot read final client grant"
+	server_grant_after=$(server_grant_398v) ||
+		error "cannot read final server grant"
+	client_grant_change=$((client_grant_before - client_grant_after))
+	server_grant_change=$((server_grant_before - server_grant_after))
+	echo "grant after DIO: client=$client_grant_after" \
+		"server=$server_grant_after" \
+		"delta=$((server_grant_after - client_grant_after))"
+	echo "grant consumed by DIO: client=$client_grant_change" \
+		"server=$server_grant_change"
+	(( client_grant_change == server_grant_change )) ||
+		error "grant change mismatch: client $client_grant_before to $client_grant_after, server $server_grant_before to $server_grant_after"
+
+	local stats
+	local write_rpcs
+	local max_in_flight
+
+	stats=$($LCTL get_param -n "$osc.rpc_stats") ||
+		error "cannot read OSC RPC statistics"
+	echo "$stats"
+	write_rpcs=$(awk '
+		/^pages per rpc/ { section = 1; next }
+		section && NF == 0 { print total + 0; exit }
+		section && $1 ~ /^[0-9]+:$/ { total += $6 }
+	' <<< "$stats")
+	# test_398g documents an occasional unrelated extra OSC write RPC.
+	(( write_rpcs >= 4 && write_rpcs <= 5 )) ||
+		error "expected 4 or 5 write RPCs, saw $write_rpcs"
+
+	max_in_flight=$(awk '
+		/^rpcs in flight/ { section = 1; next }
+		section && NF == 0 { print max + 0; exit }
+		section && $1 ~ /^[0-9]+:$/ && $6 > 0 {
+			value = $1
+			sub(/:$/, "", value)
+			if (value > max)
+				max = value
+		}
+	' <<< "$stats")
+	(( max_in_flight > 0 && max_in_flight < 4 )) ||
+		error "dirty limit allowed $max_in_flight RPCs in flight"
+
+	local bytes
+	local dirty
+	local dirty_grant
+
+	bytes=$(stat -c %s "$file") || error "cannot stat $file"
+	(( bytes == 4 * rpc_bytes )) ||
+		error "file size $bytes != expected $((4 * rpc_bytes))"
+	dirty=$($LCTL get_param -n "$osc.cur_dirty_bytes") ||
+		error "cannot read cur_dirty_bytes"
+	dirty_grant=$($LCTL get_param -n "$osc.cur_dirty_grant_bytes") ||
+		error "cannot read cur_dirty_grant_bytes"
+	(( dirty == 0 && dirty_grant == 0 )) ||
+		error "dirty accounting leaked: bytes=$dirty grant=$dirty_grant"
+
+	# Restore the OSC settings before subsequent tests.
+	cleanup_398v "$params"
+}
+run_test 398v "regular DIO respects max_dirty_mb dirty page limit"
+
 test_fake_rw() {
 	local read_write=$1
 	if [ "$read_write" = "write" ]; then
