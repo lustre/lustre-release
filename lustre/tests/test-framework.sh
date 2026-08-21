@@ -5495,6 +5495,8 @@ unmount_fstype() {
 ## MountConf setup
 
 stopall() {
+	local rc=0
+
 	# make sure we are using the primary server, so test-framework will
 	# be able to clean up properly.
 	activemds=`facet_active mds1`
@@ -5508,22 +5510,22 @@ stopall() {
 	zconf_umount_clients $clients $MOUNT "$*" || true
 	[ -n "$MOUNT2" ] && zconf_umount_clients $clients $MOUNT2 "$*" || true
 
-	[ -n "$CLIENTONLY" ] && return
+	[ -n "$CLIENTONLY" ] && return 0
 
 	# The add fn does rm ${facet}active file, this would be enough
 	# if we use do_facet <facet> only after the facet added, but
 	# currently we use do_facet mds in local.sh
 	local num
-	unmountmds
+	unmountmds || rc=$?
 	combined_mgs_mds && rm -f $TMP/mgsactive
-	unmountoss
-	unmountmgs
+	unmountoss || rc=$?
+	unmountmgs || rc=$?
 
 	if $SHARED_KEY; then
 		export SK_MOUNTED=false
 	fi
 
-	return 0
+	return $rc
 }
 
 cleanup_echo_devs () {
@@ -5567,17 +5569,21 @@ kptr_restore() {
 }
 
 cleanupall() {
+	local rc=0
+
 	nfs_client_mode && return
 	cifs_client_mode && return
 
 	cleanup_echo_devs
-	CLEANUP_DM_DEV=true stopall $*
+	CLEANUP_DM_DEV=true stopall $* || rc=$?
 
 	[[ $KPTR_ON_MOUNT ]] && kptr_restore
 
-	unload_modules
+	unload_modules || rc=$?
 	cleanup_sk
 	cleanup_gss
+
+	return $rc
 }
 
 combined_mgs_mds () {
@@ -5939,10 +5945,14 @@ writeconf_all () {
 }
 
 unmountmgs() {
+	local rc=0
+
 	if ! combined_mgs_mds ; then
-		stop mgs -f
+		stop mgs -f || rc=$?
 		rm -f $TMP/mgsactive
 	fi
+
+	return $rc
 }
 
 mountmgs() {
@@ -5954,13 +5964,16 @@ mountmgs() {
 
 unmountmds() {
 	local mdsnum
+	local rc=0
 
 	for ((mdsnum=1; mdsnum <= $MDSCOUNT; mdsnum++)); do
 		local facet=mds$mdsnum
 
-		stop $facet -f
+		stop $facet -f || rc=$?
 		rm -f $TMP/${facet}active
 	done
+
+	return $rc
 }
 
 mountmds() {
@@ -5994,13 +6007,16 @@ mountmds() {
 
 unmountoss() {
 	local ostnum
+	local rc=0
 
 	for ((ostnum=1; ostnum <= $OSTCOUNT; ostnum++)); do
 		local facet=ost$ostnum
 
-		stop $facet -f
+		stop $facet -f || rc=$?
 		rm -f $TMP/${facet}active
 	done
+
+	return $rc
 }
 
 mountoss() {

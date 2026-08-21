@@ -176,10 +176,16 @@ define_global_yaml() {
 
 reinit_dlc() {
 	if lsmod | grep -q lnet; then
-		do_lnetctl lnet unconfigure ||
-			error "lnetctl lnet unconfigure failed $?"
-		do_lnetctl lnet configure $LNET_CONFIG_OPT ||
-			error "lnetctl lnet configure failed $?"
+		if ! do_lnetctl lnet unconfigure; then
+			# Force cleanup when we cannot simply unconfigure it
+			# It could happen when a previous test failed
+			cleanupall -f ||
+				error "Failed to cleanup leftover mounts"
+			configure_dlc || error "configure_dlc failed $?"
+		else
+			do_lnetctl lnet configure $LNET_CONFIG_OPT ||
+				error "lnetctl lnet configure failed $?"
+		fi
 	else
 		configure_dlc || error "configure_dlc failed $?"
 	fi
