@@ -484,8 +484,9 @@ struct niobuf_local {
 	__u32		lnb_len;
 	__u32		lnb_flags;
 	int		lnb_rc;
-	struct page	*lnb_page;
+	struct folio	*lnb_folio;
 	void		*lnb_data;
+	__u32		lnb_fpgno;
 	__be16		lnb_guards[MAX_GUARD_NUMBER];
 	__u16		lnb_guard_rpc:1;
 	__u16		lnb_guard_disk:1;
@@ -496,6 +497,27 @@ struct niobuf_local {
 	/* page from TLS for dio/fake rw */
 	__u16		lnb_dio:1;
 };
+
+static inline size_t lnb_pgno(struct niobuf_local *lnb)
+{
+	return lnb->lnb_fpgno;
+}
+
+static inline void *lnb_kmap_local(struct niobuf_local *lnb)
+{
+	return kmap_local_folio(lnb->lnb_folio, lnb_pgno(lnb) << PAGE_SHIFT);
+}
+
+static inline void *ll_lnb_kmap_local(struct niobuf_local *lnb)
+{
+	/* for kernels where kmap_local_* is not available, use kmap() */
+	return ll_kmap_local_folio(lnb->lnb_folio, lnb_pgno(lnb) << PAGE_SHIFT);
+}
+
+static inline struct page *lnb_folio_page(struct niobuf_local *lnb)
+{
+	return folio_page(lnb->lnb_folio, lnb_pgno(lnb));
+}
 
 struct tgt_thread_big_cache {
 	struct niobuf_local	local[PTLRPC_MAX_BRW_PAGES];

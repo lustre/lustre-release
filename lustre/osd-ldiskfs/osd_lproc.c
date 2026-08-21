@@ -94,11 +94,11 @@ static int osd_stats_init(struct osd_device *osd)
 					     osd->od_dt_dev.dd_debugfs_entry,
 					     0);
 	if (osd->od_stats) {
-		lprocfs_counter_init(osd->od_stats, LPROC_OSD_GET_PAGE,
-				     LPROCFS_TYPE_LATENCY, "get_page");
-		lprocfs_counter_init(osd->od_stats, LPROC_OSD_NO_PAGE,
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_GET_FOLIO,
+				     LPROCFS_TYPE_LATENCY, "get_folio");
+		lprocfs_counter_init(osd->od_stats, LPROC_OSD_NO_FOLIO,
 				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_REQS,
-				     "get_page_failures");
+				     "get_folio_failures");
 		lprocfs_counter_init(osd->od_stats, LPROC_OSD_CACHE_ACCESS,
 				     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
 				     "cache_access");

@@ -268,7 +268,7 @@ struct osd_thread_info {
 	uint64_t		oti_lastid_oid;
 
 	/* just for fake RW now */
-	struct page		**oti_dio_pages;
+	struct folio		**oti_dio_folios;
 	int			oti_dio_pages_used;
 };
 
@@ -612,8 +612,8 @@ static inline struct osd_oi *osd_fid2oi(struct osd_device *osd,
 enum {
 	LPROC_OSD_READ_BYTES = 0,
 	LPROC_OSD_WRITE_BYTES = 1,
-	LPROC_OSD_GET_PAGE = 2,
-	LPROC_OSD_NO_PAGE = 3,
+	LPROC_OSD_GET_FOLIO = 2,
+	LPROC_OSD_NO_FOLIO = 3,
 	LPROC_OSD_CACHE_ACCESS = 4,
 	LPROC_OSD_CACHE_HIT = 5,
 	LPROC_OSD_CACHE_MISS = 6,

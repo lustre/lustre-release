@@ -510,8 +510,8 @@ struct osd_obj_declare {
 enum {
         LPROC_OSD_READ_BYTES    = 0,
         LPROC_OSD_WRITE_BYTES   = 1,
-        LPROC_OSD_GET_PAGE      = 2,
-        LPROC_OSD_NO_PAGE       = 3,
+        LPROC_OSD_GET_FOLIO     = 2,
+        LPROC_OSD_NO_FOLIO      = 3,
         LPROC_OSD_CACHE_ACCESS  = 4,
         LPROC_OSD_CACHE_HIT     = 5,
         LPROC_OSD_CACHE_MISS    = 6,

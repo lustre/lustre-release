@@ -1922,7 +1922,7 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 			struct folio *np = tgt_page_to_corrupt;
 
 			if (np) {
-				char *ptr = kmap_local_page(local_nb[i].lnb_page);
+				char *ptr = lnb_kmap_local(&local_nb[i]);
 				char *ptr2 = kmap_local_folio(np, 0);
 
 				memcpy(ptr2 + off, ptr + off, len);
@@ -1942,7 +1942,8 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 				       tgt_name(tgt));
 			}
 		}
-		cfs_crypto_hash_update_page(req, local_nb[i].lnb_page,
+		cfs_crypto_hash_update_page(req,
+				  lnb_folio_page(&local_nb[i]),
 				  local_nb[i].lnb_page_offset & ~PAGE_MASK,
 				  local_nb[i].lnb_len);
 
@@ -1955,7 +1956,7 @@ static int tgt_checksum_niobuf(struct lu_target *tgt,
 			struct folio *np = tgt_page_to_corrupt;
 
 			if (np) {
-				char *ptr = kmap_local_page(local_nb[i].lnb_page);
+				char *ptr = lnb_kmap_local(&local_nb[i]);
 				char *ptr2 = kmap_local_folio(np, 0);
 
 				memcpy(ptr2 + off, ptr + off, len);
@@ -2026,7 +2027,7 @@ static void dump_all_bulk_pages(struct obdo *oa, int count,
 	}
 
 	for (i = 0; i < count; i++) {
-		void *addr = kmap(local_nb[i].lnb_page);
+		void *addr = ll_lnb_kmap_local(&local_nb[i]);
 
 		len = local_nb[i].lnb_len;
 		buf = addr;
@@ -2040,7 +2041,7 @@ static void dump_all_bulk_pages(struct obdo *oa, int count,
 			len -= rc;
 			buf += rc;
 		}
-		kunmap(kmap_to_page(addr));
+		ll_kunmap_local(addr);
 	}
 
 	rc = vfs_fsync_range(filp, 0, LLONG_MAX, 1);
@@ -2117,7 +2118,7 @@ static int tgt_pages2shortio(struct niobuf_local *local, int npages,
 		if (len > size)
 			return -EINVAL;
 
-		ptr = kmap_local_page(local[i].lnb_page);
+		ptr = lnb_kmap_local(&local[i]);
 		memcpy(buf, ptr + off, len);
 		kunmap_local(ptr);
 		buf += len;
@@ -2185,7 +2186,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 			struct folio *np = tgt_page_to_corrupt;
 
 			if (np) {
-				char *ptr = kmap_local_page(local_nb[i].lnb_page);
+				char *ptr = lnb_kmap_local(&local_nb[i]);
 				char *ptr2 = kmap_local_folio(np, 0);
 
 				memcpy(ptr2 + off, ptr + off, len);
@@ -2238,8 +2239,6 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 				       guard_start + used_number);
 		}
 		if (!use_t10_grd || unlikely(resend)) {
-			struct folio *folio;
-			s32 pgno;
 			__be16 guard_tmp[MAX_GUARD_NUMBER];
 			__be16 *guards = guard_start + used_number;
 			int used_tmp = -1, *usedp = &used;
@@ -2248,10 +2247,8 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 				guards = guard_tmp;
 				usedp = &used_tmp;
 			}
-			folio = page_folio(local_nb[i].lnb_page);
-			pgno = folio_page_idx(folio, local_nb[i].lnb_page);
 			rc = obd_page_dif_generate_buffer(obd_name,
-				folio, pgno,
+				local_nb[i].lnb_folio, local_nb[i].lnb_fpgno,
 				local_nb[i].lnb_page_offset & ~PAGE_MASK,
 				local_nb[i].lnb_len, guards,
 				guard_number - used_number, usedp, sector_size,
@@ -2310,7 +2307,7 @@ static int tgt_checksum_niobuf_t10pi(struct lu_target *tgt,
 			struct folio *np = tgt_page_to_corrupt;
 
 			if (np) {
-				char *ptr = kmap_local_page(local_nb[i].lnb_page);
+				char *ptr = lnb_kmap_local(&local_nb[i]);
 				char *ptr2 = kmap_local_folio(np, 0);
 
 				memcpy(ptr2 + off, ptr + off, len);
@@ -2502,13 +2499,13 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 
 		nob += page_rc;
 		if (page_rc != 0 && desc != NULL) { /* some data! */
-			LASSERT(local_nb[i].lnb_page != NULL);
+			LASSERT(local_nb[i].lnb_folio != NULL);
 			CDEBUG(D_INODE,
 			       "lnb %d, at offset %llu, hole %d\n", i,
 			       local_nb[i].lnb_file_offset,
 			       local_nb[i].lnb_hole);
 			desc->bd_frag_ops->add_kiov_frag
-			  (desc, local_nb[i].lnb_page,
+			  (desc, lnb_folio_page(&local_nb[i]),
 			   local_nb[i].lnb_page_offset & ~PAGE_MASK,
 			   page_rc);
 		}
@@ -2656,7 +2653,7 @@ static int tgt_shortio2pages(struct niobuf_local *local, int npages,
 
 		CDEBUG(D_PAGE, "index %d offset = %d len = %d left = %d\n",
 		       i, off, len, size);
-		ptr = kmap_local_page(local[i].lnb_page);
+		ptr = lnb_kmap_local(&local[i]);
 		memcpy(ptr + off, buf, len < size ? len : size);
 		kunmap_local(ptr);
 		buf += len;
@@ -2898,7 +2895,7 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 		/* NB Having prepped, we must commit... */
 		for (i = 0; i < npages; i++)
 			desc->bd_frag_ops->add_kiov_frag(desc,
-					local_nb[i].lnb_page,
+					lnb_folio_page(&local_nb[i]),
 					local_nb[i].lnb_page_offset & ~PAGE_MASK,
 					local_nb[i].lnb_len);
 

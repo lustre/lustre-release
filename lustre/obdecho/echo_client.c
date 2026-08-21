@@ -2040,8 +2040,8 @@ static void echo_put_object(struct echo_object *eco)
 		       eco->eo_dev->ed_ec->ec_exp->exp_obd->obd_name, rc);
 }
 
-static void echo_client_page_debug_setup(struct page *page, int rw, u64 id,
-					 u64 offset, u64 count)
+static void echo_client_page_debug_setup(struct niobuf_local *lnb, int rw,
+					 u64 id, u64 offset, u64 count)
 {
 	char *addr;
 	u64 stripe_off;
@@ -2051,7 +2051,7 @@ static void echo_client_page_debug_setup(struct page *page, int rw, u64 id,
 	/* no partial pages on the client */
 	LASSERT(count == PAGE_SIZE);
 
-	addr = kmap_local_page(page);
+	addr = lnb_kmap_local(lnb);
 
 	for (delta = 0; delta < PAGE_SIZE; delta += OBD_ECHO_BLOCK_SIZE) {
 		if (rw == OBD_BRW_WRITE) {
@@ -2069,7 +2069,8 @@ static void echo_client_page_debug_setup(struct page *page, int rw, u64 id,
 }
 
 static int
-echo_client_page_debug_check(struct page *page, u64 id, u64 offset, u64 count)
+echo_client_page_debug_check(struct niobuf_local *lnb, u64 id, u64 offset,
+			     u64 count)
 {
 	u64 stripe_off;
 	u64 stripe_id;
@@ -2081,7 +2082,7 @@ echo_client_page_debug_check(struct page *page, u64 id, u64 offset, u64 count)
 	/* no partial pages on the client */
 	LASSERT(count == PAGE_SIZE);
 
-	addr = kmap_local_page(page);
+	addr = lnb_kmap_local(lnb);
 
 	for (rc = delta = 0; delta < PAGE_SIZE; delta += OBD_ECHO_BLOCK_SIZE) {
 		stripe_off = offset + delta;
@@ -2149,10 +2150,10 @@ static int echo_client_prep_commit(const struct lu_env *env,
 			GOTO(out, ret);
 
 		for (i = 0; i < lpages; i++) {
-			struct page *page = lnb[i].lnb_page;
+			struct folio *folio = lnb[i].lnb_folio;
 
 			/* read past eof? */
-			if (!page && lnb[i].lnb_rc == 0)
+			if (!folio && lnb[i].lnb_rc == 0)
 				continue;
 
 			if (async)
@@ -2164,12 +2165,12 @@ static int echo_client_prep_commit(const struct lu_env *env,
 				continue;
 
 			if (rw == OBD_BRW_WRITE)
-				echo_client_page_debug_setup(page, rw,
+				echo_client_page_debug_setup(&lnb[i], rw,
 							ostid_id(&oa->o_oi),
 							lnb[i].lnb_file_offset,
 							lnb[i].lnb_len);
 			else
-				echo_client_page_debug_check(page,
+				echo_client_page_debug_check(&lnb[i],
 							ostid_id(&oa->o_oi),
 							lnb[i].lnb_file_offset,
 							lnb[i].lnb_len);

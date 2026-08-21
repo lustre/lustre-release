@@ -43,7 +43,8 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
 		lnb->lnb_page_offset = poff;
 		lnb->lnb_len = plen;
 		lnb->lnb_flags = 0;
-		lnb->lnb_page = NULL;
+		lnb->lnb_folio = NULL;
+		lnb->lnb_fpgno = 0;
 		lnb->lnb_rc = 0;
 		lnb->lnb_guard_rpc = 0;
 		lnb->lnb_guard_disk = 0;
@@ -61,21 +62,23 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
 	RETURN(rc);
 }
 
-static int osd_get_page(const struct lu_env *env, struct dt_object *dt,
-			struct niobuf_local *lnb, gfp_t gfp_mask, bool write)
+static int osd_get_folio(const struct lu_env *env, struct dt_object *dt,
+			 struct niobuf_local *lnb, gfp_t gfp_mask, bool write)
 {
 	struct inode *inode = osd_dt_obj(dt)->oo_inode;
-	struct page *page;
+	struct folio *folio;
 	pgoff_t index;
 
 	LASSERT(inode);
 	index = lnb->lnb_file_offset >> PAGE_SHIFT;
 	if (write) {
-		page = find_or_create_page(inode->i_mapping, index, gfp_mask);
-		if (page == NULL)
+		folio = get_folio_create(inode->i_mapping, index,
+					 FGP_LOCK | FGP_ACCESSED | FGP_CREAT,
+					 gfp_mask);
+		if (IS_ERR_OR_NULL(folio))
 			return -ENOMEM;
 
-		LASSERT(!PagePrivate2(page));
+		LASSERT(!folio_test_private_2(folio));
 	} else {
 		/*
 		 * Specially handling for hole in the memory FS during read.
@@ -83,31 +86,34 @@ static int osd_get_page(const struct lu_env *env, struct dt_object *dt,
 		 * free them after reading.
 		 * Otherwise, reading on a large sparse file may hit OOM.
 		 */
-		page = find_lock_page(inode->i_mapping, index);
+		folio = get_folio_lock(inode->i_mapping, index, FGP_LOCK,
+				       gfp_mask);
 		/* fallocated page? */
-		if (page && !PageUptodate(page)) {
-			unlock_page(page);
-			put_page(page);
-			page = NULL;
+		if (!IS_ERR_OR_NULL(folio) && !folio_test_uptodate(folio)) {
+			folio_unlock(folio);
+			folio_put(folio);
+			folio = NULL;
 		}
 
-		if (page == NULL) {
-			page = alloc_page(gfp_mask);
-			if (!page)
+		if (IS_ERR_OR_NULL(folio)) {
+			folio = folio_alloc(gfp_mask, 0);
+			if (!folio)
 				return -ENOMEM;
 
-			SetPagePrivate2(page);
-			lock_page(page);
-			ClearPageUptodate(page);
-			page_folio(page)->index = index;
+			folio_set_private_2(folio);
+			folio_lock(folio);
+			folio_clear_uptodate(folio);
+			folio->index = index;
 			lnb->lnb_hole = 1;
 		}
 	}
 
-	lnb->lnb_page = page;
+	LASSERT(folio_nr_pages(folio) == 1);
+	lnb->lnb_folio = folio;
+	lnb->lnb_fpgno = 0;
 	lnb->lnb_locked = 1;
 	if (!lnb->lnb_hole)
-		mark_page_accessed(page);
+		folio_mark_accessed(folio);
 
 	return 0;
 }
@@ -125,26 +131,27 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 
 	ll_folio_batch_init(&fbatch);
 	for (i = 0; i < npages; i++) {
-		struct page *page = lnb[i].lnb_page;
+		struct folio *folio = lnb[i].lnb_folio;
 
-		if (page == NULL)
+		if (IS_ERR_OR_NULL(folio))
 			continue;
 
 		/* If the page is not cached in the memory FS, then free it. */
-		if (PagePrivate2(page)) {
+		if (folio_test_private_2(folio)) {
 			LASSERT(lnb[i].lnb_hole);
-			LASSERT(PageLocked(page));
-			ClearPagePrivate2(page);
-			unlock_page(page);
-			__free_page(page);
+			LASSERT(folio_test_locked(folio));
+			folio_clear_private_2(folio);
+			folio_unlock(folio);
+			folio_put(folio);
 		} else {
 			if (lnb[i].lnb_locked)
-				unlock_page(page);
-			if (folio_batch_add_page(&fbatch, page) == 0)
+				folio_unlock(folio);
+			if (folio_batch_add(&fbatch, folio) == 0)
 				folio_batch_release(&fbatch);
 		}
 
-		lnb[i].lnb_page = NULL;
+		lnb[i].lnb_folio = NULL;
+		lnb[i].lnb_fpgno = 0;
 	}
 
 	folio_batch_release(&fbatch);
@@ -191,8 +198,8 @@ static int osd_bufs_get(const struct lu_env *env, struct dt_object *dt,
 	gfp_mask = rw & DT_BUFS_TYPE_LOCAL ? (GFP_NOFS | __GFP_HIGHMEM) :
 					     GFP_HIGHUSER;
 	for (i = 0; i < npages; i++, lnb++) {
-		rc = osd_get_page(env, dt, lnb, gfp_mask,
-				  rw & DT_BUFS_TYPE_WRITE);
+		rc = osd_get_folio(env, dt, lnb, gfp_mask,
+				   rw & DT_BUFS_TYPE_WRITE);
 		if (rc)
 			GOTO(cleanup, rc);
 	}
@@ -287,18 +294,18 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 		if (lnb[i].lnb_hole) {
 			void *kaddr;
 
-			LASSERT(PagePrivate2(lnb[i].lnb_page));
-			kaddr = kmap(lnb[i].lnb_page);
+			LASSERT(folio_test_private_2(lnb[i].lnb_folio));
+			kaddr = lnb_kmap_local(&lnb[i]);
 			memset(kaddr, 0, PAGE_SIZE);
-			kunmap(lnb[i].lnb_page);
-			SetPageUptodate(lnb[i].lnb_page);
+			kunmap_local(kaddr);
+			folio_mark_uptodate(lnb[i].lnb_folio);
 		} else {
 			/*
 			 * The page in cache for MemFS should be always
 			 * in uptodate state.
 			 */
-			LASSERT(PageUptodate(lnb[i].lnb_page));
-			unlock_page(lnb[i].lnb_page);
+			LASSERT(folio_test_uptodate(lnb[i].lnb_folio));
+			folio_unlock(lnb[i].lnb_folio);
 			/*
 			 * No need to unlock in osd_bufs_put(). The sooner page
 			 * is unlocked, the earlier another client can access
@@ -331,15 +338,15 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 		 * we will set it uptodate once bulk is done. Otherwise
 		 * subsequent reads can access non-stable data.
 		 */
-		ClearPageUptodate(lnb[i].lnb_page);
-
+		folio_clear_uptodate(lnb[i].lnb_folio);
 		if (lnb[i].lnb_len == PAGE_SIZE)
 			continue;
 
-		if (maxidx < folio_index_page(lnb[i].lnb_page)) {
+		if (maxidx < lnb[i].lnb_folio->index) {
 			long off;
-			char *p = kmap(lnb[i].lnb_page);
+			char *p;
 
+			p = lnb_kmap_local(&lnb[i]);
 			off = lnb[i].lnb_page_offset;
 			if (off)
 				memset(p, 0, off);
@@ -347,7 +354,7 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 			      ~PAGE_MASK;
 			if (off)
 				memset(p + off, 0, PAGE_SIZE - off);
-			kunmap(lnb[i].lnb_page);
+			kunmap_local(p);
 		}
 	}
 
@@ -370,9 +377,9 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 
 	for (i = 0; i < npages; i++) {
 		if (lnb[i].lnb_rc) { /* ENOSPC, network RPC error, etc. */
-			LASSERT(lnb[i].lnb_page);
+			LASSERT(!IS_ERR_OR_NULL(lnb[i].lnb_folio));
 			generic_error_remove_folio(inode->i_mapping,
-						   page_folio(lnb[i].lnb_page));
+						   lnb[i].lnb_folio);
 			continue;
 		}
 
@@ -384,16 +391,15 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		if (user_size < lnb[i].lnb_file_offset + lnb[i].lnb_len)
 			user_size = lnb[i].lnb_file_offset + lnb[i].lnb_len;
 
-		LASSERT(PageLocked(lnb[i].lnb_page));
-		LASSERT(!PageWriteback(lnb[i].lnb_page));
-		/* LASSERT(!PageDirty(lnb[i].lnb_page)); */
+		LASSERT(folio_test_locked(lnb[i].lnb_folio));
+		LASSERT(!folio_test_writeback(lnb[i].lnb_folio));
+		/* LASSERT(!folio_test_dirty(lnb[i].lnb_folio)); */
 
-		SetPageUptodate(lnb[i].lnb_page);
+		folio_mark_uptodate(lnb[i].lnb_folio);
 #ifdef HAVE_DIRTY_FOLIO
-		mapping->a_ops->dirty_folio(mapping,
-					    page_folio(lnb[i].lnb_page));
+		mapping->a_ops->dirty_folio(mapping, lnb[i].lnb_folio);
 #else
-		mapping->a_ops->set_page_dirty(lnb[i].lnb_page);
+		mapping->a_ops->set_page_dirty(fpgptr(lnb[i].lnb_folio));
 #endif
 	}
 

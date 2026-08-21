@@ -32,7 +32,7 @@
 #define ECHO_HANDLE_MAGIC    0xabcd0123fedc9876ULL
 
 #define ECHO_PERSISTENT_PAGES (ECHO_PERSISTENT_SIZE >> PAGE_SHIFT)
-static struct page *echo_persistent_pages[ECHO_PERSISTENT_PAGES];
+static struct folio *echo_persistent_pages[ECHO_PERSISTENT_PAGES];
 
 enum {
 	LPROC_ECHO_READ_BYTES = 1,
@@ -150,11 +150,11 @@ static u64 echo_next_id(struct obd_device *obd)
 }
 
 static void
-echo_page_debug_setup(struct page *page, int rw, u64 id,
+echo_page_debug_setup(struct niobuf_local *lnb, int rw, u64 id,
 		      __u64 offset, int len)
 {
 	int page_offset = offset & ~PAGE_MASK;
-	char *kaddr = kmap_local_page(page);
+	char *kaddr = lnb_kmap_local(lnb);
 	char *addr = kaddr + page_offset;
 
 	if (len % OBD_ECHO_BLOCK_SIZE != 0)
@@ -178,11 +178,11 @@ echo_page_debug_setup(struct page *page, int rw, u64 id,
 }
 
 static int
-echo_page_debug_check(struct page *page, u64 id,
+echo_page_debug_check(struct niobuf_local *lnb, u64 id,
 		      __u64 offset, int len)
 {
 	int page_offset = offset & ~PAGE_MASK;
-	char *kaddr = kmap_local_page(page);
+	char *kaddr = lnb_kmap_local(lnb);
 	char *addr = kaddr + page_offset;
 	int rc = 0;
 	int rc2;
@@ -239,30 +239,36 @@ static int echo_map_nb_to_lb(struct obdo *oa, struct obd_ioobj *obj,
 		if (ispersistent &&
 		    ((res->lnb_file_offset >> PAGE_SHIFT) <
 		      ECHO_PERSISTENT_PAGES)) {
-			res->lnb_page =
+			res->lnb_folio =
 				echo_persistent_pages[res->lnb_file_offset >>
 						      PAGE_SHIFT];
-			/* Take extra ref so __free_pages() can be called OK */
-			get_page(res->lnb_page);
+			res->lnb_fpgno = 0;
+			/* Take extra ref so folio_put() can be called OK */
+			folio_get(res->lnb_folio);
 		} else {
-			res->lnb_page = alloc_page(gfp_mask);
-			if (!res->lnb_page) {
+			struct folio *folio = folio_alloc(gfp_mask, 0);
+
+			if (!folio) {
+				res->lnb_folio = NULL;
+				res->lnb_fpgno = 0;
 				CERROR("can't get page for id " DOSTID"\n",
 				       POSTID(&obj->ioo_oid));
 				return -ENOMEM;
 			}
+			res->lnb_folio = folio;
+			res->lnb_fpgno = 0;
 			/* set mapping so page is not considered encrypted */
-			res->lnb_page->mapping = ECHO_MAPPING_UNENCRYPTED;
+			res->lnb_folio->mapping = ECHO_MAPPING_UNENCRYPTED;
 		}
 
 		CDEBUG(D_PAGE, "$$$$ get page %p @ %llu for %d\n",
-		       res->lnb_page, res->lnb_file_offset, res->lnb_len);
+		       res->lnb_folio, res->lnb_file_offset, res->lnb_len);
 
 		if (cmd & OBD_BRW_READ)
 			res->lnb_rc = res->lnb_len;
 
 		if (debug_setup)
-			echo_page_debug_setup(res->lnb_page, cmd,
+			echo_page_debug_setup(res, cmd,
 					      ostid_id(&obj->ioo_oid),
 					      res->lnb_file_offset,
 					      res->lnb_len);
@@ -291,23 +297,22 @@ static int echo_finalize_lb(struct obdo *oa, struct obd_ioobj *obj,
 	int     i;
 
 	for (i = 0; i < count; i++, (*pgs) ++, res++) {
-		struct page *page = res->lnb_page;
+		struct folio *folio = res->lnb_folio;
 		void *addr;
 
-		if (!page) {
+		if (!folio) {
 			CERROR("null page objid %llu:%p, buf %d/%d\n",
-			       ostid_id(&obj->ioo_oid), page, i,
+			       ostid_id(&obj->ioo_oid), folio, i,
 			       obj->ioo_bufcnt);
 			return -EFAULT;
 		}
-
-		addr = kmap_local_page(page);
+		addr = lnb_kmap_local(res);
 
 		CDEBUG(D_PAGE, "$$$$ use page %p, addr %p@%llu\n",
-		       res->lnb_page, addr, res->lnb_file_offset);
+		       res->lnb_folio, addr, res->lnb_file_offset);
 
 		if (verify) {
-			int vrc = echo_page_debug_check(page,
+			int vrc = echo_page_debug_check(res,
 							ostid_id(&obj->ioo_oid),
 							res->lnb_file_offset,
 							res->lnb_len);
@@ -318,7 +323,7 @@ static int echo_finalize_lb(struct obdo *oa, struct obd_ioobj *obj,
 
 		kunmap_local(addr);
 		/* NB see comment above regarding persistent pages */
-		__free_page(page);
+		folio_put(folio);
 	}
 
 	return rc;
@@ -389,11 +394,12 @@ preprw_cleanup:
 	CERROR("cleaning up %u pages (%d obdos)\n", *pages, objcount);
 	for (i = 0; i < *pages; i++) {
 		/*
-		 * NB if this is a persistent page, __free_page() will just
+		 * NB if this is a persistent page, folio_put() will just
 		 * lose the extra ref gained above
 		 */
-		__free_page(res[i].lnb_page);
-		res[i].lnb_page = NULL;
+		folio_put(res[i].lnb_folio);
+		res[i].lnb_folio = NULL;
+		res[i].lnb_fpgno = 0;
 		atomic_dec(&obd2echo(obd)->eo_prep);
 	}
 
@@ -467,13 +473,13 @@ commitrw_cleanup:
 	       niocount - pgs - 1, objcount);
 
 	while (pgs < niocount) {
-		struct page *page = res[pgs++].lnb_page;
+		struct folio *folio = res[pgs++].lnb_folio;
 
-		if (!page)
+		if (!folio)
 			continue;
 
 		/* NB see comment above regarding persistent pages */
-		__free_page(page);
+		folio_put(folio);
 		atomic_dec(&obd2echo(obd)->eo_prep);
 	}
 	return rc;
@@ -958,14 +964,14 @@ void echo_persistent_pages_fini(void)
 
 	for (i = 0; i < ECHO_PERSISTENT_PAGES; i++)
 		if (echo_persistent_pages[i]) {
-			__free_page(echo_persistent_pages[i]);
+			folio_put(echo_persistent_pages[i]);
 			echo_persistent_pages[i] = NULL;
 		}
 }
 
 int echo_persistent_pages_init(void)
 {
-	struct page *pg;
+	struct folio *folio;
 	void *kaddr;
 	int i;
 
@@ -973,19 +979,19 @@ int echo_persistent_pages_init(void)
 		gfp_t gfp_mask = (i < ECHO_PERSISTENT_PAGES / 2) ?
 			GFP_KERNEL : GFP_HIGHUSER;
 
-		pg = alloc_page(gfp_mask);
-		if (!pg) {
+		folio = folio_alloc(gfp_mask, 0);
+		if (!folio) {
 			echo_persistent_pages_fini();
 			return -ENOMEM;
 		}
 
-		kaddr = kmap_local_page(pg);
+		kaddr = kmap_local_folio(folio, 0);
 		memset(kaddr, 0, PAGE_SIZE);
 		kunmap_local(kaddr);
 		/* set mapping so page is not considered encrypted */
-		pg->mapping = ECHO_MAPPING_UNENCRYPTED;
+		folio->mapping = ECHO_MAPPING_UNENCRYPTED;
 
-		echo_persistent_pages[i] = pg;
+		echo_persistent_pages[i] = folio;
 	}
 
 	return 0;

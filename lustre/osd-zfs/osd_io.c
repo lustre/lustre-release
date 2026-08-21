@@ -150,37 +150,38 @@ static inline ssize_t osd_read_no_record(const struct lu_env *env,
 	return __osd_read(env, dt, buf, pos, &size);
 }
 
-static struct page *osd_dio_page_get(const struct lu_env *env)
+static struct folio *osd_dio_get_folio(const struct lu_env *env)
 {
-	struct osd_thread_info  *oti = osd_oti_get(env);
-	struct page *page;
+	struct osd_thread_info *oti = osd_oti_get(env);
+	struct folio *folio;
 	int cur;
 
-	if (unlikely(!oti->oti_dio_pages)) {
-		OBD_ALLOC_PTR_ARRAY_LARGE(oti->oti_dio_pages,
+	if (unlikely(!oti->oti_dio_folios)) {
+		OBD_ALLOC_PTR_ARRAY_LARGE(oti->oti_dio_folios,
 					  PTLRPC_MAX_BRW_PAGES);
-		if (!oti->oti_dio_pages)
-			return ERR_PTR(-ENOMEM);
+		if (!oti->oti_dio_folios)
+			RETURN(ERR_PTR(-ENOMEM));
 	}
 
-	LASSERT(oti->oti_dio_pages);
+	LASSERT(oti->oti_dio_folios);
 	cur = oti->oti_dio_pages_used;
-	page = oti->oti_dio_pages[cur];
+	folio = oti->oti_dio_folios[cur];
 
-	if (unlikely(!page)) {
+	if (IS_ERR_OR_NULL(folio)) {
 		LASSERT(cur < PTLRPC_MAX_BRW_PAGES);
-		page = alloc_page(GFP_NOFS | __GFP_HIGHMEM);
-		CDEBUG(D_MALLOC, "alloc page %px\n", page);
-		LASSERT(page);
-		oti->oti_dio_pages[cur] = page;
-		SetPagePrivate2(page);
+		folio = folio_alloc(GFP_NOFS | __GFP_HIGHMEM, 0);
+		if (!folio)
+			RETURN(ERR_PTR(-ENOMEM));
+		CDEBUG(D_MALLOC, "alloc folio %px\n", folio);
+		oti->oti_dio_folios[cur] = folio;
+		folio_set_private_2(folio);
 	}
 	oti->oti_dio_pages_used++;
 
-	RETURN(page);
+	RETURN(folio);
 }
 
-static void osd_dio_page_put(const struct lu_env *env)
+static void osd_dio_put_folio(const struct lu_env *env)
 {
 	struct osd_thread_info  *oti = osd_oti_get(env);
 	oti->oti_dio_pages_used--;
@@ -195,15 +196,15 @@ static int osd_zfs_fake_lnb(const struct lu_env *env,
 	while (len > 0) {
 		int poff = offset & (PAGE_SIZE - 1);
 		int plen = PAGE_SIZE - poff;
-		struct page *page;
+		struct folio *folio;
 
 		if (nrpages >= maxlnb) {
 			break;
 		}
 
-		page = osd_dio_page_get(env);
-		if (IS_ERR(page)) {
-			nrpages = PTR_ERR(page);
+		folio = osd_dio_get_folio(env);
+		if (IS_ERR(folio)) {
+			nrpages = PTR_ERR(folio);
 			break;
 		}
 
@@ -219,7 +220,10 @@ static int osd_zfs_fake_lnb(const struct lu_env *env,
 		lnb->lnb_guard_disk = 0;
 		lnb->lnb_locked = 0;
 
-		lnb->lnb_page = page;
+		/* osd_dio_get_folio() should only ever allocate order 0 */
+		LASSERT(folio_nr_pages(folio) == 1);
+		lnb->lnb_folio = folio;
+		lnb->lnb_fpgno = 0;
 		lnb->lnb_dio = 1;
 
 		LASSERTF(plen <= len, "plen %u, len %lld\n", plen,
@@ -449,7 +453,7 @@ out:
  *      instead I use the lowest bit of the address so that:
  *        arc buffer:  .lnb_data = abuf          (arc we loan for write)
  *        dbuf buffer: .lnb_data = dbuf | 1      (dbuf we get for read)
- *        copy buffer: .lnb_page->mapping = obj (page we allocate for write)
+ *        copy buffer: .lnb_folio->mapping = obj (page we allocate for write)
  *
  *      bzzz, to blame
  */
@@ -466,17 +470,17 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(obj->oo_dn);
 
 	for (i = 0; i < npages; i++) {
-		if (lnb[i].lnb_page == NULL)
+		if (lnb[i].lnb_folio == NULL)
 			continue;
 		if (lnb[i].lnb_dio) {
-			osd_dio_page_put(env);
+			osd_dio_put_folio(env);
 			lnb[i].lnb_dio = 0;
 			goto next;
 		}
-		if (lnb[i].lnb_page->mapping == (void *)obj) {
+		if (lnb[i].lnb_folio->mapping == (void *)obj) {
 			/* this is anonymous page allocated for copy-write */
-			lnb[i].lnb_page->mapping = NULL;
-			__free_page(lnb[i].lnb_page);
+			lnb[i].lnb_folio->mapping = NULL;
+			folio_put(lnb[i].lnb_folio);
 			atomic_dec(&osd->od_zerocopy_alloc);
 		} else {
 			/* see comment in osd_bufs_get_read() */
@@ -493,14 +497,17 @@ static int osd_bufs_put(const struct lu_env *env, struct dt_object *dt,
 				/* these references to pages must be invalidated
 				 * to prevent access in osd_bufs_put()
 				 */
-				for (j = 0; j < apages; j++)
-					lnb[i + j].lnb_page = NULL;
+				for (j = 0; j < apages; j++) {
+					lnb[i + j].lnb_folio = NULL;
+					lnb[i + j].lnb_fpgno = 0;
+				}
 				dmu_return_arcbuf(lnb[i].lnb_data);
 				atomic_dec(&osd->od_zerocopy_loan);
 			}
 		}
 next:
-		lnb[i].lnb_page = NULL;
+		lnb[i].lnb_folio = NULL;
+		lnb[i].lnb_fpgno = 0;
 		lnb[i].lnb_data = NULL;
 	}
 
@@ -509,12 +516,18 @@ next:
 	return 0;
 }
 
-static inline struct page *kmem_to_page(void *addr)
+static inline struct folio *kmem_to_folio(void *addr, u32 *pgno)
 {
+	struct page *p;
+	struct folio *f;
+
 	if (is_vmalloc_addr(addr))
-		return vmalloc_to_page(addr);
+		p = vmalloc_to_page(addr);
 	else
-		return virt_to_page(addr);
+		p = virt_to_page(addr);
+	f = page_folio(p);
+	*pgno = folio_page_idx(f, p);
+	return f;
 }
 
 /**
@@ -594,6 +607,8 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 			dbf = (void *) ((unsigned long)dbp[i] | 1);
 
 			while (tocpy > 0) {
+				u32 pgno = 0;
+
 				if (unlikely(npages >= maxlnb))
 					GOTO(err, rc = -EOVERFLOW);
 
@@ -605,8 +620,9 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 				lnb->lnb_file_offset = off;
 				lnb->lnb_page_offset = bufoff & ~PAGE_MASK;
 				lnb->lnb_len = thispage;
-				lnb->lnb_page = kmem_to_page(dbp[i]->db_data +
-							     bufoff);
+				lnb->lnb_folio = kmem_to_folio(dbp[i]->db_data +
+							       bufoff, &pgno);
+				lnb->lnb_fpgno = pgno;
 				/* mark just a single slot: we need this
 				 * reference to dbuf to be released once
 				 */
@@ -698,6 +714,8 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 			 * local niobufs for ptlrpc's bulks
 			 */
 			while (sz_in_block > 0) {
+				u32 pgno = 0;
+
 				plen = min_t(int, sz_in_block, PAGE_SIZE);
 
 				if (unlikely(npages >= maxlnb))
@@ -713,9 +731,11 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 					lnb[i].lnb_data = NULL;
 
 				/* this one is not supposed to fail */
-				lnb[i].lnb_page = kmem_to_page(abuf->b_data +
-							off_in_block);
-				LASSERT(lnb[i].lnb_page);
+				lnb[i].lnb_folio = kmem_to_folio(abuf->b_data +
+								 off_in_block,
+								 &pgno);
+				LASSERT(lnb[i].lnb_folio);
+				lnb[i].lnb_fpgno = pgno;
 
 				lprocfs_counter_add(osd->od_stats,
 						LPROC_OSD_ZEROCOPY_IO, 1);
@@ -751,12 +771,13 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 				lnb[i].lnb_rc = 0;
 				lnb[i].lnb_data = NULL;
 
-				lnb[i].lnb_page = alloc_page(OSD_GFP_IO);
-				if (unlikely(lnb[i].lnb_page == NULL))
+				lnb[i].lnb_fpgno = 0;
+				lnb[i].lnb_folio = folio_alloc(OSD_GFP_IO, 0);
+				if (!lnb[i].lnb_folio)
 					GOTO(out_err, rc = -ENOMEM);
 
-				LASSERT(lnb[i].lnb_page->mapping == NULL);
-				lnb[i].lnb_page->mapping = (void *)obj;
+				LASSERT(lnb[i].lnb_folio->mapping == NULL);
+				lnb[i].lnb_folio->mapping = (void *)obj;
 
 				atomic_inc(&osd->od_zerocopy_alloc);
 				lprocfs_counter_add(osd->od_stats,
@@ -1129,16 +1150,17 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 
 		if (new_size < lnb[i].lnb_file_offset + lnb[i].lnb_len)
 			new_size = lnb[i].lnb_file_offset + lnb[i].lnb_len;
-		if (lnb[i].lnb_page == NULL)
+		if (lnb[i].lnb_folio == NULL)
 			continue;
 
-		if (lnb[i].lnb_page->mapping == (void *)obj) {
-			void *addr = kmap(lnb[i].lnb_page);
+		if (lnb[i].lnb_folio->mapping == (void *)obj) {
+			void *addr;
 
+			addr = ll_lnb_kmap_local(&lnb[i]);
 			osd_dmu_write(osd, obj->oo_dn, lnb[i].lnb_file_offset,
 				      lnb[i].lnb_len, addr +
 				      lnb[i].lnb_page_offset, oh->ot_tx);
-			kunmap(kmap_to_page(addr));
+			ll_kunmap_local(addr);
 			iosize += lnb[i].lnb_len;
 			abufsz = lnb[i].lnb_len; /* to drop cache below */
 		} else if (lnb[i].lnb_data) {
@@ -1157,8 +1179,10 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 			/* these references to pages must be invalidated
 			 * to prevent access in osd_bufs_put()
 			 */
-			for (j = 0; j < apages; j++)
-				lnb[i + j].lnb_page = NULL;
+			for (j = 0; j < apages; j++) {
+				lnb[i + j].lnb_folio = NULL;
+				lnb[i + j].lnb_fpgno = 0;
+			}
 			ll_dmu_assign_arcbuf_by_dbuf(&obj->oo_dn->dn_bonus->db,
 						     lnb[i].lnb_file_offset,
 						     lnb[i].lnb_data,

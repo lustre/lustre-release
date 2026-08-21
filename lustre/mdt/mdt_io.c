@@ -978,7 +978,7 @@ mdt_object_fallocate_zero(const struct lu_env *env, struct obd_export *exp,
 			GOTO(out, rc);
 
 		for (i = 0; i < npages; i++) {
-			void *kaddr = kmap_local_page(lnbs[i].lnb_page);
+			void *kaddr = lnb_kmap_local(&lnbs[i]);
 
 			memset(kaddr + lnbs[i].lnb_page_offset, 0,
 			       lnbs[i].lnb_len);
@@ -2078,7 +2078,7 @@ int mdt_dom_read_on_open(struct mdt_thread_info *mti, struct mdt_device *mdt,
 		GOTO(buf_put, rc);
 	/* copy data to the buffer finally */
 	for (i = 0; i < nr_local; i++) {
-		char *p = kmap_local_page(lnb[i].lnb_page);
+		char *p = lnb_kmap_local(&lnb[i]);
 		long off;
 
 		LASSERT(lnb[i].lnb_page_offset == 0);
