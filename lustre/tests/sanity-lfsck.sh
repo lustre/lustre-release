@@ -6399,11 +6399,79 @@ test_45() {
 		skip "Need OST version at least 2.16.53"
 
 	local prjid=1000
-	local testfile="$DIR/$tdri/$tfile-0"
-	local cnt=30
+	local testfile="$DIR/$tdir/$tfile-0"
+	local cnt=10
+	local need=$((cnt * 1024 * 11 / 10))
 	local usage
+	local best_idx=-1
+	local facet
+	local ost_name
+	local avail
+	local granted
+	local i
+	local n
+	local num
+	local ost_idx
+	local grantable
+	local best
+	local fids
 
-	$LFS setstripe $testfile -i 0 -c 1 || error "setstripe $testfile failed"
+	# LU-19569: this suite formats small OSTs, so by
+	# the time we get here the earlier subtests have both consumed OST
+	# space and left most of what remains granted to the clients.  A write
+	# that exceeds the grant an OST is still able to hand out fails with
+	# ENOSPC even though "lfs df" reports plenty of free space, as the
+	# space granted to the other clients is not deducted from it.
+	$LFS df $DIR
+	check_mount_and_prep
+	wait_delete_completed
+	$LFS df $DIR
+	do_nodes ${CLIENTS:-$HOSTNAME} "$LCTL set_param -n \
+		osc.$FSNAME-OST*-osc-[^mM]*.cur_grant_bytes=0"
+
+	for ((i = 0; i < 5 && best_idx < 0; i++)); do
+		best=0
+		for ((n = 1; n <= OSTCOUNT; n++)); do
+			facet=ost$n
+			ost_name=$(facet_svc $facet)
+			ost_idx=$(facet_index $facet)
+			avail=$($LFS df --ost=$ost_idx --output avail $DIR)
+			granted=$(do_facet $facet $LCTL get_param -n \
+				obdfilter.$ost_name.tot_granted)
+			# a failed read gives a message on stdout or nothing:
+			# the first is fatal inside $(( )), the second would
+			# silently score as nothing granted
+			[[ "$avail" =~ ^[[:space:]]*[0-9]+[[:space:]]*$ ]] ||
+				continue
+			[[ "$granted" =~ ^[[:space:]]*[0-9]+[[:space:]]*$ ]] ||
+				continue
+
+			grantable=$((avail - granted / 1024))
+			echo "$ost_name can grant ${grantable}KB"
+			# take the roomiest, the margin over $need is thin
+			(( grantable > best )) || continue
+			best=$grantable
+			(( best > need )) && best_idx=$ost_idx && num=$n
+		done
+		(( best_idx < 0 )) && sleep 1
+	done
+	(( best_idx >= 0 )) ||
+		skip_env "no OST can grant ${need}KB, best is ${best}KB"
+
+	stack_trap "rm -f $testfile"
+	$LFS setstripe $testfile -i $best_idx -c 1 ||
+		error "setstripe $testfile failed"
+
+	# "setstripe -i" is only a preference: lod_ost_alloc_specific() moves
+	# on to the next OST when the requested one cannot take the object, so
+	# check where it landed before writing to it
+	fids=($($LFS getstripe $testfile | grep 0x))
+	(( fids[0] == best_idx )) ||
+		skip "object landed on OST index ${fids[0]}, not measured"
+
+	facet=ost$num
+	ost_name=$(facet_svc $facet)
+
 	chown $RUNAS_ID.$RUNAS_GID $testfile || error "chown $testfile failed"
 	is_project_quota_supported && change_project -p $prjid $testfile
 	$RUNAS $DD of=$testfile count=$cnt || error "write $testfile failed"
@@ -6427,24 +6495,23 @@ test_45() {
 			error "quota PRJ usage $usage for $prjid is wrong"
 	}
 
-	local fids=($($LFS getstripe $testfile | grep 0x))
 	local fid="${fids[3]}:${fids[2]}:0"
-	local objpath=$(ost_fid2_objpath ost1 $fid)
+	local objpath=$(ost_fid2_objpath $facet $fid)
 
-	stop ost1 || error "failed to stop ost1"
+	stop $facet || error "failed to stop $facet"
 
 	echo "clear the UID/GID/PROJID of the test file"
-	mount_fstype ost1 || return 1
-	do_facet ost1  chown root:root $(facet_mntpt ost1)/$objpath
-	do_facet ost1 ls -l $(facet_mntpt ost1)/$objpath
+	mount_fstype $facet || return 1
+	do_facet $facet chown root:root $(facet_mntpt $facet)/$objpath
+	do_facet $facet ls -l $(facet_mntpt $facet)/$objpath
 	is_project_quota_supported && {
-		do_facet ost1 chattr -p 0 $(facet_mntpt ost1)/$objpath
-		do_facet ost1 lsattr -p $(facet_mntpt ost1)/$objpath
+		do_facet $facet chattr -p 0 $(facet_mntpt $facet)/$objpath
+		do_facet $facet lsattr -p $(facet_mntpt $facet)/$objpath
 	}
-	unmount_fstype ost1
+	unmount_fstype $facet
 
-	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS ||
-		error "failed to start ost1"
+	start $facet $(ostdevname $num) $OST_MOUNT_OPTS ||
+		error "failed to start $facet"
 
 	$LFS df
 	wait_osc_import_ready mds ost FULL
@@ -6483,11 +6550,12 @@ test_45() {
 	echo "fix the UID/GID/PROJID by LFSCK"
 	$START_LAYOUT -r -A || error "failed to start LFSCK"
 
-	wait_update_facet ost1 \
-		"$LCTL get_param -n obdfilter.$ost1_svc.lfsck_layout |
+	wait_update_facet $facet \
+		"$LCTL get_param -n obdfilter.$ost_name.lfsck_layout |
 		 awk '/^status/ { print \\\$2 }'" "completed" 32 || {
-		$SHOW_LAYOUT_ON_OST
-		error "unexpected status of LFSCK on OST1"
+		do_facet $facet \
+			$LCTL get_param -n obdfilter.$ost_name.lfsck_layout
+		error "unexpected status of LFSCK on $ost_name"
 	}
 
 	echo "the quota usage should be fixed"
