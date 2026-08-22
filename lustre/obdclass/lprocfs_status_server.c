@@ -20,6 +20,7 @@
 #include <obd_class.h>
 #include <obd_cksum.h>
 #include <lprocfs_status.h>
+#include <lu_target.h>
 #include <lustre_nodemap.h>
 
 int lprocfs_recovery_stale_clients_seq_show(struct seq_file *m, void *data)
@@ -280,43 +281,91 @@ module_param_cb(expected_clients, &expected_clients_param_ops,
 MODULE_PARM_DESC(expected_clients,
 	"Order-of-magnitude estimate of client count for parameter tuning");
 
-/* how many of the slowest clients recovery_reconnect_top reports */
-static unsigned int recovery_reconnect_top_n = 10;
-module_param(recovery_reconnect_top_n, uint, 0644);
-MODULE_PARM_DESC(recovery_reconnect_top_n,
-	"Number of slowest clients to report in recovery_reconnect_top (max " __stringify(OBT_RECONNECT_TOP_MAX) ")");
+/* how many of the slowest clients per phase recovery_top reports */
+static unsigned int recovery_top_n = 10;
+module_param(recovery_top_n, uint, 0644);
+MODULE_PARM_DESC(recovery_top_n,
+	"Number of slowest clients per phase in recovery_top (max "
+	__stringify(LUT_RECOVERY_TOP_MAX) ")");
 
-void lprocfs_reconnect_top_clear(struct obd_device_target *obt)
+/* clear the histogram and top-N list of every recovery phase */
+void lprocfs_recovery_stats_clear(struct lu_target *lut)
 {
-	spin_lock(&obt->obt_reconnect_hist.oh_lock);
-	memset(obt->obt_reconnect_top, 0, sizeof(obt->obt_reconnect_top));
-	obt->obt_reconnect_top_cursor = 0;
-	spin_unlock(&obt->obt_reconnect_hist.oh_lock);
+	enum lut_recovery_phase phase;
+
+	for (phase = 0; phase < LUT_RECOVERY_PHASE_NR; phase++) {
+		struct lut_recovery_stats *lrs = lut_recovery_stats(lut, phase);
+
+		lprocfs_oh_clear(&lrs->lrs_hist);
+		spin_lock(&lrs->lrs_hist.oh_lock);
+		memset(lrs->lrs_top, 0, sizeof(lrs->lrs_top));
+		lrs->lrs_top_cursor = 0;
+		lrs->lrs_start = 0;
+		spin_unlock(&lrs->lrs_hist.oh_lock);
+	}
 }
-EXPORT_SYMBOL(lprocfs_reconnect_top_clear);
+EXPORT_SYMBOL(lprocfs_recovery_stats_clear);
+
+/* record when the recovery thread entered @phase, for phase duration */
+void lprocfs_recovery_phase_start(struct lu_target *lut,
+				  enum lut_recovery_phase phase)
+{
+	struct lut_recovery_stats *lrs = lut_recovery_stats(lut, phase);
+
+	spin_lock(&lrs->lrs_hist.oh_lock);
+	lrs->lrs_start = ktime_get_seconds();
+	spin_unlock(&lrs->lrs_hist.oh_lock);
+}
+EXPORT_SYMBOL(lprocfs_recovery_phase_start);
 
 /*
- * Reconnect delays arrive monotonically increasing within a recovery window
- * (delay = now - recovery_start), so the most recent OBT_RECONNECT_TOP_MAX
- * entries of this circular buffer are the slowest. delay 0 is never the tail.
+ * Tally one client completing @phase @delay seconds after recovery started.
+ *
+ * All phases measure @delay from obd_recovery_start, so within one phase
+ * the delays arrive monotonically increasing and the most recent
+ * LUT_RECOVERY_TOP_MAX entries of the circular buffer are the slowest
+ * clients, without needing to sort them. delay 0 is never the tail.
+ *
+ * The histogram instead buckets the time the client spent in this phase
+ * alone, measured from the later of the client's own previous-phase
+ * completion and the moment the recovery thread entered this phase, so
+ * that time spent waiting at the phase barrier for other clients is not
+ * charged to the client.
  */
-void lprocfs_reconnect_top_tally(struct obd_device_target *obt,
-				 const struct lnet_nid *nid, timeout_t delay)
+void lprocfs_recovery_delay_tally(struct lu_target *lut,
+				  enum lut_recovery_phase phase,
+				  const struct lnet_nid *nid,
+				  timeout_t delay, timeout_t prev)
 {
-	struct obt_reconnect_entry *ent;
+	struct lut_recovery_stats *lrs = lut_recovery_stats(lut, phase);
+	struct lut_recovery_entry *ent;
+	timeout_t base, phase_time;
 
 	if (delay < 0)
 		return;
 
-	spin_lock(&obt->obt_reconnect_hist.oh_lock);
-	ent = &obt->obt_reconnect_top[obt->obt_reconnect_top_cursor];
-	ent->ore_nid = *nid;
-	ent->ore_delay = delay;
-	obt->obt_reconnect_top_cursor =
-		(obt->obt_reconnect_top_cursor + 1) % OBT_RECONNECT_TOP_MAX;
-	spin_unlock(&obt->obt_reconnect_hist.oh_lock);
+	spin_lock(&lrs->lrs_hist.oh_lock);
+	base = 0;
+	if (prev > 0)
+		base = prev;
+	if (lrs->lrs_start) {
+		timeout_t start = lrs->lrs_start -
+				  lut->lut_obd->obd_recovery_start;
+
+		if (start > base)
+			base = start;
+	}
+	phase_time = delay > base ? delay - base : 0;
+
+	ent = &lrs->lrs_top[lrs->lrs_top_cursor];
+	ent->lre_nid = *nid;
+	ent->lre_delay = delay;
+	lrs->lrs_top_cursor = (lrs->lrs_top_cursor + 1) % LUT_RECOVERY_TOP_MAX;
+	spin_unlock(&lrs->lrs_hist.oh_lock);
+
+	lprocfs_oh_tally_log2(&lrs->lrs_hist, (unsigned int)phase_time);
 }
-EXPORT_SYMBOL(lprocfs_reconnect_top_tally);
+EXPORT_SYMBOL(lprocfs_recovery_delay_tally);
 
 static DEFINE_SPINLOCK(lustre_client_stats_lock);
 
@@ -564,18 +613,36 @@ static int ldebugfs_exp_fmd_count_seq_show(struct seq_file *m, void *data)
 }
 LDEBUGFS_SEQ_FOPS_RO(ldebugfs_exp_fmd_count);
 
-static int ldebugfs_exp_reconnect_delay_seq_show(struct seq_file *m, void *data)
+static const char *const lut_recovery_phase_name[LUT_RECOVERY_PHASE_NR] = {
+	[LUT_RECOVERY_PHASE_CONNECT]	 = "reconnect",
+	[LUT_RECOVERY_PHASE_REQ_REPLAY]	 = "req_replay",
+	[LUT_RECOVERY_PHASE_LOCK_REPLAY] = "lock_replay",
+};
+
+/*
+ * Seconds from the start of the last recovery to the point this client
+ * completed each recovery phase, or "never" for a phase it never
+ * reached.
+ */
+static int ldebugfs_exp_recovery_delay_seq_show(struct seq_file *m,
+						void *data)
 {
 	struct nid_stat *stats = m->private;
+	enum lut_recovery_phase phase;
 
-	if (stats->nid_reconnect_delay < 0)
-		seq_puts(m, "never\n");
-	else
-		seq_printf(m, "%d\n", stats->nid_reconnect_delay);
+	for (phase = 0; phase < LUT_RECOVERY_PHASE_NR; phase++) {
+		timeout_t delay = stats->nid_recovery_delay[phase];
+
+		seq_printf(m, "%s_delay: ", lut_recovery_phase_name[phase]);
+		if (delay < 0)
+			seq_puts(m, "never\n");
+		else
+			seq_printf(m, "%d\n", delay);
+	}
 
 	return 0;
 }
-LDEBUGFS_SEQ_FOPS_RO(ldebugfs_exp_reconnect_delay);
+LDEBUGFS_SEQ_FOPS_RO(ldebugfs_exp_recovery_delay);
 
 int lprocfs_nid_stats_clear_seq_show(struct seq_file *m, void *data)
 {
@@ -714,8 +781,8 @@ static struct ldebugfs_vars ldebugfs_obd_exports_vars[] = {
 	  .fops =	&ldebugfs_exp_hash_fops		},
 	{ .name =	"nodemap",
 	  .fops =	&ldebugfs_exp_nodemap_fops	},
-	{ .name =	"reconnect_delay",
-	  .fops =	&ldebugfs_exp_reconnect_delay_fops },
+	{ .name =	"recovery_delay",
+	  .fops =	&ldebugfs_exp_recovery_delay_fops },
 	{ .name =	"reply_data",
 	  .fops =	&ldebugfs_exp_replydata_fops	},
 	{ .name	=	"uuid",
@@ -729,6 +796,7 @@ int lprocfs_exp_setup(struct obd_export *exp, struct lnet_nid *nid)
 	struct obd_device *obd = NULL;
 	char nidstr[LNET_NIDSTR_SIZE];
 	int rc = 0;
+	int i;
 
 	ENTRY;
 	if (!exp || !exp->exp_obd || !exp->exp_obd->obd_debugfs_exports)
@@ -757,8 +825,9 @@ int lprocfs_exp_setup(struct obd_export *exp, struct lnet_nid *nid)
 
 	new_stat->nid = *nid;
 	new_stat->nid_obd = exp->exp_obd;
-	/* -1 = client has not reconnected during a recovery yet */
-	new_stat->nid_reconnect_delay = -1;
+	/* -1 = client has not reached this recovery phase yet */
+	for (i = 0; i < LUT_RECOVERY_PHASE_NR; i++)
+		new_stat->nid_recovery_delay[i] = -1;
 	/* we need set default refcount to 1 to balance obd_disconnect */
 	atomic_set(&new_stat->nid_exp_ref_count, 1);
 
@@ -1277,14 +1346,19 @@ out:
 }
 EXPORT_SYMBOL(lprocfs_recovery_status_seq_show);
 
-int lprocfs_recovery_reconnect_histogram_seq_show(struct seq_file *m,
-						  void *data)
+/*
+ * Print the recovery window as wall-clock seconds. obd_recovery_start and
+ * the per-phase start times are monotonic, so shift them by the current
+ * offset between the monotonic and the real-time clock. Reading real_offset
+ * once keeps every timestamp in one output mutually consistent. Each replay
+ * phase also reports where it began, so the time spent in request replay and
+ * in lock replay can be computed by subtraction.
+ */
+static void recovery_window_show(struct seq_file *m, struct obd_device *obd)
 {
-	struct obd_device *obd = data;
-	struct obd_histogram *oh = &obd2obt(obd)->obt_reconnect_hist;
-	unsigned long tot, cum = 0;
+	struct lu_target *lut = obd2obt(obd)->obt_lut;
 	s64 start = 0, finish = 0, elapsed = 0, real_offset;
-	int i;
+	enum lut_recovery_phase i;
 
 	real_offset = ktime_get_real_seconds() - ktime_get_seconds();
 	if (obd->obd_recovery_start)
@@ -1294,25 +1368,47 @@ int lprocfs_recovery_reconnect_histogram_seq_show(struct seq_file *m,
 		if (start)
 			elapsed = finish - start;
 	}
-	seq_printf(m, "recovery_start:  %lld\n", start);
-	seq_printf(m, "recovery_finish: %lld\n", finish);
-	seq_printf(m, "recovery_time:   %lld\n", elapsed);
+	seq_printf(m, "%-18s %lld\n", "recovery_start:", start);
+	for (i = LUT_RECOVERY_PHASE_CONNECT + 1;
+	     i < LUT_RECOVERY_PHASE_NR; i++) {
+		char label[sizeof("lock_replay_start:")];
+		time64_t phase_start;
+
+		snprintf(label, sizeof(label), "%s_start:",
+			 lut_recovery_phase_name[i]);
+		phase_start = lut_recovery_stats(lut, i)->lrs_start;
+		seq_printf(m, "%-18s %lld\n", label,
+			   phase_start ? phase_start + real_offset : 0);
+	}
+	seq_printf(m, "%-18s %lld\n", "recovery_finish:", finish);
+	seq_printf(m, "%-18s %lld\n", "recovery_time:", elapsed);
+}
+
+static int recovery_histogram_show(struct seq_file *m, struct obd_device *obd,
+				   enum lut_recovery_phase phase)
+{
+	struct lut_recovery_stats *lrs =
+		lut_recovery_stats(obd2obt(obd)->obt_lut, phase);
+	const char *name = lut_recovery_phase_name[phase];
+	struct obd_histogram *oh = &lrs->lrs_hist;
+	unsigned long tot, cum = 0;
+	int i;
 
 	spin_lock(&oh->oh_lock);
 	tot = lprocfs_oh_sum(oh);
-	seq_printf(m, "reconnect_delay_seconds_samples: %lu\n", tot);
+	seq_printf(m, "%s_delay_seconds_samples: %lu\n", name, tot);
 	if (tot == 0)
 		goto out;
 
-	seq_puts(m, "client_reconnect_histogram:\n");
+	seq_printf(m, "client_%s_histogram:\n", name);
 	for (i = 0; i < OBD_HIST_MAX; i++) {
 		unsigned long ncli = oh->oh_buckets[i];
 
 		cum += ncli;
-		if (cum == 0)
+		if (ncli == 0)
 			continue;
 		seq_printf(m,
-			   "- { delay_sec: %3u, clients: %4lu, pct: %3lu, cum_pct: %3lu }\n",
+			   "- { phase_sec: %3u, clients: %4lu, pct: %3lu, cum_pct: %3lu }\n",
 			   1U << i, ncli, ncli * 100 / tot, cum * 100 / tot);
 		if (cum >= tot)
 			break;
@@ -1322,61 +1418,102 @@ out:
 
 	return 0;
 }
-EXPORT_SYMBOL(lprocfs_recovery_reconnect_histogram_seq_show);
 
-ssize_t ldebugfs_recovery_reconnect_histogram_seq_write(struct file *file,
-						const char __user *buf,
-						size_t len, loff_t *off)
+static int recovery_top_show(struct seq_file *m, struct obd_device *obd,
+			     enum lut_recovery_phase phase)
 {
-	struct seq_file *m = file->private_data;
-	struct obd_device *obd = m->private;
-
-	lprocfs_oh_clear(&obd2obt(obd)->obt_reconnect_hist);
-	return len;
-}
-EXPORT_SYMBOL(ldebugfs_recovery_reconnect_histogram_seq_write);
-
-int lprocfs_recovery_reconnect_top_seq_show(struct seq_file *m, void *data)
-{
-	struct obd_device *obd = data;
-	struct obd_device_target *obt = obd2obt(obd);
-	unsigned int top = READ_ONCE(recovery_reconnect_top_n);
+	struct lut_recovery_stats *lrs =
+		lut_recovery_stats(obd2obt(obd)->obt_lut, phase);
+	unsigned int top = READ_ONCE(recovery_top_n);
 	unsigned int cursor, i;
 
-	if (top > OBT_RECONNECT_TOP_MAX)
-		top = OBT_RECONNECT_TOP_MAX;
+	if (top > LUT_RECOVERY_TOP_MAX)
+		top = LUT_RECOVERY_TOP_MAX;
 
-	seq_puts(m, "client_reconnect_top:\n");
-	spin_lock(&obt->obt_reconnect_hist.oh_lock);
-	cursor = obt->obt_reconnect_top_cursor;
+	seq_printf(m, "client_%s_top:\n", lut_recovery_phase_name[phase]);
+	spin_lock(&lrs->lrs_hist.oh_lock);
+	cursor = lrs->lrs_top_cursor;
 	for (i = 0; i < top; i++) {
-		unsigned int idx = (cursor + OBT_RECONNECT_TOP_MAX - 1 - i) %
-				   OBT_RECONNECT_TOP_MAX;
-		struct obt_reconnect_entry *ent = &obt->obt_reconnect_top[idx];
+		unsigned int idx = (cursor + LUT_RECOVERY_TOP_MAX - 1 - i) %
+				   LUT_RECOVERY_TOP_MAX;
+		struct lut_recovery_entry *ent = &lrs->lrs_top[idx];
 		char nidstr[LNET_NIDSTR_SIZE + 1] = "\"";
 
-		if (ent->ore_nid.nid_type == 0)
+		if (ent->lre_nid.nid_type == 0)
 			break;
-		libcfs_nidstr_r(&ent->ore_nid, nidstr + 1, sizeof(nidstr) - 1);
+		libcfs_nidstr_r(&ent->lre_nid, nidstr + 1, sizeof(nidstr) - 1);
 		seq_printf(m, "- { nid: %24s\", delay_sec: %3d }\n",
-			   nidstr, ent->ore_delay);
+			   nidstr, ent->lre_delay);
 	}
-	spin_unlock(&obt->obt_reconnect_hist.oh_lock);
+	spin_unlock(&lrs->lrs_hist.oh_lock);
+
 	return 0;
 }
-EXPORT_SYMBOL(lprocfs_recovery_reconnect_top_seq_show);
 
-ssize_t ldebugfs_recovery_reconnect_top_seq_write(struct file *file,
-						  const char __user *buf,
-						  size_t len, loff_t *off)
+static ssize_t recovery_stats_clear(struct file *file, size_t len)
 {
 	struct seq_file *m = file->private_data;
 	struct obd_device *obd = m->private;
 
-	lprocfs_reconnect_top_clear(obd2obt(obd));
+	lprocfs_recovery_stats_clear(obd2obt(obd)->obt_lut);
+
 	return len;
 }
-EXPORT_SYMBOL(ldebugfs_recovery_reconnect_top_seq_write);
+
+/*
+ * Report the recovery window followed by the per-client delay histogram
+ * of every recovery phase, so that one read gives a consistent picture
+ * of where a recovery spent its time.
+ */
+int lprocfs_recovery_histogram_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = data;
+	enum lut_recovery_phase phase;
+	int rc;
+
+	recovery_window_show(m, obd);
+	for (phase = 0; phase < LUT_RECOVERY_PHASE_NR; phase++) {
+		rc = recovery_histogram_show(m, obd, phase);
+		if (rc)
+			return rc;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(lprocfs_recovery_histogram_seq_show);
+
+ssize_t ldebugfs_recovery_histogram_seq_write(struct file *file,
+					      const char __user *buf,
+					      size_t len, loff_t *off)
+{
+	return recovery_stats_clear(file, len);
+}
+EXPORT_SYMBOL(ldebugfs_recovery_histogram_seq_write);
+
+/* Report the slowest clients of every recovery phase, slowest first. */
+int lprocfs_recovery_top_seq_show(struct seq_file *m, void *data)
+{
+	struct obd_device *obd = data;
+	enum lut_recovery_phase phase;
+	int rc;
+
+	for (phase = 0; phase < LUT_RECOVERY_PHASE_NR; phase++) {
+		rc = recovery_top_show(m, obd, phase);
+		if (rc)
+			return rc;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(lprocfs_recovery_top_seq_show);
+
+ssize_t ldebugfs_recovery_top_seq_write(struct file *file,
+					const char __user *buf,
+					size_t len, loff_t *off)
+{
+	return recovery_stats_clear(file, len);
+}
+EXPORT_SYMBOL(ldebugfs_recovery_top_seq_write);
 
 ssize_t ir_factor_show(struct kobject *kobj, struct attribute *attr,
 		       char *buf)

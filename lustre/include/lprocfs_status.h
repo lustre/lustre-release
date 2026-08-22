@@ -696,6 +696,25 @@ ssize_t checksum_type_show(struct kobject *kobj, struct attribute *attr,
 			   char *buf);
 ssize_t checksum_type_store(struct kobject *kobj, struct attribute *attr,
 			    const char *buffer, size_t count);
+
+/*
+ * Stages a client passes through during a target recovery window.  Each
+ * stage is tallied separately so that the time spent reconnecting, replaying
+ * requests, and replaying locks can be told apart.
+ *
+ * Kept outside CONFIG_LUSTRE_FS_SERVER: struct nid_stat sizes an array with
+ * LUT_RECOVERY_PHASE_NR and is visible to client builds as well.
+ */
+enum lut_recovery_phase {
+	/* client (re)connected to the target */
+	LUT_RECOVERY_PHASE_CONNECT	= 0,
+	/* client reported MSG_REQ_REPLAY_DONE */
+	LUT_RECOVERY_PHASE_REQ_REPLAY	= 1,
+	/* client reported MSG_LOCK_REPLAY_DONE */
+	LUT_RECOVERY_PHASE_LOCK_REPLAY	= 2,
+	LUT_RECOVERY_PHASE_NR
+};
+
 #ifdef CONFIG_LUSTRE_FS_SERVER
 ssize_t dt_checksum_type_show(struct kobject *kobj, struct attribute *attr,
 			      char *buf);
@@ -712,21 +731,24 @@ lprocfs_checksum_dump_seq_write(struct file *file, const char __user *buffer,
 
 /* lprocfs_status.c: recovery status */
 int lprocfs_recovery_status_seq_show(struct seq_file *m, void *data);
-int lprocfs_recovery_reconnect_histogram_seq_show(struct seq_file *m,
-						  void *data);
-ssize_t ldebugfs_recovery_reconnect_histogram_seq_write(struct file *file,
-					const char __user *buf,
-					size_t len, loff_t *off);
-int lprocfs_recovery_reconnect_top_seq_show(struct seq_file *m, void *data);
-ssize_t ldebugfs_recovery_reconnect_top_seq_write(struct file *file,
+int lprocfs_recovery_histogram_seq_show(struct seq_file *m, void *data);
+ssize_t ldebugfs_recovery_histogram_seq_write(struct file *file,
+					      const char __user *buf,
+					      size_t len, loff_t *off);
+int lprocfs_recovery_top_seq_show(struct seq_file *m, void *data);
+ssize_t ldebugfs_recovery_top_seq_write(struct file *file,
 					const char __user *buf,
 					size_t len, loff_t *off);
 
-/* lprocfs_status_server.c: top-N reconnect tally */
-struct obd_device_target;
-void lprocfs_reconnect_top_clear(struct obd_device_target *obt);
-void lprocfs_reconnect_top_tally(struct obd_device_target *obt,
-				 const struct lnet_nid *nid, timeout_t delay);
+/* lprocfs_status_server.c: per-phase recovery delay tally */
+struct lu_target;
+void lprocfs_recovery_stats_clear(struct lu_target *lut);
+void lprocfs_recovery_phase_start(struct lu_target *lut,
+				  enum lut_recovery_phase phase);
+void lprocfs_recovery_delay_tally(struct lu_target *lut,
+				  enum lut_recovery_phase phase,
+				  const struct lnet_nid *nid,
+				  timeout_t delay, timeout_t prev);
 
 /* lprocfs: display the uuid of stale clients */
 int lprocfs_recovery_stale_clients_seq_show(struct seq_file *m, void *data);

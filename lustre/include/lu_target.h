@@ -139,6 +139,29 @@ struct tg_grants_data {
 	u64			 tgd_osfs_peaksize;
 };
 
+/* circular buffer depth; recovery_top_n caps how many are reported */
+#define LUT_RECOVERY_TOP_MAX	64
+
+struct lut_recovery_entry {
+	struct lnet_nid	lre_nid;
+	timeout_t	lre_delay;
+};
+
+/*
+ * Per-recovery-phase client delay statistics.  All phases measure the delay
+ * from obd_recovery_start, so within one phase the delays arrive
+ * non-decreasing and the newest entries in lrs_top[] are the slowest clients.
+ */
+struct lut_recovery_stats {
+	/* when the recovery thread entered this phase, 0 if not reached */
+	time64_t		 lrs_start;
+	/* log2 histogram of the per-client delays of the current recovery */
+	struct obd_histogram	 lrs_hist;
+	/* recent completions (delays arrive ascending); newest at cursor-1 */
+	struct lut_recovery_entry lrs_top[LUT_RECOVERY_TOP_MAX];
+	unsigned int		 lrs_top_cursor;
+};
+
 struct lu_target {
 	struct obd_device	*lut_obd;
 	struct dt_device	*lut_bottom;
@@ -213,7 +236,16 @@ struct lu_target {
 	/* FMD (file modification data) values */
 	int			 lut_fmd_max_num;
 	time64_t		 lut_fmd_max_age;
+
+	/* client delay statistics of each phase of the current recovery */
+	struct lut_recovery_stats lut_recovery_stats[LUT_RECOVERY_PHASE_NR];
 };
+
+static inline struct lut_recovery_stats *
+lut_recovery_stats(struct lu_target *lut, enum lut_recovery_phase phase)
+{
+	return &lut->lut_recovery_stats[phase];
+}
 
 #define LUT_FMD_MAX_NUM_DEFAULT 128
 #define LUT_FMD_MAX_AGE_DEFAULT (obd_timeout + 10)

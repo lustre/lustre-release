@@ -1,0 +1,83 @@
+.TH MDT.RECOVERY_TOP 4 2026-08-23 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+recovery_top \- slowest clients per phase in the current recovery
+.SH SYNOPSIS
+.SY
+.BI "lctl get_param mdt." TARGET ".recovery_top"
+.SY
+.BI "lctl get_param obdfilter." TARGET ".recovery_top"
+.SY
+.BI "lctl set_param mdt." TARGET ".recovery_top=clear"
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.BR 644 " | " -rw-r--r--
+.TP
+.B Scope
+.br
+Per MDT or OST target device
+.TP
+.B Config
+.br
+Always present
+.SH DESCRIPTION
+The
+.B recovery_top
+parameter reports, for each of the three recovery phases, the
+.B N
+filesystem clients that took the longest to complete that phase, sorted
+descending by delay, as three YAML lists named
+.BR client_reconnect_top ", " client_req_replay_top " and"
+.BR client_lock_replay_top .
+Each entry reports a client
+.RB ( nid )
+and its delay
+.RB ( delay_sec )
+in seconds. Delays are measured from the start of recovery, so a client's later
+phases include the time spent in the earlier ones. The depth
+.B N
+is set by the module parameter
+.BR recovery_top_n " (default 10, max 64)."
+The depth applies per phase, so up to 3 * N entries can be printed.
+The lists are reset when recovery begins, and writing any value clears all
+three phases.
+.PP
+This is the bounded-cardinality companion to
+.BR recovery_histogram (4):
+the histogram tells you the per-target distribution, this file tells
+you which specific clients drove the tail.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B mdt.*.recovery_top
+.B obdfilter.*.recovery_top
+.EE
+.SH EXAMPLES
+Show the slowest clients on an MDT after a recovery:
+.EX
+.RB mds# " lctl get_param -n mdt.lfs-MDT0000.recovery_top"
+client_reconnect_top:
+- { nid:   "192.168.101.7@tcp101", delay_sec:  47 }
+- { nid:   "192.168.102.4@tcp102", delay_sec:   8 }
+- { nid:   "192.168.102.3@tcp102", delay_sec:   7 }
+client_req_replay_top:
+- { nid:   "192.168.101.7@tcp101", delay_sec:  61 }
+- { nid:   "192.168.102.4@tcp102", delay_sec:  33 }
+- { nid:   "192.168.102.3@tcp102", delay_sec:  32 }
+client_lock_replay_top:
+- { nid:   "192.168.101.7@tcp101", delay_sec:  64 }
+- { nid:   "192.168.102.4@tcp102", delay_sec:  41 }
+- { nid:   "192.168.102.3@tcp102", delay_sec:  40 }
+.EE
+.SH AVAILABILITY
+.B recovery_top
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" commit v2_17_53
+.SH SEE ALSO
+.BR mdt.recovery_delay (4),
+.BR mdt.recovery_histogram (4),
+.BR lctl-get_param (8),
+.BR lctl-set_param (8)

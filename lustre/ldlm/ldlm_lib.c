@@ -1154,6 +1154,85 @@ static int rev_import_reconnect(struct obd_export *exp,
 	return ptlrpc_import_recovery_state_machine(revimp);
 }
 
+/*
+ * Only real filesystem clients are tallied in the recovery statistics,
+ * skipping the self-export, server-to-server OSP/MDS-MDS connections, and
+ * lightweight clients. Use the export's saved connect flags so this is
+ * correct on reconnect too; mds_conn / mds_mds_conn are only set on the
+ * INITIAL connect.
+ */
+static bool target_recovery_tally_client(struct obd_device *obd,
+					 struct obd_export *exp)
+{
+	return obd->obd_recovery_start && exp &&
+	       obd->obd_self_export != exp &&
+	       !(exp_connect_flags(exp) &
+		 (OBD_CONNECT_MDS | OBD_CONNECT_MDS_MDS |
+		  OBD_CONNECT_LIGHTWEIGHT));
+}
+
+/*
+ * Record that @exp reached @phase of the current recovery. Every phase is
+ * measured from obd_recovery_start rather than from the end of the previous
+ * phase, so the delays arrive monotonically increasing and the difference
+ * between two phases is the time the client spent in the earlier one.
+ * Per-NID delays are reset here on reconnect behind the tally gate because
+ * struct nid_stat is shared across all exports from the same NID, so an
+ * untallied export must not wipe a real client's recorded delays.
+ */
+static void target_recovery_phase_tally(struct obd_device *obd,
+					struct obd_export *exp,
+					enum lut_recovery_phase phase)
+{
+	timeout_t prev = -1;
+	time64_t delay;
+
+	if (!target_recovery_tally_client(obd, exp))
+		return;
+
+	delay = ktime_get_seconds() - obd->obd_recovery_start;
+	if (delay < 0)
+		delay = 0;
+
+	/*
+	 * The previous phase's cumulative offset is one of the two bases
+	 * the tally uses to charge this client only for the time it spent
+	 * inside the phase; -1 means there is no previous phase, or the
+	 * client never reached it, and the tally falls back to the phase
+	 * start.
+	 */
+	if (phase > LUT_RECOVERY_PHASE_CONNECT && exp->exp_nid_stats)
+		prev = exp->exp_nid_stats->nid_recovery_delay[phase - 1];
+
+	if (exp->exp_nid_stats) {
+		struct nid_stat *ns = exp->exp_nid_stats;
+
+		/*
+		 * A client entering a new recovery window drops the delays
+		 * left over from the previous one, so that a phase it never
+		 * reaches this time reports "never" rather than the value it
+		 * had in an earlier recovery.
+		 */
+		if (phase == LUT_RECOVERY_PHASE_CONNECT) {
+			enum lut_recovery_phase i;
+
+			for (i = phase + 1; i < LUT_RECOVERY_PHASE_NR; i++)
+				ns->nid_recovery_delay[i] = -1;
+		}
+		ns->nid_recovery_delay[phase] = delay;
+	}
+
+	/*
+	 * Always key the per-NID top list on the export's connection NID.
+	 * req->rq_peer.nid is the immediate sender, which is the router
+	 * rather than the client itself in a routed configuration.
+	 */
+	if (exp->exp_connection)
+		lprocfs_recovery_delay_tally(obd2obt(obd)->obt_lut, phase,
+					     &exp->exp_connection->c_peer.nid,
+					     delay, prev);
+}
+
 int target_handle_connect(struct ptlrpc_request *req)
 {
 	struct obd_device *target = NULL;
@@ -1699,32 +1778,9 @@ dont_check_exports:
 		    atomic_read(&target->obd_max_recoverable_clients))
 			wake_up(&target->obd_next_transno_waitq);
 
-		/* record reconnect delay for real filesystem clients only,
-		 * skipping the self-export, server-to-server OSP/MDS-MDS
-		 * connections, and lightweight clients. Use the export's
-		 * saved connect flags so this is correct on reconnect too;
-		 * mds_conn / mds_mds_conn are only set on INITIAL connect.
-		 */
-		if (target->obd_recovery_start &&
-		    target->obd_self_export != export &&
-		    !(exp_connect_flags(export) &
-		      (OBD_CONNECT_MDS | OBD_CONNECT_MDS_MDS |
-		       OBD_CONNECT_LIGHTWEIGHT))) {
-			struct obd_device_target *obt = obd2obt(target);
-			time64_t delay = ktime_get_seconds() -
-					 target->obd_recovery_start;
-
-			if (delay < 0)
-				delay = 0;
-			if (export->exp_nid_stats)
-				export->exp_nid_stats->nid_reconnect_delay =
-					delay;
-			lprocfs_oh_tally_log2(&obt->obt_reconnect_hist,
-					      (unsigned int)delay);
-			lprocfs_reconnect_top_tally(
-				obt, &export->exp_connection->c_peer.nid,
-				delay);
-		}
+		/* record how long this client took to reconnect */
+		target_recovery_phase_tally(target, export,
+					    LUT_RECOVERY_PHASE_CONNECT);
 	}
 
 	/* Tell the client we're in recovery, when client is involved in it. */
@@ -2907,6 +2963,7 @@ static int target_recovery_thread(void *arg)
 	CDEBUG(D_INFO, "1: request replay stage - %d clients from t%llu\n",
 	       atomic_read(&obd->obd_req_replay_clients),
 	       obd->obd_next_recovery_transno);
+	lprocfs_recovery_phase_start(lut, LUT_RECOVERY_PHASE_REQ_REPLAY);
 	replay_request_or_update(env, lut, trd, thread);
 
 	/**
@@ -2914,6 +2971,7 @@ static int target_recovery_thread(void *arg)
 	 */
 	CDEBUG(D_INFO, "2: lock replay stage - %d clients\n",
 	       atomic_read(&obd->obd_lock_replay_clients));
+	lprocfs_recovery_phase_start(lut, LUT_RECOVERY_PHASE_LOCK_REPLAY);
 
 	CFS_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_FAIL_REPLAY, 10);
 
@@ -3090,8 +3148,7 @@ void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
 	obd->obd_next_recovery_transno = obd->obd_last_committed + 1;
 	obd->obd_recovery_start = 0;
 	obd->obd_recovery_end = 0;
-	lprocfs_oh_clear(&obd2obt(obd)->obt_reconnect_hist);
-	lprocfs_reconnect_top_clear(obd2obt(obd));
+	lprocfs_recovery_stats_clear(lut);
 	hrtimer_setup(&obd->obd_recovery_timer, target_recovery_expired,
 		      CLOCK_MONOTONIC, HRTIMER_MODE_ABS);
 	target_start_recovery_thread(lut, handler);
@@ -3114,6 +3171,11 @@ static int target_process_req_flags(struct obd_device *obd,
 			LASSERT(atomic_read(&(obd)->obd_req_replay_clients) >
 				0);
 			atomic_dec(&obd->obd_req_replay_clients);
+			/* tally inside the flag-clearing branch, final pings
+			 * may be resent and must not be counted twice
+			 */
+			target_recovery_phase_tally(obd, exp,
+						LUT_RECOVERY_PHASE_REQ_REPLAY);
 		} else {
 			spin_unlock(&exp->exp_lock);
 		}
@@ -3131,6 +3193,8 @@ static int target_process_req_flags(struct obd_device *obd,
 			LASSERT(atomic_read(&(obd)->obd_lock_replay_clients) >
 				0);
 			atomic_dec(&obd->obd_lock_replay_clients);
+			target_recovery_phase_tally(obd, exp,
+						LUT_RECOVERY_PHASE_LOCK_REPLAY);
 		} else {
 			spin_unlock(&exp->exp_lock);
 		}

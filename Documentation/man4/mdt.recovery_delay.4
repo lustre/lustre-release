@@ -1,0 +1,70 @@
+.TH MDT.RECOVERY_DELAY 4 2026-08-23 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+recovery_delay \- per-client recovery phase delays
+.SH SYNOPSIS
+.SY
+.BI "lctl get_param mdt." TARGET ".exports." NID ".recovery_delay"
+.SY
+.BI "lctl get_param obdfilter." TARGET ".exports." NID ".recovery_delay"
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.BR 444 " | " -r--r--r--
+.TP
+.B Scope
+.br
+Per MDT or OST target client export
+.SH DESCRIPTION
+The
+.B recovery_delay
+parameter reports, for one specific client export, how many seconds after the
+start of the most recent recovery that client completed each of the three
+recovery phases. A phase the client never reached reports the string
+.BR never .
+Because all three delays are measured from the start of recovery, the time the
+client spent inside request replay is
+.B req_replay_delay
+minus
+.BR reconnect_delay ,
+and the time spent in lock replay is
+.B lock_replay_delay
+minus
+.BR req_replay_delay .
+.PP
+This is useful for isolating a specific client's recovery delay,
+which is otherwise shown only in aggregate form in the full
+.BR mdt.recovery_histogram (4)
+or in limited numbers in
+.BR mdt.recovery_top (4).
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B mdt.*.exports.*.recovery_delay
+.B obdfilter.*.exports.*.recovery_delay
+.EE
+.SH EXAMPLES
+Show the recovery delays for a client after a recovery:
+.EX
+.RB mds# " lctl get_param -n mdt.*.exports.10.0.0.7@tcp.recovery_delay"
+reconnect_delay: 47
+req_replay_delay: 61
+lock_replay_delay: 64
+.EE
+Show a client that never finished lock replay:
+.EX
+.RB mds# " lctl get_param -n mdt.*.exports.10.0.0.9@tcp.recovery_delay"
+reconnect_delay: 12
+req_replay_delay: 30
+lock_replay_delay: never
+.EE
+.SH AVAILABILITY
+.B recovery_delay
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" commit v2_17_53
+.SH SEE ALSO
+.BR mdt.recovery_histogram (4),
+.BR mdt.recovery_top (4),
+.BR lctl-get_param (8)

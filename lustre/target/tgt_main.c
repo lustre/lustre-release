@@ -480,6 +480,9 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	obt->obt_jobstats.ojs_cntr_num = 0;
 	obt->obt_lut = lut;
 
+	for (i = 0; i < LUT_RECOVERY_PHASE_NR; i++)
+		spin_lock_init(&lut->lut_recovery_stats[i].lrs_hist.oh_lock);
+
 	/* set request handler slice and parameters */
 	lut->lut_slice = slice;
 	lut->lut_reply_fail_id = reply_fail_id;

@@ -501,6 +501,63 @@ test_12b() {
 }
 run_test 12b "write after OST failover to a missing object"
 
+test_13() {
+	(( $OST1_VERSION >= $(version_code 2.17.57) )) ||
+		skip "need OST >= 2.17.57 for merged recovery statistics"
+
+	$LFS setstripe -i 0 -c 1 $DIR/$tfile || error "setstripe failed"
+	dd if=/dev/zero of=$DIR/$tfile count=1 bs=1M > /dev/null ||
+		error "first write failed"
+	replay_barrier ost1
+	dd if=/dev/zero of=$DIR/$tfile count=1 bs=1M > /dev/null ||
+		error "second write failed"
+	fail ost1
+
+	local ost=$(facet_svc ost1)
+	local histfile=$TMP/$tfile-hist.out
+	local topfile=$TMP/$tfile-top.out
+	local delayfile=$TMP/$tfile-delay.out
+	local nid
+
+	if remote_ost; then
+		nid=($($LCTL list_nids))
+	else
+		nid="0@lo"
+	fi
+
+	stack_trap "rm -f $histfile $topfile $delayfile"
+
+	local hist="obdfilter.$ost.recovery_histogram"
+	local top="obdfilter.$ost.recovery_top"
+	local delay="obdfilter.$ost.exports.${nid//./\\.}.recovery_delay"
+
+	do_facet ost1 "$LCTL get_param -n $hist" | tee $histfile
+	do_facet ost1 "$LCTL get_param -n $top" | tee $topfile
+	do_facet ost1 "$LCTL get_param -n $delay" | tee $delayfile
+
+	local phase
+
+	for phase in reconnect req_replay lock_replay; do
+		grep -q "^${phase}_delay_seconds_samples:" $histfile ||
+			error "$hist missing ${phase}_delay_seconds_samples"
+		grep -q "^client_${phase}_top:" $topfile ||
+			error "$top missing client_${phase}_top"
+		grep -q "^${phase}_delay:" $delayfile ||
+			error "$delay missing ${phase}_delay"
+		! grep -q "^${phase}_delay:[[:space:]]*never" $delayfile ||
+			error "$delay ${phase}_delay is 'never' after recovery"
+	done
+
+	[[ $(cat $topfile) =~ $nid ]] ||
+		error "$top does not contain $nid"
+
+	verify_yaml_available || skip_env "YAML verification not installed"
+	verify_yaml < $histfile || error "$hist is not YAML"
+	verify_yaml < $topfile || error "$top is not YAML"
+	verify_yaml < $delayfile || error "$delay is not YAML"
+}
+run_test 13 "obdfilter recovery_histogram/top/delay after OST failover"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

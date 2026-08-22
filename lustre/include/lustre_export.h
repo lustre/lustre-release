@@ -132,8 +132,10 @@ struct nid_stat {
 	struct lprocfs_stats    *nid_ldlm_stats;
 	/* for obd_nid_stats_hash exp_nid_stats */
 	atomic_t		 nid_exp_ref_count;
-	/* secs to reconnect in last recovery; -1 = never reconnected */
-	timeout_t		 nid_reconnect_delay;
+	/* secs from recovery start to completing each recovery phase in the
+	 * last recovery; -1 = phase never reached
+	 */
+	timeout_t		 nid_recovery_delay[LUT_RECOVERY_PHASE_NR];
 };
 
 #define nidstat_getref(nidstat)	\

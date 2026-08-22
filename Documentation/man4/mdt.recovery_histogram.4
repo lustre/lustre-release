@@ -1,0 +1,118 @@
+.TH MDT.RECOVERY_HISTOGRAM 4 2026-08-23 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+recovery_histogram \- per-phase client delay histograms per recovery
+.SH SYNOPSIS
+.SY
+.BI "lctl get_param mdt." TARGET ".recovery_histogram"
+.SY
+.BI "lctl get_param obdfilter." TARGET ".recovery_histogram"
+.SY
+.BI "lctl set_param mdt." TARGET ".recovery_histogram=clear"
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.BR 644 " | " -rw-r--r--
+.TP
+.B Scope
+.br
+Per MDT or OST target device
+.SH DESCRIPTION
+The
+.B recovery_histogram
+parameter reports a log2-bucketed histogram for each of the three recovery
+phases (reconnect, req_replay, lock_replay). Each histogram counts how many
+seconds each client spent inside that phase alone: the reconnect histogram
+measures from the start of the recovery window, and each replay histogram
+measures from the later of two points: when that client finished the
+preceding phase, and when the recovery thread entered this phase. Because
+each phase is a barrier, a client that finishes early waits for the slowest
+client, and that wait belongs to the phase's start rather than to the client.
+A client that never reached the preceding phase is counted from the start of
+the recovery window instead. The histogram is reset when recovery begins, so
+it always reflects the most recent recovery. Writing any value to the
+parameter clears all three phases.
+.PP
+In contrast,
+.BR mdt.recovery_top (4)
+ranks clients by their cumulative offset from the start of recovery (i.e. by
+when they finished, not by how long the phase took them), and
+.BR mdt.recovery_delay (4)
+reports the three cumulative offsets for a single client export.
+.PP
+Output is YAML. Leading scalars report the recovery window
+.RB ( recovery_start ", " req_replay_start ", " lock_replay_start ", "
+.RB recovery_finish ", " recovery_time " in seconds),"
+and each phase then contributes a
+.BI <phase> _delay_seconds_samples
+count followed by a
+.BI client_ <phase> _histogram
+list, where <phase> is one of reconnect, req_replay or lock_replay.
+Each list entry reports a bucket upper bound
+.RB ( phase_sec ),
+the number of clients whose duration for that phase fell into that bucket
+.RB ( clients ),
+that bucket's percentage of the total
+.RB ( pct ),
+and the cumulative percentage
+.RB ( cum_pct ).
+Buckets that no client fell into are omitted entirely, so the list only
+contains buckets with at least one client.
+.PP
+Per-client
+.BR mdt.recovery_delay (4)
+parameters are also exposed individually under each client mountpoint's
+.BI mdt. TARGET .exports. NID .recovery_delay
+and
+.BI obdfilter. TARGET .exports. NID .recovery_delay
+parameter. This is useful for isolating a specific client's recovery delay,
+which is otherwise shown in aggregate form in the full histogram,
+or may not be in the
+.BR mdt.recovery_top (4)
+list.
+.SH MODULES
+This parameter is in the following modules:
+.EX
+.B mdt.*.recovery_histogram
+.B obdfilter.*.recovery_histogram
+.EE
+.SH EXAMPLES
+Show the histogram for an MDT after a recovery:
+.EX
+.RB mds# " lctl get_param -n mdt.lfs-MDT0000.recovery_histogram"
+recovery_start:    1780002682
+req_replay_start:  1780002700
+lock_replay_start: 1780002714
+recovery_finish:   1780002729
+recovery_time:     47
+reconnect_delay_seconds_samples: 58
+client_reconnect_histogram:
+- { phase_sec:   1, clients:   45, pct:  77, cum_pct:  77 }
+- { phase_sec:   2, clients:    6, pct:  10, cum_pct:  87 }
+- { phase_sec:   4, clients:    4, pct:   7, cum_pct:  94 }
+- { phase_sec:   8, clients:    2, pct:   3, cum_pct:  97 }
+- { phase_sec:  32, clients:    1, pct:   3, cum_pct: 100 }
+req_replay_delay_seconds_samples: 58
+client_req_replay_histogram:
+- { phase_sec:   1, clients:   57, pct:  98, cum_pct:  98 }
+- { phase_sec:   2, clients:    1, pct:   2, cum_pct: 100 }
+lock_replay_delay_seconds_samples: 58
+client_lock_replay_histogram:
+- { phase_sec:   1, clients:   58, pct: 100, cum_pct: 100 }
+.EE
+Clear the histogram:
+.EX
+.RB mds# " lctl set_param mdt.lfs-MDT0000.recovery_histogram=clear"
+.EE
+Writing any value clears every phase.
+.SH AVAILABILITY
+.B recovery_histogram
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" commit v2_17_53
+.SH SEE ALSO
+.BR mdt.recovery_delay (4),
+.BR mdt.recovery_top (4),
+.BR lctl-get_param (8),
+.BR lctl-set_param (8)
