@@ -2612,7 +2612,7 @@ int mgs_replace_mdtname(char *name, size_t size, char *mdtsrc, char *mdtnew)
 		char *end = ptr + n;
 
 		if (*end == '\0' || *end == '-' || *end == '_')
-			strncpy(ptr, new, n);
+			memcpy(ptr, new, n);
 		ptr = end;
 		ptr = strstr(ptr, src);
 	}

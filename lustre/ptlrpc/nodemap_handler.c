@@ -5759,9 +5759,7 @@ void nodemap_test_nid(struct lnet_nid *nid, char *name_buf, size_t name_len)
 	if (IS_ERR(nodemap))
 		return;
 
-	strncpy(name_buf, nodemap->nm_name, name_len);
-	if (name_len > 0)
-		name_buf[name_len - 1] = '\0';
+	strscpy_pad(name_buf, nodemap->nm_name, name_len);
 
 	nodemap_putref(nodemap);
 }
@@ -6450,7 +6448,7 @@ int server_iocontrol_nodemap(struct obd_device *obd,
 			     struct obd_ioctl_data *data, bool *dynamic,
 			     bool *out_clean_llog_fileset, bool *out_ro_cmd)
 {
-	char name_buf[LUSTRE_NODEMAP_NAME_LENGTH + 1];
+	char name_buf[LUSTRE_NODEMAP_NAME_LENGTH + 1] = "";
 	struct lustre_cfg *lcfg = NULL;
 	const char *nodemap_name = NULL;
 	const char *client_idstr = NULL;
