@@ -2432,8 +2432,10 @@ static int osd_scan_O_seq(const struct lu_env *env, struct osd_device *dev,
 	if (unlikely(scrub->os_ls_count > scrub->os_ls_size)) {
 		OBD_ALLOC(fids,
 			  sizeof(struct lu_fid) * (scrub->os_ls_size + 4));
-		if (fids == NULL)
-			GOTO(out, -ENOMEM);
+		if (fids == NULL) {
+			scrub->os_ls_count--;
+			GOTO(out, rc = -ENOMEM);
+		}
 
 		memcpy(fids, scrub->os_ls_fids,
 		       sizeof(struct lu_fid) * scrub->os_ls_size);
