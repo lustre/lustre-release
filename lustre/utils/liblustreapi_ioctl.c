@@ -132,8 +132,10 @@ int llapi_ioctl(int fd, unsigned int cmd, void *buf)
 	unsigned int oldcmd;
 	int rc;
 
-	if (fd < 0)
+	if (fd < 0) {
+		errno = EBADF;
 		return -EBADF;
+	}
 
 	/* common case, ioctl works as expected */
 	rc = ioctl(fd, cmd, buf);
