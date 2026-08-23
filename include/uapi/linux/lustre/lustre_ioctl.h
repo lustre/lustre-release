@@ -145,6 +145,10 @@ static inline __u32 obd_ioctl_packlen(struct obd_ioctl_data *data)
 #define OBD_IOC_GETUUID		_IOR('f', 127, char[UUID_MAX])
 /* ioctl codes 128-143 are reserved for fsverity */
 /* was	OBD_IOC_UUID2DEV	_IOWR('f', 130, OBD_IOC_DATA_TYPE) until 2.18 */
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 18, 53, 0)
+/* for API compatibility until 2.18.x, but prefer OBD_IOC_GETDTNAME above */
+#define OBD_IOC_GETNAME_OLD	_IOWR('f', 131, OBD_IOC_DATA_TYPE) /*< 2.14.52*/
+#endif
 #define OBD_IOC_GETMDNAME	_IOR('f', 131, char[MAX_OBD_NAME])
 #define OBD_IOC_CLIENT_RECOVER	_IOW('f', 133, OBD_IOC_DATA_TYPE)
 /* ioctl codes 128-143 are reserved for fsverity */

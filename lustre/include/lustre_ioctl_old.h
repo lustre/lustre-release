@@ -36,10 +36,12 @@
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 99, 53, 0)
 /* for binary compatibility until 3.0, no more compiling into tools */
-#define OBD_IOC_GETNAME_OLD	_IOWR('f', 131, OBD_IOC_DATA_TYPE) /*< 2.14.52*/
-
 #define IOC_LIBCFS_GET_NI	_IOWR('e', 50, IOCTL_LIBCFS_TYPE)  /*< 2.15.53*/
 #define IOC_LIBCFS_PING		_IOWR('e', 61, IOCTL_LIBCFS_TYPE)  /*< 2.15.53*/
+
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 18, 53, 0)
+#define OBD_IOC_GETNAME_OLD	_IOWR('f', 131, OBD_IOC_DATA_TYPE) /*< 2.14.52*/
+#endif
 
 #if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 19, 53, 0)
 #define OBD_IOC_BARRIER		_IOWR('g', 5, OBD_IOC_DATA_TYPE)   /*< 2.16.55*/
