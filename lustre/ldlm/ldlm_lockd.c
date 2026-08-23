@@ -3383,7 +3383,7 @@ static int ldlm_setup(void)
 
 	ldlm_kobj = kobject_create_and_add("ldlm", &lustre_kset->kobj);
 	if (!ldlm_kobj)
-		GOTO(out, -ENOMEM);
+		GOTO(out, rc = -ENOMEM);
 
 	rc = sysfs_create_group(ldlm_kobj, &ldlm_attr_group);
 	if (rc)
@@ -3391,11 +3391,11 @@ static int ldlm_setup(void)
 
 	ldlm_ns_kset = kset_create_and_add("namespaces", NULL, ldlm_kobj);
 	if (!ldlm_ns_kset)
-		GOTO(out, -ENOMEM);
+		GOTO(out, rc = -ENOMEM);
 
 	ldlm_svc_kset = kset_create_and_add("services", NULL, ldlm_kobj);
 	if (!ldlm_svc_kset)
-		GOTO(out, -ENOMEM);
+		GOTO(out, rc = -ENOMEM);
 
 	rc = ldlm_debugfs_setup();
 	if (rc != 0)
