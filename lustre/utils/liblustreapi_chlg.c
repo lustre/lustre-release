@@ -380,12 +380,14 @@ int llapi_changelog_start_user(void **priv, enum changelog_send_flag flags,
 	cf.cf_mask = mask;
 
 	rc = ioctl(cp->clp_fd, OBD_IOC_CHANGELOG_FILTER, &cf);
-	if (rc) {
+	if (rc < 0) {
 		rc = -errno;
 		llapi_error(LLAPI_MSG_ERROR, rc, "cannot set changelog filter");
+		llapi_changelog_fini(priv);
+		return rc;
 	}
 
-	return rc < 0 ? -errno : 0;
+	return 0;
 }
 
 /**
