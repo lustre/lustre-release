@@ -605,6 +605,11 @@ int llapi_changelog_recv(void *priv, struct changelog_rec **rech)
 
 	tmp = (struct changelog_rec *)cp->clp_buf_pos;
 	*rech = llapi_changelog_repack_rec(tmp, rec_fmt, rec_extra_fmt);
+	if (*rech == NULL) {
+		rc = -ENOMEM;
+		goto out;
+	}
+
 	cp->clp_buf_pos += changelog_rec_size(tmp) + tmp->cr_namelen;
 out:
 	return rc;
