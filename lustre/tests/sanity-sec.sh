@@ -4812,6 +4812,11 @@ remove_enc_key() {
 
 remount_client_normally() {
 	local ldlmcount=$((MDSCOUNT+OSTCOUNT))
+	# on a combined client/server node ldlm.namespaces.* also matches the
+	# server-side namespaces, so count only the client-side ones: the MGC,
+	# and the mdc/osc carrying the "%s-%016lx" client mount instance that
+	# class_config_llog_handler() appends to client-side device names
+	local client_ns='[.](MGC.*|.*-(mdc|osc)-[0-9a-f]{16})[.]lru_size$'
 
 	# remount client without dummy encryption key
 	if is_mounted $MOUNT; then
@@ -4833,9 +4838,12 @@ remount_client_normally() {
 	((ldlmcount++))
 
 	wait_update_facet --verbose client \
-		"$LCTL get_param -n ldlm.namespaces.*.lru_size | wc -l" \
-		$ldlmcount 120 ||
-			error "leftover ldlms"
+		"$LCTL get_param -N ldlm.namespaces.*.lru_size | \
+			grep -c -E '$client_ns'" \
+		$ldlmcount 120 || {
+		$LCTL get_param -N ldlm.namespaces.*.lru_size
+		error "leftover ldlms"
+	}
 
 	remove_enc_key
 	wait_ssk
