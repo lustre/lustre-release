@@ -1,9 +1,10 @@
-.TH LLAPI_IOCTL 3 2024-08-27 "Lustre User API" "Lustre Library Functions"
+.TH LLAPI_IOCTL 3 2026-08-23 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_ioctl \- call ioctl() with possible command remapping
 .SH SYNOPSIS
 .nf
 .B #include <lustre/lustreapi.h>
+.B #include <linux/lustre/lustre_ioctl.h>
 .PP
 .BI "int llapi_ioctl(int " fd ", unsigned int " cmd ", void *" buf ");"
 .fi
@@ -36,28 +37,40 @@ number, and argument
 passed.
 .SH EXAMPLES
 .nf
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
 #include <lustre/lustreapi.h>
+#include <linux/lustre/lustre_ioctl.h>
 \&
 int main(int argc, char *argv[])
 {
-        unsigned long group = 1234;
+        char lov_name[MAX_OBD_NAME];
         int rc, fd;
 \&
-        fd = open(argv[1], O_RDONLY);
-        if (rc < 0) {
-                fprintf(stderr, "error opening file '%s': %s\\n",
-                        argv[1], strerror(errno));
-                return -1;
+        if (argc != 2) {
+                fprintf(stderr, "Usage: %s <filename>\\n", argv[0]);
+                return 1;
         }
 \&
-        rc = llapi_ioctl(fd, LL_IOC_GROUP_LOCK, &group);
+        fd = open(argv[1], O_RDONLY);
+        if (fd < 0) {
+                fprintf(stderr, "error opening file '%s': %s\\n",
+                        argv[1], strerror(errno));
+                return 1;
+        }
+\&
+        rc = llapi_ioctl(fd, OBD_IOC_GETDTNAME, lov_name);
         if (rc < 0) {
                 fprintf(stderr, "%s: ioctl error: %s\\n",
                         argv[1], strerror(errno));
-                return rc;
+                return 1;
         }
 \&
-        printf("%s: locked with group %lu\\n", argv[1], group);
+        printf("%s: LOV device name %s\\n", argv[1], lov_name);
         return 0;
 }
 .fi
