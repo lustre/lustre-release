@@ -1265,7 +1265,7 @@ static struct mgs_target_info *server_lsi2mti(struct lustre_sb_info *lsi,
 					      bool registration)
 {
 	size_t len = offsetof(struct mgs_target_info, mti_nidlist);
-	struct nid_fetch_data nfd;
+	struct nid_fetch_data nfd = {};
 	struct mgs_target_info *mti;
 	bool large_nid = false;
 	__u32 refnet = LNET_NET_ANY;
@@ -1310,10 +1310,8 @@ static struct mgs_target_info *server_lsi2mti(struct lustre_sb_info *lsi,
 	/* avoid allocation inside callback */
 	genradix_prealloc(&nfd.nfd_radix, MTI_NIDS_MAX, GFP_KERNEL);
 	nfd.nfd_lmd = registration ? lsi->lsi_lmd : NULL;
-	nfd.nfd_pos = 0;
 	/* skip IPv6 NIDs if MGS reports that explicitly by finished connect */
 	nfd.nfd_skip_ipv6 = !large_nid && !mgc_no_connect;
-	nfd.nfd_has_ipv6 = false;
 
 	LNetFetchNIDs(server_nid2radix, refnet, &nfd);
 	nid_count = nfd.nfd_pos;
@@ -1588,7 +1586,7 @@ static void tgt_import_update(struct work_struct *ws)
 	struct lustre_sb_info *lsi;
 	struct mgs_target_info *mti = NULL;
 	size_t mti_len = sizeof(*mti);
-	struct nid_fetch_data nfd;
+	struct nid_fetch_data nfd = {};
 	struct ptlrpc_request_set *set;
 	int i;
 	int rc;
@@ -1603,11 +1601,9 @@ static void tgt_import_update(struct work_struct *ws)
 	genradix_init(&nfd.nfd_radix);
 	/* avoid allocation inside callback */
 	genradix_prealloc(&nfd.nfd_radix, MTI_NIDS_MAX, GFP_KERNEL);
-	nfd.nfd_lmd = NULL;
-	nfd.nfd_pos = 0;
-	/* this notification always carries large NIDs */
-	nfd.nfd_skip_ipv6 = false;
-	nfd.nfd_has_ipv6 = false;
+	/* the zeroed nfd means no NID filtering and no IPv6 skipping here,
+	 * this notification always carries large NIDs
+	 */
 
 	LNetFetchNIDs(server_nid2radix, LNET_NET_ANY, &nfd);
 	if (nfd.nfd_pos == 0) {
