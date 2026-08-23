@@ -419,7 +419,7 @@ static int parse_opts_early(int argc, char *const argv[], struct mkfs_opts *mop)
 	}
 
 	/* The device or pool/filesystem name */
-	strscpy(mop->mo_device, argv[optind], sizeof(mop->mo_device));
+	strscpy_exit(mop->mo_device, argv[optind], sizeof(mop->mo_device));
 
 	if (optind < argc - 1) {
 #ifndef TUNEFS
@@ -449,7 +449,8 @@ static int parse_opts_early(int argc, char *const argv[], struct mkfs_opts *mop)
 }
 
 static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
-		      char **mountopts, char *old_fsname, char *mountdata_arg)
+		      char **mountopts, char *old_fsname, size_t ofsize,
+		      char *mountdata_arg)
 {
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
 	char new_fsname[16] = { 0 };
@@ -545,7 +546,7 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 					       "filesystem");
 			if (rc)
 				return 1;
-			strscpy(new_fsname, optarg, sizeof(new_fsname));
+			strscpy_exit(new_fsname, optarg, sizeof(new_fsname));
 			break;
 		}
 		case 'm': {
@@ -611,8 +612,8 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			ldd->ldd_flags |= LDD_F_UPDATE;
 			break;
 		case 'u':
-			strscpy(ldd->ldd_userdata, optarg,
-				sizeof(ldd->ldd_userdata));
+			strscpy_exit(ldd->ldd_userdata, optarg,
+				     sizeof(ldd->ldd_userdata));
 			break;
 		case 'U':
 			mop->mo_flags |= MO_NOHOSTID_CHECK;
@@ -645,8 +646,8 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			mop->mo_device_kb = atol(optarg);
 			break;
 		case 'k':
-			strscpy(mop->mo_mkfsopts, optarg,
-				sizeof(mop->mo_mkfsopts));
+			strscpy_exit(mop->mo_mkfsopts, optarg,
+				     sizeof(mop->mo_mkfsopts));
 			break;
 		case 'M':
 			ldd->ldd_flags |= LDD_F_SV_TYPE_MDT;
@@ -710,8 +711,7 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			}
 
 			if (IS_SEPARATED_MGS(ldd)) {
-				strscpy(old_fsname, optarg,
-					sizeof(ldd->ldd_fsname));
+				strscpy_exit(old_fsname, optarg, ofsize);
 			} else if (strlen(old_fsname) != strlen(optarg) ||
 				   strcmp(old_fsname, optarg) != 0) {
 				fprintf(stderr,
@@ -727,7 +727,7 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 					progname, optarg);
 				return 1;
 			}
-			strscpy(mountdata_arg, optarg, PATH_MAX);
+			strscpy_exit(mountdata_arg, optarg, PATH_MAX);
 			break;
 		case 'w':
 			ldd->ldd_flags |= LDD_F_WRITECONF;
@@ -771,7 +771,8 @@ static int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
 			return 1;
 		}
 
-		strscpy(ldd->ldd_fsname, new_fsname, sizeof(ldd->ldd_fsname));
+		strscpy_exit(ldd->ldd_fsname, new_fsname,
+			     sizeof(ldd->ldd_fsname));
 	}
 
 	if (index_option && !(mop->mo_ldd.ldd_flags &
@@ -864,7 +865,7 @@ int main(int argc, char *const argv[])
 
 	ret2 = osd_read_ldd(mop.mo_device, ldd);
 
-	strscpy(old_fsname, ldd->ldd_fsname, sizeof(ldd->ldd_fsname));
+	strscpy_exit(old_fsname, ldd->ldd_fsname, sizeof(old_fsname));
 	ldd->ldd_flags &= ~(LDD_F_WRITECONF | LDD_F_VIRGIN |
 			    LDD_F_NO_LOCAL_LOGS);
 
@@ -902,7 +903,7 @@ int main(int argc, char *const argv[])
 #endif /* TUNEFS */
 
 	ret = parse_opts(argc, argv, &mop, &mountopts, old_fsname,
-			 mountdata_arg);
+			 sizeof(old_fsname), mountdata_arg);
 	if (ret != 0)
 		goto out;
 

@@ -162,10 +162,28 @@ char *strscat(char *dst, char *src, int buflen)
 	return strcat(dst, src);
 }
 
-char *strscpy(char *dst, char *src, int buflen)
+/* Linux kernel compatible strscpy */
+ssize_t strscpy(char *dst, const char *src, size_t bufsz)
 {
-	dst[0] = 0;
-	return strscat(dst, src, buflen);
+	ssize_t used = snprintf(dst, bufsz, "%s", src);
+
+	if (used < 0)
+		return -errno;
+	return (used >= bufsz) ? -E2BIG : used;
+}
+
+/* A strcpy the exits on failure to avoid silent Linux kernel compatible strscpy */
+ssize_t strscpy_exit(char *dst, const char *src, size_t bufsz)
+{
+	ssize_t result = strscpy(dst, src, bufsz);
+
+	if (result < 0) {
+		fprintf(stderr,
+			"string buffer overflow (size %zu): '%s'\n",
+			bufsz, src);
+		exit(EOVERFLOW);
+	}
+	return result;
 }
 
 /*
@@ -431,8 +449,8 @@ int loop_setup(struct mkfs_opts *mop)
 					ret >= 0 ? strerror(ret) : "");
 				return ret;
 			}
-			strscpy(mop->mo_loopdev, l_device,
-				sizeof(mop->mo_loopdev));
+			strscpy_exit(mop->mo_loopdev, l_device,
+				     sizeof(mop->mo_loopdev));
 			return ret;
 		}
 	}

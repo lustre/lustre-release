@@ -37,7 +37,7 @@ static int get_wbcfs_env(char *out, char *env)
 		return -EINVAL;
 	}
 
-	strscpy(out, getenv(env), VAR_SIZE);
+	strscpy_exit(out, getenv(env), VAR_SIZE);
 	fprintf(stderr, "%s=%s\n", env, out);
 
 	return 0;
@@ -98,7 +98,7 @@ int wbcfs_read_ldd(char *ds, struct lustre_disk_data *ldd)
 	if (rc)
 		return rc;
 
-	strscpy(ldd->ldd_fsname, name_var, VAR_SIZE);
+	strscpy_exit(ldd->ldd_fsname, name_var, VAR_SIZE);
 
 	if (!getenv("OSD_WBC_INDEX")) {
 		fprintf(stderr, "OSD_WBC_INDEX is undefined\n");
@@ -127,7 +127,7 @@ int wbcfs_read_ldd(char *ds, struct lustre_disk_data *ldd)
 			 ldd->ldd_fsname, "OST",
 			 ldd->ldd_svindex);
 
-	strscpy(ldd->ldd_svname, svname, VAR_SIZE);
+	strscpy_exit(ldd->ldd_svname, svname, VAR_SIZE);
 
 	fprintf(stderr, "svname -> %s\n", svname);
 
@@ -138,7 +138,7 @@ int wbcfs_read_ldd(char *ds, struct lustre_disk_data *ldd)
 	if (tgt_type != MGT) {
 		snprintf(params, 2 * VAR_SIZE, "mgsnode=%s",
 			 tgt_type_var);
-		strscpy(ldd->ldd_params, params, VAR_SIZE);
+		strscpy_exit(ldd->ldd_params, params, sizeof(ldd->ldd_params));
 		fprintf(stderr, "params -> %s\n", params);
 	}
 

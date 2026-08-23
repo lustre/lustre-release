@@ -1073,8 +1073,8 @@ int main(int argc, char *const argv[])
 				       lgss_path);
 
 			/* Set the skpath to the .lgss file */
-			strscpy(mop.mo_skpath, lgss_path,
-				sizeof(mop.mo_skpath));
+			strscpy_exit(mop.mo_skpath, lgss_path,
+				     sizeof(mop.mo_skpath));
 		}
 	}
 

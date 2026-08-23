@@ -165,7 +165,9 @@ int add_param(char *buf, char *key, char *val);
 int append_param(char *buf, char *key, char *val, char sep);
 int get_param(char *buf, char *key, char **val);
 char *strscat(char *dst, char *src, int buflen);
-char *strscpy(char *dst, char *src, int buflen);
+__attribute__((warn_unused_result)) ssize_t strscpy(char *dst, const char *src,
+						    size_t buflen);
+ssize_t strscpy_exit(char *dst, const char *src, size_t buflen);
 int check_mtab_entry(char *spec1, char *spec2, char *mntpt, char *type);
 int update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
 		      int flags, int freq, int pass);
