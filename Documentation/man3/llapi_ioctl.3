@@ -12,7 +12,8 @@ llapi_ioctl \- call ioctl() with possible command remapping
 .B llapi_ioctl()
 calls the
 .BR ioctl (2)
-system call with the supplied arguments.  However, if the ioctl() returns
+system call with the supplied arguments.  However, if the ioctl() fails and sets
+errno to
 .B ENOTTY
 (no such ioctl) then if
 .I cmd
@@ -22,12 +23,29 @@ be retried with the old ioctl command number.
 .B llapi_ioctl()
 typically returns:
 .TP
-0
-on success in most cases
+>=0
+on success, the value returned by the
+.BR ioctl (2).
 .TP
-<0
-a negative value on failure and sets
-.BR errno .
+\-EBADF
+if
+.I fd
+is negative, without calling
+.BR ioctl (2).
+.B errno
+is also set to
+.BR EBADF .
+.TP
+\-1
+on failure, with
+.B errno
+set by
+.BR ioctl (2).
+.BR
+Note: If ioctl command is not supported, errno will be set to
+ENOTTY.  For this specific case, llapi_ioctl() may retry calling ioctl
+again and return its result.
+.PP
 Due to the variety of ioctl commands, it may return different values
 and errno as appropriate for the
 .IR fd ,
