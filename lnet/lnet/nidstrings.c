@@ -1223,7 +1223,8 @@ libcfs_ip_addr_range_print(char *buffer, int count, struct list_head *list)
 	struct cfs_expr_list *el;
 
 	list_for_each_entry(el, list, el_link) {
-		LASSERT(j++ < 4);
+		j++;
+		LASSERT(j <= 4);
 		if (i != 0)
 			i += scnprintf(buffer + i, count - i, ".");
 		i += cfs_expr_list_print(buffer + i, count - i, el);
@@ -1367,7 +1368,8 @@ libcfs_num_addr_range_print(char *buffer, int count, struct list_head *list)
 	struct cfs_expr_list *el;
 
 	list_for_each_entry(el, list, el_link) {
-		LASSERT(j++ < 1);
+		j++;
+		LASSERT(j <= 1);
 		i += cfs_expr_list_print(buffer + i, count - i, el);
 	}
 	return i;
