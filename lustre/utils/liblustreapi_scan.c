@@ -336,7 +336,12 @@ int scan_rec_gather_begin(struct find_param *param, char *path, int d,
 	return 0;
 }
 
-/* The second step of scan_rec_gather(), after scan_rec_gather_begin(). */
+/*
+ * The second step of scan_rec_gather(), after scan_rec_gather_begin().  It
+ * fetches the attributes whatever @want holds, so the caller must not call
+ * it for a @want with no LLAPI_SCAN_MDT_MASK bit.  An fd it opens is left in
+ * *@fdp (and rec->lfsr_fd) for the caller to close.
+ */
 int scan_rec_gather_finish(struct find_param *param, char *path, int p,
 			   int d, int *fdp, __u64 want, bool have_lmv,
 			   struct llapi_scan_rec *rec)
@@ -452,9 +457,8 @@ int scan_rec_gather_finish(struct find_param *param, char *path, int p,
  *
  * LLAPI_SCAN_MDT_INDEX for a regular file costs an open, which is why the
  * public default leaves it out; a special file is taken to live on its
- * parent's MDT, as lfs find has always assumed.  If an fd is opened for
- * it, it is left in *@fdp (and rec->lfsr_fd) for the caller to close, so a
- * caller that goes on to need one does not open twice.
+ * parent's MDT, as lfs find has always assumed.  An fd opened for it is
+ * the caller's to close, as for scan_rec_gather_finish().
  *
  * Return: 0 with @rec filled, or the negative errno of the fetch that
  * failed -- the caller decides what ENOENT, ESTALE and ENOTTY mean to it.

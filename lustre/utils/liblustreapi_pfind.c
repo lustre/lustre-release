@@ -455,7 +455,7 @@ retry_getfileinfo:
 			 * an IGIF, stx_mask would keep the name's bits, and
 			 * llapi_get_lum_file_fd() copies by lmd_lmmsize.
 			 * Cleared here rather than in convert_lmd_statx(),
-			 * whose third caller -- cb_find_init() under
+			 * whose third caller -- find_decide() under
 			 * gather_all -- runs after the V2 ioctl has put real
 			 * values there.
 			 */
@@ -1675,6 +1675,15 @@ static int printf_format_lustre(char *seq, char *buffer, size_t size,
 	}
 
 	/*
+	 * An unknown letter, or a trailing %L, is printed as it stands.
+	 * Keep this list in step with the switches below.
+	 */
+	if (*seq == '\0' || strchr("aAFPchiopS", *seq) == NULL) {
+		rc = 0;
+		goto format_done;
+	}
+
+	/*
 	 * Some formats like %LF or %LP are handled the same for both files
 	 * and dirs, so handle all of those here.
 	 */
@@ -1798,6 +1807,13 @@ static int printf_format_lustre(char *seq, char *buffer, size_t size,
 	} else {		/* directory */
 		lum = (struct lmv_user_md *)param->fp_lmv_md;
 		objects = lum->lum_objects;
+
+		/* off Lustre the LMV is a stub of zeroes: print nothing.
+		 * A target scan has no path, and its LMV is the object's own.
+		 */
+		if (path != NULL && lum->lum_stripe_count == 0 &&
+		    param->fp_file_mdt_index == OBD_NOT_FOUND)
+			goto format_done;
 
 		switch (*seq) {
 		case 'c':	/* stripe count */
@@ -2536,7 +2552,7 @@ static int setup_target_indexes(int d, char *path, struct find_param *param)
  * against the MDT's mode later.
  *
  * Note the sense: true is a rejection, which is the opposite of the
- * `decision` cb_find_init() carries and of what find_check_layout() and
+ * `decision` find_decide() carries and of what find_check_layout() and
  * find_value_cmp() return.  Those answer "does this predicate accept the
  * object"; this answers "is the object settled already", and false is the
  * case that goes on to the MDT, so the two cannot share one convention.
@@ -2704,118 +2720,106 @@ static bool find_lmv_rejects(const struct find_param *param, bool have_lmv)
 	return false;
 }
 
-int cb_find_init(char *path, int p, int *dp, struct find_param *param,
-		 struct dirent64 *de)
+/*
+ * What find_decide() needs beyond struct find_param: where the object came
+ * from, and what the gather settled.  A scan of a target fills it with
+ * fc_path NULL and no descriptors.  Every caller sets fc_p and fc_d: 0 is
+ * a descriptor, so zero-initialising them is not "none".
+ */
+struct find_ctx {
+	const struct llapi_scan_rec *fc_rec;
+	char			*fc_path;	/* NULL: no namespace walked */
+	struct dirent64		*fc_de;
+	int			 fc_p;		/* parent fd, or -1 */
+	int			 fc_d;		/* directory fd, or -1 */
+	int			*fc_fdp;	/* fd to reuse, or NULL */
+	__u32			 fc_stripe_count;
+	int			 fc_lustre_fs;
+	int			 fc_checked_type;
+	bool			 fc_gather_all;
+};
+
+/*
+ * The project id: an open and an ioctl for a walk, free for a scan.
+ *
+ * -ENOTSUP means there is no path to open, or no fd slot to keep the open
+ * in, so no project id can be read.
+ * An -ENOTSUP from the ioctl itself always comes with a path.  -ENOTTY
+ * comes from get_projid() and means the object is not on Lustre.
+ */
+static int find_get_projid(struct find_ctx *fc, mode_t mode, __u32 *projid)
+{
+	if (fc->fc_rec->lfsr_valid & LLAPI_SCAN_PROJID) {
+		*projid = fc->fc_rec->lfsr_projid;
+		return 0;
+	}
+	if (fc->fc_path == NULL || fc->fc_fdp == NULL)
+		return -ENOTSUP;
+
+	return get_projid(fc->fc_path, fc->fc_fdp, mode, projid);
+}
+
+/*
+ * Everything from the MDT's answer onwards: the checks that need it, the
+ * glimpse for what only a stat can settle, and the printing.  Split out so
+ * that a scan with no namespace behind it can reach it too.
+ *
+ * find_get_projid() is what tests fc_path today; setup_target_indexes(),
+ * find_check_xattrs(), the lstat_f() arm and the printing still take it
+ * unconditionally, and reach llistxattr(NULL) and lstat(NULL) if it is not
+ * there.  Nothing passes NULL to those yet -- a target scan is decided
+ * before them -- and the caller that does will have to guard them, so this
+ * says which steps are covered rather than claiming they all are.
+ *
+ * Return: 0 once the object is decided, printed or rejected, or a negative
+ * errno.  Which of the two it was is not reported: printing is the answer,
+ * and no caller has ever read it.  No positive: cb_find_init() acts only
+ * on a negative and then sets its own return, so a positive would be lost.
+ */
+static int find_decide(struct find_ctx *fc, struct find_param *param)
 {
 	struct lov_user_mds_data *lmd = param->fp_lmd;
-	struct llapi_scan_rec rec;
-	int d = dp == NULL ? -1 : *dp;
-	int decision = 1; /* 1 is accepted; -1 is rejected. */
-	int lustre_fs = 1;
-	int checked_type = 0;
-	int ret = 0;
-	__u32 stripe_count = 0;
-	__u64 flags;
-	__u64 want;
-	int fd = -2;
+	char *path = fc->fc_path;
+	struct dirent64 *de = fc->fc_de;
+	int p = fc->fc_p;
+	int d = fc->fc_d;
+	__u32 stripe_count = fc->fc_stripe_count;
+	int lustre_fs = fc->fc_lustre_fs;
+	int checked_type = fc->fc_checked_type;
+	bool gather_all = fc->fc_gather_all;
 	__u32 projid = DEFAULT_PROJID;
 	bool no_projid = false;	/* the object has none, not one that is 0 */
-	bool gather_all = false;
+	int decision = 1;	/* 1 is accepted; -1 is rejected. */
+	int ret = 0;
+	__u64 flags;
 
-	if (p == -1 && d == -1)
-		return -EINVAL;
-	/* if below minimum depth do not process further */
-	if (param->fp_depth < param->fp_min_depth)
-		goto decided;
-
-	/* Reset this value between invocations */
-	param->fp_get_lmv = 0;
-
-	/* Gather all file/dir info, not just what's needed for search params */
-	if (param->fp_format_printf_str)
-		gather_all = true;
-
-	/* What the directory entry alone can settle. */
-	scan_rec_dirent(&rec, path, p, d, de);
-	if (find_prefilter(&rec, param, &checked_type))
-		goto decided;
-
-	/* Then only as much of the MDT's answer as this search needs. */
-	want = find_want(param, checked_type, gather_all);
-	if (want != 0) {
-		bool have_lmv = false;
-
-		/* the LMV first: its checks can reject before the stat RPC */
-		ret = scan_rec_gather_begin(param, path, d, want, &have_lmv);
-		if (ret == 0 && find_lmv_rejects(param, have_lmv))
-			goto decided;
-		if (ret == 0 &&
-		    find_foreign_accepts(param, have_lmv, gather_all))
-			goto print;
-		if (ret == 0)
-			ret = scan_rec_gather_finish(param, path, p, d, &fd,
-						     want, have_lmv, &rec);
-		if (ret == 0 && lmd->lmd_lmm.lmm_magic == 0 &&
-		    find_check_lmm_info(param)) {
-			struct lov_user_md *lmm = &lmd->lmd_lmm;
-
-			/*
-			 * We need to "fake" the "use the default" values
-			 * since the lmm struct is zeroed out at this point.
-			 */
-			lmm->lmm_magic = LOV_USER_MAGIC_V1;
-			lmm->lmm_pattern = LOV_PATTERN_DEFAULT;
-			if (!param->fp_raw)
-				ostid_set_seq(&lmm->lmm_oi,
-					      FID_SEQ_LOV_DEFAULT);
-			lmm->lmm_stripe_size = 0;
-			lmm->lmm_stripe_count = 0;
-			lmm->lmm_stripe_offset = -1;
-		}
-		if (ret != 0) {
-			if (ret == -ENOTTY)
-				lustre_fs = 0;
-			if (ret == -ENOENT)
-				goto decided;
-
-			goto out;
-		} else {
-			stripe_count = find_get_stripe_count(param);
-		}
-
-		/* --mdt cannot be answered without the index: leave it out */
-		if (param->fp_mdt_uuid != NULL &&
-		    !(rec.lfsr_valid & LLAPI_SCAN_MDT_INDEX))
-			goto decided;
-
-		/*
-		 * An unstriped directory answered ENODATA, or one off Lustre
-		 * answered ENOTTY: no stripe of its own either way.
-		 */
-		if (param->fp_get_lmv && param->fp_check_foreign &&
-		    param->fp_exclude_foreign &&
-		    !(rec.lfsr_valid & LLAPI_SCAN_LMV))
-			goto print;
-	}
+	/*
+	 * An unstriped directory answered ENODATA, or one off Lustre answered
+	 * ENOTTY: no stripe of its own either way.
+	 */
+	if (param->fp_get_lmv && param->fp_check_foreign &&
+	    param->fp_exclude_foreign &&
+	    !(fc->fc_rec->lfsr_valid & LLAPI_SCAN_LMV))
+		goto print;
 
 	/* Check the file permissions from the stat info */
 	if (param->fp_perm_sign) {
 		decision = check_file_permissions(param, lmd->lmd_stx.stx_mode);
 		if (decision == -1)
-			goto decided;
+			return 0;
 	}
 
 	if (param->fp_type && !checked_type) {
 		if ((param->fp_check_mdt_count || param->fp_check_hash_flag ||
 		     param->fp_hash_type) && !S_ISDIR(lmd->lmd_stx.stx_mode))
-			goto decided;
+			return 0;
 
 		if ((lmd->lmd_stx.stx_mode & S_IFMT) == param->fp_type) {
 			if (param->fp_exclude_type)
-				goto decided;
+				return 0;
 		} else {
 			if (!param->fp_exclude_type)
-				goto decided;
+				return 0;
 		}
 	}
 
@@ -2835,7 +2839,7 @@ int cb_find_init(char *path, int p, int *dp, struct find_param *param,
 			ret = setup_target_indexes((d != -1) ? d : p, path,
 						   param);
 			if (ret)
-				goto out;
+				return ret;
 
 			param->fp_dev = makedev(lmd->lmd_stx.stx_dev_major,
 						lmd->lmd_stx.stx_dev_minor);
@@ -2850,19 +2854,19 @@ int cb_find_init(char *path, int p, int *dp, struct find_param *param,
 	if (param->fp_check_foreign) {
 		decision = find_check_foreign(param);
 		if (decision == -1)
-			goto decided;
+			return 0;
 	}
 
 	if (param->fp_check_stripe_size) {
 		decision = find_check_stripe_size(param);
 		if (decision == -1)
-			goto decided;
+			return 0;
 	}
 
 	if (param->fp_check_ext_size) {
 		decision = find_check_ext_size(param);
 		if (decision == -1)
-			goto decided;
+			return 0;
 	}
 
 	if (param->fp_check_stripe_count) {
@@ -2870,19 +2874,19 @@ int cb_find_init(char *path, int p, int *dp, struct find_param *param,
 					  param->fp_stripe_count_sign,
 					  param->fp_exclude_stripe_count, 1, 0);
 		if (decision == -1)
-			goto decided;
+			return 0;
 	}
 
 	if (param->fp_check_layout) {
 		decision = find_check_layout(param);
 		if (decision == -1)
-			goto decided;
+			return 0;
 	}
 
 	/* If an OBD UUID is specified but none matches, skip this file. */
 	if ((param->fp_obd_uuid && param->fp_obd_index == OBD_NOT_FOUND) ||
 	    (param->fp_mdt_uuid && param->fp_mdt_index == OBD_NOT_FOUND))
-		goto decided;
+		return 0;
 
 	/*
 	 * If an OST or MDT UUID is given, and some OST matches,
@@ -2900,14 +2904,14 @@ int cb_find_init(char *path, int p, int *dp, struct find_param *param,
 				if (!param->fp_mdt_uuid)
 					goto obd_matches;
 			} else {
-				goto decided;
+				return 0;
 			}
 		}
 
 		if (param->fp_mdt_uuid) {
 			if (check_mdt_match(param))
 				goto obd_matches;
-			goto decided;
+			return 0;
 		}
 	}
 
@@ -2915,26 +2919,26 @@ obd_matches:
 	if (param->fp_check_uid) {
 		if (lmd->lmd_stx.stx_uid == param->fp_uid) {
 			if (param->fp_exclude_uid)
-				goto decided;
+				return 0;
 		} else {
 			if (!param->fp_exclude_uid)
-				goto decided;
+				return 0;
 		}
 	}
 
 	if (param->fp_check_gid) {
 		if (lmd->lmd_stx.stx_gid == param->fp_gid) {
 			if (param->fp_exclude_gid)
-				goto decided;
+				return 0;
 		} else {
 			if (!param->fp_exclude_gid)
-				goto decided;
+				return 0;
 		}
 	}
 
 	/* Retrieve project id from file/dir */
 	if (param->fp_check_projid || gather_all) {
-		ret = get_projid(path, &fd, lmd->lmd_stx.stx_mode, &projid);
+		ret = find_get_projid(fc, lmd->lmd_stx.stx_mode, &projid);
 		/*
 		 * An object off Lustre has none, and both arms of the fetch
 		 * say so with ENOTTY: the special-file arm asks
@@ -2961,8 +2965,8 @@ obd_matches:
 			 */
 			if (param->fp_check_projid &&
 			    !param->fp_exclude_projid)
-				goto decided;
-			projid = 0;
+				return 0;
+			projid = DEFAULT_PROJID;
 			no_projid = true;
 			ret = 0;
 		}
@@ -2970,13 +2974,13 @@ obd_matches:
 			llapi_error(LLAPI_MSG_ERROR, -ENOENT,
 				    "warning: %s: failed to get project id from file \"%s\"",
 				    __func__, path);
-			goto out;
+			return ret;
 		}
 		/*
 		 * An object with no project id has nothing to compare, so
 		 * only the negated form answers for it: its projid is not N
-		 * because it has none.  The 0 above is -printf's stand-in and
-		 * is never compared.
+		 * because it has none.  DEFAULT_PROJID is -printf's stand-in
+		 * and is never compared.
 		 */
 		if (param->fp_check_projid && !no_projid) {
 			/* Conditionally filter this result based on --projid
@@ -2988,27 +2992,27 @@ obd_matches:
 			bool matches = projid == param->fp_projid;
 
 			if (matches == param->fp_exclude_projid)
-				goto decided;
+				return 0;
 		}
 	}
 
 	if (param->fp_check_pool) {
 		decision = find_check_pool(param);
 		if (decision == -1)
-			goto decided;
+			return 0;
 	}
 
 	if (param->fp_check_comp_count || param->fp_check_comp_flags ||
 	    param->fp_check_comp_start || param->fp_check_comp_end) {
 		decision = find_check_comp_options(param);
 		if (decision == -1)
-			goto decided;
+			return 0;
 	}
 
 	if (param->fp_check_mirror_count || param->fp_check_mirror_state) {
 		decision = find_check_mirror_options(param);
 		if (decision == -1)
-			goto decided;
+			return 0;
 	}
 
 	/* Check the time on mds. */
@@ -3020,13 +3024,13 @@ obd_matches:
 			  (S_ISREG(lmd->lmd_stx.stx_mode) && stripe_count) : 0;
 		decision = find_time_check(param, for_mds);
 		if (decision == -1)
-			goto decided;
+			return 0;
 	}
 
 	if (param->fp_btime) {
 		if (!(lmd->lmd_stx.stx_mask & STATX_BTIME)) {
 			ret = -EOPNOTSUPP;
-			goto out;
+			return ret;
 		}
 
 		decision = find_value_cmp(lmd->lmd_stx.stx_btime.tv_sec,
@@ -3034,7 +3038,7 @@ obd_matches:
 					  param->fp_exclude_btime,
 					  param->fp_time_margin, 0);
 		if (decision == -1)
-			goto decided;
+			return 0;
 	}
 
 	if (param->fp_newerxy) {
@@ -3044,17 +3048,17 @@ obd_matches:
 			  (S_ISREG(lmd->lmd_stx.stx_mode) && stripe_count) : 0;
 		decision = find_newerxy_check(param, for_mds, true);
 		if (decision == -1)
-			goto decided;
+			return 0;
 		if (decision < 0) {
 			ret = decision;
-			goto out;
+			return ret;
 		}
 	}
 
 	if (param->fp_attrs || param->fp_neg_attrs) {
 		decision = find_check_attr_options(param);
 		if (decision == -1)
-			goto decided;
+			return 0;
 	}
 
 	flags = param->fp_lmd->lmd_flags;
@@ -3075,7 +3079,7 @@ obd_matches:
 	if (param->fp_xattr_match_info) {
 		decision = find_check_xattrs(path, param->fp_xattr_match_info);
 		if (decision == -1)
-			goto decided;
+			return 0;
 	}
 
 	/*
@@ -3121,13 +3125,13 @@ obd_matches:
 				llapi_error(LLAPI_MSG_ERROR, -ENOENT,
 					    "warning: %s: %s does not exist",
 					    __func__, path);
-				goto decided;
+				return 0;
 			} else {
 				ret = -errno;
 				llapi_error(LLAPI_MSG_ERROR, ret,
 					    "%s: stat on %s failed",
 					    __func__, path);
-				goto out;
+				return ret;
 			}
 		}
 
@@ -3135,15 +3139,15 @@ obd_matches:
 		/* Check the time on osc. */
 		decision = find_time_check(param, 0);
 		if (decision == -1)
-			goto decided;
+			return 0;
 
 		if (param->fp_newerxy) {
 			decision = find_newerxy_check(param, 0, false);
 			if (decision == -1)
-				goto decided;
+				return 0;
 			if (decision < 0) {
 				ret = decision;
-				goto out;
+				return ret;
 			}
 		}
 	}
@@ -3153,7 +3157,7 @@ obd_matches:
 					  param->fp_nlink, param->fp_nlink_sign,
 					  param->fp_exclude_nlink, 1, 0);
 		if (decision == -1)
-			goto decided;
+			return 0;
 	}
 
 	if (param->fp_check_size) {
@@ -3163,7 +3167,7 @@ obd_matches:
 					  param->fp_exclude_size,
 					  param->fp_size_units, 0);
 		if (decision == -1)
-			goto decided;
+			return 0;
 	}
 
 	if (param->fp_check_blocks) { /* convert st_blocks to bytes */
@@ -3173,12 +3177,12 @@ obd_matches:
 					  param->fp_exclude_blocks,
 					  param->fp_blocks_units, 0);
 		if (decision == -1)
-			goto decided;
+			return 0;
 	}
 
 print:
 	if (param->fp_skip_percent && find_skip_file(param))
-		goto decided;
+		return 0;
 
 	if (param->fp_format_printf_str)
 		printf_format_string(param, path, projid, d);
@@ -3186,6 +3190,105 @@ print:
 		llapi_printf(LLAPI_MSG_NORMAL, "%s%c", path,
 			     param->fp_zero_end ? '\0' : '\n');
 
+	return 0;
+}
+
+int cb_find_init(char *path, int p, int *dp, struct find_param *param,
+		 struct dirent64 *de)
+{
+	struct lov_user_mds_data *lmd = param->fp_lmd;
+	struct llapi_scan_rec rec;
+	struct find_ctx fc = { 0 };
+	int d = dp == NULL ? -1 : *dp;
+	int lustre_fs = 1;
+	int checked_type = 0;
+	int ret = 0;
+	__u32 stripe_count = 0;
+	__u64 want;
+	int fd = -2;
+	bool gather_all = false;
+
+	if (p == -1 && d == -1)
+		return -EINVAL;
+	/* if below minimum depth do not process further */
+	if (param->fp_depth < param->fp_min_depth)
+		goto decided;
+
+	/* Reset this value between invocations */
+	param->fp_get_lmv = 0;
+
+	/* Gather all file/dir info, not just what's needed for search params */
+	if (param->fp_format_printf_str)
+		gather_all = true;
+
+	/* What the directory entry alone can settle. */
+	scan_rec_dirent(&rec, path, p, d, de);
+	if (find_prefilter(&rec, param, &checked_type))
+		goto decided;
+
+	/* Then only as much of the MDT's answer as this search needs. */
+	want = find_want(param, checked_type, gather_all);
+	if (want != 0) {
+		bool have_lmv = false;
+
+		/* the LMV first: its checks can reject before the stat RPC */
+		ret = scan_rec_gather_begin(param, path, d, want, &have_lmv);
+		if (ret == 0 && find_lmv_rejects(param, have_lmv))
+			goto decided;
+		if (ret == 0 &&
+		    find_foreign_accepts(param, have_lmv, gather_all))
+			goto run_decide;
+		if (ret == 0)
+			ret = scan_rec_gather_finish(param, path, p, d, &fd,
+						     want, have_lmv, &rec);
+		if (ret == 0 && lmd->lmd_lmm.lmm_magic == 0 &&
+		    find_check_lmm_info(param)) {
+			struct lov_user_md *lmm = &lmd->lmd_lmm;
+
+			/*
+			 * We need to "fake" the "use the default" values
+			 * since the lmm struct is zeroed out at this point.
+			 */
+			lmm->lmm_magic = LOV_USER_MAGIC_V1;
+			lmm->lmm_pattern = LOV_PATTERN_DEFAULT;
+			if (!param->fp_raw)
+				ostid_set_seq(&lmm->lmm_oi,
+					      FID_SEQ_LOV_DEFAULT);
+			lmm->lmm_stripe_size = 0;
+			lmm->lmm_stripe_count = 0;
+			lmm->lmm_stripe_offset = -1;
+		}
+		if (ret != 0) {
+			if (ret == -ENOTTY)
+				lustre_fs = 0;
+			if (ret == -ENOENT)
+				goto decided;
+
+			goto out;
+		} else {
+			stripe_count = find_get_stripe_count(param);
+		}
+		/* --mdt cannot be answered without the index: leave it out */
+		if (param->fp_mdt_uuid != NULL &&
+		    !(rec.lfsr_valid & LLAPI_SCAN_MDT_INDEX))
+			goto decided;
+	}
+
+run_decide:
+	fc.fc_rec = &rec;
+	fc.fc_path = path;
+	fc.fc_de = de;
+	fc.fc_p = p;
+	fc.fc_d = d;
+	fc.fc_fdp = &fd;
+	fc.fc_stripe_count = stripe_count;
+	fc.fc_lustre_fs = lustre_fs;
+	fc.fc_checked_type = checked_type;
+	fc.fc_gather_all = gather_all;
+
+	ret = find_decide(&fc, param);
+	if (ret < 0)
+		goto out;
 
 decided:
 	ret = 0;

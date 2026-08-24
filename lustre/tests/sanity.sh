@@ -11049,6 +11049,11 @@ test_56El() {
 		cat $errf
 		error "lfs find -printf wrote errors for a subtree off Lustre"
 	fi
+
+	# a directory there has no layout: print nothing, not a stub value
+	raw=$($LFS find $dir -type d -name d1 -printf '%Lc%Lh%Li%Lo') ||
+		error "lfs find -printf %Lc%Lh%Li%Lo failed on $dir"
+	[[ -z "$raw" ]] || error "layout directives printed '$raw' for $tmp/d1"
 }
 run_test 56El "lfs find -printf over a subtree that is not on Lustre"
 
