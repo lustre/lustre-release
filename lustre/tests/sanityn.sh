@@ -5937,10 +5937,14 @@ test_80a() {
 }
 run_test 80a "migrate directory when some children is being opened"
 
+migrate_stop=$TMP/80b-stop
+
 cleanup_80b() {
 	trap 0
-	kill -9 $migrate_pid
+	touch $migrate_stop
 	wait $migrate_pid 2>/dev/null
+	rm -f $migrate_stop
+	rm -rf $DIR1/$tdir || error "can't rm"
 	wait_delete_completed
 }
 
@@ -5971,8 +5975,9 @@ test_80b() {
 	done
 
 	# migrate the directories among MDTs
+	rm -f $migrate_stop
 	(
-		while true; do
+		while [ ! -e $migrate_stop ]; do
 			mdt_idx=$((RANDOM % MDSCOUNT))
 			# migrate may fail
 			$LFS migrate -m $mdt_idx $migdir1 &>/dev/null
