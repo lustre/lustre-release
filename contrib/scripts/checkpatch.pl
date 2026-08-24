@@ -6429,6 +6429,34 @@ sub process {
 			}
 		}
 
+# Lustre GOTO() only logs its second argument, it never assigns it, so a
+# bare constant there is discarded and the target label sees a stale
+# value.  A plain 0 is exempt as the conventional "no error" jump.
+		my $goto_line = $sline;
+
+		# GOTO() is wrapped after a long label name, so pull in the
+		# continuation to see the value
+		if ($goto_line =~ /\bGOTO\s*\(\s*$Ident\s*,\s*$/) {
+			my $cont = $lines[$linenr];
+
+			if (defined($cont)) {
+				$cont =~ s/^.//;	# drop the diff prefix
+				$cont =~ s/$;/ /g;	# comments as spaces
+				$goto_line .= " " . $cont;
+			}
+		}
+
+		if ($goto_line =~ /\bGOTO\s*\(\s*($Ident)\s*,\s*(.*?)\s*\)\s*;/) {
+			my $label = $1;
+			my $val = $2;
+
+			if ($val =~ /^-?\s*(?:[A-Z][A-Z0-9_]*|\d+)$/ &&
+			    $val !~ /^-?\s*0$/) {
+				WARN("GOTO_NO_ASSIGN",
+				     "GOTO() does not assign '$val'; if it is meant to be returned, use GOTO($label, rc = $val)\n" . $herecurr);
+			}
+		}
+
 # Lustre avoid unlimited message printing to the console
 		if ($line =~ /CDEBUG\((D_ERROR|D_WARNING|D_CONSOLE|[a-z])/) {
 			WARN("CDEBUG_LIMIT",
