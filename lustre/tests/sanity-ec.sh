@@ -2026,7 +2026,7 @@ test_7d() {
 
 	# Create file with regular mirror + EC mirror
 	$LFS mirror create -N -E -1 -c 2 \
-			   -N -E -1 -c 4 --ec 4+2 $tf ||
+			   -N -E -1 -c 2 --ec 2+2 $tf ||
 		error "mirror create failed"
 
 	verify_mirror_count $tf 3
