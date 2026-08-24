@@ -30,8 +30,6 @@
 #include <linux/lustre/lustre_idl.h>
 #include <linux/lustre/lustre_kernelcomm.h>
 
-#include "lstddef.h"		/* ARRAY_SIZE */
-
 #include <lustre/lustreapi.h>
 
 struct cYAML;
@@ -295,11 +293,20 @@ struct llapi_scan_rec;
 #define LLAPI_SCAN_PARAM_MAX_SIZE	4096
 /* every lfsp_flags bit a namespace scan knows.  One mask per scanner, so that
  * a flag only one of them can act on cannot be quietly accepted by the other.
+ * The exception is LLAPI_SCAN_F_STOP_ON_ERROR: a device scan accepts it and
+ * ignores it, as llapi_scan_device(3) says.
  * Deliberately not public: a caller that built against an "all flags" value
  * would mean a different set of bits by it than the library it is linked
  * against.
  */
 #define LLAPI_SCAN_F_KNOWN_NS	(LLAPI_SCAN_F_STOP_ON_ERROR)
+/* a device scan knows those, and the ones only it can act on */
+#define LLAPI_SCAN_F_KNOWN_DEV	(LLAPI_SCAN_F_KNOWN_NS |		\
+				 LLAPI_SCAN_F_INTERNAL)
+/* and the shortest struct llapi_scan_stats a scan will write back */
+#define LLAPI_SCAN_STATS_MIN_SIZE					\
+	((__u32)(offsetof(struct llapi_scan_stats, ss_seen) +		\
+		 sizeof(((struct llapi_scan_stats *)0)->ss_seen)))
 /*
  * What a namespace scan has to reach the MDT for.  The rest of what it can
  * answer for comes from the directory entry and is LLAPI_SCAN_DIRENT_MASK,
@@ -367,17 +374,57 @@ static inline __u32 scan_param_whole(__u32 size)
 		SCAN_PF_END(lfsp_want), SCAN_PF_END(lfsp_filter),
 		SCAN_PF_END(lfsp_thread_count), SCAN_PF_END(lfsp_padding),
 		SCAN_PF_END(lfsp_got),
+		SCAN_PF_END(lfsp_stats),
 	};
-	static_assert(SCAN_PF_END(lfsp_got) ==
+	static_assert(SCAN_PF_END(lfsp_stats) ==
 		      sizeof(struct llapi_scan_param),
 		      "a field was added without a row in ends[]");
 #undef SCAN_PF_END
 	__u32 whole = ends[0];
 	unsigned int i;
 
-	for (i = 0; i < ARRAY_SIZE(ends); i++)
+	for (i = 0; i < sizeof(ends) / sizeof(ends[0]); i++)
 		if (ends[i] <= size)
 			whole = ends[i];
+
+	return whole;
+}
+
+/*
+ * The same, for struct llapi_scan_stats, which a caller also sizes with its
+ * own ss_size.  Rounding down to a whole counter matters more here than it
+ * looks: an ss_size that stops inside one -- 20 passes
+ * LLAPI_SCAN_STATS_MIN_SIZE and lands in the middle of ss_emitted -- would
+ * otherwise leave the caller the low half of a number and its own bytes in
+ * the high half, which is neither the library's value nor zero.
+ */
+static inline __u32 scan_stats_whole(__u32 size)
+{
+#define SCAN_SF_END(f)							\
+	((__u32)(offsetof(struct llapi_scan_stats, f) +			\
+		 sizeof(((struct llapi_scan_stats *)0)->f)))
+	static const __u32 ends[] = {
+		SCAN_SF_END(ss_padding), SCAN_SF_END(ss_seen),
+		SCAN_SF_END(ss_emitted), SCAN_SF_END(ss_skipped),
+		SCAN_SF_END(ss_filtered), SCAN_SF_END(ss_class),
+	};
+	static_assert(LLAPI_SCAN_CLS_MAX <= LLAPI_SCAN_CLS_SLOTS,
+		      "ss_class has no room for a new class");
+	static_assert(SCAN_SF_END(ss_class) ==
+		      sizeof(struct llapi_scan_stats),
+		      "a counter was added without a row in ends[]");
+	const __u32 class_start = SCAN_SF_END(ss_filtered);
+#undef SCAN_SF_END
+	__u32 whole = ends[0];
+	unsigned int i;
+
+	for (i = 0; i < sizeof(ends) / sizeof(ends[0]); i++)
+		if (ends[i] <= size)
+			whole = ends[i];
+
+	/* inside ss_class, keep each whole element the caller has room for */
+	if (whole == class_start && size > class_start)
+		whole += (size - class_start) / sizeof(__u64) * sizeof(__u64);
 
 	return whole;
 }
@@ -482,6 +529,36 @@ static inline void scan_param_report_got(const struct llapi_scan_param *sp,
 #define LLAPI_SCAN_WANT_DEFAULT						\
 	(~0ULL & ~(LLAPI_SCAN_MDT_INDEX | LLAPI_SCAN_PROJID |		\
 		   LLAPI_SCAN_HSM))
+
+/*
+ * And what llapi_scan_device() can answer for, which is not the same set:
+ * a scan of a target reads the object itself, so it answers for fields a
+ * walk pays an ioctl or an open for, and for the class and linkea a
+ * namespace has no need of.  Narrowed again by what the target turns out
+ * to be -- only an MDT has a layout or a directory stripe -- so lfsp_got is
+ * answered for the scan actually being run.
+ */
+#define LLAPI_SCAN_WANT_KNOWN_DEV					\
+	(LLAPI_SCAN_TYPE | LLAPI_SCAN_MODE | LLAPI_SCAN_NLINK |		\
+	 LLAPI_SCAN_UID | LLAPI_SCAN_GID | LLAPI_SCAN_ATIME |		\
+	 LLAPI_SCAN_MTIME | LLAPI_SCAN_CTIME | LLAPI_SCAN_BTIME |	\
+	 LLAPI_SCAN_SIZE | LLAPI_SCAN_BLOCKS | LLAPI_SCAN_ATTRS |	\
+	 LLAPI_SCAN_LAZY_SIZE | LLAPI_SCAN_LAZY_BLOCKS |		\
+	 LLAPI_SCAN_FID | LLAPI_SCAN_LAYOUT | LLAPI_SCAN_LMV |		\
+	 LLAPI_SCAN_LMV_FOREIGN |				\
+	 LLAPI_SCAN_MDT_INDEX | LLAPI_SCAN_PROJID | LLAPI_SCAN_HSM |	\
+	 LLAPI_SCAN_INO | LLAPI_SCAN_PARENT | LLAPI_SCAN_LINKEA |	\
+	 LLAPI_SCAN_LMA | LLAPI_SCAN_CLASS)
+/* and what only one kind of target has, so a scan of the other never
+ * answers for it: the layout, the directory stripe, the HSM state, the lazy
+ * SOM size, the MDT index and the linkea with the parent it names are the
+ * MDT's.
+ */
+#define LLAPI_SCAN_WANT_MDT_ONLY					\
+	(LLAPI_SCAN_LAYOUT | LLAPI_SCAN_LMV | LLAPI_SCAN_LMV_FOREIGN |	\
+	 LLAPI_SCAN_HSM |						\
+	 LLAPI_SCAN_LAZY_SIZE | LLAPI_SCAN_LAZY_BLOCKS |		\
+	 LLAPI_SCAN_MDT_INDEX | LLAPI_SCAN_LINKEA | LLAPI_SCAN_PARENT)
 
 void scan_rec_dirent(struct llapi_scan_rec *rec, const char *path,
 		     int p, int d, const struct dirent64 *de);

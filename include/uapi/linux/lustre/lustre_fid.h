@@ -365,6 +365,15 @@ static inline bool lu_fid_eq(const struct lu_fid *f0, const struct lu_fid *f1)
 	return !memcmp(f0, f1, sizeof(*f0));
 }
 
+/*
+ * A filesystem formatted at 2.4 or later has [FID_SEQ_ROOT:1:0] as its root
+ * FID; one upgraded from before 2.4 keeps an IGIF root.
+ */
+static inline bool fid_is_root(const struct lu_fid *fid)
+{
+	return lu_fid_eq(fid, &LU_ROOT_FID);
+}
+
 static inline int lu_fid_cmp(const struct lu_fid *f0,
 			     const struct lu_fid *f1)
 {

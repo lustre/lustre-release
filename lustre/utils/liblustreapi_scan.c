@@ -65,7 +65,19 @@ struct llapi_scan_state {
 	 * negative from ss_filter
 	 */
 	int			 ss_stop_rc;
+	/*
+	 * What the scan did, for a caller that asked.  A walk runs its
+	 * callback on every thread at once, so these are counted atomically
+	 * rather than merged at the end as the device scan's per-worker
+	 * counters are.
+	 */
+	struct llapi_scan_stats	 ss_stats;
 };
+
+static inline void scan_ns_count(__u64 *counter)
+{
+	__atomic_fetch_add(counter, 1, __ATOMIC_RELAXED);
+}
 
 /*
  * The part of the record that costs nothing: path, name, and the object
@@ -496,26 +508,39 @@ static int llapi_scan_cb_init(char *path, int p, int *dp,
 		return -1;
 
 	scan_rec_dirent(&rec, path, p, d, de);
+	scan_ns_count(&st->ss_stats.ss_seen);
 
 	if (st->ss_filter != NULL) {
 		rc = st->ss_filter(&rec, st->ss_data);
-		if (rc > 0)
+		if (rc > 0) {
+			scan_ns_count(&st->ss_stats.ss_filtered);
 			goto out;		/* skip, but still descend */
+		}
 		if (rc < 0)
 			goto stop;
 	}
 
 	rc = scan_rec_gather(param, path, p, d, &fd, st->ss_want,
 			     &rec);
-	if (rc == -ENOENT || rc == -ESTALE)
+	if (rc == -ENOENT || rc == -ESTALE) {
 		/* unlinked between readdir and here: not an error */
+		scan_ns_count(&st->ss_stats.ss_skipped);
 		goto out;
+	}
 	if (rc < 0) {
+		scan_ns_count(&st->ss_stats.ss_skipped);
 		if (param->fp_stop_on_error)
 			goto err;
 		goto out;
 	}
 
+	/*
+	 * Everything a walk reaches is namespace-visible by definition: it
+	 * arrived through a directory entry.  The other classes are what a
+	 * scan of a target meets and a walk cannot.
+	 */
+	scan_ns_count(&st->ss_stats.ss_class[LLAPI_SCAN_CLS_VISIBLE]);
+	scan_ns_count(&st->ss_stats.ss_emitted);
 	rc = st->ss_cb(&rec, st->ss_data);
 	if (rc != 0)
 		goto stop;
@@ -595,6 +620,10 @@ int llapi_scan_namespace(const char *path, const struct llapi_scan_param *sp,
 		if (rc != 0)
 			return rc;
 		sp = &spl;
+		/* only now: a short lfsp_size may not reach lfsp_stats */
+		if (spl.lfsp_stats != NULL &&
+		    spl.lfsp_stats->ss_size < LLAPI_SCAN_STATS_MIN_SIZE)
+			return -EINVAL;
 	}
 
 	rc = snprintf(buf, sizeof(buf), "%s", path);
@@ -617,6 +646,7 @@ int llapi_scan_namespace(const char *path, const struct llapi_scan_param *sp,
 					 LLAPI_SCAN_WANT_DEFAULT);
 	scan_param_report_got(sp, st.ss_want, LLAPI_SCAN_WANT_KNOWN_NS);
 	st.ss_stop_rc = 0;
+	memset(&st.ss_stats, 0, sizeof(st.ss_stats));
 
 	/* -1 is "unlimited", as lfs find sets it */
 	param.fp_max_depth = (unsigned int)-1;
@@ -629,6 +659,17 @@ int llapi_scan_namespace(const char *path, const struct llapi_scan_param *sp,
 
 	rc = llapi_find_with_cb(buf, &param, llapi_scan_cb_init,
 				cb_common_fini);
+
+	if (sp != NULL && sp->lfsp_stats != NULL) {
+		__u32 room = sp->lfsp_stats->ss_size;
+
+		if (room > sizeof(st.ss_stats))
+			room = sizeof(st.ss_stats);
+		/* a whole counter, never half of one */
+		room = scan_stats_whole(room);
+		st.ss_stats.ss_size = room;
+		memcpy(sp->lfsp_stats, &st.ss_stats, room);
+	}
 
 	/* a consumer that stopped the scan hears its own value back */
 	return st.ss_stop_rc != 0 ? st.ss_stop_rc : rc;

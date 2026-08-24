@@ -384,7 +384,8 @@ Obsoletes: lustre-osd-mount < %{version}
 
 %description osd-ldiskfs-mount
 Provide a shared library (dso) that can be loaded into various
-lustre tools (mount/mkfs) to provide support for ldisfs
+lustre tools (mount/mkfs) to provide support for ldisfs.
+It also holds the ldiskfs backend of llapi_scan_device().
 
 # with lustre_utils
 %endif
@@ -1094,6 +1095,7 @@ echo '%exclude %{_libdir}/lustre/tests/lcov-merge.sh*' >> lustre-tests.files
 %defattr(-,root,root)
 %dir %{_libdir}/@PACKAGE@
 %{_libdir}/@PACKAGE@/mount_osd_ldiskfs.so
+%{_libdir}/@PACKAGE@/scan_osd_ldiskfs.so
 %endif
 %endif
 %endif

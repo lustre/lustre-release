@@ -149,6 +149,7 @@ DO_NOT_UPDATE_THIS_LIST =			\
 	llapi_quotactl.3			\
 	llapi_rmfid.3				\
 	llapi_rmfid_at.3			\
+	llapi_scan_device.3			\
 	llapi_scan_namespace.3			\
 	llapi_search_mdt.3			\
 	llapi_search_mounts.3			\

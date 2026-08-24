@@ -599,7 +599,14 @@ void llapi_find_param_free(struct find_param *param);
 /* The whole of that half, whether this API has a name for the bit or not. */
 #define LLAPI_SCAN_STATX_MASK	0x00000000ffffffffULL
 
-/* The high half is this API's own, and is what lfsr_valid reports. */
+/*
+ * The high half is this API's own, and is what lfsr_valid reports.
+ *
+ * STATX_INO is deliberately not among the aliases above: LLAPI_SCAN_INO
+ * below is the object's id on the target it was read from, and stx_ino is
+ * the client's inode number for the same object.  Two different numbers
+ * cannot share one bit.
+ */
 #define LLAPI_SCAN_FID		0x0000000100000000ULL
 /* stx_attributes, masked by stx_attributes_mask; statx has no bit for it */
 #define LLAPI_SCAN_ATTRS	0x0000000200000000ULL
@@ -607,7 +614,9 @@ void llapi_find_param_free(struct find_param *param);
  * lfsr_lmm.  For a directory this is the *default* layout new files under
  * it inherit, never a layout of its own -- and where the directory has none,
  * what the filesystem root's default is, which may describe nothing about
- * this directory at all.  It carries no objects either way.
+ * this directory at all.  It carries no objects either way.  That is a
+ * namespace scan's answer; a device scan gives the stored trusted.lov,
+ * see llapi_scan_device(3).
  */
 #define LLAPI_SCAN_LAYOUT	0x0000000400000000ULL
 /* costs an open per regular file: gathered only when named in lfsp_want */
@@ -638,9 +647,51 @@ void llapi_find_param_free(struct find_param *param);
  * object for these; a scan of a target reads them from trusted.hsm.
  */
 #define LLAPI_SCAN_HSM		0x0000020000000000ULL
+/*
+ * The object as the target holds it: its id there, the parent and name its
+ * linkea records, and its LMA.
+ */
+#define LLAPI_SCAN_INO		0x0000040000000000ULL	/* lfsr_ino */
+#define LLAPI_SCAN_PARENT	0x0000080000000000ULL	/* lfsr_parent_fid */
+#define LLAPI_SCAN_LINKEA	0x0000100000000000ULL	/* lfsr_linkea */
+#define LLAPI_SCAN_LMA		0x0000200000000000ULL	/* lfsr_lma_* */
+#define LLAPI_SCAN_CLASS	0x0000400000000000ULL	/* lfsr_class */
 
 /* Fields the scanner can answer without touching the MDT. */
 #define LLAPI_SCAN_DIRENT_MASK	LLAPI_SCAN_TYPE
+
+/**
+ * enum llapi_scan_class - what an object is, for a scanner that sees them all
+ *
+ * Besides the objects a client can name, a target holds the ones the
+ * filesystem keeps for itself, and a consumer that acts on what it is
+ * given has to be able to tell them apart.
+ */
+enum llapi_scan_class {
+	LLAPI_SCAN_CLS_VISIBLE = 0,	/* reachable from the namespace */
+	LLAPI_SCAN_CLS_INTERNAL = 1,	/* the OSD's own object */
+	LLAPI_SCAN_CLS_OST_OBJ = 2,	/* an OST data object */
+	LLAPI_SCAN_CLS_AGENT = 3,	/* DNE agent inode: a remote entry's
+					 * local stand-in (LMAI_AGENT)
+					 */
+	/*
+	 * no LMA.  lfsr_fid is the IGIF the inode number and its generation
+	 * make, but only on MDT0000: nowhere else is that the FID such an
+	 * object has, and LLAPI_SCAN_FID is clear instead.
+	 */
+	LLAPI_SCAN_CLS_NO_LMA = 4,
+	LLAPI_SCAN_CLS_BAD = 5,		/* LMA has an unknown incompat bit */
+	/*
+	 * in PENDING: an open-unlinked file, or a volatile one a migrate,
+	 * resync or HSM restore is using.  It keeps a link and a FID, so it
+	 * would otherwise read as visible, but no name reaches it.
+	 */
+	LLAPI_SCAN_CLS_ORPHAN = 6,
+	LLAPI_SCAN_CLS_MAX = 7
+};
+
+/* entries in ss_class, fixed so the struct can grow after it */
+#define LLAPI_SCAN_CLS_SLOTS	16
 
 /**
  * struct llapi_scan_rec - one scanned object
@@ -648,6 +699,10 @@ void llapi_find_param_free(struct find_param *param);
  * Valid only for the duration of the callback it is passed to.  lfsr_path,
  * lfsr_name, lfsr_lmm and lfsr_lmv point into scanner-owned memory and must
  * be copied by a consumer that keeps them.
+ *
+ * The pointer fields carry their own answer: lfsr_path is NULL where no
+ * namespace was walked, and lfsr_name is NULL where no name was recovered.
+ * A path is not a scan's to invent.
  *
  * This is an in-process record and not a serialization.  It holds pointers
  * into scanner-owned memory and open descriptors, so it cannot be written to
@@ -708,13 +763,15 @@ struct llapi_scan_rec {
 	const struct lov_user_md *lfsr_lmm;	/* raw layout, or NULL */
 	/*
 	 * The directory stripe, in the lmv_user_md form unless
-	 * LLAPI_SCAN_LMV_FOREIGN says otherwise: a device scan converts the
-	 * on-disk lmv_mds_md_v1 it reads, so the field means one thing
-	 * whichever scanner filled it.  A foreign LMV has no such form and
-	 * is delivered as the struct lmv_foreign_md it is, which is what
-	 * that bit is for.  A device scan does not carry the shard FIDs --
-	 * naming a stripe needs an MDT index, which is an FLD lookup it has
-	 * no client to make.
+	 * LLAPI_SCAN_LMV_FOREIGN says otherwise: a foreign LMV has no such
+	 * form and is delivered as the struct lmv_foreign_md it is, which
+	 * is what that bit is for.
+	 *
+	 * The shard FIDs may be absent, naming a stripe needing an MDT
+	 * index and so an FLD lookup, so lum_objects[] is measured by
+	 * lfsr_lmvsize and never by lum_stripe_count: the count is the
+	 * directory's real one either way, and the two sizes differ by 24
+	 * bytes a stripe.
 	 */
 	const struct lmv_user_md *lfsr_lmv;	/* dir stripe, or NULL */
 	/* open parent dir, or -1 */
@@ -724,25 +781,68 @@ struct llapi_scan_rec {
 	/* enum hsm_states, HS_* */
 	__u32			 lfsr_hsm_states;
 	__u32			 lfsr_hsm_archive_id;
+	/* from here on, the object as the target holds it */
+	__u64			 lfsr_ino;	/* object id on the target */
+	/* first linkea parent */
+	struct lu_fid		 lfsr_parent_fid;
+	const void		*lfsr_linkea;	/* raw trusted.link */
+	/* bytes at lfsr_linkea */
+	__u32			 lfsr_linkeasize;
+	__u32			 lfsr_class;	/* enum llapi_scan_class */
+	__u32			 lfsr_lma_compat;	/* LMAC_* */
+	__u32			 lfsr_lma_incompat; /* LMAI_* */
+};
+
+/**
+ * struct llapi_scan_stats - what a scan did, filled in on return
+ *
+ * A scan of a live target skips objects it cannot trust rather than
+ * reporting them wrong, so the count of what it dropped is part of its
+ * answer and not a diagnostic.  ss_size must be set to sizeof(*stats).
+ *
+ * Every object the scan looked at is accounted for exactly once, so on a
+ * completed scan ss_seen == ss_filtered + ss_skipped + sum(ss_class).
+ * ss_class has LLAPI_SCAN_CLS_SLOTS entries, more than there are classes,
+ * so a class added later does not move a counter added after ss_class.
+ * Entries from LLAPI_SCAN_CLS_MAX on are zero.
+ * ss_emitted is not a fourth part of that sum: it counts the records the
+ * callback was handed, which is the ss_class entries that are the
+ * target's own subject matter, plus the rest when
+ * LLAPI_SCAN_F_INTERNAL is set.
+ */
+struct llapi_scan_stats {
+	__u32			 ss_size;
+	__u32			 ss_padding;
+	__u64			 ss_seen;	/* objects examined */
+	__u64			 ss_emitted;	/* records delivered */
+	__u64			 ss_skipped;	/* unreadable or inconsistent */
+	__u64			 ss_filtered;	/* rejected by lfsp_filter */
+	__u64			 ss_class[LLAPI_SCAN_CLS_SLOTS];
 };
 
 /* struct llapi_scan_param flags (lfsp_flags). */
 #define LLAPI_SCAN_F_STOP_ON_ERROR	0x00000001ULL
+/* deliver objects that are not namespace-visible, which a scan of a target's
+ * own objects otherwise keeps to itself (see enum llapi_scan_class)
+ */
+#define LLAPI_SCAN_F_INTERNAL		0x00000002ULL
 
 /**
  * llapi_scan_cb_t - consumer callback
  *
  * Called once per object.  Return 0 to continue the scan; any other value
- * stops it and is returned to the caller of llapi_scan_namespace().  With
- * more than one scan thread this is called concurrently and must be
- * thread-safe.
+ * stops it and is returned to the caller of llapi_scan_namespace() or
+ * llapi_scan_device().  With more than one scan thread this is called
+ * concurrently and must be thread-safe.
  *
- * As lfsp_filter it is called before any I/O on the object, with a record
- * carrying only lfsr_path, lfsr_name and, when the directory entry knew it,
- * LLAPI_SCAN_TYPE -- which a subdirectory does not carry once there is
- * more than one scan thread.  There the return values are 0 to gather
- * and deliver the object, 1 to skip it without gathering (descent into
- * a directory is unaffected), and negative to stop the scan.
+ * As lfsp_filter it is called before any I/O on the object, so the record
+ * carries only what the scan already had: the directory entry for a
+ * namespace walk, the object's own inode for a scan of a target.  Which
+ * fields that is, is each scanner's, and its page says so.
+ *
+ * There the return values are 0 to gather and deliver the object, 1 to skip
+ * it without gathering (descent into a directory is unaffected), and
+ * negative to stop the scan.
  */
 typedef int (*llapi_scan_cb_t)(const struct llapi_scan_rec *rec, void *data);
 
@@ -777,14 +877,9 @@ typedef int (*llapi_scan_cb_t)(const struct llapi_scan_rec *rec, void *data);
  * this one rather than as a change to it.
  *
  * lfsp_want is the demand mask: which LLAPI_SCAN_* fields the consumer will
- * read.  0 asks for everything except LLAPI_SCAN_MDT_INDEX,
- * LLAPI_SCAN_PROJID and LLAPI_SCAN_HSM, which each cost an ioctl or an open
- * per object and have to be named.  LLAPI_SCAN_LMV is not one of them:
- * it costs a second ioctl, but only on a directory, which is the one
- * place it means anything.  A scan wanting nothing
- * outside LLAPI_SCAN_DIRENT_MASK performs no ioctl per object, which is
- * what makes a name-only search cheap.  A field not asked for may still
- * arrive.
+ * read.  0 means the scanner's own default, and the two are not the same
+ * -- what each leaves out is what costs it I/O, so each scanner's page
+ * says which.  A field not asked for may still arrive.
  */
 struct llapi_scan_param {
 	__u32			 lfsp_size;
@@ -811,10 +906,14 @@ struct llapi_scan_param {
 	 * default came to.
 	 */
 	__u64			*lfsp_got;
+	/* filled in when the scan ends.  NULL: not wanted */
+	struct llapi_scan_stats	*lfsp_stats;
 };
 
 int llapi_scan_namespace(const char *path, const struct llapi_scan_param *sp,
 			 llapi_scan_cb_t cb, void *data);
+int llapi_scan_device(const char *device, const struct llapi_scan_param *sp,
+		      llapi_scan_cb_t cb, void *data);
 
 int llapi_file_fget_mdtidx(int fd, int *mdtidx);
 int llapi_dir_set_default_lmv(const char *name,

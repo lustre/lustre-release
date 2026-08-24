@@ -1,4 +1,4 @@
-.TH LLAPI_SCAN_NAMESPACE 3 2026-08-18 "Lustre User API" "Lustre Library Functions"
+.TH LLAPI_SCAN_NAMESPACE 3 2026-09-01 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_scan_namespace \- scan a Lustre namespace, one record per object
 .SH SYNOPSIS
@@ -55,6 +55,15 @@ must be zero: those bytes are already counted in
 .IR lfsp_size ,
 so a field carved out of them later can only be refused here, never
 noticed.
+.I lfsp_stats
+points at a
+.B struct llapi_scan_stats
+the scan fills in with what it did, described in
+.BR llapi_scan_device (3),
+or NULL when the caller does not want it. A walk counts an object as seen
+once, then as filtered, skipped, or delivered and namespace-visible.
+Everything a walk reaches arrived through a directory entry, so the other
+classes are ones only a scan of a target meets.
 .LP
 .I lfsp_want
 is the demand mask: the
@@ -366,12 +375,28 @@ where
 names it and the filesystem supports project quotas. It is the same walk with
 .BR stat (2)
 as the attribute source, not a second scanner.
+.LP
+A scanner reading a target's objects directly answers for more than a
+namespace walk can. See
+.BR llapi_scan_device (3).
 .SH RETURN VALUES
 .B llapi_scan_namespace()
 returns:
 .TP
 0
-on success.
+on success. Objects may still have been left out: a fetch that fails for
+a reason other than the object having gone (an eviction or a recovery
+window, say) drops that object from the callback stream and the scan
+carries on. Set
+.B LLAPI_SCAN_F_STOP_ON_ERROR
+in
+.I lfsp_flags
+for a scan that stops on the first of those instead, and read
+.I ss_skipped
+to learn how many were left out. It also counts the objects that went
+between the readdir and the fetch, which are not errors, so a nonzero
+.I ss_skipped
+on a busy tree does not by itself mean something was lost.
 .TP
 <0
 a negative errno on failure, or the negative value
@@ -402,12 +427,23 @@ is smaller than the fields up to and including
 or is larger than 4096 bytes, or is larger than the library's definition of
 the parameter structure and a byte past the end of it is not zero, or
 .I lfsp_flags
-sets a bit this library does not define, or
+sets a bit this library does not define or that only
+.BR llapi_scan_device (3)
+acts on, such as
+.BR LLAPI_SCAN_F_INTERNAL ,
+or
 .I lfsp_padding
 is not zero. Neither changes
 .IR lfsp_size ,
 so refusing them is what gives flags and the reserved bytes the same
 guarantee fields already have: a caller never has one silently ignored.
+It is also returned when
+.I lfsp_stats
+is not NULL and its
+.I ss_size
+is shorter than the minimum a scan writes back, which reaches through
+.IR ss_seen ,
+for the same reason.
 .TP 15
 .B -ENAMETOOLONG
 .I path
@@ -498,4 +534,5 @@ user application interface library since release 2.18.0.
 .SH SEE ALSO
 .BR lfs-find (1),
 .BR llapi_layout_get_by_xattr (3),
+.BR llapi_scan_device (3),
 .BR lustreapi (7)

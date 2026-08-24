@@ -131,6 +131,8 @@ liblustreapi_la_SOURCES = libhsm_scanner.c \
 			  liblustreapi_project.c \
 			  liblustreapi_root.c \
 			  liblustreapi_scan.c \
+			  liblustreapi_scan_device.c \
+			  lustreapi_scan_backend.h \
 			  liblustreapi_swap.c \
 			  liblustreapi_util.c \
 			  erasurecode/ec_base.c \
@@ -146,6 +148,29 @@ liblustreapi_la_LIBADD = $(top_builddir)/lib/libcfs/libcfs.la \
 			 $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la \
 			 $(LIBNL3_LIBS) -lpthread
 
+#
+# llapi_scan_device()'s backend.  With plugins -- the default -- it is a
+# shared object beside mount_osd_ldiskfs.so, dlopen'ed on the first scan, so
+# that this library never links libext2fs and a client build carries no trace
+# of it.  Without them there is nowhere to dlopen from, and a build that has
+# ldiskfs links the backend in, as mount.lustre does with its own.
+#
+if PLUGINS
+liblustreapi_la_CFLAGS += -DPLUGIN_DIR=\"${pkglibdir}\"
+liblustreapi_la_LIBADD += -ldl
+else
+if UTILS
+if LDISKFS_ENABLED
+# Compiled in, not linked in: adding a plain .a to a libtool library's
+# LIBADD leaves its objects out of the static liblustreapi.a, and every
+# program that links that archive is then short the backend.
+liblustreapi_la_SOURCES += libscan_ldiskfs.c
+liblustreapi_la_CFLAGS += -DHAVE_LDISKFS_SCAN
+liblustreapi_la_LIBADD += -lext2fs
+endif # LDISKFS_ENABLED
+endif # UTILS
+endif # PLUGINS
+
 pkgconfigdir = $(libdir)/pkgconfig
 pkgconfig_DATA = lustre.pc
 
@@ -154,6 +179,7 @@ LIB_TARGETS =
 if PLUGINS
 if LDISKFS_ENABLED
 LIB_TARGETS += mount_osd_ldiskfs.so
+LIB_TARGETS += scan_osd_ldiskfs.so
 endif
 if ZFS_ENABLED
 LIB_TARGETS += mount_osd_zfs.so
@@ -236,6 +262,22 @@ MNTMODLIBS += $(ZFS_LIBZFS_LIBS)
 PLUGIN_LIB += libmount_utils_zfs.a
 endif # PLUGINS
 endif # ZFS_ENABLED
+
+if LDISKFS_ENABLED
+if PLUGINS
+noinst_LIBRARIES += libscan_ldiskfs.a
+
+libscan_ldiskfs_a_SOURCES = libscan_ldiskfs.c
+libscan_ldiskfs_a_CPPFLAGS :=
+
+lib_LTLIBRARIES += libscan_ldiskfs.la
+libscan_ldiskfs.la : libscan_ldiskfs.a
+	$(CC) $(LDFLAGS) $(MNTMODLDFLAGS) -shared -Wl,--export-dynamic \
+			 -o scan_osd_ldiskfs.so \
+			 `$(AR) -t libscan_ldiskfs.a` \
+			 -lext2fs
+endif # PLUGINS
+endif # LDISKFS_ENABLED
 
 if LDISKFS_ENABLED
 noinst_LIBRARIES += libmount_utils_ldiskfs.a
