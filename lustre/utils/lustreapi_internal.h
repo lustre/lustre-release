@@ -481,6 +481,11 @@ static inline void scan_param_report_got(const struct llapi_scan_param *sp,
 
 void scan_rec_dirent(struct llapi_scan_rec *rec, const char *path,
 		     int p, int d, const struct dirent64 *de);
+int scan_rec_gather_begin(struct find_param *param, char *path, int d,
+			  __u64 want, bool *have_lmv);
+int scan_rec_gather_finish(struct find_param *param, char *path, int p,
+			   int d, int *fdp, __u64 want, bool have_lmv,
+			   struct llapi_scan_rec *rec);
 int scan_rec_gather(struct find_param *param, char *path, int p,
 		    int d, int *fdp, __u64 want,
 		    struct llapi_scan_rec *rec);

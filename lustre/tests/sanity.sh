@@ -10803,6 +10803,78 @@ test_56Ek() {
 }
 run_test 56Ek "Test lfs find error handling with LLAPI_FAIL_LOC"
 
+test_56El() {
+	local dir=$DIR/$tdir
+	local tmp=$dir/notlustre
+	local errf=$TMP/$tfile.err
+	local found
+
+	test_mkdir $dir || error "mkdir $dir failed"
+	# under $dir on purpose, and not in $TMP: the case is a walk that
+	# starts on Lustre and crosses off it, so the subtree has to be
+	# reachable from a Lustre path.  A tmpfs is the cheapest filesystem
+	# that is certainly not Lustre and needs no device.
+	mkdir $tmp || error "mkdir $tmp failed"
+	mount -t tmpfs none $tmp || skip_env "cannot mount tmpfs on $tmp"
+	stack_trap "umount $tmp || umount -l $tmp"
+	stack_trap "rm -f $errf"
+
+	touch $tmp/f1 $tmp/f2 || error "touch under tmpfs failed"
+	mkdir $tmp/d1 || error "mkdir under tmpfs failed"
+	touch $tmp/d1/f3 || error "touch in tmpfs subdir failed"
+	# a special file too: the project-id fetch takes its other arm for one,
+	# asking LL_IOC_PROJECT of the parent, which off Lustre answers ENOTTY
+	# on every kernel -- where the regular-file arm only does so on a
+	# client older than v6.0, which is why this needs its own object
+	ln -s f1 $tmp/l1 || error "symlink under tmpfs failed"
+
+	# the walk descends into a subtree that is not on Lustre, where each
+	# object's stat and, for --links, each directory's LMV answer ENOTTY.
+	# No -type: d_type would reject the directories before the LMV fetch.
+	local raw
+
+	raw=$($LFS find $dir --links 1) ||
+		error "lfs find failed on $dir"
+	found=$(wc -l <<< "$raw")
+	# f1, f2, f3 and l1; every directory has more than one link
+	(( found == 4 )) ||
+		error "lfs find found $found objects under $dir, expected 4"
+
+	# any -printf reads a project id for every object; off Lustre there is
+	# none to read, and that must not fail the search
+	$LFS find $dir -printf '%LP %p\n' > /dev/null 2> $errf || {
+		cat $errf
+		error "lfs find -printf %LP failed on $dir"
+	}
+	if [[ -s $errf ]]; then
+		cat $errf
+		error "lfs find -printf %LP wrote errors off Lustre"
+	fi
+
+	# l1 has no project id at all: --projid N cannot match it and
+	# ! --projid N does, for N 0 too, which the -printf stand-in equals
+	raw=$($LFS find $dir -type l --projid 0) ||
+		error "lfs find --projid 0 failed on $dir"
+	[[ -z "$raw" ]] || error "--projid 0 matched '$raw', which has none"
+	raw=$($LFS find $dir -type l ! --projid 0) ||
+		error "lfs find ! --projid 0 failed on $dir"
+	[[ "$raw" == "$tmp/l1" ]] ||
+		error "! --projid 0 printed '$raw', expected $tmp/l1"
+
+	# and an object there has no FID and no layout, which is what it is
+	# rather than an error to report: stderr must stay empty
+	# on failure the stderr is the whole diagnosis, so print it either way
+	$LFS find $dir -printf '%LF %Lc %p\n' > /dev/null 2> $errf || {
+		cat $errf
+		error "lfs find -printf failed on $dir"
+	}
+	if [[ -s $errf ]]; then
+		cat $errf
+		error "lfs find -printf wrote errors for a subtree off Lustre"
+	fi
+}
+run_test 56El "lfs find -printf over a subtree that is not on Lustre"
+
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	# note test will not do anything if MDS is not local

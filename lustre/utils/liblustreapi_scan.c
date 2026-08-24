@@ -289,35 +289,19 @@ static int llapi_scan_get_lmv(char *path, int d, struct find_param *param)
 }
 
 /*
- * Phase two of the record: what the MDT answers for, as much of it as
- * @want asks for, into @param's scratch buffers and from there into @rec.
+ * The first step of scan_rec_gather(): clear the scratch buffers and fetch
+ * the LMV.  lfs find runs the two steps itself, so that its LMV checks can
+ * reject a directory before the stat RPC.
  *
- * Written to be the one place that decides how an object's attributes are
- * fetched; lfs find is moved onto it by LU-20605, which is why it is here
- * rather than static to the scanner.  @want is taken
- * literally here -- 0 means nothing, and the public entry point is what
- * widens 0 to "everything".
- *
- * LLAPI_SCAN_MDT_INDEX for a regular file costs an open, which is why the
- * public default leaves it out; a special file is taken to live on its
- * parent's MDT, as lfs find has always assumed.  If an fd is opened for
- * it, it is left in *@fdp (and rec->lfsr_fd) for the caller to close, so a
- * caller that goes on to need one does not open twice.
- *
- * Return: 0 with @rec filled, or the negative errno of the fetch that
- * failed -- the caller decides what ENOENT, ESTALE and ENOTTY mean to it.
+ * Return: 0 with *@have_lmv set, or a negative errno.
  */
-int scan_rec_gather(struct find_param *param, char *path, int p,
-		    int d, int *fdp, __u64 want,
-		    struct llapi_scan_rec *rec)
+int scan_rec_gather_begin(struct find_param *param, char *path, int d,
+			  __u64 want, bool *have_lmv)
 {
 	struct lov_user_mds_data *lmd = param->fp_lmd;
-	bool have_lmv = false;
 	int rc;
 
-	if (!(want & LLAPI_SCAN_MDT_MASK))
-		return 0;
-
+	*have_lmv = false;
 	lmd->lmd_lmm.lmm_magic = 0;
 	/*
 	 * fp_lmd is one buffer for the whole scan.  get_lmd_info_fd() fills
@@ -334,8 +318,19 @@ int scan_rec_gather(struct find_param *param, char *path, int p,
 		rc = llapi_scan_get_lmv(path, d, param);
 		if (rc < 0)
 			return rc;
-		have_lmv = rc == 1;
+		*have_lmv = rc == 1;
 	}
+
+	return 0;
+}
+
+/* The second step of scan_rec_gather(), after scan_rec_gather_begin(). */
+int scan_rec_gather_finish(struct find_param *param, char *path, int p,
+			   int d, int *fdp, __u64 want, bool have_lmv,
+			   struct llapi_scan_rec *rec)
+{
+	struct lov_user_mds_data *lmd = param->fp_lmd;
+	int rc;
 
 	rc = get_lmd_info_fd(path, p, d, lmd, param->fp_lum_size,
 			     GET_LMD_INFO);
@@ -431,6 +426,43 @@ int scan_rec_gather(struct find_param *param, char *path, int p,
 		rec->lfsr_fd = *fdp;
 	scan_rec_mdt(rec, lmd, param, have_lmv);
 	return 0;
+}
+
+/*
+ * Phase two of the record: what the MDT answers for, as much of it as
+ * @want asks for, into @param's scratch buffers and from there into @rec.
+ *
+ * Written to be the one place that decides how an object's attributes are
+ * fetched; lfs find is moved onto it by LU-20605, which is why it is here
+ * rather than static to the scanner.  @want is taken
+ * literally here -- 0 means nothing, and the public entry point is what
+ * widens 0 to "everything".
+ *
+ * LLAPI_SCAN_MDT_INDEX for a regular file costs an open, which is why the
+ * public default leaves it out; a special file is taken to live on its
+ * parent's MDT, as lfs find has always assumed.  If an fd is opened for
+ * it, it is left in *@fdp (and rec->lfsr_fd) for the caller to close, so a
+ * caller that goes on to need one does not open twice.
+ *
+ * Return: 0 with @rec filled, or the negative errno of the fetch that
+ * failed -- the caller decides what ENOENT, ESTALE and ENOTTY mean to it.
+ */
+int scan_rec_gather(struct find_param *param, char *path, int p,
+		    int d, int *fdp, __u64 want,
+		    struct llapi_scan_rec *rec)
+{
+	bool have_lmv;
+	int rc;
+
+	if (!(want & LLAPI_SCAN_MDT_MASK))
+		return 0;
+
+	rc = scan_rec_gather_begin(param, path, d, want, &have_lmv);
+	if (rc < 0)
+		return rc;
+
+	return scan_rec_gather_finish(param, path, p, d, fdp, want, have_lmv,
+				      rec);
 }
 
 /*
