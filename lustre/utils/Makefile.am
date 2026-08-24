@@ -82,7 +82,8 @@ lctl_CFLAGS := $(AM_CFLAGS) $(LIBNL3_CFLAGS) -I $(top_builddir)/lnet/utils
 lctl_LDADD := liblustreapi.la $(PTHREAD_LIBS) $(LIBNL3_LIBS) -lyaml
 lctl_LDADD += $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la
 
-lfs_SOURCES = lfs.c lfs_project.c lfs_project.h callvpe.c callvpe.h
+lfs_SOURCES = lfs.c lfs_project.c lfs_project.h callvpe.c callvpe.h \
+	      lfs_find_parse.c lfs_find_parse.h
 lfs_CFLAGS := -fPIC $(AM_CFLAGS) -I $(top_builddir)/lnet/utils
 lfs_LDADD := liblustreapi.la -lz -lm
 lfs_LDADD += $(top_builddir)/lnet/utils/lnetconfig/liblnetconfig.la
