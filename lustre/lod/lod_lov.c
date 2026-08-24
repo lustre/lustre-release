@@ -1049,8 +1049,9 @@ out:
  * EA. The buffer is reallocated if the value doesn't fit.
  *
  * Return:
- * * %0 if EA is fetched successfully
- * * %0 if EA is empty
+ * * %positive size of the EA that was fetched
+ * * %0 if EA is empty or absent
+ * * %-EAGAIN if the EA kept shrinking under a racing writer
  * * %negative error number on failure
  */
 int lod_get_ea(const struct lu_env *env, struct lod_object *lo,
@@ -1058,6 +1059,7 @@ int lod_get_ea(const struct lu_env *env, struct lod_object *lo,
 {
 	struct lod_thread_info	*info = lod_env_info(env);
 	struct dt_object	*next = dt_object_child(&lo->ldo_obj);
+	struct lod_device	*lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	int rc, count = 0;
 	ENTRY;
 
@@ -1086,9 +1088,17 @@ repeat:
 
 		LASSERT(rc > 0);
 		if (rc <= info->lti_ea_store_size) {
+			int size = rc;
+
 			/* sometimes LOVEA can shrink in parallel */
-			LASSERT(count++ < 10);
-			goto repeat;
+			if (count++ < 10)
+				goto repeat;
+
+			rc = -EAGAIN;
+			CERROR("%s: "DFID" %s kept shrinking to %d: rc = %d\n",
+			       lod2obd(lod)->obd_name, PFID(lod_object_fid(lo)),
+			       name, size, rc);
+			RETURN(rc);
 		}
 		rc = lod_ea_store_resize(info, rc);
 		if (rc)
