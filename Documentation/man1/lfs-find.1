@@ -1,6 +1,6 @@
 .TH LFS-FIND 1 2026-09-11 Lustre "Lustre User Utilities"
 .SH NAME
-lfs-find \- Lustre client utility to list files with specific attributes
+lfs-find \- Lustre utility to list files with specific attributes
 .SH SYNOPSIS
 .SY "lfs find"
 .IR DIRECTORY | FILENAME " ..."
@@ -166,6 +166,16 @@ lfs-find \- Lustre client utility to list files with specific attributes
 .RB [[ ! ]
 .BR --xattr
 .IR NAME [= VALUE ]]
+.SY "lfs find"
+.RB { --target
+.IR NAME |
+.B --fsname
+.IR FSNAME |
+.RB [ --device ]
+.IR DEVICE |\c
+.BR --local }
+.RB [ --internal ]
+.RI [ OPTION ]...
 .YS
 .SH DESCRIPTION
 .B lfs find
@@ -177,6 +187,22 @@ the same options as
 .BR find (1),
 as well as Lustre-specific attributes such as stripe count and size,
 OST and MDT location, and composite layout attributes.
+.PP
+Given a target instead of a directory,
+.B lfs find
+reads that MDT or OST straight off its device
+and matches the target's own objects with the same options.
+No client or MDS is involved.
+For a device named with
+.B --device
+or given as a block device, nothing needs to be mounted;
+.BR --target ,
+.B --fsname
+and
+.B --local
+read targets mounted on this node.
+This needs read access to the device and the scan backend
+that the Lustre server package installs.
 .SH OPTIONS
 .TP
 .BR -A ", " --atime
@@ -819,6 +845,95 @@ The regular expressions must match the complete attribute names and values,
 and not just a substring.
 This option may be specified multiple times, and the file must match all
 provided arguments.
+.SS Searching a target
+.TP
+.BI --device " DEVICE"
+Read the target on
+.IR DEVICE ,
+a block device, disk image, or snapshot,
+instead of walking a directory.
+A block device may also be given where a directory would be,
+without
+.BR --device ,
+unless the device node is itself stored on Lustre:
+that is a file, and is walked as before.
+A disk image may not, since it cannot be told apart from a file.
+.TP
+.BI --target " NAME"
+Read a target mounted on this node,
+named as
+.B mkfs.lustre
+labelled it, such as
+.BR testfs-MDT0000 .
+Its device is found through the
+.BI osd-*. NAME .mntdev
+parameter, which exists only while the target is mounted.
+.TP
+.BI --fsname " FSNAME"
+Read every MDT and OST of filesystem
+.I FSNAME
+that is mounted on this node, one after another, as
+.B --local
+does for all of them.
+.I FSNAME
+is the name
+.B mkfs.lustre
+was given, so it has to be one it would accept:
+1 to 8 letters, digits,
+.BR _ " or " - .
+A bare
+.I FSNAME
+without the option is a path, as it always is.
+.TP
+.B --local
+Read every MDT and OST mounted on this node, one after another.
+The MGS is skipped.
+Where the sweep finds more than one target,
+a line naming each one it reads goes to standard error ahead of its objects,
+so standard output stays a plain list.
+A target that cannot be read is reported and the others are still read,
+and the exit status is non-zero.
+So is a target this build has no scan backend for,
+and one that cannot answer an option, such as an OST asked about layouts.
+.B --ost
+and
+.B --mdt
+are different: here and under
+.BR --fsname ,
+a sweep skips the targets of the other kind rather than failing on them,
+and refuses the two options together, since no target would be left.
+Only an MDT answers the layout options, such as
+.B --pool
+and
+.BR --stripe-count ,
+so a sweep that reads an MDT skips the OSTs of its filesystem.
+With no MDT of the filesystem to read, or with
+.BR --ost ,
+each OST fails as one that cannot answer them.
+.TP
+.B --internal
+Also report the objects a target keeps for itself,
+such as its OI and quota files,
+which are otherwise left out.
+One with no FID is printed as obj:ID, its object number on the target.
+.PP
+Only one of
+.BR --device ,
+.BR --target ,
+.B --fsname
+and
+.B --local
+may be given, and only one target named;
+.B --fsname
+and
+.B --local
+may read several.
+A target holds no pathnames, so each match is printed as its FID.
+On an OST that is the data object's own FID, which
+.B -printf %LO
+prints too;
+.B %LF
+prints nothing for a data object.
 .SH NOTES
 Specifying
 .B !
@@ -850,6 +965,43 @@ MDT inode attributes for each matching filename. If it can make a
 positive or negative decision for a file based only on the MDT attributes
 (e.g. newer than specified time, user/group/project ID) it will not fetch
 the OST object attributes for that file.
+.SS Searching a target
+A target is read as it is on disk, without locks or journal replay,
+so on a target in service the answer may not exactly match
+what a client would see at the same moment.
+Objects caught mid-update are skipped and counted, not reported wrongly.
+.PP
+Some options answer differently against a target:
+.TP
+.B One MDT is part of the namespace
+Under DNE, a directory's entries may be on another MDT,
+so a scan of one MDT can return fewer results with nothing to say so.
+.TP
+.BR --size ", " --blocks
+A striped file's size lives on its OSTs,
+so these use the size-on-MDT answer that
+.B --lazy
+gives, and a file without one is counted as undecided.
+.TP
+.BR --ost ", " --stripe-index ", " --mdt
+These name the target being read, so every object on it matches or none does.
+.B --ost
+applies to an OST, and so does
+.BR --stripe-index ,
+which is taken the same way;
+.B --mdt
+applies to an MDT.
+.TP
+.BR --xattr ", " --maxdepth ", " --mindepth ", " --threads ", " "-printf %p"
+These are refused.
+A target has no mount to read an extended attribute through,
+no directory tree to limit, and no pathnames to print.
+.B --ls
+is refused too, because its format ends in
+.BR %p .
+.PP
+.BR llapi_find_device (3)
+describes each difference in full.
 .SH BASH COMPLETION
 The
 .B lfs find
@@ -896,6 +1048,20 @@ number:
 .EX
 .RS
 .B # lfs find /mnt/lustre -printf "%u %M %i \n"
+.RE
+.EE
+.PP
+Lists the regular files over a gigabyte on an unmounted MDT, by FID:
+.EX
+.RS
+.B # lfs find --device /dev/vdb --type f --size +1G
+.RE
+.EE
+.PP
+Lists every object of project 1999 on this server's targets of testfs:
+.EX
+.RS
+.B # lfs find --fsname testfs --projid 1999
 .RE
 .EE
 .PP
@@ -995,6 +1161,7 @@ filesystem package since release 0.10.0
 .BR lfs-getstripe (1),
 .BR lfs-migrate (1),
 .BR xargs (1),
+.BR llapi_find_device (3),
 .BR projid (5),
 .BR lustre (7),
 .BR regex (7)

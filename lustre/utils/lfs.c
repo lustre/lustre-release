@@ -27,6 +27,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <glob.h>
 #include <grp.h>
 #include <inttypes.h>
 #include <libgen.h>
@@ -44,6 +45,7 @@
 #include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
+#include <sys/vfs.h>
 #include <sys/xattr.h>
 #include <time.h>
 #include <unistd.h>
@@ -508,8 +510,12 @@ command_t cmdlist[] = {
 	 "List pools or pool OSTs\n"
 	 "usage: pool_list <fsname>[.<pool>] | <pathname>\n"},
 	{"find", lfs_find, 0,
-	 "find files matching given attributes recursively in directory tree.\n"
+	 "find files matching given attributes recursively in directory tree,\n"
+	 "or the objects of a Lustre target read directly from its device.\n"
 	 "usage: find <directory|filename> ...\n"
+	 "       find {--device DEVICE|--target NAME|--fsname NAME|--local|\n"
+	 "             BLOCKDEV}\n"
+	 "            [--internal] ...\n"
 	 "     [[!] --atime|-A [+-]N[smhdwy]] [[!] --btime|-B [+-]N[smhdwy]]\n"
 	 "     [[!] --ctime|-C [+-]N[smhdwy]] [[!] --mtime|-M [+-]N[smhdwy]]\n"
 	 "     [[!] --attrs=[^]ATTR[,...]]\n"
@@ -7485,6 +7491,360 @@ static int calculate_default_thread_count(const char *path)
 	return default_threads;
 }
 
+/* A target this node serves: what it is called, and what it lives on. */
+struct lfs_find_target {
+	/* an osd service name, char od_svname[MAX_OBD_NAME] on the far side */
+	char	lt_name[MAX_OBD_NAME];
+	char	lt_device[PATH_MAX];
+};
+
+/*
+ * Is @label -- fsname-MDT0000, as mkfs.lustre formats it -- a target of
+ * @fsname?  A filesystem name may itself contain '-', so the role starts
+ * after the last one, and the lengths are compared too: comparing the prefix
+ * alone, as lsnapshot does, takes test-MDT0000 for a target of testfs.
+ */
+static bool lfs_find_label_of(const char *label, const char *fsname)
+{
+	const char *dash = strrchr(label, '-');
+
+	return dash && (size_t)(dash - label) == strlen(fsname) &&
+	       strncmp(label, fsname, dash - label) == 0;
+}
+
+/* Are @a and @b labels of targets of the same filesystem? */
+static bool lfs_find_label_same_fs(const char *a, const char *b)
+{
+	const char *da = strrchr(a, '-');
+	const char *db = strrchr(b, '-');
+
+	return da && db && da - a == db - b &&
+	       strncmp(a, b, da - a) == 0;
+}
+
+/* Is @label's role @role ("MDT" or "OST")?  Read after the last '-' too. */
+static bool lfs_find_label_is(const char *label, const char *role)
+{
+	const char *dash = strrchr(label, '-');
+
+	return dash && strncmp(dash + 1, role, 3) == 0;
+}
+
+/*
+ * Every target mounted here, from osd-*.<name>.mntdev, which exists only while
+ * that target is mounted -- all of them, the one named @want, or those of
+ * filesystem @fsname.  The MGS is skipped: configuration llogs, not objects
+ * with FIDs.
+ */
+static int lfs_find_local_targets(const char *want, const char *fsname,
+				  struct lfs_find_target **tgtsp, int *nrp)
+{
+	struct lfs_find_target *tgts = NULL;
+	glob_t paths = { 0 };
+	int nr = 0;
+	size_t i;
+	int rc;
+
+	rc = llapi_param_get_paths("osd-*/*/mntdev", &paths);
+	if (rc != 0) {
+		/* no parameter at all: this node serves no target */
+		if (errno == ENOENT || errno == ENODEV) {
+			*tgtsp = NULL;
+			*nrp = 0;
+			return 0;
+		}
+		return -errno;
+	}
+
+	tgts = calloc(paths.gl_pathc, sizeof(*tgts));
+	if (!tgts) {
+		llapi_param_paths_free(&paths);
+		return -ENOMEM;
+	}
+
+	for (i = 0; i < paths.gl_pathc; i++) {
+		char copy[PATH_MAX];
+		size_t buflen = 0;
+		char *buf = NULL;
+		char *dir, *name;
+		int j;
+
+		/* .../osd-ldiskfs/<name>/mntdev */
+		snprintf(copy, sizeof(copy), "%s", paths.gl_pathv[i]);
+		dir = dirname(copy);
+		name = basename(dir);
+
+		if (!lfs_find_label_is(name, "MDT") &&
+		    !lfs_find_label_is(name, "OST"))
+			continue;
+		if (want && strcmp(want, name) != 0)
+			continue;
+		if (fsname && !lfs_find_label_of(name, fsname))
+			continue;
+
+		if (llapi_param_get_value(paths.gl_pathv[i], &buf,
+					  &buflen) != 0) {
+			/* --local promises every target or an error, so a
+			 * partial sweep must not read as a whole one
+			 */
+			rc = -errno;
+			llapi_error(LLAPI_MSG_ERROR, rc,
+				    "cannot read the device of %s", name);
+			continue;
+		}
+
+		snprintf(tgts[nr].lt_name, sizeof(tgts[nr].lt_name), "%s",
+			 name);
+		snprintf(tgts[nr].lt_device, sizeof(tgts[nr].lt_device), "%s",
+			 buf);
+		free(buf);
+		/* a trailing newline is how a parameter ends */
+		tgts[nr].lt_device[strcspn(tgts[nr].lt_device, "\n")] = '\0';
+
+		/* one device, one scan, whatever names it */
+		for (j = 0; j < nr; j++) {
+			if (strcmp(tgts[j].lt_device, tgts[nr].lt_device) == 0)
+				break;
+		}
+		if (j == nr)
+			nr++;
+	}
+
+	llapi_param_paths_free(&paths);
+
+	*tgtsp = tgts;
+	*nrp = nr;
+
+	return rc;
+}
+
+/*
+ * Is this search of a target rather than of a namespace?  A selector says so,
+ * and so does a block device where a path would be, which is how a device is
+ * usually named.  A disk image is a regular file and cannot be told from a
+ * path, so it needs --device.
+ */
+static bool lfs_find_is_device(const struct find_param *param, char **argv,
+			       int pathstart, int pathend)
+{
+	int i;
+
+	if (param->fp_device || param->fp_target ||
+	    param->fp_fsname || param->fp_local_targets)
+		return true;
+
+	if (pathstart == -1)
+		return false;
+
+	/* any of the paths, so a second target is refused and not walked */
+	for (i = pathstart; i < pathend; i++) {
+		char dir[PATH_MAX];
+		struct statfs sfs;
+#ifdef HAVE_STATX
+		struct statx stx;
+
+		/* the type only: a size would glimpse the file's OSTs */
+		if (statx(AT_FDCWD, argv[i], AT_STATX_DONT_SYNC, STATX_TYPE,
+			  &stx) != 0 || !S_ISBLK(stx.stx_mode))
+			continue;
+#else
+		struct stat st;
+
+		if (stat(argv[i], &st) != 0 || !S_ISBLK(st.st_mode))
+			continue;
+#endif
+		/*
+		 * A device node, or a symlink to one, stored on Lustre is a
+		 * file and is walked as before, so ask about the directory
+		 * that holds the entry, not about what it points at.
+		 */
+		snprintf(dir, sizeof(dir), "%s", argv[i]);
+		if (statfs(dirname(dir), &sfs) == 0 &&
+		    sfs.f_type == LL_SUPER_MAGIC)
+			continue;
+		return true;
+	}
+
+	return false;
+}
+
+/* the options only a layout answers, as find_asks_layout() in the library */
+static bool lfs_find_asks_layout(const struct find_param *param)
+{
+	return param->fp_check_pool || param->fp_check_stripe_count ||
+	       param->fp_check_stripe_size || param->fp_check_layout ||
+	       param->fp_check_comp_count || param->fp_check_comp_end ||
+	       param->fp_check_comp_start || param->fp_check_comp_flags ||
+	       param->fp_check_mirror_count || param->fp_check_foreign ||
+	       param->fp_check_mirror_state || param->fp_check_ext_size;
+}
+
+/*
+ * lfs find over a target's own objects, read off its device by
+ * llapi_find_device(3).  One target per invocation, except for the sweeps
+ * --local and --fsname make of this node, which go on past a target that
+ * fails and say so in the return value, so that a partial sweep is not taken
+ * for a whole one.
+ *
+ * A sweep skips the targets --ost or --mdt cannot name, and the OSTs when
+ * an MDT of their filesystem answers the layout options.  ENOTSUP does not
+ * end it: an OST cannot answer everything an MDT can, and a node may serve
+ * a kind of target this build has no backend for.
+ */
+static int lfs_find_device(char **argv, struct find_param *param,
+			   int pathstart, int pathend)
+{
+	struct llapi_scan_param sp = { .lfsp_size = sizeof(sp) };
+	struct lfs_find_target *tgts = NULL;
+	struct lfs_find_target one = { 0 };
+	const char *device = param->fp_device;
+	bool skip_ost = false;
+	int scanned = 0;
+	int ret = 0;
+	int named;
+	int nr = 0;
+	int i;
+
+	/*
+	 * A plain argument counts even beside a selector, so that
+	 * "--device /dev/a /dev/b" is refused rather than scanning the first
+	 * and dropping the second without a word.
+	 */
+	named = !!param->fp_device + !!param->fp_target +
+		!!param->fp_fsname + param->fp_local_targets;
+	if (pathstart != -1) {
+		named += pathend - pathstart;
+		if (!device)
+			device = argv[pathstart];
+	}
+	if (named > 1) {
+		fprintf(stderr, "error: %s: name one target, not %d\n",
+			argv[0], named);
+		return CMD_HELP;
+	}
+
+	/* a sweep keeps only targets of the kind named: both leaves none */
+	if (!device && !param->fp_target &&
+	    param->fp_obd_uuid && param->fp_mdt_uuid) {
+		fprintf(stderr,
+			"%s: --ost and --mdt together match no target of a sweep\n",
+			argv[0]);
+		return -EINVAL;
+	}
+
+	/*
+	 * Refused once here, not once per target of a sweep.  lfs seeds
+	 * fp_max_depth with -1, so any other value, 0 included, is the
+	 * user's.  -printf %p is left to the library, which parses formats.
+	 */
+	if (param->fp_max_depth != (unsigned int)-1 ||
+	    param->fp_min_depth != 0 || param->fp_thread_count != 0) {
+		fprintf(stderr,
+			"%s: --maxdepth, --mindepth and --threads describe a walk, which a target scan is not\n",
+			argv[0]);
+		return -ENOTSUP;
+	}
+	if (param->fp_xattr_match_info) {
+		fprintf(stderr, "%s: --xattr needs a mounted filesystem\n",
+			argv[0]);
+		return -ENOTSUP;
+	}
+	/* the MGS is a target too, but holds no objects to search */
+	if (param->fp_target &&
+	    !lfs_find_label_is(param->fp_target, "MDT") &&
+	    !lfs_find_label_is(param->fp_target, "OST")) {
+		fprintf(stderr,
+			"%s: '%s' is not a target name like FSNAME-MDT0000 or FSNAME-OST0000\n",
+			argv[0], param->fp_target);
+		return -EINVAL;
+	}
+
+	sp.lfsp_flags = param->fp_scan_internal ? LLAPI_SCAN_F_INTERNAL : 0;
+
+	if (device) {
+		snprintf(one.lt_device, sizeof(one.lt_device), "%s", device);
+		tgts = &one;
+		nr = 1;
+	} else {
+		ret = lfs_find_local_targets(param->fp_target,
+					     param->fp_fsname, &tgts, &nr);
+		if (ret < 0 && nr == 0) {
+			fprintf(stderr,
+				"%s: cannot read the local targets: %s\n",
+				progname, strerror(-ret));
+			goto out;
+		}
+		if (nr == 0) {
+			if (param->fp_target)
+				fprintf(stderr,
+					"%s: no target '%s' mounted here\n",
+					progname, param->fp_target);
+			else if (param->fp_fsname)
+				fprintf(stderr,
+					"%s: no local targets of '%s'\n",
+					progname, param->fp_fsname);
+			else
+				fprintf(stderr,
+					"%s: no local Lustre targets -- this is a client, or none are mounted\n",
+					progname);
+			ret = -ENODEV;
+			goto out;
+		}
+	}
+
+	/* with no MDT, or with --ost, each OST says why it cannot answer */
+	skip_ost = tgts != &one && !param->fp_target &&
+		   !param->fp_obd_uuid && lfs_find_asks_layout(param);
+
+	for (i = 0; i < nr; i++) {
+		int rc;
+
+		/* a sweep reads only the targets --ost or --mdt can name */
+		if (tgts != &one && !param->fp_target &&
+		    ((param->fp_obd_uuid &&
+		      !lfs_find_label_is(tgts[i].lt_name, "OST")) ||
+		     (param->fp_mdt_uuid &&
+		      !lfs_find_label_is(tgts[i].lt_name, "MDT"))))
+			continue;
+		/* an OST is skipped only if an MDT of its filesystem answers */
+		if (skip_ost && lfs_find_label_is(tgts[i].lt_name, "OST")) {
+			int j;
+
+			for (j = 0; j < nr; j++)
+				if (lfs_find_label_is(tgts[j].lt_name, "MDT") &&
+				    lfs_find_label_same_fs(tgts[i].lt_name,
+							   tgts[j].lt_name))
+					break;
+			if (j < nr)
+				continue;
+		}
+		scanned++;
+
+		if (nr > 1)
+			fprintf(stderr, "# %s (%s)\n", tgts[i].lt_name,
+				tgts[i].lt_device);
+
+		rc = llapi_find_device(tgts[i].lt_device, param, &sp);
+		if (rc != 0) {
+			fprintf(stderr, "%s: failed for '%s': %s\n", progname,
+				tgts[i].lt_device, strerror(-rc));
+			if (ret == 0)
+				ret = rc;
+		}
+	}
+	if (scanned == 0 && ret == 0) {
+		fprintf(stderr, "%s: no local %s to search\n", progname,
+			param->fp_obd_uuid ? "OST" : "MDT");
+		ret = -ENODEV;
+	}
+
+out:
+	if (tgts != &one)
+		free(tgts);
+
+	return ret;
+}
+
 static int lfs_find(int argc, char **argv)
 {
 	int rc;
@@ -7509,14 +7869,32 @@ static int lfs_find(int argc, char **argv)
 	if (stopped)
 		goto err;
 
+	/* no option followed the paths */
+	if (pathstart != -1 && pathend == -1)
+		pathend = argc;
+
+	/*
+	 * Before the walk's own checks and defaults: a target scan picks its
+	 * own threads, and llapi_find_device() refuses a thread count it was
+	 * not asked for by the caller.
+	 */
+	if (lfs_find_is_device(param, argv, pathstart, pathend)) {
+		ret = lfs_find_device(argv, param, pathstart, pathend);
+		goto err;
+	}
+	if (param->fp_scan_internal) {
+		fprintf(stderr,
+			"error: %s: --internal needs a target: --device, --target, --fsname, --local or a block device\n",
+			argv[0]);
+		ret = CMD_HELP;
+		goto err;
+	}
+
 	if (pathstart == -1) {
 		fprintf(stderr, "error: %s: no filename|pathname\n",
 			argv[0]);
 		ret = CMD_HELP;
 		goto err;
-	} else if (pathend == -1) {
-		/* no options */
-		pathend = argc;
 	}
 
 	if (param->fp_min_depth > param->fp_max_depth) {

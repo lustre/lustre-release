@@ -2703,7 +2703,7 @@ int get_projid(const char *path, int *fd, mode_t mode, __u32 *projid)
 				 *
 				 * The level does not quiet it by itself.
 				 * llapi_msg_level starts at LLAPI_MSG_MAX
-				 * and neither lfs nor lfind lowers it, so
+				 * and lfs does not lower it, so
 				 * the line still prints; what the level
 				 * buys is a caller able to silence it with
 				 * llapi_msg_set_level().

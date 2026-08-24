@@ -435,7 +435,9 @@ struct find_param {
 				 fp_obds_printed:1,
 				 fp_no_follow:1,
 				 fp_hex_idx:1,
-				 fp_unused_bits:28;
+				 fp_local_targets:1,	/* --local */
+				 fp_scan_internal:1,	/* --internal */
+				 fp_unused_bits:26;
 	unsigned int		 fp_depth;
 	unsigned int		 fp_hash_type;
 	unsigned int		 fp_time_margin; /* time margin in seconds */
@@ -491,6 +493,15 @@ struct find_param {
 	struct xattr_match_info	*fp_xattr_match_info;
 	struct find_work_queue	*fp_queue;
 	void			*fp_cb_data; /* Callback data */
+	/*
+	 * lfs find --device, --target and --fsname: a target read directly
+	 * rather than a namespace walked.  Only lfs uses these: its parser
+	 * returns everything it reads in this struct.  The library ignores
+	 * them.
+	 */
+	char			*fp_device;
+	char			*fp_target;
+	char			*fp_fsname;
 };
 
 /* Work unit for parallel directory processing */

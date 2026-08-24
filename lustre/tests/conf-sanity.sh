@@ -14746,6 +14746,508 @@ test_250() {
 }
 run_test 250 "verify lcfg_erase removes filesystem parameters"
 
+test_300a() {
+	[ "$mds1_FSTYPE" == ldiskfs ] || skip "ldiskfs only test"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	(( MDS1_VERSION >= $(version_code 2.17.58) )) ||
+		skip "Need MDS >= 2.17.58 for a target scan"
+
+	local scanner=${SCANNER:-$LUSTRE/tests/llapi_scan_device_test}
+	local mdt1=$(mdsdevname 1)
+	local client_fids=$TMP/$tfile.client
+	local scan_fids=$TMP/$tfile.scan
+	local scan_err=$TMP/$tfile.scanerr
+	local file_fids=$TMP/$tfile.files
+	local find_fids=$TMP/$tfile.find
+	local lo_fids=$TMP/$tfile.lo
+	local missing
+
+	stack_trap "rm -f $TMP/$tfile.*"
+
+	# an error and not a skip: past the version check a scanner missing
+	# from mds1 is a packaging fault, which a skip would hide
+	do_facet mds1 "test -x $scanner" ||
+		error "$scanner is not on mds1"
+
+	setup_noconfig
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
+	createmany -o $DIR/$tdir/$tfile- 100 || error "createmany failed"
+	test_mkdir -c 1 -i 0 $DIR/$tdir/subdir || error "mkdir subdir failed"
+	# over every OST, so that %LO has more than one FID to list
+	$LFS setstripe -c -1 $DIR/$tdir/striped || error "setstripe failed"
+
+	# every FID the namespace can see, from the client that made them.
+	# FIDs are compared without their brackets throughout.
+	$LFS find $DIR/$tdir -printf "%LF\n" | sort > $client_fids
+	[[ -s $client_fids ]] || error "no FIDs from the client"
+
+	# and the same question with a predicate, for lfs find to answer later
+	$LFS find $DIR/$tdir -type f -printf "%LF\n" | sort > $file_fids
+	[[ -s $file_fids ]] || error "no regular files from the client"
+
+	# and each file's OST object FIDs, which the MDT has in its layout;
+	# the striped file's are checked against lfs getstripe
+	$LFS find $DIR/$tdir -type f -printf "%LF %LO\n" | sort > $lo_fids
+	local sfid=$($LFS path2fid $DIR/$tdir/striped | tr -d '[]')
+	local ofids=$($LFS getstripe -y $DIR/$tdir/striped |
+		      awk '/l_fid:/ { printf "%s%s", s, $2; s = "," }')
+
+	[[ -n "$ofids" ]] || error "no OST objects for $DIR/$tdir/striped"
+	grep -qxF -- "$sfid [$ofids]" $lo_fids ||
+		error "%LO of striped is not [$ofids]: $(grep $sfid $lo_fids)"
+
+	# and the directory's own FID, which --type f must not report.  Taken
+	# now: after stopall there is no client to ask, and an empty one would
+	# leave the grep below testing nothing.
+	local dirfid=$($LFS find $DIR/$tdir/subdir -maxdepth 0 -printf "%LF")
+
+	[[ -n "$dirfid" ]] || error "no FID for $DIR/$tdir/subdir"
+
+	# --target and --fsname while mds1 is up, which is where they are meant
+	# to answer; test_300c sweeps where mds1 and ost1 share a node.
+	local mdt1svc=$(facet_svc mds1)
+	local n
+
+	n=$(do_facet mds1 "$LFS find --target $mdt1svc --type f" \
+		2> $scan_err | wc -l)
+	(( n > 0 )) || {
+		cat $scan_err
+		error "lfs find --target $mdt1svc found no files"
+	}
+	n=$(do_facet mds1 \
+		"$LFS find --fsname $FSNAME --mdt $mdt1svc --type f" \
+		2> $scan_err | wc -l)
+	(( n > 0 )) || {
+		cat $scan_err
+		error "--fsname $FSNAME --mdt $mdt1svc found no files"
+	}
+
+	# and now the same objects, read off the device with nothing mounted:
+	# an unmounted target has no journal to replay and nothing moving, so
+	# a difference here is the scanner's and not the timing's
+	stopall
+	stack_trap setupall
+
+	# an error, never a skip: an ldiskfs build needs libext2fs to configure
+	# and packages the backend beside the osd plugin that mounted this MDT
+	do_facet mds1 "$LFS find --device $mdt1 -printf '%LF\n'" \
+		> $scan_fids.raw 2> $scan_err || {
+		cat $scan_err
+		error "lfs find --device $mdt1 failed"
+	}
+	sort $scan_fids.raw > $scan_fids
+	do_facet mds1 "$scanner -d $mdt1" ||
+		error "llapi_scan_device_test on $mdt1 failed"
+
+	# misses are what matters: a scanner a cleanup tool acts on must not
+	# lose objects.  Extras are expected -- the target's own objects, and
+	# the .lustre entries no client walk reaches
+	missing=$(comm -23 $client_fids $scan_fids)
+	[[ -z "$missing" ]] || {
+		echo "$missing" | head -20
+		error "$(echo "$missing" | wc -l) client FIDs not on the device"
+	}
+
+	echo "scanned $(wc -l < $scan_fids) objects;" \
+		"found all $(wc -l < $client_fids) visible FIDs"
+
+	# lfs find runs the same predicates over that scan: every regular file
+	# the client listed has to come back, and no directory with it
+	do_facet mds1 "$LFS find --device $mdt1 --type f -printf '%LF\n'" \
+		> $find_fids.raw || error "lfs find on $mdt1 failed"
+	sort $find_fids.raw > $find_fids
+
+	missing=$(comm -23 $file_fids $find_fids)
+	[[ -z "$missing" ]] || {
+		echo "$missing" | head -20
+		error "lfs find lost $(echo "$missing" | wc -l) files"
+	}
+
+	# a directory must not be in a --type f answer
+	grep -qxF -- "$dirfid" $find_fids &&
+		error "lfs find --type f reported the directory $dirfid"
+
+	echo "lfs find --type f found all $(wc -l < $file_fids) files"
+
+	# %LO read off the MDT gives each file the FIDs the client saw
+	do_facet mds1 "$LFS find --device $mdt1 \
+			--type f -printf '%LF %LO\n'" > $lo_fids.raw ||
+		error "lfs find -printf %LO on $mdt1 failed"
+	sort $lo_fids.raw > $lo_fids.dev
+	missing=$(comm -23 $lo_fids $lo_fids.dev)
+	[[ -z "$missing" ]] || {
+		echo "$missing" | head -20
+		error "%LO differs for $(echo "$missing" | wc -l) files"
+	}
+
+	# the plain-argument form of the same target, and --device=VALUE.
+	# Redirect and sort as two steps: a pipeline's status is the last
+	# command's, so "| sort || error" would be testing sort.
+	#
+	# A plain argument is a target only when it is a block device: a
+	# file-backed MDT is a regular file, which cannot be told from a path
+	# and is walked as one, so that form needs --device.
+	if do_facet mds1 "test -b $mdt1"; then
+		do_facet mds1 "$LFS find $mdt1 --type f -printf '%LF\n'" \
+			> $find_fids.out ||
+			error "lfs find with a plain device argument failed"
+		sort $find_fids.out > $find_fids.raw
+		cmp -s $find_fids $find_fids.raw ||
+			error "lfs find $mdt1 differs from --device $mdt1"
+	fi
+
+	do_facet mds1 "$LFS find --device=$mdt1 --type f -printf '%LF\n'" \
+		> $find_fids.out || error "lfs find --device=$mdt1 failed"
+	sort $find_fids.out > $find_fids.raw
+	cmp -s $find_fids $find_fids.raw ||
+		error "lfs find --device=$mdt1 answered differently"
+
+	# naming a target twice is refused, not answered from the first --
+	# both as two selectors and as a selector plus a plain argument
+	do_facet mds1 "$LFS find --device $mdt1 $mdt1 --type f" &&
+		error "lfs find took two targets"
+	do_facet mds1 "$LFS find --device $mdt1 --device $mdt1 --type f" &&
+		error "lfs find took --device twice"
+
+	# --internal is the same scan without the class filter, so it can
+	# only add: an MDT's own objects -- O, oi.N, the d* buckets -- are
+	# what a cleanup tool must be able to see and must not act on
+	do_facet mds1 "$LFS find --device $mdt1" \
+		> $find_fids.out || error "lfs find on $mdt1 failed"
+	sort $find_fids.out > $find_fids.all
+	do_facet mds1 "$LFS find --device $mdt1 \
+			--internal" > $find_fids.out ||
+		error "lfs find --internal on $mdt1 failed"
+	sort $find_fids.out > $find_fids.int
+
+	missing=$(comm -23 $find_fids.all $find_fids.int)
+	[[ -z "$missing" ]] || {
+		echo "$missing" | head -20
+		error "--internal lost $(echo "$missing" | wc -l) objects"
+	}
+	(( $(wc -l < $find_fids.int) > $(wc -l < $find_fids.all) )) ||
+		error "--internal reported none of the target's own objects"
+
+	echo "--internal added $(( $(wc -l < $find_fids.int) -
+				   $(wc -l < $find_fids.all) )) objects"
+
+	# the selectors that need a mounted target, with nothing mounted:
+	# each has to say which target it could not find rather than scan
+	# something else or report an empty filesystem as an answer
+	do_facet mds1 "$LFS find --local --type f" > /dev/null 2> $scan_err &&
+		error "lfs find --local answered with every target stopped"
+	grep -q "no local Lustre targets" $scan_err || {
+		cat $scan_err
+		error "lfs find --local did not say there are none"
+	}
+
+	do_facet mds1 "$LFS find --target $mdt1svc --type f" \
+		> /dev/null 2> $scan_err &&
+		error "lfs find --target $mdt1svc answered with it stopped"
+	grep -q "no target '$mdt1svc' mounted here" $scan_err || {
+		cat $scan_err
+		error "lfs find --target did not say $mdt1svc is not mounted"
+	}
+
+	do_facet mds1 "$LFS find --fsname $FSNAME --type f" \
+		> /dev/null 2> $scan_err &&
+		error "lfs find --fsname $FSNAME answered with it stopped"
+	grep -q "no local targets of '$FSNAME'" $scan_err || {
+		cat $scan_err
+		error "lfs find --fsname did not say $FSNAME has none here"
+	}
+
+	# a name mkfs.lustre would refuse is refused, not searched for
+	do_facet mds1 "$LFS find --fsname fsname_too_long --type f" \
+		> /dev/null 2> $scan_err &&
+		error "lfs find took a --fsname over 8 characters"
+	grep -q "filesystem name" $scan_err || {
+		cat $scan_err
+		error "lfs find did not refuse fsname_too_long as a name"
+	}
+}
+run_test 300a "a target scan finds every object, lfs find answers over it"
+
+test_300b() {
+	[ "$ost1_FSTYPE" == ldiskfs ] || skip "ldiskfs only test"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	(( OST1_VERSION >= $(version_code 2.17.58) )) ||
+		skip "Need OST >= 2.17.58 for a target scan"
+
+	local scanner=${SCANNER:-$LUSTRE/tests/llapi_scan_device_test}
+	local scan_err=$TMP/$tfile.scanerr
+	local want=$TMP/$tfile.want
+	local missing
+
+	stack_trap "rm -f $TMP/$tfile.*"
+
+	is_mounted $MOUNT || setup_noconfig
+	check_mount || error "check_mount failed"
+	# right after a setup, -i 0 falls back to another OST until MDT0000
+	# can create objects on OST0000
+	local mdtosc=$(get_mdtosc_proc_path mds1 $(ostname_from_index 0))
+
+	wait_osc_import_state mds1 ost1 FULL
+	wait_update_facet mds1 \
+		"$LCTL get_param -n osp.$mdtosc.prealloc_status" 0 ||
+		error "MDT0000 cannot create objects on OST0000"
+	# on ost1 alone, and written: a write gives each object the
+	# trusted.fid that names its file, which a precreated one lacks
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
+	$LFS setstripe -i 0 -c 1 $DIR/$tdir || error "setstripe $tdir failed"
+	for ((i = 0; i < 20; i++)); do
+		echo $i > $DIR/$tdir/$tfile-$i || error "write $tfile-$i failed"
+		(( $($LFS getstripe -i $DIR/$tdir/$tfile-$i) == 0 )) ||
+			error "$tfile-$i is not on OST0000"
+	done
+	# what the scan of ost1 has to give back for each of them
+	$LFS find $DIR/$tdir -type f -printf "%LO\n" | sort > $want
+	[[ -s $want ]] || error "no OST object FIDs from the client"
+	# a client sync does not commit the OST
+	sync
+	do_facet ost1 "sync; sync"
+	stopall
+	stack_trap setupall
+
+	# an OST has no namespace, so what it delivers by default is its data
+	# objects; a scan that returned nothing here would look like success
+	do_facet ost1 "test -x $scanner" ||
+		error "$scanner is not on ost1"
+	do_facet ost1 "$scanner -d $(ostdevname 1)" ||
+		error "llapi_scan_device_test on $(ostdevname 1) failed"
+
+	# lfs find over the same OST: %LO is each object's own FID
+	do_facet ost1 "$LFS find --device $(ostdevname 1) \
+			-printf '%LO\n'" > $want.raw 2> $scan_err || {
+		cat $scan_err
+		error "lfs find --device $(ostdevname 1) failed"
+	}
+	sort $want.raw > $want.dev
+	missing=$(comm -23 $want $want.dev)
+	[[ -z "$missing" ]] || {
+		echo "$missing" | head -20
+		error "$(echo "$missing" | wc -l) objects not given back"
+	}
+}
+run_test 300b "llapi_scan_device reads an OST's data objects"
+
+test_300c() {
+	# ldiskfs only: a ZFS pool in use is refused
+	[[ "$mds1_FSTYPE" == ldiskfs && "$ost1_FSTYPE" == ldiskfs ]] ||
+		skip "ldiskfs only test"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	(( MDS1_VERSION >= $(version_code 2.17.58) )) ||
+		skip "Need MDS >= 2.17.58 for lfs find --local"
+	(( OST1_VERSION >= $(version_code 2.17.58) )) ||
+		skip "Need OST >= 2.17.58 for lfs find --local"
+
+	local scan_err=$TMP/$tfile.scanerr
+	local scan_out=$TMP/$tfile.scanout
+
+	stack_trap "rm -f $scan_err $scan_out"
+	is_mounted $MOUNT || setup_noconfig
+	check_mount || error "check_mount failed"
+	# on mds1 and ost1, so both sweeps below have something to find
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
+	$LFS setstripe -i 0 -c 1 $DIR/$tdir || error "setstripe $tdir failed"
+	createmany -o $DIR/$tdir/$tfile- 10 || error "createmany failed"
+
+	local ostsvc=$(facet_svc ost1)
+	local mdtsvc=$(facet_svc mds1)
+
+	# a --local sweep of mounted targets, each on its own node
+	do_facet ost1 "$LFS find --local --ost $ostsvc --type f" \
+		> $scan_out 2> $scan_err || {
+		cat $scan_err
+		error "lfs find --local --ost $ostsvc failed on ost1"
+	}
+	[[ -s $scan_out ]] ||
+		error "lfs find --local --ost $ostsvc found nothing"
+	do_facet mds1 "$LFS find --local --mdt $mdtsvc --type f" \
+		> $scan_out 2> $scan_err || {
+		cat $scan_err
+		error "lfs find --local --mdt $mdtsvc failed on mds1"
+	}
+	[[ -s $scan_out ]] ||
+		error "lfs find --local --mdt $mdtsvc found nothing"
+
+	# and where one node serves both, --ost or --mdt skips the other type
+	[[ $(facet_active_host mds1) == $(facet_active_host ost1) ]] || {
+		echo "mds1 and ost1 are not on one node: no cross-type check"
+		return 0
+	}
+
+	do_facet --quiet mds1 "$LFS find --local --ost $ostsvc --type f" \
+		> /dev/null 2> $scan_err || {
+		cat $scan_err
+		error "lfs find --local --ost $ostsvc failed"
+	}
+	# the naming line is only printed when more than one target
+	# was swept, so assert the right one was read as well as that
+	# the wrong one was not -- otherwise an empty $scan_err
+	# passes both greps while checking nothing
+	grep -q -- "-OST" $scan_err || {
+		cat $scan_err
+		error "lfs find --local --ost $ostsvc did not read the OST"
+	}
+	grep -q -- "-MDT" $scan_err && {
+		cat $scan_err
+		error "lfs find --local --ost $ostsvc read an MDT"
+	}
+	do_facet --quiet mds1 "$LFS find --local --mdt $mdtsvc --type f" \
+		> /dev/null 2> $scan_err || {
+		cat $scan_err
+		error "lfs find --local --mdt $mdtsvc failed"
+	}
+	grep -q -- "-MDT" $scan_err || {
+		cat $scan_err
+		error "lfs find --local --mdt $mdtsvc did not read the MDT"
+	}
+	if grep -q -- "-OST" $scan_err; then
+		cat $scan_err
+		error "lfs find --local --mdt $mdtsvc read an OST"
+	fi
+
+	# only an MDT answers a layout option, so the sweep skips the OST
+	do_facet --quiet mds1 "$LFS find --local --stripe-count 1 --type f" \
+		> $scan_out 2> $scan_err || {
+		cat $scan_err
+		error "lfs find --local --stripe-count 1 failed"
+	}
+	[[ -s $scan_out ]] ||
+		error "lfs find --local --stripe-count 1 found nothing"
+	if grep -q -- "-OST" $scan_err; then
+		cat $scan_err
+		error "lfs find --local --stripe-count 1 read an OST"
+	fi
+	# but an OST named alone still refuses it
+	do_facet mds1 "$LFS find --target $ostsvc --stripe-count 1" \
+		> /dev/null 2>&1 &&
+		error "lfs find --target $ostsvc --stripe-count 1 succeeded"
+	return 0
+}
+run_test 300c "lfs find --local --ost or --mdt reads only that type"
+
+test_300d() {
+	[[ "$mds1_FSTYPE" == ldiskfs && "$ost1_FSTYPE" == ldiskfs ]] ||
+		skip "ldiskfs only test"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+	(( MDS1_VERSION >= $(version_code 2.17.58) )) ||
+		skip "Need MDS >= 2.17.58 for a target scan"
+
+	local mdt1=$(mdsdevname 1)
+	local ost1=$(ostdevname 1)
+	local uuid=$(cat /proc/sys/kernel/random/uuid)
+	local tree=$TMP/$tfile.tree
+	local walk=$TMP/$tfile.walk
+	local dev=$TMP/$tfile.dev
+	local err=$TMP/$tfile.err
+	local preds=("-type f" "--size +0" "--uid 0" "-mtime -1" "--links 2"
+		     "--stripe-count 2" "--layout mdt" "--component-count 2"
+		     "--foreign" "! --foreign" "--foreign=none -type d"
+		     "! --foreign -type d")
+	local p i out rc
+
+	stack_trap "rm -f $TMP/$tfile.*"
+	setup_noconfig
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
+	mkdir $DIR/$tdir/dir $DIR/$tdir/d2 || error "mkdir failed"
+	echo x > $DIR/$tdir/file || error "write file failed"
+	$LFS setstripe -i 0 -c 1 $DIR/$tdir/ost0 || error "setstripe ost0"
+	echo x > $DIR/$tdir/ost0
+	$LFS setstripe -c 2 $DIR/$tdir/c2 || error "setstripe c2 failed"
+	$LFS setstripe -E 1M -c 1 -E -1 -c 2 $DIR/$tdir/pfl ||
+		error "setstripe pfl failed"
+	$LFS setstripe -E 1M -L mdt -E -1 -c 1 $DIR/$tdir/dom ||
+		error "setstripe dom failed"
+	touch $DIR/$tdir/hl && ln $DIR/$tdir/hl $DIR/$tdir/d2/hl2 ||
+		error "hard link failed"
+	$LFS mkdir --foreign=none --xattr=$uuid --flags=0xda05 \
+		$DIR/$tdir/fdir || error "create foreign dir failed"
+	$LFS setstripe --foreign=none --xattr=$uuid --flags=0xda05 \
+		$DIR/$tdir/ffile || error "create foreign file failed"
+	if $LFS project -p 1000 $DIR/$tdir/file 2>/dev/null; then
+		preds+=("--projid 1000")
+	fi
+
+	# the walk's answers, as FIDs, before the targets go down
+	$LFS find $DIR/$tdir -printf "%LF\n" | sort -u > $tree
+	for i in "${!preds[@]}"; do
+		$LFS find $DIR/$tdir ${preds[i]} -printf "%LF\n" |
+			sort -u > $walk.$i
+	done
+	$LFS find $DIR/$tdir -name hl2 -printf "%LF\n" > $walk.hl2
+	{ $LFS find $DIR/$tdir -name pfl -printf "pfl %Lo\n";
+	  $LFS find $DIR/$tdir -name dom -printf "dom %Lo\n"; } 2> $err |
+		sort > $walk.lo
+	[[ -s $err ]] && error "walk %Lo printed errors: $(cat $err)"
+	[[ $(wc -l < $walk.hl2) == 1 ]] || error "walk did not find hl2"
+
+	stopall
+	stack_trap setupall
+
+	# each predicate answered over the scan as over the walk
+	for i in "${!preds[@]}"; do
+		do_facet mds1 "$LFS find --device $mdt1 ${preds[i]} \
+			-printf '%LF\n'" | sort | grep -Fxf $tree > $dev.$i
+		diff -u $walk.$i $dev.$i ||
+			error "'${preds[i]}' differs between walk and scan"
+	done
+
+	# a file under its second name, reported once
+	do_facet mds1 "$LFS find --device $mdt1 -name hl2 -printf '%LF\n'" \
+		> $dev.hl2
+	diff -u $walk.hl2 $dev.hl2 || error "-name hl2 differs"
+
+	# an uninstantiated component and a DoM one print '?', no errors
+	do_facet --quiet mds1 \
+		"$LFS find --device $mdt1 -name pfl -printf 'pfl %Lo\n'; \
+		$LFS find --device $mdt1 -name dom -printf 'dom %Lo\n'" \
+		2> $err | sort > $dev.lo
+	diff -u $walk.lo $dev.lo || error "%Lo differs between walk and scan"
+	[[ -s $err ]] && error "scan %Lo printed errors: $(cat $err)"
+
+	# the namespace roots have no name, and are not undecided for it
+	out=$(do_facet --quiet mds1 \
+		"$LFS find --device $mdt1 -name nosuchname" 2>&1)
+	[[ -z "$out" ]] || error "-name nosuchname printed '$out'"
+
+	# refused with EOPNOTSUPP and nothing printed
+	for p in "--xattr trusted.lov" "-printf %p" "-printf %+5p" \
+		 "-maxdepth 1" "--threads 2" "--ost 0"; do
+		out=$(do_facet mds1 "$LFS find --device $mdt1 $p" 2>/dev/null)
+		rc=$?
+		[[ $rc == 95 && -z "$out" ]] ||
+			error "'$p' over an MDT gave rc $rc, '$out'"
+	done
+	for p in "--mdt 0" "--stripe-count 1"; do
+		out=$(do_facet ost1 "$LFS find --device $ost1 $p" 2>/dev/null)
+		rc=$?
+		[[ $rc == 95 && -z "$out" ]] ||
+			error "'$p' over an OST gave rc $rc, '$out'"
+	done
+
+	# an OST sweep: its own index is every object, another is none
+	local all=$(do_facet ost1 "$LFS find --device $ost1" | wc -l)
+
+	(( all > 0 )) || error "no objects on $ost1"
+	out=$(do_facet ost1 "$LFS find --device $ost1 --ost 0" | wc -l)
+	(( out == all )) || error "--ost 0 found $out of $all"
+	out=$(do_facet ost1 "$LFS find --device $ost1 --ost 1" | wc -l)
+	(( out == 0 )) || error "--ost 1 found $out on OST0000"
+	out=$(do_facet ost1 "$LFS find --device $ost1 ! --ost 1" | wc -l)
+	(( out == all )) || error "! --ost 1 found $out of $all"
+
+	# OST objects carry no names: nothing found, and the scan says why
+	out=$(do_facet ost1 "$LFS find --device $ost1 -name '*'" 2> $err)
+	[[ -z "$out" ]] || error "-name over an OST printed '$out'"
+	grep -q "could not be decided" $err ||
+		error "-name over an OST gave no warning: $(cat $err)"
+}
+run_test 300d "lfs find --device answers as a walk does"
+
 #
 # (This was sanity/802a)
 #

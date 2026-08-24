@@ -75,7 +75,7 @@ THETESTS += create_foreign_dir parse_foreign_dir
 THETESTS += check_fallocate splice-test lseek_test expand_truncate_test
 THETESTS += foreign_symlink_striping lov_getstripe_old io_scope io_uring_probe
 THETESTS += fadvise_dontneed_helper llapi_root_test llapi_pool_test aheadmany
-THETESTS += llapi_scan_test
+THETESTS += llapi_scan_test llapi_scan_device_test
 THETESTS += monitor_lustrefs test_parity_read lod_rr_test
 
 if LIBAIO
@@ -115,6 +115,9 @@ llapi_pool_test_SOURCES = llapi_pool_test.c llapi_test_utils.c llapi_test_utils.
 llapi_pool_test_LDADD = $(LIBLUSTREAPI)
 llapi_scan_test_SOURCES = llapi_scan_test.c llapi_test_utils.c llapi_test_utils.h
 llapi_scan_test_LDADD = $(LIBLUSTREAPI) -lpthread
+llapi_scan_device_test_SOURCES = llapi_scan_device_test.c llapi_test_utils.c \
+				 llapi_test_utils.h
+llapi_scan_device_test_LDADD = $(LIBLUSTREAPI) -lpthread
 group_lock_test_LDADD = $(LIBLUSTREAPI)
 llapi_fid_test_LDADD = $(LIBLUSTREAPI)
 llapi_fid2mdtidx_test_LDADD = $(LIBLUSTREAPI)

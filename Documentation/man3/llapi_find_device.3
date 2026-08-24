@@ -19,7 +19,10 @@ to the objects of the MDT or OST named by
 which
 .BR llapi_scan_device (3)
 reads directly, and prints what matches.  The predicates are
-.BR lfs-find (1)'s.
+.BR lfs-find (1)'s,
+and it is what
+.B lfs find --device
+runs.
 .SS What it prints
 A target holds names and parent FIDs, not paths, so a match is named by its
 FID:

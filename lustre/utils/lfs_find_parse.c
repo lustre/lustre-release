@@ -37,6 +37,7 @@
 #include <lustre/lustreapi.h>
 #include "lfs_find_parse.h"
 #include "lstddef.h"
+#include "lustreapi_internal.h"
 
 static int xattr_match_info_append(struct xattr_match_info *xmi, bool exclude,
 				   char *name_pattern, char *value_pattern);
@@ -967,6 +968,8 @@ int lfs_find_parse(int argc, char **argv, struct find_param *param,
 	{ .val = 'c',	.name = "stripe-count",	.has_arg = required_argument },
 	{ .val = 'c',	.name = "stripe_count",	.has_arg = required_argument },
 	{ .val = 'C',	.name = "ctime",	.has_arg = required_argument },
+	{ .val = LFS_DEVICE_OPT,
+			.name = "device",	.has_arg = required_argument },
 /* getstripe { .val = 'd', .name = "directory",	.has_arg = no_argument }, */
 	{ .val = 'd',	.name = "mindepth",	.has_arg = required_argument },
 	{ .val = 'D',	.name = "maxdepth",	.has_arg = required_argument },
@@ -976,6 +979,8 @@ int lfs_find_parse(int argc, char **argv, struct find_param *param,
 /* find	{ .val = 'F',	.name = "fid",		.has_arg = no_argument }, */
 	{ .val = LFS_LAYOUT_FOREIGN_OPT,
 			.name = "foreign",	.has_arg = optional_argument},
+	{ .val = LFS_FSNAME_OPT,
+			.name = "fsname",	.has_arg = required_argument },
 	{ .val = 'g',	.name = "gid",		.has_arg = required_argument },
 	{ .val = 'G',	.name = "group",	.has_arg = required_argument },
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
@@ -983,11 +988,15 @@ int lfs_find_parse(int argc, char **argv, struct find_param *param,
 	{ .val = 'i',	.name = "stripe-index",	.has_arg = required_argument },
 	{ .val = 'i',	.name = "stripe_index",	.has_arg = required_argument },
 /* getstripe { .val = 'I', .name = "comp-id",	.has_arg = required_argument }*/
+	{ .val = LFS_INTERNAL_OPT,
+			.name = "internal",	.has_arg = no_argument },
 	{ .val = 'k',	.name = "skip",		.has_arg = required_argument },
 	{ .val = 'l',	.name = "lazy",		.has_arg = no_argument },
 	{ .val = 'L',	.name = "layout",	.has_arg = required_argument },
 	{ .val = LFS_LINKS_OPT,
 			.name = "links",	.has_arg = required_argument },
+	{ .val = LFS_LOCAL_OPT,
+			.name = "local",	.has_arg = no_argument },
 	{ .val = LFS_PRINTF_LS,
 			.name = "ls",		.has_arg = no_argument },
 	{ .val = 'm',	.name = "mdt",		.has_arg = required_argument },
@@ -1018,6 +1027,8 @@ int lfs_find_parse(int argc, char **argv, struct find_param *param,
 	{ .val = 's',	.name = "size",		.has_arg = required_argument },
 	{ .val = 'S',	.name = "stripe-size",	.has_arg = required_argument },
 	{ .val = 'S',	.name = "stripe_size",	.has_arg = required_argument },
+	{ .val = LFS_TARGET_OPT,
+			.name = "target",	.has_arg = required_argument },
 	{ .val = 't',	.name = "type",		.has_arg = required_argument },
 	{ .val = 'T',	.name = "mdt-count",	.has_arg = required_argument },
 	{ .val = 'u',	.name = "uid",		.has_arg = required_argument },
@@ -1096,6 +1107,16 @@ int lfs_find_parse(int argc, char **argv, struct find_param *param,
 			pathend = prev_optind;
 
 		prev_optind = optind;
+
+		/* what to scan is not a test, and has no negation */
+		if (neg_opt && (c == LFS_DEVICE_OPT || c == LFS_TARGET_OPT ||
+				c == LFS_FSNAME_OPT || c == LFS_LOCAL_OPT ||
+				c == LFS_INTERNAL_OPT)) {
+			fprintf(stderr, "error: %s: '!' cannot negate --%s\n",
+				argv[0], long_opts[optidx].name);
+			ret = CMD_HELP;
+			goto out;
+		}
 
 		switch (c) {
 		case 0:
@@ -1280,17 +1301,22 @@ int lfs_find_parse(int argc, char **argv, struct find_param *param,
 				goto out;
 			}
 			break;
-		case 'D':
+		case 'D': {
+			/* fp_max_depth is unsigned: check the sign first */
+			long depth;
+
 			errno = 0;
-			param->fp_max_depth = strtol(optarg, 0, 0);
-			if (errno != 0 || param->fp_max_depth < 0) {
+			depth = strtol(optarg, 0, 0);
+			if (errno != 0 || depth < 0) {
 				fprintf(stderr,
 					"error: bad maxdepth '%s'\n",
 					optarg);
 				ret = -1;
 				goto out;
 			}
+			param->fp_max_depth = depth;
 			break;
+		}
 		case 'E':
 			if (optarg[0] == '+') {
 				param->fp_comp_end_sign = -1;
@@ -1626,7 +1652,10 @@ int lfs_find_parse(int argc, char **argv, struct find_param *param,
 				p_alloc = &param->fp_num_alloc_obds;
 				pp_uuid = &param->fp_obd_uuid;
 			}
-			regcomp(&reg, pattern, REG_EXTENDED);
+			if (regcomp(&reg, pattern, REG_EXTENDED)) {
+				ret = -ENOMEM;
+				goto out;
+			}
 
 			while (p1 && *p1 != '\0') {
 				/* grab one uuid/idx/idx_range */
@@ -1736,6 +1765,51 @@ int lfs_find_parse(int argc, char **argv, struct find_param *param,
 			break;
 		case LFS_PRINTF_OPT:
 			param->fp_format_printf_str = strdup(optarg);
+			break;
+		case LFS_DEVICE_OPT:
+		case LFS_TARGET_OPT:
+		case LFS_FSNAME_OPT: {
+			char **store = c == LFS_DEVICE_OPT ? &param->fp_device :
+				       c == LFS_TARGET_OPT ? &param->fp_target :
+				       &param->fp_fsname;
+
+			/*
+			 * One target per invocation, and a repeat would
+			 * replace the first and scan something the caller did
+			 * not name.
+			 */
+			if (*store) {
+				fprintf(stderr, "error: %s: --%s given twice\n",
+					argv[0], long_opts[optidx].name);
+				ret = CMD_HELP;
+				goto out;
+			}
+			/*
+			 * mkfs.lustre's own check, through the wrapper it
+			 * calls with the same arguments, so a mistyped
+			 * --fsname is refused rather than matching no
+			 * target -- and so too long is told apart from a
+			 * character that is not allowed.
+			 */
+			if (c == LFS_FSNAME_OPT &&
+			    llapi_name_verify(optarg, "_-", LUSTRE_MAXFSNAME,
+					      "filesystem") != 0) {
+				ret = CMD_HELP;
+				goto out;
+			}
+			/*
+			 * Borrowed from argv, as fp_pattern is: argv outlives
+			 * the command, so nothing frees these -- and
+			 * lfs_find_parse_fini() must not learn to.
+			 */
+			*store = optarg;
+			break;
+		}
+		case LFS_LOCAL_OPT:
+			param->fp_local_targets = 1;
+			break;
+		case LFS_INTERNAL_OPT:
+			param->fp_scan_internal = 1;
 			break;
 		case LFS_PRINTF_LS:
 			param->fp_format_printf_str =
@@ -1894,6 +1968,7 @@ int lfs_find_parse(int argc, char **argv, struct find_param *param,
 		default:
 			fprintf(stderr, "%s: unrecognized option '%s'\n",
 				progname, argv[optind - 1]);
+			fallthrough;
 		case 'h':
 			ret = CMD_HELP;
 			goto out;

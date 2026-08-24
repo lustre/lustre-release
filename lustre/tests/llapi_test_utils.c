@@ -154,7 +154,6 @@ void set_tests_to_run(const char *str_tests, struct test_tbl_entry *tst_tbl)
 
 int run_tests(const char *lustre_dir, struct test_tbl_entry *tst_tbl)
 {
-	struct test_tbl_entry *tst;
 	char fsname[8 + 1];
 	struct stat st;
 	int saved_msg_level = llapi_msg_get_level();
@@ -180,6 +179,24 @@ int run_tests(const char *lustre_dir, struct test_tbl_entry *tst_tbl)
 		return EXIT_FAILURE;
 	}
 
+	rc = run_test_tbl(tst_tbl);
+	llapi_msg_set_level(saved_msg_level);
+
+	return rc;
+}
+
+/*
+ * The same runner, for a test whose subject is not a Lustre directory: a
+ * scan of a target has a device, not a mountpoint.
+ */
+int run_test_tbl(struct test_tbl_entry *tst_tbl)
+{
+	struct test_tbl_entry *tst;
+	int rc = 0;
+
+	if (!tst_tbl)
+		DIE("no test table provided\n");
+
 	/* Play nice with Lustre test scripts. Non-line buffered output
 	 * stream under I/O redirection may appear incorrectly.
 	 */
@@ -190,8 +207,6 @@ int run_tests(const char *lustre_dir, struct test_tbl_entry *tst_tbl)
 			 tst->tte_num))
 			rc++;
 	}
-
-	llapi_msg_set_level(saved_msg_level);
 
 	return rc;
 }
