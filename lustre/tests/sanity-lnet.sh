@@ -3070,7 +3070,8 @@ setup_health_test() {
 	local mr=$($LNETCTL peer show --nid ${RNIDS[0]} |
 		   awk '/Multi-Rail/{print $NF}')
 
-	if ${need_mr} && [[ $mr == False ]]; then
+	# 2.16 and prior routers return capitalized False, so normalize it
+	if ${need_mr} && [[ ${mr,,} == false ]]; then
 		cleanup_health_test || return $?
 		skip "Need MR peer"
 	fi
@@ -5142,7 +5143,8 @@ test_238() {
 	local mr=$(do_node ${ROUTERS[0]} "$LNETCTL peer show --nid $my_nid" |
 		   awk '/Multi-Rail:/{print $NF}')
 
-	[[ $mr == false ]] ||
+	# 2.16 and prior routers return capitalized False, so normalize it
+	[[ ${mr,,} == false ]] ||
 		error "Expect 'Multi-Rail: false', found $mr"
 
 	do_mr_forwarding_test false || return $?
