@@ -383,8 +383,29 @@ retry:
 
 	rc = md_intent_lock(tgt->ltd_exp, op_data, it, reqp, cb_blocking,
 			    extra_lock_flags);
-	if (rc != 0)
+	if (rc != 0) {
+		/* the stripe the request was sent to may have been destroyed
+		 * by a migration which finished in the meantime, in which case
+		 * the name is in the new layout, retry there.
+		 */
+		if (!(it->it_open_flags & MDS_OPEN_BY_FID) &&
+		    (rc == -ENOENT || rc == -ESTALE) &&
+		    lmv_dir_retry_check_update(op_data)) {
+			CDEBUG(D_INODE,
+			       "retry on new layout: "DFID"/"DNAME": rc = %d\n",
+			       PFID(&op_data->op_fid1),
+			       encode_fn_opdata(op_data), rc);
+			ptlrpc_req_put(*reqp);
+			it->it_request = NULL;
+			it_clear_disposition(it, DISP_ALL);
+			*reqp = NULL;
+			it->it_open_flags = flags;
+			fid_zero(&op_data->op_fid2);
+			goto retry;
+		}
+
 		RETURN(rc);
+	}
 	/*
 	 * Nothing is found, do not access body->fid1 as it is zero and thus
 	 * pointless.
@@ -503,8 +524,27 @@ retry:
 
 	rc = md_intent_lock(tgt->ltd_exp, op_data, it, reqp, cb_blocking,
 			    extra_lock_flags);
-	if (rc < 0)
+	if (rc < 0) {
+		/* the stripe the request was sent to may have been destroyed
+		 * by a migration which finished in the meantime, in which case
+		 * the name is in the new layout, retry there.
+		 */
+		if (op_data->op_name && (rc == -ENOENT || rc == -ESTALE) &&
+		    lmv_dir_retry_check_update(op_data)) {
+			CDEBUG(D_INODE,
+			       "retry on new layout: "DFID"/"DNAME": rc = %d\n",
+			       PFID(&op_data->op_fid1),
+			       encode_fn_opdata(op_data), rc);
+			ptlrpc_req_put(*reqp);
+			it->it_request = NULL;
+			it_clear_disposition(it, DISP_ALL);
+			*reqp = NULL;
+
+			goto retry;
+		}
+
 		RETURN(rc);
+	}
 
 	if (*reqp == NULL) {
 		/* If RPC happens, lsm information will be revalidated

@@ -2516,7 +2516,8 @@ retry:
 		PFID(&op_data->op_fid1), tgt->ltd_index);
 
 	rc = md_getattr_name(tgt->ltd_exp, op_data, preq);
-	if (rc == -ENOENT && lmv_dir_retry_check_update(op_data)) {
+	if ((rc == -ENOENT || rc == -ESTALE) &&
+	    lmv_dir_retry_check_update(op_data)) {
 		ptlrpc_req_put(*preq);
 		*preq = NULL;
 		goto retry;
@@ -2982,7 +2983,8 @@ rename:
 
 	rc = md_rename(tgt->ltd_exp, op_data, old, oldlen, new, newlen,
 			request);
-	if (rc == -ENOENT && lmv_dir_retry_check_update(op_data)) {
+	if ((rc == -ENOENT || rc == -ESTALE) &&
+	    lmv_dir_retry_check_update(op_data)) {
 		ptlrpc_req_put(*request);
 		*request = NULL;
 		goto retry;
@@ -3534,7 +3536,8 @@ retry:
 	       tgt->ltd_index);
 
 	rc = md_unlink(tgt->ltd_exp, op_data, request);
-	if (rc == -ENOENT && lmv_dir_retry_check_update(op_data)) {
+	if ((rc == -ENOENT || rc == -ESTALE) &&
+	    lmv_dir_retry_check_update(op_data)) {
 		ptlrpc_req_put(*request);
 		*request = NULL;
 		goto retry;
