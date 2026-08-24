@@ -29,6 +29,7 @@
 #include <lustre/lustreapi.h>
 #include <linux/lustre/erasure_code.h>
 #include <linux/lustre/lustre_idl.h>
+#include <linux/lustre/lustre_ostid.h>
 #include "lstddef.h"
 #include "lustreapi_internal.h"
 
@@ -162,8 +163,8 @@ static int llapi_layout_objects_in_lum(struct lov_user_md *lum, size_t lum_size)
  * refactor the needed functions in lustre/ptlrpc/pack_generic.c
  * into a library that can be shared between kernel and user code.
  */
-static void
-llapi_layout_swab_lov_user_md(struct lov_user_md *lum, int lum_size)
+void
+layout_swab_lov_user_md(struct lov_user_md *lum, int lum_size)
 {
 	int i, j, ent_count, obj_count;
 	struct lov_comp_md_v1 *comp_v1 = NULL;
@@ -583,7 +584,7 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 	}
 #endif
 
-	llapi_layout_swab_lov_user_md(lum, lov_xattr_size);
+	layout_swab_lov_user_md(lum, lov_xattr_size);
 
 #if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 16, 53, 0)
 #define LLAPI_LXF_CHECK_OLD 0x0001
@@ -1876,6 +1877,32 @@ int llapi_layout_ost_index_get(const struct llapi_layout *layout,
 		*index = comp->llc_objects[stripe_number].l_ost_idx;
 
 	return 0;
+}
+
+/*
+ * The FID of the object @stripe_number in the current component, for
+ * lfs find -printf %LO.  -ENODATA for a stripe with no object yet.
+ */
+int layout_ost_fid_get(const struct llapi_layout *layout,
+		       uint64_t stripe_number, struct lu_fid *fid)
+{
+	struct llapi_layout_comp *comp;
+	struct lov_user_ost_data_v1 *obj;
+
+	comp = __llapi_layout_cur_comp(layout);
+	if (!comp)
+		return -EINVAL;
+	if (comp->llc_pattern == LLAPI_LAYOUT_FOREIGN ||
+	    stripe_number >= comp->llc_stripe_count ||
+	    stripe_number >= comp->llc_objects_count)
+		return -EINVAL;
+
+	obj = &comp->llc_objects[stripe_number];
+	if (ostid_id(&obj->l_ost_oi) == 0 ||
+	    fid_seq_is_default(ostid_seq(&obj->l_ost_oi)))
+		return -ENODATA;
+
+	return ostid_to_fid(fid, &obj->l_ost_oi, obj->l_ost_idx);
 }
 
 /**

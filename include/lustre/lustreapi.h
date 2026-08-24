@@ -635,6 +635,16 @@ void llapi_find_param_free(struct find_param *param);
  */
 #define LLAPI_SCAN_LMV_FOREIGN	0x0000002000000000ULL
 /*
+ * A striped directory's shard, whose trusted.lmv is LMV_MAGIC_STRIPE: an
+ * object with a linkea of its own -- name "<DFID>:<index>", parent the
+ * master -- that is not a directory the filesystem has a path for.  Set
+ * without LLAPI_SCAN_LMV, there being no lmv_user_md form of it, and only
+ * by a scan of a target: a namespace walk never sees a shard.  A consumer
+ * composing pathnames steps over it to the master, as mdt_path_current()
+ * does.
+ */
+#define LLAPI_SCAN_LMV_SHARD	0x0000800000000000ULL
+/*
  * lfsr_stx.stx_size/stx_blocks hold a lazy SOM value, which is why stx_mask
  * does not claim the field: the number is there and it is the MDT's
  * approximation, not a glimpse.
@@ -918,6 +928,8 @@ int llapi_scan_namespace(const char *path, const struct llapi_scan_param *sp,
 			 llapi_scan_cb_t cb, void *data);
 int llapi_scan_device(const char *device, const struct llapi_scan_param *sp,
 		      llapi_scan_cb_t cb, void *data);
+int llapi_find_device(const char *target, struct find_param *param,
+		      const struct llapi_scan_param *sp);
 
 int llapi_file_fget_mdtidx(int fd, int *mdtidx);
 int llapi_dir_set_default_lmv(const char *name,

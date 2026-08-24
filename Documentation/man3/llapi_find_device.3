@@ -1,0 +1,308 @@
+.TH LLAPI_FIND_DEVICE 3 2026-09-01 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_find_device \- run lfs find's predicates over a scan of a target
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_find_device(const char *" target ,
+.BI "                      struct find_param *" param ,
+.BI "                      const struct llapi_scan_param *" sp ");"
+.PP
+.fi
+.SH DESCRIPTION
+.B llapi_find_device()
+applies the search in
+.I param
+to the objects of the MDT or OST named by
+.IR target ,
+which
+.BR llapi_scan_device (3)
+reads directly, and prints what matches.  The predicates are
+.BR lfs-find (1)'s.
+.SS What it prints
+A target holds names and parent FIDs, not paths, so a match is named by its
+FID:
+.IP
+.EX
+[0x200000401:0x1:0x0]
+.EE
+.LP
+An object carrying no
+.B trusted.lma
+has recorded no FID of its own. On MDT0000 it still has one: its inode number
+and generation are an IGIF, which is built and printed as the FID it is. That
+is the only target where an IGIF can be built. On another MDT the object
+may be FID-on-OST, or carry a FID that a file-level restore has invalidated,
+and on an OST the object id is in the directory entry that names the inode,
+not in the inode. Where no FID can be had, the
+object's own id on the target is printed instead:
+.IP
+.EX
+obj:1442
+.EE
+.LP
+Only
+.B LLAPI_SCAN_F_INTERNAL
+reaches those, so a default search prints the first form and nothing else.
+Every record carries one or the other: the scan sets the object id on all
+of them, so the second form always applies where the first does not.
+.I fp_zero_end
+in
+.I param
+chooses the separator (a NUL rather than a newline) as it does for
+a walk.
+.LP
+.I sp
+is the parameter block
+.BR llapi_scan_device (3)
+takes, or NULL for its defaults, so a knob added there needs no change here.
+.I lfsp_flags
+carries
+.B LLAPI_SCAN_F_INTERNAL
+as it does for a scan.  Three of its fields are the search's to decide and
+are overwritten whatever the caller set:
+.IR lfsp_want ,
+.I lfsp_thread_count
+and
+.IR lfsp_filter .
+.I lfsp_stats
+is filled as
+.BR llapi_scan_device (3)
+fills it, so a program can see that part of the target was skipped.
+Its
+.I ss_emitted
+counts the objects the search judged, not the ones it matched.
+.I lfsp_got
+is left untouched rather than filled for the caller: it would report the
+demand mask the search settled on and not the one the caller asked for.
+.I lfsp_filter
+goes because there is no caller data to pair a filter with: the
+scan carries this function's own state, and a caller's callback would be
+handed that.
+.LP
+A target holds objects and not a namespace, so a search that needs one is
+refused rather than answered wrongly: see ERRORS.  A size or a block count
+that lives on the OSTs cannot be settled from an MDT alone, and objects a
+predicate could not decide are counted and reported once at the end rather
+than printed as matches.
+.LP
+A time predicate is not among those. For a striped regular file
+.BR -atime ", " -mtime ", " -ctime
+and
+.B -newerXY
+are answered from the MDT inode's copy, which the OSTs may have moved past:
+over a mount the same predicate forces a glimpse, and a scan has none. The
+object is answered rather than counted as undecided, so the result can
+differ from
+.BR llapi_find (3)
+without saying that it did.
+.LP
+.B -name
+differs the other way, by answering more rather than less. A walk meets a
+hardlinked file once per link and tests the name it arrived by; a scan meets
+the object once and tests the pattern against every name in its
+.IR trusted.link ,
+so a file matching under any of its names is reported once. An object with
+no linkea has no name to test (an OST data object, and the
+.BR CLS_INTERNAL ,
+.B CLS_NO_LMA
+and
+.B CLS_AGENT
+records
+.B LLAPI_SCAN_F_INTERNAL
+delivers) and is counted undecided rather than answered. The filesystem
+root and
+.IR .lustre ,
+which have no linkea either, are neither matched nor counted.
+An encrypted object is counted undecided too: its
+.I trusted.link
+holds the names the client encrypted. That includes the top directory of
+an encrypted tree, whose own name is clear, since a record does not say
+which object that is.
+A file with too many links for its
+.I trusted.link
+to hold is counted undecided when none of its stored names matches, since
+the MDT does not store the names past that limit.
+.LP
+A striped directory has a shard on each MDT it is striped over. The shards are
+not reported: the master answers for the directory, once, as a walk does.
+.SH RETURN VALUES
+.B llapi_find_device()
+returns:
+.TP
+0
+on success.
+.TP
+<0
+a negative errno on failure.
+.SH ERRORS
+.TP 15
+.B -EINVAL
+.I target
+or
+.I param
+is NULL, or
+.I lfsp_size
+is outside the range this library accepts: shorter than its minimum,
+longer than 4096 bytes, or longer than its own definition with a byte past the
+end of it set.
+.TP 15
+.B -ENOTSUP
+this build has no scanning backend, or the search needs something a target
+scan does not have. The two share this value, so a caller that skips its
+work where a build cannot scan at all must not also skip it on a node that
+can. See
+.BR llapi_scan_device (3),
+whose return value this function passes back unchanged, and which separates
+the two. What a target scan does not have is a path
+.RB ( -printf " " %p ),
+a mounted filesystem
+.RB ( --xattr ),
+or a walk to describe
+.RB ( --maxdepth
+other than 0,
+.BR --mindepth ", " --threads ).
+.B --ost
+over an MDT and
+.B --mdt
+over an OST are refused with this value too: an OST object names its MDT only
+through an FLD lookup, which needs a client, and which OSTs a file is striped
+over is a question about its layout rather than about the target being read.
+The layout options
+.RB ( --stripe-count ", " --stripe-size ", " --extension-size ,
+.BR --pool ", " --layout ", " --comp-* ", " --mirror-* ", " --foreign )
+over an OST are refused too, because an OST object has no layout, and so are
+.B --ost
+and
+.B --mdt
+over a target whose label carries no index.
+A search runs the scan single-threaded, since
+.I fp_lmd
+is one buffer for the whole of it, which is why
+.I lfsp_thread_count
+is among the fields above rather than a knob.
+.TP 15
+.B -ENOENT
+.I target
+does not exist.
+.TP 15
+.B -ENOPKG
+the backend refused the target.
+.TP 15
+.B -EIO
+the target could not be read.
+.LP
+Any other error
+.BR llapi_scan_device (3)
+returns is passed back as well;
+.BR -EACCES ,
+a device the caller cannot read, is the one a non-root caller meets first.
+.SH NOTES
+.I param
+is modified: the search runs with
+.I fp_lazy
+set, since a scan cannot glimpse an OST, and the buffers the search
+allocates in it are released before returning.  The caller's
+.I fp_lazy
+is put back.
+With
+.BR --mdt ,
+as in a walk,
+.I fp_mdt_indexes
+is left allocated and
+.IR fp_mdt_index " and " fp_file_mdt_index
+are changed.
+.LP
+.B --ost
+and
+.B --mdt
+are about the target and not about each object: every object an MDT scan
+delivers is on that MDT, and every object an OST scan delivers is on that OST.
+The names given are resolved against the target's own label, so an index and
+the target's UUID both work without a mount. A name for some other target is
+not an error: the search simply matches nothing, and its negation matches
+everything, which is what lets one predicate sweep a list of devices and skip
+the ones that cannot hold a match. An empty result returns 0.
+.LP
+.B -printf
+is answered from the record and not from a path, so every directive but
+.B %p
+works here.
+.B %LF
+prints the FID the record carries, and nothing for an object the scan has no
+FID for, or for an OST data object: the FID a user knows for one is its
+file's, which this scan does not read.
+.B %LO
+prints an OST data object's own FID, in brackets, and the FIDs of a file's OST
+objects from its layout;
+the layout directives
+.RB ( %Lc ", " %Li ", " %Lo ", " %Lp ", " %LS )
+read the
+.B trusted.lov
+the scan already read, and print nothing for an object that has none or whose
+layout did not parse. The filesystem default a predicate compares such an
+object against is not a layout to print. An object with no project id prints
+.B %LP
+as 0, which is what a walk off Lustre prints for one as well.
+.BR %s ", " %b " and " %k
+print nothing for an object the scan has no size or blocks for, such as a
+striped file with no
+.BR trusted.som .
+For a striped directory
+.BR %n ,
+.BR %a ,
+.B %c
+and
+.B %t
+print nothing too: the target holds the master inode's link count and
+times, where a walk reports the directory's own, counted over every stripe.
+.LP
+.I fp_max_depth
+may be 0, as
+.BR llapi_find_param_alloc (3)
+leaves it, or
+.BR "(unsigned int)-1" .
+A scan has no depth, so both mean no limit.
+Any other value is refused.
+.SH EXAMPLES
+To print the regular files over a gigabyte on a stopped MDT, without
+mounting it. A file whose size the MDT does not hold, such as a striped
+file with no
+.BR trusted.som ,
+is counted as undecided and not printed:
+.EX
+        struct find_param *param = llapi_find_param_alloc();
+        int rc;
+\&
+        if (param == NULL)
+                return \-ENOMEM;
+        param\->fp_max_depth  = (unsigned int)\-1;
+        param\->fp_check_size = 1;
+        param\->fp_size       = 1024ULL * 1024 * 1024;
+        param\->fp_size_sign  = \-1;       /* greater than; '+size' is \-1 */
+        param\->fp_type       = S_IFREG;
+\&
+        rc = llapi_find_device("/dev/vdb", param, NULL);
+        llapi_find_param_free(param);
+.EE
+.LP
+.I sp
+is NULL here, so the scan runs with
+.BR llapi_scan_device (3)'s
+defaults; pass one with
+.I lfsp_flags
+set to
+.B LLAPI_SCAN_F_INTERNAL
+to search the target's own objects as well as the visible ones.
+.SH AVAILABILITY
+.B llapi_find_device()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.18.0.
+.\" Added in commit v2_17_57-xxx-gxxxxxxxxx
+.SH SEE ALSO
+.BR lfs-find (1),
+.BR llapi_scan_device (3),
+.BR llapi_scan_namespace (3),
+.BR lustreapi (7)

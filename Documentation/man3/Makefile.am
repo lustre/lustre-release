@@ -37,6 +37,7 @@ DO_NOT_UPDATE_THIS_LIST =			\
 	llapi_file_open_volatile.3		\
 	llapi_file_open_volatile_idx.3		\
 	llapi_file_open_volatile_param.3	\
+	llapi_find_device.3			\
 	llapi_find_param_alloc.3		\
 	llapi_find_param_free.3			\
 	llapi_fswap_layout_fids.3		\

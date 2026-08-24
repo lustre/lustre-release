@@ -676,6 +676,12 @@ component.
 .B %Lo
 List of all OST/MDT indices associated with a file or directory.
 .TP
+.B %LO
+List of the FIDs of a file's OST objects, comma-separated, with one list in
+brackets for each layout component, as
+.B %Lo
+lists the indices. A directory has none.
+.TP
 .B %Lp
 File\'s OST pool name. For a composite file, this is the pool associated
 with the last instantiated component. (NOTE: This can also be used for

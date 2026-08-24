@@ -3593,7 +3593,7 @@ static int validate_printf_fmt(char *c)
 {
 	char *valid_fmt_single = "abcigGkmMnpstuUwy%";
 	char *valid_fmt_double = "ACTW";
-	char *valid_fmt_lustre = "aAcFhioPpS";
+	char *valid_fmt_lustre = "aAcFhiOoPpS";
 	char curr = *c, next;
 
 	if (curr == '\0') {

@@ -516,7 +516,11 @@ static inline int scan_param_copyin(struct llapi_scan_param *dst,
  * field, not that any one object has it: an object with no project id
  * still leaves LLAPI_SCAN_PROJID clear in lfsr_valid.
  */
-/* LLAPI_SCAN_LMV_FOREIGN describes lfsr_lmv, so asking for it asks for that */
+/*
+ * LLAPI_SCAN_LMV_FOREIGN describes lfsr_lmv, so asking for it asks for that.
+ * LLAPI_SCAN_LMV_SHARD does not: a shard has no lfsr_lmv, and the device
+ * scanner reads trusted.lmv for it without LLAPI_SCAN_LMV.
+ */
 static inline __u64 scan_want_widen(__u64 want)
 {
 	if (want & LLAPI_SCAN_LMV_FOREIGN)
@@ -554,7 +558,7 @@ static inline void scan_param_report_got(const struct llapi_scan_param *sp,
 	 LLAPI_SCAN_SIZE | LLAPI_SCAN_BLOCKS | LLAPI_SCAN_ATTRS |	\
 	 LLAPI_SCAN_LAZY_SIZE | LLAPI_SCAN_LAZY_BLOCKS |		\
 	 LLAPI_SCAN_FID | LLAPI_SCAN_LAYOUT | LLAPI_SCAN_LMV |		\
-	 LLAPI_SCAN_LMV_FOREIGN |				\
+	 LLAPI_SCAN_LMV_FOREIGN | LLAPI_SCAN_LMV_SHARD |		\
 	 LLAPI_SCAN_MDT_INDEX | LLAPI_SCAN_PROJID | LLAPI_SCAN_HSM |	\
 	 LLAPI_SCAN_INO | LLAPI_SCAN_PARENT | LLAPI_SCAN_LINKEA |	\
 	 LLAPI_SCAN_LMA | LLAPI_SCAN_CLASS)
@@ -565,7 +569,7 @@ static inline void scan_param_report_got(const struct llapi_scan_param *sp,
  */
 #define LLAPI_SCAN_WANT_MDT_ONLY					\
 	(LLAPI_SCAN_LAYOUT | LLAPI_SCAN_LMV | LLAPI_SCAN_LMV_FOREIGN |	\
-	 LLAPI_SCAN_HSM |						\
+	 LLAPI_SCAN_LMV_SHARD | LLAPI_SCAN_HSM |			\
 	 LLAPI_SCAN_LAZY_SIZE | LLAPI_SCAN_LAZY_BLOCKS |		\
 	 LLAPI_SCAN_MDT_INDEX | LLAPI_SCAN_LINKEA | LLAPI_SCAN_PARENT)
 
@@ -579,6 +583,22 @@ int scan_rec_gather_finish(struct find_param *param, char *path, int p,
 int scan_rec_gather(struct find_param *param, char *path, int p,
 		    int d, int *fdp, __u64 want,
 		    struct llapi_scan_rec *rec);
+/* liblustreapi_layout.c: a layout as it is on disk, in host order */
+void layout_swab_lov_user_md(struct lov_user_md *lum, int lum_size);
+int layout_ost_fid_get(const struct llapi_layout *layout,
+		       uint64_t stripe_number, struct lu_fid *fid);
+
+/* liblustreapi_scan_device.c: one entry of a raw trusted.link */
+int scan_linkea_entry(const void *buf, size_t len, unsigned int idx,
+		      char *name, size_t namesize, struct lu_fid *parent);
+/* and the next one, for a caller reading them all */
+int scan_linkea_next(const void *buf, size_t len, size_t *offp,
+		     char *name, size_t namesize, struct lu_fid *parent);
+/* true if trusted.link dropped names when it overflowed */
+bool scan_linkea_overflowed(const void *buf, size_t len);
+/* liblustreapi_scan_device.c: the target's label and index, without a scan */
+struct llapi_scan_tgt;
+int scan_device_target(const char *device, struct llapi_scan_tgt *tgt);
 int common_param_init(struct find_param *param, char *path);
 void find_param_fini(struct find_param *param);
 int parallel_find(char *path, llapi_find_cb_t cb_init, llapi_find_cb_t cb_fini,

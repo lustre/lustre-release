@@ -11257,6 +11257,26 @@ test_56Ea() { #LU-10378
 	[[ "${lattr_printf}" == "${lattr_getstr}" ]] ||
 		error "Attrs from lfs find and lfs getstripe don't match"
 
+	# %LO lists the OST object FIDs lfs getstripe -y gives, and a
+	# directory has none
+	local ofids=$($LFS getstripe -y $path/$tfile |
+		      awk '/l_fid:/ { printf "%s%s", s, $2; s = "," }')
+	local lo_printf=$($LFS find $path/$tfile -printf "%LO")
+
+	[[ -n "$ofids" && "$lo_printf" == "[$ofids]" ]] ||
+		error "%LO gave '$lo_printf', getstripe gives [$ofids]"
+	lo_printf=$($LFS find $path -maxdepth 0 -printf "%LO")
+	[[ -z "$lo_printf" ]] || error "%LO gave '$lo_printf' for a directory"
+
+	# more FIDs than the 1024-byte buffer holds, and the text after them
+	$LFS setstripe -C 100 $path/$tfile.wide ||
+		error "setstripe -C 100 $path/$tfile.wide failed"
+	ofids=$($LFS getstripe -y $path/$tfile.wide |
+		awk '/l_fid:/ { printf "%s%s", s, $2; s = "," }')
+	lo_printf=$($LFS find $path/$tfile.wide -printf "%LO end")
+	[[ "$lo_printf" == "[$ofids] end" ]] ||
+		error "wide %LO gave '$lo_printf', getstripe gives [$ofids]"
+
 	# Verify behavior for unknown escape/format sequences
 	local esc_printf=$($LFS find $path/$tfile -printf '\\ %% \Q %Q')
 

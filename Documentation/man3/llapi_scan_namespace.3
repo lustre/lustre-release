@@ -327,6 +327,23 @@ too, and
 .I lfsp_got
 reports both.
 .TP
+.B LLAPI_SCAN_LMV_SHARD
+The object is a striped directory's shard, whose
+.B trusted.lmv
+is
+.BR LMV_MAGIC_STRIPE .
+It carries no
+.I lfsr_lmv
+because there is no
+.B lmv_user_md
+form of one, so the bit is the whole answer. A shard has a linkea of its
+own, naming the master as its parent and itself
+.RI < DFID >: <index>,
+and is not a directory the filesystem has a pathname for, so a consumer
+composing pathnames steps through it to the master. Only
+.BR llapi_scan_device (3)
+reports it: a namespace walk never reaches a shard.
+.TP
 .B LLAPI_SCAN_MDT_INDEX
 .IR lfsr_mdt_index .
 .TP

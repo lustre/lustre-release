@@ -101,7 +101,7 @@ static __u32 scan_want_xattr(__u64 want)
 
 	if (want & LLAPI_SCAN_LAYOUT)
 		xa |= LLAPI_SCAN_XA_BIT(LLAPI_SCAN_XA_LOV);
-	if (want & LLAPI_SCAN_LMV)
+	if (want & (LLAPI_SCAN_LMV | LLAPI_SCAN_LMV_SHARD))
 		xa |= LLAPI_SCAN_XA_BIT(LLAPI_SCAN_XA_LMV);
 	/*
 	 * trusted.lmv with it: a striped directory's own size is not the
@@ -223,6 +223,25 @@ static enum llapi_scan_class scan_classify(const struct lustre_mdt_attrs *lma,
 					   LLAPI_SCAN_CLS_VISIBLE;
 
 	return LLAPI_SCAN_CLS_INTERNAL;
+}
+
+/*
+ * A striped directory's shard: its trusted.lmv is LMV_MAGIC_STRIPE, which
+ * scan_lmv_to_user() has no user form for and answers 0 to.  It is worth
+ * saying so anyway -- a shard has a linkea and looks like a directory to
+ * anything walking one, and it is not a directory the filesystem has a path
+ * for.
+ */
+static bool scan_lmv_is_shard(const void *disk, __u32 len)
+{
+	__u32 magic;
+
+	if (len < sizeof(magic))
+		return false;
+
+	memcpy(&magic, disk, sizeof(magic));
+
+	return __le32_to_cpu(magic) == LMV_MAGIC_STRIPE;
 }
 
 /*
@@ -355,27 +374,70 @@ static __u32 scan_lmv_to_user(const void *disk, __u32 len, void *out,
 }
 
 /*
- * The first linkea entry: a name, and the FID of the directory it is in.
- * Entries are big-endian, the header is not necessarily; the kernel's
- * linkea_init() and linkea_entry_unpack() are what this mirrors.
+ * The entry of a raw trusted.link at *offp, advancing *offp past it, so a
+ * caller reading every name walks the buffer once.  *offp 0 is the first
+ * entry.  0 at the end of the buffer or at an entry whose length cannot be
+ * trusted; the header is the caller's to have checked.
+ */
+int scan_linkea_next(const void *buf, size_t len, size_t *offp,
+		     char *name, size_t namesize, struct lu_fid *parent)
+{
+	const struct link_ea_entry *lee;
+	size_t off = *offp != 0 ? *offp : sizeof(struct link_ea_header);
+	int reclen, namelen;
+
+	if (!buf || off + sizeof(*lee) > len)
+		return 0;
+
+	lee = (const struct link_ea_entry *)((const char *)buf + off);
+	reclen = (lee->lee_reclen[0] << 8) | lee->lee_reclen[1];
+	namelen = reclen - (int)sizeof(*lee);
+	/* never trust a length read off a device */
+	if (reclen <= (int)sizeof(*lee) || off + reclen > len)
+		return 0;
+
+	if (parent) {
+		memcpy(parent, lee->lee_parent_fid, sizeof(*parent));
+		parent->f_seq = __be64_to_cpu(parent->f_seq);
+		parent->f_oid = __be32_to_cpu(parent->f_oid);
+		parent->f_ver = __be32_to_cpu(parent->f_ver);
+	}
+	if (name) {
+		if ((size_t)namelen >= namesize)
+			namelen = namesize - 1;
+		memcpy(name, lee->lee_name, namelen);
+		name[namelen] = '\0';
+	}
+	*offp = off + reclen;
+
+	return 1;
+}
+
+/*
+ * Walk trusted.link, mirroring linkea_init() and linkea_entry_unpack():
+ * entries are big-endian, the header is not necessarily.  Returns the entry
+ * count, filling @name and @parent from entry @idx.
+ *
+ * 0 is two answers: no usable linkea at all, and an entry @idx whose
+ * reclen does not fit what the xattr holds.  A caller cannot tell them
+ * apart and does not need to -- neither yields a name -- but it should not
+ * read 0 as "the header said there are none".
  *
  * A name is not a path.  Turning one into the other is a walk of its own
  * and is not this scan's to do.
  */
-static void scan_linkea(const struct llapi_scan_obj *obj, char *name,
-			size_t namesize, struct llapi_scan_rec *rec)
+int scan_linkea_entry(const void *buf, size_t len, unsigned int idx,
+		      char *name, size_t namesize, struct lu_fid *parent)
 {
-	const struct link_ea_header *leh;
+	const struct link_ea_header *leh = buf;
 	const struct link_ea_entry *lee;
-	size_t len = 0;
-	__u32 reccount;
+	unsigned int reccount;
+	size_t off = 0;
 	__u32 magic;
-	int reclen;
-	int namelen;
+	unsigned int i;
 
-	leh = scan_xattr(obj, LLAPI_SCAN_XA_LINK, &len);
 	if (leh == NULL || len < sizeof(*leh))
-		return;
+		return 0;
 
 	magic = leh->leh_magic;
 	reccount = leh->leh_reccount;
@@ -384,37 +446,68 @@ static void scan_linkea(const struct llapi_scan_obj *obj, char *name,
 		reccount = __swab32(reccount);
 	}
 	if (magic != LINK_EA_MAGIC || reccount == 0)
+		return 0;
+
+	/* a count off the device is not a count the buffer can hold */
+	if (reccount > (len - sizeof(*leh)) / sizeof(*lee))
+		reccount = (len - sizeof(*leh)) / sizeof(*lee);
+
+	if (!name && !parent)
+		return reccount;
+
+	for (i = 0; i <= idx; i++)
+		if (!scan_linkea_next(buf, len, &off,
+				      i == idx ? name : NULL, namesize,
+				      i == idx ? parent : NULL))
+			return 0;
+
+	return reccount;
+}
+
+/*
+ * Past MAX_LINKEA_SIZE the MDT stops storing names and sets
+ * leh_overflow_time instead, so a name the file has may be missing.
+ */
+bool scan_linkea_overflowed(const void *buf, size_t len)
+{
+	const struct link_ea_header *leh = buf;
+
+	if (!leh || len < sizeof(*leh))
+		return false;
+	if (leh->leh_magic != LINK_EA_MAGIC &&
+	    leh->leh_magic != __swab32(LINK_EA_MAGIC))
+		return false;
+
+	return leh->leh_overflow_time != 0;
+}
+
+/* The record's view: the raw bytes, plus the first entry's name and parent. */
+static void scan_linkea(const struct llapi_scan_obj *obj, char *name,
+			size_t namesize, struct llapi_scan_rec *rec)
+{
+	struct lu_fid parent = { 0 };
+	size_t len = 0;
+	const void *buf;
+
+	buf = scan_xattr(obj, LLAPI_SCAN_XA_LINK, &len);
+	if (!buf)
 		return;
 
-	rec->lfsr_linkea = leh;
+	if (scan_linkea_entry(buf, len, 0, name, namesize, &parent) == 0)
+		return;
+
+	rec->lfsr_linkea = buf;
 	rec->lfsr_linkeasize = len;
 	rec->lfsr_valid |= LLAPI_SCAN_LINKEA;
 
-	if (len < sizeof(*leh) + sizeof(*lee))
-		return;
-
-	lee = (const struct link_ea_entry *)(leh + 1);
-	reclen = (lee->lee_reclen[0] << 8) | lee->lee_reclen[1];
-	namelen = reclen - (int)sizeof(*lee);
-	if (reclen <= (int)sizeof(*lee) ||
-	    (size_t)reclen > len - sizeof(*leh))
-		return;
-
-	memcpy(&rec->lfsr_parent_fid, lee->lee_parent_fid,
-	       sizeof(rec->lfsr_parent_fid));
-	rec->lfsr_parent_fid.f_seq = __be64_to_cpu(rec->lfsr_parent_fid.f_seq);
-	rec->lfsr_parent_fid.f_oid = __be32_to_cpu(rec->lfsr_parent_fid.f_oid);
-	rec->lfsr_parent_fid.f_ver = __be32_to_cpu(rec->lfsr_parent_fid.f_ver);
+	rec->lfsr_parent_fid = parent;
 	if (fid_is_sane(&rec->lfsr_parent_fid))
 		rec->lfsr_valid |= LLAPI_SCAN_PARENT;
 	else
 		memset(&rec->lfsr_parent_fid, 0, sizeof(rec->lfsr_parent_fid));
 
-	if ((size_t)namelen >= namesize)
-		namelen = namesize - 1;
-	memcpy(name, lee->lee_name, namelen);
-	name[namelen] = '\0';
-	rec->lfsr_name = name;
+	if (name[0] != '\0')
+		rec->lfsr_name = name;
 }
 
 /*
@@ -836,6 +929,12 @@ static int scan_sink_object(void *ctx, const struct llapi_scan_obj *obj)
 			 */
 			if (lmv_is_foreign(lmv->lum_magic))
 				rec.lfsr_valid |= LLAPI_SCAN_LMV_FOREIGN;
+		} else if (scan_lmv_is_shard(val, len)) {
+			/* no lfsr_lmv: there is no lmv_user_md for a shard.
+			 * The bit is the whole answer, and what a consumer
+			 * composing a pathname needs.
+			 */
+			rec.lfsr_valid |= LLAPI_SCAN_LMV_SHARD;
 		}
 	}
 
@@ -1057,6 +1156,43 @@ static void scan_open_error(const char *device, int rc)
 			    device);
 	else
 		llapi_error(LLAPI_MSG_ERROR, rc, "cannot open %s", device);
+}
+
+/*
+ * What the backend says about a target, without scanning it.
+ *
+ * A search has to know what it is reading before it can say whether a
+ * predicate can be answered at all -- llapi_find_device() decides --ost and
+ * --mdt against the label this reports.  An open and a close, which reads
+ * the superblock and the group descriptors and no inode; llapi_scan_device()
+ * opens the target again for itself, which also keeps this from holding it
+ * open meanwhile.
+ *
+ * Return: 0 with @tgt filled, or a negative errno.
+ */
+int scan_device_target(const char *device, struct llapi_scan_tgt *tgt)
+{
+	struct llapi_scan_backend *be;
+	void *handle = NULL;
+	int rc;
+
+	if (!device || !tgt)
+		return -EINVAL;
+
+	pthread_once(&scan_backend_once, scan_backend_load);
+	be = scan_backend;
+	if (!be)
+		return -ENOTSUP;
+
+	memset(tgt, 0, sizeof(*tgt));
+	rc = be->sb_open(device, &handle, tgt);
+	if (rc < 0) {
+		scan_open_error(device, rc);
+		return rc;
+	}
+	be->sb_close(handle);
+
+	return 0;
 }
 
 /**

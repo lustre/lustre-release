@@ -116,7 +116,12 @@ the raw
 .BR trusted.link ,
 with
 .I lfsr_linkeasize
-bytes at it.
+bytes at it. The bit is set only when the first entry parses, so a
+.B trusted.link
+that is damaged there is not delivered at all.
+.I lfsr_name
+can still be NULL with the bit set, when that entry's name starts with a
+NUL byte.
 .TP
 .I lfsr_parent_fid
 .RB ( LLAPI_SCAN_PARENT )
