@@ -124,6 +124,7 @@ liblustreapi_la_SOURCES = libhsm_scanner.c \
 			  liblustreapi_pfind.c \
 			  liblustreapi_project.c \
 			  liblustreapi_root.c \
+			  liblustreapi_scan.c \
 			  liblustreapi_swap.c \
 			  liblustreapi_util.c \
 			  erasurecode/ec_base.c \

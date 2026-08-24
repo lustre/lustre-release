@@ -305,9 +305,13 @@ static int convert_lmdbuf_v1v2(void *lmdbuf, int lmdlen)
 	st = lmd_v1->lmd_st;
 	memmove(&lmd_v2->lmd_lmm, &lmd_v1->lmd_lmm,
 		lmdlen - (&lmd_v2->lmd_lmm - &lmd_v1->lmd_lmm));
+	/*
+	 * Everything up to lmd_lmm is still the V1 lmd_st: lmd_fid would read
+	 * as an IGIF and stx_mask would keep st_nlink's bits, and
+	 * convert_lmd_statx() writes only the fields lstat has.
+	 */
+	memset(lmd_v2, 0, offsetof(typeof(*lmd_v2), lmd_lmm));
 	convert_lmd_statx(lmd_v2, &st, false);
-	lmd_v2->lmd_lmmsize = 0;
-	lmd_v2->lmd_padding = 0;
 
 	return 0;
 }
@@ -429,6 +433,18 @@ retry_getfileinfo:
 					    __func__, path);
 			}
 
+			/*
+			 * A stat answers for an object the ioctl could not,
+			 * and the buffer holds the name written in for that
+			 * ioctl or the previous object: lmd_fid would read as
+			 * an IGIF, stx_mask would keep the name's bits, and
+			 * llapi_get_lum_file_fd() copies by lmd_lmmsize.
+			 * Cleared here rather than in convert_lmd_statx(),
+			 * whose third caller -- cb_find_init() under
+			 * gather_all -- runs after the V2 ioctl has put real
+			 * values there.
+			 */
+			memset(lmd, 0, offsetof(typeof(*lmd), lmd_lmm));
 			convert_lmd_statx(lmd, &st, true);
 			/*
 			 * It may be wrong to set use_old_ioctl with true as
@@ -2183,7 +2199,7 @@ static void printf_format_string(struct find_param *param, char *path,
  *			is a regular file/dir or if it's a special file type.
  * @param[out]	projid	A reference to where to store the projid of the file/dir
  */
-static int get_projid(const char *path, int *fd, mode_t mode, __u32 *projid)
+int get_projid(const char *path, int *fd, mode_t mode, __u32 *projid)
 {
 	struct fsxattr fsx = { 0 };
 	struct lu_project lu_project = { 0 };
@@ -2198,8 +2214,23 @@ static int get_projid(const char *path, int *fd, mode_t mode, __u32 *projid)
 			 */
 			*fd = open(path, O_RDONLY | O_NOCTTY | O_NDELAY);
 			if (*fd <= 0) {
-				llapi_error(LLAPI_MSG_ERROR, -ENOENT,
-					    "warning: %s: unable to open file \"%s\"to get project id",
+				/*
+				 * LLAPI_MSG_DEBUG marks this diagnostic
+				 * rather than an error: failing to open is
+				 * an ordinary outcome for an object the
+				 * caller cannot open, and scan_rec_gather()
+				 * answers it by leaving LLAPI_SCAN_PROJID
+				 * clear rather than by reporting.
+				 *
+				 * The level does not quiet it by itself.
+				 * llapi_msg_level starts at LLAPI_MSG_MAX
+				 * and neither lfs nor lfind lowers it, so
+				 * the line still prints; what the level
+				 * buys is a caller able to silence it with
+				 * llapi_msg_set_level().
+				 */
+				llapi_error(LLAPI_MSG_DEBUG, -ENOENT,
+					    "%s: unable to open file \"%s\" to get project id",
 					    __func__, path);
 				return -ENOENT;
 			}
@@ -2224,8 +2255,8 @@ static int get_projid(const char *path, int *fd, mode_t mode, __u32 *projid)
 		int dir_fd = open(dir_name, O_RDONLY | O_NOCTTY | O_NDELAY);
 
 		if (dir_fd < 0) {
-			llapi_error(LLAPI_MSG_ERROR, -ENOENT,
-				    "warning: %s: unable to open dir \"%s\"to get project id",
+			llapi_error(LLAPI_MSG_DEBUG, -ENOENT,
+				    "%s: unable to open dir \"%s\" to get project id",
 				    __func__, path);
 			return -errno;
 		}
@@ -2236,8 +2267,8 @@ static int get_projid(const char *path, int *fd, mode_t mode, __u32 *projid)
 		ret = ioctl(dir_fd, LL_IOC_PROJECT, &lu_project);
 		close(dir_fd);
 		if (ret) {
-			llapi_error(LLAPI_MSG_ERROR, -ENOENT,
-				    "warning: %s: failed to get xattr for '%s': %s",
+			llapi_error(LLAPI_MSG_DEBUG, -ENOENT,
+				    "%s: failed to get xattr for '%s': %s",
 				    __func__, path, strerror(errno));
 			return -errno;
 		}

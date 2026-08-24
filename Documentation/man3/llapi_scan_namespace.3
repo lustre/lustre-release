@@ -1,0 +1,501 @@
+.TH LLAPI_SCAN_NAMESPACE 3 2026-08-18 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_scan_namespace \- scan a Lustre namespace, one record per object
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "typedef int (*llapi_scan_cb_t)(const struct llapi_scan_rec *" rec ,
+.BI "                               void *" data ");"
+.PP
+.BI "int llapi_scan_namespace(const char *" path ,
+.BI "                         const struct llapi_scan_param *" sp ,
+.BI "                         llapi_scan_cb_t " cb ", void *" data ");"
+.PP
+.fi
+.SH DESCRIPTION
+.B llapi_scan_namespace()
+walks the namespace below
+.I path
+and calls
+.I cb
+once for each object found, passing it a
+.B struct llapi_scan_rec
+describing that object and the caller's
+.I data
+unchanged.
+.LP
+.I sp
+may be NULL for the defaults. Otherwise its
+.I lfsp_size
+field must be set to
+.BR "sizeof(struct llapi_scan_param)" .
+The caller must own that many bytes, because the library reads them.
+A caller built against an older, shorter definition of the structure is
+accepted and the fields it did not set read as zero. A longer one is
+accepted too, up to 4096 bytes, as long as every byte past the end of this
+library's definition is zero \(em which is the caller saying it set no field
+this library could not honour \(em and is refused with \-EINVAL otherwise.
+The size is therefore not a version number: an application built against a
+newer header runs against an older library for as long as it asks only for
+what that library has.
+.I lfsp_max_depth
+limits the descent, counted as
+.BR find (1)
+counts it: 1 is the start point and its children, 2 their children in
+turn, and 0 is unlimited.
+.I lfsp_thread_count
+sets the number of scan threads (0 or 1 scans in the calling thread), and
+.I lfsp_flags
+takes
+.B LLAPI_SCAN_F_STOP_ON_ERROR
+to abandon the scan when an object cannot be read rather than skipping it.
+.I lfsp_padding
+must be zero: those bytes are already counted in
+.IR lfsp_size ,
+so a field carved out of them later can only be refused here, never
+noticed.
+.LP
+.I lfsp_want
+is the demand mask: the
+.B LLAPI_SCAN_*
+fields the consumer will read, or 0 for everything except
+.BR LLAPI_SCAN_MDT_INDEX ,
+.B LLAPI_SCAN_PROJID
+and
+.BR LLAPI_SCAN_HSM ,
+which each cost an ioctl or an open per object and are gathered only when
+named.
+.B LLAPI_SCAN_LMV
+is not one of them: it costs a second ioctl, but only on a directory,
+which is the one place it means anything.
+A scan wanting nothing outside
+.B LLAPI_SCAN_DIRENT_MASK
+performs no ioctl per object, which is what makes a name-only search cheap.
+A field not asked for may still be delivered.
+.LP
+A bit of
+.I lfsp_want
+this library does not know, or knows but this scan cannot answer for, is
+not an error: it is dropped, and
+.I lfsp_got
+reports what is left. If
+.I lfsp_got
+is not NULL it is filled, before the first record, with the subset of
+.I lfsp_want
+this scan will answer for \(em a property of the scan rather than of the
+library, since what a scan can answer for depends on the entry point and,
+for a scan of a target, on what the target turns out to be. Where
+.I lfsp_want
+is 0 it reports what the scanner's default came to. A bit in
+.I lfsp_got
+says the scan may fill the field, not that any one object has it: an object
+with no project id still leaves
+.B LLAPI_SCAN_PROJID
+clear in
+.IR lfsr_valid .
+So an application can ask an older library for everything it might want and
+decide once whether the subset it is offered will do, rather than learning
+field by field that a bit never arrives.
+.LP
+.I lfsp_filter
+is an optional pre-filter, called before any I/O on the object with a record
+carrying only
+.IR lfsr_path ,
+.I lfsr_name
+and, when the directory entry knew the object type,
+.BR LLAPI_SCAN_TYPE .
+It returns 0 to gather and deliver the object, 1 to skip it without
+gathering (descent into a directory is unaffected), or a negative value to
+stop the scan.
+.LP
+Each field of the record has a bit, one of the
+.B LLAPI_SCAN_*
+constants, which is set only when the scanner could answer for that field.
+A consumer must test the bit rather than compare against zero: a scanner
+that cannot answer and a scanner that answers zero mean different things.
+.LP
+Two masks report those bits, each owning the half of the record it
+describes. The fields of
+.I lfsr_stx
+are reported by
+.IR lfsr_stx.stx_mask ,
+and the low
+.B LLAPI_SCAN_*
+constants are the kernel's
+.B STATX_*
+values, so the two are the same bits under either name. Everything else is
+reported by
+.IR lfsr_valid ,
+whose own low half is reserved and always zero.
+.I lfsp_want
+takes either half.
+.LP
+.I lfsr_size
+holds the size of the record the scanner filled, so a consumer built against
+an older definition of the structure continues to work; fields are only ever
+appended.
+.LP
+.I lfsr_stx
+begins the record, so a
+.B struct llapi_scan_rec *
+may be cast to a
+.B struct statx *
+and handed to anything that takes one \(em
+.BI & rec ->lfsr_stx
+says the same thing and costs no more. Every other field therefore sits at an
+offset
+.BR "sizeof(struct statx)" ,
+which the library asserts at build time is still the 256 bytes it has been
+since Linux 4.11: a statx that grew would move them under a consumer already
+built against the old ones, and
+.I lfsr_size
+reports how much of a record was filled, never that a field moved.
+.LP
+For a regular file,
+.B LLAPI_SCAN_SIZE
+and
+.B LLAPI_SCAN_BLOCKS
+are set only when the MDT can answer authoritatively. The file data lives on
+OSTs, so in the general case the size is not the MDT's to give, and the record
+says so rather than reporting zero. When the MDT holds a lazy size-on-MDT
+value instead,
+.B LLAPI_SCAN_LAZY_SIZE
+(and
+.BR LLAPI_SCAN_LAZY_BLOCKS )
+says so and the value is in
+.IR lfsr_stx.stx_size .
+.B STATX_SIZE
+stays clear for it, as it does in llite when the MDT's answer is not
+authoritative.
+A consumer that needs a strict size for every regular file must stat it, which
+is what
+.BR lfs-find (1)
+does for
+.BR --size ;
+.I lfsr_parent_fd
+and
+.I lfsr_name
+are there so it can do so with
+.BR fstatat (2).
+.I lfsr_parent_fd
+is the parent's descriptor only while
+.I lfsp_thread_count
+is 1: above that each subdirectory is a work unit of its own and the walk
+enters it with no parent open, so a directory's record carries \-1. A
+consumer that needs the parent above one thread opens
+.I lfsr_path
+itself.
+.LP
+The layout is delivered raw, as
+.I lfsr_lmm
+and
+.IR lfsr_lmmsize ,
+for the caller to decode with
+.BR llapi_layout_get_by_xattr (3).
+That call takes a non-const buffer and byte-swaps it in place, so a
+consumer copies
+.I lfsr_lmmsize
+bytes and decodes the copy:
+.I lfsr_lmm
+points into the scan's own buffer, which the walk reuses for the next
+object.
+A directory's stripe arrives likewise as
+.I lfsr_lmv
+and
+.IR lfsr_lmvsize ,
+under
+.BR LLAPI_SCAN_LMV ,
+which is set only for a directory that has one.
+.LP
+.B LLAPI_SCAN_HSM
+fills
+.I lfsr_hsm_states
+from
+.B enum hsm_states
+and
+.IR lfsr_hsm_archive_id ,
+for a regular file that has them. State 0 with the bit set means the scan
+asked and the file has no HSM state, which is not the same as the bit being
+clear.
+.SS The record's fields and their bits
+Each field is set only when its bit is set, in
+.I lfsr_stx.stx_mask
+for the fields of
+.I lfsr_stx
+and in
+.I lfsr_valid
+for the rest.
+.TP 22
+.B LLAPI_SCAN_FID
+.I lfsr_fid
+\(em the object's FID.
+.TP
+.B LLAPI_SCAN_TYPE
+the
+.B S_IFMT
+part of
+.IR lfsr_stx.stx_mode ,
+from the directory entry, with no I/O behind it.
+.TP
+.B LLAPI_SCAN_MODE
+.I lfsr_stx.stx_mode
+in full.
+.TP
+.B LLAPI_SCAN_NLINK
+.IR lfsr_stx.stx_nlink .
+.TP
+.B LLAPI_SCAN_UID
+.RB / LLAPI_SCAN_GID
+.I lfsr_stx.stx_uid
+and
+.IR lfsr_stx.stx_gid .
+.TP
+.B LLAPI_SCAN_PROJID
+.IR lfsr_projid .
+.TP
+.B LLAPI_SCAN_SIZE
+.RB / LLAPI_SCAN_BLOCKS
+.I lfsr_stx.stx_size
+and
+.IR lfsr_stx.stx_blocks ,
+authoritatively; the
+.B LAZY_
+pair says the value is a size-on-MDT one instead.
+.TP
+.B LLAPI_SCAN_ATIME
+.RB / MTIME / CTIME / BTIME
+.IR lfsr_stx.stx_atime ,
+.IR lfsr_stx.stx_mtime ,
+.I lfsr_stx.stx_ctime
+and
+.IR lfsr_stx.stx_btime ,
+each a whole
+.BR "struct statx_timestamp" .
+The MDT reports whole seconds today, so
+.I tv_nsec
+is 0; the field is there for when it reports more.
+.TP
+.B LLAPI_SCAN_ATTRS
+.IR lfsr_stx.stx_attributes ,
+set when the object's flags were answered \(em
+.B OBD_MD_FLFLAGS
+in the MDT's reply, which it sets only when it filled them. The value is
+masked down to the
+.B STATX_ATTR_*
+bits named in
+.IR lfsr_stx.stx_attributes_mask ,
+which is the scanner's own declaration of what it can represent; flags
+outside it are masked off rather than reported. This bit is in
+.I lfsr_valid
+because statx has no mask bit of its own for
+.IR stx_attributes .
+.TP
+.B LLAPI_SCAN_LAYOUT
+.I lfsr_lmm
+and
+.IR lfsr_lmmsize .
+.TP
+.B LLAPI_SCAN_LMV
+.I lfsr_lmv
+and
+.IR lfsr_lmvsize ,
+with
+.B LLAPI_SCAN_LMV_FOREIGN
+set beside it when the buffer is a
+.B struct lmv_foreign_md
+(declared in
+.BR <linux/lustre/lustre_idl.h> )
+rather than an
+.BR lmv_user_md .
+Naming
+.B LLAPI_SCAN_LMV_FOREIGN
+in
+.I lfsp_want
+asks for
+.B LLAPI_SCAN_LMV
+too, and
+.I lfsp_got
+reports both.
+.TP
+.B LLAPI_SCAN_MDT_INDEX
+.IR lfsr_mdt_index .
+.TP
+.B LLAPI_SCAN_HSM
+.I lfsr_hsm_states
+and
+.IR lfsr_hsm_archive_id .
+.LP
+.I lfsr_path
+and
+.I lfsr_name
+are always set.
+.I lfsr_parent_fd
+is an open descriptor on the parent directory and
+.I lfsr_fd
+one on the object, or \-1 when the scan holds none; neither is the
+consumer's to close, and both are valid only for the duration of the
+callback.
+.SS A target that is not Lustre
+.I path
+does not have to name a Lustre filesystem, and a walk that crosses onto one
+that is not \(em a bind mount, a local disk below the mount point \(em does
+not stop there. Attributes then come from
+.BR stat (2)
+instead of the MDT, and the record says so: a field that source cannot answer
+leaves its bit clear rather than reading as zero. In particular a
+.B stat
+has no FID, so
+.B LLAPI_SCAN_FID
+is clear and
+.I lfsr_fid
+must not be read; the same holds for
+.BR LLAPI_SCAN_LAYOUT ,
+.BR LLAPI_SCAN_LMV ,
+.B LLAPI_SCAN_MDT_INDEX
+and
+.BR LLAPI_SCAN_HSM .
+.LP
+What such an object does carry is what a
+.B stat
+answers \(em type, mode, link count, owner, size, blocks and the three times
+\(em plus
+.B LLAPI_SCAN_PROJID
+where
+.I lfsp_want
+names it and the filesystem supports project quotas. It is the same walk with
+.BR stat (2)
+as the attribute source, not a second scanner.
+.SH RETURN VALUES
+.B llapi_scan_namespace()
+returns:
+.TP
+0
+on success.
+.TP
+<0
+a negative errno on failure, or the negative value
+.I cb
+or
+.I lfsp_filter
+returned to stop the scan, passed back unchanged. The two are not
+distinguishable here: a filter stops only by returning a negative, its
+positive values meaning skip. A consumer that must tell them apart should
+stop from
+.I cb
+instead, whose positive values come back under
+.B >0
+below, or pick a value this page's ERRORS does not list.
+.TP
+>0
+the value a callback returned to stop the scan, unchanged.
+.SH ERRORS
+.TP 15
+.B -EINVAL
+.I path
+or
+.I cb
+is NULL, or
+.I lfsp_size
+is smaller than the fields up to and including
+.IR lfsp_want ,
+or is larger than 4096 bytes, or is larger than the library's definition of
+the parameter structure and a byte past the end of it is not zero, or
+.I lfsp_flags
+sets a bit this library does not define, or
+.I lfsp_padding
+is not zero. Neither changes
+.IR lfsp_size ,
+so refusing them is what gives flags and the reserved bytes the same
+guarantee fields already have: a caller never has one silently ignored.
+.TP 15
+.B -ENAMETOOLONG
+.I path
+is longer than PATH_MAX.
+.SH NOTES
+With
+.I lfsp_thread_count
+greater than 1 the callback is invoked concurrently from several threads and
+must be thread-safe. The record passed to each call is private to that call;
+.I data
+is shared between them.
+.SS Lifetimes
+The record is valid only for the duration of the callback, and so is
+everything it points at. A consumer that keeps any part of either must copy
+it. What follows says when each part stops being the object's, because the
+answers differ and two of them are shorter than the rule above suggests.
+.LP
+The record itself is a local of the scan's own traversal callback, so the
+fields held by value \(em
+.IR lfsr_stx ,
+.IR lfsr_fid ,
+.I lfsr_projid
+and the rest \(em are gone when the callback returns. Copying the structure
+is enough for those, and enough for nothing else.
+.LP
+.I lfsr_path
+is the traversal's path buffer, rewritten as the walk moves on. For a
+directory that is its own descent: the buffer has the first child appended to
+it before any callback below it runs, so a directory's path does not last
+even until its next sibling.
+.I lfsr_name
+points into that buffer rather than beside it, and does not outlive it.
+.LP
+.I lfsr_lmm
+and
+.I lfsr_lmv
+are the buffers the MDT's answer arrives in, reused from one object to the
+next rather than one per object. Within the callback the record is honest about
+them: an object with no layout leaves
+.I lfsr_lmm
+NULL rather than pointing at the last object's bytes. The buffer itself is
+rewritten by the
+.B next
+object's gather, though, which is later than the callback returns \(em so a
+pointer kept past that describes whichever object was gathered most recently,
+and the gather clears the layout's magic without clearing the body behind it.
+With
+.I lfsp_thread_count
+above 1 a kept pointer can be freed memory instead:
+each subdirectory is walked with buffers of its own,
+released when that subdirectory is done.
+Treat either as an accident of the implementation and not as room.
+.LP
+.I lfsr_fd
+is the shortest-lived. For a directory it is the traversal's own descriptor
+and lasts while the subtree is walked. For anything else it is a descriptor
+the gather opened only because
+.I lfsp_want
+asked for a field an ioctl answers, and it is closed as soon as the callback
+returns \(em so a kept copy names a closed descriptor whose number the scan
+is about to reuse.
+.I lfsr_parent_fd
+is the parent directory's and lasts while that directory is walked. Neither
+is the consumer's to close.
+.SH EXAMPLES
+To count the regular files under a directory, testing the validity mask
+before reading a field:
+.EX
+        static int count_cb(const struct llapi_scan_rec *rec, void *data)
+        {
+                __u64 *n = data;
+\&
+                if ((rec->lfsr_stx.stx_mask & STATX_TYPE) &&
+                    S_ISREG(rec->lfsr_stx.stx_mode))
+                        (*n)++;
+                return 0;
+        }
+\&
+        __u64 n = 0;
+        int rc = llapi_scan_namespace("/mnt/lustre", NULL, count_cb, &n);
+.EE
+.SH AVAILABILITY
+.B llapi_scan_namespace()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.18.0.
+.\" Added in commit v2_17_57-xxx-gxxxxxxxxx
+.SH SEE ALSO
+.BR lfs-find (1),
+.BR llapi_layout_get_by_xattr (3),
+.BR lustreapi (7)

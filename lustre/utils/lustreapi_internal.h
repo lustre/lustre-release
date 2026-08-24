@@ -17,8 +17,10 @@
 #ifndef _LUSTREAPI_INTERNAL_H_
 #define _LUSTREAPI_INTERNAL_H_
 
+#include <assert.h>
 #include <dirent.h>
 #include <limits.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <time.h>
 
@@ -27,6 +29,8 @@
 
 #include <linux/lustre/lustre_idl.h>
 #include <linux/lustre/lustre_kernelcomm.h>
+
+#include "lstddef.h"		/* ARRAY_SIZE */
 
 #include <lustre/lustreapi.h>
 
@@ -270,6 +274,216 @@ int cb_common_fini(char *path, int p, int *dp, struct find_param *param,
 		   struct dirent64 *de);
 /* @d keeps its number, but the ENOTTY retry may reopen what it names */
 int cb_get_dirstripe(char *path, int d, struct find_param *param);
+int get_projid(const char *path, int *fd, mode_t mode, __u32 *projid);
+
+/* liblustreapi_scan.c: the record front-end lfs find shares with the scanner */
+struct llapi_scan_rec;
+/* the shortest struct llapi_scan_param a scan will act on: everything up to
+ * and including the demand mask.  Anything after it may be missing, and is
+ * read as zero.
+ */
+#define LLAPI_SCAN_PARAM_MIN_SIZE					\
+	((__u32)(offsetof(struct llapi_scan_param, lfsp_want) +		\
+		 sizeof(((struct llapi_scan_param *)0)->lfsp_want)))
+/* and the longest: no definition of the struct will reach a page, so a size
+ * past it is a caller's mistake, refused before its tail is read
+ */
+#define LLAPI_SCAN_PARAM_MAX_SIZE	4096
+/* every lfsp_flags bit a namespace scan knows.  One mask per scanner, so that
+ * a flag only one of them can act on cannot be quietly accepted by the other.
+ * Deliberately not public: a caller that built against an "all flags" value
+ * would mean a different set of bits by it than the library it is linked
+ * against.
+ */
+#define LLAPI_SCAN_F_KNOWN_NS	(LLAPI_SCAN_F_STOP_ON_ERROR)
+/*
+ * What a namespace scan has to reach the MDT for.  The rest of what it can
+ * answer for comes from the directory entry and is LLAPI_SCAN_DIRENT_MASK,
+ * which is public because lfsp_filter runs against it.  Enumerated rather
+ * than derived from "every bit up to the last one defined", so that a
+ * field added for a scanner reading a device directly does not silently
+ * become a field this one claims to fill.
+ *
+ * LLAPI_SCAN_LMV_FOREIGN is here because the gather sets it, and a mask
+ * that did not name it would have scan_param_report_got() promise less
+ * than the scan delivers.  Asked for alone it brings LLAPI_SCAN_LMV with
+ * it: see scan_want_widen().
+ *
+ * STATX_INO is named here rather than through an alias: the ioctl fills
+ * stx_ino, and nothing else does, so a demand mask of STATX_INO alone has
+ * to reach the MDT.  LLAPI_SCAN_STATX_MASK promises the whole low half,
+ * named or not, so asking for it alone is legal.
+ */
+#define LLAPI_SCAN_MDT_MASK	(LLAPI_SCAN_FID | LLAPI_SCAN_MODE |	\
+				 ((__u64)STATX_INO) |			\
+				 LLAPI_SCAN_NLINK | LLAPI_SCAN_UID |	\
+				 LLAPI_SCAN_GID | LLAPI_SCAN_SIZE |	\
+				 LLAPI_SCAN_BLOCKS | LLAPI_SCAN_ATIME |	\
+				 LLAPI_SCAN_MTIME | LLAPI_SCAN_CTIME |	\
+				 LLAPI_SCAN_BTIME | LLAPI_SCAN_ATTRS |	\
+				 LLAPI_SCAN_LAYOUT | LLAPI_SCAN_LMV |	\
+				 LLAPI_SCAN_LMV_FOREIGN |		\
+				 LLAPI_SCAN_MDT_INDEX |			\
+				 LLAPI_SCAN_PROJID |			\
+				 LLAPI_SCAN_HSM |			\
+				 LLAPI_SCAN_LAZY_SIZE |			\
+				 LLAPI_SCAN_LAZY_BLOCKS)
+/*
+ * Which lfsp_want bits llapi_scan_namespace() can answer for, and not
+ * public: a caller that built against an "everything" value would mean a
+ * different set of bits by it than the library it is linked against.
+ *
+ * A bit outside it is dropped rather than refused -- see lfsp_got in
+ * lustreapi.h -- so this is what the scanner may fill and nothing more.
+ * Enumerated from the fields the gather actually sets.
+ */
+#define LLAPI_SCAN_WANT_KNOWN_NS	(LLAPI_SCAN_DIRENT_MASK |	\
+					 LLAPI_SCAN_MDT_MASK)
+
+/*
+ * How much of the caller's struct to copy: whole fields only.
+ *
+ * lfsp_size is the caller's, and a size that stops inside a field leaves it
+ * neither the caller's value nor zero.  lfsp_filter is where that bites: it
+ * is a function pointer the scan then calls, and the range test alone does
+ * not catch it, lfsp_filter ending at 32 where the minimum is 24, so 25..31
+ * passes.  Every pointer this struct gains later is the same case.
+ *
+ * Rounded down rather than refused, because a short size is already how a
+ * caller says "this field is missing" -- one that stops mid-field is the
+ * same statement made imprecisely, and the field it stops in is exactly the
+ * one to drop.
+ */
+static inline __u32 scan_param_whole(__u32 size)
+{
+#define SCAN_PF_END(f)							\
+	((__u32)(offsetof(struct llapi_scan_param, f) +			\
+		 sizeof(((struct llapi_scan_param *)0)->f)))
+	static const __u32 ends[] = {
+		SCAN_PF_END(lfsp_want), SCAN_PF_END(lfsp_filter),
+		SCAN_PF_END(lfsp_thread_count), SCAN_PF_END(lfsp_padding),
+		SCAN_PF_END(lfsp_got),
+	};
+	static_assert(SCAN_PF_END(lfsp_got) ==
+		      sizeof(struct llapi_scan_param),
+		      "a field was added without a row in ends[]");
+#undef SCAN_PF_END
+	__u32 whole = ends[0];
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(ends); i++)
+		if (ends[i] <= size)
+			whole = ends[i];
+
+	return whole;
+}
+
+/*
+ * The reserved bytes are documented must-be-zero, so that a field carved
+ * out of them later cannot be set by a newer caller and silently ignored
+ * here: they are already inside lfsp_size, which is what catches an
+ * appended field.
+ */
+static inline bool scan_param_padding_ok(const struct llapi_scan_param *sp)
+{
+	unsigned int i;
+
+	for (i = 0; i < sizeof(sp->lfsp_padding); i++)
+		if (sp->lfsp_padding[i] != 0)
+			return false;
+
+	return true;
+}
+
+/*
+ * Take the caller's parameter block, whatever version of the struct it was
+ * built against, and say whether this library can act on it.
+ *
+ * A shorter block than ours is the easy half: the fields it stops before
+ * read as zero, which is what a caller built against an older header means
+ * by not having them.  A longer one is the interoperability case -- an
+ * application built against a newer header, running against this library --
+ * and it is accepted as long as every byte past the end of our definition
+ * is zero.  That is the caller demonstrating it set no field we could not
+ * honour; one that did set such a field is refused, which is the same
+ * answer an undefined lfsp_flags bit gets and for the same reason.
+ *
+ * Reading those bytes takes the caller at its word that lfsp_size describes
+ * memory it owns, as every size-carrying interface does, up to
+ * LLAPI_SCAN_PARAM_MAX_SIZE.
+ *
+ * The demand mask is not policed here.  A want bit this library does not
+ * know is not an error -- it is dropped, and lfsp_got reports the rest --
+ * because a field is asked for, where a flag is commanded.
+ */
+static inline int scan_param_copyin(struct llapi_scan_param *dst,
+				    const struct llapi_scan_param *src,
+				    __u64 known_flags)
+{
+	const unsigned char *tail;
+	__u32 i;
+
+	memset(dst, 0, sizeof(*dst));
+
+	if (src->lfsp_size < LLAPI_SCAN_PARAM_MIN_SIZE ||
+	    src->lfsp_size > LLAPI_SCAN_PARAM_MAX_SIZE)
+		return -EINVAL;
+	if (src->lfsp_flags & ~known_flags)
+		return -EINVAL;
+
+	if (src->lfsp_size > (__u32)sizeof(*dst)) {
+		tail = (const unsigned char *)src + sizeof(*dst);
+		for (i = 0; i < src->lfsp_size - (__u32)sizeof(*dst); i++)
+			if (tail[i] != 0)
+				return -EINVAL;
+		memcpy(dst, src, sizeof(*dst));
+	} else {
+		memcpy(dst, src, scan_param_whole(src->lfsp_size));
+	}
+	/* ours from here on, whatever the caller's was */
+	dst->lfsp_size = sizeof(*dst);
+
+	if (!scan_param_padding_ok(dst))
+		return -EINVAL;
+
+	return 0;
+}
+
+/*
+ * What a scan will answer for, reported to the caller before the first
+ * record.  @known is the entry point's mask, already narrowed to the
+ * target where the scan knows it.  A bit here says the scan may fill the
+ * field, not that any one object has it: an object with no project id
+ * still leaves LLAPI_SCAN_PROJID clear in lfsr_valid.
+ */
+/* LLAPI_SCAN_LMV_FOREIGN describes lfsr_lmv, so asking for it asks for that */
+static inline __u64 scan_want_widen(__u64 want)
+{
+	if (want & LLAPI_SCAN_LMV_FOREIGN)
+		want |= LLAPI_SCAN_LMV;
+	return want;
+}
+
+static inline void scan_param_report_got(const struct llapi_scan_param *sp,
+					 __u64 want, __u64 known)
+{
+	if (sp != NULL && sp->lfsp_got != NULL)
+		*sp->lfsp_got = want & known;
+}
+
+/* what llapi_scan_namespace() gathers when lfsp_want is 0: everything,
+ * except the fields that cost an ioctl or an open per object and have to
+ * be named.
+ */
+#define LLAPI_SCAN_WANT_DEFAULT						\
+	(~0ULL & ~(LLAPI_SCAN_MDT_INDEX | LLAPI_SCAN_PROJID |		\
+		   LLAPI_SCAN_HSM))
+
+void scan_rec_dirent(struct llapi_scan_rec *rec, const char *path,
+		     int p, int d, const struct dirent64 *de);
+int scan_rec_gather(struct find_param *param, char *path, int p,
+		    int d, int *fdp, __u64 want,
+		    struct llapi_scan_rec *rec);
 int common_param_init(struct find_param *param, char *path);
 void find_param_fini(struct find_param *param);
 int parallel_find(char *path, llapi_find_cb_t cb_init, llapi_find_cb_t cb_fini,
