@@ -321,7 +321,7 @@ retry:
 		if (PTR_ERR(nm_obj) == -EEXIST && rc != -ENOENT &&
 		    los->los_last_oid < (tfid.f_oid - 1)) {
 			if (dt2lu_dev(dev)->ld_obd)
-				dt2lu_dev(dev)->ld_obd->obd_need_scrub = 1;
+				set_bit(OBDF_NEED_SCRUB, dt2lu_dev(dev)->ld_obd->obd_flags);
 
 			mutex_lock(&los->los_id_lock);
 			los->los_last_oid = tfid.f_oid - 1;

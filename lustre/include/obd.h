@@ -659,6 +659,13 @@ enum {
 	OBDF_CHECKSUM_DUMP,	/* dump pages upon cksum error */
 	OBDF_DYNAMIC_NIDS,	/* Allow dynamic NIDs on device */
 	OBDF_READ_ONLY,		/* device is read-only */
+#ifdef CONFIG_LUSTRE_FS_SERVER
+	/* start of the server start range */
+	OBDF_SERVER_OPTS = 65,
+
+	/* device need scrub */
+	OBDF_NEED_SCRUB	= OBDF_SERVER_OPTS,
+#endif
 	OBDF_NUM_FLAGS,
 };
 
@@ -677,8 +684,6 @@ struct obd_device {
 
 	/* bitfield modification is protected by obd_dev_lock */
 	DECLARE_BITMAP(obd_flags, OBDF_NUM_FLAGS);
-	unsigned long
-		obd_need_scrub:1;	/* device need scrub */
 #ifdef CONFIG_LUSTRE_FS_SERVER
 	/* no committed-transno notification */
 	unsigned long			obd_no_transno:1;

@@ -8301,7 +8301,7 @@ static int mdt_postrecov(const struct lu_env *env, struct mdt_device *mdt)
 		lsp.lsp_index_valid = 0;
 
 		if (dt2lu_dev(mdt->mdt_bottom)->ld_obd &&
-		    dt2lu_dev(mdt->mdt_bottom)->ld_obd->obd_need_scrub) {
+		    test_bit(OBDF_NEED_SCRUB, dt2lu_dev(mdt->mdt_bottom)->ld_obd->obd_flags)) {
 			memset(&start, 0, sizeof(start));
 			start.ls_version = LFSCK_VERSION_V1;
 			start.ls_active = LFSCK_TYPE_SCRUB;
