@@ -665,6 +665,7 @@ enum {
 
 	/* device need scrub */
 	OBDF_NEED_SCRUB	= OBDF_SERVER_OPTS,
+	OBDF_NO_TRANSNO,	/* no committed-transno notification */
 #endif
 	OBDF_NUM_FLAGS,
 };
@@ -684,10 +685,6 @@ struct obd_device {
 
 	/* bitfield modification is protected by obd_dev_lock */
 	DECLARE_BITMAP(obd_flags, OBDF_NUM_FLAGS);
-#ifdef CONFIG_LUSTRE_FS_SERVER
-	/* no committed-transno notification */
-	unsigned long			obd_no_transno:1;
-#endif
 
 	/* use separate field as it is set in interrupt to not mess with
 	 * protection of other bits using _bh lock

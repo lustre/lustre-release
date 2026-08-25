@@ -1349,7 +1349,7 @@ static void distribute_txn_batchid_cb(struct lu_env *env,
 	      tdtd->tdtd_lut->lut_obd->obd_name, dtbd->dtbd_batchid);
 	spin_lock(&tdtd->tdtd_batchid_lock);
 	if (dtbd->dtbd_batchid > tdtd->tdtd_committed_batchid &&
-	    !tdtd->tdtd_lut->lut_obd->obd_no_transno)
+	    !test_bit(OBDF_NO_TRANSNO, tdtd->tdtd_lut->lut_obd->obd_flags))
 		tdtd->tdtd_committed_batchid = dtbd->dtbd_batchid;
 	spin_unlock(&tdtd->tdtd_batchid_lock);
 	if (atomic_dec_and_test(&tdtd->tdtd_refcount))

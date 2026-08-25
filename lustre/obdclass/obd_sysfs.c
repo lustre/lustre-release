@@ -233,7 +233,7 @@ static ssize_t no_transno_store(struct kobject *kobj,
 	}
 
 	spin_lock(&obd->obd_dev_lock);
-	obd->obd_no_transno = 1;
+	set_bit(OBDF_NO_TRANSNO, obd->obd_flags);
 	spin_unlock(&obd->obd_dev_lock);
 	return count;
 }

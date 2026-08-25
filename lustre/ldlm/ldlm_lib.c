@@ -3320,13 +3320,13 @@ void target_committed_to_req(struct ptlrpc_request *req)
 {
 	struct obd_export *exp = req->rq_export;
 
-	if (!exp->exp_obd->obd_no_transno && req->rq_repmsg != NULL)
+	if (!test_bit(OBDF_NO_TRANSNO, exp->exp_obd->obd_flags) && req->rq_repmsg != NULL)
 		lustre_msg_set_last_committed(req->rq_repmsg,
 					      exp->exp_last_committed);
 	else
 		DEBUG_REQ(D_IOCTL, req,
 			  "not sending last_committed update (%d/%d)",
-			  exp->exp_obd->obd_no_transno,
+			  test_bit(OBDF_NO_TRANSNO, exp->exp_obd->obd_flags),
 			  req->rq_repmsg == NULL);
 
 	CDEBUG(D_INFO, "last_committed %llu, transno %llu, xid %llu\n",

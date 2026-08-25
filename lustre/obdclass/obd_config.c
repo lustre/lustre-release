@@ -934,7 +934,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 				spin_lock(&obd->obd_dev_lock);
 				set_bit(OBDF_FAIL, obd->obd_flags);
 #ifdef CONFIG_LUSTRE_FS_SERVER
-				obd->obd_no_transno = 1;
+				set_bit(OBDF_NO_TRANSNO, obd->obd_flags);
 #endif
 				set_bit(OBDF_NO_RECOV, obd->obd_flags);
 				spin_unlock(&obd->obd_dev_lock);

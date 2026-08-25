@@ -3010,11 +3010,12 @@ out_lock:
 	if (desc)
 		ptlrpc_free_bulk(desc);
 out:
-	if (unlikely(no_reply || (exp->exp_obd->obd_no_transno && wait_sync))) {
+	if (unlikely(no_reply ||
+	    (test_bit(OBDF_NO_TRANSNO, exp->exp_obd->obd_flags) && wait_sync))) {
 		req->rq_no_reply = 1;
 		/* reply out callback would free */
 		ptlrpc_req_drop_rs(req);
-		if (!exp->exp_obd->obd_no_transno)
+		if (!test_bit(OBDF_NO_TRANSNO, exp->exp_obd->obd_flags))
 			LCONSOLE_WARN("%s: Bulk IO write error with %s (at %s), client will retry: rc = %d\n",
 				      obd_name,
 				      obd_uuid2str(&exp->exp_client_uuid),
