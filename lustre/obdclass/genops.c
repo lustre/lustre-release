@@ -1050,10 +1050,9 @@ static inline int ptlrpc_exp_deadline_cmp(const void *key,
 }
 
 int obd_export_timed_init(struct obd_export *exp, void **data)
-
 {
 	OBD_ALLOC(*data, sizeof(struct rb_node_exp_deadline));
-	return data == NULL ? -ENOMEM : 0;
+	return *data ? 0 : -ENOMEM;
 }
 EXPORT_SYMBOL(obd_export_timed_init);
 

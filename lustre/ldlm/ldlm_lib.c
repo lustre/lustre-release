@@ -1057,13 +1057,26 @@ int rev_import_init(struct obd_export *export)
 {
 	struct obd_device *obd = export->exp_obd;
 	struct obd_import *revimp;
-	int rc = 0;
+	void *data = NULL;
+	int rc;
 
 	LASSERT(export->exp_imp_reverse == NULL);
 
+	/* allocate before exp_imp_reverse is published: once it is set the
+	 * reconnect path skips rev_import_init(), so a later failure would
+	 * leave the export out of obd_exports_timed for good
+	 */
+	if (export->exp_timed) {
+		rc = obd_export_timed_init(export, &data);
+		if (rc)
+			return rc;
+	}
+
 	revimp = class_new_import(obd);
-	if (revimp == NULL)
+	if (!revimp) {
+		obd_export_timed_fini(export, &data);
 		return -ENOMEM;
+	}
 
 	revimp->imp_remote_handle.cookie = 0ULL;
 	revimp->imp_client = &obd->obd_ldlm_client;
@@ -1075,22 +1088,18 @@ int rev_import_init(struct obd_export *export)
 	spin_unlock(&export->exp_lock);
 	class_import_put(revimp);
 
-	if (export->exp_timed) {
-		void *data;
-
-		rc = obd_export_timed_init(export, &data);
-		if (rc == 0) {
-			spin_lock(&obd->obd_dev_lock);
-			/* At the beginning, there is no AT stats yet, use
-			 * previous approach for the ping evictor timeout */
-			export->exp_deadline =
-				PING_EVICT_TIMEOUT + ktime_get_real_seconds();
-			obd_export_timed_add(export, &data);
-			spin_unlock(&obd->obd_dev_lock);
-			obd_export_timed_fini(export, &data);
-		}
+	if (data) {
+		spin_lock(&obd->obd_dev_lock);
+		/* At the beginning, there is no AT stats yet, use
+		 * previous approach for the ping evictor timeout
+		 */
+		export->exp_deadline = PING_EVICT_TIMEOUT +
+				       ktime_get_real_seconds();
+		obd_export_timed_add(export, &data);
+		spin_unlock(&obd->obd_dev_lock);
+		obd_export_timed_fini(export, &data);
 	}
-	return rc;
+	return 0;
 }
 EXPORT_SYMBOL(rev_import_init);
 
