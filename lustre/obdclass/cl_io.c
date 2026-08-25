@@ -192,6 +192,26 @@ int cl_io_init(const struct lu_env *env, struct cl_io *io,
 EXPORT_SYMBOL(cl_io_init);
 
 /**
+ * cl_io_set_range() - Set the io read range for CIT_EC_RD
+ * (cl_object_operations::coo_io_set_range() top-to-bottom)
+ * @env: execution environment
+ * @obj: Object linked to IO operation (obj == cl_object_top(obj))
+ * @io: pointer to a cl_io struct
+ */
+static void cl_io_set_range(const struct lu_env *env, struct cl_object *obj,
+			    struct cl_io *io)
+{
+	struct cl_object *scan;
+
+	ENTRY;
+	cl_object_for_each(scan, obj) {
+		if (scan->co_ops->coo_io_set_range != NULL)
+			scan->co_ops->coo_io_set_range(env, scan, io);
+	}
+	EXIT;
+}
+
+/**
  * cl_io_rw_init() - Initialize read or write IO
  * @env: execution environment
  * @io: pointer to a cl_io struct
@@ -1190,27 +1210,6 @@ void cl_req_attr_set(const struct lu_env *env, struct cl_object *obj,
 	EXIT;
 }
 EXPORT_SYMBOL(cl_req_attr_set);
-
-/**
- * cl_io_set_range() - Set the io read range for CIT_EC_RD
- * (cl_object_operations::coo_io_set_range() bottom-to-top)
- * @env: execution environment
- * @obj: Object linked to IO operation (obj == cl_object_top(obj))
- * @io: pointer to a cl_io struct
- */
-void cl_io_set_range(const struct lu_env *env, struct cl_object *obj,
-		     struct cl_io *io)
-{
-	struct cl_object *scan;
-
-	ENTRY;
-	cl_object_for_each(scan, obj) {
-		if (scan->co_ops->coo_io_set_range != NULL)
-			scan->co_ops->coo_io_set_range(env, scan, io);
-	}
-	EXIT;
-}
-EXPORT_SYMBOL(cl_io_set_range);
 
 /**
  * cl_sync_io_init_notify() - Initialize synchronous IO wait @anchor for @nr

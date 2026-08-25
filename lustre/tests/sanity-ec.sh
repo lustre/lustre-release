@@ -7998,16 +7998,22 @@ test_49a() {
 
 	local failures=0
 	for i in 1 2 3 4; do
-		if ! wait ${pids[$((i-1))]}; then
-			echo "Reader $i: process failed"
+		local out=$TMP/ec_read_${i}_$tfile
+		wait ${pids[$((i-1))]}
+		local rc=$?
+		if (( rc != 0 )); then
+			echo "Reader $i: process failed (exit $rc)"
+			[[ -s $out ]] && echo "Reader $i output:" &&
+				sed 's/^/  /' $out
 			failures=$((failures + 1))
 			continue
 		fi
 		local sum
-		sum=$(awk '{print $1}' \
-			$TMP/ec_read_${i}_$tfile)
+		sum=$(awk '{print $1}' $out)
 		if [[ "$sum_expected" != "$sum" ]]; then
 			echo "Reader $i: $sum != $sum_expected"
+			[[ -s $out ]] && echo "Reader $i output:" &&
+				sed 's/^/  /' $out
 			failures=$((failures + 1))
 		fi
 	done
@@ -10202,6 +10208,20 @@ test_66a() {
 	cancel_lru_locks osc
 
 	local got=$(md5sum $tf | awk '{print $1}')
+	local read="md5sum"
+	local bs pass
+
+	# Reads smaller than a page, and reads of pages a previous EC read
+	# rebuilt, which may come back through the other EC mirror.
+	for bs in 4k 32k; do
+		cancel_lru_locks osc
+		for pass in 1 2; do
+			[[ "$got" == "$sum" ]] || break 2
+			read="dd bs=$bs pass $pass"
+			got=$(dd if=$tf bs=$bs 2> /dev/null | md5sum |
+			      awk '{print $1}')
+		done
+	done
 
 	for ost in "${EC_MIRROR_VICTIMS[@]}"; do
 		ec_reactivate_ost $ost
@@ -10209,7 +10229,7 @@ test_66a() {
 
 	[[ "$sum" == "$got" ]] ||
 		error "2-EC-mirror OSTs ${EC_MIRROR_VICTIMS[*]}:" \
-			"$sum != $got"
+			"$sum != $got ($read)"
 	echo "  OSTs ${EC_MIRROR_VICTIMS[*]} OK"
 }
 run_test 66a "EC recovery with two EC data mirrors"
@@ -11695,18 +11715,26 @@ test_74a() {
 		ec_deactivate_ost $victim
 
 		for ((j = 0; j < 4; j++)); do
-			if ! wait ${pids[$j]}; then
+			local out=$TMP/ec_race_${j}_$tfile
+			wait ${pids[$j]}
+			local rc=$?
+			if (( rc != 0 )); then
 				echo "round $i reader $j:" \
-					"process failed"
+					"process failed (exit $rc)"
+				[[ -s $out ]] &&
+					echo "round $i reader $j output:" &&
+					sed 's/^/  /' $out
 				failures=$((failures + 1))
 				continue
 			fi
 			local got
-			got=$(awk '{print $1}' \
-				$TMP/ec_race_${j}_$tfile)
+			got=$(awk '{print $1}' $out)
 			if [[ "$sum" != "$got" ]]; then
 				echo "round $i reader $j:" \
 					"$sum != $got"
+				[[ -s $out ]] &&
+					echo "round $i reader $j output:" &&
+					sed 's/^/  /' $out
 				failures=$((failures + 1))
 			fi
 			reads_done=$((reads_done + 1))

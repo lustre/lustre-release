@@ -2010,7 +2010,9 @@ static struct lov_io_sub *lov_ec_readable_sub(struct lov_io *lio, int comp_i,
  * Returns 0 on success. Pages in state of EC_DPG_UPTODATE are assumed (owned)
  * in out_pages[], pages in state of EC_DPG_READ are owned in dlist, and pages
  * in state of EC_DPG_ERROR are owned in ec_page_list. Vmpages can be accessed
- * via out_pages[]->cp_folio.
+ * via out_pages[]->cp_folio.  Returns -ENODATA, with io->ci_need_restart set,
+ * if another reader is recovering a page, which is then referenced in
+ * ec_wait_page for vvp_io_ec_rd_iter_fini() to wait on.
  */
 static int
 lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
@@ -2079,6 +2081,20 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 			folio_put(folio);
 			GOTO(out_err, rc = PTR_ERR(clpage));
 		}
+		/* Another CIT_EC_RD is recovering this page.  Don't wait for
+		 * it while holding other page locks, as its copy-out may
+		 * fault on one of them.  Restart the IO, and wait for it in
+		 * vvp_io_ec_rd_iter_fini() once everything is released.
+		 */
+		if (clpage->cp_ec_recovery) {
+			folio_unlock(folio);
+			folio_put(folio);
+			io->u.ci_ec.ec_wait_page = clpage;
+			io->ci_switch_ec_io = 1;
+			io->ci_ndelay_tried = 0;
+			io->ci_need_restart = 1;
+			GOTO(out_err, rc = -ENODATA);
+		}
 		cl_page_assume(env, io, clpage);
 		out_pages[j] = clpage;
 		/* drop vmpage refcount added by get_folio_grab() */
@@ -2088,6 +2104,7 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 			out_states[j] = EC_DPG_UPTODATE;
 		} else if (!sub) {
 			out_states[j] = EC_DPG_ERROR;
+			clpage->cp_ec_recovery = 1;
 			cl_page_list_add(&io->u.ci_ec.ec_page_list, clpage,
 					 false);
 		} else {
@@ -2118,8 +2135,10 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 		cl_page_list_splice(&queue->c2_qout, &io->u.ci_ec.ec_page_list);
 		cl_2queue_fini(env, queue);
 		for (j = 0; j < nfolios; j++) {
-			if (out_states[j] == EC_DPG_READ)
+			if (out_states[j] == EC_DPG_READ) {
+				out_pages[j]->cp_ec_recovery = 1;
 				out_states[j] = EC_DPG_ERROR;
+			}
 		}
 		RETURN(0); /* not fatal, can try parity */
 	}
@@ -2142,13 +2161,17 @@ out_err:
 	 * - UPTODATE: valid in the page cache, disown (unlock vmpage) and
 	 *   drop the cl_page ref.  No discard.
 	 * - READ: assumed/owned but never submitted, so not in dlist nor
-	 *   ec_page_list.  Disown to unlock the vmpage and drop the cl_page
-	 *   ref so neither leaks.
-	 * - ERROR: already in ec_page_list; vvp_io_ec_rd_end will disown and
-	 *   fini it, so just NULL the pointer.
+	 *   ec_page_list.  Delete the cl_page, which is bound to this EC
+	 *   mirror's stripe and would be submitted to the wrong sub-IO by a
+	 *   later read through another mirror, then disown it to unlock the
+	 *   vmpage and drop the cl_page ref.
+	 * - ERROR: already in ec_page_list; vvp_io_ec_rd_end will delete it,
+	 *   so just NULL the pointer.
 	 */
 	for (j = 0; j < nfolios; j++) {
 		if (out_pages[j]) {
+			if (out_states[j] == EC_DPG_READ)
+				cl_page_delete(env, out_pages[j]);
 			if (out_states[j] == EC_DPG_UPTODATE ||
 			    out_states[j] == EC_DPG_READ) {
 				cl_page_disown(env, io, out_pages[j]);
@@ -3041,10 +3064,12 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 					&all_states[k * nfolios],
 					&dlist);
 			if (rc) {
-				CWARN("%s: "DFID": fail to read stripe %d: rc = %d\n",
-				      lov2obd(dev->ld_lov)->obd_name,
-				      PFID(lu_object_fid(lov2lu(lov))),
-				      k, rc);
+				/* -EAGAIN/-ENODATA: the IO is restarted */
+				if (rc != -EAGAIN && rc != -ENODATA)
+					CWARN("%s: "DFID": fail to read stripe %d: rc = %d\n",
+					      lov2obd(dev->ld_lov)->obd_name,
+					      PFID(lu_object_fid(lov2lu(lov))),
+					      k, rc);
 				io->u.ci_ec.ec_recovery_failed = true;
 				GOTO(rg_cleanup, rc);
 			}

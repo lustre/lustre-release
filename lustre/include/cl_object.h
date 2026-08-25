@@ -448,7 +448,7 @@ struct cl_object_operations {
 				   struct cl_object *obj, __u32 *projid);
 	/**
 	 * Set the coverage of the \a io, used by CIT_EC_RD, called from
-	 * bottom to top.
+	 * top to bottom.
 	 */
 	void (*coo_io_set_range)(const struct lu_env *env,
 				 struct cl_object *obj, struct cl_io *io);
@@ -741,7 +741,7 @@ enum cl_page_type {
 	CPT_NR
 };
 
-#define	CP_STATE_BITS	4
+#define	CP_STATE_BITS	3
 #define	CP_TYPE_BITS	2
 #define	CP_MAX_LAYER	2
 
@@ -786,6 +786,8 @@ struct cl_page {
 	/** folio page #, may be from a 1G hugetlb max: (1 << 18) */
 				cp_pgno:19,
 				cp_defer_uptodate:1,
+	/* CIT_EC_RD is recovering the page from parity, under the folio lock */
+				cp_ec_recovery:1,
 				cp_ra_updated:1,
 				cp_ra_used:1,
 				cp_in_kmem_array:1,
@@ -1885,6 +1887,10 @@ struct cl_io {
 			struct cl_io_rw_common ec_inner;
 			/* unavailable pages, will be recovered from parity */
 			struct cl_page_list ec_page_list;
+			/* page another reader is recovering, to wait for
+			 * before restarting the IO
+			 */
+			struct cl_page *ec_wait_page;
 			loff_t ec_inode_size;
 			/* set by lov_io_ec_rd_start when recovery is
 			 * impossible (err_nr > pcount); tells
@@ -2519,8 +2525,6 @@ int cl_io_read_ahead_prep(const struct lu_env *env, struct cl_io *io,
 			  pgoff_t start, struct cl_read_ahead *ra);
 void cl_io_rw_advance(const struct lu_env *env, struct cl_io *io,
 		      size_t bytes);
-void cl_io_set_range(const struct lu_env *env, struct cl_object *obj,
-		     struct cl_io *io);
 
 /**
  * True, iff \a io is an O_APPEND write(2).

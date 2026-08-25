@@ -1484,27 +1484,28 @@ static void vvp_io_ec_rd_end(const struct lu_env *env,
 	struct cl_object *obj = io->ci_obj;
 	struct inode *inode = vvp_object_inode(obj);
 	struct ll_inode_info *lli = ll_i2info(inode);
-	struct cl_page *page;
+	struct cl_page *cl_page, *temp;
 	struct iov_iter iter;
 	bool direct_io = iocb_ki_flags_check(vio->vui_iocb, IOCB_DIRECT);
 	ssize_t result;
 
 	ENTRY;
+	/* Recovery failed (too many dead stripes): skip the cache read so
+	 * we don't serve zero-filled or stale pages.  The pages stay owned
+	 * for the teardown below, and the error from cio_start propagates
+	 * out through cl_io_loop.
+	 */
+	if (io->u.ci_ec.ec_recovery_failed)
+		goto out;
+
 	/* disown the recovered pages, i.e. unlock vmpage, for
 	 * generic_file_read_iter() would wait for the page locks.  When
 	 * ec_page_list is empty, no recovery was needed but we must still
 	 * call generic_file_read_iter() below to deliver data from the
 	 * page cache to userspace.
 	 */
-	cl_page_list_for_each(page, &io->u.ci_ec.ec_page_list)
-		cl_page_disown(env, io, page);
-
-	/* Recovery failed (too many dead stripes): skip the cache read so
-	 * we don't serve zero-filled or stale pages.  The -EIO from
-	 * cio_start will propagate out through cl_io_loop.
-	 */
-	if (io->u.ci_ec.ec_recovery_failed)
-		goto out;
+	cl_page_list_for_each(cl_page, &io->u.ci_ec.ec_page_list)
+		cl_page_disown(env, io, cl_page);
 
 	if (vio->vui_iocb->ki_pos >= i_size_read(inode) &&
 	    io->u.ci_ec.ec_inode_size > i_size_read(inode)) {
@@ -1540,6 +1541,15 @@ static void vvp_io_ec_rd_end(const struct lu_env *env,
 	if (result >= 0) {
 		CDEBUG(D_VFSTRACE, "ec read result %zd\n", result);
 		io->ci_bytes += result;
+	} else if (result == -EAGAIN && io->ci_ndelay && !io->ci_iocb_nowait) {
+		/* an NDELAY read RPC failed, retry it as cl_io_loop() does */
+		if (io->ci_tried_all_mirrors) {
+			io->ci_result = -EIO;
+		} else {
+			io->ci_result = 0;
+			io->ci_need_restart = 1;
+		}
+		io->ci_continue = 0;
 	} else {
 		/* Record the read error so cl_io_loop() reports it back
 		 * through io->ci_result, and stop iterating rather than
@@ -1549,10 +1559,39 @@ static void vvp_io_ec_rd_end(const struct lu_env *env,
 		io->ci_continue = 0;
 	}
 out:
-	trunc_sem_up_read(&lli->lli_trunc_sem);
+	/* Unlink each reconstructed page and clear cp_ec_recovery under the
+	 * folio lock, so the next reader to lock the page sees a consistent
+	 * state.  No DLM lock protects these pages, so delete the cl_page,
+	 * which also drops Uptodate under lli_page_inv_lock (LU-16160).  A
+	 * cl_page kept on a non-Uptodate folio would still point at the
+	 * stripe of the mirror this EC read used, and a later read of the
+	 * folio from another mirror would submit it to the wrong sub-IO.
+	 * A lock cancel may already have discarded a page that was not
+	 * owned during the copy to userspace.
+	 */
+	cl_page_list_for_each_safe(cl_page, temp,
+				   &io->u.ci_ec.ec_page_list) {
+		struct folio *folio = cl_page->cp_folio;
+		bool owned = io->u.ci_ec.ec_recovery_failed;
 
-	/* put vmpage and cl_page */
-	cl_page_list_fini(env, &io->u.ci_ec.ec_page_list);
+		if (!owned)
+			folio_lock(folio);
+		cl_page_list_del(env, &io->u.ci_ec.ec_page_list, cl_page,
+				 false);
+		if (cl_page->cp_state != CPS_FREEING)
+			cl_page_delete(env, cl_page);
+		cl_page->cp_ec_recovery = 0;
+		/* pairs with wait_var_event() in vvp_io_ec_rd_iter_fini() */
+		smp_mb();
+		wake_up_var(cl_page);
+		if (owned)
+			cl_page_disown(env, io, cl_page);
+		else
+			folio_unlock(folio);
+		cl_page_put(env, cl_page);
+	}
+
+	trunc_sem_up_read(&lli->lli_trunc_sem);
 
 	EXIT;
 }
@@ -1914,6 +1953,7 @@ static int vvp_io_ec_rd_iter_init(const struct lu_env *env,
 	int rc = 0;
 
 	ENTRY;
+	io->u.ci_ec.ec_wait_page = NULL;
 	/* i_size_read() might not return the real file size when the
 	 * OST holding the last block of data is down. So we'd refresh
 	 * the file size here if the expanded read range overlaps EOF, and
@@ -1930,6 +1970,32 @@ static int vvp_io_ec_rd_iter_init(const struct lu_env *env,
 		io->u.ci_ec.ec_inode_size = i_size_read(inode);
 
 	RETURN(rc);
+}
+
+/**
+ * vvp_io_ec_rd_iter_fini() - wait for another reader's EC page recovery
+ * @env: execution environment
+ * @ios: VVP slice of the CIT_EC_RD IO
+ *
+ * Another reader was recovering a page this IO needs, and the IO is about to
+ * restart.  Wait for the recovery to finish now that no page or DLM locks
+ * are held.  If the wait is killed, do not restart the IO.
+ *
+ * Context: may sleep (killable)
+ */
+static void vvp_io_ec_rd_iter_fini(const struct lu_env *env,
+				   const struct cl_io_slice *ios)
+{
+	struct cl_io *io = ios->cis_io;
+	struct cl_page *page = io->u.ci_ec.ec_wait_page;
+
+	if (!page)
+		return;
+
+	io->u.ci_ec.ec_wait_page = NULL;
+	if (wait_var_event_killable(page, !page->cp_ec_recovery))
+		io->ci_need_restart = 0;
+	cl_page_put(env, page);
 }
 
 static int vvp_io_ec_rd_lock(const struct lu_env *env,
@@ -1971,6 +2037,7 @@ static const struct cl_io_operations vvp_io_ops = {
 		[CIT_EC_RD] = {
 			.cio_fini	= vvp_io_fini,
 			.cio_iter_init	= vvp_io_ec_rd_iter_init,
+			.cio_iter_fini	= vvp_io_ec_rd_iter_fini,
 			.cio_lock	= vvp_io_ec_rd_lock,
 			.cio_start	= vvp_io_ec_rd_start,
 			.cio_end	= vvp_io_ec_rd_end,
