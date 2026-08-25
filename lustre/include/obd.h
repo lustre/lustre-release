@@ -688,6 +688,8 @@ enum {
 	/* device need scrub */
 	OBDF_NEED_SCRUB	= OBDF_SERVER_OPTS,
 	OBDF_NO_TRANSNO,	/* no committed-transno notification */
+	OBDF_RECOVERY_EXPIRED,	/* recovery expired. Set from interrupt context
+				 */
 #endif
 	OBDF_NUM_FLAGS,
 };
@@ -708,10 +710,6 @@ struct obd_device {
 	/* bitfield modification is protected by obd_dev_lock */
 	DECLARE_BITMAP(obd_flags, OBDF_NUM_FLAGS);
 
-	/* use separate field as it is set in interrupt to not mess with
-	 * protection of other bits using _bh lock
-	 */
-	unsigned long obd_recovery_expired:1;
 	/* uuid-export hash body */
 	struct rhashtable		obd_uuid_hash;
 	/* nid-export hash body */

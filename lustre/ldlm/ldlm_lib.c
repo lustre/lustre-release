@@ -2265,7 +2265,7 @@ static int check_for_next_transno(struct lu_target *lut)
 	if (obd_recovery_abort(obd)) {
 		CDEBUG(D_HA, "waking for aborted recovery\n");
 		wake_up = 1;
-	} else if (obd->obd_recovery_expired) {
+	} else if (test_bit(OBDF_RECOVERY_EXPIRED, obd->obd_flags)) {
 		CDEBUG(D_HA, "waking for expired recovery\n");
 		wake_up = 1;
 	} else if (!obd_mdt_recovery_abort(obd) && tdtd && req &&
@@ -2322,7 +2322,7 @@ static int check_for_next_lock(struct lu_target *lut)
 	} else if (test_bit(OBDF_ABORT_RECOVERY, obd->obd_flags)) {
 		CDEBUG(D_HA, "waking for aborted recovery\n");
 		wake_up = 1;
-	} else if (obd->obd_recovery_expired) {
+	} else if (test_bit(OBDF_RECOVERY_EXPIRED, obd->obd_flags)) {
 		CDEBUG(D_HA, "waking for expired recovery\n");
 		wake_up = 1;
 	}
@@ -2453,9 +2453,7 @@ repeat:
 		/** evict exports which didn't finish recovery yet */
 		class_disconnect_stale_exports(obd, exp_finished);
 		return 1;
-	} else if (obd->obd_recovery_expired) {
-		obd->obd_recovery_expired = 0;
-
+	} else if (test_and_clear_bit(OBDF_RECOVERY_EXPIRED, obd->obd_flags)) {
 		/** If some clients died being recovered, evict them */
 		LCONSOLE_WARN("%s: recovery is timed out, evict stale exports\n",
 			      obd->obd_name);
@@ -2577,9 +2575,11 @@ static int check_for_recovery_ready(struct lu_target *lut)
 	       "connected %d stale %d max_recoverable_clients %d abort %d expired %d\n",
 	       clnts, obd->obd_stale_clients,
 	       atomic_read(&obd->obd_max_recoverable_clients),
-	       test_bit(OBDF_ABORT_RECOVERY, obd->obd_flags), obd->obd_recovery_expired);
+	       test_bit(OBDF_ABORT_RECOVERY, obd->obd_flags),
+	       test_bit(OBDF_RECOVERY_EXPIRED, obd->obd_flags));
 
-	if (!obd_recovery_abort(obd) && !obd->obd_recovery_expired) {
+	if (!obd_recovery_abort(obd) &&
+	    !test_bit(OBDF_RECOVERY_EXPIRED, obd->obd_flags)) {
 		LASSERT(clnts <=
 			atomic_read(&obd->obd_max_recoverable_clients));
 		if (clnts + obd->obd_stale_clients <
@@ -3064,7 +3064,7 @@ static enum hrtimer_restart target_recovery_expired(struct hrtimer *timer)
 	       ktime_get_seconds() - obd->obd_recovery_start,
 	       atomic_read(&obd->obd_connected_clients));
 
-	obd->obd_recovery_expired = 1;
+	set_bit(OBDF_RECOVERY_EXPIRED, obd->obd_flags);
 	wake_up(&obd->obd_next_transno_waitq);
 	return HRTIMER_NORESTART;
 }
