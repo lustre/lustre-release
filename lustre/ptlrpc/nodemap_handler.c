@@ -68,7 +68,9 @@ static void nodemap_destroy(struct lu_nodemap *nodemap)
 {
 	ENTRY;
 
-	lprocfs_nodemap_remove(nodemap->nm_pde_data);
+	if (nodemap->nm_pde_data)
+		CWARN("%s: debugfs entries still attached on destroy\n",
+		      nodemap->nm_name);
 	if (nodemap->nm_dt_stats)
 		lprocfs_stats_free(&nodemap->nm_dt_stats);
 	if (nodemap->nm_md_stats)
@@ -4888,6 +4890,7 @@ static int nodemap_del_internal(const char *nodemap_name,
 	struct lu_nodemap	*nodemap;
 	struct lu_nid_range	*range;
 	struct lu_nid_range	*range_temp;
+	struct nodemap_pde	*nm_pde = NULL;
 	bool fileset_prim_exists = false;
 	int			 rc = 0;
 	int			 rc2 = 0;
@@ -4930,6 +4933,7 @@ static int nodemap_del_internal(const char *nodemap_name,
 				       nodemap_name, name, rc2);
 		}
 	}
+
 	nodemap_putref(nodemap);
 
 	/* we had dropped lock, so fetch nodemap again */
@@ -4940,6 +4944,9 @@ static int nodemap_del_internal(const char *nodemap_name,
 		mutex_unlock(&active_config_lock);
 		GOTO(out, rc = -ENOENT);
 	}
+
+	nm_pde = nodemap->nm_pde_data;
+	nodemap->nm_pde_data = NULL;
 
 	(void)rhashtable_remove_fast(&active_config->nmc_nodemap_sha_hash,
 				     &nodemap->nm_sha_hash,
@@ -4986,13 +4993,6 @@ static int nodemap_del_internal(const char *nodemap_name,
 	if (rc2 < 0)
 		rc = rc2;
 
-	/*
-	 * remove procfs here in case nodemap_create called with same name
-	 * before nodemap_destroy is run.
-	 */
-	lprocfs_nodemap_remove(nodemap->nm_pde_data);
-	nodemap->nm_pde_data = NULL;
-
 	if (!list_empty(&nodemap->nm_subnodemaps))
 		CWARN("%s: nodemap_del failed to remove all subnodemaps\n",
 		      nodemap_name);
@@ -5007,6 +5007,10 @@ static int nodemap_del_internal(const char *nodemap_name,
 		      nodemap_name);
 
 	mutex_unlock(&active_config_lock);
+
+	if (nm_pde)
+		lprocfs_nodemap_remove(nm_pde);
+
 	nodemap_putref(nodemap);
 out:
 	return rc;
@@ -5420,8 +5424,18 @@ void nodemap_config_dealloc(struct nodemap_config *config)
 	 */
 	list_for_each_entry_safe(nodemap, nodemap_temp, &nodemap_list_head,
 				 nm_list) {
+		struct nodemap_pde *nm_pde;
+
 		mutex_lock(&active_config_lock);
 		down_write(&config->nmc_range_tree_lock);
+
+		/*
+		 * Detach the debugfs entries now, so that they are not removed
+		 * from nodemap_destroy(), which can run in the context of a
+		 * reader of those files.
+		 */
+		nm_pde = nodemap->nm_pde_data;
+		nodemap->nm_pde_data = NULL;
 
 		/* move members to new config, requires ac lock */
 		nm_member_reclassify_nodemap(nodemap);
@@ -5435,6 +5449,13 @@ void nodemap_config_dealloc(struct nodemap_config *config)
 			ban_range_delete(config, range);
 		up_write(&config->nmc_ban_range_tree_lock);
 		mutex_unlock(&active_config_lock);
+
+		/*
+		 * lprocfs_nodemap_remove() must be called without
+		 * active_config_lock.
+		 */
+		if (nm_pde)
+			lprocfs_nodemap_remove(nm_pde);
 
 		/* putref must be outside of ac lock if nm could be destroyed */
 		nodemap_putref(nodemap);

@@ -78,6 +78,12 @@ static void nm_register_obd_stats(struct lu_nodemap *nm, struct obd_export *exp)
 		return;
 	if (obd->obd_md_stats && nm->nm_md_stats)
 		return;
+	/* nm_pde_data is NULL if the debugfs entries could not be created, or
+	 * if they have already been removed because the nodemap is going away.
+	 * In both cases there is nowhere to attach the stats files.
+	 */
+	if (!nm->nm_pde_data)
+		return;
 
 	mutex_lock(&nm->nm_stats_lock);
 	if (obd->obd_md_stats && !nm->nm_md_stats) {

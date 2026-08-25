@@ -12294,6 +12294,125 @@ test_85() {
 }
 run_test 85 "forbid squashing to UID/GID 0"
 
+nodemap_readers_start() {
+	local nm=$1
+	local flag=$2
+	local readers=${3:-4}
+	local cmd
+	local i
+
+	cmd="while [ -e $flag ]; do "
+	cmd+="$LCTL get_param nodemap.$nm.* > /dev/null 2>&1 || :; done"
+
+	do_facet mgs "touch $flag"
+	for ((i = 0; i < readers; i++)); do
+		echo "starting reader $i"
+		do_facet mgs \
+			"nohup bash -c '$cmd' < /dev/null > /dev/null 2>&1 &"
+	done
+}
+
+nodemap_del_nohang() {
+	local nm=$1
+	local tag=$2
+	local max=${3:-60}
+	local cmd="$LCTL nodemap_del $nm && touch $tag.ok || touch $tag.fail"
+
+	do_facet mgs "rm -f $tag.ok $tag.fail $tag.log"
+	do_facet mgs "nohup bash -c '$cmd' < /dev/null > $tag.log 2>&1 &"
+
+	wait_update_facet mgs \
+		"test -e $tag.ok -o -e $tag.fail && echo done" "done" $max ||
+		return 3
+
+	do_facet mgs "test -e $tag.ok" && return 0
+	do_facet mgs "cat $tag.log"
+	return 1
+}
+
+cleanup_nodemap_readers() {
+	local nm=$1
+	local flag=$2
+	local tag=$3
+
+	do_facet mgs "rm -f $flag"
+	nodemap_del_nohang $nm $tag 20 || true
+	do_facet mgs "rm -f $tag.ok $tag.fail $tag.log"
+}
+
+test_86() {
+	local nm=nodemap_86
+	local nids="192.168.19.[0-255]@o2ib20"
+	local flag=$TMP/sanity-sec.86.readers
+	local tag=$TMP/sanity-sec.86.del
+	local dbg=$TMP/sanity-sec.86.debug_log
+	local mark="sanity-sec test_86 nodemap_del race $(date +%s)"
+	local warn="debugfs entries still attached"
+	local readers=10
+	local iters=20
+	local saved_debug
+	local saved_dbg_mb
+	local awkprog
+	local warned
+	local left
+	local rc
+	local i
+
+	(( MGS_VERSION >= $(version_code 2.17.58) )) ||
+		skip "Need MGS >= 2.17.58 for nodemap debugfs removal fix"
+
+	stack_trap "cleanup_nodemap_readers $nm $flag $tag" EXIT
+
+	nodemap_del_nohang $nm $tag 60
+	(( $? != 3 )) || error "leftover nodemap $nm cannot be removed"
+
+	saved_debug=$(do_facet mgs $LCTL get_param -n debug)
+	stack_trap "do_facet mgs $LCTL set_param debug=${saved_debug// /+}" EXIT
+	saved_dbg_mb=$(do_facet mgs $LCTL get_param -n debug_mb)
+	stack_trap "do_facet mgs $LCTL set_param debug_mb=$saved_dbg_mb" EXIT
+
+	do_facet mgs $LCTL set_param debug=warning+error+console
+	do_facet mgs $LCTL set_param debug_mb=150
+	stack_trap "do_facet mgs rm -f $dbg" EXIT
+	mkdir -p $LOGDIR
+	do_facet mgs "$LCTL dk > $dbg"
+	do_facet mgs "cat $dbg" > $TESTLOG_PREFIX.$TESTNAME.debug_log.mgs
+	do_facet mgs "$LCTL mark '$mark'"
+
+	nodemap_readers_start $nm $flag $readers
+
+	for ((i = 0; i < iters; i++)); do
+		do_facet mgs $LCTL nodemap_add $nm ||
+			error "cannot add nodemap $nm (iteration $i)"
+		do_facet mgs $LCTL nodemap_add_range --name $nm \
+			--range $nids ||
+			error "cannot add range $nids to $nm (iteration $i)"
+
+		nodemap_del_nohang $nm $tag 60
+		rc=$?
+		(( rc == 0 )) ||
+			error "cannot del nodemap $nm (iteration $i), rc $rc"
+	done
+
+	do_facet mgs "rm -f $flag"
+
+	do_facet mgs "$LCTL dk > $dbg"
+	do_facet mgs "cat $dbg" >> $TESTLOG_PREFIX.$TESTNAME.debug_log.mgs
+
+	left=$(do_facet mgs "$LCTL get_param -N nodemap.$nm.* 2> /dev/null")
+	[[ -z "$left" ]] ||
+		error "debugfs entries left for deleted nodemap $nm: $left"
+
+	do_facet mgs "grep -q '$mark' $dbg" ||
+		error "marker not found in mgs debug log, buffer wrapped?"
+
+	awkprog="/$mark/{s = 1} s && /$warn/{n++} END{print n+0}"
+	warned=$(do_facet mgs "awk '$awkprog' $dbg")
+	(( warned == 0 )) ||
+		error "$warned nodemaps destroyed with debugfs entries attached"
+}
+run_test 86 "nodemap_del racing with nodemap debugfs readers"
+
 check_contains() {
 	local val="$1"; shift
 	for role in "$@"; do

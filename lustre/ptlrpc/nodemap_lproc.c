@@ -19,6 +19,11 @@
 #include "nodemap_internal.h"
 
 static LIST_HEAD(nodemap_pde_list);
+/* protects nodemap_pde_list. Cannot rely on active_config_lock, as
+ * nodemap_del() and nodemap_config_dealloc() drop the debugfs entries
+ * without holding it.
+ */
+static DEFINE_MUTEX(nodemap_pde_list_lock);
 
 /* nodemap debugfs root directory under lustre */
 static struct dentry *nodemap_root;
@@ -1466,11 +1471,13 @@ void nodemap_procfs_exit(void)
 	struct nodemap_pde *tmp;
 
 	debugfs_remove_recursive(nodemap_root);
+	mutex_lock(&nodemap_pde_list_lock);
 	list_for_each_entry_safe(nm_pde, tmp, &nodemap_pde_list,
 				 npe_list_member) {
 		list_del(&nm_pde->npe_list_member);
 		OBD_FREE_PTR(nm_pde);
 	}
+	mutex_unlock(&nodemap_pde_list_lock);
 }
 
 /*
@@ -1482,7 +1489,9 @@ void lprocfs_nodemap_remove(struct nodemap_pde *nm_pde)
 		return;
 
 	debugfs_remove_recursive(nm_pde->npe_debugfs_entry);
+	mutex_lock(&nodemap_pde_list_lock);
 	list_del(&nm_pde->npe_list_member);
+	mutex_unlock(&nodemap_pde_list_lock);
 	OBD_FREE_PTR(nm_pde);
 }
 
@@ -1506,8 +1515,18 @@ int lprocfs_nodemap_register(struct lu_nodemap *nodemap, bool is_default)
 
 	nm_entry->npe_debugfs_entry = debugfs_create_dir(nodemap->nm_name,
 							 nodemap_root);
-	if (!nm_entry->npe_debugfs_entry)
+	if (IS_ERR(nm_entry->npe_debugfs_entry)) {
+		rc = PTR_ERR(nm_entry->npe_debugfs_entry);
+		nm_entry->npe_debugfs_entry = NULL;
+		/* -EEXIST means a nodemap with the same name is being removed
+		 * at the same time. Ignore other errors, debugfs is not usable.
+		 */
+		if (rc == -EEXIST)
+			GOTO(out, rc);
+		rc = 0;
+	} else if (!nm_entry->npe_debugfs_entry) {
 		GOTO(out, rc = -ENOENT);
+	}
 
 	snprintf(nm_entry->npe_name, sizeof(nm_entry->npe_name), "%s",
 		 nodemap->nm_name);
@@ -1520,7 +1539,9 @@ int lprocfs_nodemap_register(struct lu_nodemap *nodemap, bool is_default)
 			  (is_default ? lprocfs_default_nodemap_vars :
 					lprocfs_nodemap_vars),
 			  nm_entry->npe_name);
+	mutex_lock(&nodemap_pde_list_lock);
 	list_add(&nm_entry->npe_list_member, &nodemap_pde_list);
+	mutex_unlock(&nodemap_pde_list_lock);
 out:
 	if (rc != 0) {
 		CERROR("cannot create 'nodemap/%s': rc = %d\n",
