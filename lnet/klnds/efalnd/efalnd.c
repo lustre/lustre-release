@@ -3097,6 +3097,12 @@ kefalnd_startup(struct lnet_ni *ni)
 
 	CDEBUG(D_MALLOC, "Before NI startup: kmem[%lld]\n", libcfs_kmem_read());
 
+	if (!ni->ni_interface) {
+		CERROR("Missing interface name\n");
+		return -EINVAL;
+	}
+	ifname = ni->ni_interface;
+
 	LIBCFS_ALLOC(efa_ni, sizeof(*efa_ni));
 	if (!efa_ni) {
 		CERROR("Failed to allocate memory for EFA network\n");
@@ -3112,14 +3118,6 @@ kefalnd_startup(struct lnet_ni *ni)
 	INIT_LIST_HEAD(&efa_ni->cleanup_conns);
 	INIT_LIST_HEAD(&efa_ni->lnd_node);
 	INIT_LIST_HEAD(&efa_ni->cm_node);
-
-	if (ni->ni_interface) {
-		ifname = ni->ni_interface;
-	} else {
-		CERROR("Missing interface name\n");
-		rc = -EINVAL;
-		goto failed;
-	}
 
 	kefalnd_tunables_setup(ni);
 
