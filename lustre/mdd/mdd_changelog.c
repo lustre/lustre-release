@@ -42,18 +42,44 @@ static int mdd_changelog_user_lookup_cb(const struct lu_env *env,
 
 	rec = container_of(hdr, typeof(*rec), cur_hdr);
 
-	/* Match the requested user ID or name */
-	if ((rec->cur_hdr.lrh_type != CHANGELOG_USER_REC2) ||
-	    (req->cf_user_id != 0 && rec->cur_id != req->cf_user_id) ||
-	    (req->cf_user_id == 0 && strcmp(rec->cur_name, req->cf_username)))
+	if (rec->cur_hdr.lrh_type != CHANGELOG_USER_REC &&
+	    rec->cur_hdr.lrh_type != CHANGELOG_USER_REC2)
 		RETURN(0);
+
+	/*
+	 * Match the requested user ID or name.  cur_name may lie past the end
+	 * of an old CHANGELOG_USER_REC -- one written before LU-13055
+	 * (v2.14.53), when the record was 40 bytes -- so only an ID can find
+	 * one of those.  From that commit on, mdd_changelog_user_register()
+	 * writes sizeof(*rec) into lrh_len whichever type it then picks, so
+	 * cur_name is inside the record and zeroed.  The name compare is
+	 * bounded for the same reason it is in mdd_changelog_name_check_cb():
+	 * cur_name comes off disk and nothing guarantees a NUL inside its 16
+	 * bytes.
+	 */
+	if (req->cf_user_id != 0) {
+		if (rec->cur_id != req->cf_user_id)
+			RETURN(0);
+	} else if (rec->cur_hdr.lrh_type != CHANGELOG_USER_REC2 ||
+		   strncmp(rec->cur_name, req->cf_username,
+			   sizeof(rec->cur_name))) {
+		RETURN(0);
+	}
 
 	/* Found the user - fill the info structure */
 	reply->cf_user_id = rec->cur_id;
 	reply->cf_mask = mdd_chlg_usermask(rec);
-	if (req->cf_user_id && rec->cur_name[0] != '\0')
+	/*
+	 * Not "if the lookup was by ID": the only caller passes one buffer as
+	 * both req and reply, so cf_user_id is this record's by the line
+	 * above.  The record's own type is what decides whether it has a name.
+	 * Bounded by the source, as the compare above is: cur_name carries no
+	 * guaranteed NUL, and cf_username is the larger of the two.
+	 */
+	if (rec->cur_hdr.lrh_type == CHANGELOG_USER_REC2 &&
+	    rec->cur_name[0] != '\0')
 		strscpy(reply->cf_username, rec->cur_name,
-			sizeof(reply->cf_username));
+			sizeof(rec->cur_name));
 	CDEBUG(D_INFO, "Found changelog user: user=cl%u(%s), mask=0x%llx\n",
 	       reply->cf_user_id, reply->cf_username, reply->cf_mask);
 

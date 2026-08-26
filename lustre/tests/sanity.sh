@@ -22989,6 +22989,75 @@ test_160x() {
 }
 run_test 160x "changelog users do not disappear"
 
+test_160y() {
+	[[ $PARALLEL == "yes" ]] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+
+	(( $MDS1_VERSION >= $(version_code 2.17.57) )) ||
+		skip "Need MDS >= 2.17.57 to look up a plain changelog user"
+
+	local mdt="$(facet_svc $SINGLEMDS)"
+	local named="u_"$testnum
+	local plain_id masked_id
+	local logs
+
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
+
+	# neither a mask nor a name, so the MDT writes CHANGELOG_USER_REC
+	changelog_register || error "changelog_register failed"
+	plain_id="${CL_USERS[$SINGLEMDS]%% *}"
+
+	# a mask, so this one is a CHANGELOG_USER_REC2
+	changelog_register -m creat || error "changelog_register -m failed"
+	masked_id="$(awk '{print $NF}' <<<"${CL_USERS[$SINGLEMDS]}")"
+
+	# a name, and looked up by it below: "cl<N>" is parsed into an ID by
+	# the client, so a lookup by name is only reached by giving a name
+	# that is not one.  Coverage rather than a regression case -- the old
+	# callback rejected a plain record in the first clause of its ||,
+	# before strcmp() ran, so a name lookup behaved the same before this
+	# fix.  Only an ID lookup changes, and that is the path lfs takes.
+	changelog_register --user $named ||
+		error "changelog_register --user failed"
+
+	# the +hsm that changelog_register() sets rebases on DEFMASK only
+	# while the proc mask is minimal, so do not lean on it to widen a
+	# narrow one.  After the registrations, so their stack traps restore
+	# the mask this test found rather than this one.
+	changelog_chmask "ALL"
+
+	changelog_users $SINGLEMDS
+	changelog_clear 0 || error "changelog_clear failed"
+
+	touch $DIR/$tdir/f1 || error "touch f1 failed"
+
+	# the masked user has always worked; it is the control
+	logs=$($LFS changelog --user $masked_id $mdt) ||
+		error "$masked_id: lfs changelog --user failed"
+	[[ -n "$logs" ]] || error "$masked_id should see changelog records"
+
+	logs=$($LFS changelog --user $plain_id $mdt) ||
+		error "$plain_id: lfs changelog --user failed"
+	[[ -n "$logs" ]] || error "$plain_id should see changelog records"
+
+	logs=$($LFS changelog --user $named $mdt) ||
+		error "$named: lfs changelog --user failed"
+	[[ -n "$logs" ]] || error "$named should see changelog records"
+
+	# a plain user reports cf_mask 0, so the reader filters nothing and
+	# any non-empty log satisfies a lookup that matched the wrong record.
+	# The negative cases are what pin the widened gate down, this change
+	# being one that widens it.
+	$LFS changelog --user cl$((${plain_id#cl} + 100)) $mdt &&
+		error "an unregistered ID should not be found"
+	$LFS changelog --user no_such_$testnum $mdt &&
+		error "an unregistered name should not be found"
+
+	rm -rf $DIR/$tdir
+	changelog_deregister || error "changelog_deregister failed"
+}
+run_test 160y "lfs changelog --user for a user registered without a mask"
+
 test_161a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
