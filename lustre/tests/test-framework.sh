@@ -1255,12 +1255,38 @@ load_modules_local() {
 
 	# /sbin/mount.lustre symlink may not be created in a read-only root fs
 	if [[ $MOUNT_TGT =~ lustre_tgt ]]; then
+		local mount_tgt=mount.lustre
+
+		[[ -f $LUSTRE/utils/mount.lustre_tgt ]] &&
+			mount_tgt=$LUSTRE/utils/mount.lustre_tgt
+
 		sbin_mount=$(readlink -f /sbin)/mount.lustre_tgt
-		if [[ ! -e $sbin_mount ]]; then
+
+		# undo an interrupted run: start from the node as it was found;
+		# a marker can outlive it, so only a symlink can be ours
+		if [[ -e $sbin_mount && ! -L $sbin_mount ]]; then
+			rm -vf $sbin_mount.nonex $sbin_mount.orig
+		elif [[ -e $sbin_mount.nonex ]]; then
+			rm -vf $sbin_mount $sbin_mount.nonex
+		elif [[ -e $sbin_mount.orig || -L $sbin_mount.orig ]]; then
+			mv -vf $sbin_mount.orig $sbin_mount
+		fi
+
+		if [[ $(readlink $sbin_mount) != "$mount_tgt" ]]; then
 			if [[ ! -w /usr/sbin ]]; then
 				echo "/usr/sbin/ not writable for $sbin_mount"
 				MOUNT_TGT=$MOUNT_CMD
-			elif ! ln -svf mount.lustre ${sbin_mount}; then
+			# save the original for unload_modules_local();
+			# a .nonex records that there was nothing to save
+			elif [[ ! -e $sbin_mount && ! -L $sbin_mount ]] &&
+			     ! touch $sbin_mount.nonex; then
+				echo "cannot record $sbin_mount.nonex"
+				MOUNT_TGT=$MOUNT_CMD
+			elif [[ -e $sbin_mount || -L $sbin_mount ]] &&
+			     ! mv -v $sbin_mount $sbin_mount.orig; then
+				echo "cannot save $sbin_mount"
+				MOUNT_TGT=$MOUNT_CMD
+			elif ! ln -svf $mount_tgt ${sbin_mount}; then
 				echo "cannot create $sbin_mount symlink"
 				MOUNT_TGT=$MOUNT_CMD
 			fi
@@ -1314,6 +1340,19 @@ check_mem_leak () {
 }
 
 unload_modules_local() {
+	local sbin_mount=$(readlink -f /sbin)/mount.lustre_tgt
+
+	# put back what load_modules_local() saved, or drop the link it made,
+	# which a .nonex records; only a symlink can be ours. Do this before
+	# the rmmod, which may fail
+	if [[ -e $sbin_mount && ! -L $sbin_mount ]]; then
+		rm -vf $sbin_mount.nonex $sbin_mount.orig
+	elif [[ -e $sbin_mount.nonex ]]; then
+		rm -vf $sbin_mount $sbin_mount.nonex
+	elif [[ -e $sbin_mount.orig || -L $sbin_mount.orig ]]; then
+		mv -vf $sbin_mount.orig $sbin_mount
+	fi
+
 	$LUSTRE_RMMOD ldiskfs || return 2
 
 	[ -f /etc/udev/rules.d/99-lustre-test.rules ] &&
@@ -1355,12 +1394,6 @@ unload_modules() {
 	fi
 
 	local sbin_mount=$(readlink -f /sbin)/mount.lustre
-	if grep -qe "$sbin_mount " /proc/mounts; then
-		umount $sbin_mount || true
-		[[ -s $sbin_mount ]] && ! grep -q "STUB MARK" $sbin_mount ||
-			rm -f $sbin_mount
-	fi
-	sbin_mount=$(readlink -f /sbin)/mount.lustre_tgt
 	if grep -qe "$sbin_mount " /proc/mounts; then
 		umount $sbin_mount || true
 		[[ -s $sbin_mount ]] && ! grep -q "STUB MARK" $sbin_mount ||

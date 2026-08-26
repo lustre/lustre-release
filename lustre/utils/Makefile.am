@@ -36,6 +36,7 @@ bin_PROGRAMS  = lfs
 sbin_SCRIPTS  = ldlm_debug_upcall
 sbin_PROGRAMS = lctl l_getidentity llverdev llverfs lustre_rsync \
 		ll_decode_linkea llsom_sync l_foreign_symlink
+noinst_PROGRAMS =
 
 if TESTS
 sbin_PROGRAMS += wirecheck wiretest
@@ -45,6 +46,11 @@ if SERVER
 sbin_PROGRAMS += mkfs.lustre tunefs.lustre lr_reader lshowmount \
 		 ll_decode_filter_fid llog_reader l_tunedisk \
 		 ofd_access_log_reader check_iam
+if TESTS
+# only the symlink is installed; a build tree binary is needed because a
+# symlink to the libtool wrapper execs the hard-coded lt-mount.lustre
+noinst_PROGRAMS += mount.lustre_tgt
+endif # TESTS
 endif
 if LIBPTHREAD
 sbin_PROGRAMS += lhsmtool_posix
@@ -168,15 +174,17 @@ install-exec-hook:
 	    $(INSTALL_DATA) $$p $(DESTDIR)$(libdir)/lustre/$$f; \
 	  else :; fi; \
 	done
+
 if SERVER
-	$(mkinstalldirs) $(DESTDIR)$(rootsbindir)
+# mount.lustre is a rootsbin_PROGRAMS, which automake installs during
+# install-data-am, so the symlink to it belongs in the data hook
+install-data-hook:
+	@$(NORMAL_INSTALL)
 	ln -sf mount.lustre $(DESTDIR)$(rootsbindir)/mount.lustre_tgt
 
-all-local: mount.lustre_tgt
-
-mount.lustre_tgt: mount.lustre
-	rm -f $@
-	$(LN_S) mount.lustre $@
+uninstall-hook:
+	@$(NORMAL_UNINSTALL)
+	rm -f $(DESTDIR)$(rootsbindir)/mount.lustre_tgt
 endif # SERVER
 endif # UTILS
 
@@ -273,6 +281,11 @@ mount_lustre_LDFLAGS  := ${MNTMODLDFLAGS}
 mount_lustre_LDADD    := $(SELINUX) $(LDLIBMOUNT) $(PLUGIN_LIB) $(GSSLIB)
 mount_lustre_LDADD    += $(top_builddir)/lib/libcfs/libcfs.la $(MNTMODLIBS)
 mount_lustre_LDADD    += liblustreapi.la
+
+mount_lustre_tgt_SOURCES  = $(mount_lustre_SOURCES)
+mount_lustre_tgt_CPPFLAGS = $(mount_lustre_CPPFLAGS)
+mount_lustre_tgt_LDFLAGS  = $(mount_lustre_LDFLAGS)
+mount_lustre_tgt_LDADD    = $(mount_lustre_LDADD)
 
 mkfs_lustre_SOURCES = mkfs_lustre.c mount_utils.c mount_utils.h $(GSSSRC)
 mkfs_lustre_CPPFLAGS := -UTUNEFS ${MNTMODCFLAGS}
