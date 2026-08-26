@@ -1294,7 +1294,7 @@ static int osd_declare_write_commit(const struct lu_env *env,
 	int			rc = 0;
 	int			credits = 0;
 	long long		quota_space = 0;
-	struct ldiskfs_map_blocks map;
+	struct ldiskfs_map_blocks map = { 0 };
 	enum osd_quota_local_flags local_flags = 0;
 	enum osd_qid_declare_flags declare_flags = OSD_QID_BLK;
 	unsigned int		extent_bytes;
