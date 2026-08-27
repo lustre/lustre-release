@@ -537,7 +537,6 @@ __must_hold(&conn->lock)
 		}
 
 		atomic64_set(&tx->send_time, now);
-		atomic_inc(&tx->ref_cnt);
 		list_move_tail(&tx->list_node, &conn->active_tx);
 		rc = ib_post_send(qp->ib_qp, wr,
 				  (const struct ib_send_wr **)&bad);
@@ -550,7 +549,6 @@ __must_hold(&conn->lock)
 			}
 
 			atomic64_set(&tx->send_time, 0);
-			atomic_dec(&tx->ref_cnt);
 			list_move(&tx->list_node, &conn->pend_tx);
 
 			/* TODO - TX might stay stuck on connection.
@@ -571,6 +569,7 @@ kefalnd_launch_tx(struct kefa_conn *conn, struct kefa_tx *tx)
 	if (!list_empty(&tx->list_node))
 		list_del_init(&tx->list_node);
 
+	atomic_inc(&tx->ref_cnt);
 	list_add_tail(&tx->list_node, &conn->pend_tx);
 
 	tx->conn = conn;
