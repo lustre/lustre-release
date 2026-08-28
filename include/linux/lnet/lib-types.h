@@ -289,6 +289,7 @@ struct netstrfns {
 
 struct lnet_ni;					 /* forward ref */
 struct socket;
+struct lnet_device_id;
 
 struct lnet_lnd {
 	/* fields initialized by the LND */
@@ -339,7 +340,7 @@ struct lnet_lnd {
 
 	/* get dma_dev priority */
 	unsigned int (*lnd_get_dev_prio)(struct lnet_ni *ni,
-					 unsigned int dev_idx);
+					 struct lnet_device_id *dev_id);
 
 	/* get LND timeout */
 	int (*lnd_get_timeout)(void);

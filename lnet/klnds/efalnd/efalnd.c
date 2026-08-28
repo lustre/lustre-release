@@ -190,7 +190,7 @@ kefalnd_errno_to_efa_status(int status)
 }
 
 static unsigned int
-kefalnd_get_dev_prio(struct lnet_ni *ni, unsigned int dev_idx)
+kefalnd_get_dev_prio(struct lnet_ni *ni, struct lnet_device_id *dev_id)
 {
 	struct kefa_ni *efa_ni = ni->ni_data;
 	struct device *dev = NULL;
@@ -198,7 +198,7 @@ kefalnd_get_dev_prio(struct lnet_ni *ni, unsigned int dev_idx)
 	if (efa_ni)
 		dev = efa_ni->efa_dev->ib_dev->dma_device;
 
-	return lnet_get_dev_prio(dev, dev_idx);
+	return lnet_get_dev_prio(dev, dev_id);
 }
 
 static inline int kefalnd_dma_map_sg(struct kefa_dev *efa_dev,

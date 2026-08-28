@@ -1463,16 +1463,16 @@ lnet_find_route_locked(struct lnet_remotenet *rnet, __u32 src_net,
 }
 
 static inline unsigned int
-lnet_dev_prio_of_md(struct lnet_ni *ni, unsigned int dev_idx)
+lnet_dev_prio_of_md(struct lnet_ni *ni, struct lnet_device_id *dev_id)
 {
-	if (dev_idx == UINT_MAX)
+	if (!dev_id || dev_id->ldi_type == LNET_DEV_TYPE_NONE)
 		return UINT_MAX;
 
 	if (!ni || !ni->ni_net || !ni->ni_net->net_lnd ||
 	    !ni->ni_net->net_lnd->lnd_get_dev_prio)
 		return UINT_MAX;
 
-	return ni->ni_net->net_lnd->lnd_get_dev_prio(ni, dev_idx);
+	return ni->ni_net->net_lnd->lnd_get_dev_prio(ni, dev_id);
 }
 
 static struct lnet_ni *
@@ -1489,14 +1489,11 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 	__u32 best_sel_prio;
 	unsigned int best_dev_prio;
 	int best_ni_fatal;
-	unsigned int dev_idx = UINT_MAX;
-	bool is_p2p = lnet_md_is_p2p(md);
+	struct lnet_device_id dev_id = { .ldi_type = LNET_DEV_TYPE_NONE };
+	struct page *page = lnet_get_first_page(&md, offset);
 
-	if (is_p2p) {
-		struct page *page = lnet_get_first_page(md, offset);
-
-		dev_idx = lnet_get_dev_idx(page);
-	}
+	if (lnet_md_is_p2p(md))
+		lnet_get_device_id(page, &dev_id);
 
 	/*
 	 * If there is no peer_ni that we can send to on this network,
@@ -1513,7 +1510,7 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 		best_healthv = 0;
 		best_ni_fatal = true;
 	} else {
-		best_dev_prio = lnet_dev_prio_of_md(best_ni, dev_idx);
+		best_dev_prio = lnet_dev_prio_of_md(best_ni, &dev_id);
 		shortest_distance = cfs_cpt_distance(lnet_cpt_table(), md_cpt,
 						     best_ni->ni_dev_cpt);
 		best_credits = atomic_read(&best_ni->ni_tx_credits);
@@ -1544,13 +1541,13 @@ lnet_get_best_ni(struct lnet_net *local_net, struct lnet_ni *best_ni,
 					    md_cpt,
 					    ni->ni_dev_cpt);
 
-		ni_dev_prio = lnet_dev_prio_of_md(ni, dev_idx);
+		ni_dev_prio = lnet_dev_prio_of_md(ni, &dev_id);
 
 		/*
 		 * All distances smaller than the NUMA range
 		 * are treated equally.
 		 */
-		if (!is_p2p && distance < lnet_numa_range)
+		if (distance < lnet_numa_range)
 			distance = lnet_numa_range;
 
 		/*

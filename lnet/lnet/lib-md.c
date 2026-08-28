@@ -52,8 +52,9 @@ lnet_md_unlink(struct lnet_libmd *md)
 }
 
 struct page *
-lnet_get_first_page(struct lnet_libmd *md, unsigned int offset)
+lnet_get_first_page(struct lnet_libmd **md_ptr, unsigned int offset)
 {
+	struct lnet_libmd *md = *md_ptr;
 	unsigned int niov;
 	struct bio_vec *kiov;
 
@@ -62,8 +63,10 @@ lnet_get_first_page(struct lnet_libmd *md, unsigned int offset)
 	 * bulk md because that's the data which we will be DMAing
 	 */
 	if (md && (md->md_options & LNET_MD_BULK_HANDLE) != 0 &&
-	    !LNetMDHandleIsInvalid(md->md_bulk_handle))
+	    !LNetMDHandleIsInvalid(md->md_bulk_handle)) {
 		md = lnet_handle2md(&md->md_bulk_handle);
+		*md_ptr = md;
+	}
 
 	if (!md || md->md_niov == 0)
 		return NULL;
@@ -90,7 +93,7 @@ lnet_cpt_of_md(struct lnet_libmd *md, unsigned int offset)
 	struct page *page;
 	int cpt = CFS_CPT_ANY;
 
-	page = lnet_get_first_page(md, offset);
+	page = lnet_get_first_page(&md, offset);
 	if (!page) {
 		CDEBUG(D_NET, "Couldn't resolve first page of md %p with offset %u\n",
 			md, offset);

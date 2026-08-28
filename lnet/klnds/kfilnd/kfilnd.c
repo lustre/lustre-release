@@ -495,7 +495,7 @@ kfilnd_nl_set(int cmd, struct nlattr *attr, int type, void *data)
 }
 
 static unsigned int
-kfilnd_get_dev_prio(struct lnet_ni *ni, unsigned int dev_idx)
+kfilnd_get_dev_prio(struct lnet_ni *ni, struct lnet_device_id *dev_id)
 {
 	struct kfilnd_dev *dev = ni->ni_data;
 	struct device *device = NULL;
@@ -503,7 +503,7 @@ kfilnd_get_dev_prio(struct lnet_ni *ni, unsigned int dev_idx)
 	if (dev)
 		device = dev->device;
 
-	return lnet_get_dev_prio(device, dev_idx);
+	return lnet_get_dev_prio(device, dev_id);
 }
 
 static int kfilnd_startup(struct lnet_ni *ni);

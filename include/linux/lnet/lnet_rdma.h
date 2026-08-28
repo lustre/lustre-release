@@ -78,15 +78,29 @@ enum ft_bits {
 int REGISTER_FUNC(struct nvfs_dma_rw_ops *ops);
 void UNREGISTER_FUNC(void);
 
+enum lnet_device_type {
+	LNET_DEV_TYPE_NONE = 0,
+	LNET_DEV_TYPE_GPU,
+	LNET_DEV_TYPE_P2P
+};
+
+struct lnet_device_id {
+	enum lnet_device_type ldi_type;
+	union {
+		unsigned int ldi_gpu_idx;
+		struct device *ldi_p2pdev;
+	};
+};
+
 unsigned int lnet_get_dev_prio(struct device *dev,
-			       unsigned int dev_idx);
+			       struct lnet_device_id *dev_id);
 int lnet_rdma_map_sg_attrs(struct device *dev, struct scatterlist *sg,
 			   int nents, enum dma_data_direction direction);
 int lnet_rdma_unmap_sg(struct device *dev,
 		       struct scatterlist *sg, int nents,
 		       enum dma_data_direction direction);
 bool lnet_is_rdma_only_page(struct page *page);
-unsigned int lnet_get_dev_idx(struct page *page);
+void lnet_get_device_id(struct page *page, struct lnet_device_id *id);
 
 /* DMA_ATTR_NO_WARN was added to kernel v4.8-11962-ga9a62c9 */
 #ifndef DMA_ATTR_NO_WARN

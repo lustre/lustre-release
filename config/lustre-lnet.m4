@@ -984,6 +984,43 @@ AC_DEFUN([LN_IS_PCI_P2PDMA_PAGE], [
 	])
 ]) # LN_IS_PCI_P2PDMA_PAGE
 
+#
+# LN_P2PDMA_PROVIDER
+#
+AC_DEFUN([LN_SRC_P2PDMA_PROVIDER], [
+	LB2_LINUX_TEST_SRC([p2pdma_provider], [
+		#include <linux/pci-p2pdma.h>
+	],[
+		struct p2pdma_provider *p = NULL;
+		p->owner = NULL;
+	],[-Werror])
+])
+AC_DEFUN([LN_P2PDMA_PROVIDER], [
+	LB2_MSG_LINUX_TEST_RESULT([if struct p2pdma_provider exists],
+	[p2pdma_provider], [
+		AC_DEFINE(HAVE_P2PDMA_PROVIDER, 1,
+			  [struct p2pdma_provider exists])
+	])
+]) # LN_P2PDMA_PROVIDER
+
+#
+# LN_PAGE_PGMAP
+#
+AC_DEFUN([LN_SRC_PAGE_PGMAP], [
+	LB2_LINUX_TEST_SRC([page_pgmap], [
+		#include <linux/mm.h>
+	],[
+		page_pgmap(NULL);
+	],[-Werror])
+])
+AC_DEFUN([LN_PAGE_PGMAP], [
+	LB2_MSG_LINUX_TEST_RESULT([if page_pgmap() exists],
+	[page_pgmap], [
+		AC_DEFINE(HAVE_PAGE_PGMAP, 1,
+			  [page_pgmap() exists])
+	])
+]) # LN_PAGE_PGMAP
+
 AC_DEFUN([LN_PROG_LINUX_SRC], [
 	LN_CONFIG_O2IB_SRC
 	# 5.3 and 4.18.0-193.el8
@@ -999,6 +1036,8 @@ AC_DEFUN([LN_PROG_LINUX_SRC], [
 	# 6.19
 	LN_SRC_HAVE_STRUCT_SOCKADDR_UNSIZED
 	LN_SRC_IS_PCI_P2PDMA_PAGE
+	LN_SRC_PAGE_PGMAP
+	LN_SRC_P2PDMA_PROVIDER
 ])
 
 AC_DEFUN([LN_PROG_LINUX_RESULTS], [
@@ -1016,6 +1055,8 @@ AC_DEFUN([LN_PROG_LINUX_RESULTS], [
 	# 6.19
 	LN_HAVE_STRUCT_SOCKADDR_UNSIZED
 	LN_IS_PCI_P2PDMA_PAGE
+	LN_PAGE_PGMAP
+	LN_P2PDMA_PROVIDER
 ])
 
 #

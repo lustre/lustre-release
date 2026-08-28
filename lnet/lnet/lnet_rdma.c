@@ -9,6 +9,12 @@
 /* MAX / MIN conflict */
 #include <linux/lnet/lib-lnet.h>
 
+#ifdef HAVE_IS_PCI_P2PDMA_PAGE
+#include <linux/pci.h>
+#include <linux/memremap.h>
+#include <linux/pci-p2pdma.h>
+#endif
+
 #define NVFS_HOLD_TIME_MS 1000
 
 #define ERROR_PRINT_DEADLINE 3600
@@ -103,39 +109,103 @@ void UNREGISTER_FUNC(void)
 EXPORT_SYMBOL_GPL(UNREGISTER_FUNC);
 
 unsigned int
-lnet_get_dev_prio(struct device *dev, unsigned int dev_idx)
+lnet_get_dev_prio(struct device *dev, struct lnet_device_id *dev_id)
 {
 	unsigned int dev_prio = UINT_MAX;
 	struct nvfs_dma_rw_ops *nvfs_ops;
 
-	if (!dev)
+	if (!dev || !dev_id || dev_id->ldi_type == LNET_DEV_TYPE_NONE)
 		return dev_prio;
 
-	nvfs_ops = nvfs_get_ops();
-	if (!nvfs_ops)
-		return dev_prio;
+#ifdef HAVE_IS_PCI_P2PDMA_PAGE
+	if (dev_id->ldi_type == LNET_DEV_TYPE_P2P) {
+		int p2p_dist;
 
-	dev_prio = nvfs_ops->nvfs_device_priority(dev, dev_idx);
+		p2p_dist = pci_p2pdma_distance(to_pci_dev(dev_id->ldi_p2pdev),
+					       dev, false);
+		if (p2p_dist < 0)
+			return UINT_MAX;
+		return p2p_dist;
+	}
+#endif
 
-	nvfs_put_ops();
+	if (dev_id->ldi_type == LNET_DEV_TYPE_GPU) {
+		nvfs_ops = nvfs_get_ops();
+		if (!nvfs_ops)
+			return dev_prio;
+
+		dev_prio = nvfs_ops->nvfs_device_priority(dev,
+							  dev_id->ldi_gpu_idx);
+		nvfs_put_ops();
+	}
+
 	return dev_prio;
 }
 EXPORT_SYMBOL(lnet_get_dev_prio);
 
-unsigned int
-lnet_get_dev_idx(struct page *page)
+#ifdef HAVE_IS_PCI_P2PDMA_PAGE
+
+#ifndef HAVE_PAGE_PGMAP
+#define page_pgmap(page) ((page)->pgmap)
+#endif
+static inline struct device *lnet_get_p2p_dev(struct page *page)
 {
-	unsigned int dev_idx = UINT_MAX;
+	struct dev_pagemap *pgmap = page_pgmap(page);
+
+#ifdef HAVE_P2PDMA_PROVIDER
+	struct {
+		struct dev_pagemap pgmap;
+		struct p2pdma_provider *mem;
+	} *p2p = container_of(pgmap, typeof(*p2p), pgmap);
+	return p2p->mem->owner;
+#elif KERNEL_VERSION(6, 7, 0) <= LINUX_VERSION_CODE
+	struct {
+		struct pci_dev *provider;
+		u64 bus_offset;
+		struct dev_pagemap pgmap;
+	} *p2p = container_of(pgmap, typeof(*p2p), pgmap);
+	return &p2p->provider->dev;
+#else
+	struct {
+		struct dev_pagemap pgmap;
+		struct pci_dev *provider;
+		u64 bus_offset;
+	} *p2p = container_of(pgmap, typeof(*p2p), pgmap);
+	return &p2p->provider->dev;
+#endif
+}
+#endif /* HAVE_IS_PCI_P2PDMA_PAGE */
+
+void lnet_get_device_id(struct page *page, struct lnet_device_id *id)
+{
 	struct nvfs_dma_rw_ops *nvfs_ops;
+	unsigned int idx;
+
+	id->ldi_type = LNET_DEV_TYPE_NONE;
+
+	if (!page)
+		return;
+
+#ifdef HAVE_IS_PCI_P2PDMA_PAGE
+	if (is_pci_p2pdma_page(page)) {
+		id->ldi_type = LNET_DEV_TYPE_P2P;
+		id->ldi_p2pdev = lnet_get_p2p_dev(page);
+		return;
+	}
+#endif
 
 	nvfs_ops = nvfs_get_ops();
 	if (!nvfs_ops)
-		return dev_idx;
+		return;
 
-	dev_idx = nvfs_ops->nvfs_gpu_index(page);
+	idx = nvfs_ops->nvfs_gpu_index(page);
+
+	if (idx != UINT_MAX) {
+		id->ldi_type = LNET_DEV_TYPE_GPU;
+		id->ldi_gpu_idx = idx;
+	}
 
 	nvfs_put_ops();
-	return dev_idx;
 }
 
 int lnet_rdma_map_sg_attrs(struct device *dev, struct scatterlist *sg,

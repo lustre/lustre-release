@@ -1899,7 +1899,7 @@ failed_0:
 }
 
 unsigned int
-kiblnd_get_dev_prio(struct lnet_ni *ni, unsigned int dev_idx)
+kiblnd_get_dev_prio(struct lnet_ni *ni, struct lnet_device_id *dev_id)
 {
 	struct kib_net *net = ni->ni_data;
 	struct device *dev = NULL;
@@ -1907,7 +1907,7 @@ kiblnd_get_dev_prio(struct lnet_ni *ni, unsigned int dev_idx)
 	if (net)
 		dev = net->ibn_dev->ibd_hdev->ibh_ibdev->dma_device;
 
-	return lnet_get_dev_prio(dev, dev_idx);
+	return lnet_get_dev_prio(dev, dev_id);
 
 }
 
