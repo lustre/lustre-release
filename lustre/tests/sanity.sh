@@ -29587,17 +29587,17 @@ test_270h() {
 	stack_trap "restore_lustre_params < $save; rm -f $save" EXIT
 
 	$LFS mkdir -i 0 -c 1 $DIR/$tdir
-	$LFS setstripe -E 1M -c1  -E -1 -c2 ${dom}_1 ||
+	$LFS setstripe -E 1M -c1  -E -1 -c2 ${dom}_mirror ||
 		error "can't create OST file"
 	# mirrored file with DOM entry in the second mirror
-	$LFS mirror extend -N -E 1M -L mdt -E eof -c2 ${dom}_1 ||
+	$LFS mirror extend -N -E 1M -L mdt -E eof -c2 ${dom}_mirror ||
 		error "can't create mirror with DoM component"
 
 	do_facet mds1 $LCTL set_param -n lod.$mdtname.dom_stripesize=0
 
 	# DOM component in the middle and has other enries in the same mirror,
 	# should succeed but lost DoM component
-	local fid1=$($LFS path2fid ${dom}_1)
+	local fid1=$($LFS path2fid ${dom}_mirror)
 
 	$LFS setstripe --copy=$fid1 $dom ||
 		error "Can't create file from OST|DOM mirror layout"
