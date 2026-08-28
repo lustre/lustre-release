@@ -188,6 +188,11 @@ static int osc_object_ast_clear(struct ldlm_lock *lock, void *data)
 
 		LASSERT(osc != NULL);
 		LASSERT(osc->oo_oinfo != NULL);
+
+		/* an EC placeholder lock has no LVB to update */
+		if (ldlm_is_placeholder(lock))
+			RETURN(LDLM_ITER_CONTINUE);
+
 		LASSERT(lvb != NULL);
 
 		/* Updates lvb in lock by the cached oinfo */
@@ -227,6 +232,26 @@ int osc_object_prune(const struct lu_env *env, struct cl_object *obj)
 }
 EXPORT_SYMBOL(osc_object_prune);
 
+/*
+ * The pages kept by EC placeholder locks are only valid with the layout lock,
+ * so cancel the placeholders, and discard their pages, when it is lost.
+ */
+static int osc_object_conf_set(const struct lu_env *env, struct cl_object *obj,
+			       const struct cl_object_conf *conf)
+{
+	struct osc_object *osc = cl2osc(obj);
+	struct ldlm_namespace *ns = osc_export(osc)->exp_obd->obd_namespace;
+	struct ldlm_res_id *resname = &osc_env_info(env)->oti_resname;
+
+	if (conf->coc_opc != OBJECT_CONF_INVALIDATE)
+		return 0;
+
+	osc_build_res_name(osc, resname);
+	return ldlm_cli_cancel_unused_resource(ns, resname, NULL, LCK_MODE_MIN,
+					       LCF_LOCAL | LCF_PLACEHOLDER,
+					       NULL);
+}
+
 static int osc_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 			     struct ll_fiemap_info_key *fmkey,
 			     struct fiemap *fiemap, size_t *buflen)
@@ -257,10 +282,13 @@ static int osc_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 				       PAGE_SIZE - 1) & PAGE_MASK;
 
 	ostid_build_res_name(&fmkey->lfik_oa.o_oi, &resid);
-	mode = ldlm_lock_match(exp->exp_obd->obd_namespace,
-			       LDLM_FL_BLOCK_GRANTED | LDLM_FL_LVB_READY,
-			       &resid, LDLM_EXTENT, &policy,
-			       LCK_PR | LCK_PW, 0, &lockh);
+	/* skip EC placeholder locks, which never become LVB_READY */
+	mode = ldlm_lock_match_with_skip(exp->exp_obd->obd_namespace,
+					 LDLM_FL_BLOCK_GRANTED |
+					 LDLM_FL_LVB_READY,
+					 LDLM_FL_PLACEHOLDER, &resid,
+					 LDLM_EXTENT, &policy,
+					 LCK_PR | LCK_PW, 0, &lockh);
 	fmkey->lfik_oa.o_valid |= OBD_MD_FLFLAGS;
 	if (mode) { /* lock is cached on client */
 		fmkey->lfik_oa.o_flags &= ~OBD_FL_SRVLOCK;
@@ -413,6 +441,7 @@ static const struct cl_object_operations osc_ops = {
 	.coo_attr_update  = osc_attr_update,
 	.coo_glimpse      = osc_object_glimpse,
 	.coo_prune        = osc_object_prune,
+	.coo_conf_set     = osc_object_conf_set,
 	.coo_fiemap       = osc_object_fiemap,
 	.coo_req_attr_set = osc_req_attr_set
 };

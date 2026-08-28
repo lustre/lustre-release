@@ -289,7 +289,9 @@ static vm_fault_t __ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	if (ll_sbi_has_fast_read(ll_i2sbi(inode))) {
+	/* without the layout lock, cached pages may be stale EC pages */
+	if (ll_sbi_has_fast_read(ll_i2sbi(inode)) &&
+	    ll_layout_version_get(ll_i2info(inode)) != CL_LAYOUT_GEN_NONE) {
 		/* do fast fault */
 		bool allow_retry = vmf->flags & FAULT_FLAG_ALLOW_RETRY;
 		bool has_retry = vmf->flags & FAULT_FLAG_RETRY_NOWAIT;

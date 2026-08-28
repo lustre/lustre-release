@@ -184,6 +184,14 @@
 #define ldlm_set_fail_loc(_l)           LDLM_SET_FLAG((_l), 1ULL << 32)
 #define ldlm_clear_fail_loc(_l)         LDLM_CLEAR_FLAG((_l), 1ULL << 32)
 
+/**
+ * Client-only EC placeholder lock granted locally without an RPC, to keep
+ * reconstructed pages cached.  It has no LVB and no server-side state.
+ * Never add it to an on-wire flag mask.
+ */
+#define LDLM_FL_PLACEHOLDER             0x0000000200000000ULL // bit  33
+#define ldlm_is_placeholder(_l)         LDLM_TEST_FLAG((_l), 1ULL << 33)
+
 /** this lock is being destroyed */
 #define LDLM_FL_CBPENDING               0x0000000400000000ULL // bit  34
 #define ldlm_is_cbpending(_l)           LDLM_TEST_FLAG((_l), 1ULL << 34)

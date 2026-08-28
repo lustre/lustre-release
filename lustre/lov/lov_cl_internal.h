@@ -427,8 +427,7 @@ struct lov_lock_sub {
 	/* Set if the sublock has ever been enqueued, meaning it may
 	 * hold resources of underlying layers
 	 */
-	unsigned int		sub_is_enqueued:1,
-				sub_initialized:1;
+	unsigned int		sub_is_enqueued:1;
 	int			sub_index;
 };
 

@@ -56,7 +56,7 @@ static struct lov_sublock_env *lov_sublock_env_get(const struct lu_env *env,
 	return subenv;
 }
 
-/* This EC read holds no lock on the stripe of @lls, so must not read it */
+/* EC read holds no server lock on the stripe of @lls, so must not read it */
 static void lov_lock_sub_ec_err(struct lov_io *lio, struct lov_lock_sub *lls)
 {
 	struct lov_io_sub *sub = lov_sub_lookup(lio, lls->sub_index);
@@ -83,6 +83,38 @@ static int lov_sublock_init(const struct lu_env *env,
 		result = PTR_ERR(subenv);
 	}
 	RETURN(result);
+}
+
+/*
+ * Convert a sub-lock into an EC placeholder lock.  If the layout lock was
+ * lost meanwhile, lov_conf_invalidate_ec() may have missed the placeholder,
+ * so have it cancelled after this IO as that would.
+ */
+static int lov_sublock_to_placeholder(const struct lu_env *env,
+				      struct lov_object *lov,
+				      const struct cl_lock *parent,
+				      struct lov_lock_sub *lls)
+{
+	static const struct cl_object_conf conf = {
+		.coc_opc = OBJECT_CONF_INVALIDATE,
+	};
+	struct lov_sublock_env *subenv;
+	int rc;
+
+	subenv = lov_sublock_env_get(env, parent, lls);
+	if (IS_ERR(subenv))
+		return PTR_ERR(subenv);
+
+	rc = cl_lock_to_placeholder(subenv->lse_env, &lls->sub_lock);
+	if (rc)
+		return rc;
+
+	/* pairs with smp_mb__after_atomic() in lov_conf_set() */
+	smp_mb();
+	if (test_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags))
+		cl_conf_set(subenv->lse_env, lls->sub_lock.cll_descr.cld_obj,
+			    &conf);
+	return 0;
 }
 
 /**
@@ -198,21 +230,36 @@ init_sublock:
 
 			lls->sub_index = lov_comp_index(index, i);
 
-			if ((descr->cld_enq_flags & CEF_HEED_ERROR) &&
-			    (r0->lo_sub[i]->lso_status == LSS_READ_ERR)) {
-				lov_lock_sub_ec_err(lio, lls);
-				lls->sub_initialized = 0;
-				nr++;
-				continue;
-			}
-
 			/* initialize sub lock */
 			result = lov_sublock_init(env, lock, lls);
 			if (result < 0)
 				break;
 
-			lls->sub_initialized = 1;
 			nr++;
+
+			/* Keep pages reconstructed for an inactive OST cached
+			 * under a placeholder lock.  Otherwise retry the OST,
+			 * and lov_lock_enqueue() converts the lock if it fails.
+			 */
+			if (io->ci_type == CIT_EC_RD &&
+			    descr->cld_enq_flags & CEF_HEED_ERROR &&
+			    r0->lo_sub[i]->lso_status == LSS_READ_ERR) {
+				struct lov_oinfo *oinfo;
+				struct lu_tgt_desc *tgt;
+
+				oinfo = lov_lse(lov, index)->lsme_oinfo[i];
+				tgt = lov_tgt(lov_object_dev(lov)->ld_lov,
+					      oinfo->loi_ost_idx);
+				if (tgt && tgt->ltd_active) {
+					r0->lo_sub[i]->lso_status = LSS_OK;
+					continue;
+				}
+
+				lov_lock_sub_ec_err(lio, lls);
+				if (!lov_sublock_to_placeholder(env, lov, lock,
+								lls))
+					lls->sub_is_enqueued = 1;
+			}
 		}
 		if (result < 0)
 			break;
@@ -221,14 +268,15 @@ init_sublock:
 
 	if (result != 0) {
 		for (i = 0; i < nr; ++i) {
-			if (!lovlck->lls_sub[i].sub_initialized)
-				continue;
+			struct lov_lock_sub *lls = &lovlck->lls_sub[i];
 
-			cl_lock_fini(env, &lovlck->lls_sub[i].sub_lock);
+			/* detach a placeholder ldlm_lock before fini */
+			cl_lock_cancel(env, &lls->sub_lock);
+			cl_lock_fini(env, &lls->sub_lock);
 		}
 
-		OBD_FREE_LARGE(lovlck,
-				offsetof(struct lov_lock, lls_sub[nr]));
+		OBD_FREE_LARGE(lovlck, offsetof(struct lov_lock,
+						 lls_sub[lovlck->lls_nr]));
 		lovlck = ERR_PTR(result);
 	}
 
@@ -245,8 +293,7 @@ static void lov_lock_fini(const struct lu_env *env,
 	lovlck = cl2lov_lock(slice);
 	for (i = 0; i < lovlck->lls_nr; ++i) {
 		LASSERT(!lovlck->lls_sub[i].sub_is_enqueued);
-		if (lovlck->lls_sub[i].sub_initialized)
-			cl_lock_fini(env, &lovlck->lls_sub[i].sub_lock);
+		cl_lock_fini(env, &lovlck->lls_sub[i].sub_lock);
 	}
 	OBD_FREE_LARGE(lovlck,
 		       offsetof(struct lov_lock, lls_sub[lovlck->lls_nr]));
@@ -286,13 +333,6 @@ static int lov_lock_enqueue(const struct lu_env *env,
 		struct lov_lock_sub     *lls = &lovlck->lls_sub[i];
 		struct lov_sublock_env  *subenv;
 
-		/* Skip sub-locks that were not initialized (e.g. stripes
-		 * in LSS_READ_ERR state when CEF_HEED_ERROR is set). They
-		 * have no underlying lock state to enqueue.
-		 */
-		if (!lls->sub_initialized)
-			continue;
-
 		subenv = lov_sublock_env_get(env, lock, lls);
 		if (IS_ERR(subenv)) {
 			rc = PTR_ERR(subenv);
@@ -326,6 +366,17 @@ static int lov_lock_enqueue(const struct lu_env *env,
 				cl2lovsub(lls->sub_lock.cll_descr.cld_obj)->
 					lso_status = LSS_READ_ERR;
 				lov_lock_sub_ec_err(lov_env_io(env), lls);
+
+				/* keep the reconstructed pages cached under a
+				 * placeholder, or drop them after the read
+				 */
+				rc = lov_sublock_to_placeholder(env, lov, lock,
+								lls);
+				if (!rc)
+					lls->sub_is_enqueued = 1;
+				else
+					io->u.ci_ec.ec_unprotected_recovery =
+						true;
 				rc = 0;
 				continue;
 			}
@@ -360,9 +411,10 @@ static void lov_lock_cancel(const struct lu_env *env,
 		if (!IS_ERR(subenv)) {
 			cl_lock_cancel(subenv->lse_env, sublock);
 		} else {
-			CL_LOCK_DEBUG(D_ERROR, env, slice->cls_lock,
-				      "lov_lock_cancel fails with %ld.\n",
-				      PTR_ERR(subenv));
+			/* cancel anyway, or the ldlm_lock reference leaks
+			 * and osc_lock_fini() asserts on ols_dlmlock
+			 */
+			cl_lock_cancel(env, sublock);
 		}
 	}
 }
@@ -379,19 +431,7 @@ static int lov_lock_print(const struct lu_env *env, void *cookie,
 
 		sub = &lck->lls_sub[i];
 		(*p)(env, cookie, "    %d %x: ", i, sub->sub_is_enqueued);
-		/* sub-locks that were not initialized (e.g. stripes in
-		 * LSS_READ_ERR state when CEF_HEED_ERROR is set) have an
-		 * uninitialized cll_layers list, so only their descr is
-		 * safe to print.
-		 */
-		if (sub->sub_initialized) {
-			cl_lock_print(env, cookie, p, &sub->sub_lock);
-		} else {
-			(*p)(env, cookie, "lock@%p", &sub->sub_lock);
-			cl_lock_descr_print(env, cookie, p,
-					    &sub->sub_lock.cll_descr);
-			(*p)(env, cookie, " (uninitialized)\n");
-		}
+		cl_lock_print(env, cookie, p, &sub->sub_lock);
 	}
 	return 0;
 }

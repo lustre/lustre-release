@@ -1190,11 +1190,103 @@ int osc_lock_print(const struct lu_env *env, void *cookie,
 }
 EXPORT_SYMBOL(osc_lock_print);
 
+/**
+ * osc_lock_to_placeholder() - Convert an osc_lock into an EC placeholder
+ * @env: execution environment
+ * @slice: osc lock slice to convert
+ *
+ * Grant a client-only ldlm_lock locally, without an RPC, for a stripe on an
+ * unavailable OST, so the pages reconstructed from parity during CIT_EC_RD
+ * stay cached after the read.  The pages are valid while the parity is not
+ * STALE: any write or truncate of the file must stale the parity through a
+ * layout write intent first, which revokes the layout lock on every client,
+ * and osc_object_conf_set() then cancels the placeholders and discards their
+ * pages.  So a placeholder needs no server-side state: it is never replayed,
+ * only matched by page coverage tests, and otherwise leaves the cache through
+ * the LRU like any unused lock.
+ *
+ * Only LCK_PR locks are converted: a PW placeholder could satisfy a later
+ * write without a server lock, and a GROUP lock is cancelled at its last
+ * decref.
+ *
+ * Context: process context, called by LOV via cl_lock_to_placeholder().
+ * Return:
+ * * %0 on success
+ * * %-EOPNOTSUPP if the lock mode cannot be a placeholder
+ * * negative errno on other failures
+ */
+static int osc_lock_to_placeholder(const struct lu_env *env,
+				   const struct cl_lock_slice *slice)
+{
+	struct osc_lock *oscl = cl2osc_lock(slice);
+	struct osc_object *osc = cl2osc(slice->cls_obj);
+	struct ldlm_enqueue_info *einfo = &oscl->ols_einfo;
+	struct osc_thread_info *info = osc_env_info(env);
+	struct ldlm_res_id *resname = &info->oti_resname;
+	union ldlm_policy_data *policy = &info->oti_policy;
+	struct obd_export *exp = osc_export(osc);
+	struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
+	struct ldlm_callback_suite cbs = { .lcs_blocking = einfo->ei_cb_bl };
+	struct ldlm_lock *dlmlock;
+	struct lustre_handle lockh;
+	enum ldlm_mode mode;
+	int rc;
+
+	ENTRY;
+	if (einfo->ei_mode != LCK_PR)
+		RETURN(-EOPNOTSUPP);
+
+	ostid_build_res_name(&osc->oo_oinfo->loi_oi, resname);
+	osc_lock_build_policy(env, slice->cls_lock, policy);
+
+	/* reuse a lock of this object that covers the extent, normally a
+	 * placeholder left by an earlier read
+	 */
+	mode = ldlm_lock_match_with_skip(ns, LDLM_FL_BLOCK_GRANTED, 0, resname,
+					 einfo->ei_type, policy, LCK_PR,
+					 LDLM_MATCH_AST, &lockh);
+	if (mode) {
+		bool reuse;
+
+		dlmlock = ldlm_handle2lock(&lockh);
+		lock_res_and_lock(dlmlock);
+		reuse = dlmlock->l_ast_data == osc &&
+			dlmlock->l_flags & LDLM_FL_LVB_CACHED;
+		unlock_res_and_lock(dlmlock);
+		if (reuse) {
+			/* new osc_lock, or cancelled by a failed enqueue */
+			oscl->ols_state = OLS_UPCALL_RECEIVED;
+			osc_lock_granted(env, oscl, &lockh);
+		}
+		ldlm_lock_decref(&lockh, mode);
+		ldlm_lock_put(dlmlock);
+		if (reuse)
+			RETURN(0);
+	}
+
+	/* cover the whole object, so later reads of it reuse this lock.
+	 * KMS_IGNORE: the OST cannot revoke it, so it must not hold the KMS
+	 */
+	policy->l_extent.start = 0;
+	policy->l_extent.end = OBD_OBJECT_EOF;
+	rc = ldlm_cli_enqueue_placeholder(env, exp, resname, einfo->ei_type,
+					  policy, LCK_PR, LDLM_FL_KMS_IGNORE,
+					  &cbs, osc, &lockh);
+	if (rc)
+		RETURN(rc);
+
+	oscl->ols_state = OLS_UPCALL_RECEIVED;
+	osc_lock_granted(env, oscl, &lockh);
+	ldlm_lock_decref(&lockh, LCK_PR);
+	RETURN(0);
+}
+
 static const struct cl_lock_operations osc_lock_ops = {
-        .clo_fini    = osc_lock_fini,
-        .clo_enqueue = osc_lock_enqueue,
-        .clo_cancel  = osc_lock_cancel,
-        .clo_print   = osc_lock_print,
+	.clo_fini	= osc_lock_fini,
+	.clo_enqueue	= osc_lock_enqueue,
+	.clo_cancel	= osc_lock_cancel,
+	.clo_print	= osc_lock_print,
+	.clo_to_placeholder = osc_lock_to_placeholder,
 };
 
 static void osc_lock_lockless_cancel(const struct lu_env *env,

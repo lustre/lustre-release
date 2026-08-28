@@ -65,6 +65,37 @@ void cl_lock_slice_add(struct cl_lock *lock, struct cl_lock_slice *slice,
 }
 EXPORT_SYMBOL(cl_lock_slice_add);
 
+/**
+ * cl_lock_to_placeholder() - Convert a lock into a client-only placeholder
+ * @env: execution environment
+ * @lock: lock to convert
+ *
+ * Call cl_lock_operations::clo_to_placeholder() on each layer that has it,
+ * so LOV can keep pages reconstructed by CIT_EC_RD cached for a stripe on
+ * an unavailable OST.
+ *
+ * Return:
+ * * %0 on success
+ * * %-EOPNOTSUPP if no layer supports it
+ * * negative errno on failure
+ */
+int cl_lock_to_placeholder(const struct lu_env *env, struct cl_lock *lock)
+{
+	const struct cl_lock_slice *slice;
+	int result = -EOPNOTSUPP;
+
+	ENTRY;
+	list_for_each_entry(slice, &lock->cll_layers, cls_linkage) {
+		if (slice->cls_ops->clo_to_placeholder != NULL) {
+			result = slice->cls_ops->clo_to_placeholder(env, slice);
+			if (result != 0)
+				break;
+		}
+	}
+	RETURN(result);
+}
+EXPORT_SYMBOL(cl_lock_to_placeholder);
+
 void cl_lock_fini(const struct lu_env *env, struct cl_lock *lock)
 {
 	struct cl_lock_slice *slice;

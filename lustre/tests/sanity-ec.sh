@@ -8374,6 +8374,107 @@ test_49e() {
 }
 run_test 49e "concurrent EC reads with stopped OSTs (no deactivation)"
 
+ec_osc_read_rpcs() {
+	$LCTL get_param -n osc.*.stats |
+		awk '/^read_bytes/ { sum += $2 } END { print sum + 0 }'
+}
+
+test_49f() {
+	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local tf2=$DIR2/$tfile
+
+	if ! is_mounted $MOUNT2; then
+		mkdir -p $MOUNT2
+		mount_client $MOUNT2 || error "mount_client $MOUNT2 failed"
+		stack_trap "umount_client $MOUNT2"
+	fi
+	stack_trap "rm -f $tf"
+
+	$LFS setstripe -E eof -S 1M -c 4 --ec 4+2 $tf ||
+		error "setstripe --ec 4+2 $tf failed"
+	dd if=/dev/urandom of=$tf bs=1M count=8 || error "dd $tf failed"
+	$LFS mirror resync $tf || error "mirror resync $tf failed"
+	local sum=$(md5sum < $tf)
+
+	# stop the OST of stripe 0, so an mmap read faults its pages first
+	ec_classify_osts $tf
+	local ost=${data_osts[0]}
+	[[ " ${safe_osts[*]} " == *" $ost "* ]] ||
+		skip_env "stripe 0 OST$ost also holds parity"
+	local facet=ost$((ost + 1))
+	local osc=$(ostname_from_index $ost)-osc-$($LFS getname -i $MOUNT)
+
+	cancel_lru_locks osc
+	stop $facet || error "stop $facet failed"
+	stack_trap "facet_up $facet || {
+		start $facet $(ostdevname $((ost + 1))) $OST_MOUNT_OPTS;
+		wait_recovery_complete $facet; }"
+	wait_osc_import_state client $facet "\(DISCONN\|IDLE\)"
+
+	# the first read rebuilds the stripe under a placeholder lock
+	local sum1=$(md5sum < $tf)
+	[[ "$sum1" == "$sum" ]] || error "degraded read '$sum1' != '$sum'"
+	local locks=$($LCTL get_param -n ldlm.namespaces.$osc.lock_count)
+	(( locks > 0 )) || error "no placeholder lock on $osc"
+
+	# the second read is served from the page cache
+	local rpcs=$(ec_osc_read_rpcs)
+	sum1=$(md5sum < $tf)
+	[[ "$sum1" == "$sum" ]] || error "cached read '$sum1' != '$sum'"
+	rpcs=$(( $(ec_osc_read_rpcs) - rpcs ))
+	(( rpcs == 0 )) || error "cached read sent $rpcs read RPCs"
+
+	# map the file now, as an open after the write refreshes the layout
+	local out=$TMP/$tfile.mmap
+	python3 -c '
+import hashlib, mmap, signal, sys
+f = open(sys.argv[1], "rb")
+m = mmap.mmap(f.fileno(), 0, prot=mmap.PROT_READ)
+signal.pthread_sigmask(signal.SIG_BLOCK, [signal.SIGUSR1])
+print("mapped", flush=True)
+signal.sigwait([signal.SIGUSR1])
+print(hashlib.md5(m[:]).hexdigest(), flush=True)' $tf > $out &
+	local pid=$!
+	stack_trap "kill $pid 2> /dev/null || true; rm -f $out"
+	local i
+	for ((i = 0; i < 20; i++)); do
+		grep -q mapped $out && break
+		sleep 0.5
+	done
+	grep -q mapped $out || error "mmap of $tf failed"
+
+	# the placeholder is not replayed, and stays over OST recovery
+	start $facet $(ostdevname $((ost + 1))) $OST_MOUNT_OPTS ||
+		error "start $facet failed"
+	wait_recovery_complete $facet
+	wait_osc_import_state client $facet FULL
+	locks=$($LCTL get_param -n ldlm.namespaces.$osc.lock_count)
+	(( locks > 0 )) || error "placeholder lock on $osc lost in recovery"
+
+	# The OST does not know the placeholder, so a write from $MOUNT2 is
+	# only seen on $MOUNT because it stales the parity and so revokes the
+	# layout lock, after which mmap and read must not use the old pages.
+	# A read of $tf before the write would take a server lock, and its
+	# cancel would discard the old pages anyway.
+	dd if=/dev/urandom of=$tf2 bs=1M count=8 conv=notrunc ||
+		error "dd $tf2 failed"
+	locks=$($LCTL get_param -n ldlm.namespaces.$osc.lock_count)
+	(( locks == 0 )) || error "placeholder lock on $osc kept after write"
+	$LFS mirror resync $tf2 || error "mirror resync $tf2 failed"
+	sum=$(md5sum < $tf2)
+	kill -USR1 $pid
+	wait $pid || error "mmap read of $tf failed"
+	sum1=$(tail -n 1 $out)
+	[[ "$sum1" == "${sum%% *}" ]] ||
+		error "mmap after write '$sum1' != '${sum%% *}'"
+	sum1=$(md5sum < $tf)
+	[[ "$sum1" == "$sum" ]] || error "read after write '$sum1' != '$sum'"
+}
+run_test 49f "keep reconstructed EC pages cached under placeholder"
+
 test_50a() {
 	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
 	enable_ec

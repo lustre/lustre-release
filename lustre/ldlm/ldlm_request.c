@@ -562,6 +562,74 @@ int ldlm_cli_enqueue_local(const struct lu_env *env,
 }
 EXPORT_SYMBOL(ldlm_cli_enqueue_local);
 
+/**
+ * ldlm_cli_enqueue_placeholder() - Grant a client-only placeholder lock
+ * @env: Lustre environment
+ * @exp: Export of the target the lock belongs to
+ * @res_id: The resource name of the lock
+ * @type: Type of the lock (LDLM_EXTENT etc...)
+ * @policy: Lock policy, the range the lock covers
+ * @mode: Lock mode
+ * @flags: Lock flags to set in addition to the placeholder ones
+ * @cbs: Lock callbacks
+ * @data: Data for lock
+ * @lockh: Handle of the granted lock, holding a @mode reference (output)
+ *
+ * Grant a lock on a client namespace locally without an enqueue RPC, so the
+ * server has no state for it.  It is used to keep pages cached that EC
+ * recovery rebuilt from parity.  LDLM_FL_LOCAL_ONLY cancels it without an
+ * RPC, it has no LVB to fetch, and LDLM_FL_PLACEHOLDER keeps it from being
+ * replayed.  Callers matching locks in the namespace must skip
+ * LDLM_FL_PLACEHOLDER unless they only test page coverage.  The caller drops
+ * the @mode reference with ldlm_lock_decref().
+ *
+ * Return:
+ * * %0 on success
+ * * %negative on failure
+ */
+int ldlm_cli_enqueue_placeholder(const struct lu_env *env,
+				 struct obd_export *exp,
+				 const struct ldlm_res_id *res_id,
+				 enum ldlm_type type,
+				 union ldlm_policy_data *policy,
+				 enum ldlm_mode mode, __u64 flags,
+				 const struct ldlm_callback_suite *cbs,
+				 void *data, struct lustre_handle *lockh)
+{
+	struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
+	struct ldlm_lock *lock;
+	enum ldlm_error err;
+	__u64 enq_flags = 0;
+
+	ENTRY;
+	lock = ldlm_lock_create(ns, res_id, type, mode, cbs, data, 0,
+				LVB_T_NONE);
+	if (IS_ERR(lock))
+		RETURN(PTR_ERR(lock));
+
+	lock->l_conn_export = exp;
+	lock->l_flags |= flags | LDLM_FL_LOCAL_ONLY | LDLM_FL_PLACEHOLDER |
+			 LDLM_FL_LVB_CACHED;
+	lock->l_policy_data = *policy;
+	if (type == LDLM_EXTENT)
+		lock->l_req_extent = policy->l_extent;
+
+	/* hold a reference across the grant, as ldlm_cli_enqueue() does */
+	ldlm_lock2handle(lock, lockh);
+	ldlm_lock_addref(lockh, mode);
+	err = ldlm_lock_enqueue(env, ns, &lock, NULL, &enq_flags);
+	if (err != ELDLM_OK) {
+		ldlm_lock_decref_and_cancel(lockh, mode);
+		ldlm_lock_put(lock);
+		RETURN(ldlm_error2errno(err));
+	}
+
+	LDLM_DEBUG(lock, "client-only placeholder lock granted");
+	ldlm_lock_put(lock);
+	RETURN(0);
+}
+EXPORT_SYMBOL(ldlm_cli_enqueue_placeholder);
+
 static void failed_lock_cleanup(struct ldlm_namespace *ns,
 				struct ldlm_lock *lock, int mode)
 {
@@ -2371,8 +2439,16 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
 			continue;
 		}
 
-		if (lock->l_readers || lock->l_writers)
+		if (cancel_flags & LCF_PLACEHOLDER &&
+		    !ldlm_is_placeholder(lock))
 			continue;
+
+		if (lock->l_readers || lock->l_writers) {
+			/* cancel an EC placeholder in use at its last decref */
+			if (cancel_flags & LCF_PLACEHOLDER)
+				lock->l_flags |= LDLM_FL_CBPENDING;
+			continue;
+		}
 
 		/*
 		 * If somebody is already doing CANCEL, or blocking AST came
@@ -2721,8 +2797,10 @@ static int ldlm_chain_lock_for_replay(struct ldlm_lock *lock, void *closure)
 	 * b=9573: don't replay locks left after eviction, or
 	 * b=17614: locks being actively cancelled. Get a reference
 	 * on a lock so that it does not disapear under us (e.g. due to cancel)
+	 * Client-only EC placeholder locks are unknown to the server.
 	 */
-	if (!(lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_BL_DONE))) {
+	if (!(lock->l_flags & (LDLM_FL_FAILED|LDLM_FL_BL_DONE)) &&
+	    !ldlm_is_placeholder(lock)) {
 		list_add(&lock->l_pending_chain, list);
 		ldlm_lock_get(lock);
 	}

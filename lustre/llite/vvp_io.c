@@ -490,9 +490,10 @@ static int vvp_mmap_locks(const struct lu_env *env,
 			/* For EC recovery reads, tolerate stripes that are
 			 * already in LSS_READ_ERR state on the EC object
 			 * being reconstructed. CEF_HEED_ERROR tells the LOV
-			 * layer to skip sub-lock creation for unavailable
-			 * stripes, so the lock enqueue does not block on
-			 * unavailable OSTs.
+			 * layer to retry the OST of a stripe in LSS_READ_ERR
+			 * state, or for a read-mode lock to use a client-only
+			 * placeholder if the OST is inactive or the NDELAY
+			 * enqueue fails.
 			 * Only apply this tolerance to locks on the EC
 			 * object (io->ci_obj), not to unrelated mmap buffer
 			 * files.
@@ -1561,13 +1562,14 @@ static void vvp_io_ec_rd_end(const struct lu_env *env,
 out:
 	/* Unlink each reconstructed page and clear cp_ec_recovery under the
 	 * folio lock, so the next reader to lock the page sees a consistent
-	 * state.  No DLM lock protects these pages, so delete the cl_page,
-	 * which also drops Uptodate under lli_page_inv_lock (LU-16160).  A
-	 * cl_page kept on a non-Uptodate folio would still point at the
-	 * stripe of the mirror this EC read used, and a later read of the
-	 * folio from another mirror would submit it to the wrong sub-IO.
-	 * A lock cancel may already have discarded a page that was not
-	 * owned during the copy to userspace.
+	 * state.  Unless the recovery succeeded and every stripe holds a
+	 * granted or EC placeholder lock, delete the cl_page, which also
+	 * drops Uptodate under lli_page_inv_lock (LU-16160).  A cl_page kept
+	 * on a non-Uptodate folio would still point at the stripe of the
+	 * mirror this EC read used, and a later read of the folio from
+	 * another mirror would submit it to the wrong sub-IO.  A lock cancel
+	 * may already have discarded a page that was not owned during the
+	 * copy to userspace.
 	 */
 	cl_page_list_for_each_safe(cl_page, temp,
 				   &io->u.ci_ec.ec_page_list) {
@@ -1578,7 +1580,8 @@ out:
 			folio_lock(folio);
 		cl_page_list_del(env, &io->u.ci_ec.ec_page_list, cl_page,
 				 false);
-		if (cl_page->cp_state != CPS_FREEING)
+		if ((io->u.ci_ec.ec_unprotected_recovery || owned) &&
+		    cl_page->cp_state != CPS_FREEING)
 			cl_page_delete(env, cl_page);
 		cl_page->cp_ec_recovery = 0;
 		/* pairs with wait_var_event() in vvp_io_ec_rd_iter_fini() */
@@ -1954,6 +1957,7 @@ static int vvp_io_ec_rd_iter_init(const struct lu_env *env,
 
 	ENTRY;
 	io->u.ci_ec.ec_wait_page = NULL;
+	io->u.ci_ec.ec_unprotected_recovery = false;
 	/* i_size_read() might not return the real file size when the
 	 * OST holding the last block of data is down. So we'd refresh
 	 * the file size here if the expanded read range overlaps EOF, and

@@ -831,6 +831,7 @@ enum ldlm_cancel_flags {
 	LCF_ASYNC	= 0x1, /* Cancel locks asynchronously. */
 	LCF_LOCAL	= 0x2, /* Cancel locks locally, not notifing server */
 	LCF_BL_AST	= 0x4, /* Cancel LDLM_FL_BL_AST locks in the same RPC */
+	LCF_PLACEHOLDER	= 0x8, /* Only cancel EC placeholder locks */
 };
 
 struct ldlm_flock {
@@ -1891,6 +1892,14 @@ int ldlm_cli_enqueue_local(const struct lu_env *env,
 			   void *data, __u32 lvb_len, enum lvb_type lvb_type,
 			   const __u64 *client_cookie,
 			   struct lustre_handle *lockh);
+int ldlm_cli_enqueue_placeholder(const struct lu_env *env,
+				 struct obd_export *exp,
+				 const struct ldlm_res_id *res_id,
+				 enum ldlm_type type,
+				 union ldlm_policy_data *policy,
+				 enum ldlm_mode mode, __u64 flags,
+				 const struct ldlm_callback_suite *cbs,
+				 void *data, struct lustre_handle *lockh);
 int ldlm_cli_lock_create_pack(struct obd_export *exp,
 			      struct ldlm_request *dlmreq,
 			      struct ldlm_enqueue_info *einfo,

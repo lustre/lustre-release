@@ -1456,6 +1456,47 @@ out_lsm:
 	RETURN(rc);
 }
 
+/*
+ * Pages reconstructed from EC parity are cached under client-only placeholder
+ * locks, which only stay valid with the layout lock (LU-12669).  Pass its loss
+ * down to the stripe objects, so they cancel their placeholders.
+ */
+static void lov_conf_invalidate_ec(const struct lu_env *env,
+				   struct lov_object *lov,
+				   const struct cl_object_conf *conf)
+{
+	struct lov_mirror_entry *lre;
+	struct lov_layout_entry *lle;
+	bool parity = false;
+	int i;
+
+	lov_conf_freeze(lov);
+	if (lov->lo_type != LLT_COMP || !lov_is_flr(lov))
+		goto out;
+
+	lov_foreach_mirror_entry(lov, lre)
+		parity |= lre->lre_parity;
+	if (!parity)
+		goto out;
+
+	lov_foreach_layout_entry(lov, lle) {
+		struct lov_layout_raid0 *r0 = &lle->lle_raid0;
+
+		if (!lle->lle_lsme || lsme_is_foreign(lle->lle_lsme) ||
+		    !r0->lo_sub)
+			continue;
+
+		for (i = 0; i < r0->lo_nr; i++) {
+			struct lovsub_object *los = r0->lo_sub[i];
+
+			if (los)
+				cl_conf_set(env, lovsub2cl(los), conf);
+		}
+	}
+out:
+	lov_conf_thaw(lov);
+}
+
 static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
 			const struct cl_object_conf *conf)
 {
@@ -1477,6 +1518,9 @@ static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
 
 	if (conf->coc_opc == OBJECT_CONF_INVALIDATE) {
 		set_bit(LO_LAYOUT_INVALID, &lov->lo_obj_flags);
+		/* pairs with smp_mb() in lov_sublock_to_placeholder() */
+		smp_mb__after_atomic();
+		lov_conf_invalidate_ec(env, lov, conf);
 		GOTO(out_lsm, result = 0);
 	}
 

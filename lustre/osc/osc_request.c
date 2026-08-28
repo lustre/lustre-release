@@ -3230,7 +3230,11 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
 		search_flags |= LDLM_FL_BLOCK_GRANTED;
 	if (mode == LCK_GROUP)
 		match_flags = LDLM_MATCH_GROUP;
-	mode = ldlm_lock_match_with_skip(obd->obd_namespace, search_flags, 0,
+	/* skip client-only EC placeholder locks, as the server has no record
+	 * of them and they have no LVB
+	 */
+	mode = ldlm_lock_match_with_skip(obd->obd_namespace, search_flags,
+					 LDLM_FL_PLACEHOLDER,
 					 res_id, einfo->ei_type, policy, mode,
 					 match_flags, &lockh);
 	if (mode) {
@@ -3342,6 +3346,7 @@ int osc_match_base(const struct lu_env *env, struct obd_export *exp,
 {
 	struct obd_device *obd = exp->exp_obd;
 	__u64 lflags = *flags;
+	__u64 skip_flags = LDLM_FL_PLACEHOLDER;
 	enum ldlm_mode rc;
 
 	ENTRY;
@@ -3354,8 +3359,13 @@ int osc_match_base(const struct lu_env *env, struct obd_export *exp,
 	policy->l_extent.start -= policy->l_extent.start & ~PAGE_MASK;
 	policy->l_extent.end |= ~PAGE_MASK;
 
-	/* Next, search for already existing extent locks that will cover us */
-	rc = ldlm_lock_match_with_skip(obd->obd_namespace, lflags, 0,
+	/* Next, search for already existing extent locks that will cover us.
+	 * An EC placeholder lock only covers cached pages, so only a page
+	 * coverage test of the object it belongs to may match it.
+	 */
+	if ((lflags & LDLM_FL_TEST_LOCK) && (match_flags & LDLM_MATCH_AST))
+		skip_flags = 0;
+	rc = ldlm_lock_match_with_skip(obd->obd_namespace, lflags, skip_flags,
 					res_id, type, policy, mode,
 					match_flags, lockh);
 	if (rc == 0 || lflags & LDLM_FL_TEST_LOCK)
@@ -3998,6 +4008,10 @@ static int osc_import_event(struct obd_device *obd, struct obd_import *imp,
  */
 static int osc_cancel_weight(struct ldlm_lock *lock)
 {
+	/* an EC placeholder is not replayed, so keep it with its pages */
+	if (ldlm_is_placeholder(lock))
+		RETURN(0);
+
 	/*
 	 * Cancel all unused and granted extent lock.
 	 */

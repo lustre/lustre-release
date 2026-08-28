@@ -1240,6 +1240,12 @@ struct cl_lock_operations {
 	 */
 	int (*clo_print)(const struct lu_env *env, void *cookie,
 			 lu_printer_t p, const struct cl_lock_slice *slice);
+	/**
+	 * Convert a lock into a client-only EC placeholder for a stripe on
+	 * an unavailable OST.  Implemented by osc.
+	 */
+	int (*clo_to_placeholder)(const struct lu_env *env,
+				  const struct cl_lock_slice *slice);
 };
 
 #define CL_LOCK_DEBUG(mask, env, lock, format, ...)                     \
@@ -1719,7 +1725,8 @@ enum cl_enq_flags {
 	 */
 	CEF_LOCK_NO_EXPAND    = 0x00000100,
 	/**
-	 * do not create sub lock if read error happens on the stripe
+	 * for EC read, use a placeholder lock for a stripe on an unavailable
+	 * OST
 	 */
 	CEF_HEED_ERROR		= 0x00000200,
 	/**
@@ -1899,6 +1906,11 @@ struct cl_io {
 			 * cache.
 			 */
 			bool ec_recovery_failed;
+			/* a stripe has neither a granted lock nor a
+			 * placeholder, so the reconstructed pages are
+			 * not kept after the read
+			 */
+			bool ec_unprotected_recovery;
 		} ci_ec;
 		struct cl_setattr_io {
 			struct ost_lvb		 sa_attr;
@@ -2262,6 +2274,7 @@ void cl_page_slice_add(struct cl_page *page, struct cl_page_slice *slice,
 void cl_lock_slice_add(struct cl_lock *lock, struct cl_lock_slice *slice,
 		       struct cl_object *obj,
 		       const struct cl_lock_operations *ops);
+int cl_lock_to_placeholder(const struct lu_env *env, struct cl_lock *lock);
 void cl_io_slice_add(struct cl_io *io, struct cl_io_slice *slice,
 		     struct cl_object *obj, const struct cl_io_operations *ops);
 
