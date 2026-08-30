@@ -374,13 +374,15 @@ lnet_net_alloc(__u32 net_id, struct list_head *net_list)
 
 int lnet_ni_add_interface(struct lnet_ni *ni, char *iface)
 {
-	size_t iface_len = strlen(iface) + 1;
+	size_t iface_len;
 
 	if (ni == NULL)
 		return -ENOMEM;
 
 	if (!iface || !strlen(iface))
 		return -EINVAL;
+
+	iface_len = strlen(iface) + 1;
 
 	if (ni->ni_interface && strlen(ni->ni_interface)) {
 		LCONSOLE_ERROR("%s: interface %s already set for net %s: rc = %d\n",

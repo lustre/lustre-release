@@ -1289,6 +1289,7 @@ lnet_find_best_lpni(struct lnet_ni *lni, struct lnet_nid *dst_nid,
 }
 
 /* Compare router peer NIs health, outstanding traffic, and available credits.
+ * Neither argument may be NULL.
  * \retval 1	If \lpni1 is the better peer NI
  * \retval -1	If \lpni2 is the better peer NI
  * \retval 0	If \lpni1 and lpni2 are equally good peer NIs
@@ -1298,12 +1299,6 @@ lnet_compare_gw_lpnis(struct lnet_peer_ni *lpni1, struct lnet_peer_ni *lpni2)
 {
 	int lpni1_healthv;
 	int lpni2_healthv;
-
-	if (lpni1 && !lpni2)
-		return 1;
-
-	if (!lpni1 && lpni2)
-		return -1;
 
 	lpni1_healthv = atomic_read(&lpni1->lpni_healthv);
 	lpni2_healthv = atomic_read(&lpni2->lpni_healthv);
@@ -1337,6 +1332,7 @@ lnet_compare_gw_lpnis(struct lnet_peer_ni *lpni1, struct lnet_peer_ni *lpni2)
 }
 
 /* Compare route UDSP, priorities, and hop counts.
+ * Only \r2, the incumbent best, may be NULL.
  * \retval 1	If \r1 is the better route
  * \retval -1	If \r2 is the better route
  * \retval 0	If \r1 and \r2 are equally good routes
@@ -1348,11 +1344,8 @@ lnet_compare_routes(struct lnet_route *r1, struct lnet_route *r2,
 	int r1_hops;
 	int r2_hops;
 
-	if (r1 && !r2)
+	if (!r2)
 		return 1;
-
-	if (!r1 && r2)
-		return -1;
 
 	CDEBUG(D_NET, "n:[%s, %s] u:[%s, %s] p:[%u, %u] h:[%u, %u]\n",
 	       libcfs_nidstr(&r1->lr_gateway->lp_primary_nid),
