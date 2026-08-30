@@ -25,10 +25,25 @@ ctags:
 	$(FIND_TAG_FILES_CMD) | xargs ctags $$CTAGSF -a
 
 
+#
+# autoMakefile carries automake's own cscope recipe, which this one would
+# override.  Define it only when autoMakefile was not read - the top-level
+# Makefile includes it before this file, so MAKEFILE_LIST already names it
+# here - or when cscope was asked for anyway.
+#
+
+ifeq (,$(filter autoMakefile, $(MAKEFILE_LIST)))
+CSCOPE_WANTED := yes
+else
+CSCOPE_WANTED := $(filter cscope, $(MAKECMDGOALS))
+endif
+
+ifneq (,$(CSCOPE_WANTED))
 cscope:
 	$(RM) cscope*.out cscope.files
 	$(FIND_TAG_FILES_CMD) > cscope.files
 	cscope -bRq
+endif
 
 
 mkid:
