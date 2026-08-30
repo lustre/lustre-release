@@ -1476,7 +1476,7 @@ static int llog_osd_open(const struct lu_env *env, struct llog_handle *handle,
 generate:
 		rc = local_object_fid_generate(env, los, &lgi->lgi_fid);
 		if (rc < 0)
-			GOTO(out, rc);
+			GOTO(out_name, rc);
 		new_id = true;
 	}
 	if (CFS_FAIL_PRECHECK(OBD_FAIL_MDS_LLOG_UMOUNT_RACE) &&
