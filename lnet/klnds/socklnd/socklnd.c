@@ -2204,7 +2204,7 @@ static int ksocknal_inet6addr_event(struct notifier_block *this,
 	struct inet6_ifaddr *ifa6 = ptr;
 	struct net *dev_netns = dev_net(ifa6->idev->dev);
 
-	CDEBUG(D_NET, "addr6event: status %s, device %s, ip addr %pISc, ns %p\n",
+	CDEBUG(D_NET, "addr6event: status %s, device %s, ip addr %pI6c, ns %p\n",
 		netdev_cmd_to_name(event), ifa6->idev->dev->name, &ifa6->addr,
 		dev_netns);
 

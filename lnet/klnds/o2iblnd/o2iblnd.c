@@ -3259,7 +3259,7 @@ static int kiblnd_inet6addr_event(struct notifier_block *this,
 {
 	struct inet6_ifaddr *ifa6 = ptr;
 
-	CDEBUG(D_NET, "addrevent: status %s ip addr %pISc\n",
+	CDEBUG(D_NET, "addrevent: status %s ip addr %pI6c\n",
 	       netdev_cmd_to_name(event), &ifa6->addr);
 
 	switch (event) {
