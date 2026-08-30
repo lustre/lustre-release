@@ -301,9 +301,6 @@ static int ldlm_lock_busy(struct ldlm_lock *lock)
 
 	ENTRY;
 
-	if (lock->l_export == NULL)
-		return 0;
-
 	spin_lock(&lock->l_export->exp_rpc_lock);
 	list_for_each_entry(req, &lock->l_export->exp_hp_rpcs,
 				rq_exp_list) {
@@ -853,11 +850,6 @@ static void ldlm_lock_reorder_req(struct ldlm_lock *lock)
 
 	ENTRY;
 
-	if (lock->l_export == NULL) {
-		LDLM_DEBUG(lock, "client lock: no-op");
-		RETURN_EXIT;
-	}
-
 	spin_lock(&lock->l_export->exp_rpc_lock);
 	list_for_each_entry(req, &lock->l_export->exp_hp_rpcs,
 			    rq_exp_list) {
@@ -984,7 +976,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 	if (obd_at_off(obd))
 		req->rq_timeout = ldlm_get_rq_timeout();
 
-	if (lock->l_export && lock->l_export->exp_nid_stats &&
+	if (lock->l_export->exp_nid_stats &&
 	    lock->l_export->exp_nid_stats->nid_ldlm_stats)
 		lprocfs_counter_incr(lock->l_export->exp_nid_stats->nid_ldlm_stats,
 				     LDLM_BL_CALLBACK - LDLM_FIRST_OPC);
@@ -1123,7 +1115,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 	}
 	unlock_res_and_lock(lock);
 
-	if (lock->l_export && lock->l_export->exp_nid_stats &&
+	if (lock->l_export->exp_nid_stats &&
 	    lock->l_export->exp_nid_stats->nid_ldlm_stats)
 		lprocfs_counter_incr(lock->l_export->exp_nid_stats->nid_ldlm_stats,
 				     LDLM_CP_CALLBACK - LDLM_FIRST_OPC);
@@ -1195,7 +1187,7 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
 
 	req->rq_interpret_reply = ldlm_cb_interpret;
 
-	if (lock->l_export && lock->l_export->exp_nid_stats) {
+	if (lock->l_export->exp_nid_stats) {
 		struct nid_stat *nid_stats = lock->l_export->exp_nid_stats;
 
 		lprocfs_counter_incr(nid_stats->nid_ldlm_stats,
