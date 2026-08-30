@@ -1534,9 +1534,6 @@ static void stats_free(struct kref *kref)
 	unsigned int percpusize;
 	unsigned int i;
 
-	if (!stats || stats->ls_num == 0)
-		return;
-
 	if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU)
 		num_entry = 1;
 	else
@@ -2881,9 +2878,6 @@ ssize_t checksum_type_show(struct kobject *kobj, struct attribute *attr,
 	ssize_t len = 0;
 	int i;
 
-	if (!obd)
-		return 0;
-
 	for (i = 0; cksum_name[i] != NULL; i++) {
 		if ((BIT(i) & obd->u.cli.cl_supp_cksum_types) == 0)
 			continue;
@@ -2907,9 +2901,6 @@ ssize_t checksum_type_store(struct kobject *kobj, struct attribute *attr,
 					      obd_kset.kobj);
 	int rc = -EINVAL;
 	int i;
-
-	if (!obd)
-		return 0;
 
 	for (i = 0; cksum_name[i] != NULL; i++) {
 		if (strcasecmp(buffer, cksum_name[i]) == 0) {

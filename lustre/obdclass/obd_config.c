@@ -2039,7 +2039,7 @@ int class_config_llog_handler(const struct lu_env *env,
 		 * [3]: inactive-on-startup
 		 * [4]: restrictive net
 		 */
-		if (cfg && cfg->cfg_sb && s2lsi(cfg->cfg_sb)) {
+		if (cfg->cfg_sb && s2lsi(cfg->cfg_sb)) {
 			struct lustre_sb_info *lsi = s2lsi(cfg->cfg_sb);
 			char *nidnet = lsi->lsi_lmd->lmd_nidnet;
 

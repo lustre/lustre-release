@@ -1524,7 +1524,7 @@ out_put:
 	else
 		dt_object_put(env, o);
 out_name:
-	OBD_FREE(handle->lgh_name, strlen(name) + 1);
+	OBD_FREE(handle->lgh_name, strlen(handle->lgh_name) + 1);
 out:
 	if (los != NULL)
 		dt_los_put(los);
