@@ -2117,8 +2117,6 @@ static int string_to_decimal(u64 *int_d, u64 *frac_d, u32 *frac_div,
 	/* parse integer */
 	if (*str != '.') {
 		rc = sscanf(str, "%llu%n", int_d, &len);
-		if (rc < 0)
-			return rc;
 		if (rc < 1 || !len || len > count)
 			return -EINVAL;
 		str += len;
@@ -2131,8 +2129,6 @@ static int string_to_decimal(u64 *int_d, u64 *frac_d, u32 *frac_div,
 	str++;
 	len++;
 	rc = sscanf(str, "%llu%n", frac_d, &frac_len);
-	if (rc < 0)
-		return rc;
 	if (rc < 1 || !frac_len)
 		return (len == 1) ? -EINVAL : len;
 
