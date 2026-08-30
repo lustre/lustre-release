@@ -1409,31 +1409,30 @@ int mdd_changelog_ns_store(const struct lu_env *env,
 	LASSERT(tname != NULL);
 	LASSERT(handle != NULL);
 
-	if (tname) {
-		OBD_ALLOC_PTR(ltname);
-		if (!ltname)
-			GOTO(out, rc = -ENOMEM);
+	OBD_ALLOC_PTR(ltname);
+	if (!ltname)
+		GOTO(out, rc = -ENOMEM);
 
-		if (sname) {
-			enc = info->mdi_tpattr.la_valid & LA_FLAGS &&
-				info->mdi_tpattr.la_flags & LUSTRE_ENCRYPT_FL;
-			tfid = (struct lu_fid *)sfid;
+	if (sname) {
+		enc = info->mdi_tpattr.la_valid & LA_FLAGS &&
+			info->mdi_tpattr.la_flags & LUSTRE_ENCRYPT_FL;
+		tfid = (struct lu_fid *)sfid;
+	} else {
+		enc = info->mdi_pattr.la_valid & LA_FLAGS &&
+			info->mdi_pattr.la_flags & LUSTRE_ENCRYPT_FL;
+		if (!target) {
+			/* this is lfs rm_entry with no target fid */
+			tfid = &info->mdi_fid2;
+			memset(tfid, 0, sizeof(*tfid));
 		} else {
-			enc = info->mdi_pattr.la_valid & LA_FLAGS &&
-				info->mdi_pattr.la_flags & LUSTRE_ENCRYPT_FL;
-			if (!target) {
-				/* this is lfs rm_entry with no target fid */
-				tfid = &info->mdi_fid2;
-				memset(tfid, 0, sizeof(*tfid));
-			} else {
-				tfid = (struct lu_fid *)mdd_object_fid(target);
-			}
+			tfid = (struct lu_fid *)mdd_object_fid(target);
 		}
-		rc = changelog_name2digest(tname->ln_name, tname->ln_namelen,
-					   tfid, enc, ltname);
-		if (rc)
-			GOTO(out_ltname, rc);
 	}
+	rc = changelog_name2digest(tname->ln_name, tname->ln_namelen,
+				   tfid, enc, ltname);
+	if (rc)
+		GOTO(out_ltname, rc);
+
 	if (sname) {
 		OBD_ALLOC_PTR(lsname);
 		if (!lsname)
@@ -1526,7 +1525,7 @@ out_lsname:
 		kfree(lsname->ln_name);
 	OBD_FREE_PTR(lsname);
 out_ltname:
-	if (ltname && ltname->ln_name != tname->ln_name)
+	if (ltname->ln_name != tname->ln_name)
 		kfree(ltname->ln_name);
 	OBD_FREE_PTR(ltname);
 out:
@@ -2556,7 +2555,7 @@ static int mdd_create_sanity_check(const struct lu_env *env,
 	}
 
 	if (S_ISDIR(cattr->la_mode) &&
-	    unlikely(spec != NULL && spec->sp_cr_flags & MDS_OPEN_HAS_EA) &&
+	    unlikely(spec->sp_cr_flags & MDS_OPEN_HAS_EA) &&
 	    spec->u.sp_ea.eadata != NULL && spec->u.sp_ea.eadatalen > 0) {
 		const struct lmv_user_md *lum = spec->u.sp_ea.eadata;
 		s32 stripe_count;

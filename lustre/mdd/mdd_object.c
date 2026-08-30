@@ -3806,7 +3806,7 @@ void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
 	/* For striped directory, give striping EA to lod_ah_init, which will
 	 * decide the stripe_offset and stripe count by it.
 	 */
-	if (S_ISDIR(attr->la_mode) && spec) {
+	if (S_ISDIR(attr->la_mode)) {
 		if (unlikely(spec->sp_cr_flags & MDS_OPEN_HAS_EA)) {
 			hint->dah_eadata = spec->u.sp_ea.eadata;
 			hint->dah_eadata_len = spec->u.sp_ea.eadatalen;
