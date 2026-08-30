@@ -2511,8 +2511,8 @@ retry:
 	if (IS_ERR(tgt))
 		RETURN(PTR_ERR(tgt));
 
-	CDEBUG(D_INODE, "GETATTR_NAME for %*s on "DFID" -> mds #%d\n",
-		(int)op_data->op_namelen, op_data->op_name,
+	CDEBUG(D_INODE, "GETATTR_NAME for "DNAME" on "DFID" -> mds #%u\n",
+		encode_fn_opdata(op_data),
 		PFID(&op_data->op_fid1), tgt->ltd_index);
 
 	rc = md_getattr_name(tgt->ltd_exp, op_data, preq);
@@ -2603,9 +2603,9 @@ static int lmv_link(struct obd_export *exp, struct md_op_data *op_data,
 
 	LASSERT(op_data->op_namelen != 0);
 
-	CDEBUG(D_INODE, "LINK "DFID":%*s to "DFID"\n",
-	       PFID(&op_data->op_fid2), (int)op_data->op_namelen,
-	       op_data->op_name, PFID(&op_data->op_fid1));
+	CDEBUG(D_INODE, "LINK "DFID":"DNAME" to "DFID"\n",
+	       PFID(&op_data->op_fid2), encode_fn_opdata(op_data),
+	       PFID(&op_data->op_fid1));
 
 	op_data->op_fsuid = from_kuid(&init_user_ns, current_fsuid());
 	op_data->op_fsgid = from_kgid(&init_user_ns, current_fsgid());
