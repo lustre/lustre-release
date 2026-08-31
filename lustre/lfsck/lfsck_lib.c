@@ -3874,7 +3874,7 @@ void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
 	LASSERT(ltds->ltd_tgtnr > 0);
 
 	ltds->ltd_tgtnr--;
-	set_bit(index, ltds->ltd_tgts_bitmap);
+	clear_bit(index, ltds->ltd_tgts_bitmap);
 	lfsck_assign_tgt(ltds, NULL, index);
 
 unlock:
