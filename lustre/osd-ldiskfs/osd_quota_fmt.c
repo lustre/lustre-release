@@ -61,7 +61,7 @@ static ssize_t quota_read_blk(const struct lu_env *env,
 		 "type=%d\n", type);
 
 	ret = sb->s_op->quota_read(sb, type, buf, LUSTRE_DQBLKSIZE,
-				   blk << LUSTRE_DQBLKSIZE_BITS);
+				   (loff_t)blk << LUSTRE_DQBLKSIZE_BITS);
 
 	/* Reading past EOF just returns a block of zeros */
 	if (ret == -EBADR)
@@ -126,7 +126,7 @@ static loff_t find_block_dqentry(const struct lu_env *env,
 		ret = 0;
 		GOTO(out_buf, ret);
 	} else {
-		ret = (blk << LUSTRE_DQBLKSIZE_BITS) +
+		ret = ((loff_t)blk << LUSTRE_DQBLKSIZE_BITS) +
 		      sizeof(struct lustre_disk_dqdbheader) + i * dqblk_sz;
 
 		if (it) {
@@ -259,7 +259,7 @@ int walk_block_dqentry(const struct lu_env *env, struct osd_object *obj,
 
 		it->oiq_blk[LUSTRE_DQTREEDEPTH] = blk;
 		it->oiq_id = le32_to_cpu(ddquot[i].dqb_id);
-		it->oiq_offset = (blk << LUSTRE_DQBLKSIZE_BITS) +
+		it->oiq_offset = ((loff_t)blk << LUSTRE_DQBLKSIZE_BITS) +
 				  sizeof(struct lustre_disk_dqdbheader) +
 				  i * dqblk_sz;
 		it->oiq_index[LUSTRE_DQTREEDEPTH] = i;
