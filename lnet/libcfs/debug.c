@@ -460,7 +460,7 @@ static void libcfs_run_debug_log_upcall(char *file)
 /**
  * Dump Lustre log to ::debug_file_path by calling tracefile_dump_all_pages()
  */
-static void libcfs_debug_dumplog_internal(void *arg)
+static void libcfs_debug_dumplog_internal(pid_t pid)
 {
 	static time64_t last_dump_time;
 	time64_t current_time;
@@ -471,8 +471,8 @@ static void libcfs_debug_dumplog_internal(void *arg)
 	    current_time > last_dump_time) {
 		last_dump_time = current_time;
 		snprintf(debug_file_name, sizeof(debug_file_name) - 1,
-			 "%s.%lld.%ld", libcfs_debug_file_path,
-			 (s64)current_time, (uintptr_t)arg);
+			 "%s.%lld.%d", libcfs_debug_file_path,
+			 (s64)current_time, pid);
 		pr_alert("LustreError: dumping log to %s\n", debug_file_name);
 		cfs_tracefile_dump_all_pages(debug_file_name);
 		libcfs_run_debug_log_upcall(debug_file_name);
@@ -481,7 +481,7 @@ static void libcfs_debug_dumplog_internal(void *arg)
 
 static int libcfs_debug_dumplog_thread(void *arg)
 {
-	libcfs_debug_dumplog_internal(arg);
+	libcfs_debug_dumplog_internal((pid_t)(uintptr_t)arg);
 	complete(&debug_complete);
 	return 0;
 }
@@ -505,7 +505,7 @@ void libcfs_debug_dumplog(void)
 	 */
 	reinit_completion(&debug_complete);
 	dumper = kthread_run(libcfs_debug_dumplog_thread,
-			     (void *)(long)current->pid,
+			     (void *)(uintptr_t)current->pid,
 			     "libcfs_debug_dumper");
 	if (IS_ERR(dumper))
 		pr_err("LustreError: cannot start log dump thread: rc = %ld\n",
@@ -562,7 +562,7 @@ static int panic_notifier(struct notifier_block *self, unsigned long unused1,
 	if (in_interrupt()) {
 		cfs_trace_debug_print();
 	} else {
-		libcfs_debug_dumplog_internal((void *)(long)current->pid);
+		libcfs_debug_dumplog_internal(current->pid);
 	}
 #endif
 	return 0;
