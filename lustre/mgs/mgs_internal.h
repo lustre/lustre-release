@@ -331,11 +331,9 @@ struct mgs_direntry {
 static inline void mgs_direntry_free(struct mgs_direntry *de)
 {
 	LASSERT(list_empty(&de->mde_list));
-	if (de) {
-		LASSERT(de->mde_len);
-		OBD_FREE(de->mde_name, de->mde_len);
-		OBD_FREE_PTR(de);
-	}
+	LASSERT(de->mde_len);
+	OBD_FREE(de->mde_name, de->mde_len);
+	OBD_FREE_PTR(de);
 }
 
 static inline struct mgs_direntry *mgs_direntry_alloc(int len)
