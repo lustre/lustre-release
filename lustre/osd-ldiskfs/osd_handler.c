@@ -2859,14 +2859,13 @@ static int osd_commit_async(const struct lu_env *env,
  */
 static int osd_ro(const struct lu_env *env, struct dt_device *d)
 {
-	struct super_block *sb = osd_sb(osd_dt_dev(d));
-	struct block_device *dev = sb->s_bdev;
+	struct osd_device *osd = osd_dt_dev(d);
 	int rc = -EOPNOTSUPP;
 
 	ENTRY;
 
-	CERROR("%s: %lx CANNOT BE SET READONLY: rc = %d\n",
-	       osd_dt_dev(d)->od_svname, (long)dev, rc);
+	CERROR("%s: device %s CANNOT BE SET READONLY: rc = %d\n",
+	       osd->od_svname, osd->od_mntdev, rc);
 
 	RETURN(rc);
 }
