@@ -212,21 +212,18 @@ setup_pcc_mapping() {
 umount_loopdev() {
 	local facet=$1
 	local mntpt=$2
-	local rc
+	local rc=0
 	local i
 
+	# retry: the mount may be held briefly by the exiting copytool
+	# or by kernel-side PCC references on the backend mount
 	for ((i = 0; i < 10; i++)); do
-		if do_facet $facet lsof $mntpt; then
-			echo "$mntpt is busy, wait 1 second..."
-			sleep 1
-		else
-			echo "$mntpt is idle now"
-			break
-		fi
+		do_facet $facet $UMOUNT $mntpt && return 0
+		rc=$?
+		sleep 1
 	done
 
-	do_facet $facet $UMOUNT $mntpt
-	rc=$?
+	echo "$mntpt is still busy after $i attempts"
 	return $rc
 }
 
