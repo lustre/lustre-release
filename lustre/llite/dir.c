@@ -1851,6 +1851,8 @@ static int ll_rmfid(struct file *file, void __user *arg)
 	/* DoS protection */
 	if (nr > OBD_MAX_FIDS_IN_ARRAY)
 		RETURN(-E2BIG);
+	if (nr == 0)
+		RETURN(0);
 
 	size = offsetof(struct fid_array, fa_fids[nr]);
 	OBD_ALLOC(lfa, size);
@@ -1862,6 +1864,9 @@ static int ll_rmfid(struct file *file, void __user *arg)
 
 	if (copy_from_user(lfa, arg, size))
 		GOTO(free_rcs, rc = -EFAULT);
+	/* fa_nr was just fetched a second time, it shouldn't change */
+	if (lfa->fa_nr != nr)
+		GOTO(free_rcs, rc = -EAGAIN);
 
 	/* In case of subdirectory mount, we need to make sure all the files
 	 * for which we want to remove FID are visible in the namespace.
@@ -1936,7 +1941,7 @@ static int ll_rmfid(struct file *file, void __user *arg)
 		lfa = lfa_new;
 	}
 	if (lfa->fa_nr == 0)
-		GOTO(free_rcs, rc = rcs[nr - 1]);
+		GOTO(free_lfa_new, rc = rcs[nr - 1]);
 
 	/* Call mdc_iocontrol */
 	rc = md_rmfid(ll_i2mdexp(file_inode(file)), lfa, rcs, NULL);
