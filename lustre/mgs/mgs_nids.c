@@ -828,7 +828,7 @@ enum {
 	IR_MDT     = 2
 };
 
-static int delogname(char *logname, char *fsname, int *typ)
+static int delogname(char *logname, char *fsname, size_t fsname_size, int *typ)
 {
 	char *ptr;
 	int type;
@@ -850,7 +850,7 @@ static int delogname(char *logname, char *fsname, int *typ)
 		return -EINVAL;
 
 	len = ptr - logname;
-	if (len == 0)
+	if (len == 0 || len >= fsname_size)
 		return -EINVAL;
 
 	memcpy(fsname, logname, len);
@@ -875,7 +875,7 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 	struct mgs_config_body *body;
 	struct mgs_config_res *res;
 	struct ptlrpc_bulk_desc *desc;
-	char fsname[16];
+	char fsname[LUSTRE_MAXFSNAME + 1];
 	long bufsize;
 	int unit_size;
 	int type;
@@ -895,7 +895,8 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 	if (body->mcb_type != MGS_CFG_T_RECOVER)
 		RETURN(-EINVAL);
 
-	rc = delogname(body->mcb_name, fsname, &type);
+	body->mcb_name[sizeof(body->mcb_name) - 1] = '\0';
+	rc = delogname(body->mcb_name, fsname, sizeof(fsname), &type);
 	if (rc)
 		RETURN(rc);
 
