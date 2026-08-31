@@ -399,16 +399,8 @@ static bool check_privs_for_op(struct lu_nodemap *nodemap,
  */
 static bool nodemap_name_is_valid(const char *name)
 {
-	if (strlen(name) > LUSTRE_NODEMAP_NAME_LENGTH ||
-	    strlen(name) == 0)
-		return false;
-
-	for (; *name != '\0'; name++) {
-		if (!isalnum(*name) && *name != '_')
-			return false;
-	}
-
-	return true;
+	return class_name_validate(name, "_", LUSTRE_NODEMAP_NAME_LENGTH,
+				   NULL) == 0;
 }
 
 /**

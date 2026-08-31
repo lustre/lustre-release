@@ -1402,8 +1402,7 @@ static int lqa_parse_args(struct obd_device *obd, struct obd_ioctl_data *data,
 			  char **lqa, __u32 *start, __u32 *end)
 {
 	__u32 cmd = data->ioc_command;
-	int lqalen, rc;
-	char *c;
+	int rc;
 
 	if (data->ioc_inlbuf1 && data->ioc_inllen1 &&
 	    data->ioc_inllen1 <= LQA_NAME_MAX + 1)
@@ -1412,22 +1411,16 @@ static int lqa_parse_args(struct obd_device *obd, struct obd_ioctl_data *data,
 	if (!*lqa)
 		return cmd == LQA_LIST ? 0 : -EINVAL;
 
-	lqalen = strnlen(*lqa, LQA_NAME_MAX + 1);
-	if (!lqalen || lqalen == LQA_NAME_MAX + 1) {
-		rc = -ENAMETOOLONG;
-		CERROR("%s: lqa name is larger than maximum %d: rc = %d\n",
-		       obd->obd_name, LQA_NAME_MAX, rc);
-		return rc;
-	}
-	for (c = *lqa; *c != '\0'; c++) {
-		if (isalnum(*c) || *c == '_')
-			continue;
+	if (!memchr(*lqa, '\0', data->ioc_inllen1)) {
 		rc = -EINVAL;
-		CERROR("%s: lqa name '%.*s' has illegal character '%c'(0x%02x): rc = %d\n",
-		       obd->obd_name, LQA_NAME_MAX, *lqa,
-		       isprint(*c) ? *c : ' ', *c, rc);
+		CERROR("%s: LQA name in %u byte buffer is not terminated: rc = %d\n",
+		       obd->obd_name, data->ioc_inllen1, rc);
 		return rc;
 	}
+
+	rc = class_name_verify(obd->obd_name, *lqa, "_", LQA_NAME_MAX, "LQA");
+	if (rc)
+		return rc;
 
 	if (cmd == LQA_ADD || cmd == LQA_REM) {
 		*start = (__u32)data->ioc_u32_1;

@@ -2540,20 +2540,10 @@ static void nrs_tbf_cmd_fini(struct nrs_tbf_cmd *cmd)
 
 static int check_rule_name(const char *name)
 {
-	int i;
+	int rc = class_name_validate(name, "_", MAX_TBF_NAME - 1, NULL);
 
-	if (name[0] == '\0')
-		return -EINVAL;
-
-	for (i = 0; name[i] != '\0' && i < MAX_TBF_NAME; i++) {
-		if (!isalnum(name[i]) && name[i] != '_')
-			return -EINVAL;
-	}
-
-	if (i == MAX_TBF_NAME)
-		return -ENAMETOOLONG;
-
-	return 0;
+	/* an empty rule name is a syntax error, not a missing object */
+	return rc == -ENXIO ? -EINVAL : rc;
 }
 
 static int

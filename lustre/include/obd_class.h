@@ -221,6 +221,11 @@ int class_parse_nid_quiet(char *buf, struct lnet_nid *nid, char **endh);
 int class_parse_net(char *buf, u32 *net, char **endh);
 int class_match_nid(char *buf, char *key, struct lnet_nid *nid);
 int class_match_net(char *buf, char *key, u32 net);
+int class_name_validate(const char *name, const char *extra_chars,
+			unsigned int maxlen, const char **bad_char);
+int class_name_verify(const char *devname, const char *name,
+		      const char *extra_chars, unsigned int maxlen,
+		      const char *type);
 
 struct obd_device *class_incref(struct obd_device *obd,
 				const char *scope, const void *source);

@@ -15,6 +15,7 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <linux/ctype.h>
 #include <linux/delay.h>
 #include <linux/kobject.h>
 #include <linux/string.h>
@@ -590,6 +591,90 @@ int class_parse_net(char *buf, __u32 *net, char **endh)
 	return class_parse_value(buf, CLASS_PARSE_NET, (void *)net, endh, 0);
 }
 EXPORT_SYMBOL(class_parse_net);
+
+/**
+ * class_name_validate() - check a name for allowed characters and length
+ * @name: name to check.  The scan stops at the first NUL, so only a caller
+ *	  whose buffer may not hold one has to keep @maxlen + 1 bytes readable
+ * @extra_chars: characters allowed besides alphanumeric ones, or NULL
+ * @maxlen: maximum number of characters allowed in @name
+ * @bad_char: if not NULL, is set to point at the first bad character on -EINVAL
+ *
+ * Kernel counterpart of the userspace llapi_name_validate(), with the same
+ * arguments plus @bad_char, the same @extra_chars and the same return codes,
+ * so that a name the utilities accept is always accepted here.  isalnum() is
+ * Latin-1 in the kernel and ASCII only in the C locale the utilities run in,
+ * so this side stays the more permissive of the two on purpose: names written
+ * by earlier versions have to keep loading.
+ *
+ * Return:
+ * * %0			@name is usable
+ * * %-ENXIO		@name is NULL or empty
+ * * %-EINVAL		@name has a character outside the allowed set
+ * * %-ENAMETOOLONG	@name is longer than @maxlen characters
+ */
+int class_name_validate(const char *name, const char *extra_chars,
+			unsigned int maxlen, const char **bad_char)
+{
+	unsigned int len = 0;
+
+	if (!name || !*name)
+		return -ENXIO;
+
+	if (!extra_chars)
+		extra_chars = "";
+
+	while (*name && len < maxlen) {
+		if (!isalnum(*name) && !strchr(extra_chars, *name)) {
+			if (bad_char)
+				*bad_char = name;
+			return -EINVAL;
+		}
+		name++;
+		len++;
+	}
+
+	return *name ? -ENAMETOOLONG : 0;
+}
+EXPORT_SYMBOL(class_name_validate);
+
+/**
+ * class_name_verify() - validate a name and report why it was rejected
+ * @devname: device name to prefix the message with
+ * @name: name to check, with the same reachability rule as
+ *	  class_name_validate(): the message never reads further than the scan
+ * @extra_chars: characters allowed besides alphanumeric ones, or NULL
+ * @maxlen: maximum number of characters allowed in @name
+ * @type: what @name names, for the message
+ *
+ * Return: the class_name_validate() return code
+ */
+int class_name_verify(const char *devname, const char *name,
+		      const char *extra_chars, unsigned int maxlen,
+		      const char *type)
+{
+	const char *bad_char = NULL;
+	int rc;
+
+	rc = class_name_validate(name, extra_chars, maxlen, &bad_char);
+	if (rc == -ENXIO) {
+		CERROR("%s: %s name must be 1-%u characters: rc = %d\n",
+		       devname, type, maxlen, rc);
+	} else if (rc == -ENAMETOOLONG) {
+		CERROR("%s: %s name '%.*s' is longer than %u characters: rc = %d\n",
+		       devname, type, (int)maxlen, name, maxlen, rc);
+	} else if (rc == -EINVAL) {
+		unsigned char bad = *bad_char;
+
+		CERROR("%s: %s name '%.*s' has illegal character '%c'(0x%02x) at offset %d: rc = %d\n",
+		       devname, type, (int)(bad_char - name), name,
+		       isascii(bad) && isprint(bad) ? bad : ' ', bad,
+		       (int)(bad_char - name), rc);
+	}
+
+	return rc;
+}
+EXPORT_SYMBOL(class_name_verify);
 
 /*
  * 1 param contains key and match
