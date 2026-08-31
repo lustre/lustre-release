@@ -1081,6 +1081,7 @@ ksocknal_process_receive(struct ksock_conn *conn)
 	struct kvec *kvec = conn->ksnc_rx_iov_space;
 	struct lnet_processid *id;
 	struct lnet_hdr hdr;
+	u8 rx_state;
 	int rc;
 
 	LASSERT(refcount_read(&conn->ksnc_conn_refcount) > 0);
@@ -1226,11 +1227,14 @@ ksocknal_process_receive(struct ksock_conn *conn)
 			return -EPROTO;
 		}
 
-		/* I'm racing with ksocknal_recv() */
-		LASSERT(conn->ksnc_rx_state == SOCKNAL_RX_PARSE ||
-			conn->ksnc_rx_state == SOCKNAL_RX_LNET_PAYLOAD);
+		/* I'm racing with ksocknal_recv().  Acquire its receive tuple
+		 * when it publishes SOCKNAL_RX_LNET_PAYLOAD.
+		 */
+		rx_state = smp_load_acquire(&conn->ksnc_rx_state);
+		LASSERT(rx_state == SOCKNAL_RX_PARSE ||
+			rx_state == SOCKNAL_RX_LNET_PAYLOAD);
 
-		if (conn->ksnc_rx_state != SOCKNAL_RX_LNET_PAYLOAD)
+		if (rx_state != SOCKNAL_RX_LNET_PAYLOAD)
 			return 0;
 
 		/* ksocknal_recv() got called */
@@ -1329,7 +1333,8 @@ ksocknal_recv(struct lnet_ni *ni, void *private, struct lnet_msg *msg,
 		break;
 	}
 
-	conn->ksnc_rx_state = SOCKNAL_RX_LNET_PAYLOAD;
+	/* Publish the complete receive tuple to ksocknal_process_receive(). */
+	smp_store_release(&conn->ksnc_rx_state, SOCKNAL_RX_LNET_PAYLOAD);
 
 	spin_unlock_bh(&sched->kss_lock);
 	ksocknal_conn_decref(conn);
