@@ -295,7 +295,7 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock,
 	struct mdt_device *mdt;
 	struct lu_env *env;
 	struct lu_fid *fid;
-	struct mdt_object *obj = NULL;
+	struct mdt_object *obj;
 	struct md_object *child = NULL;
 	int rc;
 	ENTRY;
@@ -398,8 +398,7 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock,
 	}
 
 out_put:
-	if (obj != NULL && !IS_ERR(obj))
-		mdt_object_put(env, obj);
+	mdt_object_put(env, obj);
 out:
 	if (rc < 0 && rc != -ERANGE)
 		rc = 0;
