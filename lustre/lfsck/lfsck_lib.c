@@ -3832,7 +3832,8 @@ void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
 {
 	struct lfsck_instance *lfsck;
 	struct lfsck_tgt_descs *ltds;
-	struct lfsck_tgt_desc *ltd;
+	struct lfsck_tgt_desc *ltd = NULL;
+	struct lfsck_tgt_desc *tmp;
 	struct list_head *head;
 
 	if (for_ost)
@@ -3841,17 +3842,16 @@ void lfsck_del_target(const struct lu_env *env, struct dt_device *key,
 		head = &lfsck_mdt_orphan_list;
 
 	spin_lock(&lfsck_instance_lock);
-	list_for_each_entry(ltd, head, ltd_orphan_list) {
-		if (ltd->ltd_tgt == tgt) {
-			list_del_init(&ltd->ltd_orphan_list);
+	list_for_each_entry(tmp, head, ltd_orphan_list) {
+		if (tmp->ltd_tgt == tgt) {
+			list_del_init(&tmp->ltd_orphan_list);
 			spin_unlock(&lfsck_instance_lock);
-			kref_put(&ltd->ltd_ref, lfsck_tgt_free);
+			kref_put(&tmp->ltd_ref, lfsck_tgt_free);
 
 			return;
 		}
 	}
 
-	ltd = NULL;
 	lfsck = __lfsck_instance_find(key, true, false);
 	spin_unlock(&lfsck_instance_lock);
 	if (unlikely(lfsck == NULL))
@@ -3885,9 +3885,10 @@ unlock:
 		else
 			head = &lfsck->li_mdt_descs.ltd_orphan;
 
-		list_for_each_entry(ltd, head, ltd_orphan_list) {
-			if (ltd->ltd_tgt == tgt) {
-				list_del_init(&ltd->ltd_orphan_list);
+		list_for_each_entry(tmp, head, ltd_orphan_list) {
+			if (tmp->ltd_tgt == tgt) {
+				list_del_init(&tmp->ltd_orphan_list);
+				ltd = tmp;
 				break;
 			}
 		}
