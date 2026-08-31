@@ -85,6 +85,7 @@ static bool ofd_intent_cb(struct ldlm_lock *lock, struct ofd_intent_args *arg)
 {
 	__u64			  size = arg->size;
 	struct ldlm_glimpse_work *gl_work = NULL;
+	struct ldlm_glimpse_work *pos;
 	bool rc;
 
 	/* If the interval is lower than the current file size, just break. */
@@ -119,8 +120,8 @@ static bool ofd_intent_cb(struct ldlm_lock *lock, struct ofd_intent_args *arg)
 	 * an active lock, we can stop glimpsing.  So keep the rc set in the
 	 * check above.)
 	 */
-	list_for_each_entry(gl_work, &arg->gl_list, gl_list) {
-		if (gl_work->gl_lock->l_export == lock->l_export)
+	list_for_each_entry(pos, &arg->gl_list, gl_list) {
+		if (pos->gl_lock->l_export == lock->l_export)
 			GOTO(out, rc);
 	}
 
