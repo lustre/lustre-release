@@ -2622,6 +2622,7 @@ kefalnd_destroy_cqs(struct kefa_dev *efa_dev)
 		}
 
 		LIBCFS_FREE(efa_dev->cqs, efa_dev->ncqs * sizeof(*efa_dev->cqs));
+		efa_dev->cqs = NULL;
 	}
 
 	if (efa_dev->cm_cq) {
@@ -2631,6 +2632,7 @@ kefalnd_destroy_cqs(struct kefa_dev *efa_dev)
 		}
 
 		LIBCFS_FREE(efa_dev->cm_cq, sizeof(*efa_dev->cm_cq));
+		efa_dev->cm_cq = NULL;
 	}
 }
 
