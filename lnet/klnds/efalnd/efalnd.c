@@ -2597,7 +2597,7 @@ kefalnd_create_cq(struct kefa_dev *efa_dev, struct kefa_cq *cq, int cq_depth)
 	if (IS_ERR(ib_cq)) {
 		EFA_DEV_ERR(efa_dev, "can't create CQ. err[%ld]\n",
 			    PTR_ERR(ib_cq));
-		return IS_ERR(ib_cq);
+		return PTR_ERR(ib_cq);
 	}
 
 	cq->cpt = efa_dev->cpt;
