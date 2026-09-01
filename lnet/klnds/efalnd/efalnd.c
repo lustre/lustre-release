@@ -2464,11 +2464,13 @@ kefalnd_destroy_qps(struct kefa_dev *efa_dev)
 			kefalnd_destroy_qp(&efa_dev->qps[i]);
 
 		LIBCFS_FREE(efa_dev->qps, efa_dev->nqps * sizeof(*efa_dev->qps));
+		efa_dev->qps = NULL;
 	}
 
 	if (efa_dev->cm_qp) {
 		kefalnd_destroy_qp(efa_dev->cm_qp);
 		LIBCFS_FREE(efa_dev->cm_qp, sizeof(*efa_dev->cm_qp));
+		efa_dev->cm_qp = NULL;
 	}
 }
 
