@@ -265,8 +265,8 @@ ldt_name
 ldt_ops
 	is the vector of lu_device_type operations, please see below for
 	further details
-ldt_ctxt_type
-	is the lu_context_tag to be used for operations.
+ldt_ctx_tags
+	is a set of lu_context_tag values to be used for operations.
 	This should be set to LCT_LOCAL for OSDs.
 
 In the original 2.0 MDS stack the devices were built from the top down and OSD
