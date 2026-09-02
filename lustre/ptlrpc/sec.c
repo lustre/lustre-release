@@ -690,6 +690,48 @@ void req_off_ctx_list(struct ptlrpc_request *req, struct ptlrpc_cli_ctx *ctx)
 	spin_unlock(&ctx->cc_lock);
 }
 
+/*
+ * There are two different families of ctx nego failures, either the target
+ * refused the credentials (rpc_err = EACCES), or transient RPC/GSS errors
+ * can occur and very likely being caused by a target failover.
+ */
+static bool gss_ctx_err_is_transient(struct ptlrpc_cli_ctx *ctx)
+{
+	struct gss_cli_ctx *gctx;
+
+	if (SPTLRPC_FLVR_POLICY(ctx->cc_sec->ps_flvr.sf_rpc) !=
+	    SPTLRPC_POLICY_GSS)
+		return false;
+
+	gctx = ctx2gctx(ctx);
+	if (gctx->gc_rpc_err)
+		return gctx->gc_rpc_err != -EACCES &&
+		       gctx->gc_rpc_err != -ENOKEY;
+
+	return GSS_ROUTINE_ERROR(gctx->gc_gss_err) == GSS_S_NO_CONTEXT;
+}
+
+/*
+ * Retry as long as a target failover is expected to complete.
+ * Also stop if the import is disabled or the thread is being killed.
+ */
+static bool ctx_refresh_retry_ok(struct ptlrpc_request *req,
+				 time64_t *deadline)
+{
+	if (test_bit(IMPF_DEACTIVE, req->rq_import->imp_flags))
+		return false;
+
+	if (fatal_signal_pending(current))
+		return false;
+
+	if (!*deadline) {
+		*deadline = ktime_get_seconds() + OBD_RECOVERY_TIME_SOFT;
+		return true;
+	}
+
+	return ktime_get_seconds() < *deadline;
+}
+
 /**
  * sptlrpc_req_refresh_ctx() - refresh the context of @req, if not up-to-date.
  * @req: Request to drop context
@@ -710,6 +752,7 @@ int sptlrpc_req_refresh_ctx(struct ptlrpc_request *req, long timeout)
 {
 	struct ptlrpc_cli_ctx *ctx = req->rq_cli_ctx;
 	struct ptlrpc_sec *sec;
+	time64_t ctx_retry_deadline = 0;
 	int rc;
 
 	ENTRY;
@@ -765,8 +808,8 @@ again:
 			goto again;
 		}
 		if (timeout == MAX_SCHEDULE_TIMEOUT &&
-		    GSS_ROUTINE_ERROR(ctx2gctx(ctx)->gc_gss_err) ==
-		    GSS_S_NO_CONTEXT) {
+		    gss_ctx_err_is_transient(ctx) &&
+		    ctx_refresh_retry_ok(req, &ctx_retry_deadline)) {
 			/* Context is in error, but if MAX_SCHEDULE_TIMEOUT
 			 * this is very likely when verifying ctx upon a lock
 			 * coverage verification and thus being transient
@@ -774,12 +817,20 @@ again:
 			 * so try to refresh it !
 			 */
 			CDEBUG(D_SEC,
-			       "ctx is in error (%p, fl %lx), trying to refresh it\n",
-			       ctx, ctx->cc_flags);
+			       "ctx is in error (%p, fl %lx, gss err %#x/rpc err %d), trying to refresh it\n",
+			       ctx, ctx->cc_flags, ctx2gctx(ctx)->gc_gss_err,
+			       ctx2gctx(ctx)->gc_rpc_err);
 			clear_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags);
 			sptlrpc_sec_put(sec);
+			/* do not busy loop */
+			schedule_timeout_uninterruptible(cfs_time_seconds(1));
 			goto again;
 		}
+		if (ctx_retry_deadline)
+			CWARN("%s: stop refreshing ctx in error (%p, fl %lx, gss err %#x/rpc err %d).\n",
+			      req->rq_import->imp_obd->obd_name, ctx,
+			      ctx->cc_flags, ctx2gctx(ctx)->gc_gss_err,
+			      ctx2gctx(ctx)->gc_rpc_err);
 		spin_lock(&req->rq_lock);
 		req->rq_err = 1;
 		spin_unlock(&req->rq_lock);

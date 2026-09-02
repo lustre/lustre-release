@@ -1857,6 +1857,7 @@ int gss_kt_update(struct key *key, struct key_preparsed_payload *prep)
 		       nego_rpc_err, nego_gss_err);
 
 		gctx->gc_gss_err = nego_gss_err;
+		gctx->gc_rpc_err = nego_rpc_err;
 
 		rc = nego_rpc_err ? nego_rpc_err : -EACCES;
 	} else {
