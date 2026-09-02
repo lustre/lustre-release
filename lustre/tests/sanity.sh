@@ -14788,6 +14788,35 @@ test_102t() {
 }
 run_test 102t "zero length xattr values handled correctly"
 
+test_102u() {
+	[[ -n "$(which setfattr 2>/dev/null)" ]] ||
+		skip "could not find setfattr"
+
+	local testfile=$DIR/$tfile
+
+	touch $testfile || error "touch $testfile failed"
+	chown $RUNAS_ID:$RUNAS_GID $testfile || error "chown $testfile failed"
+
+	setfattr -x trusted.lov.$tfile $testfile
+	setfattr -x trusted.lmv $testfile
+	$RUNAS setfattr -x lustre.lov.$tfile $testfile
+	$RUNAS setfattr -x lustre.lmv $testfile
+	$RUNAS setfattr -n lustre.lov.$tfile $testfile
+	$RUNAS setfattr -n lustre.lmv $testfile
+	$RUNAS setfattr -n lustre.lov.$tfile -v 0x0bd10bd0 $testfile
+	$RUNAS setfattr -n lustre.lov.$tfile -v 0x0bd60bd0 $testfile
+	$RUNAS setfattr -n lustre.lmv -v 0x0cd30cd0 $testfile
+
+	local oi="00000000000000000000000000000000"
+
+	$RUNAS setfattr -n lustre.lov.$tfile \
+		-v 0x0bd10bd000000001${oi}0010000000010000 $testfile
+
+	stat $testfile || error "stat $testfile failed"
+	rm -f $testfile
+}
+run_test 102u "malformed lustre.lov.*/lmv xattrs should not crash the client"
+
 run_acl_subtest()
 {
 	local test=$LUSTRE/tests/acl/$1.test

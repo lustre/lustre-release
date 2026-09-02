@@ -417,11 +417,18 @@ static int ll_xattr_set(const struct xattr_handler *handler,
 		goto out;
 	}
 
-	if (strncmp(name, "lov.", 4) == 0 &&
+	if (value && strncmp(name, "lov.", 4) == 0 &&
+	    size >= sizeof(struct lov_user_md) &&
 	    (__swab32(((struct lov_user_md *)value)->lmm_magic) &
-	    le32_to_cpu(LOV_MAGIC_MASK)) == le32_to_cpu(LOV_MAGIC_MAGIC))
+	    le32_to_cpu(LOV_MAGIC_MASK)) == le32_to_cpu(LOV_MAGIC_MAGIC)) {
+#ifdef __BIG_ENDIAN
 		lustre_swab_lov_user_md((struct lov_user_md *)value, 0);
-	else if (strcmp(name, "lmv") == 0) {
+#else
+		rc = -EINVAL;
+		goto out;
+#endif
+	} else if (value && strcmp(name, "lmv") == 0 &&
+		   size >= sizeof(struct lmv_user_md)) {
 		struct lmv_user_md *lmu = (struct lmv_user_md *)value;
 
 		/* sanity 102n setxattr(lmv) with garbage, but it expects
