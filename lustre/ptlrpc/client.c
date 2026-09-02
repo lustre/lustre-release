@@ -939,10 +939,15 @@ int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
 
 out_ctx:
 	LASSERT(!request->rq_pool);
-	sptlrpc_cli_ctx_put(request->rq_cli_ctx, 1);
+	/* Also clears rq_cli_ctx, so ptlrpc_req_put() does not drop it */
+	sptlrpc_req_put_ctx(request, 1);
 out_free:
 	atomic_dec(&imp->imp_reqs);
 	class_import_put(imp);
+	/* A caller may use ptlrpc_req_put() on a failed non-pool request.
+	 * Clear rq_import so __ptlrpc_free_req() does not drop it again.
+	 */
+	request->rq_import = NULL;
 
 	return rc;
 }
@@ -1057,7 +1062,12 @@ ptlrpc_request_alloc_internal(struct obd_import *imp,
 	 * if it's already connected */
 	if (unlikely(imp->imp_state != LUSTRE_IMP_FULL)) {
 		if (ptlrpc_reconnect_if_idle(imp) < 0) {
+			/* not ptlrpc_req_put(): a pool request has its reqbuf
+			 * but no ctx yet, and that free path asserts on it
+			 */
 			atomic_dec(&imp->imp_reqs);
+			class_import_put(imp);
+			request->rq_import = NULL;
 			ptlrpc_request_free(request);
 			return NULL;
 		}
