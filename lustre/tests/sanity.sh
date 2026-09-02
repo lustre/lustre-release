@@ -29365,6 +29365,7 @@ test_271c() {
 		skip "Need MDS >= 2.10.55.74 for combined DoM lock bits"
 
 	local dom=$DIR/$tdir/dom
+	local count=1000
 
 	mkdir -p $DIR/$tdir
 
@@ -29376,28 +29377,28 @@ test_271c() {
 
 	cancel_lru_locks mdc
 	do_facet $facet lctl set_param -n mdt.*.dom_lock=0
-	createmany -o $dom 1000
+	createmany -o $dom $count || error "createmany failed"
+	stack_trap "unlinkmany $dom $count || true"
 	lctl set_param -n mdc.*.stats=clear
-	smalliomany -w $dom 1000 200
+	smalliomany -w $dom $count 200 || error "smalliomany failed"
 	get_mdc_stats $mdtidx
 	local enq=$(get_mdc_stats $mdtidx ldlm_ibits_enqueue)
 	# Each file has 1 open, 1 IO enqueues, total 2000
 	# but now we have also +1 getxattr for security.capability, total 3000
-	[ $enq -ge 2000 ] || error "Too few enqueues $enq, expected > 2000"
-	unlinkmany $dom 1000
+	(( $enq >= $count * 2 )) ||
+		error "Too few enqueues $enq, expected > $(($count * 2))"
+	unlinkmany $dom $count || error "unlinkmany failed"
 
 	cancel_lru_locks mdc
 	do_facet $facet lctl set_param -n mdt.*.dom_lock=1
-	createmany -o $dom 1000
+	createmany -o $dom $count || error "re-createmany failed"
 	lctl set_param -n mdc.*.stats=clear
-	smalliomany -w $dom 1000 200
+	smalliomany -w $dom $count 200 || error "re-smalliomany failed"
 	local enq_2=$(get_mdc_stats $mdtidx ldlm_ibits_enqueue)
 	# Expect to see reduced amount of RPCs by 1000 due to single enqueue
 	# for OPEN and IO lock.
-	[ $((enq - enq_2)) -ge 1000 ] ||
-		error "Too many enqueues $enq_2, expected about $((enq - 1000))"
-	unlinkmany $dom 1000
-	return 0
+	(( $enq_2 <= $enq - $count + 5 )) ||
+		error "Too many enqueues $enq_2, expected < $((enq - $count))"
 }
 run_test 271c "DoM: IO lock at open saves enqueue RPCs"
 
