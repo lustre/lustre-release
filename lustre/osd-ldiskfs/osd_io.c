@@ -3039,9 +3039,8 @@ void osd_trunc_unlock_all(const struct lu_env *env, struct list_head *list)
 }
 
 /* For a partial-page punch, flush punch range to disk immediately */
-static void osd_partial_page_flush_punch(struct osd_device *d,
-					 struct inode *inode, loff_t start,
-					 loff_t end)
+static void osd_partial_flush_punch(struct osd_device *d, struct inode *inode,
+				    loff_t start, loff_t end)
 {
 	if (osd_use_page_cache(d)) {
 		filemap_fdatawrite_range(inode->i_mapping, start, end);
@@ -3054,36 +3053,40 @@ static void osd_partial_page_flush_punch(struct osd_device *d,
 	}
 }
 
-static void osd_invalidate_partial_page(struct inode *inode, loff_t offset)
+static void osd_invalidate_partial_folio(struct inode *inode, loff_t offset)
 {
 	struct address_space *mapping = inode->i_mapping;
 	struct ldiskfs_inode_info *ei = LDISKFS_I(inode);
-	struct page *page;
+	struct folio *folio;
+	size_t foff;
 	int rc;
 
 	if (!test_bit(LDISKFS_INODE_JOURNAL_DATA, &ei->i_flags))
 		return;
 
-	page = find_or_create_page(mapping, i_size_read(inode) >> PAGE_SHIFT,
-				   mapping_gfp_constraint(mapping, ~__GFP_FS));
-	if (!page)
+	/* folio in cache containing @offset */
+	folio = get_folio_lock(mapping, offset >> PAGE_SHIFT, FGP_LOCK, 0);
+	if (IS_ERR_OR_NULL(folio))
 		return;
 
-	rc = osd_jbd_invalidate_page(LDISKFS_SB(inode->i_sb)->s_journal,
-				     page, 0, PAGE_SIZE);
-	LASSERTF(rc == 0, "  last page %lu %s%s rc=%d\n",
-		 folio_index_page(page),
-		 PageChecked(page) ? "C" : "", PageDirty(page) ? "D" : "", rc);
-	unlock_page(page);
-	put_page(page);
+	foff = offset_in_folio(folio, offset) & PAGE_MASK;
+	rc = osd_jbd_invalidate_folio(LDISKFS_SB(inode->i_sb)->s_journal,
+				      folio, foff, PAGE_SIZE);
+	LASSERTF(rc == 0,
+		 "  last folio %lu size %zu off %zu %s%s rc=%d\n",
+		 folio->index, folio_size(folio), foff,
+		 folio_test_checked(folio) ? "C" : "",
+		 folio_test_dirty(folio) ? "D" : "", rc);
+	folio_unlock(folio);
+	folio_put(folio);
 }
 
 /*
  * For a partial-page truncate, flush the page to disk immediately to
  * avoid data corruption during direct disk write.  b=17397
  */
-static void osd_partial_page_flush(struct osd_device *d, struct inode *inode,
-				   loff_t offset)
+static void osd_partial_flush(struct osd_device *d, struct inode *inode,
+			      loff_t offset)
 {
 	if (!(offset & ~PAGE_MASK))
 		return;
@@ -3099,7 +3102,7 @@ static void osd_partial_page_flush(struct osd_device *d, struct inode *inode,
 	}
 
 	/* to prevent ldiskfs warning about forgottent page */
-	osd_invalidate_partial_page(inode, offset);
+	osd_invalidate_partial_folio(inode, offset);
 }
 
 void osd_execute_truncate(struct osd_object *obj)
@@ -3137,7 +3140,7 @@ void osd_execute_truncate(struct osd_object *obj)
 		spin_unlock(&inode->i_lock);
 		osd_dirty_inode(inode, I_DIRTY_DATASYNC);
 	}
-	osd_partial_page_flush(d, inode, size);
+	osd_partial_flush(d, inode, size);
 }
 
 static int osd_execute_fallocate(const struct lu_env *env,
@@ -3162,14 +3165,14 @@ static int osd_execute_fallocate(const struct lu_env *env,
 	if (rc == 0 && CFS_FAIL_CHECK(OBD_FAIL_OSD_FALLOCATE_ERR))
 		rc = -EIO;
 	/* a failed fallocate may still have dirtied part of the range */
-	osd_partial_page_flush_punch(d, inode, start, end - 1);
+	osd_partial_flush_punch(d, inode, start, end - 1);
 	/*
 	 * When the fallocate grows the file, ldiskfs also zeroes the
 	 * partial block at the old EOF, which lies outside the
 	 * [start, end) range flushed above.
 	 */
 	if (i_size_read(inode) > old_size)
-		osd_partial_page_flush(d, inode, old_size);
+		osd_partial_flush(d, inode, old_size);
 	return rc;
 }
 

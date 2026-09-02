@@ -216,6 +216,8 @@ do {						\
 #define folio_lock(p)			lock_page((p))
 #define folio_unlock(p)			unlock_page((p))
 #define folio_pos(p)			page_offset((p))
+#define folio_size(page)		(PAGE_SIZE)
+#define offset_in_folio(folio, ptr)	offset_in_page((ptr))
 #define flush_dcache_folio(p)		flush_dcache_page((p))
 #define filemap_alloc_folio(gfp, ord, numa) \
 	__page_cache_alloc((gfp))

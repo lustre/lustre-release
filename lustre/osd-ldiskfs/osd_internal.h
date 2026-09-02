@@ -1868,11 +1868,11 @@ static int fill_fn(struct dir_context *buf, const char *name, int namelen,  \
 
 
 #ifdef HAVE_INVALIDATE_FOLIO
-#define osd_jbd_invalidate_page(journal, page, offset, len) \
-	jbd2_journal_invalidate_folio(journal, page_folio(page), offset, len)
+#define osd_jbd_invalidate_folio(journal, folio, offset, len) \
+	jbd2_journal_invalidate_folio((journal), (folio), (offset), (len))
 #else
-#define osd_jbd_invalidate_page(journal, page, offset, len) \
-	jbd2_journal_invalidatepage(journal, page_folio(page), offset, len)
+#define osd_jbd_invalidate_folio(journal, folio, offset, len) \
+	jbd2_journal_invalidatepage((journal), fpgptr((folio)), (offset), (len))
 #endif
 
 #endif /* _OSD_INTERNAL_H */

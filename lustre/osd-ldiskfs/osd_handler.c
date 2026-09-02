@@ -2441,7 +2441,10 @@ static void osd_drop_preallocated_space(struct osd_object *o)
 {
 	struct inode *inode = o->oo_inode;
 	struct address_space *mapping = inode->i_mapping;
-	struct page *page;
+	struct folio *folio;
+	loff_t i_size;
+	size_t foff;
+	size_t length;
 	int rc;
 
 	/*
@@ -2463,7 +2466,8 @@ static void osd_drop_preallocated_space(struct osd_object *o)
 	}
 	LASSERT(list_empty(&LDISKFS_I(inode)->i_orphan));
 
-	if ((i_size_read(inode) & PAGE_MASK) == 0)
+	i_size = i_size_read(inode);
+	if ((i_size & PAGE_MASK) == 0)
 		return;
 
 	/*
@@ -2472,19 +2476,22 @@ static void osd_drop_preallocated_space(struct osd_object *o)
 	 * a backtrace.
 	 * XXX: support for sub-page buffers
 	 */
-	page = find_or_create_page(mapping, i_size_read(inode) >> PAGE_SHIFT,
-				   mapping_gfp_constraint(mapping, ~__GFP_FS));
-	if (!page)
+	folio = get_folio_lock(mapping, i_size >> PAGE_SHIFT, FGP_LOCK, 0);
+	if (IS_ERR_OR_NULL(folio))
 		return;
 
-	rc = osd_jbd_invalidate_page(LDISKFS_SB(inode->i_sb)->s_journal,
-				     page, 0, PAGE_SIZE);
-	LASSERTF(rc == 0, "  last page %lu %s%s rc=%d\n",
-		 folio_index_page(page),
-		 PageChecked(page) ? "C" : "", PageDirty(page) ? "D" : "", rc);
-
-	unlock_page(page);
-	put_page(page);
+	/* page aligned offset in folio containing i_size */
+	foff = offset_in_folio(folio, i_size) & PAGE_MASK;
+	length = folio_size(folio) - foff;
+	rc = osd_jbd_invalidate_folio(LDISKFS_SB(inode->i_sb)->s_journal,
+				      folio, foff, length);
+	LASSERTF(rc == 0,
+		 "  last folio %lu size %zu off %zu len %zu %s%s rc=%d\n",
+		 folio->index, folio_size(folio), foff, length,
+		 folio_test_checked(folio) ? "C" : "",
+		 folio_test_dirty(folio) ? "D" : "", rc);
+	folio_unlock(folio);
+	folio_put(folio);
 }
 
 /*
