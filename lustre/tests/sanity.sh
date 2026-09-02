@@ -26870,7 +26870,8 @@ test_205b() {
 		skip "Need MDS version at least 2.13.54.91"
 
 	local job_stats="mdt.*.job_stats"
-	local old_jobid=$(do_facet mds1 $LCTL get_param jobid_var)
+	# jobid_var is restored on the client below, so save the client value
+	local old_jobid=$($LCTL get_param jobid_var)
 
 	do_facet mds1 $LCTL set_param $job_stats=clear
 
@@ -27196,7 +27197,9 @@ test_205l() {
 
 	cp -a /etc/hosts $DIR/hosts
 	cp $(which mv) ${mv_save}
-	do_nodes $mdts "$LCTL set_param jobid_var=procname_uid jobid_name=%e.%u mdt.*.job_cleanup_interval=5"
+	# the jobid is generated on the client, so set jobid_var there
+	$LCTL set_param jobid_var=procname_uid jobid_name=%e.%u
+	do_nodes $mdts "$LCTL set_param mdt.*.job_cleanup_interval=5"
 	sleep 5
 	do_nodes $mdts "$LCTL set_param mdt.*.job_stats=clear mdt.*.job_cleanup_interval=0"
 	sleep 5
