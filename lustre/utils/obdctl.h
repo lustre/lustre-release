@@ -116,7 +116,7 @@ int jt_llog_check(int argc, char **argv);
 struct lustre_cfg;
 int lcfg_ioctl(char * func, int dev_id, struct lustre_cfg *lcfg);
 int lcfg_mgs_ioctl(const char *func, int dev_id, struct lustre_cfg *lcfg);
-int parse_devname(char *func, char *name, int dev_id);
+int parse_devname(const char *func, const char *name);
 const char *jt_cmdname(const char *func);
 
 /* lustre_param.c */
@@ -132,9 +132,8 @@ int jt_lctl_findparam(int argc, char **argv);
 int jt_lctl_helpparam(int argc, char **argv);
 
 /* lustre_cfg.c */
-int lcfg_set_devname(char *name);
+int lcfg_set_devname(const char *name);
 char *lcfg_get_devname(void);
-int jt_lcfg_device(int argc, char **argv);
 int jt_lcfg_attach(int argc, char **argv);
 int jt_lcfg_setup(int argc, char **argv);
 int jt_lcfg_add_uuid(int argc, char **argv);

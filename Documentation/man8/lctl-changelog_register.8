@@ -1,11 +1,11 @@
-.TH LCTL-CHANGELOG_REGISTER 8 2024-08-13 Lustre "Lustre Configuration Utilities"
+.TH LCTL-CHANGELOG_REGISTER 8 2026-08-27 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-changelog_register \- register changelog user for device
 .SH SYNOPSIS
 .SY lctl
-.B --device
-.I MDT_NAME
 .B changelog_register
+.RB { --device | --mdt | -d }
+.IR MDTNAME
 .RB [ --help | -h ]
 .RB [ --mask | -m
 .IR MASK ]
@@ -25,10 +25,13 @@ See also
 changelog_clear.
 .SH OPTIONS
 .TP
+.BR -d ", " --device | --mdt " \fIMDTNAME"
+Specify MDT device.
+.TP
 .BR -h ", " --help
 Output brief command usage help.
 .TP
-.BR -m ", " --mask \fI MASK
+.BR -m ", " --mask " \fIMASK"
 Sets per-user changelog
 .IR MASK .
 Mask is specified as set of keywords in form
@@ -48,23 +51,37 @@ keywords.
 .TP
 .BR -n ", " --nameonly
 The output format modifier. If set then command outputs just changelog user
-name in format
-.RB' cl\c
-.IR ID [- USERNAME ].
-Where
+name in the form
+.BI cl ID\fR[ - USERNAME \fR],
+where
 .I ID
-stands for assigned changelog user
-.BR ID .
+is the numeric changelog user ID assigned by the MDS and
+.I USERNAME
+is the optional name supplied for the
+.B --user
+option.
 .TP
-.BR -u ", " --user \fI USERNAME
+.BR -u ", " --user " \fIUSERNAME"
 Specific username assigment. Unique name can be assigned to a new changelog
 user. Name must start with a letter and consist of letters, digits, '-' and
-\'_' symbols with total length limited by 15 symbols.
+\'_' symbols with total length limited by 15 characters.  It is recommended
+that the
+.B --user
+option is used for all new registrations, to simplify identification of any
+registered users, and to allow applications to look up their registration
+automatically by name instead of having to supply the numeric
+.B ID
+in the configuration, as it may be different between MDTs and may change
+if the ID is deregistered due to inactivity.
 .SH EXAMPLES
 Simple changelog user register on device
 .BR testfs-MDT0000 :
 .RS
 .EX
+.B # lctl changelog_register --device testfs-MDT0000
+or
+.B # lctl changelog_register --mdt testfs-MDT0000
+or
 .B # lctl --device testfs-MDT0000 changelog_register
 testfs-MDT0000: Registered changelog userid 'cl1'
 .EE
@@ -74,15 +91,15 @@ Register changelog user with specific name
 .BR testname :
 .RS
 .EX
-.B # lctl --device testfs-MDT0000 changelog_register -u testname
-lustre-MDT0000: Registered changelog userid 'cl1-testname'
+.B # lctl changelog_register --device testfs-MDT0003 -u testname
+lustre-MDT0003: Registered changelog userid 'cl1-testname'
 .EE
 .RE
 .PP
 Register changelog user with specific mask:
 .RS
 .EX
-.B # lctl --device testfs-MDT0000 changelog_register -m +open,atime,-hlink
+.B # lctl changelog_register --device testfs-MDT0000 -m +open,atime,-hlink
 lustre-MDT0000: Registered changelog userid 'cl1'
 .EE
 .RE
@@ -90,8 +107,8 @@ lustre-MDT0000: Registered changelog userid 'cl1'
 Register changelog user with terse output:
 .RS
 .EX
-.B # lctl --device testfs-MDT0000 changelog_register -n
-cl1
+.B # lctl --device testfs-MDT0000 changelog_register -n -u audit
+cl4-audit
 .EE
 .RE
 .SH AVAILABILITY
@@ -104,4 +121,5 @@ filesystem package since release 1.7.0
 .\" Added in commit 1.6.0-2540-g2c74bfcb7a
 .SH SEE ALSO
 .BR lctl (8),
+.BR llapi_changelog_register (3),
 .BR lctl-changelog_deregister (8)

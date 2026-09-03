@@ -37,9 +37,6 @@
 #include <time.h>
 #include <unistd.h>
 #include <limits.h>
-#include "obdctl.h"
-#include "lstddef.h"
-#include "lustreapi_internal.h"
 #include <libcfs/util/list.h>
 #include <libcfs/util/ioctl.h>
 #include <libcfs/util/param.h>
@@ -49,13 +46,16 @@
 #include <linux/lnet/nidstr.h>
 #include <linux/lnet/lnetctl.h>
 #include <linux/lustre/lustre_cfg.h>
+#include <linux/lustre/lustre_disk.h>
 #include <linux/lustre/lustre_ioctl.h>
 #include <linux/lustre/lustre_ostid.h>
 #include <linux/lustre/lustre_param.h>
 #include <linux/lustre/lustre_ver.h>
 
 #include <lustre/lustreapi.h>
-#include <linux/lustre/lustre_disk.h>
+#include "lstddef.h"
+#include "lustreapi_internal.h"
+#include "obdctl.h"
 
 #define MAX_STRING_SIZE 128
 
@@ -536,9 +536,9 @@ static int do_device(char *func, char *devname)
 {
 	int dev;
 
-	dev = parse_devname(func, devname, cur_device);
+	dev = parse_devname(func, devname);
 	if (dev < 0)
-		return -1;
+		return dev;
 
 	lcfg_set_devname(devname);
 	cur_device = dev;
@@ -552,8 +552,6 @@ int jt_obd_get_device(void)
 
 int jt_obd_device(int argc, char **argv)
 {
-	int rc;
-
 	if (argc > 2)
 		return CMD_HELP;
 
@@ -562,8 +560,7 @@ int jt_obd_device(int argc, char **argv)
 		       cur_device, lcfg_get_devname() ? : "not set");
 		return 0;
 	}
-	rc = do_device("device", argv[1]);
-	return rc;
+	return do_device(argv[0], argv[1]);
 }
 
 int jt_opt_device(int argc, char **argv)
@@ -574,7 +571,7 @@ int jt_opt_device(int argc, char **argv)
 	if (argc < 3)
 		return CMD_HELP;
 
-	rc = do_device("device", argv[1]);
+	rc = do_device(argv[0], argv[1]);
 
 	if (!rc)
 		rc = cfs_parser(argc - 1, argv + 1, cmdlist);
@@ -7070,200 +7067,255 @@ int jt_get_obj_version(int argc, char **argv)
 int jt_changelog_register(int argc, char **argv)
 {
 	struct option long_opts[] = {
+	{ .val = 'd', .name = "device", .has_arg = required_argument },
+	{ .val = 'd', .name = "mdt", .has_arg = required_argument },
 	{ .val = 'h', .name = "help", .has_arg = no_argument },
 	{ .val = 'm', .name = "mask", .has_arg = required_argument },
 	{ .val = 'n', .name = "nameonly", .has_arg = no_argument },
 	{ .val = 'u', .name = "user", .has_arg = required_argument },
 	{ .name = NULL } };
-	struct obd_ioctl_data data = { 0 };
-	char rawbuf[MAX_IOC_BUFLEN] = "";
-	char *buf = rawbuf;
-	char *device = lcfg_get_devname();
+	char regname[CHANGELOG_USER_NAMELEN_FULL] = "";
 	char *username = NULL, *usermask = NULL;
+	char *mdtname = NULL;
 	bool print_name_only = false;
 	int c;
 	int rc;
 
-	if (cur_device < 0 || !device)
-		return CMD_HELP;
-
-	while ((c = getopt_long(argc, argv, "hm:nu:", long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "d:hm:nu:", long_opts, NULL)) !=
+	       -1) {
 		switch (c) {
+		case 'd':
+			free(mdtname);
+			mdtname = strdup(optarg);
+			if (!mdtname) {
+				fprintf(stderr,
+					"error: %s: %s: cannot copy '-d %s'\n",
+					jt_cmdname(argv[0]), strerror(errno),
+					optarg);
+				rc = -errno;
+				goto out;
+			}
+			break;
 		case 'm':
+			free(usermask);
 			usermask = strdup(optarg);
 			if (!usermask) {
 				fprintf(stderr,
-					"error: %s: %s: cannot copy '%s'\n",
+					"error: %s: %s: cannot copy '-m %s'\n",
 					jt_cmdname(argv[0]), strerror(errno),
 					optarg);
-				return -errno;
+				rc = -errno;
+				goto out;
 			}
 			break;
 		case 'n':
 			print_name_only = true;
 			break;
 		case 'u':
+			free(username);
 			username = strdup(optarg);
 			if (!username) {
 				fprintf(stderr,
-					"error: %s: %s: cannot copy '%s'\n",
+					"error: %s: %s: cannot copy '-u %s'\n",
 					jt_cmdname(argv[0]), strerror(errno),
 					optarg);
-				return -errno;
+				rc = -errno;
+				goto out;
 			}
 			break;
 		case 'h':
 		default:
-			free(username);
-			free(usermask);
-			return CMD_HELP;
+			rc = CMD_HELP;
+			goto out;
 		}
 	}
 
-	data.ioc_dev = cur_device;
-	if (username) {
-		data.ioc_inlbuf1 = username;
-		data.ioc_inllen1 = strlen(username) + 1;
+	if (!mdtname) {
+		mdtname = lcfg_get_devname(); /* lctl --device xxx */
+		if (mdtname) {
+			mdtname = strdup(mdtname);
+		} else {
+			fprintf(stderr, "%s: no '--device MDTNAME' specified\n",
+				jt_cmdname(argv[0]));
+			rc = CMD_HELP;
+			goto out;
+		}
 	}
 
-	if (usermask) {
-		data.ioc_inlbuf2 = usermask;
-		data.ioc_inllen2 = strlen(usermask) + 1;
+	if (argc > optind) {
+		fprintf(stderr, "%s: unknown argument '%s'\n",
+			jt_cmdname(argv[0]), argv[optind]);
+		rc = CMD_HELP;
+		goto out;
 	}
 
-	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	rc = llapi_changelog_register(mdtname, username, usermask,
+				      regname, sizeof(regname));
 	if (rc < 0) {
-		fprintf(stderr, "error: %s: cannot pack ioctl: %s\n",
-			jt_cmdname(argv[0]), strerror(-rc));
+		switch (rc) {
+		case -EINVAL:
+			fprintf(stderr,
+				"error: %s: bad mdtname '%s', username '%s', or mask '%s'\n",
+				jt_cmdname(argv[0]), mdtname,
+				username ?: "(unused)",
+				usermask ?: "(unused)");
+			break;
+		case -ENAMETOOLONG:
+			fprintf(stderr,
+				"error: %s: username '%s' is too long\n",
+				jt_cmdname(argv[0]), username);
+			break;
+		case -EILSEQ:
+			fprintf(stderr, "error: %s: user mask '%s' invalid\n",
+				jt_cmdname(argv[0]), usermask);
+			break;
+		case -EEXIST:
+			fprintf(stderr, "error: %s: user '%s' exists\n",
+				jt_cmdname(argv[0]), username);
+			break;
+		case -EPROTO:
+			fprintf(stderr, "error: %s: invalid user assigned\n",
+				jt_cmdname(argv[0]));
+			break;
+		case -EOVERFLOW:
+			fprintf(stderr, "error: %s: registered name too long\n",
+				jt_cmdname(argv[0]));
+			break;
+		default:
+			fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+				strerror(-rc));
+			break;
+		}
 		goto out;
-	}
-	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CHANGELOG_REG, buf);
-	if (rc < 0) {
-		rc = -errno;
-		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-			rc == -EEXIST ? "User exists" : strerror(-rc));
-		goto out;
-	}
-
-	llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
-
-	if (data.ioc_u32_1 == 0) {
-		fprintf(stderr, "received invalid userid!\n");
-		rc = -EPROTO;
-		goto out;
+	} else {
+		rc = 0;
 	}
 
 	if (print_name_only)
-		printf("%s%u%s%s\n", CHANGELOG_USER_PREFIX, data.ioc_u32_1,
-		       username ? "-" : "", username ? : "");
+		printf("%s\n", regname);
 	else
-		printf("%s: Registered changelog userid '%s%u%s%s'\n",
-		       device, CHANGELOG_USER_PREFIX, data.ioc_u32_1,
-		       username ? "-" : "", username ? : "");
+		printf("%s: Registered changelog userid '%s'\n",
+		       mdtname, regname);
 out:
-	free(usermask);
+	free(mdtname);
 	free(username);
+	free(usermask);
 	return rc;
 }
 
 int jt_changelog_deregister(int argc, char **argv)
 {
 	struct option long_opts[] = {
+	{ .val = 'd', .name = "device", .has_arg = required_argument },
+	{ .val = 'd', .name = "mdt", .has_arg = required_argument },
 	{ .val = 'h', .name = "help", .has_arg = no_argument },
 	{ .val = 'u', .name = "user", .has_arg = required_argument },
 	{ .name = NULL } };
-	struct obd_ioctl_data data = { 0 };
-	char rawbuf[MAX_IOC_BUFLEN] = "";
-	char *buf = rawbuf;
-	char *device = lcfg_get_devname();
 	char *username = NULL;
-	int id = 0;
+	char *mdtname = NULL;
 	int c, rc;
 
-	if (cur_device < 0 || !device)
-		return CMD_HELP;
-
-	while ((c = getopt_long(argc, argv, "hu:", long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "d:hu:", long_opts, NULL)) != -1) {
 		switch (c) {
-		case 'u':
-			username = strdup(optarg);
-			if (!username) {
+		case 'd':
+			free(mdtname);
+			mdtname = strdup(optarg);
+			if (!mdtname) {
+				rc = -errno;
 				fprintf(stderr,
-					"error: %s: %s: cannot copy '%s'\n",
+					"error: %s: %s: cannot copy mdtname '%s'\n",
 					jt_cmdname(argv[0]), strerror(errno),
 					optarg);
-				return -errno;
+				goto out;
+			}
+			break;
+		case 'u':
+			free(username);
+			username = strdup(optarg);
+			if (!username) {
+				rc = -errno;
+				fprintf(stderr,
+					"error: %s: %s: cannot copy username '%s'\n",
+					jt_cmdname(argv[0]), strerror(errno),
+					optarg);
+				goto out;
 			}
 			break;
 		case 'h':
+		case '?':
 		default:
-			free(username);
-			return CMD_HELP;
+			rc = CMD_HELP;
+			goto out;
 		}
 	}
 
-	if (1 == optind && argc > 1) {
-		/* first check if pure ID was passed */
-		id = atoi(argv[optind]);
-		/* nameless cl<ID> format or cl<ID>-... format, only ID matters */
-		if (id == 0)
-			sscanf(argv[optind], CHANGELOG_USER_PREFIX"%d", &id);
+	if (!mdtname) {
+		mdtname = lcfg_get_devname(); /* lctl --device xxx */
+		if (mdtname) {
+			mdtname = strdup(mdtname);
+		} else {
+			fprintf(stderr, "%s: no '--device MDTNAME' specified\n",
+				jt_cmdname(argv[0]));
+			rc = CMD_HELP;
+			goto out;
+		}
+	}
 
-		/* no valid ID was parsed */
-		if (id <= 0) {
-			rc = -EINVAL;
+	if (!username) {
+		if (argc == optind) {
 			fprintf(stderr,
-				"error: %s: expect <ID> or cl<ID>[-name] got '%s'\n",
-				strerror(-rc), argv[optind]);
-			return CMD_HELP;
+				"error: %s: %s: expect <ID> or cl<ID>[-name]\n",
+				jt_cmdname(argv[0]), strerror(EINVAL));
+			rc = CMD_HELP;
+			goto out;
+		}
+		username = strdup(argv[optind]);
+		if (!username) {
+			rc = -errno;
+			fprintf(stderr,
+				"error: %s: %s: cannot copy user arg '%s'\n",
+				jt_cmdname(argv[0]), strerror(errno),
+				argv[optind]);
+			goto out;
 		}
 		optind++;
 	}
-
-	if (optind < argc || argc == 1) {
-		free(username);
-		return CMD_HELP;
+	if (argc > optind) {
+		fprintf(stderr, "%s: unknown argument '%s'\n",
+			jt_cmdname(argv[0]), argv[optind]);
+		rc = CMD_HELP;
+		goto out;
 	}
 
-	data.ioc_dev = cur_device;
-	data.ioc_u32_1 = id;
-	if (username) {
-		data.ioc_inlbuf1 = username;
-		data.ioc_inllen1 = strlen(username) + 1;
-	}
+	rc = llapi_changelog_deregister(mdtname, username);
+	if (!rc)
+		printf("%s: deregistered changelog user '%s'\n",
+		       mdtname, username);
+	else
+		fprintf(stderr,
+			"%s: error deregistering changelog user '%s': %s\n",
+			mdtname, username, strerror(-rc));
 
-	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-	if (rc < 0) {
-		fprintf(stderr, "error: %s: invalid ioctl\n",
-			jt_cmdname(argv[0]));
-		return rc;
-	}
-
-	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_CHANGELOG_DEREG, buf);
-	if (rc < 0) {
-		rc = -errno;
-		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
-			rc == -ENOENT ? "User not found" : strerror(-rc));
-		return rc;
-	}
-
-	llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
-	printf("%s: Deregistered changelog user #%u\n", device, data.ioc_u32_1);
-
-	return 0;
+out:
+	free(mdtname);
+	free(username);
+	return rc;
 }
 #else /* !HAVE_SERVER_SUPPORT */
 int jt_changelog_register(int argc, char **argv)
 {
-	fprintf(stderr, "error: %s: invalid ioctl\n",
+	fprintf(stderr, "error: %s: changelog_register unsupported on client\n",
 		jt_cmdname(argv[0]));
+
 	return -EOPNOTSUPP;
 }
 
 int jt_changelog_deregister(int argc, char **argv)
 {
-	fprintf(stderr, "error: %s: invalid ioctl\n",
+	fprintf(stderr,
+		"error: %s: changelog_deregister unsupported on client\n",
 		jt_cmdname(argv[0]));
+
 	return -EOPNOTSUPP;
 }
 #endif /* HAVE_SERVER_SUPPORT */

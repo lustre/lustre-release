@@ -1007,6 +1007,9 @@ enum changelog_send_extra_flag {
 	CHANGELOG_EXTRA_FLAG_XATTR	= CLFE_XATTR,
 };
 
+int llapi_changelog_register(const char *mdtname, const char *username,
+			    const char *usermask, char *regname, size_t reglen);
+int llapi_changelog_deregister(const char *mdtname, const char *regname);
 int llapi_changelog_start(void **priv, enum changelog_send_flag flags,
 			  const char *mdtname, long long startrec);
 int llapi_changelog_start_user(void **priv, enum changelog_send_flag flags,

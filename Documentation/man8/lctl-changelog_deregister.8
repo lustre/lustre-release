@@ -1,17 +1,14 @@
-.TH LCTL-CHANGELOG_DEREGISTER 8 2024-08-13 Lustre "Lustre Configuration Utilities"
+.TH LCTL-CHANGELOG_DEREGISTER 8 2026-08-27 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-changelog_deregister \- deregister existing changelog user
 .SH SYNOPSIS
 .SY lctl
-.B --device
-.I MDT_NAME
 .B changelog_deregister
-.RI [ ID |\c
-.B cl\c
-.IR ID ]
-.RB [ --help | -h ]
-.RB [ --user | -u
-.IR USERNAME ]
+.RB { --device | --mdt | -d }
+.IR MDTNAME
+.RI { ID |\fBcl ID |\c
+.BR --user | -u
+.IR USERNAME }
 .YS
 .SH DESCRIPTION
 This command is used to deregister an existing changelog user on selected
@@ -22,10 +19,13 @@ or specific
 used on registration.
 .SH OPTIONS
 .TP
+.BR -d ", " --device | --mdt " \fIMDTNAME"
+Specify MDT device.
+.TP
 .BR -h ", " --help
 Output brief command usage help.
 .TP
-.BR -u ", " --user \fI USERNAME
+.BR -u ", " --user " \fIUSERNAME"
 Deregistration by username. If changelog user specified unique name during
 registration then it can be deregistered by
 .I USERNAME
@@ -40,7 +40,15 @@ by
 .RS
 .EX
 .B # lctl --device testfs-MDT0000 changelog_deregister cl1
-testfs-MDT0000: Deregistered changelog user #1
+.EE
+or
+.EX
+.B # lctl changelog_deregister cl1 --device testfs-MDT0000
+.EE
+or
+.EX
+.B # lctl changelog_deregister cl1 --mdt testfs-MDT0000
+testfs-MDT0000: deregistered changelog user 'cl1'
 .EE
 .RE
 .PP
@@ -49,7 +57,7 @@ Deregister changelog user by pure
 .RS
 .EX
 .B # lctl --device testfs-MDT0000 changelog_deregister 1
-testfs-MDT0000: Deregistered changelog user #1
+testfs-MDT0000: deregistered changelog user '1'
 .EE
 .RE
 .PP
@@ -58,7 +66,7 @@ Deregister changelog user by its specific name
 .RS
 .EX
 .B # lctl --device testfs-MDT0000 changelog_deregister -u testname
-testfs-MDT0000: Deregistered changelog user #1
+testfs-MDT0000: deregistered changelog user 'testname'
 .EE
 .RE
 .SH AVAILABILITY
@@ -67,8 +75,9 @@ is a subcommand of
 .BR lctl (8)
 and is distributed as part of the
 .BR lustre (7)
-filesystem package since release 1.7.0
+filesystem package since release 1.7.0.
 .\" Added in commit 1.6.0-2540-g2c74bfcb7a
 .SH SEE ALSO
 .BR lctl (8),
+.BR llapi_changelog_deregister (3),
 .BR lctl-changelog_register (8)

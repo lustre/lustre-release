@@ -3092,8 +3092,6 @@ struct llog_changelog_rec {
 } __attribute__((packed));
 
 #define CHANGELOG_USER_PREFIX "cl"
-#define CHANGELOG_USER_NAMELEN 16 /* base name including NUL terminator */
-#define CHANGELOG_USER_NAMELEN_FULL 30 /* basename plus 'cl$ID-' prefix */
 
 struct llog_changelog_user_rec {
 	struct llog_rec_hdr   cur_hdr;

@@ -75,12 +75,15 @@ int llapi_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max_len)
 }
 
 /**
+ * Call ioctl() on Lustre OBD control device, usually OBD_DEV_ID.
+ *
  * Remap OBD device ioctl cmd to old one in case running with older modules.
  * Replaces callers that use "l_ioctl(OBD_DEV_ID, ...)".
  *
- * \param dev_id	Lustre device number (from 'lctl dl')
- * \param cmd		ioctl command
- * \param buf		ioctl data argument, usually obd_ioctl_data
+ * @dev_id	Lustre device number
+ * @cmd		ioctl command
+ * @buf		ioctl data argument, usually obd_ioctl_data
+ * @return	0 on success, or negative errno on error
  */
 int llapi_ioctl_dev(int dev_id, unsigned int cmd, void *buf)
 {
@@ -204,4 +207,60 @@ int llapi_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len)
 	}
 
 	return 0;
+}
+
+/**
+ * llapi_obdname2devno() - find OBD device name to get local OBD device number
+ *
+ * Lookup OBD device name to find locally configured OBD device number
+ * used for obd_ioctl_data.dev_id in device ioctls.
+ *
+ * @name	OBD device name
+ * @return	positive device number on success, or negative errno on error
+ * @retval	-EINVAL	invalid OBD device name
+ */
+int llapi_obdname2devno(const char *name)
+{
+	struct obd_ioctl_data data = { 0 };
+	char rawbuf[MAX_IOC_BUFLEN] = "";
+	char *buf = rawbuf;
+	ssize_t len;
+	int ioctl_dev;
+	int rc;
+
+	if (!name)
+		return -EINVAL;
+
+	len = strlen(name);
+	if (len >= MAX_OBD_NAME)
+		return -EINVAL;
+
+	data.ioc_inllen1 = len + 1;
+	data.ioc_inlbuf1 = (char *)name;
+
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc < 0)
+		return rc;
+
+	ioctl_dev = llapi_register_ioc_dev(OBD_DEV_ID, OBD_DEV_PATH);
+	if (ioctl_dev < 0)
+		return ioctl_dev;
+
+	rc = llapi_ioctl_dev(ioctl_dev, OBD_IOC_NAME2DEV, buf);
+	if (rc < 0) {
+		if (rc != -EINVAL)
+			goto out_yaml;
+		return rc;
+	}
+
+	/* don't overwrite input string on unpack */
+	data.ioc_inlbuf1 = NULL;
+	rc = llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
+	if (rc < 0)
+		return rc;
+
+	return data.ioc_dev;
+
+out_yaml: /* Use YAML to find device index if ioctl() call fails */
+	return llapi_yaml_get_device_index(name);
 }

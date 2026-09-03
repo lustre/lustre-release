@@ -1,0 +1,120 @@
+.TH LLAPI_CHANGELOG_REGISTER 3 2026-09-12 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_changelog_register \- Register changelog user on specific MDT device.
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_changelog_register(const char *" mdtname ", const char *" username ,
+.BI "                    const char *" usermask ", char *" regname ", size_t "reglen );
+.fi
+.SH DESCRIPTION
+The function
+.B llapi_changelog_register()
+registers a changelog
+.I username
+using an optional application-specific identifier (e.g.
+.RB ' audit ')
+on the specified MDT device
+.I mdtname
+(e.g.
+.BR lustrefs-MDT0000 )
+with user-specific
+.IR usermask ,
+and returns the registered full consumer name
+.I regname
+with
+.I reglen
+length.
+The
+.B llapi_changelog_register()
+command must run on the MDS where the MDT is mounted as the root user for each
+.I mdtname
+in the filesystem to be monitored.
+.PP
+The
+.I username
+must be under
+.B CHANGELOG_USER_NAMELEN
+bytes in size, as this length includes a trailing NUL character.
+The name must start with a letter and only contain ASCII alphanumeric
+.RB ( isalnum (3)),
+dash
+.RB ' - ' ,
+and underscore
+.RB ' _ '
+characters.
+.PP
+The
+.I regname
+argument is a character array that should be long enough to hold the
+.I username
+plus the changelog user number, with
+.I reglen
+at least
+.B CHANGELOG_USER_NAMELEN_FULL
+bytes in size.
+.PP
+The
+.I usermask
+argument contains a comma- or '+' separated list of changelog record
+type names that should be activated while this user is registered.
+.SH RETURN VALUES
+Return changelog user ID on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM -EEXIST
+Username already exists.
+.TP
+.SM -EILSEQ
+Mask is in a wrong format.
+.TP
+.SM -EINVAL
+MDT device name is invalid or not found.
+.TP
+.SM -ENAMETOOLONG
+The specified
+.I username
+is too long, shorten it.
+.TP
+.SM -EOVERFLOW
+The
+.I regname
+buffer is too small, increase its size and its corresponding
+.IR reglen
+and/or shorten
+.IR username .
+.TP
+.SM -EPROTO
+Assigned username is invalid.
+.SH EXAMPLE
+To register a new changelog user on the specified MDT:
+.EX
+#include <lustre/lustreapi.h>
+
+int main(int argc, char *argv[])
+{
+	char *mdtname = argv[1];  /* e.g. "testfs-MDT0000" */
+	char *username = argv[2]; /* e.g. "audit" */
+	char *usermask = argv[3]; /* e.g. "open,creat,renam,unlnk" */
+	char regname[CHANGELOG_USER_NAMELEN_FULL];
+	int rc;
+
+	rc = llapi_changelog_register(mdtname, username, usermask,
+	                              regname, sizeof(regname));
+}
+.EE
+.SH AVAILABILITY
+.B llapi_changelog_register()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.18.0.
+.\" Added in commit 2.17.5x
+.SH SEE ALSO
+.BR llapi_changelog_clear (3),
+.BR llapi_changelog_deregister (3),
+.BR llapi_changelog_get_fd (3),
+.BR llapi_changelog_recv (3),
+.BR llapi_changelog_start (3),
+.BR lustreapi (7),
+.BR lctl-changelog_register (8)

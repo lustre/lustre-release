@@ -11,21 +11,21 @@
  * Author: Henri Doreau <henri.doreau@cea.fr>
  */
 
+#include <ctype.h>
+#include <errno.h>
 #include <fcntl.h>
+#include <poll.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
-#include <errno.h>
-#include <poll.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
-#include <ctype.h>
 
 #include <lustre/lustreapi.h>
+#include <linux/lustre/lustre_idl.h>
 #include <linux/lustre/lustre_ioctl.h>
-#include <linux/lustre/lustre_user.h>
 
 #include "lustreapi_internal.h"
 
@@ -163,13 +163,14 @@ out_free_cp:
 /**
  * changelog_parse_username() - Parse user string to extract numeric ID if
  *                              possible
+ *
  * @username: User name or ID (e.g. "cl1", "cl1-user", "1", or "user")
  * @user_id: User ID number (0 will let MDT parse the username) [out]
  *
  * An unparsable @username is not an error: @user_id is set to %0 and the
  * MDT is left to resolve the name itself.
  *
- * Return: %0 always
+ * Return %0 on success and %negative on error
  */
 static int changelog_parse_username(const char *username, __u32 *user_id)
 {
@@ -192,6 +193,146 @@ static int changelog_parse_username(const char *username, __u32 *user_id)
 
 	/* Let MDT parse the user string */
 	*user_id = 0;
+	return 0;
+}
+
+/** Register a changelog consumer
+ *
+ * @param mdtname MDT device name
+ * @param username Changelog consumer name
+ * @param usermask Changelog consumer mask
+ * @param regname Returns Changelog consumer registered username
+ * @param reglen regname buffer size
+ *
+ * @return registered user number on success with regname set,
+ *	negative errno on failure
+ * @retval -EINVAL MDT device or username invalid or not found
+ * @retval -ENAMETOOLONG username is too long
+ * @retval -EOVERFLOW regname too small to hold generated username
+ * @retval -EEXIST User already exists
+ * @retval -EILSEQ Invalid mask
+ * @retval -EPROTO Invalid user number assignment from kernel
+ */
+int llapi_changelog_register(const char *mdtname, const char *username,
+			     const char *usermask, char *regname, size_t reglen)
+{
+	struct obd_ioctl_data data = { 0 };
+	char rawbuf[MAX_IOC_BUFLEN] = "";
+	char *buf = rawbuf;
+	int rc;
+
+	if (!mdtname || mdtname[0] == '\0')
+		return -EINVAL;
+
+	rc = llapi_obdname2devno(mdtname);
+	if (rc < 0)
+		return rc;
+	data.ioc_dev = rc;
+
+	if (username && username[0]) {
+		if (!isalpha((unsigned char)username[0]))
+			return -EINVAL;
+		rc = llapi_name_validate(username, "-_",
+					 CHANGELOG_USER_NAMELEN - 1);
+		if (rc < 0)
+			return rc;
+		data.ioc_inlbuf1 = (char *)username;
+		data.ioc_inllen1 = strlen(username) + 1;
+	}
+
+	if (usermask && usermask[0]) {
+		rc = llapi_name_validate(usermask, ",+-", MAX_IOC_BUFLEN / 2);
+		if (rc < 0)
+			return -EILSEQ;
+		data.ioc_inlbuf2 = (char *)usermask;
+		data.ioc_inllen2 = strlen(usermask) + 1;
+	}
+
+	if (regname && reglen < CHANGELOG_USER_NAMELEN_FULL)
+		return -EOVERFLOW;
+
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc < 0)
+		return rc;
+
+	rc = llapi_ioctl_dev(OBD_DEV_ID, OBD_IOC_CHANGELOG_REG, buf);
+	if (rc < 0)
+		return rc;
+
+	/* don't overwrite input strings on unpack */
+	data.ioc_inlbuf1 = NULL;
+	data.ioc_inlbuf2 = NULL;
+	llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
+
+	if (data.ioc_u32_1 == 0)
+		return -EPROTO;
+
+	if (regname) {
+		memset(regname, '\0', reglen);
+		if (username && username[0])
+			rc = snprintf(regname, reglen, "%s%u-%s",
+				      CHANGELOG_USER_PREFIX, data.ioc_u32_1,
+				      username);
+		else
+			rc = snprintf(regname, reglen, "%s%u",
+				      CHANGELOG_USER_PREFIX, data.ioc_u32_1);
+		if (rc >= reglen) /* this should never happen */
+			return -EOVERFLOW;
+	}
+
+	return data.ioc_u32_1;
+}
+
+/** Deregister a changelog consumer
+ *
+ * @param mdtname MDT device name
+ * @param regname Changelog user name, e.g. "cl1", "cl1-xxx", "1", or "xxx"
+ *
+ * @return 0 on success, negative errno on failure
+ * @retval -EINVAL MDT device name invalid or not found
+ * @retval -ENOENT User not found
+ */
+int llapi_changelog_deregister(const char *mdtname, const char *regname)
+{
+	struct obd_ioctl_data data = { 0 };
+	char rawbuf[MAX_IOC_BUFLEN] = "";
+	char *buf = rawbuf;
+	__u32 user_id;
+	int rc;
+
+	if (!mdtname || !mdtname[0])
+		return -EINVAL;
+
+	if (!regname || !regname[0])
+		return -EINVAL;
+
+	rc = llapi_obdname2devno(mdtname);
+	if (rc < 0)
+		return rc;
+	data.ioc_dev = rc;
+
+	rc = changelog_parse_username(regname, &user_id);
+	if (rc)
+		return rc;
+
+	data.ioc_u32_1 = user_id;
+	if (user_id == 0) {
+		data.ioc_inlbuf1 = (char *)regname;
+		data.ioc_inllen1 = strlen(regname) + 1;
+	}
+
+	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc < 0)
+		return rc;
+
+	rc = llapi_ioctl_dev(OBD_DEV_ID, OBD_IOC_CHANGELOG_DEREG, buf);
+	if (rc < 0)
+		return rc;
+
+	/* don't overwrite input string on unpack */
+	data.ioc_inlbuf1 = NULL;
+	llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
+
 	return 0;
 }
 

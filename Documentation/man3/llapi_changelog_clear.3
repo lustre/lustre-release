@@ -1,4 +1,4 @@
-.TH LLAPI_CHANGELOG_CLEAR 3 2024-08-22 "Lustre User API" "Lustre Library Functions"
+.TH LLAPI_CHANGELOG_CLEAR 3 2026-09-12 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_changelog_clear \- Clear changelog records for a changelog consumer
 .SH SYNOPSIS
@@ -24,10 +24,8 @@ An
 .I endrec
 of 0 indicates the current last record.
 .PP
-Changelog consumers must be registered on the
-MDT node using:
-.br
-.BI "lctl --device " MDT_NAME " changelog_register"
+Changelog consumers must be registered on the MDT node using
+.BR lctl-changelog_register (8).
 .SH RETURN VALUES
 Return the file descriptor on success or a negative errno value on failure.
 .SH ERRORS
@@ -58,10 +56,11 @@ user application interface library since release 2.0.0.
 \" Added in commit 1.6.0-3165-g8901d15087b2
 .SH SEE ALSO
 .BR lfs-changelog_clear (1),
+.BR llapi_changelog_deregister (3),
 .BR llapi_changelog_get_fd (3),
 .BR llapi_changelog_in_buf (3),
 .BR llapi_changelog_recv (3),
+.BR llapi_changelog_register (3),
 .BR llapi_changelog_start (3),
 .BR llapi_changelog_start_user (3),
-.BR lustreapi (7),
-.BR lctl-changelog_register (8)
+.BR lustreapi (7)

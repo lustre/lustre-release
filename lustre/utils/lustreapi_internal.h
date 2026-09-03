@@ -40,6 +40,7 @@ int verify_pin_xattr_object(struct cYAML *yaml);
 int dump_pin_object(struct cYAML *yaml, char *buff, int buflen);
 struct cYAML *read_pin_xattr_object(const char *path);
 struct cYAML *read_pin_xattr_object_fd(int fd);
+int llapi_yaml_get_device_index(const char *source);
 
 #define MAX_IOC_BUFLEN	8192
 #define MAX_INSTANCE_LEN  32
@@ -69,6 +70,7 @@ int get_root_path(int want, char *fsname, int *outfd, char *path, int index,
 struct obd_ioctl_data;
 int llapi_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max_len);
 int llapi_ioctl_dev(int dev_id, unsigned int cmd, void *buf);
+int llapi_obdname2devno(const char *name);
 int llapi_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len);
 int sattr_cache_get_defaults(const char *const fsname,
 			     const char *const pathname, unsigned int *scount,

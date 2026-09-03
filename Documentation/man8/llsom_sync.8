@@ -19,7 +19,9 @@ llsom_sync \- Utility to sync file LSOM xattr.
 .B llsom_sync
 is designed to sync file LSOM xattr in the Lustre Filesystem by
 using Lustre MDT changelogs.  A changelog user must be registered
-(see lctl (8) changelog_register) before using this tool.
+(see
+.BR lctl-changelog_register (8))
+before using this tool.
 .SH OPTIONS
 .TP
 .BR -m ", " --mdt= \fIMDT
@@ -27,7 +29,8 @@ The metadata device which need to be synced the LSOM xattr of files.
 A changelog user must be registered for this device.
 .TP
 .BR -u ", " --user= \fIUSER_ID
-The changelog user id for the above MDT device. See lctl(8) changelog_register.
+The changelog user id for the above MDT device, see
+.BR lctl-changelog_register (8).
 .TP
 .B --daemonize
 Daemonize the program. In daemon mode, the utility will scan,
@@ -59,9 +62,8 @@ performance significantly if thousands of fsync requests are sent.
 Register a changelog consumer for MDT lustre-MDT0000:
 .RS
 .EX
-.B # cl_user=$(ssh root@mds01 lctl --device lustre-MDT0000 changelog_register -n)
-.B # echo $cl_user
-cl1
+.RB "mds# " "lctl changelog_register --device lustre-MDT0000 -n -u llsomsync"
+cl14-llsomsync
 .EE
 .RE
 .PP
@@ -70,7 +72,7 @@ mount point '/mnt/lustre' and the filesystem undergoes some changes,
 sync file LSOM xattr:
 .RS
 .EX
-.B # llsom_sync --mdt=lustre-MDT0000 --user=$cl_user --verbose /mnt/lustre
+.RB "mds# " "llsom_sync --mdt=lustre-MDT0000 --user=cl14-llsomsync --verbose /mnt/lustre"
 .EE
 .RE
 .PP
@@ -78,7 +80,7 @@ To deregister the changelog user (e.g. after this example, or if SOM
 updates are no longer needed):
 .RS
 .EX
-.B # ssh root@mds01 lctl --device lustre-MDT0000 changelog_deregister $cl_user
+.RB "mds# " "lctl --device lustre-MDT0000 changelog_deregister cl14-llsomsync"
 .EE
 .RE
 .SH AVAILABILITY

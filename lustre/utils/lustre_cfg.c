@@ -59,9 +59,9 @@ static int lcfg_apply_param_yaml(const char *func, const char *filename);
 
 static char *lcfg_devname;
 
-int lcfg_set_devname(char *name)
+int lcfg_set_devname(const char *name)
 {
-	char *ptr;
+	const char *ptr;
 	int digit = 1;
 
 	if (name) {
@@ -95,11 +95,6 @@ int lcfg_set_devname(char *name)
 char *lcfg_get_devname(void)
 {
 	return lcfg_devname;
-}
-
-int jt_lcfg_device(int argc, char **argv)
-{
-	return jt_obd_device(argc, argv);
 }
 
 static int jt_lcfg_ioctl(struct lustre_cfg_bufs *bufs, char *arg, int cmd)
@@ -621,160 +616,6 @@ fail_print:
 	printf("%s%s%s\n", s, buf[0] ? " " : "", buf);
 }
 
-static int yaml_get_device_index(char *source)
-{
-	yaml_emitter_t request;
-	yaml_parser_t reply;
-	yaml_event_t event;
-	struct nl_sock *sk;
-	bool done = false;
-	int rc;
-
-	sk = nl_socket_alloc();
-	if (!sk)
-		return -EOPNOTSUPP;
-
-	/* Setup parser to recieve Netlink packets */
-	rc = yaml_parser_initialize(&reply);
-	if (rc == 0)
-		return -EOPNOTSUPP;
-
-	rc = yaml_parser_set_input_netlink(&reply, sk, false);
-	if (rc == 0)
-		return -EOPNOTSUPP;
-
-	/* Create Netlink emitter to send request to kernel */
-	yaml_emitter_initialize(&request);
-	rc = yaml_emitter_set_output_netlink(&request, sk, "lustre",
-					     LUSTRE_GENL_VERSION,
-					     LUSTRE_CMD_DEVICES, NLM_F_DUMP);
-	if (rc == 0)
-		goto error;
-
-	yaml_emitter_open(&request);
-
-	yaml_document_start_event_initialize(&event, NULL, NULL, NULL, 0);
-	rc = yaml_emitter_emit(&request, &event);
-	if (rc == 0)
-		goto error;
-
-	yaml_mapping_start_event_initialize(&event, NULL,
-					    (yaml_char_t *)YAML_MAP_TAG,
-					    1, YAML_ANY_MAPPING_STYLE);
-	rc = yaml_emitter_emit(&request, &event);
-	if (rc == 0)
-		goto error;
-
-	yaml_scalar_event_initialize(&event, NULL,
-				     (yaml_char_t *)YAML_STR_TAG,
-				     (yaml_char_t *)"devices",
-				     strlen("devices"), 1, 0,
-				     YAML_PLAIN_SCALAR_STYLE);
-	rc = yaml_emitter_emit(&request, &event);
-	if (rc == 0)
-		goto error;
-
-	yaml_sequence_start_event_initialize(&event, NULL,
-					     (yaml_char_t *)YAML_SEQ_TAG,
-					     1, YAML_ANY_SEQUENCE_STYLE);
-	rc = yaml_emitter_emit(&request, &event);
-	if (rc == 0)
-		goto error;
-
-	yaml_mapping_start_event_initialize(&event, NULL,
-					    (yaml_char_t *)YAML_MAP_TAG,
-					    1, YAML_ANY_MAPPING_STYLE);
-	rc = yaml_emitter_emit(&request, &event);
-	if (rc == 0)
-		goto error;
-
-	yaml_scalar_event_initialize(&event, NULL,
-				     (yaml_char_t *)YAML_STR_TAG,
-				     (yaml_char_t *)"name",
-				     strlen("name"),
-				     1, 0, YAML_PLAIN_SCALAR_STYLE);
-	rc = yaml_emitter_emit(&request, &event);
-	if (rc == 0)
-		goto error;
-
-	rc = yaml_scalar_event_initialize(&event, NULL,
-				     (yaml_char_t *)YAML_STR_TAG,
-				     (yaml_char_t *)source,
-				     strlen(source), 1, 0,
-				     YAML_PLAIN_SCALAR_STYLE);
-	if (rc == 0)
-		goto error;
-
-	rc = yaml_emitter_emit(&request, &event);
-	if (rc == 0)
-		goto error;
-
-	yaml_mapping_end_event_initialize(&event);
-	rc = yaml_emitter_emit(&request, &event);
-	if (rc == 0)
-		goto error;
-
-	yaml_sequence_end_event_initialize(&event);
-	rc = yaml_emitter_emit(&request, &event);
-	if (rc == 0)
-		goto error;
-
-	yaml_mapping_end_event_initialize(&event);
-	rc = yaml_emitter_emit(&request, &event);
-	if (rc == 0)
-		goto error;
-
-	yaml_document_end_event_initialize(&event, 0);
-	rc = yaml_emitter_emit(&request, &event);
-	if (rc == 0)
-		goto error;
-
-	yaml_emitter_close(&request);
-error:
-	if (rc == 0) {
-		yaml_emitter_log_error(&request, stderr);
-		yaml_emitter_cleanup(&request);
-		rc = -EOPNOTSUPP;
-		goto free_reply;
-	}
-	yaml_emitter_cleanup(&request);
-
-	while (!done) {
-		rc = yaml_parser_parse(&reply, &event);
-		if (rc == 0) {
-			yaml_parser_log_error(&reply, stdout, "lctl: ");
-			rc = -EINVAL;
-			break;
-		}
-
-		if (event.type == YAML_SCALAR_EVENT) {
-			char *value = (char *)event.data.scalar.value;
-
-			if (strcmp(value, "index") == 0) {
-				yaml_event_delete(&event);
-				rc = yaml_parser_parse(&reply, &event);
-				if (rc == 1) {
-					value = (char *)event.data.scalar.value;
-					errno = 0;
-					rc = strtoul(value, NULL, 10);
-					if (errno) {
-						yaml_event_delete(&event);
-						rc = -errno;
-					}
-					goto free_reply;
-				}
-			}
-		}
-		done = (event.type == YAML_STREAM_END_EVENT);
-		yaml_event_delete(&event);
-	}
-free_reply:
-	yaml_parser_cleanup(&reply);
-	nl_socket_free(sk);
-
-	return rc;
-}
-
 int yaml_get_limit_uid(const char *config)
 {
 	yaml_parser_t parser;
@@ -899,45 +740,11 @@ int jt_device_list(int argc, char **argv)
 	return 0;
 }
 
-static int do_name2dev(char *func, char *name, int dev_id)
-{
-	struct obd_ioctl_data data;
-	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
-	int rc;
-
-	/* Use YAML to find device index */
-	rc = yaml_get_device_index(name);
-	if (rc >= 0 || rc != -EOPNOTSUPP)
-		return rc;
-
-	memset(&data, 0, sizeof(data));
-	data.ioc_dev = dev_id;
-	data.ioc_inllen1 = strlen(name) + 1;
-	data.ioc_inlbuf1 = name;
-
-	memset(buf, 0, sizeof(rawbuf));
-	rc = llapi_ioctl_pack(&data, &buf, sizeof(rawbuf));
-	if (rc < 0) {
-		fprintf(stderr, "error: %s: invalid ioctl\n", jt_cmdname(func));
-		return rc;
-	}
-	rc = l_ioctl(OBD_DEV_ID, OBD_IOC_NAME2DEV, buf);
-	if (rc < 0)
-		return -errno;
-	rc = llapi_ioctl_unpack(&data, buf, sizeof(rawbuf));
-	if (rc < 0) {
-		fprintf(stderr, "error: %s: invalid reply\n", jt_cmdname(func));
-		return rc;
-	}
-
-	return data.ioc_dev;
-}
-
 /*
  * resolve a device name to a device number.
  * supports a number, $name or %uuid.
  */
-int parse_devname(char *func, char *name, int dev_id)
+int parse_devname(const char *func, const char *name)
 {
 	int rc = 0;
 
@@ -949,7 +756,7 @@ int parse_devname(char *func, char *name, int dev_id)
 		if (name[0] == '$' || name[0] == '%')
 			name++;
 
-		rc = do_name2dev(func, name, dev_id);
+		rc = llapi_obdname2devno(name);
 	} else {
 		errno = 0;
 		rc = strtoul(name, NULL, 10);
@@ -958,8 +765,8 @@ int parse_devname(char *func, char *name, int dev_id)
 	}
 
 	if (rc < 0)
-		fprintf(stderr, "No device found for name %s: %s\n",
-			name, strerror(-rc));
+		fprintf(stderr, "%s: no device found for name %s: %s\n",
+			func, name, strerror(-rc));
 	return rc;
 }
 

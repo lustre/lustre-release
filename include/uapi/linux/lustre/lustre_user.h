@@ -2165,12 +2165,15 @@ struct changelog_ext_xattr {
 	char cr_xattr[XATTR_NAME_MAX + 1]; /**< zero-terminated string. */
 };
 
+#define CHANGELOG_USER_NAMELEN 16 /* base name including NUL terminator */
+#define CHANGELOG_USER_NAMELEN_FULL 30 /* basename plus 'cl$ID-' prefix */
+
 /* Changelog filter for kernel-side filtering */
 struct changelog_filter {
 	__u64 cf_mask;
 	__u32 cf_user_id;
 	__u32 cf_padding;
-	char  cf_username[30]; /* CHANGELOG_USER_NAMELEN_FULL */
+	char  cf_username[CHANGELOG_USER_NAMELEN_FULL];
 };
 
 static inline struct changelog_ext_extra_flags *changelog_rec_extra_flags(

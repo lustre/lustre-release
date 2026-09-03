@@ -6,11 +6,13 @@
 
 LIBMAN = 					\
 	llapi_changelog_clear.3			\
+	llapi_changelog_deregister.3		\
 	llapi_changelog_fini.3			\
 	llapi_changelog_free.3			\
 	llapi_changelog_get_fd.3		\
 	llapi_changelog_in_buf.3		\
 	llapi_changelog_recv.3			\
+	llapi_changelog_register.3		\
 	llapi_changelog_set_xflags.3		\
 	llapi_changelog_start.3			\
 	llapi_changelog_start_user.3		\

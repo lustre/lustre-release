@@ -22602,17 +22602,22 @@ test_160q() {
 
 	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"
-	[ $MDS1_VERSION -ge $(version_code 2.14.54) ] ||
-		skip "Need MDS version at least 2.14.54"
+	(( $MDS1_VERSION >= $(version_code v2_14_54-57-gffe259f81c) )) ||
+		skip "Need MDS >= 2.14.54.57 for changelog default mask"
+
+	local old_opt=""
+	local new_opt="--mdt $mdt"
+	(( $MDS1_VERSION >= $(version_code 2.17.56) )) ||
+		{ old_opt="--device $mdt"; new_opt=""; }
 
 	# set server mask to minimal value like server init does
 	changelog_chmask "MARK"
-	clu=$(do_facet $SINGLEMDS $LCTL --device $mdt changelog_register -n) ||
+	clu=$(do_facet $SINGLEMDS $LCTL $old_opt changelog_register $new_opt -n) ||
 		error "changelog_register failed"
 	# check effective mask again, should be treated as DEFMASK now
 	mask=$(do_facet $SINGLEMDS $LCTL get_param \
 				mdd.$mdt.changelog_current_mask -n)
-	do_facet $SINGLEMDS $LCTL --device $mdt changelog_deregister $clu ||
+	do_facet $SINGLEMDS $LCTL $old_opt changelog_deregister $new_opt $clu ||
 		error "changelog_deregister failed"
 	[[ $mask == *"HLINK"* ]] || error "mask is not DEFMASK as expected"
 }

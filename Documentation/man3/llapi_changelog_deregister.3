@@ -1,0 +1,67 @@
+.TH LLAPI_CHANGELOG_DEREGISTER 3 2026-09-12 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_changelog_deregister \- Deregister changelog user on specific MDT device
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_changelog_deregister(const char *" mdtname ", const char *" regname );
+.fi
+.SH DESCRIPTION
+The function
+.B llapi_changelog_deregister()
+deregisters changelog
+.I regname
+on specific MDT device
+.I mdtname
+(e.g.
+.BR lustrefs-MDT0000 ).
+It must be run on the MDS node where the MDT is currently mounted.
+.PP
+The
+.I regname
+argument preferably uses the
+.I username
+specified during
+.IR llapi_changelog_register (3)
+(e.g.
+.RB ' audit ')
+as this allows an application to deregister its changelog user by the preferred
+name regardless of which changelog user number was assigned, but it can also be
+the changelog user number (e.g.
+.RB ' cl4 "' or '" 4 '),
+or both (e.g.
+.RB ' cl4-audit ').
+.SH RETURN VALUES
+Return 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.SM -EINVAL
+MDT device is invalid or not found.
+.TP
+.SM -ENOENT
+Username is not found.
+.SH EXAMPLE
+To deregister a previously-registered changelog user:
+.EX
+#include <lustre/lustreapi.h>
+
+int main(int argc, char *argv[])
+{
+	char *mdtname = argv[1]; /* e.g. "testfs-MDT0000" */
+	char *username = argv[2]; /* e.g. "cl4-audit" */
+	int rc;
+
+	rc = llapi_changelog_deregister(mdtname, username);
+}
+.EE
+.SH AVAILABILITY
+.B llapi_changelog_deregister()
+is part of the
+.BR lustre (7)
+user application interface library since release 2.18.0
+.\" Added in commit 2.17.5x
+.SH SEE ALSO
+.BR llapi_changelog_register (3),
+.BR lustreapi (7),
+.BR lctl-changelog_deregister (8)

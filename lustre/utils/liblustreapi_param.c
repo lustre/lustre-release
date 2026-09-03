@@ -1306,3 +1306,165 @@ void llapi_param_paths_free(glob_t *paths)
 {
 	cfs_free_param_data(paths);
 }
+
+int llapi_yaml_get_device_index(const char *source)
+{
+	yaml_emitter_t request;
+	yaml_parser_t reply;
+	yaml_event_t event;
+	struct nl_sock *sk;
+	bool done = false;
+	int rc;
+
+	sk = nl_socket_alloc();
+	if (!sk)
+		return -EOPNOTSUPP;
+
+	/* Setup parser to recieve Netlink packets */
+	rc = yaml_parser_initialize(&reply);
+	if (rc == 0) {
+		rc = -EOPNOTSUPP;
+		goto free_socket;
+	}
+
+	rc = yaml_parser_set_input_netlink(&reply, sk, false);
+	if (rc == 0) {
+		rc = -EOPNOTSUPP;
+		goto free_reply;
+	}
+
+	/* Create Netlink emitter to send request to kernel */
+	yaml_emitter_initialize(&request);
+	rc = yaml_emitter_set_output_netlink(&request, sk, "lustre",
+					     LUSTRE_GENL_VERSION,
+					     LUSTRE_CMD_DEVICES, NLM_F_DUMP);
+	if (rc == 0)
+		goto error;
+
+	yaml_emitter_open(&request);
+
+	yaml_document_start_event_initialize(&event, NULL, NULL, NULL, 0);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_ANY_MAPPING_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)"devices",
+				     strlen("devices"), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_sequence_start_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_SEQ_TAG,
+					     1, YAML_ANY_SEQUENCE_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_mapping_start_event_initialize(&event, NULL,
+					    (yaml_char_t *)YAML_MAP_TAG,
+					    1, YAML_ANY_MAPPING_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)"name",
+				     strlen("name"),
+				     1, 0, YAML_PLAIN_SCALAR_STYLE);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	rc = yaml_scalar_event_initialize(&event, NULL,
+				     (yaml_char_t *)YAML_STR_TAG,
+				     (yaml_char_t *)source,
+				     strlen(source), 1, 0,
+				     YAML_PLAIN_SCALAR_STYLE);
+	if (rc == 0)
+		goto error;
+
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_sequence_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_mapping_end_event_initialize(&event);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_document_end_event_initialize(&event, 0);
+	rc = yaml_emitter_emit(&request, &event);
+	if (rc == 0)
+		goto error;
+
+	yaml_emitter_close(&request);
+error:
+	if (rc == 0) {
+		yaml_emitter_log_error(&request, stderr);
+		yaml_emitter_cleanup(&request);
+		rc = -EOPNOTSUPP;
+		goto free_reply;
+	}
+	yaml_emitter_cleanup(&request);
+
+	while (!done) {
+		rc = yaml_parser_parse(&reply, &event);
+		if (rc == 0) {
+			yaml_parser_log_error(&reply, stderr, "obdname2dev: ");
+			rc = -EINVAL;
+			break;
+		}
+
+		if (event.type == YAML_SCALAR_EVENT) {
+			char *value = (char *)event.data.scalar.value;
+
+			if (strcmp(value, "index") == 0) {
+				yaml_event_delete(&event);
+				rc = yaml_parser_parse(&reply, &event);
+				if (rc == 1) {
+					value = (char *)event.data.scalar.value;
+					errno = 0;
+					rc = strtoul(value, NULL, 10);
+					if (errno) {
+						yaml_event_delete(&event);
+						rc = -errno;
+					}
+					yaml_event_delete(&event);
+					goto free_reply;
+				}
+			}
+		}
+		done = (event.type == YAML_STREAM_END_EVENT);
+		yaml_event_delete(&event);
+	}
+	if (done) /* name was not found */
+		rc = -ENOENT;
+free_reply:
+	yaml_parser_cleanup(&reply);
+free_socket:
+	nl_socket_free(sk);
+
+	return rc;
+}
