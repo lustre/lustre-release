@@ -1975,7 +1975,6 @@ static int ll_new_node(struct inode *dir, struct dentry *dchild,
 		datalen = disk_link->len;
 	}
 
-again:
 	err = ll_new_node_prepare(dir, dchild, mode, opc, &encrypt, tgt,
 				  &op_data, &lum, &data, &datalen, disk_link);
 	if (err)
@@ -1985,72 +1984,6 @@ again:
 			from_kuid(&init_user_ns, current_fsuid()),
 			from_kgid(&init_user_ns, current_fsgid()),
 			current_cap(), rdev, &request);
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 17, 58, 0)
-	/*
-	 * server < 2.12.58 doesn't pack default LMV in intent_getattr reply,
-	 * fetch default LMV here.
-	 */
-	if (unlikely(err == -EREMOTE)) {
-		struct ll_inode_info	*lli = ll_i2info(dir);
-		struct lmv_user_md	*lum;
-		int			lumsize;
-		int			err2;
-
-		ptlrpc_req_put(request);
-		request = NULL;
-		ll_finish_md_op_data(op_data);
-		op_data = NULL;
-
-		err2 = ll_dir_getstripe(dir, (void **)&lum, &lumsize, &request,
-					OBD_MD_DEFAULT_MEA);
-		if (err2 == 0) {
-			struct lustre_md md = { NULL };
-
-
-			md.body = req_capsule_server_get(&request->rq_pill,
-							 &RMF_MDT_BODY);
-			if (!md.body)
-				GOTO(err_exit, err = -EPROTO);
-
-			OBD_ALLOC_PTR(md.def_lsm_obj);
-			if (!md.def_lsm_obj)
-				GOTO(err_exit, err = -ENOMEM);
-
-			md.def_lsm_obj->lso_lsm.lsm_md_magic = lum->lum_magic;
-			md.def_lsm_obj->lso_lsm.lsm_md_stripe_count =
-				lum->lum_stripe_count;
-			md.def_lsm_obj->lso_lsm.lsm_md_master_mdt_index =
-				lum->lum_stripe_offset;
-			md.def_lsm_obj->lso_lsm.lsm_md_hash_type =
-				lum->lum_hash_type;
-			md.def_lsm_obj->lso_lsm.lsm_md_max_inherit =
-				lum->lum_max_inherit;
-			md.def_lsm_obj->lso_lsm.lsm_md_max_inherit_rr =
-				lum->lum_max_inherit_rr;
-			kref_init(&md.def_lsm_obj->lso_refs);
-
-			err = ll_update_inode(dir, &md);
-			md_put_lustre_md(sbi->ll_md_exp, &md);
-			if (err)
-				GOTO(err_exit, err);
-		} else if (err2 == -ENODATA && lli->lli_def_lsm_obj) {
-			/*
-			 * If there are no default stripe EA on the MDT, but the
-			 * client has default stripe, then it probably means
-			 * default stripe EA has just been deleted.
-			 */
-			down_write(&lli->lli_lsm_sem);
-			lmv_stripe_object_put(&lli->lli_def_lsm_obj);
-			up_write(&lli->lli_lsm_sem);
-		} else {
-			GOTO(err_exit, err);
-		}
-
-		ptlrpc_req_put(request);
-		request = NULL;
-		goto again;
-	}
-#endif
 
 	if (err < 0)
 		GOTO(err_exit, err);
