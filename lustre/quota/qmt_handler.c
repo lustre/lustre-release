@@ -564,7 +564,7 @@ out:
 	if (!IS_ERR_OR_NULL(th))
 		dt_trans_stop(env, qmt->qmt_child, th);
 
-	if (slv_obj != NULL)
+	if (!IS_ERR_OR_NULL(slv_obj))
 		dt_object_put(env, slv_obj);
 	return 0;
 }
