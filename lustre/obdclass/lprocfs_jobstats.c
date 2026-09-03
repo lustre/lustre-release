@@ -221,6 +221,7 @@ static struct job_stat *job_alloc(char *jobid, struct obd_job_stats *jobs)
 	job->js_time_latest = job->js_stats->ls_init;
 	job->js_jobstats = jobs;
 	RB_CLEAR_NODE(&job->js_idnode);
+	RB_CLEAR_NODE(&job->js_posnode);
 	INIT_LIST_HEAD(&job->js_lru);
 	clear_bit(JS_EXPIRED, &job->js_flags);
 	/* open code init_llist_node */
@@ -421,9 +422,14 @@ try_insert:
 	down_write(&stats->ojs_rwsem);
 	job_purge_locked(stats, UINT_MAX);
 	existing_job = job_insert(stats, job);
-	if (IS_ERR(existing_job) && PTR_ERR(existing_job) == -EAGAIN) {
+	if (IS_ERR(existing_job)) {
+		if (PTR_ERR(existing_job) == -EAGAIN) {
+			up_write(&stats->ojs_rwsem);
+			goto try_insert;
+		}
+		job_putref(job);
 		up_write(&stats->ojs_rwsem);
-		goto try_insert;
+		RETURN(PTR_ERR(existing_job));
 	}
 	/* on collision drop the old job and proceed with the existing job */
 	if (existing_job) {
