@@ -27,7 +27,7 @@ static int extent_debug; /* set it to be true for more debug */
 
 static void osc_update_pending(struct osc_object *obj, int cmd, int delta);
 static int osc_extent_wait(const struct lu_env *env, struct osc_extent *ext,
-			   enum osc_extent_state state);
+			   enum osc_extent_state state, bool abortable);
 static void osc_completion(const struct lu_env *env, struct osc_object *osc,
 			   struct osc_async_page *oap, enum cl_req_type crt,
 			   int rc);
@@ -614,10 +614,11 @@ void osc_extent_release(const struct lu_env *env, struct osc_extent *ext,
 				int rc;
 
 				osc_object_unlock(obj);
-				rc = osc_extent_wait(env, ext, OES_INV);
+				rc = osc_extent_wait(env, ext, OES_INV, false);
 				if (rc < 0)
 					OSC_EXTENT_DUMP(D_ERROR, ext,
-							"error: %d.\n", rc);
+						"wait for OES_INV: rc = %d\n",
+						rc);
 				osc_object_lock(obj);
 			}
 			osc_extent_state_set(ext, OES_TRUNC);
@@ -864,7 +865,7 @@ restart:
 
 		/* waiting for IO to finish. Please notice that it's impossible
 		 * to be an OES_TRUNC extent. */
-		rc = osc_extent_wait(env, conflict, OES_INV);
+		rc = osc_extent_wait(env, conflict, OES_INV, true);
 		osc_extent_put(env, conflict);
 		conflict = NULL;
 		if (rc < 0)
@@ -907,7 +908,7 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 
 	OSC_EXTENT_DUMP(D_CACHE, ext, "extent finished.\n");
 
-	ext->oe_rc = rc ?: ext->oe_nr_pages;
+	ext->oe_rc = rc;
 	EASSERT(ergo(rc == 0, ext->oe_state == OES_RPC), ext);
 
 	/* dio pages do not go in the LRU */
@@ -960,13 +961,17 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
  * @env: Lustre environment
  * @ext: Pointer to osc_extent (extent which is being waited for state change)
  * @state: Value of OSC state
+ * @abortable: %true if the caller returns the error rather than going on to
+ * flush, discard or truncate the pages, which must not happen on top of an
+ * incomplete drain (LU-2779).  It only applies once the 600s wait below has
+ * expired.  For mkwrite, only fatal signals may abort the wait.
  *
  * Return:
  * * %0 on success
- * * %1 on failure
+ * * -ve errno on failure
  */
 static int osc_extent_wait(const struct lu_env *env, struct osc_extent *ext,
-			   enum osc_extent_state state)
+			   enum osc_extent_state state, bool abortable)
 {
 	struct osc_object *obj = ext->oe_obj;
 	int rc = 0;
@@ -989,22 +994,41 @@ static int osc_extent_wait(const struct lu_env *env, struct osc_extent *ext,
 	if (rc == 1)
 		osc_extent_release(env, ext, IO_PRIO_NORMAL);
 
-	/* wait for the extent until its state becomes @state */
+	/* All wait conditions below use load-acquire to pair with the
+	 * store-release in osc_extent_state_set(), so the extent updates made
+	 * before the state change are visible once @state is observed.
+	 */
 	rc = wait_event_idle_timeout(ext->oe_waitq,
 				     smp_load_acquire(&ext->oe_state) == state,
 				     cfs_time_seconds(600));
-	if (rc == 0) {
+	if (unlikely(rc == 0)) {
 		OSC_EXTENT_DUMP(D_ERROR, ext,
 			"%s: wait ext to %u timedout, recovery in progress?\n",
 			cli_name(osc_cli(obj)), state);
 
-		wait_event_idle(ext->oe_waitq,
-				smp_load_acquire(&ext->oe_state) == state);
+		if (abortable) {
+			struct cl_io *io = osc_env_io(env)->oi_cl.cis_io;
+
+			/* page_mkwrite() maps an interrupted wait to SIGBUS.
+			 * Only abort it when the task is being killed, so a
+			 * caught SIGTERM cannot turn into a fatal fault.
+			 */
+			if (cl_io_is_mkwrite(io))
+				rc = wait_event_killable(ext->oe_waitq,
+				     smp_load_acquire(&ext->oe_state) == state);
+			else
+				rc = l_wait_event_abortable(ext->oe_waitq,
+				     smp_load_acquire(&ext->oe_state) == state);
+		} else {
+			wait_event_idle(ext->oe_waitq,
+				     smp_load_acquire(&ext->oe_state) == state);
+		}
+	} else {
+		rc = 0; /* wait_event_idle_timeout() returns jiffies left */
 	}
-	if (ext->oe_rc < 0)
+	if (rc == 0)
 		rc = ext->oe_rc;
-	else
-		rc = 0;
+
 	RETURN(rc);
 }
 
@@ -2702,10 +2726,12 @@ restart_find:
 				oio->oi_active = NULL;
 
 				/* Waiting for IO finished.  */
-				rc = osc_extent_wait(env, ext, OES_INV);
+				rc = osc_extent_wait(env, ext, OES_INV, true);
 				osc_extent_put(env, ext);
-				if (rc < 0)
+				if (rc < 0) {
+					osc_exit_cache(cli, oap);
 					RETURN(rc);
+				}
 
 				GOTO(restart_find, rc);
 			}
@@ -2915,7 +2941,7 @@ int osc_queue_dio_pages(const struct lu_env *env, struct cl_io *io,
 		int rc;
 
 		osc_io_unplug(env, cli, obj);
-		rc = osc_extent_wait(env, ext, OES_INV);
+		rc = osc_extent_wait(env, ext, OES_INV, false);
 		osc_extent_put(env, ext);
 		/*
 		 * RPC completion has already recorded @rc in the DIO sync
@@ -3143,7 +3169,7 @@ again:
 		/* extent may be in OES_ACTIVE state because inode mutex
 		 * is released before osc_io_end() in file write case */
 		if (ext->oe_state != OES_TRUNC)
-			osc_extent_wait(env, ext, OES_TRUNC);
+			osc_extent_wait(env, ext, OES_TRUNC, false);
 
 		rc = osc_extent_truncate(ext, index, partial);
 		if (rc < 0) {
@@ -3181,9 +3207,10 @@ again:
 
 		/* ignore the result of osc_extent_wait the write initiator
 		 * should take care of it. */
-		rc = osc_extent_wait(env, waiting, OES_INV);
+		rc = osc_extent_wait(env, waiting, OES_INV, false);
 		if (rc < 0)
-			OSC_EXTENT_DUMP(D_CACHE, waiting, "error: %d.\n", rc);
+			OSC_EXTENT_DUMP(D_CACHE, waiting,
+					"wait for OES_INV: rc = %d\n", rc);
 
 		osc_extent_put(env, waiting);
 		waiting = NULL;
@@ -3280,7 +3307,7 @@ again:
 		osc_extent_get(ext);
 		osc_object_unlock(obj);
 
-		rc = osc_extent_wait(env, ext, OES_INV);
+		rc = osc_extent_wait(env, ext, OES_INV, false);
 		if (result == 0)
 			result = rc;
 		osc_extent_put(env, ext);

@@ -322,23 +322,22 @@ noreproc:
 		ldlm_set_fail_loc(lock);
 		rc = -EINTR;
 	} else {
+		bool abortable_wait = false;
+
 		/* Go to sleep until the lock is granted or cancelled. */
 		if (ldlm_is_no_timeout(lock)) {
-			LDLM_DEBUG(lock, "waiting indefinitely because of NO_TIMEOUT");
-			rc = l_wait_event_abortable(
-				lock->l_waitq,
-				is_granted_or_cancelled(lock));
-		} else {
-			if (wait_event_idle_timeout(
-				    lock->l_waitq,
-				    is_granted_or_cancelled(lock),
-				    cfs_time_seconds(timeout)) == 0) {
-				ldlm_expired_completion_wait(&lwd);
-				rc = l_wait_event_abortable(
-					lock->l_waitq,
-					is_granted_or_cancelled(lock));
-			}
-		}
+			LDLM_DEBUG(lock,
+				"waiting indefinitely because of NO_TIMEOUT");
+			abortable_wait = true;
+		} else if (wait_event_idle_timeout(lock->l_waitq,
+					    is_granted_or_cancelled(lock),
+					    cfs_time_seconds(timeout)) == 0) {
+			ldlm_expired_completion_wait(&lwd);
+			abortable_wait = true;
+		} /* else lock was granted or cancelled, no extra wait needed */
+		if (abortable_wait)
+			rc = l_wait_event_abortable(lock->l_waitq,
+						is_granted_or_cancelled(lock));
 	}
 
 	if (rc) {

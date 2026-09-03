@@ -951,8 +951,8 @@ struct osc_extent {
 	struct ldlm_lock	*oe_dlmlock;
 	/** terminator of this extent. Must be true if this extent is in IO. */
 	struct task_struct	*oe_owner;
-	/** return value of writeback. If somebody is waiting for this extent,
-	 * this value can be known by outside world.
+	/* return value of writeback (0 or negative errno). If somebody is
+	 * waiting for this extent, this value can be known by outside world.
 	 */
 	int			oe_rc;
 	/** max pages per rpc when this extent was created */

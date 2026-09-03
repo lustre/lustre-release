@@ -2396,7 +2396,7 @@ __u16 obd_get_mod_rpc_slot(struct client_obd *cli, __u32 opc)
 		while (wait.woken == false) {
 			spin_unlock_irq(&cli->cl_mod_rpcs_waitq.lock);
 			wait_woken(&wait.wqe, TASK_UNINTERRUPTIBLE,
-				MAX_SCHEDULE_TIMEOUT);
+				   MAX_SCHEDULE_TIMEOUT);
 			spin_lock_irq(&cli->cl_mod_rpcs_waitq.lock);
 		}
 		__remove_wait_queue(&cli->cl_mod_rpcs_waitq, &wait.wqe);
