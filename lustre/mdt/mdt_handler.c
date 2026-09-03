@@ -3293,11 +3293,11 @@ static int mdt_set_info(struct tgt_session_info *tsi)
 static int mdt_readpage(struct tgt_session_info *tsi)
 {
 	struct mdt_thread_info	*info = mdt_th_info(tsi->tsi_env);
-	struct mdt_object	*object = mdt_obj(tsi->tsi_corpus);
 	struct lu_rdpg		*rdpg = &info->mti_u.rdpg.mti_rdpg;
 	const struct mdt_body	*reqbody = tsi->tsi_mdt_body;
 	struct ptlrpc_request	*req = tgt_ses_req(tsi);
 	ktime_t			 kstart = ktime_get();
+	struct mdt_object	*object;
 	struct mdt_body		*repbody;
 	int			 rc;
 	int			 i;
@@ -3310,6 +3310,11 @@ static int mdt_readpage(struct tgt_session_info *tsi)
 	repbody = req_capsule_server_get(tsi->tsi_pill, &RMF_MDT_BODY);
 	if (repbody == NULL || reqbody == NULL)
 		RETURN(err_serious(-EFAULT));
+
+	if (unlikely(tsi->tsi_corpus == NULL))
+		RETURN(-EPROTO);
+
+	object = mdt_obj(tsi->tsi_corpus);
 
 	/*
 	 * prepare @rdpg before calling lower layers and transfer itself. Here
