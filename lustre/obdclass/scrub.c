@@ -1063,6 +1063,7 @@ void lustre_index_backup(const struct lu_env *env, struct dt_device *dev,
 		if (IS_ERR_OR_NULL(parent)) {
 			CERROR("%s: failed to locate backup dir: rc = %ld\n",
 			       devname, parent ? PTR_ERR(parent) : -ENOENT);
+			parent = NULL;
 			backup = false;
 			goto scan;
 		}
