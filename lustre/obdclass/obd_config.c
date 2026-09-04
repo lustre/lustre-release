@@ -2195,7 +2195,6 @@ int class_config_parse_llog(const struct lu_env *env, struct llog_ctxt *ctxt,
 			    char *name, struct config_llog_instance *cfg)
 {
 	struct llog_process_cat_data cd = {
-		.lpcd_first_idx = 0,
 		.lpcd_read_mode = LLOG_READ_MODE_NORMAL,
 	};
 	struct llog_handle *llh;
@@ -2214,13 +2213,9 @@ int class_config_parse_llog(const struct lu_env *env, struct llog_ctxt *ctxt,
 		GOTO(parse_out, rc);
 
 	/* continue processing from where we last stopped to end-of-log */
-	if (cfg) {
-		cd.lpcd_first_idx = cfg->cfg_last_idx;
-		callback = cfg->cfg_callback;
-		LASSERT(callback != NULL);
-	} else {
-		callback = class_config_llog_handler;
-	}
+	cd.lpcd_first_idx = cfg->cfg_last_idx;
+	callback = cfg->cfg_callback;
+	LASSERT(callback != NULL);
 
 	cd.lpcd_last_idx = 0;
 
@@ -2228,8 +2223,7 @@ int class_config_parse_llog(const struct lu_env *env, struct llog_ctxt *ctxt,
 
 	CDEBUG(D_CONFIG, "Processed log %s gen %d-%d (rc=%d)\n", name,
 	       cd.lpcd_first_idx + 1, cd.lpcd_last_idx, rc);
-	if (cfg)
-		cfg->cfg_last_idx = cd.lpcd_last_idx;
+	cfg->cfg_last_idx = cd.lpcd_last_idx;
 
 parse_out:
 	llog_close(env, llh);
