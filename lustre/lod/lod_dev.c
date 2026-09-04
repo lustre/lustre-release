@@ -2456,9 +2456,8 @@ static int lod_obd_get_info(const struct lu_env *env, struct obd_export *exp,
 				continue;
 
 			ctxt = llog_get_context(ld, LLOG_UPDATELOG_ORIG_CTXT);
-			LASSERT(ctxt != NULL);
-			if (!ctxt->loc_handle) {
-				CDEBUG(D_INFO, "%s: %s is not ready(%p).\n",
+			if (!ctxt || !ctxt->loc_handle) {
+				CDEBUG(D_HA, "%s: %s is not ready(%p).\n",
 				       obd->obd_name, ld->obd_name, ctxt);
 				llog_ctxt_put(ctxt);
 				rc = -EAGAIN;
