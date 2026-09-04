@@ -1447,6 +1447,13 @@ struct ptlrpc_bulk_desc {
 	int			bd_nob;		/* # bytes covered */
 	int			bd_nob_transferred; /* # bytes GOT/PUT */
 	unsigned int		bd_iop_len;	/* md iop bytes */
+	/* Interop only: MD0 shrink requested by a pre-2.17 peer, in units of
+	 * PTLRPC_BULK_INTEROP_PAGE_SIZE, range [0, IOOBJ_OFFSET_MASK].  Such
+	 * peers charge the first MD for the unused head of the first 64KiB
+	 * page, so this side must reserve the same space to split the bulk
+	 * into MDs at the same place.  Zero for 2.17+ peers.
+	 */
+	unsigned short		bd_md_offset;
 
 	__u64			bd_last_mbits;
 

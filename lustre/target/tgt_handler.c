@@ -2509,6 +2509,8 @@ int tgt_brw_read(struct tgt_session_info *tsi)
 					    &ptlrpc_bulk_kiov_nopin_ops);
 		if (desc == NULL)
 			GOTO(out_commitrw, rc = -ENOMEM);
+		/* pre-2.17 clients may need MD0 shrunk, see bd_md_offset */
+		desc->bd_md_offset = ioobj_page_interop_offset(ioo);
 	}
 
 	npages_read = npages;
@@ -2960,6 +2962,8 @@ int tgt_brw_write(struct tgt_session_info *tsi)
 					    &ptlrpc_bulk_kiov_nopin_ops);
 		if (desc == NULL)
 			GOTO(skip_transfer, rc = -ENOMEM);
+		/* pre-2.17 clients may need MD0 shrunk, see bd_md_offset */
+		desc->bd_md_offset = ioobj_page_interop_offset(ioo);
 		/* NB Having prepped, we must commit... */
 		for (i = 0; i < npages; i++)
 			desc->bd_frag_ops->add_kiov_frag(desc,

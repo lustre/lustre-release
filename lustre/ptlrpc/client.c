@@ -183,6 +183,7 @@ struct ptlrpc_bulk_desc *ptlrpc_new_bulk(unsigned int nfrags,
 	desc->bd_type = type;
 	desc->bd_md_count = 0;
 	desc->bd_iop_len = 0;
+	desc->bd_md_offset = 0;
 	desc->bd_frag_ops = ops;
 	LASSERT(max_brw > 0);
 	desc->bd_md_max_brw = min(max_brw, PTLRPC_BULK_OPS_COUNT);
@@ -298,7 +299,13 @@ restart:
 	    (desc->bd_iop_len + PTLRPC_BULK_INTEROP_PAGE_SIZE) > LNET_MTU) {
 		desc->bd_mds_off[desc->bd_md_count] = desc->bd_iov_count;
 		desc->bd_md_count++;
-		desc->bd_iop_len = 0;
+		/* Interop: a pre-2.17 peer charges MD0 for the unused head of
+		 * the first 64KiB page, so shrink MD0 by the same amount or
+		 * the two sides put the MD boundary in different places and
+		 * the transfer never matches. See bd_md_offset.
+		 */
+		desc->bd_iop_len = desc->bd_md_count == 1 ?
+			desc->bd_md_offset * PTLRPC_BULK_INTEROP_PAGE_SIZE : 0;
 		LASSERT(desc->bd_md_count <= PTLRPC_BULK_OPS_LIMIT);
 		if (desc->bd_md_count > desc->bd_md_max_brw &&
 		   (desc->bd_md_max_brw << 1) <= PTLRPC_BULK_OPS_COUNT)
