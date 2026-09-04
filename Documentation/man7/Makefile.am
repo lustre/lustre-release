@@ -4,23 +4,27 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-MANFILES =					\
-	lustre.7				\
-	lnet.7
+# Every *.7 in this directory is shipped, and installed subject to the
+# conditionals below.  Do not turn this back into a hand-written list of
+# pages.
+MANFILES = $(notdir $(wildcard $(srcdir)/*.7))
 
-
+# API overview pages, which ship even without the utilities.  This is a
+# classification, not the packaging list: a page left out of it still
+# installs and ships, but it is only included in the utilities set.
 LIBMAN = 					\
 	lustreapi.7				\
 	llapi_layout.7
 
 if MANPAGES
-man_MANS = $(LIBMAN)
 if UTILS
-man_MANS += $(MANFILES)
-endif
-endif
+man7_MANS = $(MANFILES)
+else
+man7_MANS = $(LIBMAN)
+endif # UTILS
+endif # MANPAGES
 
 CLEANFILES = *.aux *.tex *.log *.pdf
-EXTRA_DIST = $(MANFILES) $(LIBMAN)
+EXTRA_DIST = $(MANFILES)
 
 all:

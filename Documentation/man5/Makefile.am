@@ -4,13 +4,14 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-MANFILES =					\
-	ldev.conf.5				\
-	nids.5
+# Every *.5 in this directory is shipped, and installed subject to the
+# conditionals below.  Do not turn this back into a hand-written list of
+# pages.
+MANFILES = $(notdir $(wildcard $(srcdir)/*.5))
 
 if MANPAGES
 if UTILS
-man_MANS = $(MANFILES)
+man5_MANS = $(MANFILES)
 endif
 endif
 

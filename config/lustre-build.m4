@@ -421,6 +421,7 @@ AC_DEFUN([LB_CONFIG_FILES], [
 		Documentation/Makefile
 		Documentation/man1/Makefile
 		Documentation/man3/Makefile
+		Documentation/man4/Makefile
 		Documentation/man5/Makefile
 		Documentation/man7/Makefile
 		Documentation/man8/Makefile
