@@ -735,6 +735,7 @@ static int osd_scrub_next(struct osd_thread_info *info, struct osd_device *dev,
 	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
 	struct lu_fid *fid;
 	struct osd_inode_id *lid;
+	__u64 next;
 	int rc;
 
 	if (CFS_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_DELAY) && cfs_fail_val > 0)
@@ -778,15 +779,17 @@ static int osd_scrub_next(struct osd_thread_info *info, struct osd_device *dev,
 	if (noslot)
 		return SCRUB_NEXT_WAIT;
 
-	rc = osd_iit_next(param, &scrub->os_pos_current);
+	next = scrub->os_pos_current;
+	rc = osd_iit_next(param, &next);
 	if (rc != 0)
 		return rc;
 
 	*oic = &dev->od_scrub.os_oic;
 	fid = &(*oic)->oic_fid;
 	lid = &(*oic)->oic_lid;
-	rc = osd_iit_iget(info, dev, fid, lid,
-			  scrub->os_pos_current, param->sb, true);
+	rc = osd_iit_iget(info, dev, fid, lid, next, param->sb, true);
+	smp_mb();
+	scrub->os_pos_current = next;
 	return rc;
 }
 

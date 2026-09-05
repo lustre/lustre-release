@@ -653,6 +653,8 @@ test_5()
 	[ "$mds1_FSTYPE" != ldiskfs ] &&
 		skip "OI Scrub not implemented for ZFS"
 
+	wait_delete_completed
+
 	lfsck_prep 1 1 1
 	cleanup_mount $MOUNT || error "(0.1) Fail to stop client!"
 	stop $SINGLEMDS > /dev/null || error "(0.2) Fail to stop $SINGLEMDS!"
