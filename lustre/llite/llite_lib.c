@@ -1543,15 +1543,13 @@ int ll_fill_super(struct super_block *sb)
 	if (len > LUSTRE_MAXFSNAME) {
 		if (unlikely(len >= MAX_STRING_SIZE))
 			len = MAX_STRING_SIZE - 1;
-		strncpy(name, profilenm, len);
-		name[len] = '\0';
+		strscpy(name, profilenm, len + 1);
 		err = -ENAMETOOLONG;
 		CERROR("%s: fsname longer than %u characters: rc = %d\n",
 		       name, LUSTRE_MAXFSNAME, err);
 		GOTO(out_free_cfg, err);
 	}
-	strncpy(sbi->ll_fsname, profilenm, len);
-	sbi->ll_fsname[len] = '\0';
+	strscpy(sbi->ll_fsname, profilenm, len + 1);
 
 	err = gss_rename_sk_key(sbi->ll_skid, sbi->ll_fsname,
 				sbi->ll_sb_uuid.uuid);

@@ -110,8 +110,7 @@ static ssize_t qos_prio_free_store(struct kobject *kobj,
 	if (count >= sizeof(buf))
 		return -ERANGE;
 
-	strncpy(buf, buffer, sizeof(buf));
-	buf[sizeof(buf) - 1] = '\0';
+	strscpy(buf, buffer, sizeof(buf));
 	tmp = strchr(buf, '%');
 	if (tmp)
 		*tmp = '\0';
@@ -194,8 +193,7 @@ static ssize_t qos_threshold_rr_store(struct kobject *kobj,
 	if (count >= sizeof(buf))
 		return -ERANGE;
 
-	strncpy(buf, buffer, sizeof(buf));
-	buf[sizeof(buf) - 1] = '\0';
+	strscpy(buf, buffer, sizeof(buf));
 	tmp = strchr(buf, '%');
 	if (tmp)
 		*tmp = '\0';
@@ -314,8 +312,7 @@ static ssize_t qos_exclude_seq_write_internal(struct file *file,
 			OBD_FREE(buf, count + 1);
 			return -ERANGE;
 		}
-		strncpy(namebuf, name, len);
-		namebuf[len] = '\0';
+		strscpy(namebuf, name, len + 1);
 		again = is_prefix;
 		switch (op) {
 		default:
@@ -338,7 +335,7 @@ again_plus:
 				OBD_FREE(buf, count + 1);
 				return -ENOMEM;
 			}
-			strncpy(pat->qep_name, namebuf, len);
+			strscpy(pat->qep_name, namebuf, len + 1);
 			spin_lock(&lmv->lmv_lock);
 			list_add_tail(&pat->qep_list,
 						&lmv->lmv_qos_exclude_list);

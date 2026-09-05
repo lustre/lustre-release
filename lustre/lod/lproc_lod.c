@@ -639,8 +639,7 @@ static ssize_t __qos_prio_free_store(struct kobject *kobj,
 	if (count >= sizeof(buf))
 		return -ERANGE;
 
-	strncpy(buf, buffer, sizeof(buf));
-	buf[sizeof(buf) - 1] = '\0';
+	strscpy(buf, buffer, sizeof(buf));
 	tmp = strchr(buf, '%');
 	if (tmp)
 		*tmp = '\0';
@@ -730,8 +729,7 @@ static ssize_t __qos_threshold_rr_store(struct kobject *kobj,
 	if (count >= sizeof(buf))
 		return -ERANGE;
 
-	strncpy(buf, buffer, sizeof(buf));
-	buf[sizeof(buf) - 1] = '\0';
+	strscpy(buf, buffer, sizeof(buf));
 	tmp = strchr(buf, '%');
 	if (tmp)
 		*tmp = '\0';
@@ -1201,7 +1199,7 @@ static int lod_spill_check_loop(struct lod_device *lod,
 	struct lod_pool_desc *tgt;
 	int rc = 0;
 
-	strncpy(dest, destarg, sizeof(dest));
+	strscpy(dest, destarg, sizeof(dest));
 
 	/*
 	 * pool1 -> pool2 -> pool3 ++> pool1
@@ -1214,7 +1212,7 @@ static int lod_spill_check_loop(struct lod_device *lod,
 			break;
 		}
 
-		strncpy(dest, tgt->pool_spill_target, sizeof(dest));
+		strscpy(dest, tgt->pool_spill_target, sizeof(dest));
 		lod_pool_putref(tgt);
 
 		if (strcmp(dest, pool) == 0) {
@@ -1264,7 +1262,7 @@ lod_spill_target_seq_write(struct file *file, const char __user *buffer,
 
 	rc = lod_spill_check_loop(lod, pool->pool_name, tgt_name);
 	if (rc == 0) {
-		strncpy(pool->pool_spill_target, tgt_name,
+		strscpy(pool->pool_spill_target, tgt_name,
 			sizeof(pool->pool_spill_target));
 		rc = count;
 	}

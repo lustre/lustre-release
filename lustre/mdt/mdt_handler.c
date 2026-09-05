@@ -340,7 +340,7 @@ static int mdt_lookup_fileset(struct mdt_thread_info *info, const char *fileset,
 		start = s2;
 
 		lname->ln_namelen = s2 - s1;
-		if (lname->ln_namelen > NAME_MAX) {
+		if (lname->ln_namelen >= sizeof(info->mti_filename)) {
 			rc = -EINVAL;
 			break;
 		}
@@ -351,8 +351,8 @@ static int mdt_lookup_fileset(struct mdt_thread_info *info, const char *fileset,
 			break;
 		}
 
-		strncpy(filename, s1, lname->ln_namelen);
-		filename[lname->ln_namelen] = '\0';
+		/* construct ln_name using mti_filename for buffer */
+		strscpy(filename, s1, lname->ln_namelen + 1);
 		lname->ln_name = filename;
 
 		obj = mdt_object_find(info->mti_env, mdt, fid);
@@ -6611,7 +6611,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	/* Set this lu_device to obd for error handling purposes. */
 	obd->obd_lu_dev = &m->mdt_lu_dev;
 
-	strncpy(m->mdt_job_xattr, XATTR_NAME_JOB_DEFAULT, XATTR_JOB_MAX_LEN);
+	strscpy(m->mdt_job_xattr, XATTR_NAME_JOB_DEFAULT,
+		sizeof(m->mdt_job_xattr));
 
 	/* init the stack */
 	rc = mdt_stack_init((struct lu_env *)env, m, cfg);

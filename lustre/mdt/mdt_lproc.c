@@ -1287,7 +1287,7 @@ static ssize_t job_xattr_store(struct kobject *kobj, struct attribute *attr,
 	    buffer[XATTR_JOB_MAX_LEN - 1] != '\n')
 		return -EINVAL;
 
-	strncpy(name, buffer, XATTR_JOB_MAX_LEN - 1);
+	strscpy(name, buffer, sizeof(name));
 
 	/* reject if not in namespace.name format */
 	p = strchr(name, '.');
@@ -1310,7 +1310,7 @@ static ssize_t job_xattr_store(struct kobject *kobj, struct attribute *attr,
 
 	/* trusted.job is only valid name in trusted namespace */
 	if (!strncmp(name, "trusted.job", 12)) {
-		strncpy(mdt->mdt_job_xattr, name, XATTR_JOB_MAX_LEN);
+		strscpy(mdt->mdt_job_xattr, name, sizeof(mdt->mdt_job_xattr));
 		return count;
 	}
 
@@ -1322,7 +1322,7 @@ static ssize_t job_xattr_store(struct kobject *kobj, struct attribute *attr,
 	if (name[sizeof(XATTR_USER_PREFIX) - 1] == '\0')
 		return -EINVAL;
 
-	strncpy(mdt->mdt_job_xattr, name, XATTR_JOB_MAX_LEN);
+	strscpy(mdt->mdt_job_xattr, name, sizeof(mdt->mdt_job_xattr));
 
 	return count;
 }

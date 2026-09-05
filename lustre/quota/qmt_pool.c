@@ -202,7 +202,7 @@ static int qmt_pool_alloc(const struct lu_env *env, struct qmt_device *qmt,
 	/* create pool proc directory */
 	snprintf(qti->qti_buf, LQUOTA_NAME_MAX, is_lqa ? "lqa-%s-%s" : "%s-%s",
 		 RES_NAME(pool_type), pool_name);
-	strncpy(pool->qpi_name, pool_name, QPI_MAXNAME);
+	strscpy(pool->qpi_name, pool_name, sizeof(pool->qpi_name));
 	pool->qpi_proc = lprocfs_register(qti->qti_buf, qmt->qmt_proc,
 					  lprocfs_quota_qpi_vars, pool);
 	if (IS_ERR(pool->qpi_proc)) {

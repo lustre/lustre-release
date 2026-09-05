@@ -857,8 +857,7 @@ libcfs_nid2str_r(lnet_nid_t nid, char *buf, size_t buf_size)
 	struct netstrfns *nf;
 
 	if (nid == LNET_NID_ANY) {
-		strncpy(buf, "<?>", buf_size);
-		buf[buf_size - 1] = '\0';
+		snprintf(buf, buf_size, "%s", "<?>");
 		return buf;
 	}
 
@@ -889,8 +888,7 @@ libcfs_nidstr_r(const struct lnet_nid *nid, char *buf, size_t buf_size)
 	struct netstrfns *nf;
 
 	if (LNET_NID_IS_ANY(nid)) {
-		strncpy(buf, "<?>", buf_size);
-		buf[buf_size - 1] = '\0';
+		snprintf(buf, buf_size, "%s", "<?>");
 		return buf;
 	}
 

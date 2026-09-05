@@ -109,7 +109,7 @@ static int lwp_setup(const struct lu_env *env, struct lwp_device *lwp,
 		GOTO(out, rc = -EINVAL);
 	}
 
-	strncpy(server_uuid, lwp_name, uuid_len);
+	strscpy(server_uuid, lwp_name, uuid_len + 1);
 	strlcat(server_uuid, "_UUID", len);
 	lustre_cfg_bufs_reset(bufs, lwp_name);
 	lustre_cfg_bufs_set_string(bufs, 1, server_uuid);

@@ -662,7 +662,7 @@ osd_it_pack_dirent(struct lu_dirent *ent, struct lu_fid *fid, __u64 offset,
 	ent->lde_hash = cpu_to_le64(offset);
 	ent->lde_reclen = cpu_to_le16(lu_dirent_calc_size(namelen, attr));
 
-	strncpy(ent->lde_name, name, namelen);
+	memcpy(ent->lde_name, name, namelen);
 	ent->lde_name[namelen] = '\0';
 	ent->lde_namelen = cpu_to_le16(namelen);
 

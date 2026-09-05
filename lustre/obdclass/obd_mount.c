@@ -762,10 +762,8 @@ int server_name2fsname(const char *svname, char *fsname, const char **endptr)
 	if (dash == svname)
 		return -EINVAL;
 
-	if (fsname != NULL) {
-		strncpy(fsname, svname, dash - svname);
-		fsname[dash - svname] = '\0';
-	}
+	if (fsname)
+		strscpy(fsname, svname, dash - svname + 1);
 
 	if (endptr != NULL)
 		*endptr = dash;
@@ -1675,11 +1673,13 @@ bad_string:
 	while (*options && (*options == ',' || *options == ' '))
 		options++;
 	if (*options != 0) {
+		size_t options_size = strlen(options) + 1;
+
 		/* Freed in lustre_free_lsi */
-		OBD_ALLOC(lmd->lmd_opts, strlen(options) + 1);
+		OBD_ALLOC(lmd->lmd_opts, options_size);
 		if (!lmd->lmd_opts)
 			GOTO(invalid, rc = -ENOMEM);
-		strncpy(lmd->lmd_opts, options, strlen(options));
+		strscpy(lmd->lmd_opts, options, options_size);
 	}
 
 	lmd_print(lmd);

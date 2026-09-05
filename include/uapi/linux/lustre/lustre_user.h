@@ -1484,8 +1484,12 @@ static inline int obd_uuid_empty(struct obd_uuid *uuid)
 
 static inline void obd_str2uuid(struct obd_uuid *uuid, const char *tmp)
 {
-	strncpy(uuid->uuid, tmp, sizeof(uuid->uuid));
-	uuid->uuid[sizeof(uuid->uuid) - 1] = '\0';
+	int bytes = snprintf(uuid->uuid, sizeof(uuid->uuid), "%s", tmp);
+
+	if (bytes < 0)
+		memset(uuid->uuid, 0, sizeof(uuid->uuid));
+	else if ((size_t)bytes < sizeof(uuid->uuid))
+		memset(uuid->uuid + bytes, 0, sizeof(uuid->uuid) - bytes);
 }
 
 /* For printf's only, make sure uuid is terminated */
@@ -1498,10 +1502,10 @@ static inline const char *obd_uuid2str(const struct obd_uuid *uuid)
 		/* Obviously not safe, but for printfs, no real harm done...
 		 * we're always null-terminated, even in a ce.
 		 */
-		static char temp[sizeof(uuid->uuid)];
+		static char temp[sizeof(uuid->uuid) + 1];
 
-		strncpy(temp, uuid->uuid, sizeof(temp));
-		temp[sizeof(temp) - 1] = '\0';
+		memcpy(temp, uuid->uuid, sizeof(uuid->uuid));
+		temp[sizeof(uuid->uuid)] = '\0';
 		return temp;
 	}
 	return uuid->uuid;
@@ -1522,8 +1526,7 @@ static inline void obd_uuid2fsname(char *buf, char *uuid,
 	if (buflen == 0)
 		return;
 
-	strncpy(buf, uuid, buflen - 1);
-	buf[buflen - 1] = '\0';
+	snprintf(buf, buflen, "%s", uuid);
 	p = strrchr(buf, '-');
 	if (p != NULL)
 		*p = '\0';

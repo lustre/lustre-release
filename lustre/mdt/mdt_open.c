@@ -1659,8 +1659,8 @@ again_pw:
 		info->mti_spec.sp_feat = &dt_directory_features;
 
 		/* set jobid xattr name from sysfs parameter */
-		strncpy(info->mti_spec.sp_cr_job_xattr, mdt->mdt_job_xattr,
-			XATTR_JOB_MAX_LEN);
+		strscpy(info->mti_spec.sp_cr_job_xattr, mdt->mdt_job_xattr,
+			sizeof(info->mti_spec.sp_cr_job_xattr));
 
 		result = mdo_create(info->mti_env, mdt_object_child(parent),
 				    &rr->rr_name, mdt_object_child(child),

@@ -112,7 +112,7 @@ int jobid_set_current(char *jobid)
 	rcu_read_lock();
 	sid = task_session(current);
 	sj->sj_session = get_pid(sid);
-	strncpy(sj->sj_jobid, jobid, len + 1);
+	strscpy(sj->sj_jobid, jobid, len + 1);
 	origsj = rhashtable_lookup_get_insert_fast(&session_jobids,
 						   &sj->sj_linkage,
 						   jobid_params);

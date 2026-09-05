@@ -2671,7 +2671,7 @@ int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise)
 	sai->sai_fend = ladvise->lla_end;
 	sai->sai_ls_all = 0;
 	sai->sai_max = sbi->ll_sa_max;
-	strncpy(sai->sai_fname, ladvise->lla_fname, sizeof(sai->sai_fname));
+	strscpy(sai->sai_fname, ladvise->lla_fname, sizeof(sai->sai_fname));
 	sai->sai_pid = current->pid;
 
 	ctx = ll_sax_get(dir);

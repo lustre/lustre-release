@@ -392,7 +392,7 @@ static int pcc_expr_time_parse(char *str, struct pcc_expression *expr)
 	if (len >= sizeof(buf))
 		return -EOVERFLOW;
 
-	strncpy(buf, str, sizeof(buf));
+	strscpy(buf, str, sizeof(buf));
 	rc = strspn(buf, "0123456789");
 	if (rc < len) {
 		switch (str[rc]) {
@@ -1025,7 +1025,7 @@ pcc_dataset_add(struct pcc_super *super, struct pcc_cmd *cmd)
 		OBD_FREE_PTR(dataset);
 		return rc;
 	}
-	strncpy(dataset->pccd_pathname, pathname, PATH_MAX);
+	strscpy(dataset->pccd_pathname, pathname, PATH_MAX);
 	dataset->pccd_rwid = cmd->u.pccc_add.pccc_rwid;
 	dataset->pccd_roid = cmd->u.pccc_add.pccc_roid;
 	dataset->pccd_flags = cmd->u.pccc_add.pccc_flags;

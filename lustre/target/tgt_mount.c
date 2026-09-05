@@ -2052,9 +2052,11 @@ static void server_put_super(struct super_block *sb)
 		lprof = class_get_profile(lsi->lsi_svname);
 		if (lprof) {
 			if (lprof->lp_dt) {
-				OBD_ALLOC(extraname, strlen(lprof->lp_dt) + 1);
-				strncpy(extraname, lprof->lp_dt,
-					strlen(lprof->lp_dt) + 1);
+				int sz = strlen(lprof->lp_dt) + 1;
+
+				OBD_ALLOC(extraname, sz);
+				if (extraname)
+					strscpy(extraname, lprof->lp_dt, sz);
 			}
 			class_put_profile(lprof);
 		}

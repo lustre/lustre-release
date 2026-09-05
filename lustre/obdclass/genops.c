@@ -366,7 +366,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name,
 		RETURN(ERR_PTR(-ENOMEM));
 	}
 	LASSERT(newdev->obd_magic == OBD_DEVICE_MAGIC);
-	strncpy(newdev->obd_name, name, sizeof(newdev->obd_name) - 1);
+	strscpy(newdev->obd_name, name, sizeof(newdev->obd_name));
 	newdev->obd_type = type;
 	newdev->obd_minor = -1;
 
@@ -407,7 +407,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name,
 
 	atomic_set(&newdev->obd_conn_inprogress, 0);
 
-	strncpy(newdev->obd_uuid.uuid, uuid, UUID_MAX);
+	strscpy(newdev->obd_uuid.uuid, uuid, sizeof(newdev->obd_uuid.uuid));
 
 	CDEBUG(D_IOCTL, "Allocate new device %s (%p)\n",
 	       newdev->obd_name, newdev);

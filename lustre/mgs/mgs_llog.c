@@ -521,7 +521,7 @@ static struct fs_db *mgs_new_fsdb(const struct lu_env *env,
 	if (!fsdb)
 		RETURN(ERR_PTR(-ENOMEM));
 
-	strncpy(fsdb->fsdb_name, fsname, sizeof(fsdb->fsdb_name));
+	strscpy(fsdb->fsdb_name, fsname, sizeof(fsdb->fsdb_name));
 	mutex_init(&fsdb->fsdb_mutex);
 	INIT_LIST_HEAD(&fsdb->fsdb_list);
 	set_bit(FSDB_UDESC, &fsdb->fsdb_flags);
@@ -4305,8 +4305,7 @@ static int mgs_srpc_set_param_disk(const struct lu_env *env,
 	OBD_ALLOC(comment, len + 1);
 	if (comment == NULL)
 		RETURN(-ENOMEM);
-	strncpy(comment, param, len);
-	comment[len] = '\0';
+	strscpy(comment, param, len + 1);
 
 	/* prepare lcfg */
 	lustre_cfg_bufs_reset(&mgi->mgi_bufs, mti->mti_svname);

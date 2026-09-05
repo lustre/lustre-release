@@ -354,8 +354,6 @@ config_recover_log_add(struct obd_device *obd, char *fsname,
 	 * where only clients are notified if one of DNE server restarts.
 	 */
 	LASSERT(strlen(fsname) < sizeof(logname) / 2);
-	strncpy(logname, fsname, sizeof(logname));
-
 	LASSERT(is_server ? lcfg.cfg_instance == 0 : lcfg.cfg_instance != 0);
 	if (is_server)
 		lcfg.cfg_instance = ll_get_cfg_instance(sb);

@@ -718,7 +718,7 @@ static void mdt_restripe_layout_update_prep(struct mdt_thread_info *info,
 	attr->la_ctime = attr->la_mtime = ktime_get_real_seconds();
 	attr->la_valid = LA_CTIME | LA_MTIME;
 
-	strncpy(info->mti_filename, XATTR_NAME_LMV,
+	strscpy(info->mti_filename, XATTR_NAME_LMV,
 		sizeof(info->mti_filename));
 
 	lum = &info->mti_mdt->mdt_restriper.mdr_lmv.lmv_user_md;

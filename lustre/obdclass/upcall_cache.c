@@ -159,7 +159,7 @@ int upcall_cache_set_upcall(struct upcall_cache *cache, const char *buffer,
 	}
 
 	down_write(&cache->uc_upcall_rwsem);
-	strncpy(cache->uc_upcall, upcall, count + 1);
+	strscpy(cache->uc_upcall, upcall, count + 1);
 	up_write(&cache->uc_upcall_rwsem);
 
 out:

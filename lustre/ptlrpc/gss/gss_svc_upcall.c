@@ -1085,7 +1085,7 @@ static int check_gssd_socket(void)
 	}
 
 	sun->sun_family = AF_UNIX;
-	strncpy(sun->sun_path, GSS_SOCKET_PATH, sizeof(sun->sun_path));
+	strscpy(sun->sun_path, GSS_SOCKET_PATH, sizeof(sun->sun_path));
 
 	/* Try to connect to the socket */
 	while (tries++ < 6) {

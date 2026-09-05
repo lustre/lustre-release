@@ -263,8 +263,9 @@ prandom_u32_max||get_random_u32_below
 ptlrpc_req_finished||ptlrpc_req_put
 sprintf||snprintf
 strcat||strncat
-strcpy||strncpy
+strcpy||strscpy
 strlcpy||strscpy
+strncpy||strscpy
 struct timeval||struct timespec64
 sysctl_vfs_cache_pressure||vfs_pressure_ratio
 tempnam||mkstemp

@@ -1213,8 +1213,7 @@ lnet_parse_route(char *str, int *im_a_router)
 	unsigned int priority = 0;
 
 	/* save a copy of the string for error messages */
-	strncpy(cmd, str, sizeof(cmd));
-	cmd[sizeof(cmd) - 1] = '\0';
+	strscpy(cmd, str, sizeof(cmd));
 
 	sep = str;
 	for (;;) {
@@ -1523,8 +1522,7 @@ lnet_splitnets(char *source, struct list_head *nets)
 		if (tb2 == NULL)
 			return -ENOMEM;
 
-		strncpy(tb2->ltb_text, sep, len);
-		tb2->ltb_text[len] = '\0';
+		strscpy(tb2->ltb_text, sep, len + 1);
 		list_add_tail(&tb2->ltb_list, nets);
 
 		tb = tb2;
@@ -1562,8 +1560,7 @@ lnet_match_networks(const char **networksp, const char *ip2nets,
 	while ((tb = list_first_entry_or_null(&raw_entries,
 					      struct lnet_text_buf,
 					      ltb_list)) != NULL) {
-		strncpy(source, tb->ltb_text, sizeof(source));
-		source[sizeof(source) - 1] = '\0';
+		strscpy(source, tb->ltb_text, sizeof(source));
 
 		/* replace ltb_text with the network(s) add on match */
 		rc = lnet_match_network_tokens(tb->ltb_text, ipaddrs, nip);

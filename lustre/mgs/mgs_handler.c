@@ -759,8 +759,7 @@ static int mgs_llog_open(struct tgt_session_info *tsi)
 					      logname);
 			/* not error, this can be llog test name */
 		} else {
-			strncpy(mgi->mgi_fsname, logname, len);
-			mgi->mgi_fsname[len] = 0;
+			strscpy(mgi->mgi_fsname, logname, len + 1);
 
 			rc = mgs_fsc_attach(tsi->tsi_env, tsi->tsi_exp,
 					    mgi->mgi_fsname);
@@ -854,7 +853,7 @@ static int mgs_extract_fs_pool(char *arg, char *fsname, char *poolname)
 	if (len > LUSTRE_MAXFSNAME)
 		return -ENAMETOOLONG;
 
-	strncpy(fsname, arg, len);
+	strscpy(fsname, arg, len + 1);
 
 	RETURN(0);
 }

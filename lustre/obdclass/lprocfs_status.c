@@ -1054,7 +1054,7 @@ static void lprocfs_import_seq_show_locked(struct seq_file *m,
 		libcfs_nidstr_r(&imp->imp_connection->c_peer.nid,
 				  nidstr, sizeof(nidstr));
 	else
-		strncpy(nidstr, "<none>", sizeof(nidstr));
+		strscpy(nidstr, "<none>", sizeof(nidstr));
 	seq_printf(m, " ]\n"
 		   "       nids_stats:");
 	list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
@@ -1073,7 +1073,7 @@ static void lprocfs_import_seq_show_locked(struct seq_file *m,
 		libcfs_nidstr_r(&imp->imp_connection->c_peer.nid,
 				  nidstr, sizeof(nidstr));
 	else
-		strncpy(nidstr, "<none>", sizeof(nidstr));
+		strscpy(nidstr, "<none>", sizeof(nidstr));
 	seq_printf(m, "\n"
 		   "       current_connection: \"%s\"\n"
 		   "       connection_attempts: %u\n"

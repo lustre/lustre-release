@@ -385,10 +385,8 @@ static int osd_it_acct_rec(const struct lu_env *env,
 		RETURN(rc);
 
 	/* inode accounting is maintained by DMU since 0.7.0 */
-	strncpy(info->oti_buf, DMU_OBJACCT_PREFIX,
-		DMU_OBJACCT_PREFIX_LEN);
-	strscpy(info->oti_buf + DMU_OBJACCT_PREFIX_LEN, za->za_name,
-		sizeof(info->oti_buf) - DMU_OBJACCT_PREFIX_LEN);
+	snprintf(info->oti_buf, sizeof(info->oti_buf), "%s%s",
+		 DMU_OBJACCT_PREFIX, za->za_name);
 	rc = osd_zap_lookup(osd, it->oiq_obj->oo_dn->dn_object,
 			    it->oiq_obj->oo_dn, info->oti_buf, sizeof(uint64_t),
 			    1, &rec->ispace);

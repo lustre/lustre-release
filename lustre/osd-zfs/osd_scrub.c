@@ -1920,7 +1920,7 @@ static int osd_scan_dir(const struct lu_env *env, struct osd_device *dev,
 			continue;
 		}
 
-		strncpy(it->ozi_name, za->za_name, sizeof(it->ozi_name));
+		strscpy(it->ozi_name, za->za_name, sizeof(it->ozi_name));
 		if (za->za_integer_length != 8) {
 			rc = -EIO;
 			break;

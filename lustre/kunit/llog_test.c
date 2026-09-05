@@ -2739,8 +2739,8 @@ static struct lu_device *llog_test_device_alloc(const struct lu_env *env,
 	if (!lldev)
 		RETURN(ERR_PTR(-ENOMEM));
 
-	strncpy(lldev->llog_target_name, lustre_cfg_string(lcfg, 1),
-		MAX_OBD_NAME);
+	strscpy(lldev->llog_target_name, lustre_cfg_string(lcfg, 1),
+		sizeof(lldev->llog_target_name));
 
 	RETURN(&lldev->llog_lu);
 }

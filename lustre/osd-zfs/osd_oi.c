@@ -609,7 +609,7 @@ osd_get_name_n_idx_compat(const struct lu_env *env, struct osd_device *osd,
 		if (name) {
 			zapid = osd->od_root;
 			if (buf)
-				strncpy(buf, name, bufsize);
+				strscpy(buf, name, bufsize);
 		} else {
 			zapid = osd_get_idx_for_fid(osd, fid, buf, NULL,
 						    bufsize);
@@ -643,7 +643,7 @@ uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
 		if (name) {
 			zapid = osd->od_root;
 			if (buf)
-				strncpy(buf, name, bufsize);
+				strscpy(buf, name, bufsize);
 		} else {
 			zapid = osd_get_idx_for_fid(osd, fid, buf, NULL,
 						    bufsize);

@@ -128,7 +128,7 @@ static int qsd_enabled_seq_show(struct seq_file *m, void *data)
 	if (qsd_type_enabled(qsd, PRJQUOTA))
 		enabled[types++] = 'p';
 	if (!types)
-		strncpy(enabled, "none", 4);
+		strscpy(enabled, "none", sizeof(enabled));
 
 	seq_printf(m, "%s\n", enabled);
 	return 0;
