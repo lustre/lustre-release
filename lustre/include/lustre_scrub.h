@@ -154,7 +154,13 @@ struct lustre_scrub {
 	__u64			os_pos_current;
 	__u32			os_start_flags;
 
-	/* FIDs with maxmimum OID in local storage */
+	/* FIDs with maximum OID in local storage.  On ldiskfs the OI scrub
+	 * thread and the otable iterator both reach this array, so there
+	 * every access to it -- a plain f_oid read included -- is under
+	 * ->os_lock, bar the scrub thread's own reads of the pointer, size
+	 * and count, which only it writes.  osd-zfs has no concurrent
+	 * reader and needs no lock.
+	 */
 	__u32			os_ls_size;
 	__u32			os_ls_count;
 	struct lu_fid		*os_ls_fids;

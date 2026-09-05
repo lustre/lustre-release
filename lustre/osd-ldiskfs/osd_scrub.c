@@ -706,8 +706,12 @@ static int osd_iit_iget(struct osd_thread_info *info, struct osd_device *dev,
 	}
 
 	rc = osd_scrub_get_fid(info, dev, inode, fid, is_scrub);
-	if (rc >= 0 && scrub->os_ls_count > 0 && fid_is_local_storage(fid)) {
-		index = 0;
+	if (rc >= 0 && fid_is_local_storage(fid)) {
+		/* os_ls_fids is grown and released by the OI scrub thread,
+		 * which may run and exit while this iteration is driven by
+		 * the otable iterator thread.
+		 */
+		spin_lock(&scrub->os_lock);
 		for (index = 0; index < scrub->os_ls_count; index++)
 			if (scrub->os_ls_fids[index].f_seq == fid->f_seq)
 				break;
@@ -715,6 +719,7 @@ static int osd_iit_iget(struct osd_thread_info *info, struct osd_device *dev,
 		if (index < scrub->os_ls_count &&
 		    scrub->os_ls_fids[index].f_oid < fid->f_oid)
 			scrub->os_ls_fids[index].f_oid = fid->f_oid;
+		spin_unlock(&scrub->os_lock);
 	}
 	GOTO(put, rc);
 
@@ -1230,6 +1235,8 @@ static int osd_scrub_main(void *args)
 	struct lu_env env;
 	struct osd_device *dev = (struct osd_device *)args;
 	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
+	struct lu_fid *fids;
+	__u32 size;
 	int rc, ret;
 
 	ENTRY;
@@ -1266,11 +1273,16 @@ static int osd_scrub_main(void *args)
 	       scrub->os_pos_current,
 	       scrub->os_file.sf_param & SP_DRYRUN ? " dryrun mode" : "");
 
-	scrub->os_ls_count = 0;
-	scrub->os_ls_size = 4;
-	OBD_ALLOC(scrub->os_ls_fids, scrub->os_ls_size * sizeof(struct lu_fid));
-	if (scrub->os_ls_fids == NULL)
+	size = 4;
+	OBD_ALLOC_PTR_ARRAY(fids, size);
+	if (!fids)
 		GOTO(out, rc = -ENOMEM);
+
+	spin_lock(&scrub->os_lock);
+	scrub->os_ls_count = 0;
+	scrub->os_ls_size = size;
+	scrub->os_ls_fids = fids;
+	spin_unlock(&scrub->os_lock);
 
 	rc = osd_scan_O_main(&env, dev);
 	if (rc)
@@ -1307,6 +1319,19 @@ post:
 	       scrub->os_file.sf_param & SP_DRYRUN ? " dryrun mode" : "");
 
 out:
+	/* detach under os_lock, and before the os_task handover below lets
+	 * another OI scrub thread publish an array of its own
+	 */
+	spin_lock(&scrub->os_lock);
+	fids = scrub->os_ls_fids;
+	size = scrub->os_ls_size;
+	scrub->os_ls_size = 0;
+	scrub->os_ls_count = 0;
+	scrub->os_ls_fids = NULL;
+	spin_unlock(&scrub->os_lock);
+
+	OBD_FREE_PTR_ARRAY(fids, size);
+
 	osd_scrub_ois_fini(scrub, &scrub->os_inconsistent_items);
 	lu_env_fini(&env);
 
@@ -1318,17 +1343,6 @@ noenv:
 		/* scrub_stop() is waiting, we need to synchronize */
 		wait_var_event(scrub, kthread_should_stop());
 	wake_up_var(scrub);
-
-	/* a running iterator can be using os_ls_fids, so let's release
-	 * only when we're asked to stop by that iterator */
-	if (scrub->os_ls_fids) {
-		OBD_FREE(scrub->os_ls_fids,
-			 scrub->os_ls_size * sizeof(struct lu_fid));
-
-		scrub->os_ls_size = 0;
-		scrub->os_ls_count = 0;
-		scrub->os_ls_fids = NULL;
-	}
 
 	return rc;
 }
@@ -3397,6 +3411,7 @@ static int osd_scan_lastid_seq(const struct lu_env *env, struct osd_device *dev,
 	__u64 lastid;
 	__u64 lastid_known;
 	loff_t offset = 0;
+	bool found;
 	int index;
 	int rc;
 
@@ -3441,18 +3456,21 @@ static int osd_scan_lastid_seq(const struct lu_env *env, struct osd_device *dev,
 	if (scrub->os_file.sf_param & SP_DRYRUN)
 		GOTO(out, rc = 0);
 
+	spin_lock(&scrub->os_lock);
 	for (index = 0; index < scrub->os_ls_count; index++)
 		if (scrub->os_ls_fids[index].f_seq == seq)
 			break;
+	found = index < scrub->os_ls_count;
+	if (found)
+		lastid_known = scrub->os_ls_fids[index].f_oid;
+	spin_unlock(&scrub->os_lock);
 
-	if (unlikely(index >= scrub->os_ls_count)) {
+	if (unlikely(!found)) {
 		CDEBUG(D_LFSCK,
 		       "%s: can't find seq %llu, it's modified during scrub?\n",
 		       osd_name(dev), seq);
 		GOTO(out, rc);
 	}
-
-	lastid_known = scrub->os_ls_fids[index].f_oid;
 	if (!info->oti_lastid_inode) {
 		rc = osd_create_lastid(env, dev, dir, lastid_known);
 		GOTO(out, rc);
@@ -3527,7 +3545,6 @@ static int osd_scan_O_seq(const struct lu_env *env, struct osd_device *dev,
 	struct lustre_scrub *scrub = &dev->od_scrub.os_scrub;
 	struct inode *inode;
 	struct osd_inode_id id;
-	struct lu_fid *fids;
 	__u64 seq;
 	int rc;
 
@@ -3561,25 +3578,28 @@ static int osd_scan_O_seq(const struct lu_env *env, struct osd_device *dev,
 	if (!fid_seq_is_local_storage(seq))
 		GOTO(out, rc = 0);
 
-	scrub->os_ls_count++;
-	if (unlikely(scrub->os_ls_count > scrub->os_ls_size)) {
-		OBD_ALLOC(fids,
-			  sizeof(struct lu_fid) * (scrub->os_ls_size + 4));
-		if (fids == NULL) {
-			scrub->os_ls_count--;
+	if (unlikely(scrub->os_ls_count == scrub->os_ls_size)) {
+		struct lu_fid *old = scrub->os_ls_fids;
+		__u32 oldsize = scrub->os_ls_size;
+		struct lu_fid *fids;
+
+		OBD_ALLOC_PTR_ARRAY(fids, oldsize + 4);
+		if (!fids)
 			GOTO(out, rc = -ENOMEM);
-		}
 
-		memcpy(fids, scrub->os_ls_fids,
-		       sizeof(struct lu_fid) * scrub->os_ls_size);
-		OBD_FREE(scrub->os_ls_fids,
-			 sizeof(struct lu_fid) * scrub->os_ls_size);
-
-		scrub->os_ls_size += 4;
+		spin_lock(&scrub->os_lock);
+		memcpy(fids, old, sizeof(*fids) * oldsize);
+		scrub->os_ls_size = oldsize + 4;
 		scrub->os_ls_fids = fids;
+		spin_unlock(&scrub->os_lock);
+
+		OBD_FREE_PTR_ARRAY(old, oldsize);
 	}
 
-	scrub->os_ls_fids[scrub->os_ls_count - 1].f_seq = seq;
+	spin_lock(&scrub->os_lock);
+	scrub->os_ls_fids[scrub->os_ls_count].f_seq = seq;
+	scrub->os_ls_count++;
+	spin_unlock(&scrub->os_lock);
 
 out:
 	iput(inode);
