@@ -2319,6 +2319,7 @@ int mdt_reint_migrate(struct mdt_thread_info *info,
 	struct mdt_lock_handle *lhtp;
 	struct mdt_lock_handle *lhs;
 	struct mdt_lock_handle *lhl;
+	enum mds_ibits_locks ibits;
 	LIST_HEAD(link_locks);
 	int lock_retries = 5;
 	bool reverse = false;
@@ -2509,9 +2510,25 @@ lock_parent:
 	/* lock source */
 	lhs = &info->mti_lh[MDT_LH_OLD];
 	lhl = &info->mti_lh[MDT_LH_LOOKUP];
-	rc = mdt_rename_source_lock(info, spobj, sobj, lhs, lhl,
-				    MDS_INODELOCK_LOOKUP | MDS_INODELOCK_XATTR |
-				    MDS_INODELOCK_OPEN);
+	ibits = MDS_INODELOCK_LOOKUP | MDS_INODELOCK_XATTR |
+		MDS_INODELOCK_OPEN;
+	/* migrating a file changes its link count and destroys it, so
+	 * UPDATE is needed to exclude a concurrent unlink or link of any of
+	 * its other names, and LAYOUT makes clients invalidate the cached
+	 * layout of the old object, whose OST objects the new one takes
+	 * over.  @sp_migrate_nsonly is never cleared once set, so it cannot
+	 * turn into an inode migration later on.  A directory has no other
+	 * names, and UPDATE on it would block every create and unlink
+	 * inside it for the whole migration.
+	 */
+	if (!info->mti_spec.sp_migrate_nsonly &&
+	    !S_ISDIR(lu_object_attr(&sobj->mot_obj))) {
+		/* HSM restore holds EX LAYOUT until the restore completes */
+		if (mdt_hsm_restore_is_running(info, mdt_object_fid(sobj)))
+			GOTO(unlock_links, rc = -EBUSY);
+		ibits |= MDS_INODELOCK_UPDATE | MDS_INODELOCK_LAYOUT;
+	}
+	rc = mdt_rename_source_lock(info, spobj, sobj, lhs, lhl, ibits);
 	if (rc)
 		GOTO(unlock_links, rc);
 
