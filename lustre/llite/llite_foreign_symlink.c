@@ -336,13 +336,11 @@ failed:
 
 static void ll_foreign_put_link(void *cookie)
 {
-	/* to avoid allocating an unnecessary big buffer, and since ways to
-	 * build the symlink path from foreign LOV/LMV can be multiple and
-	 * not constant. So it size is not known and we need to use
-	 * strlen(cookie)+1 to determine its size and to avoid false positive
-	 * to be reported by memory leak check code
+	/* the ways to build the symlink path from foreign LOV/LMV can be
+	 * multiple and not constant, so the buffer size is not known here
+	 * and has to come from the string itself
 	 */
-	OBD_FREE_LARGE(cookie, strlen(cookie) + 1);
+	OBD_FREE_STR(cookie);
 }
 
 static const char *ll_foreign_get_link(struct dentry *dentry,
@@ -590,8 +588,7 @@ ssize_t foreign_symlink_upcall_store(struct kobject *kobj,
 			       sbi->ll_fsname, new);
 	}
 
-	if (old)
-		OBD_FREE_LARGE(old, strlen(old) + 1);
+	OBD_FREE_STR(old);
 
 	return new_len;
 }

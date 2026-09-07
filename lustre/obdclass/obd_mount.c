@@ -627,19 +627,19 @@ static void lustre_put_lsm_free(struct kref *kref)
 	struct lustre_mount_data *lmd = container_of(kref,
 						     struct lustre_mount_data,
 						     lmd_ref);
-	OBD_FREE(lmd->lmd_dev, strlen(lmd->lmd_dev) + 1);
-	OBD_FREE(lmd->lmd_profile, strlen(lmd->lmd_profile) + 1);
-	OBD_FREE(lmd->lmd_fileset, strlen(lmd->lmd_fileset) + 1);
-	OBD_FREE(lmd->lmd_mgssec, strlen(lmd->lmd_mgssec) + 1);
-	OBD_FREE(lmd->lmd_opts, strlen(lmd->lmd_opts) + 1);
+	OBD_FREE_STR(lmd->lmd_dev);
+	OBD_FREE_STR(lmd->lmd_profile);
+	OBD_FREE_STR(lmd->lmd_fileset);
+	OBD_FREE_STR(lmd->lmd_mgssec);
+	OBD_FREE_STR(lmd->lmd_opts);
 	if (lmd->lmd_exclude_count)
 		OBD_FREE_PTR_ARRAY(lmd->lmd_exclude,
 				   lmd->lmd_exclude_count);
-	OBD_FREE(lmd->lmd_mgs, strlen(lmd->lmd_mgs) + 1);
-	OBD_FREE(lmd->lmd_mgsname, strlen(lmd->lmd_mgsname) + 1);
-	OBD_FREE(lmd->lmd_osd_type, strlen(lmd->lmd_osd_type) + 1);
+	OBD_FREE_STR(lmd->lmd_mgs);
+	OBD_FREE_STR(lmd->lmd_mgsname);
+	OBD_FREE_STR(lmd->lmd_osd_type);
 	OBD_FREE(lmd->lmd_params, 4096);
-	OBD_FREE(lmd->lmd_nidnet, strlen(lmd->lmd_nidnet) + 1);
+	OBD_FREE_STR(lmd->lmd_nidnet);
 	OBD_FREE_PTR(lmd);
 }
 
@@ -1049,10 +1049,7 @@ static int lmd_parse_mgssec(struct lustre_mount_data *lmd, char *ptr)
 {
 	int length = strlen(ptr);
 
-	if (lmd->lmd_mgssec != NULL) {
-		OBD_FREE(lmd->lmd_mgssec, strlen(lmd->lmd_mgssec) + 1);
-		lmd->lmd_mgssec = NULL;
-	}
+	OBD_FREE_STR(lmd->lmd_mgssec);
 
 	OBD_ALLOC(lmd->lmd_mgssec, length + 1);
 	if (lmd->lmd_mgssec == NULL)
@@ -1067,10 +1064,7 @@ static int lmd_parse_network(struct lustre_mount_data *lmd, char *ptr)
 {
 	int length = strlen(ptr);
 
-	if (lmd->lmd_nidnet != NULL) {
-		OBD_FREE(lmd->lmd_nidnet, strlen(lmd->lmd_nidnet) + 1);
-		lmd->lmd_nidnet = NULL;
-	}
+	OBD_FREE_STR(lmd->lmd_nidnet);
 
 	OBD_ALLOC(lmd->lmd_nidnet, length + 1);
 	if (lmd->lmd_nidnet == NULL)
@@ -1088,8 +1082,7 @@ static int lmd_parse_string(char **handle, char *ptr)
 	if (!handle || !ptr)
 		return -EINVAL;
 
-	OBD_FREE(*handle, strlen(*handle) + 1);
-	*handle = NULL;
+	OBD_FREE_STR(*handle);
 
 	len = strlen(ptr);
 	OBD_ALLOC(*handle, len + 1);

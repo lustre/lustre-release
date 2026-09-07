@@ -1524,7 +1524,7 @@ out_put:
 	else
 		dt_object_put(env, o);
 out_name:
-	OBD_FREE(handle->lgh_name, strlen(handle->lgh_name) + 1);
+	OBD_FREE_STR(handle->lgh_name);
 out:
 	if (los != NULL)
 		dt_los_put(los);
@@ -1844,7 +1844,7 @@ static int llog_osd_close(const struct lu_env *env, struct llog_handle *handle)
 	LASSERT(los);
 	dt_los_put(los);
 
-	OBD_FREE(handle->lgh_name, strlen(handle->lgh_name) + 1);
+	OBD_FREE_STR(handle->lgh_name);
 
 	RETURN(rc);
 }

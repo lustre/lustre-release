@@ -141,7 +141,7 @@ static void pcc_fname_list_free(struct pcc_expression *expr)
 
 	LASSERT(expr->pe_opc == PCC_FIELD_OP_EQ);
 	list_for_each_entry_safe(fname, n, &expr->pe_cond, pmf_linkage) {
-		OBD_FREE(fname->pmf_name, strlen(fname->pmf_name) + 1);
+		OBD_FREE_STR(fname->pmf_name);
 		list_del_init(&fname->pmf_linkage);
 		OBD_FREE_PTR(fname);
 	}
@@ -212,11 +212,7 @@ static void pcc_cmd_fini(struct pcc_cmd *cmd)
 	if (cmd->pccc_cmd == PCC_ADD_DATASET) {
 		if (!list_empty(&cmd->u.pccc_add.pccc_conds))
 			pcc_rule_conds_free(&cmd->u.pccc_add.pccc_conds);
-		if (cmd->u.pccc_add.pccc_conds_str) {
-			OBD_FREE(cmd->u.pccc_add.pccc_conds_str,
-				 strlen(cmd->u.pccc_add.pccc_conds_str) + 1);
-			cmd->u.pccc_add.pccc_conds_str = NULL;
-		}
+		OBD_FREE_STR(cmd->u.pccc_add.pccc_conds_str);
 	}
 }
 
@@ -740,8 +736,7 @@ pcc_dataset_rule_fini(struct pcc_match_rule *rule)
 {
 	if (!list_empty(&rule->pmr_conds))
 		pcc_rule_conds_free(&rule->pmr_conds);
-	LASSERT(rule->pmr_conds_str != NULL);
-	OBD_FREE(rule->pmr_conds_str, strlen(rule->pmr_conds_str) + 1);
+	OBD_FREE_STR(rule->pmr_conds_str);
 }
 
 static int

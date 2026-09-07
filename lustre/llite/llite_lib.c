@@ -277,12 +277,7 @@ static void ll_free_sbi(struct super_block *sb)
 				 sbi->ll_foreign_symlink_prefix_size);
 			sbi->ll_foreign_symlink_prefix = NULL;
 		}
-		if (sbi->ll_foreign_symlink_upcall) {
-			OBD_FREE(sbi->ll_foreign_symlink_upcall,
-				 strlen(sbi->ll_foreign_symlink_upcall) +
-				       1);
-			sbi->ll_foreign_symlink_upcall = NULL;
-		}
+		OBD_FREE_STR(sbi->ll_foreign_symlink_upcall);
 		if (sbi->ll_foreign_symlink_upcall_items) {
 			int i;
 			int nb_items = sbi->ll_foreign_symlink_upcall_nb_items;
@@ -2086,11 +2081,8 @@ void ll_clear_inode(struct inode *inode)
 	if (lli->lli_mds_read_och)
 		ll_md_real_close(inode, FMODE_READ);
 
-	if (S_ISLNK(inode->i_mode) && lli->lli_symlink_name) {
-		OBD_FREE(lli->lli_symlink_name,
-			 strlen(lli->lli_symlink_name) + 1);
-		lli->lli_symlink_name = NULL;
-	}
+	if (S_ISLNK(inode->i_mode))
+		OBD_FREE_STR(lli->lli_symlink_name);
 
 	ll_xattr_cache_destroy(inode);
 

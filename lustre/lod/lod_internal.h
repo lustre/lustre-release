@@ -356,11 +356,7 @@ static inline int lod_set_pool(char **pool, const char *new_pool)
 	if (*pool == new_pool)
 		return 0;
 
-	if (*pool != NULL) {
-		len = strlen(*pool) + 1;
-		OBD_FREE(*pool, len);
-		*pool = NULL;
-	}
+	OBD_FREE_STR(*pool);
 	if (new_pool != NULL) {
 		len = strlen(new_pool) + 1;
 		OBD_ALLOC(*pool, len);

@@ -208,8 +208,7 @@ static inline int name_create(char **newname, char *prefix, char *suffix)
 
 static inline void name_destroy(char **name)
 {
-	OBD_FREE(*name, strlen(*name) + 1);
-	*name = NULL;
+	OBD_FREE_STR(*name);
 }
 
 static inline int niduuid_create(char **niduuid, char *nidstr)
@@ -438,7 +437,7 @@ static void mgs_free_fsdb_srpc(struct fs_db *fsdb)
 		LASSERT(tgtconf->mtsc_tgt);
 
 		sptlrpc_rule_set_free(&tgtconf->mtsc_rset);
-		OBD_FREE(tgtconf->mtsc_tgt, strlen(tgtconf->mtsc_tgt) + 1);
+		OBD_FREE_STR(tgtconf->mtsc_tgt);
 		OBD_FREE_PTR(tgtconf);
 	}
 

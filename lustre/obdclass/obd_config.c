@@ -1317,9 +1317,9 @@ void class_put_profile(struct lustre_profile *lprof)
 	 * on the target profile or lustre_profile_list will corrupt
 	 */
 	LASSERT(lprof->lp_list_deleted);
-	OBD_FREE(lprof->lp_profile, strlen(lprof->lp_profile) + 1);
-	OBD_FREE(lprof->lp_dt, strlen(lprof->lp_dt) + 1);
-	OBD_FREE(lprof->lp_md, strlen(lprof->lp_md) + 1);
+	OBD_FREE_STR(lprof->lp_profile);
+	OBD_FREE_STR(lprof->lp_dt);
+	OBD_FREE_STR(lprof->lp_md);
 	OBD_FREE(lprof, sizeof(*lprof));
 }
 EXPORT_SYMBOL(class_put_profile);

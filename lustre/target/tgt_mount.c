@@ -88,7 +88,7 @@ static int server_register_mount(const char *name, struct super_block *sb)
 	if (server_find_mount(name)) {
 		mutex_unlock(&lustre_mount_info_lock);
 		OBD_FREE(lmi, sizeof(*lmi));
-		OBD_FREE(name_cp, strlen(name) + 1);
+		OBD_FREE_STR(name_cp);
 		CERROR("Already registered %s\n", name);
 		RETURN(-EEXIST);
 	}
@@ -119,7 +119,7 @@ static int server_deregister_mount(const char *name)
 
 	CDEBUG(D_MOUNT, "deregister mount %p from %s\n", lmi->lmi_sb, name);
 
-	OBD_FREE(lmi->lmi_name, strlen(lmi->lmi_name) + 1);
+	OBD_FREE_STR(lmi->lmi_name);
 	list_del(&lmi->lmi_list_chain);
 	OBD_FREE(lmi, sizeof(*lmi));
 	mutex_unlock(&lustre_mount_info_lock);
@@ -2169,7 +2169,7 @@ static void server_put_super(struct super_block *sb)
 			set_bit(OBDF_FORCE, obd->obd_flags);
 			class_manual_cleanup(obd);
 		}
-		OBD_FREE(extraname, strlen(extraname) + 1);
+		OBD_FREE_STR(extraname);
 	}
 
 	lu_env_remove(&env);

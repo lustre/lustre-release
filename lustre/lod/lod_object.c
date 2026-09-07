@@ -2936,11 +2936,7 @@ static int lod_declare_layout_add(const struct lu_env *env,
 error:
 	for (i = lo->ldo_comp_cnt; i < array_cnt; i++) {
 		lod_comp = &comp_array[i];
-		if (lod_comp->llc_pool != NULL) {
-			OBD_FREE(lod_comp->llc_pool,
-				 strlen(lod_comp->llc_pool) + 1);
-			lod_comp->llc_pool = NULL;
-		}
+		OBD_FREE_STR(lod_comp->llc_pool);
 	}
 	OBD_FREE_PTR_ARRAY_LARGE(comp_array, array_cnt);
 	mutex_unlock(&lo->ldo_layout_mutex);
