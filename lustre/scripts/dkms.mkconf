@@ -133,9 +133,10 @@ else
       pkgs="\${pkgs}|compat-rdma-devel|kernel-ib-devel|ofa_kernel-devel"
       paths=\$(rpm -qa |
               grep -E -w "\${pkgs}" | xargs rpm -ql 2>/dev/null |
-              grep -E '/ofa_kernel|/ofa_kernel/default|/openib' |
+              grep -E '(/ofa_kernel|/openib)(/|\$)' |
               grep -v /ofed_scripts/ | head -n1)
-      if [[ -n "\$paths" ]]; then
+      [[ -z "\$paths" ]] && paths=/usr/src/ofa_kernel
+      if [[ -d \$paths ]]; then
           [[ ! -d \$paths/\$(uname -m)/\$(uname -r) ]] ||
               paths=\$paths/\$(uname -m)/\$(uname -r)
           epaths=\$(find -H \$paths -name rdma_cm.h |

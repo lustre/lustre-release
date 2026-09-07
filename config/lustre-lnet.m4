@@ -94,12 +94,10 @@ case $with_o2ib in
 			O2IBPKG+=" kernel-ib-devel"
 			O2IBPKG+=" ofa_kernel-devel"
 
-			O2IBDIR="/ofa_kernel"
-			O2IBDIR+="|/ofa_kernel/default"
-			O2IBDIR+="|/openib"
+			O2IBDIR="(/ofa_kernel|/openib)(/|$)"
 
 			O2IBDIR_PATH=$(eval $LSPKG $O2IBPKG 2>/dev/null |
-				       grep -E "${O2IBDIR}$" |
+				       grep -E "${O2IBDIR}" |
 				       grep -v /ofed_scripts/ | head -n1)
 
 			# Nowadays, path should always be
