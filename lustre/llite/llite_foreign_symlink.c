@@ -116,9 +116,8 @@ static int ll_foreign_symlink_upcall_parse(struct ll_sb_info *sbi,
 					   struct lov_foreign_md *lfm,
 					   char **destname)
 {
+	struct ll_foreign_symlink_upcall_item *foreign_symlink_items;
 	int pos = 0, suffix_pos = -1;
-	struct ll_foreign_symlink_upcall_item *foreign_symlink_items =
-			sbi->ll_foreign_symlink_upcall_items;
 	size_t destname_size = 0;
 	u64 items_size = 0;
 	int i = 0, rc = 0;
@@ -126,6 +125,7 @@ static int ll_foreign_symlink_upcall_parse(struct ll_sb_info *sbi,
 	ENTRY;
 
 	down_read(&sbi->ll_foreign_symlink_sem);
+	foreign_symlink_items = sbi->ll_foreign_symlink_upcall_items;
 
 	/* compute size of relative path of destination path
 	 * could be done once during upcall items/infos reading
