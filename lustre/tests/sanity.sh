@@ -3742,6 +3742,81 @@ test_27Pa() {
 }
 run_test 27Pa "reject malformed foreign symlink upcall format"
 
+test_27Pb() {
+	(( $CLIENT_VERSION >= $(version_code 2.17.58) )) ||
+		skip "need client >= 2.17.58 for upcall item bound checking"
+	(( $MDS1_VERSION > $(version_code 2.12.51) )) ||
+		skip "need MDS >= 2.12.51 for foreign symlink files"
+
+	local sbi=$(ls -d /sys/fs/lustre/llite/$FSNAME-* 2>/dev/null | head -n1)
+	local info=$sbi/foreign_symlink_upcall_info
+	local uuid1=$(cat /proc/sys/kernel/random/uuid)
+	local uuid2=$(cat /proc/sys/kernel/random/uuid)
+	local dest
+
+	[[ -n "$sbi" && -f $info ]] ||
+		skip "no foreign_symlink_upcall_info parameter"
+	(( $(getconf LONG_BIT) == 64 )) ||
+		skip "the item blobs below assume a 64-bit client"
+
+	local param=llite/$FSNAME-*/foreign_symlink_prefix
+	local prefix=$($LCTL get_param -n $param)
+
+	test_mkdir $DIR/$tdir
+	stack_trap "$LFS unlink_foreign $DIR/$tdir/$tfile || true"
+	stack_trap "$LCTL set_param $param=$prefix"
+	stack_trap "$LCTL set_param llite/$FSNAME-*/foreign_symlink_enable=0"
+	# writing "none" clears LL_SBI_FOREIGN_SYMLINK_UPCALL without running
+	# any upcall, so later tests see the default parsing again
+	stack_trap "printf none > $sbi/foreign_symlink_upcall"
+
+	$LCTL set_param llite/$FSNAME-*/foreign_symlink_enable=1
+	$LCTL set_param $param=/tmp/
+
+	# a 36 + 1 + 36 bytes long foreign EA
+	$LFS setstripe --foreign=symlink --flags 0xda05 \
+		-x "$uuid1/$uuid2" --mode 0600 $DIR/$tdir/$tfile ||
+		error "$DIR/$tdir/$tfile: create failed"
+
+	# the format l_foreign_symlink installs: POSLEN(0,36), STRING("/"),
+	# POSLEN(37,36), EOB
+	local good='\3\0\0\0\0\0\0\0\0\0\0\0\44\0\0\0'
+
+	good+='\2\0\0\0\0\0\0\0\1\0\0\0\0\0\0\0\57\0\0\0'
+	good+='\3\0\0\0\0\0\0\0\45\0\0\0\44\0\0\0\1\0\0\0'
+
+	printf "$good" > $info || error "valid upcall format was rejected"
+	dest=$(readlink $DIR/$tdir/$tfile) ||
+		error "readlink of the foreign symlink has failed"
+	[[ "$dest" == */$uuid1/$uuid2 ]] ||
+		error "foreign symlink resolved to '$dest'"
+
+	# POSLEN(0xfffffff0,16): pos + len sums to 0 in 32 bits, so it fits
+	# any lfm_length and reads 4GiB past the foreign EA
+	local wrap='\3\0\0\0\0\0\0\0\360\377\377\377\20\0\0\0\1\0\0\0'
+
+	$LCTL clear
+	printf "$wrap" > $info || error "wrapping item format was rejected"
+	dest=$(readlink $DIR/$tdir/$tfile) &&
+		error "wrapping (pos,len) item resolved to '$dest'"
+	$LCTL dk | grep -q "foreign EA too short" ||
+		error "wrapping (pos,len) item was not rejected on its range"
+
+	# POSLEN(0,0xfffff447) + POSLEN(0,3000): the two lengths sum to
+	# 0xffffffff, which truncates to -1 and wraps the allocation size
+	local sum='\3\0\0\0\0\0\0\0\0\0\0\0\107\364\377\377'
+
+	sum+='\3\0\0\0\0\0\0\0\0\0\0\0\270\13\0\0\1\0\0\0'
+
+	$LCTL clear
+	printf "$sum" > $info || error "oversized item format was rejected"
+	dest=$(readlink $DIR/$tdir/$tfile) &&
+		error "oversized items resolved to '$dest'"
+	$LCTL dk | grep -q "bytes relative path" ||
+		error "oversized items were not rejected on their size"
+}
+run_test 27Pb "bound foreign symlink upcall item (pos,len) values"
+
 test_27Q() {
 	rm -f $TMP/$tfile $TMP/$tfile.loop $TMP/$tfile.none $TMP/$tfile.broken
 	stack_trap "rm -f $TMP/$tfile*"

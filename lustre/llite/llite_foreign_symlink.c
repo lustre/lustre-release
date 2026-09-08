@@ -35,16 +35,22 @@
 static int foreign_symlink_alloc_and_copy_prefix(struct ll_sb_info *sbi,
 						 struct inode *inode,
 						 char **destname,
-						 size_t suffix_size)
+						 size_t suffix_size,
+						 size_t *destname_size)
 {
 	size_t prefix_size, full_size;
 
 	ENTRY;
 
+	*destname_size = 0;
+
 	/* allocate enough for "/<prefix>/<suffix>'\0'" */
 	prefix_size = sbi->ll_foreign_symlink_prefix_size - 1;
 	full_size = suffix_size + prefix_size + 3;
-	if (full_size > PATH_MAX) {
+	/* prefix_size cannot exceed a page, so bounding suffix_size here
+	 * is what keeps full_size from wrapping
+	 */
+	if (suffix_size > PATH_MAX || full_size > PATH_MAX) {
 		CERROR("%s: inode "DFID": resolved destination path too long\n",
 		       sbi->ll_fsname, PFID(ll_inode2fid(inode)));
 		RETURN(-EINVAL);
@@ -52,6 +58,8 @@ static int foreign_symlink_alloc_and_copy_prefix(struct ll_sb_info *sbi,
 	OBD_ALLOC(*destname, full_size);
 	if (*destname == NULL)
 		RETURN(-ENOMEM);
+
+	*destname_size = full_size;
 
 	memcpy(*destname + 1, sbi->ll_foreign_symlink_prefix,
 	       prefix_size);
@@ -70,12 +78,14 @@ static int ll_foreign_symlink_default_parse(struct ll_sb_info *sbi,
 					    struct lov_foreign_md *lfm,
 					    char **destname)
 {
+	size_t destname_size;
 	int suffix_pos;
 
 	down_read(&sbi->ll_foreign_symlink_sem);
 	suffix_pos = foreign_symlink_alloc_and_copy_prefix(sbi, inode,
 							   destname,
-							   lfm->lfm_length);
+							   lfm->lfm_length,
+							   &destname_size);
 	up_read(&sbi->ll_foreign_symlink_sem);
 
 	if (suffix_pos < 0)
@@ -98,9 +108,11 @@ static int ll_foreign_symlink_upcall_parse(struct ll_sb_info *sbi,
 					   struct lov_foreign_md *lfm,
 					   char **destname)
 {
-	int pos = 0, suffix_pos = -1, items_size = 0;
+	int pos = 0, suffix_pos = -1;
 	struct ll_foreign_symlink_upcall_item *foreign_symlink_items =
 			sbi->ll_foreign_symlink_upcall_items;
+	size_t destname_size = 0;
+	u64 items_size = 0;
 	int i = 0, rc = 0;
 
 	ENTRY;
@@ -129,8 +141,17 @@ static int ll_foreign_symlink_upcall_parse(struct ll_sb_info *sbi,
 		}
 	}
 
+	if (items_size > PATH_MAX) {
+		rc = -EINVAL;
+		CERROR("%s: inode "DFID": upcall items describe a %llu bytes relative path, over the %u bytes limit: rc = %d\n",
+		       sbi->ll_fsname, PFID(ll_inode2fid(inode)), items_size,
+		       (unsigned int)PATH_MAX, rc);
+		GOTO(failed, rc);
+	}
+
 	suffix_pos = foreign_symlink_alloc_and_copy_prefix(sbi, inode, destname,
-							   items_size);
+							   items_size,
+							   &destname_size);
 	if (suffix_pos < 0)
 		GOTO(failed, rc = suffix_pos);
 
@@ -143,8 +164,9 @@ static int ll_foreign_symlink_upcall_parse(struct ll_sb_info *sbi,
 			       foreign_symlink_items[i].size);
 			pos += foreign_symlink_items[i].size;
 		} else if (foreign_symlink_items[i].type == POSLEN_TYPE) {
-			if (lfm->lfm_length < foreign_symlink_items[i].pos +
-					      foreign_symlink_items[i].len) {
+			if ((u64)foreign_symlink_items[i].pos +
+			    foreign_symlink_items[i].len >
+			    lfm->lfm_length) {
 				CERROR("%s:  "DFID" foreign EA too short to find (%u,%u) item\n",
 				       sbi->ll_fsname,
 				       PFID(ll_inode2fid(inode)),
@@ -167,7 +189,7 @@ failed:
 	up_read(&sbi->ll_foreign_symlink_sem);
 
 	if (rc != 0 && suffix_pos >= 0) {
-		OBD_FREE_LARGE(*destname, suffix_pos + items_size);
+		OBD_FREE(*destname, destname_size);
 		*destname = NULL;
 	}
 
