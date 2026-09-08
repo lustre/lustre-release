@@ -562,6 +562,24 @@ ssize_t foreign_symlink_upcall_store(struct kobject *kobj,
 	return new_len;
 }
 
+/* smallest number of bytes that must remain in the upcall buffer for an
+ * item of the given type to be complete, including the EOB_TYPE item that
+ * has to follow any other item. Returns 0 for an unknown type.
+ */
+static size_t foreign_symlink_item_min_remaining(__u32 type)
+{
+	switch (type) {
+	case STRING_TYPE:
+		return STRING_ITEM_SZ(0) + sizeof(__u32);
+	case POSLEN_TYPE:
+		return POSLEN_ITEM_SZ + sizeof(__u32);
+	case EOB_TYPE:
+		return sizeof(__u32);
+	default:
+		return 0;
+	}
+}
+
 /* foreign_symlink_upcall_info_store() stores format items in
  * foreign_symlink_items[], and foreign_symlink_upcall_parse()
  * uses it to parse each foreign symlink LOV/LMV EAs
@@ -594,12 +612,27 @@ ssize_t foreign_symlink_upcall_info_store(struct kobject *kobj,
 
 	/* evaluate number of items provided */
 	while (remaining > 0) {
+		size_t min_remaining;
+
 		item = (struct ll_foreign_symlink_upcall_item *)
 				&buffer[count - remaining];
+
+		/* remaining is a non-zero multiple of sizeof(item->type),
+		 * so item->type itself can always be read
+		 */
+		min_remaining = foreign_symlink_item_min_remaining(item->type);
+		if (min_remaining != 0 && remaining < min_remaining) {
+			rc = -EINVAL;
+			CERROR("%s: truncated item of type '%u' at pos %zu, with %zu remaining bytes, in infos buffer returned by foreign symlink upcall: rc = %d\n",
+			       sbi->ll_fsname, item->type, count - remaining,
+			       remaining, rc);
+			GOTO(failed, rc);
+		}
+
 		switch (item->type) {
 		case STRING_TYPE: {
 			/* a constant string following */
-			if (item->size >= remaining -
+			if (item->size > remaining -
 			    offsetof(struct ll_foreign_symlink_upcall_item,
 				     bytestring) - sizeof(item->type)) {
 				/* size of string must not overflow remaining
@@ -642,7 +675,7 @@ ssize_t foreign_symlink_upcall_info_store(struct kobject *kobj,
 			break;
 		default:
 			CERROR("%s: wrong type '%u' encountered at pos %zu , with %zu remaining bytes, in infos buffer returned by foreign symlink upcall\n",
-			       sbi->ll_fsname, (__u32)buffer[count - remaining],
+			       sbi->ll_fsname, item->type,
 			       count - remaining, remaining);
 			GOTO(failed, rc = -EINVAL);
 		}
@@ -655,6 +688,18 @@ ssize_t foreign_symlink_upcall_info_store(struct kobject *kobj,
 			GOTO(failed, rc = -EINVAL);
 		}
 	}
+
+	/* the loop above cannot end on anything but an EOB_TYPE item, but
+	 * ll_foreign_symlink_upcall_parse() depends on that terminator, so
+	 * enforce it here rather than leave it implied
+	 */
+	if (nb_items == 0 || items[nb_items - 1].type != EOB_TYPE) {
+		rc = -EINVAL;
+		CERROR("%s: missing end of buffer item in infos buffer returned by foreign symlink upcall: rc = %d\n",
+		       sbi->ll_fsname, rc);
+		GOTO(failed, rc);
+	}
+
 	/* valid format has been provided by foreign symlink user upcall */
 	OBD_ALLOC_LARGE(new_items, nb_items *
 			sizeof(struct ll_foreign_symlink_upcall_item));

@@ -3696,6 +3696,52 @@ test_27P() {
 }
 run_test 27P "basic ops on foreign dir of foreign_symlink type"
 
+test_27Pa() {
+	(( $CLIENT_VERSION >= $(version_code 2.17.58) )) ||
+		skip "need client >= 2.17.58 for upcall format checking"
+
+	local sbi=$(ls -d /sys/fs/lustre/llite/$FSNAME-* 2>/dev/null | head -n1)
+	local info=$sbi/foreign_symlink_upcall_info
+	local fmt
+
+	[[ -n "$sbi" && -f $info ]] ||
+		skip "no foreign_symlink_upcall_info parameter"
+	(( $(getconf LONG_BIT) == 64 )) ||
+		skip "the item blobs below assume a 64-bit client"
+
+	# writing "none" clears LL_SBI_FOREIGN_SYMLINK_UPCALL without
+	# running any upcall, so later tests see the default parsing again
+	stack_trap "printf none > $sbi/foreign_symlink_upcall"
+
+	# the format l_foreign_symlink installs: POSLEN(0,36), STRING("/"),
+	# POSLEN(37,36), EOB
+	local good='\3\0\0\0\0\0\0\0\0\0\0\0\44\0\0\0'
+
+	good+='\2\0\0\0\0\0\0\0\1\0\0\0\0\0\0\0\57\0\0\0'
+	good+='\3\0\0\0\0\0\0\0\45\0\0\0\44\0\0\0\1\0\0\0'
+
+	printf "$good" > $info || error "valid upcall format was rejected"
+
+	# a STRING_TYPE item whose 4 bytes exactly fill the buffer ahead of
+	# the EOB_TYPE item: the tightest layout the parser has to accept
+	local tight='\2\0\0\0\0\0\0\0\4\0\0\0\0\0\0\0abcd\1\0\0\0'
+
+	printf "$tight" > $info || error "exact-fit string was rejected"
+	printf "$good" > $info
+
+	# a lone POSLEN_TYPE or STRING_TYPE item type, with no room left for
+	# the rest of the item, a complete POSLEN_TYPE item with no EOB_TYPE
+	# item to end the format, then a string one byte longer than its room
+	for fmt in '\3\0\0\0' '\2\0\0\0' \
+		   '\3\0\0\0\0\0\0\0\0\0\0\0\4\0\0\0' \
+		   '\2\0\0\0\0\0\0\0\5\0\0\0\0\0\0\0abcd\1\0\0\0'; do
+		printf "$fmt" 2>/dev/null > $info || continue
+		printf "$good" > $info
+		error "malformed upcall format '$fmt' was accepted"
+	done
+}
+run_test 27Pa "reject malformed foreign symlink upcall format"
+
 test_27Q() {
 	rm -f $TMP/$tfile $TMP/$tfile.loop $TMP/$tfile.none $TMP/$tfile.broken
 	stack_trap "rm -f $TMP/$tfile*"
