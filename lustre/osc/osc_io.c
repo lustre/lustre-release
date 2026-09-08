@@ -1510,21 +1510,12 @@ int osc_io_init(const struct lu_env *env,
 	struct osc_io *oio = osc_env_io(env);
 	struct osc_object *osc = cl2osc(obj);
 	struct obd_export *exp = osc_export(osc);
-	struct client_obd *cli = &exp->exp_obd->u.cli;
 
 	CL_IO_SLICE_CLEAN(oio, oi_cl);
 	cl_io_slice_add(io, &oio->oi_cl, obj, &osc_io_ops);
 
 	if (!exp_connect_unaligned_dio(exp))
 		cl_io_top(io)->ci_allow_unaligned_dio = false;
-
-	/*
-	 * P2P DMA requires ALL OSCs (stripes) representing a file to be
-	 * P2P DMA capable. If any visited OSC is incapable, we set
-	 * ci_p2pdma_unsupported to 1 to track this.
-	 */
-	if (!cli->cl_import || !cli->cl_import->imp_p2pdma)
-		cl_io_top(io)->ci_p2pdma_unsupported = 1;
 
 	return 0;
 }

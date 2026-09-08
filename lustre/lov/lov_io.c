@@ -4480,6 +4480,81 @@ static const struct cl_io_operations lov_empty_io_ops = {
 	.cio_commit_async              = LOV_EMPTY_IMPOSSIBLE
 };
 
+/**
+ * lov_io_p2pdma_check() - check P2P DMA support of all targets of a DIO
+ * @lio: LOV IO, set up by lov_io_slice_init()
+ * @io: top-level IO
+ *
+ * cl_dio_pages_init() pins the user pages with ITER_ALLOW_P2PDMA unless
+ * ci_p2pdma_unsupported is set. cl_io_loop() handles one stripe chunk per
+ * iteration and only creates the sub-IO (osc_io_init()/mdc_io_init()) of
+ * that stripe, so a target without P2P DMA support would only be found
+ * after P2P pages were already submitted to the earlier stripes. Check
+ * the import of every stripe this IO can reach in the selected mirror
+ * before any page is pinned.
+ */
+static void lov_io_p2pdma_check(struct lov_io *lio, struct cl_io *io)
+{
+	struct lov_object *lov = lio->lis_object;
+	struct lov_stripe_md *lsm = lov->lo_lsm;
+	struct lu_extent ext = {
+		.e_start = lio->lis_pos,
+		.e_end = lio->lis_endpos,
+	};
+	int index;
+
+	/* the append offset is only known under the lock, so the IO may
+	 * reach every instantiated component, see lov_io_rw_iter_init()
+	 */
+	if (cl_io_is_append(io)) {
+		ext.e_start = 0;
+		ext.e_end = OBD_OBJECT_EOF;
+	}
+
+	/* same components of the selected mirror as lov_io_iter_init() */
+	lov_foreach_io_layout(index, lio, &ext) {
+		struct lov_layout_raid0 *r0 = lov_r0(lov, index);
+		int i;
+
+		/* lle_valid is not checked: designated mirror IO (resync) can
+		 * write to stale components. r0->lo_nr is 0 for components
+		 * without sub-objects (uninstantiated, unsupported pattern).
+		 */
+		if (!lsm_entry_inited(lsm, index) ||
+		    lsm_entry_is_foreign(lsm, index))
+			continue;
+
+		/* for DoM, lle_dom.lo_dom_r0 is an alias of lle_raid0 */
+		for (i = 0; i < r0->lo_nr; i++) {
+			struct lovsub_object *los = r0->lo_sub[i];
+			struct lovsub_device *lsd;
+			struct obd_device *obd;
+			struct obd_import *imp;
+
+			/* layout hole (dummy oinfo), lov_io_iter_init() fails
+			 * the IO if it reaches this stripe
+			 */
+			if (!los ||
+			    !lov_stripe_intersects(lsm, index, i, &ext,
+						   NULL, NULL))
+				continue;
+
+			/* the lovsub device has no obd, use the OSC/MDC one */
+			lsd = lu2lovsub_dev(lovsub2lu(los)->lo_dev);
+			obd = cl2lu_dev(lsd->acid_next)->ld_obd;
+			imp = obd->u.cli.cl_import;
+			if (!imp || !imp->imp_p2pdma) {
+				CDEBUG(D_VFSTRACE,
+				       DFID": %s lacks P2P DMA (%d:%d)\n",
+				       PFID(lu_object_fid(lov2lu(lov))),
+				       obd->obd_name, index, i);
+				cl_io_top(io)->ci_p2pdma_unsupported = 1;
+				return;
+			}
+		}
+	}
+}
+
 int lov_io_init_composite(const struct lu_env *env, struct cl_object *obj,
 			  struct cl_io *io)
 {
@@ -4493,6 +4568,10 @@ int lov_io_init_composite(const struct lu_env *env, struct cl_object *obj,
 	result = lov_io_slice_init(env, lio, lov, io);
 	if (result)
 		GOTO(out, result);
+
+	if (io->ci_dio_aio &&
+	    (io->ci_type == CIT_READ || io->ci_type == CIT_WRITE))
+		lov_io_p2pdma_check(lio, io);
 
 	result = lov_io_subio_init(env, lio, io);
 	if (!result) {
