@@ -95,6 +95,14 @@ static int ll_foreign_symlink_default_parse(struct ll_sb_info *sbi,
 	       lfm->lfm_length);
 	(*destname)[suffix_pos + lfm->lfm_length] = '\0';
 
+	if (memchr(*destname + suffix_pos, '\0', lfm->lfm_length)) {
+		CERROR("%s: inode "DFID": NUL byte in symlink path: rc = %d\n",
+		       sbi->ll_fsname, PFID(ll_inode2fid(inode)), -EINVAL);
+		OBD_FREE(*destname, destname_size);
+		*destname = NULL;
+		RETURN(-EINVAL);
+	}
+
 	RETURN(0);
 }
 
@@ -184,6 +192,12 @@ static int ll_foreign_symlink_upcall_parse(struct ll_sb_info *sbi,
 			GOTO(failed, rc = -EINVAL);
 		}
 		i++;
+	}
+
+	if (memchr(*destname + suffix_pos, '\0', pos)) {
+		CERROR("%s: inode "DFID": NUL byte in symlink path: rc = %d\n",
+		       sbi->ll_fsname, PFID(ll_inode2fid(inode)), -EINVAL);
+		rc = -EINVAL;
 	}
 failed:
 	up_read(&sbi->ll_foreign_symlink_sem);
@@ -300,8 +314,6 @@ static int ll_foreign_readlink_internal(struct inode *inode, char **symname)
 		       sbi->ll_fsname, PFID(ll_inode2fid(inode)));
 		GOTO(failed, rc = -EINVAL);
 	}
-
-	/* XXX no assert nor double check of magic, length and type ? */
 
 	rc = ll_foreign_symlink_parse(sbi, inode, lfm, &destname);
 

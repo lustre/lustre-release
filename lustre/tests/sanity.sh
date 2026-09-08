@@ -3817,6 +3817,71 @@ test_27Pb() {
 }
 run_test 27Pb "bound foreign symlink upcall item (pos,len) values"
 
+test_27Pc() {
+	(( $CLIENT_VERSION >= $(version_code 2.17.58) )) ||
+		skip "need client >= 2.17.58 for NUL byte checking"
+	(( $MDS1_VERSION > $(version_code 2.12.51) )) ||
+		skip "need MDS >= 2.12.51 for foreign symlink files"
+
+	local sbi=$(ls -d /sys/fs/lustre/llite/$FSNAME-* 2>/dev/null | head -n1)
+	local info=$sbi/foreign_symlink_upcall_info
+	local uuid1=$(cat /proc/sys/kernel/random/uuid)
+	local uuid2=$(cat /proc/sys/kernel/random/uuid)
+	local dest
+
+	[[ -n "$sbi" && -f $info ]] ||
+		skip "no foreign_symlink_upcall_info parameter"
+	(( $(getconf LONG_BIT) == 64 )) ||
+		skip "the item blobs below assume a 64-bit client"
+
+	local param=llite/$FSNAME-*/foreign_symlink_prefix
+	local prefix=$($LCTL get_param -n $param)
+
+	test_mkdir $DIR/$tdir
+	stack_trap "$LFS unlink_foreign $DIR/$tdir/$tfile || true"
+	stack_trap "$LCTL set_param $param=$prefix"
+	stack_trap "$LCTL set_param llite/$FSNAME-*/foreign_symlink_enable=0"
+	# writing "none" clears LL_SBI_FOREIGN_SYMLINK_UPCALL without running
+	# any upcall, so later tests see the default parsing again
+	stack_trap "printf none > $sbi/foreign_symlink_upcall"
+
+	$LCTL set_param llite/$FSNAME-*/foreign_symlink_enable=1
+	$LCTL set_param $param=/tmp/
+
+	# a 36 + 1 + 36 bytes long foreign EA
+	$LFS setstripe --foreign=symlink --flags 0xda05 \
+		-x "$uuid1/$uuid2" --mode 0600 $DIR/$tdir/$tfile ||
+		error "$DIR/$tdir/$tfile: create failed"
+
+	# the format l_foreign_symlink installs: POSLEN(0,36), STRING("/"),
+	# POSLEN(37,36), EOB
+	local good='\3\0\0\0\0\0\0\0\0\0\0\0\44\0\0\0'
+
+	good+='\2\0\0\0\0\0\0\0\1\0\0\0\0\0\0\0\57\0\0\0'
+	good+='\3\0\0\0\0\0\0\0\45\0\0\0\44\0\0\0\1\0\0\0'
+
+	printf "$good" > $info || error "valid upcall format was rejected"
+	dest=$(readlink $DIR/$tdir/$tfile) ||
+		error "readlink of the foreign symlink has failed"
+	[[ "$dest" == */$uuid1/$uuid2 ]] ||
+		error "foreign symlink resolved to '$dest'"
+
+	# the same format with the constant string holding a NUL byte in
+	# place of '/', so the built path would end in the middle
+	local nul='\3\0\0\0\0\0\0\0\0\0\0\0\44\0\0\0'
+
+	nul+='\2\0\0\0\0\0\0\0\1\0\0\0\0\0\0\0\0\0\0\0'
+	nul+='\3\0\0\0\0\0\0\0\45\0\0\0\44\0\0\0\1\0\0\0'
+
+	$LCTL clear
+	printf "$nul" > $info || error "NUL holding upcall format rejected"
+	dest=$(readlink $DIR/$tdir/$tfile) &&
+		error "NUL byte in built path resolved to '$dest'"
+	$LCTL dk | grep -q "NUL byte in symlink path" ||
+		error "the NUL byte in the built path was not reported"
+}
+run_test 27Pc "reject a NUL byte in a foreign symlink path"
+
 test_27Q() {
 	rm -f $TMP/$tfile $TMP/$tfile.loop $TMP/$tfile.none $TMP/$tfile.broken
 	stack_trap "rm -f $TMP/$tfile*"
