@@ -963,7 +963,7 @@ do {									      \
 #define OBD_FREE_LARGE(ptr, size)				\
 do {								\
 	if (likely(ptr)) {					\
-		OBD_FREE_PRE(ptr, size, "kvfree");		\
+		OBD_FREE_PRE(ptr, size, "kvfreed");		\
 		kvfree(ptr);					\
 		POISON_PTR(ptr);				\
 	}							\

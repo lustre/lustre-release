@@ -75,8 +75,8 @@ while ($line = <INFILE>) {
     # message format here needs to match OBD_ALLOC_POST()/OBD_FREE_PRE()
     # mask:subs:cpu:epoch second.usec:?:pid:?:(filename:line:function_name())
     #    alloc-type 'var_name': size at memory_address.
-    if ($line =~ m/^(.*)\((.*):(\d+):(.*)\(\)\) (k[m]?|v[m]?|slab-|)(alloc(ed)?|free[d]?(_rcu)?) '(.*)': (\d+) at ([\da-f]+)/ ||
-        $line =~ m/^(.*)\((.*):(\d+):(.*)\(\)\) (k[m]?|v[m]?|slab-|)(alloc(ed)?|free[d]?(_rcu)?) '(.*)' of size (\d+) at ([\da-f]+)/) {
+    if ($line =~ m/^(.*)\((.*):(\d+):(.*)\(\)\) (k[mv]?|v[m]?|slab-|)(alloc(ed)?|free[d]?(_rcu)?) '(.*)': (\d+) at ([\da-f]+)/ ||
+        $line =~ m/^(.*)\((.*):(\d+):(.*)\(\)\) (k[mv]?|v[m]?|slab-|)(alloc(ed)?|free[d]?(_rcu)?) '(.*)' of size (\d+) at ([\da-f]+)/) {
         $file = $2;
         $lno  = $3;
         $func = $4;
@@ -92,7 +92,7 @@ while ($line = <INFILE>) {
         $name = $8;
         $size = 0;
         $addr = $9;
-    } elsif ($line =~ m/([ -]alloc(ed)? |[ -]free[d]? ).*at [0-9a-f]*/) {
+    } elsif ($line =~ m/([ -]\w*alloc(ed)? |[ -]\w*free[d]?(_rcu)? ).*at [0-9a-f]*/) {
         # alloc/free line that didn't match regexp, notify user of missed line
         print STDERR "Couldn't parse line $debug_line, script needs to be fixed:\n$line";
         next;
