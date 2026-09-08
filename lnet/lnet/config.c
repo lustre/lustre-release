@@ -270,6 +270,8 @@ lnet_net_remove_cpts(__u32 *cpts, __u32 ncpts, struct lnet_net *net)
 void
 lnet_ni_free(struct lnet_ni *ni)
 {
+	list_del_init(&ni->ni_netlist);
+
 	lnet_net_remove_cpts(ni->ni_cpts, ni->ni_ncpts, ni->ni_net);
 
 	if (ni->ni_refs != NULL)
