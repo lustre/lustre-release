@@ -864,6 +864,35 @@ test_16k() {
 }
 run_test 16k "Parallel FSX and drop caches should not panic"
 
+test_16m() {
+	local file1=$DIR1/$tfile
+	local file2=$DIR2/$tfile
+	local stripe_size=$(do_facet $SINGLEMDS \
+		"$LCTL get_param -n lod.$(facet_svc $SINGLEMDS)*.stripesize")
+
+	check_set_fallocate
+
+	stack_trap "rm -f $file1*"
+
+	# to allocate grant because it may run out due to test_15.
+	$LFS setstripe -c -1 $file1
+	dd if=/dev/zero of=$file1 bs=$stripe_size count=$OSTCOUNT oflag=sync ||
+		error "(0) dd failed writing to file=$file1"
+	dd if=/dev/zero of=$file2 bs=$stripe_size count=$OSTCOUNT oflag=sync ||
+		error "(1) dd failed writing to file=$file2"
+	$TRUNCATE $file1 0 || error "(2) truncate of file=$file1 failed"
+
+	# a run of operations on one mount before switching to the other
+	$FSX -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 -I burst \
+		$file1 $file2 || error "(3) fsx with burst failed"
+	$TRUNCATE $file1 0 || error "(4) truncate of file=$file1 failed"
+
+	# burst:1 switches path on every operation
+	$FSX -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 -I burst:1 \
+		$file1 $file2 || error "(5) fsx with burst:1 failed"
+}
+run_test 16m "dual-mount fsx bursting operations on each mount"
+
 test_17() { # bug 3513, 3667
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 

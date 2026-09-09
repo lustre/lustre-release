@@ -95,10 +95,14 @@ enum fd_iteration_policy {
 	FD_SINGLE,
 	FD_ROTATE,
 	FD_RANDOM,
+	FD_BURST,
 };
 
 int fd_policy = FD_RANDOM;
 int fd_last;
+int fd_burst_max = 16;			/* -I burst:N */
+int fd_burst_left;			/* ops left before switching fd */
+int fd_burst_used;			/* get_tf() ran for this operation */
 
 /*
  *	A log entry is an operation and a bunch of arguments.
@@ -551,6 +555,22 @@ get_tf(void)
 	case FD_RANDOM:
 		index = random();
 		break;
+	case FD_BURST:
+		/*
+		 * Run a random number of operations (1 to fd_burst_max) on one
+		 * path before moving to another one.
+		 */
+		if (fd_burst_left <= 0) {
+			if (num_test_files > 1) {
+				int step = 1 + random() % (num_test_files - 1);
+
+				fd_last = (fd_last + step) % num_test_files;
+			}
+			fd_burst_left = 1 + random() % fd_burst_max;
+		}
+		fd_burst_used = 1;
+		index = fd_last;
+		break;
 	case FD_SINGLE:
 		index = 0;
 		break;
@@ -565,10 +585,27 @@ get_tf(void)
 static void
 assign_fd_policy(char *policy)
 {
+	static const char burst_pfx[] = "burst:";
+
 	if (!strcmp(policy, "random")) {
 		fd_policy = FD_RANDOM;
 	} else if (!strcmp(policy, "rotate")) {
 		fd_policy = FD_ROTATE;
+	} else if (!strcmp(policy, "burst")) {
+		fd_policy = FD_BURST;
+	} else if (!strncmp(policy, burst_pfx, sizeof(burst_pfx) - 1)) {
+		char *count = policy + sizeof(burst_pfx) - 1;
+		char *endp;
+		long max;
+
+		errno = 0;
+		max = strtol(count, &endp, 0);
+		if (errno || *endp != '\0' || max < 1 || max > INT_MAX) {
+			prt("bad -I burst count: '%s'\n", count);
+			exit(1);
+		}
+		fd_policy = FD_BURST;
+		fd_burst_max = max;
 	} else {
 		prt("unknown -I policy: '%s'\n", policy);
 		exit(1);
@@ -1620,6 +1657,11 @@ test(void)
 out:
 	if (sizechecks && testcalls > simulatedopcount)
 		check_size();
+
+	if (fd_policy == FD_BURST && fd_burst_used) {
+		fd_burst_used = 0;
+		fd_burst_left--;
+	}
 }
 
 static void
@@ -1645,7 +1687,12 @@ static void
 usage(void)
 {
 	fprintf(stdout,
-		"usage: fsx [-dfnqFLOW] [-b opnum] [-c Prob] [-l flen] [-m start:end] [-o oplen] [-p progressinterval] [-r readbdy] [-s style] [-t truncbdy] [-w writebdy] [-D startingop] [ -I random|rotate ] [-N numops] [-P dirpath] [-S seed] [-Z [prob]] fname [additional paths to fname..]\n"
+"usage: fsx [-dfnqFLOW] [-b opnum] [-c Prob] [-l flen] [-m start:end]\n"
+"	[-o oplen] [-p progressinterval] [-r readbdy] [-s style]\n"
+"	[-t truncbdy] [-w writebdy] [-D startingop]\n"
+"	[ -I random|rotate|burst[:maxops] ] [-N numops] [-P dirpath]\n"
+"	[-S seed] [-Z [prob]]\n"
+"	fname [additional paths to fname..]\n"
 "	-b opnum: beginning operation number (default 1)\n"
 "	-c P: 1 in P chance of file close+open at each op (default infinity)\n"
 "	-d: debug output for all operations [-d -d = more debugging]\n"
@@ -1682,9 +1729,14 @@ usage(void)
 "	-z: Do not use zero range calls\n"
 #endif
 /* XFS: -C: Do not use collapse range calls\n\ */
-"	-I [rotate|random]: When multiple paths to the file are given,\n"
-"	    each operation uses a different path.  Iterate through them in\n"
-"	    order with 'rotate' or chose them at 'random'.  (default random)\n"
+"	-I [rotate|random|burst[:maxops]]: With multiple paths to the file,\n"
+"	    operations are spread across the paths.  Iterate through\n"
+"	    them in order with 'rotate', choose them at 'random', or with\n"
+"	    'burst' do 1 to maxops operations on one path before switching to\n"
+"	    another one.  (default random, default burst maxops 16)\n"
+"	    Note that with 'burst' an operation that touches a path does its\n"
+"	    size check on that path, whereas 'rotate' and 'random' usually\n"
+"	    check across mounts.\n"
 "	-L: fsxLite - no file creations & no file size changes\n"
 /* OSX: -I: start interactive mode since operation opnum\n\ */
 "	-M: mirror file test mode\n"
@@ -2047,6 +2099,12 @@ main(int argc, char **argv)
 		zero_range_calls = test_fallocate(FALLOC_FL_ZERO_RANGE);
 
 	fl_keep_size = test_fallocate(FALLOC_FL_KEEP_SIZE);
+
+	if (fd_policy == FD_BURST) {
+		fd_last = random() % num_test_files;
+		fd_burst_left = 1 + random() % fd_burst_max;
+		fd_burst_used = 0;
+	}
 
 	while (numops == -1 || numops--)
 		test();
