@@ -21,6 +21,7 @@
 #include <lustre_obdo.h>
 #include <lustre_osc.h>
 #include <lustre_compat/linux/folio_batch.h>
+#include <lustre_compat/linux/mm.h>
 #include <linux/falloc.h>
 
 #include "osc_internal.h"
@@ -284,7 +285,7 @@ int osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 		brw_flags |= OBD_BRW_RDMA_ONLY;
 
 	/* Fast-fail P2P pages if route to the OST does not support it */
-	if (lustre_is_p2prdma_page(folio_page(folio, cdp->cdp_pgno[0]))) {
+	if (is_pci_p2pdma_page(folio_page(folio, cdp->cdp_pgno[0]))) {
 		if (cli->cl_import && !cli->cl_import->imp_p2pdma)
 			return -EOPNOTSUPP;
 	}

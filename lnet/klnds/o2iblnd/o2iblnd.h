@@ -55,7 +55,7 @@
 #endif
 
 #define DEBUG_SUBSYSTEM S_LND
-#include <lustre_compat.h>
+#include <lustre_compat/linux/mm.h>
 
 #include <linux/libcfs/libcfs.h>
 #include <linux/lnet/lib-lnet.h>
@@ -1119,7 +1119,7 @@ int kiblnd_dma_map_sg(struct kib_hca_dev *hdev, struct kib_tx *tx)
 			int i;
 
 			for_each_sg(sg, s, nents, i) {
-				if (lustre_is_p2prdma_page(sg_page(s))) {
+				if (is_pci_p2pdma_page(sg_page(s))) {
 					has_p2p = true;
 					break;
 				}

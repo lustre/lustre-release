@@ -19,4 +19,15 @@ unsigned int compat_account_page_dirtied(struct page *page,
 #endif
 #endif
 
+#ifndef HAVE_IS_PCI_P2PDMA_PAGE
+static inline bool is_pci_p2pdma_page(const struct page *page)
+{
+	return false;
+}
+#endif
+
+#ifndef HAVE_PAGE_PGMAP
+#define page_pgmap(page) ((page)->pgmap)
+#endif
+
 #endif /* _LINUX_MM_LUSTRE_H */

@@ -4,7 +4,7 @@
 
 #include <linux/lnet/lnet_rdma.h>
 #include <linux/libcfs/libcfs.h>
-#include <lustre_compat.h>
+#include <lustre_compat/linux/mm.h>
 
 /* MAX / MIN conflict */
 #include <linux/lnet/lib-lnet.h>
@@ -145,9 +145,6 @@ EXPORT_SYMBOL(lnet_get_dev_prio);
 
 #ifdef HAVE_IS_PCI_P2PDMA_PAGE
 
-#ifndef HAVE_PAGE_PGMAP
-#define page_pgmap(page) ((page)->pgmap)
-#endif
 static inline struct device *lnet_get_p2p_dev(struct page *page)
 {
 	struct dev_pagemap *pgmap = page_pgmap(page);
@@ -268,7 +265,7 @@ lnet_is_rdma_only_page(struct page *page)
 
 	LASSERT(page != NULL);
 
-	if (lustre_is_p2prdma_page(page))
+	if (is_pci_p2pdma_page(page))
 		return true;
 
 	nvfs_ops = nvfs_get_ops();

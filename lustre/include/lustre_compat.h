@@ -53,17 +53,4 @@ static inline struct iovec iov_iter_iovec(const struct iov_iter *iter)
 #define migrate_folio	migratepage
 #endif
 
-#ifdef HAVE_IS_PCI_P2PDMA_PAGE
-#include <linux/pci-p2pdma.h>
-#endif
-
-static inline bool lustre_is_p2prdma_page(struct page *page)
-{
-#ifdef HAVE_IS_PCI_P2PDMA_PAGE
-	return is_pci_p2pdma_page(page);
-#else
-	return false;
-#endif
-}
-
 #endif /* _LUSTRE_COMPAT_H */
