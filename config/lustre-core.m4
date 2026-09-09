@@ -3318,6 +3318,7 @@ AC_DEFUN([LC_HAVE_SET_DEFAULT_D_OP],[
 #
 AC_DEFUN([LC_SRC_HAVE_FILE_KATTR],[
 	LB2_LINUX_TEST_SRC([struct_file_kattr], [
+		#include <linux/fs.h>
 		#include <linux/fileattr.h>
 	],[
 		struct file_kattr *ka __attribute__ ((unused)) = NULL;
