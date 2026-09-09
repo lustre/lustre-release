@@ -853,6 +853,7 @@ static const char *const obd_connect_names[] = {
 	"pool_slv_packed",	     /* 0x200000000000 */
 	"migrate_src",		     /* 0x400000000000 */
 	"renameat2",		     /* 0x800000000000 */
+	"maintenance",		    /* 0x1000000000000 */
 	NULL
 };
 

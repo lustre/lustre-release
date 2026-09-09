@@ -297,7 +297,11 @@ void lustre_assert_wire_constants(void)
 		 (long long)LDLM_GL_CALLBACK);
 	LASSERTF(LDLM_SET_INFO == 107, "found %lld\n",
 		 (long long)LDLM_SET_INFO);
-	LASSERTF(LDLM_LAST_OPC == 108, "found %lld\n",
+	LASSERTF(LDLM_MAINTENANCE == 108, "found %lld\n",
+		 (long long)LDLM_MAINTENANCE);
+	LASSERTF(LDLM_MAINT_HINT == 109, "found %lld\n",
+		 (long long)LDLM_MAINT_HINT);
+	LASSERTF(LDLM_LAST_OPC == 110, "found %lld\n",
 		 (long long)LDLM_LAST_OPC);
 	/* LDLM wire-visible request flags */
 	LASSERTF(LDLM_FL_WIRE_REQ_FLAGS_MASK == 0x00000000e08c131aULL,
@@ -1158,6 +1162,16 @@ void lustre_assert_wire_constants(void)
 		 (unsigned)MSG_REQ_REPLAY_DONE);
 	LASSERTF(MSG_LOCK_REPLAY_DONE == 0x00000080UL, "found 0x%.8xUL\n",
 		 (unsigned)MSG_LOCK_REPLAY_DONE);
+	LASSERTF(MSG_CLIENT_BANNED == 0x00000100UL, "found 0x%.8xUL\n",
+		 (unsigned int)MSG_CLIENT_BANNED);
+	LASSERTF(MSG_PACK_UID_GID == 0x00000200UL, "found 0x%.8xUL\n",
+		 (unsigned int)MSG_PACK_UID_GID);
+	LASSERTF(MSG_PACK_PROJID == 0x00000400UL, "found 0x%.8xUL\n",
+		 (unsigned int)MSG_PACK_PROJID);
+	LASSERTF(MSG_MAINT_DRAINED == 0x00000800UL, "found 0x%.8xUL\n",
+		 (unsigned int)MSG_MAINT_DRAINED);
+	LASSERTF(MSG_MAINT_HINT_CAPABLE == 0x00001000UL, "found 0x%.8xUL\n",
+		 (unsigned int)MSG_MAINT_HINT_CAPABLE);
 	LASSERTF(MSG_CONNECT_RECOVERING == 0x00000001UL, "found 0x%.8xUL\n",
 		 (unsigned)MSG_CONNECT_RECOVERING);
 	LASSERTF(MSG_CONNECT_RECONNECT == 0x00000002UL, "found 0x%.8xUL\n",
@@ -1526,6 +1540,8 @@ void lustre_assert_wire_constants(void)
 		 OBD_CONNECT2_MIGRATE_SRC);
 	LASSERTF(OBD_CONNECT2_RENAMEAT2 == 0x800000000000ULL, "found 0x%.16llxULL\n",
 		 OBD_CONNECT2_RENAMEAT2);
+	LASSERTF(OBD_CONNECT2_MAINTENANCE == 0x1000000000000ULL, "found 0x%.16llxULL\n",
+		 OBD_CONNECT2_MAINTENANCE);
 
 	LASSERTF(OBD_CKSUM_CRC32 == 0x00000001UL, "found 0x%.8xUL\n",
 		 (unsigned)OBD_CKSUM_CRC32);

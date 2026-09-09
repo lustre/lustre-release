@@ -197,13 +197,17 @@ enum local_oid {
 	MGS_CONFIGS_OID		= 4119UL,
 	OFD_HEALTH_CHECK_OID	= 4120UL,
 	MDD_LOV_OBJ_OSEQ	= 4121UL,
-	LFSCK_NAMESPACE_OID     = 4122UL,
+	LFSCK_NAMESPACE_OID	= 4122UL,
 	REMOTE_PARENT_DIR_OID	= 4123UL,
 	/* This definition is obsolete
 	 * SLAVE_LLOG_CATALOGS_OID	= 4124UL,
 	 */
-	BATCHID_COMMITTED_OID   = 4125UL,
+	BATCHID_COMMITTED_OID	= 4125UL,
 	OFD_FAILURE_DOMAIN_OID	= 4126UL,
+	/* maintenance certified-clients set for current recovery only:
+	 * lr_maint_data_header plus lr_maint_client for each client
+	 */
+	MAINT_DATA_OID		= 4127UL,
 };
 
 static inline void lu_local_obj_fid(struct lu_fid *fid, __u32 oid)

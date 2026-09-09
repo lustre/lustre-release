@@ -238,6 +238,11 @@ static inline bool target_supports_large_nid(struct mgs_target_info *mti)
 #define OBD_INCOMPAT_MULTI_OI   0x00000200
 /** multiple RPCs in flight */
 #define OBD_INCOMPAT_MULTI_RPCS	0x00000400
+/** target quiesced for maintenance: clients confirmed clean, so the next
+ * recovery may bound its wait instead of holding the full window (LU-5703);
+ * set briefly during the maintenance window, cleared as recovery completes
+ */
+#define OBD_INCOMPAT_MAINT	0x00000800
 
 /* last_rcvd handling */
 static inline void lsd_le_to_cpu(struct lr_server_data *buf,

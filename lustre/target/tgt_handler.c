@@ -1538,8 +1538,8 @@ int tgt_cp_callback(struct tgt_session_info *tsi)
 	return err_serious(-EOPNOTSUPP);
 }
 
-/* generic LDLM target handler */
-struct tgt_handler tgt_dlm_handlers[] = {
+/* generic LDLM target handler, sized so unused opcodes are NULL */
+struct tgt_handler tgt_dlm_handlers[LDLM_LAST_OPC - LDLM_FIRST_OPC] = {
 TGT_DLM_HDL(HAS_KEY, LDLM_ENQUEUE, tgt_enqueue),
 TGT_DLM_HDL(HAS_KEY, LDLM_CONVERT, tgt_convert),
 TGT_DLM_HDL_VAR(0, LDLM_BL_CALLBACK, tgt_bl_callback),

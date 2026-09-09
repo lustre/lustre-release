@@ -18106,7 +18106,17 @@ test_127a() { # bug 15521
 	stack_trap "rm -f $DIR/$tfile $tmpfile"
 	local now=$(date +%s)
 
-	$LCTL get_param osc.*.stats | tee $tmpfile
+	# check for broken opcode names due to ll_rpc_opcode_table[] mismatch
+	$LCTL get_param osc.*.stats | tee $tmpfile | grep opcode &&
+		error "'opcode' in osc stats, check ll_rpc_opcode_table[]"
+	$LCTL get_param mdc.*.stats | grep opcode &&
+		error "'opcode' in mdc stats, check ll_rpc_opcode_table[]"
+	do_facet mds1 "$LCTL get_param osp.*.stats" | grep opcode &&
+		error "'opcode' in osp stats, check ll_rpc_opcode_table[]"
+	do_facet mds1 "$LCTL get_param mds.MDS.*.stats" | grep opcode &&
+		error "'opcode' in mds stats, check ll_rpc_opcode_table[]"
+	do_facet ost1 "$LCTL get_param ost.OSS.*.stats" | grep opcode &&
+		error "'opcode' in ost stats, check ll_rpc_opcode_table[]"
 
 	local snapshot_time=$(awk '/snapshot_time/ { print $2; exit }' $tmpfile)
 	local start_time=$(awk '/start_time/ { print $2; exit }' $tmpfile)

@@ -635,6 +635,8 @@ enum lustre_msg_version {
 #define MSG_CLIENT_BANNED	0x0100 /* client is banned by nodemap */
 #define MSG_PACK_UID_GID	0x0200 /* thread UID/GID in ptlrpc_body */
 #define MSG_PACK_PROJID		0x0400 /* thread PROJID in ptlrpc_body */
+#define MSG_MAINT_DRAINED	0x0800 /* client drained after maint SYNC */
+#define MSG_MAINT_HINT_CAPABLE	0x1000 /* SYNC ACK: decodes LDLM_MAINT_HINT */
 
 /* pb_op_flags for connect opcodes: MDS_CONNECT, OST_CONNECT, MGS_CONNECT */
 #define MSG_CONNECT_RECOVERING	0x00000001 /* target is in recovery */
@@ -868,6 +870,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_POOL_SLV_PACKED 0x200000000000ULL /* packed pool SLV */
 #define OBD_CONNECT2_MIGRATE_SRC     0x400000000000ULL /* migrate src FID */
 #define OBD_CONNECT2_RENAMEAT2	     0x800000000000ULL /* renameat2() flags */
+#define OBD_CONNECT2_MAINTENANCE    0x1000000000000ULL /* fast client recovery*/
 /* XXX README XXX README XXX README XXX README XXX README XXX README XXX
  * Please DO NOT add OBD_CONNECT flags before first ensuring that this value
  * is not in use by some other branch/patch.
@@ -2587,6 +2590,8 @@ enum ldlm_cmd {
 	LDLM_CP_CALLBACK = 105,
 	LDLM_GL_CALLBACK = 106,
 	LDLM_SET_INFO    = 107,
+	LDLM_MAINTENANCE = 108, /* quiesce client to minimize recovery time */
+	LDLM_MAINT_HINT  = 109, /* server notification to client of liveness */
 	LDLM_LAST_OPC
 };
 #define LDLM_FIRST_OPC LDLM_ENQUEUE

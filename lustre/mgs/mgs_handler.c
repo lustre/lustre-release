@@ -1375,7 +1375,8 @@ static struct tgt_handler mgs_obd_handlers[] = {
 TGT_OBD_HDL(0,	OBD_PING,	tgt_obd_ping),
 };
 
-static struct tgt_handler mgs_dlm_handlers[] = {
+/* sized so unused opcodes are NULL */
+static struct tgt_handler mgs_dlm_handlers[LDLM_LAST_OPC - LDLM_FIRST_OPC] = {
 [LDLM_ENQUEUE - LDLM_FIRST_OPC] = {
 	.th_name = "LDLM_ENQUEUE",
 	/* don't use th_fail_id for MGS to don't interfere with MDS tests.
