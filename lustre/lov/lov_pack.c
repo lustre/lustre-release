@@ -422,14 +422,15 @@ int lov_getstripe(const struct lu_env *env, struct lov_object *obj,
 	 * Legacy appication passes limited buffer, we need to figure out
 	 * the user buffer size by the passed in lmm_stripe_count.
 	 */
-	if (lsm->lsm_magic != LOV_MAGIC_FOREIGN)
+	if (lsm->lsm_magic != LOV_MAGIC_FOREIGN) {
 		if (copy_from_user(&lum, lump, sizeof(struct lov_user_md_v1)))
 			GOTO(out_free, rc = -EFAULT);
 
-	if (lum.lmm_magic == LOV_USER_MAGIC_V1 ||
-	    lum.lmm_magic == LOV_USER_MAGIC_V3)
-		lum_size = lov_user_md_size(lum.lmm_stripe_count,
-					    lum.lmm_magic);
+		if (lum.lmm_magic == LOV_USER_MAGIC_V1 ||
+		    lum.lmm_magic == LOV_USER_MAGIC_V3)
+			lum_size = lov_user_md_size(lum.lmm_stripe_count,
+						    lum.lmm_magic);
+	}
 
 	if (lum_size != 0) {
 		struct lov_mds_md *comp_md = lmmk;
