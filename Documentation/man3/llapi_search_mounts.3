@@ -1,0 +1,86 @@
+.TH LLAPI_SEARCH_MOUNTS 3 2026-08-12 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_search_mounts \- search for Lustre filesystem mount points
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_search_mounts(const char *" pathname ", int " index ,
+.BI "                        char *" mntdir ", char *" fsname );
+.fi
+.SH DESCRIPTION
+The
+.B llapi_search_mounts()
+function scans the active system mounts for the mountpoint that contains
+the specified
+.BR pathname .
+The mountpoint is copied into the supplied
+.I mntdir
+buffer (which should be at least
+.B PATH_MAX
+bytes in size).
+The filesystem name for that mountpoint is optionally returned in the supplied
+.I fsname
+buffer (at least 16 bytes) if that argument is non-NULL.
+If
+.I pathname
+is NULL or an empty string, then it will search all mountpoints with the
+.B lustre
+client filesystem type,
+otherwise it will iterate over matching mount entries with an incrementing
+.I index
+argument, starting from 0.
+For each matching index, the mount directory path is copied to
+.I mntdir
+and the associated Lustre file system name is copied to
+.I fsname
+if non-NULL.
+.SH RETURN VALUES
+.B llapi_search_mounts
+returns 0 on success.  On failure, a negative error code is returned and
+.B errno
+is set appropriately.
+.SH ERRORS
+Returned errors include (among others):
+.TP 15
+.B EINVAL
+.I mntdir
+is NULL, so no information can be returned.
+.TP
+.B EIO
+the
+.IR setmntent (3)
+function could not open the list of mountpoints.
+.TP
+.B ENODEV
+no mounted Lustre filesystem was found.
+.SH EXAMPLES
+Find and print the fsname for all Lustre client mountpoints:
+.nf
+#include <lustre/lustreapi.h>
+
+int main(int argc, char *argv[])
+{
+	char mntdir[PATH_MAX];
+	char fsname[17];
+	int index = 0;
+
+	while (!llapi_search_mounts(NULL, index++, mntdir, fsname))
+		printf("fsname %s mounted at %s\\n", fsname, mntdir);
+
+	return 0;
+}
+.fi
+.SH AVAILABILITY
+The
+.B llapi_search_mounts()
+function is part of the
+.BR lustre (7)
+user application interface library since release 1.8.2.
+.\" Added in commit v1_8_1_1-972-gfff5b60742
+.SH SEE ALSO
+.BR getmntent_r (3),
+.BR llapi_is_lustre_mnt (3),
+.BR llapi_search_fsname (3),
+.BR llapi_search_tgt (3),
+.BR mount.lustre (8)

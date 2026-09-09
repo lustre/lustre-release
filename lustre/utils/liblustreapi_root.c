@@ -432,11 +432,11 @@ out_errno:
 	return rc;
 }
 
-/*
+/**
  * search lustre mounts
  *
- * Calling this function will return to the user the mount point, mntdir, and
- * the file system name, fsname, if the user passed a buffer to this routine.
+ * Calling this function will return to the user the mount point, @mntdir, and
+ * the file system name, @fsname, if the user passed a buffer to this routine.
  *
  * The user inputs are pathname and index. If the pathname is supplied then
  * the value of the index will be ignored. The pathname will return data if
@@ -449,15 +449,23 @@ int llapi_search_mounts(const char *pathname, int index, char *mntdir,
 {
 	int want = WANT_PATH, idx = -1;
 
+	if (!mntdir) {
+		errno = EINVAL;
+		return -errno;
+	}
+
 	if (!pathname || pathname[0] == '\0') {
 		want |= WANT_INDEX;
 		idx = index;
+		mntdir[0] = '\0';
 	} else {
-		strcpy(mntdir, pathname);
+		snprintf(mntdir, PATH_MAX, "%s", pathname);
 	}
 
-	if (fsname)
+	if (fsname) {
 		want |= WANT_FSNAME;
+		fsname[0] = '\0';
+	}
 	return get_root_path(want, fsname, NULL, mntdir, idx, NULL, NULL);
 }
 
@@ -466,6 +474,9 @@ int llapi_search_fsname(const char *pathname, char *fsname)
 {
 	dev_t dev;
 	int rc;
+
+	if (!pathname)
+		return -EINVAL;
 
 	rc = get_file_dev(pathname, &dev);
 	if (rc) {

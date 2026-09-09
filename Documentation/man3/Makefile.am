@@ -143,10 +143,11 @@ LIBMAN = 					\
 	llapi_rmfid_at.3			\
 	llapi_scan_namespace.3			\
 	llapi_search_mdt.3			\
+	llapi_search_mounts.3			\
 	llapi_search_ost.3			\
-	llapi_search_tgt.3			\
 	llapi_search_rootpath.3			\
 	llapi_search_rootpath_by_dev.3		\
+	llapi_search_tgt.3			\
 	llapi_unlink_foreign.3
 
 if MANPAGES

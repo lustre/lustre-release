@@ -4656,7 +4656,6 @@ static int guess_only_lustre_mount_root(char *mntdir)
 	int rc;
 	char buf[PATH_MAX] = {0};
 
-	mntdir[0] = '\0';
 	rc = llapi_search_mounts(NULL, 0, mntdir, NULL);
 	if (rc != 0) {
 		llapi_error(LLAPI_MSG_DEBUG, rc,
@@ -8844,10 +8843,6 @@ static int lfs_tgts(int argc, char **argv)
 	}
 
 	while (!llapi_search_mounts(path, index++, mntdir, NULL)) {
-		/* Check if we have a mount point */
-		if (mntdir[0] == '\0')
-			continue;
-
 		if (!strcmp(argv[0], "mdts"))
 			param->fp_get_lmv = 1;
 
@@ -10307,19 +10302,11 @@ static int lfs_df(int argc, char **argv)
 	/* Handle case where path is not specified */
 	if (optind == argc) {
 		while (!llapi_search_mounts(path, index++, mntdir, fsname)) {
-			/* Check if we have a mount point */
-			if (mntdir[0] == '\0')
-				continue;
-
 			rc = mntdf(mntdir, fsname, pool_name, flags, ops, NULL,
 				   mdt_idx, ost_idx, fields, field_order,
 				   field_count);
 			if (rc || path[0] != '\0')
 				break;
-
-			fsname[0] = '\0'; /* avoid matching in next loop */
-			mntdir[0] = '\0'; /* avoid matching in next loop */
-			path[0] = '\0'; /* clean for next loop */
 		}
 		return rc;
 	}
@@ -10330,8 +10317,6 @@ static int lfs_df(int argc, char **argv)
 	for (arg_idx = optind; arg_idx <= argc - 1; arg_idx++) {
 		bool valid = false;
 
-		fsname[0] = '\0'; /* start clean */
-		mntdir[0] = '\0'; /* start clean */
 		path[0] = '\0';   /* start clean */
 
 		/* path does not exists at all */
@@ -10348,10 +10333,6 @@ static int lfs_df(int argc, char **argv)
 
 		/* path exists but may not be a Lustre filesystem */
 		while (!llapi_search_mounts(path, index++, mntdir, fsname)) {
-			/* Check if we have a mount point */
-			if (mntdir[0] == '\0')
-				continue;
-
 			rc = mntdf(mntdir, fsname, pool_name, flags, ops, NULL,
 				   mdt_idx, ost_idx, fields, field_order,
 				   field_count);
@@ -10449,17 +10430,15 @@ static int lfs_getname(int argc, char **argv)
 	}
 
 	if (optind == argc) { /* no paths specified, get all paths. */
-		char mntdir[PATH_MAX] = { 0 };
-		char path[PATH_MAX] = { 0 };
+		char mntdir[PATH_MAX];
 		int index = 0;
 
-		while (!llapi_search_mounts(path, index++, mntdir, fsname)) {
+		while (!llapi_search_mounts(NULL, index++, mntdir, fsname)) {
 			rc2 = print_instance(mntdir, fsname, sizeof(fsname),
 					     opt_instance, opt_fsname, opt_uuid,
 					     true);
 			if (!rc)
 				rc = rc2;
-			path[0] = fsname[0] = mntdir[0] = '\0';
 		}
 	} else { /* paths specified, only attempt to search these. */
 		bool opt_mntdir = ((argc - optind) != 1);
@@ -12563,14 +12542,9 @@ quota_type:
 			int i = 0;
 
 			while (!llapi_search_mounts(NULL, i++, mnt, NULL)) {
-				if (mnt[0] == '\0')
-					continue;
-
 				rc = do_quota_op(mnt, qctl, &param);
 				if (rc)
 					break;
-
-				mnt[0] = '\0'; /* avoid matching in next loop */
 			}
 		} else {
 			int i = optind;
