@@ -2170,10 +2170,21 @@ int _attr_name_starts_with(const char *attr_name, const char *name, size_t len)
 }
 
 static inline
-struct attribute *get_attr_starts_with(const struct kobj_type *typ,
-				       const char *name,
-				       size_t len)
+int _attr_name_exact_len(const char *attr_name, const char *key, size_t len)
 {
+	return strlen(attr_name) == len && !strncmp(attr_name, key, len);
+}
+
+static inline
+struct attribute *get_attr_matches(const struct kobj_type *typ,
+				   const char *name, size_t len)
+{
+	struct attribute *attr;
+
+	attr = _get_attr_matches(typ, name, len, _attr_name_exact_len);
+	if (attr)
+		return attr;
+
 	return _get_attr_matches(typ, name, len, _attr_name_starts_with);
 }
 

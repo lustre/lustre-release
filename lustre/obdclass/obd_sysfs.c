@@ -847,13 +847,21 @@ static struct attribute_group lustre_attr_group = {
 
 ssize_t class_set_global(const char *param)
 {
-	const char *value = strchr(param, '=') + 1;
-	size_t off = value - param - 1;
+	const char *eq = strchr(param, '=');
+	const char *value;
+	size_t off;
 	ssize_t count = -ENOENT;
 	int i;
 
+	if (!eq || eq == param)
+		return -EINVAL;
+
+	off = eq - param;
+	value = eq + 1;
+
 	for (i = 0; lustre_attrs[i]; i++) {
-		if (!strncmp(lustre_attrs[i]->name, param, off)) {
+		if (strlen(lustre_attrs[i]->name) == off &&
+		    !strncmp(lustre_attrs[i]->name, param, off)) {
 			count = lustre_attr_store(&lustre_kset->kobj,
 						  lustre_attrs[i], value,
 						  strlen(value));

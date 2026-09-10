@@ -33538,6 +33538,48 @@ test_401db() { #LU-9544
 }
 run_test 401db "Verify 'lctl set_param' does not add trailing '='"
 
+test_401dc() {
+	remote_mgs_nodsh && skip "remote MGS with nodsh"
+
+	local old_timeout=$($LCTL get_param -n timeout)
+	local old_at_history=$($LCTL get_param -n at_history)
+	local old_at_max=$($LCTL get_param -n at_max)
+	local new_at_max=$((old_at_max + 10))
+
+	stack_trap "do_facet mgs $LCTL set_param -P -d time=10 || true" EXIT
+	stack_trap "do_facet mgs $LCTL set_param -P -d at_hist=10 || true" EXIT
+	stack_trap "do_facet mgs $LCTL set_param -P -d =10 || true" EXIT
+	stack_trap "do_facet mgs $LCTL conf_param -d $FSNAME.sys.= || true" EXIT
+	stack_trap "do_facet mgs $LCTL set_param -P at_max=$old_at_max ||
+		true" EXIT
+
+	# "time" is a prefix of "timeout" and "at_hist" of "at_history", so
+	# these names must not match (and overwrite) the longer attribute.
+	# class_set_global() must reject them with an exact-length match.
+	do_facet mgs $LCTL set_param -P time=10 ||
+		error "recording time=10 failed"
+	do_facet mgs $LCTL set_param -P at_hist=10 ||
+		error "recording at_hist=10 failed"
+	do_facet mgs $LCTL set_param -P =10 ||
+		error "recording =10 failed"
+	do_facet mgs $LCTL conf_param $FSNAME.sys.=10 &&
+		error "conf_param accepted an empty global param name"
+
+	# Change a valid parameter after the invalid ones and wait for it to
+	# be applied on the client, so the bad records above have been
+	# processed by the client as well.
+	do_facet mgs $LCTL set_param -P at_max=$new_at_max ||
+		error "recording at_max=$new_at_max failed"
+	wait_update $HOSTNAME "$LCTL get_param -n at_max" $new_at_max ||
+		error "at_max was not applied"
+
+	[[ "$($LCTL get_param -n timeout)" == "$old_timeout" ]] ||
+		error "'time=10' changed timeout"
+	[[ "$($LCTL get_param -n at_history)" == "$old_at_history" ]] ||
+		error "'at_hist=10' changed at_history"
+}
+run_test 401dc "invalid global param names must not match valid ones"
+
 test_401e() { # LU-14779
 	$LCTL list_param -R "ldlm.namespaces.MGC*" ||
 		error "lctl list_param MGC* failed"

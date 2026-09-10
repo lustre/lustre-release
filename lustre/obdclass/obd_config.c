@@ -1685,6 +1685,10 @@ int class_process_config(struct lustre_cfg *lcfg, struct kobject *kobj)
 	}
 	case LCFG_SET_PARAM: {
 		err = process_param2_config(lcfg);
+		if (err < 0)
+			CDEBUG(D_CONFIG,
+			       "Ignoring error %d on optional param '%s'\n",
+			       err, lustre_cfg_string(lcfg, 1));
 		GOTO(out, err = 0);
 	}
 	}
@@ -1840,7 +1844,7 @@ ssize_t class_modify_config(struct lustre_cfg *lcfg, const char *prefix,
 		keylen = value - key;
 		value++;
 
-		attr = get_attr_starts_with(typ, key, keylen);
+		attr = get_attr_matches(typ, key, keylen);
 		if (!attr) {
 			char *envp[4], *param, *path;
 
