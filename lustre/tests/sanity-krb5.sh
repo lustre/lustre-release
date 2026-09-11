@@ -64,16 +64,30 @@ rm -rf $DIR/[df][0-9]*
 
 check_runas_id $RUNAS_ID $RUNAS_ID $RUNAS
 
+dump_dbench_log()
+{
+	[[ -s $DBENCH_LOG ]] || return 0
+
+	# rundbench cleans up with 'rm -frv', and the hundreds of lines it
+	# prints would push the dbench error message out of the tail
+	echo "--- dbench output begin ---"
+	grep -v "^removed " $DBENCH_LOG | tail -n 100
+	echo "--- dbench output end ---"
+}
+
 start_dbench()
 {
 	local NPROC=$(grep -c ^processor /proc/cpuinfo)
+
 	[ $NPROC -gt 2 ] && NPROC=2
-	bash rundbench -D $DIR/$tdir $NPROC 1>/dev/null &
+	DBENCH_LOG=$TMP/dbench.$TESTNAME.log
+	bash rundbench -D $DIR/$tdir $NPROC > $DBENCH_LOG 2>&1 &
 	DBENCH_PID=$!
 	sleep 2
 
 	num=$(ps --no-headers -p $DBENCH_PID 2>/dev/null | wc -l)
 	if [ $num -ne 1 ]; then
+		dump_dbench_log
 		error "failed to start dbench $NPROC"
 	else
 		echo "started dbench with $NPROC processes at background"
@@ -84,13 +98,21 @@ start_dbench()
 
 check_dbench()
 {
+	local rc
+
 	num=$(ps --no-headers -p $DBENCH_PID 2>/dev/null | wc -l)
 	if [ $num -eq 0 ]; then
 		echo "dbench $DBENCH_PID already finished"
-		wait $DBENCH_PID || error "dbench $PID exit with error"
+		wait $DBENCH_PID
+		rc=$?
+		if [ $rc -ne 0 ]; then
+			dump_dbench_log
+			error "dbench $DBENCH_PID exit with error $rc"
+		fi
 		start_dbench
 	elif [ $num -ne 1 ]; then
 		killall -9 dbench
+		dump_dbench_log
 		error "found $num instance of pid $DBENCH_PID ???"
 	fi
 
@@ -120,6 +142,7 @@ error_dbench()
 
 	killall -9 dbench
 	sleep 1
+	dump_dbench_log
 
 	error $err_str
 }
@@ -670,7 +693,7 @@ test_90() {
 		sleep 2
 		check_dbench
 		echo "flush ctx ($n/$total) ..."
-		$LFS flushctx -k -r $MOUNT ||
+		$LFS flushctx -r $MOUNT ||
 			error "can't flush context on $MOUNT"
 	done
 	check_dbench
