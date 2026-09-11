@@ -13,7 +13,7 @@ Usage:
   B) Pass a full legacy options line (the tool will extract ip2nets=..., routes=..., and networks=...):
       ./lnet_legacy2yaml "options lnet 'ip2nets=\"tcp0 10.0.0.*\" routes=...';"
 
-  C) Read from stdin (omit positional argument):
+  C) Read from stdin (omit both the positional argument and -i/-r/-n/-m):
       echo 'tcp(eth0) 192.168.0.[2,4]; tcp 192.168.0.*' | ./lnet_legacy2yaml
 
   D) Provide separate files for ip2nets, routes, and/or networks:
@@ -597,8 +597,12 @@ def main(argv: List[str]) -> int:
     if args.inline is not None:
         inline_raw = args.inline
     else:
-        # If no inline and no files, read stdin (heuristic: data piped in)
-        if not sys.stdin.isatty():
+        # If no inline and no files, read stdin (heuristic: data piped in).
+        # With file sources given, stdin is not a data source: reading it
+        # would block forever on an inherited pipe that is never closed.
+        have_files = any((args.ip2nets, args.routes, args.networks,
+                          args.modprobe))
+        if not have_files and not sys.stdin.isatty():
             inline_raw = sys.stdin.read()
 
     if inline_raw:

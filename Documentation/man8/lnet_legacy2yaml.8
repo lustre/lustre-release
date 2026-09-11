@@ -44,11 +44,22 @@ legacy module configuration files (e.g.
 .BR lustre.conf )
 to the YAML form consumed by modern LNet configuration workflows.
 .P
-Input may be supplied through any combination of positional inline
-argument, file options, or standard input. If no positional inline
-argument is provided and stdin is not a TTY, data is read from stdin.
-Multiple sources accumulate: ip2nets files first, route files, then
-inline/stdin content.
+Input may be supplied through a positional inline argument, through the
+file options
+.RB ( -i ,
+.BR -r ,
+.BR -n ,
+.BR -m ),
+or through standard input. Inline and file options may be combined and
+accumulate: modprobe files first, then ip2nets files, route files,
+networks files, then the inline argument.
+.P
+Standard input is read only as a fallback, when neither a positional
+inline argument nor any file option is given (and stdin is not a TTY).
+Supplying a file option therefore causes redirected stdin to be ignored
+rather than appended. This keeps the tool from blocking forever on an
+inherited pipe that is never written to or closed, as happens when it is
+invoked from a test harness or an init script.
 .SH OPTIONS
 .TP
 .BR -i ", " --ip2nets " \fIFILE\fP"
@@ -235,7 +246,8 @@ same file. Each line is automatically detected and parsed according to
 its format.
 .IP \(bu
 Modprobe files are processed first, followed by explicit ip2nets files,
-routes files, networks files, then inline/stdin content.
+routes files, networks files, then the inline argument. Standard input
+is consulted only when no inline argument and no file options are given.
 .IP \(bu
 Line continuations in modprobe files (backslash-newline) are handled
 automatically.
