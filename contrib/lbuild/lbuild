@@ -1197,9 +1197,9 @@ build_spl_zfs() {
 	    # it and the zfs-devel rpm only has unversioned symlinks to the
 	    # libraries in the zfs rpm
 	    # this will all change one day when we have a libzfs rpm per
-	    # https://github.com/zfsonlinux/zfs/issues/2329
+	    # https://github.com/openzfs/zfs/issues/2329
 	    # and it looks like it could be one day soon:
-	    # https://github.com/zfsonlinux/zfs/pull/2341
+	    # https://github.com/openzfs/zfs/pull/2341
 	    local devel_rpms=$(ls -1 $TOPDIR/RPMS/*/{$pkg-devel,$pkg-$SPLZFSVER,lib*}-*.rpm)
 	    for rpm in $devel_rpms; do
 		rpm2cpio $rpm | cpio -id

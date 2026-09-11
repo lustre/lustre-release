@@ -8,7 +8,7 @@
 
 /*
  *  Adapted in part from MIT Kerberos 5-1.2.1 slave/kprop.c and from
- *  http://docs.sun.com/?p=/doc/816-1331/6m7oo9sms&a=view
+ *  https://docs.oracle.com/cd/E19683-01/816-1331/6m7oo9sms/index.html
  *
  *  Copyright (c) 2002-2004 The Regents of the University of Michigan.
  *  All rights reserved.

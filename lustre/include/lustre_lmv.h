@@ -259,7 +259,7 @@ static inline __u32 crush_hash(__u32 a, __u32 b)
 }
 
 /* refer to https://github.com/ceph/ceph/blob/master/src/crush/hash.c and
- * https://www.ssrc.ucsc.edu/Papers/weil-sc06.pdf for details of CRUSH
+ * https://ceph.io/assets/pdfs/weil-crush-sc06.pdf for details of CRUSH
  * algorithm.
  */
 static inline unsigned int

@@ -20,9 +20,9 @@ second in simultaneous, aggregate throughput.
 +---------------+
 
 More information about Lustre:
-    http://www.lustre.org/
+    https://www.lustre.org/
 Many resources for using, configuring, and troubleshooting Lustre are at:
-    http://wiki.lustre.org/
+    https://wiki.lustre.org/
 
 For in-tree documentation, see:
     Documentation/
@@ -53,7 +53,7 @@ Mirror is available at:
 +----------+
 
 Detailed instructions for building, configuring and running Lustre:
-    http://wiki.lustre.org/Compiling_Lustre
+    https://wiki.lustre.org/Compiling_Lustre
 and
     https://wiki.whamcloud.com/display/PUB/Getting+started+with+Lustre
 
@@ -99,16 +99,16 @@ To clean up:
 +--------------+
 
 Instructions for contributing patches for Lustre:
-    http://wiki.lustre.org/Submitting_Changes
+    https://wiki.lustre.org/Submitting_Changes
 and
-    http://wiki.lustre.org/Using_Gerrit
+    https://wiki.lustre.org/Using_Gerrit
 
 
 The Lustre Coding Style Guidelines can be found at:
-    http://wiki.lustre.org/Lustre_Coding_Style_Guidelines
+    https://wiki.lustre.org/Lustre_Coding_Style_Guidelines
 
 The Lustre Test Script Style Guidelines can be found at:
-    http://wiki.lustre.org/Lustre_Script_Coding_Style
+    https://wiki.lustre.org/Lustre_Script_Coding_Style
 
 
 In order to improve the quality of patches submitted to the Lustre tree,
