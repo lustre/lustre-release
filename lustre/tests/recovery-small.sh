@@ -2806,6 +2806,9 @@ test_131() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
 	rm -f $DIR/$tfile
+	# the eviction below discards the buffered write, so the file is left
+	# behind with a size the OSTs never saw
+	stack_trap "rm -f $DIR/$tfile"
 	# get a lock on client so that export would reach the stale list
 	$LFS setstripe -i 0 $DIR/$tfile || error "setstripe failed"
 	dd if=/dev/zero of=$DIR/$tfile count=1 || error "dd failed"
@@ -3633,25 +3636,30 @@ test_155() {
 	(( MDS1_VERSION >= $(version_code v2_15_58-110-g71f8e5d6506f) )) ||
 		skip "need MDS >= 2.15.58.110 for ptlrpc fix"
 
-	sync; cancel_lru_locks
-	local lsoutput1=$(mktemp -p ${TMP:-/tmp} $TESTNAME.1.XXXXXX})
-	local lsoutput2=$(mktemp -p ${TMP:-/tmp} $TESTNAME.2.XXXXXX})
-	local lsoutput2
+	local lsoutput1=$(mktemp -p ${TMP:-/tmp} $TESTNAME.1.XXXXXX)
+	local lsoutput2=$(mktemp -p ${TMP:-/tmp} $TESTNAME.2.XXXXXX)
 
-	touch $DIR/$tfile || error "creating $tfile"
-	ls -l $DIR > $lsoutput1 || error "ls1 failed"
 	stack_trap "rm -f $lsoutput1 $lsoutput2"
 
+	# list only what this test creates: the remount below drops the
+	# attributes cached for other tests' files, which the servers may
+	# never have agreed with
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
+	touch $DIR/$tdir/$tfile || error "creating $tfile"
+	ls -l $DIR/$tdir > $lsoutput1 || error "ls1 failed"
+
 	zconf_umount $HOSTNAME $MOUNT || error "umount failed"
-	# make sure that last_rcvd update is committed
-	do_facet mds1 sync
+	# this client cannot replay the create above, so it has to reach
+	# disk before the replay barrier below drops writes
+	do_facet mds1 "$LCTL set_param -n osd*.*MDT*.force_sync=1" ||
+		error "force_sync failed"
 	zconf_mount $HOSTNAME $MOUNT || error "mount failed"
 
 	replay_barrier_nosync mds1
 
 	fail_nodf mds1
 
-	ls -l $DIR > $lsoutput2 || error "ls2 failed"
+	ls -l $DIR/$tdir > $lsoutput2 || error "ls2 failed"
 	diff -wu0 $lsoutput1 $lsoutput2 || error "ls1 != ls2"
 }
 run_test 155 "failover after client remount"
