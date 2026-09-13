@@ -22,7 +22,7 @@
 #include <linux/lnet/lib-lnet.h> /* for CFS_FAIL_PTLRPC_OST_BULK_CB2 */
 
 /* whether we should use PM-QoS to lower CPUs resume latency during I/O */
-bool ptlrpc_enable_pmqos = true;
+bool ptlrpc_enable_pmqos = IS_ENABLED(CONFIG_CPU_IDLE);
 
 /* max CPUs power resume latency to be used during I/O */
 int ptlrpc_pmqos_latency_max_usec = CPU_MAX_RESUME_LATENCY_US;
@@ -30,7 +30,7 @@ int ptlrpc_pmqos_latency_max_usec = CPU_MAX_RESUME_LATENCY_US;
 /* default timeout to end CPUs resume latency constraint */
 u64 ptlrpc_pmqos_default_duration_usec = DEFAULT_CPU_LATENCY_TIMEOUT_US;
 
-/* whether we should use OBD stats to determine best low latency duration */
+/* whether the measured delays, not the default above, set the duration */
 bool ptlrpc_pmqos_use_stats_for_duration = true;
 
 /**
@@ -601,108 +601,52 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
 	}
 }
 
-/* lower CPU latency on all logical CPUs in the cpt partition that will
- * handle replies from the target NID server
+/*
+ * lower CPU latency system wide: the CPUs an RPC involves cannot all be
+ * covered precisely
  */
-static void kick_cpu_latency(struct ptlrpc_connection *conn,
-			     struct obd_device *obd)
+static void kick_cpu_latency(void)
 {
-	cpumask_t *cpt_cpumask;
-	int cpu;
-	struct cpu_latency_qos *latency_qos;
-	u64 time = 0;
+	struct cpu_latency_qos *latency_qos = &ptlrpc_cpu_latency_qos;
+	u64 now, cur;
 
-	if (unlikely(ptlrpc_enable_pmqos == false) ||
-	    unlikely(cpus_latency_qos == NULL))
+	if (unlikely(!ptlrpc_enable_pmqos))
 		return;
 
-#ifdef CONFIG_PROC_FS
-	if (ptlrpc_pmqos_use_stats_for_duration == true && obd != NULL) {
-		/* prevent racing with OBD cleanup (umount !) */
-		spin_lock(&obd->obd_dev_lock);
-		if (!test_bit(OBDF_STOPPING, obd->obd_flags) &&
-		    obd->obd_svc_stats != NULL) {
-			struct lprocfs_counter ret;
+	now = get_jiffies_64();
 
-			lprocfs_stats_collect(obd->obd_svc_stats,
-					      PTLRPC_REQWAIT_CNTR, &ret);
-			/* use 125% of average wait time (lc_sum/lc_count)
-			 * instead of lc_max
-			 */
-			if (ret.lc_count != 0)
-				time = (ret.lc_sum / ret.lc_count) * 5 / 4;
-			CDEBUG(D_INFO, "%s: using a timeout of %llu usecs (%lu jiffies)\n",
-			       obd->obd_name, time, usecs_to_jiffies(time));
-		}
-		spin_unlock(&obd->obd_dev_lock);
+	/*
+	 * the work item drops the request once this stops moving, keep the
+	 * newest: concurrent senders may sample jiffies out of order
+	 */
+	do {
+		cur = atomic64_read(&latency_qos->last_send_time);
+		if (now <= cur)
+			break;
+	} while (atomic64_cmpxchg(&latency_qos->last_send_time, cur, now) !=
+		 cur);
+
+	/* the longest delay between sends, in jiffies */
+	if (ptlrpc_pmqos_use_stats_for_duration && now > cur &&
+	    now - cur <= usecs_to_jiffies(MAX_CPU_LATENCY_TIMEOUT_US)) {
+		u64 delay = now - cur, old;
+
+		do {
+			old = atomic64_read(&latency_qos->max_send_delay);
+			if (delay <= old)
+				break;
+		} while (atomic64_cmpxchg(&latency_qos->max_send_delay, old,
+					  delay) != old);
 	}
-#endif
 
-	cpt_cpumask = *cfs_cpt_cpumask(lnet_cpt_table(),
-				       lnet_cpt_of_nid(lnet_nid_to_nid4(&conn->c_peer.nid),
-				       NULL));
-	for_each_cpu(cpu, cpt_cpumask) {
-		u64 this_cpu_time, new_deadline;
-		bool new_work = true;
-
-		latency_qos = &cpus_latency_qos[cpu];
-
-		if (ptlrpc_pmqos_use_stats_for_duration == false) {
-			/* XXX should we use latency_qos->max_time if greater ? */
-			this_cpu_time = ptlrpc_pmqos_default_duration_usec;
-		} else if (time == 0) {
-			this_cpu_time = latency_qos->max_time;
-		} else {
-			this_cpu_time = time;
-			if (time > latency_qos->max_time)
-				latency_qos->max_time = time;
-		}
-
-		new_deadline = jiffies_64 + usecs_to_jiffies(this_cpu_time);
-		CDEBUG(D_TRACE, "%s: PM QoS new deadline estimation for cpu %d is %llu\n",
-		       obd->obd_name, cpu, new_deadline);
-		mutex_lock(&latency_qos->lock);
-		if (latency_qos->pm_qos_req == NULL) {
-			OBD_ALLOC_PTR(latency_qos->pm_qos_req);
-			if (latency_qos->pm_qos_req == NULL) {
-				CWARN("%s: Failed to allocate a PM-QoS request for cpu %d\n",
-				      obd->obd_name, cpu);
-				return;
-			}
-			dev_pm_qos_add_request(get_cpu_device(cpu),
-					       latency_qos->pm_qos_req,
-					       DEV_PM_QOS_RESUME_LATENCY,
-					       ptlrpc_pmqos_latency_max_usec);
-			latency_qos->deadline = new_deadline;
-			CDEBUG(D_TRACE, "%s: PM QoS request now active for cpu %d\n",
-			       obd->obd_name, cpu);
-		} else if (dev_pm_qos_request_active(latency_qos->pm_qos_req)) {
-			if (new_deadline > latency_qos->deadline) {
-				cancel_delayed_work(&latency_qos->delayed_work);
-				CDEBUG(D_TRACE,
-				       "%s: PM QoS request active for cpu %d, simply extend its deadline from %llu\n",
-				       obd->obd_name, cpu,
-				       latency_qos->deadline);
-				latency_qos->deadline = new_deadline;
-			} else {
-				new_work = false;
-				CDEBUG(D_TRACE,
-				       "%s: PM QoS request active for cpu %d, keep current deadline %llu\n",
-				       obd->obd_name, cpu,
-				       latency_qos->deadline);
-			}
-		} else {
-			/* should not happen ? */
-			CDEBUG(D_INFO,
-			       "%s: Inactive PM QoS request for cpu %d, has been found unexpectedly...\n",
-			       obd->obd_name, cpu);
-		}
-		if (new_work == true)
-			schedule_delayed_work_on(cpu,
-						 &latency_qos->delayed_work,
-						 usecs_to_jiffies(this_cpu_time));
-		mutex_unlock(&latency_qos->lock);
-	}
+	/*
+	 * test first, queueing is an atomic RMW even while pending; a running
+	 * work item has already cleared PENDING, so it is queued again and
+	 * does not miss this send
+	 */
+	if (!delayed_work_pending(&latency_qos->delayed_work))
+		queue_delayed_work(system_highpri_wq,
+				   &latency_qos->delayed_work, 0);
 }
 
 /**
@@ -1137,7 +1081,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	if (likely(rc == 0)) {
 		/* lower CPU latency while waiting for the reply */
 		if (!noreply)
-			kick_cpu_latency(connection, obd);
+			kick_cpu_latency();
 		GOTO(out, rc);
 	}
 

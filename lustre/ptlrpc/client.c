@@ -1693,6 +1693,25 @@ static int after_reply(struct ptlrpc_request *req)
 		RETURN(0);
 	}
 
+	/*
+	 * keep the longest wait that can still be a reply delay, the ceiling
+	 * also keeps a recovery wait from wrapping the unsigned int argument
+	 * of usecs_to_jiffies()
+	 */
+	if (ptlrpc_enable_pmqos && ptlrpc_pmqos_use_stats_for_duration &&
+	    timediff <= MAX_CPU_LATENCY_TIMEOUT_US) {
+		struct cpu_latency_qos *qos = &ptlrpc_cpu_latency_qos;
+		u64 delay = usecs_to_jiffies(timediff);
+		u64 cur;
+
+		do {
+			cur = atomic64_read(&qos->max_reply_delay);
+			if (delay <= cur)
+				break;
+		} while (atomic64_cmpxchg(&qos->max_reply_delay, cur, delay) !=
+			 cur);
+	}
+
 	if (obd->obd_svc_stats) {
 		s64 qtime = ktime_us_delta(work_start, req->rq_queued_time_ns);
 

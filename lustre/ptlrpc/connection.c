@@ -24,8 +24,8 @@
 
 static struct rhashtable conn_hash;
 
-/* per-cpu PM QoS management */
-struct cpu_latency_qos *cpus_latency_qos;
+/* system wide PM QoS management */
+struct cpu_latency_qos ptlrpc_cpu_latency_qos;
 
 /*
  * struct lnet_process_id may contain unassigned bytes which might not
@@ -61,39 +61,88 @@ static const struct rhashtable_params conn_hash_params = {
 	.obj_cmpfn	= lnet_process_id_cmp,
 };
 
+/*
+ * No lock on the PM QoS request: a work item never runs twice in parallel,
+ * and ptlrpc_latency_req_fini() cancels it before removing the request.
+ */
 static void cpu_latency_work(struct work_struct *work)
 {
 	struct cpu_latency_qos *latency_qos;
-	struct dev_pm_qos_request *pm_qos_req_done = NULL;
-	int cpu;
+	/* read once: re-reading it below could underflow the requeue delay */
+	u64 now = get_jiffies_64();
+	u64 delay, timeout, last;
 
 	latency_qos = container_of(work, struct cpu_latency_qos,
 				   delayed_work.work);
-	cpu = latency_qos - cpus_latency_qos;
-	mutex_lock(&latency_qos->lock);
-	if (time_after_eq64(jiffies_64, latency_qos->deadline)) {
-		CDEBUG(D_INFO, "work item of %p (cpu %d) has reached its deadline %llu, at %llu\n",
-		       latency_qos, cpu, latency_qos->deadline, jiffies_64);
-		pm_qos_req_done = latency_qos->pm_qos_req;
-		latency_qos->pm_qos_req = NULL;
-	} else {
-		/* XXX Is this expected to happen?
-		 * anyway, reschedule for the remaining time
-		 */
-		cancel_delayed_work(&latency_qos->delayed_work);
-		schedule_delayed_work(&latency_qos->delayed_work,
-				      (unsigned long)(latency_qos->deadline -
-				       jiffies_64));
-		CDEBUG(D_INFO, "work item of %p (cpu %d) has not reached its deadline %llu, at %llu\n",
-		       latency_qos, cpu, latency_qos->deadline, jiffies_64);
-	}
-	mutex_unlock(&latency_qos->lock);
 
-	/* must be done outside atomic section */
-	if (pm_qos_req_done != NULL) {
-		dev_pm_qos_remove_request(pm_qos_req_done);
-		OBD_FREE_PTR(pm_qos_req_done);
+	/* the tunable may have been cleared since the work was queued */
+	if (unlikely(!ptlrpc_enable_pmqos)) {
+		CDEBUG(D_INFO, "PM QoS disabled, at %llu\n", now);
+		goto drop;
 	}
+
+	/*
+	 * no send for this long means the RPCs have stopped, last_send_time
+	 * drops the part of the send time below a jiffy, the + 1 adds it back
+	 */
+	if (ptlrpc_pmqos_use_stats_for_duration) {
+		/*
+		 * longest reply delay or delay between sends, a jiffy at least
+		 */
+		delay = max(atomic64_read(&latency_qos->max_reply_delay),
+			    atomic64_read(&latency_qos->max_send_delay));
+		delay = max_t(u64, delay, 1);
+		timeout = delay * CPU_LATENCY_SILENCE_FACTOR + 1;
+	} else {
+		/* set by the admin, held as is */
+		delay = usecs_to_jiffies(ptlrpc_pmqos_default_duration_usec);
+		timeout = delay + 1;
+	}
+
+	last = atomic64_read(&latency_qos->last_send_time);
+
+	if (!cpu_latency_qos_request_active(&latency_qos->pm_qos_req)) {
+		cpu_latency_qos_add_request(&latency_qos->pm_qos_req,
+					    ptlrpc_pmqos_latency_max_usec);
+		CDEBUG(D_INFO,
+		       "PM QoS request now active, delay %llu, timeout %llu\n",
+		       delay, timeout);
+		/* just added, give it a whole window before looking again */
+		mod_delayed_work(system_highpri_wq,
+				 &latency_qos->delayed_work, timeout);
+		return;
+	}
+
+	if (time_after_eq64(now, last + timeout)) {
+		CDEBUG(D_INFO, "PM QoS no RPC since %llu, at %llu\n",
+		       last, now);
+		goto drop;
+	}
+
+	CDEBUG(D_INFO, "PM QoS held, last RPC %llu, timeout %llu, at %llu\n",
+	       last, timeout, now);
+	/* the tunable may have changed since the request was added */
+	cpu_latency_qos_update_request(&latency_qos->pm_qos_req,
+				       ptlrpc_pmqos_latency_max_usec);
+	/*
+	 * look again exactly when the silence would be complete, the check
+	 * above just proved that instant is still ahead of us
+	 */
+	mod_delayed_work(system_highpri_wq, &latency_qos->delayed_work,
+			 last + timeout - now);
+	return;
+
+drop:
+	/* a send since the check above queued us again, keep the request */
+	if (delayed_work_pending(&latency_qos->delayed_work))
+		return;
+	if (cpu_latency_qos_request_active(&latency_qos->pm_qos_req))
+		cpu_latency_qos_remove_request(&latency_qos->pm_qos_req);
+	/* decay by 1/8 instead of clearing, unless a newer sample came in */
+	delay = atomic64_read(&latency_qos->max_reply_delay);
+	atomic64_cmpxchg(&latency_qos->max_reply_delay, delay, delay * 7 >> 3);
+	delay = atomic64_read(&latency_qos->max_send_delay);
+	atomic64_cmpxchg(&latency_qos->max_send_delay, delay, delay * 7 >> 3);
 }
 
 /**
@@ -199,62 +248,40 @@ conn_exit(void *vconn, void *data)
 	OBD_FREE_PTR(conn);
 }
 
+static void ptlrpc_latency_req_init(struct cpu_latency_qos *lq)
+{
+	INIT_DELAYED_WORK(&lq->delayed_work, cpu_latency_work);
+}
+
 int ptlrpc_connection_init(void)
 {
-	int cpu;
-
-	OBD_ALLOC_PTR_ARRAY(cpus_latency_qos, nr_cpu_ids);
-	if (!cpus_latency_qos) {
-		CWARN("Failed to allocate PM-QoS management structs\n");
-	} else {
-		for (cpu = 0; cpu < nr_cpu_ids; cpu++) {
-			struct cpu_latency_qos *cpu_latency_qos =
-				&cpus_latency_qos[cpu];
-
-			INIT_DELAYED_WORK(&cpu_latency_qos->delayed_work,
-					  cpu_latency_work);
-			mutex_init(&cpu_latency_qos->lock);
-			cpu_latency_qos->max_time =
-				DEFAULT_CPU_LATENCY_TIMEOUT_US;
-		}
-	}
+	ptlrpc_latency_req_init(&ptlrpc_cpu_latency_qos);
 
 	return rhashtable_init(&conn_hash, &conn_hash_params);
 }
 
-static void ptlrpc_latency_req_fini(struct cpu_latency_qos *lq, int cpu)
+static void ptlrpc_latency_req_fini(struct cpu_latency_qos *lq)
 {
 	/*
 	 * Wait for any in-flight (or self-rescheduling) cpu_latency_work() to
-	 * finish before touching or freeing what it dereferences.  This must
-	 * be done without holding lq->lock, which cpu_latency_work() also
-	 * takes.  cancel_delayed_work() alone does not wait for a work item
-	 * that has already been dispatched, so the freed request could be
-	 * used after the module is unloaded.
+	 * finish before touching what it dereferences.
+	 * cancel_delayed_work() alone does not wait for a work item that has
+	 * already been dispatched, so it could still requeue itself after the
+	 * module is unloaded.  A sender can queue it again too, but ptlrpc is
+	 * torn down only once no RPC is sent anymore.
 	 */
 	cancel_delayed_work_sync(&lq->delayed_work);
 
-	mutex_lock(&lq->lock);
-	if (lq->pm_qos_req != NULL) {
-		if (dev_pm_qos_request_active(lq->pm_qos_req))
-			dev_pm_qos_remove_request(lq->pm_qos_req);
-		CDEBUG(D_INFO, "remove PM QoS request %p and associated work" \
-		       " item, still active for this cpu %d\n", lq, cpu);
-		OBD_FREE_PTR(lq->pm_qos_req);
-		lq->pm_qos_req = NULL;
+	if (cpu_latency_qos_request_active(&lq->pm_qos_req)) {
+		cpu_latency_qos_remove_request(&lq->pm_qos_req);
+		CDEBUG(D_INFO, "remove PM QoS request %p and associated work item, still active\n",
+		       lq);
 	}
-	mutex_unlock(&lq->lock);
 }
 
 void ptlrpc_connection_fini(void)
 {
-	int cpu;
-
-	if (cpus_latency_qos != NULL) {
-		for (cpu = 0; cpu < nr_cpu_ids; cpu++)
-			ptlrpc_latency_req_fini(&cpus_latency_qos[cpu], cpu);
-		OBD_FREE_PTR_ARRAY(cpus_latency_qos, nr_cpu_ids);
-	}
-
 	rhashtable_free_and_destroy(&conn_hash, conn_exit, NULL);
+
+	ptlrpc_latency_req_fini(&ptlrpc_cpu_latency_qos);
 }

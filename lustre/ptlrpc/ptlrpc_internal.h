@@ -16,6 +16,7 @@
 #ifndef PTLRPC_INTERNAL_H
 #define PTLRPC_INTERNAL_H
 
+#include <linux/pm_qos.h>
 #include <linux/sched.h>
 #include <linux/sched/debug.h>
 
@@ -51,6 +52,45 @@ extern struct mutex pinger_mutex;
 
 extern lnet_handler_t ptlrpc_handler;
 extern struct percpu_ref ptlrpc_pending;
+
+/* max latency being allowed when connection is busy */
+#define CPU_MAX_RESUME_LATENCY_US 20
+/* default time during which low latency will be set */
+#define DEFAULT_CPU_LATENCY_TIMEOUT_US 3000
+
+/* reply delays or delays between sends above this are not sampled */
+#define MAX_CPU_LATENCY_TIMEOUT_US (50 * USEC_PER_MSEC)
+/* silence before the request is dropped, in multiples of the longest delay */
+#define CPU_LATENCY_SILENCE_FACTOR 2
+
+/**
+ * Structure for PM QoS management.
+ */
+struct cpu_latency_qos {
+	struct pm_qos_request pm_qos_req;
+	struct delayed_work delayed_work;
+	/* longest reply delay, in jiffies */
+	atomic64_t max_reply_delay;
+	/* jiffies of the newest RPC sent, written by any sender */
+	atomic64_t last_send_time ____cacheline_aligned;
+	/* longest delay between sends, in jiffies */
+	atomic64_t max_send_delay;
+};
+
+/* system wide PM QoS management */
+extern struct cpu_latency_qos ptlrpc_cpu_latency_qos;
+
+/* whether we should use PM-QoS to lower CPUs resume latency during I/O */
+extern bool ptlrpc_enable_pmqos;
+
+/* max CPUs power resume latency to be used during I/O */
+extern int ptlrpc_pmqos_latency_max_usec;
+
+/* default timeout to end CPUs resume latency constraint */
+extern u64 ptlrpc_pmqos_default_duration_usec;
+
+/* whether the measured delays, not the default above, set the duration */
+extern bool ptlrpc_pmqos_use_stats_for_duration;
 
 /* ptlrpcd.c */
 int ptlrpcd_start(struct ptlrpcd_ctl *pc);

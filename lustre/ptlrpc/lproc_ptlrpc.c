@@ -1484,15 +1484,26 @@ static ssize_t
 enable_pmqos_store(struct kobject *kobj, struct attribute *attr,
 		   const char *buf, size_t count)
 {
-	bool val;
+	bool val, old;
 	int rc;
 
 	rc = kstrtobool(buf, &val);
 	if (rc < 0)
 		return rc;
 
+	/* without cpuidle the PM QoS calls are stubs */
+	if (val && !IS_ENABLED(CONFIG_CPU_IDLE))
+		return -EOPNOTSUPP;
+
 	CDEBUG(D_INFO, "Setting 'enable_pmqos' to %s\n", val ? "true" : "false");
+	old = ptlrpc_enable_pmqos;
 	ptlrpc_enable_pmqos = val;
+	/* release the constraint now, not at the next run of the work item */
+	if (old && !val) {
+		cancel_delayed_work_sync(&ptlrpc_cpu_latency_qos.delayed_work);
+		queue_delayed_work(system_highpri_wq,
+				   &ptlrpc_cpu_latency_qos.delayed_work, 0);
+	}
 
 	return count;
 }

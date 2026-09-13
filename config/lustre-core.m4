@@ -765,6 +765,39 @@ AC_DEFUN([LC_FSCRYPT_DUMMY_CONTEXT_ENABLED], [
 ]) # LC_FSCRYPT_DUMMY_CONTEXT_ENABLED
 
 #
+# LC_HAVE_CPU_LATENCY_QOS
+#
+# Linux commit v5.6-rc1-25-g67b06ba01857
+#   PM: QoS: Drop PM_QOS_CPU_DMA_LATENCY and rename related functions
+#
+AC_DEFUN([LC_SRC_HAVE_CPU_LATENCY_QOS], [
+	LB2_LINUX_TEST_SRC([cpu_latency_qos_add_request], [
+		#include <linux/pm_qos.h>
+	],[
+		struct pm_qos_request req;
+
+		cpu_latency_qos_add_request(&req, 0);
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_CPU_LATENCY_QOS], [
+	LB2_MSG_LINUX_TEST_RESULT([if 'cpu_latency_qos_add_request()' exists],
+	[cpu_latency_qos_add_request], [],[
+		AC_DEFINE([cpu_latency_qos_add_request(req, val)],
+			  [pm_qos_add_request(req, PM_QOS_CPU_DMA_LATENCY, val)],
+			  [pm_qos_add_request() -> cpu_latency_qos_add_request()])
+		AC_DEFINE([cpu_latency_qos_update_request],
+			  [pm_qos_update_request],
+			  [pm_qos_update_request() -> cpu_latency_qos_update_request()])
+		AC_DEFINE([cpu_latency_qos_remove_request],
+			  [pm_qos_remove_request],
+			  [pm_qos_remove_request() -> cpu_latency_qos_remove_request()])
+		AC_DEFINE([cpu_latency_qos_request_active],
+			  [pm_qos_request_active],
+			  [pm_qos_request_active() -> cpu_latency_qos_request_active()])
+	])
+]) # LC_HAVE_CPU_LATENCY_QOS
+
+#
 # LC_HAVE_PRANDOM_HEADER
 #
 # Linux v5.8-2483-gc0842fbc1b18
@@ -3955,6 +3988,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 
 	# 5.7
 	LC_SRC_FSCRYPT_DUMMY_CONTEXT_ENABLED
+	LC_SRC_HAVE_CPU_LATENCY_QOS
 
 	# 5.8
 	LC_SRC_HAVE_PRANDOM_HEADER
@@ -4183,6 +4217,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 5.7
 	LC_FSCRYPT_DUMMY_CONTEXT_ENABLED
+	LC_HAVE_CPU_LATENCY_QOS
 
 	# 5.8
 	LC_HAVE_PRANDOM_HEADER
