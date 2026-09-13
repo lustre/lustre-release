@@ -1517,7 +1517,11 @@ pmqos_latency_max_usec_store(struct kobject *kobj, struct attribute *attr,
 	if (rc < 0)
 		return rc;
 
-	CDEBUG(D_INFO, "Setting 'pmqos_latency_max_usec' to %d", val);
+	/* not a latency; 0 already pins cpuidle to polling */
+	if (val < 0)
+		return -ERANGE;
+
+	CDEBUG(D_INFO, "Setting 'pmqos_latency_max_usec' to %d\n", val);
 	ptlrpc_pmqos_latency_max_usec = val;
 
 	return count;
@@ -1544,7 +1548,14 @@ pmqos_default_duration_usec_store(struct kobject *kobj,
 	if (rc < 0)
 		return rc;
 
-	CDEBUG(D_INFO, "Setting 'pmqos_default_duration_usec' to %llu", val);
+	/*
+	 * 0 would take and drop the constraint on every RPC, and
+	 * usecs_to_jiffies() silently truncates to unsigned int
+	 */
+	if (val == 0 || val > UINT_MAX)
+		return -ERANGE;
+
+	CDEBUG(D_INFO, "Setting 'pmqos_default_duration_usec' to %llu\n", val);
 	ptlrpc_pmqos_default_duration_usec = val;
 
 	return count;
