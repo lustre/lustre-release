@@ -537,9 +537,10 @@ out_disc:
 
 		--lmv->lmv_mdt_descs.ltd_lmv_desc.ld_active_tgt_count;
 		obd_register_observer(tgt->ltd_exp->exp_obd, NULL);
-		obd_disconnect(tgt->ltd_exp);
 		tgt->ltd_exp->exp_obd->obd_upcall.onu_owner = NULL;
 		tgt->ltd_exp->exp_obd->obd_upcall.onu_upcall = NULL;
+		obd_disconnect(tgt->ltd_exp);
+		tgt->ltd_exp = NULL;
 	}
 
 	goto unlock;
@@ -598,14 +599,15 @@ static int lmv_disconnect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 
 	lmv_activate_target(lmv, tgt, 0);
 	obd_register_observer(tgt->ltd_exp->exp_obd, NULL);
+
+	tgt->ltd_exp->exp_obd->obd_upcall.onu_owner = NULL;
+	tgt->ltd_exp->exp_obd->obd_upcall.onu_upcall = NULL;
 	rc = obd_disconnect(tgt->ltd_exp);
 	if (rc) {
 		CERROR("%s: Target %s disconnect error: rc = %d\n",
-		       tgt->ltd_exp->exp_obd->obd_name,
+		       mdc_obd ? mdc_obd->obd_name : "unknown",
 		       tgt->ltd_uuid.uuid, rc);
 	}
-	tgt->ltd_exp->exp_obd->obd_upcall.onu_owner = NULL;
-	tgt->ltd_exp->exp_obd->obd_upcall.onu_upcall = NULL;
 	tgt->ltd_exp = NULL;
 	RETURN(0);
 }
