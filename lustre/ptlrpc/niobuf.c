@@ -1130,8 +1130,9 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 			  request->rq_request_portal,
 			  request->rq_xid, 0, &bulk_cookie);
 	if (likely(rc == 0)) {
-		/* lower CPU latency when in-flight RPCs */
-		kick_cpu_latency(connection, obd);
+		/* lower CPU latency while waiting for the reply */
+		if (!noreply)
+			kick_cpu_latency(connection, obd);
 		GOTO(out, rc);
 	}
 
