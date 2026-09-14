@@ -143,6 +143,22 @@ static inline const char *mt_type(enum ldd_mount_type mt)
 
 	return mount_type_string[mt];
 }
+/* kernel module for the backend OSD, or NULL */
+static inline const char *mt_module(enum ldd_mount_type mt)
+{
+	switch (mt) {
+	case LDD_MT_EXT3:
+	case LDD_MT_LDISKFS:
+	case LDD_MT_LDISKFS2:
+		return "osd_ldiskfs";
+	case LDD_MT_ZFS:
+		return "osd_zfs";
+	case LDD_MT_WBCFS:
+		return "osd_wbcfs";
+	default:
+		return NULL;
+	}
+}
 
 #define OSD_WBCFS_DEV "lustre-wbcfs"
 #endif /* HAVE_SERVER_SUPPORT */
@@ -195,6 +211,8 @@ int osd_read_ldd(char *dev, struct lustre_disk_data *ldd);
 int osd_erase_ldd(struct mkfs_opts *mop, char *param);
 void osd_print_ldd_params(struct mkfs_opts *mop);
 int osd_is_lustre(char *dev, unsigned *mount_type);
+void osd_modprobe(enum ldd_mount_type mount_type);
+bool osd_module_loaded(enum ldd_mount_type mount_type);
 int osd_make_lustre(struct mkfs_opts *mop);
 int osd_prepare_lustre(struct mkfs_opts *mop,
 		       char *wanted_mountopts, size_t len);

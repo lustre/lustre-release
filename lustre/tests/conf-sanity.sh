@@ -9257,11 +9257,15 @@ test_102() {
 	do_facet mds1 lsmod | grep libcfs || error "libcfs not loaded"
 
 	#define OBD_FAIL_OBDCLASS_MODULE_LOAD    0x60a
-	do_facet mds1 "$LCTL set_param fail_loc=0x8000060a"
+	do_facet mds1 "$LCTL set_param fail_loc=0x60a"
 
 	do_facet mds1 $MOUNT_CMD $mds1dev $mds1mnt $mds1opts &&
-		error "mdt start must fail" || log "mount failed as expected"
-	do_facet mds1 lsmod | grep obdclass && error "obdclass must not load" ||
+		{ do_facet mds1 "$LCTL set_param fail_loc=0x0" ;
+		  error "mdt start must fail"; } ||
+		log "mount failed as expected"
+	do_facet mds1 lsmod | grep obdclass &&
+		{ do_facet mds1 "$LCTL set_param fail_loc=0x0";
+		  error "obdclass must not load"; } ||
 		log "obdclass not loaded as expected"
 
 	do_facet mds1 "$LCTL set_param fail_loc=0x0"
@@ -13340,6 +13344,123 @@ test_166() {
 	[[ "$val" == "-" ]] || error "autodegrade is '$val', expected unset"
 }
 run_test 166 "mkfs.lustre and tunefs.lustre handle autodegrade properly"
+
+# Dump the Lustre debug log of a facet into a file under $LOGDIR,
+# to search for patterns. The file is written where gather_logs()
+# writes the logs of a failed test, so that the CI collects it too.
+save_debug_log() {
+	local facet=$1
+	local tag=$2
+
+	DEBUG_LOG_FILE=$TESTLOG_PREFIX.$TESTNAME.debug_log
+	DEBUG_LOG_FILE+=.$(facet_host $facet).$tag.log
+
+	mkdir -p $LOGDIR
+	do_facet $facet "$LCTL dk" > $DEBUG_LOG_FILE ||
+		error "cannot dump the debug log of $facet"
+
+	echo "debug log of $facet saved as $DEBUG_LOG_FILE"
+}
+
+test_167() {
+	local facet=mds1
+	local conf=/etc/modprobe.d/lustre-test-conf-sanity.conf
+	local mod=osd_ldiskfs
+	local type=osd-ldiskfs
+	local false_bin
+	local out
+
+	(( $MDS1_VERSION >= $(version_code 2.17.60) )) ||
+		skip "Need MDS version at least 2.17.60 for osd module load robustness"
+	[[ "$mds1_FSTYPE" == "ldiskfs" ]] || skip "ldiskfs only test"
+
+	do_facet $facet "modinfo $mod > /dev/null 2>&1" ||
+		skip "$mod is not a loadable module on $facet"
+
+	stopall
+
+	do_facet $facet "modprobe -r $mod" || true
+	do_facet $facet "! lsmod | grep -q \"^$mod \"" ||
+		skip "$mod is still loaded on $facet"
+
+	false_bin=$(do_facet $facet "which false") ||
+		skip "no false binary on $facet"
+
+	# make every attempt to load the OSD module fail
+	stack_trap "do_facet $facet rm -f $conf"
+	do_facet $facet "echo 'install $mod $false_bin' > $conf" ||
+		error "cannot create $conf on $facet"
+
+	do_facet $facet "modprobe lnet" # to have the debug log facility loaded
+	save_debug_log $facet before
+
+	out=$(start_mdt 1 2>&1) && error "MDT start should fail without $mod"
+	echo "$out"
+
+	echo "$out" | grep -q "cannot load module '$mod'" ||
+		error "mount.lustre did not report the failed load of $mod"
+	echo "$out" | grep -q "Check 'modprobe $mod'" ||
+		error "mount.lustre did not name $mod as the missing module"
+
+	save_debug_log $facet mount
+
+	grep -q "$type: retry loading module: rc = " $DEBUG_LOG_FILE ||
+		error "loading $type was not retried"
+	grep -q "Can't load module '$type': rc = " $DEBUG_LOG_FILE ||
+		error "no rc reported for the failed load of $type"
+
+	do_facet $facet "rm -f $conf"
+	setupall || error "cannot start the filesystem again"
+	stopall
+}
+run_test 167 "report why a backend OSD module cannot be loaded"
+
+test_168() {
+	local facet=mds1
+	local mod=osd_ldiskfs
+	local type=osd-ldiskfs
+	local loops=${MODLOAD_LOOPS:-3}
+	local i
+
+	(( $MDS1_VERSION >= $(version_code 2.17.59) )) ||
+		skip "Need MDS version at least 2.17.59 for osd module load robustness"
+	[[ "$mds1_FSTYPE" == "ldiskfs" ]] || skip "ldiskfs only test"
+
+	for ((i = 1; i <= loops; i++)); do
+		echo "=== restart the servers, loop $i of $loops ==="
+		stopall || error "unable to stop the filesystem"
+		LOAD_MODULES_REMOTE=true unload_modules ||
+			error "unable to unload modules"
+		LOAD_MODULES_REMOTE=true load_modules ||
+			error "unable to load modules"
+
+		# a server installed from packages has no OSD module loaded
+		# at this point, so mounting a target is what has to load it,
+		# as in the sanity-sec test_27a failure
+		do_facet $facet "modprobe -r $mod" || true
+		do_facet $facet "! lsmod | grep -q \"^$mod \"" ||
+			skip "$mod is still loaded on $facet"
+
+		combined_mgs_mds || start_mgs || error "unable to start mgs"
+		start_mds --no-client-wait || error "unable to start mds ($i)"
+		start_ost || error "unable to start ost ($i)"
+
+		do_facet $facet "lsmod | grep -q \"^$mod \"" ||
+			error "$mod was not loaded by mounting the MDT"
+
+		save_debug_log $facet $i
+
+		if grep -q "$type: retry loading module" $DEBUG_LOG_FILE; then
+			echo "loading $type had to be retried"
+		fi
+
+		! grep -q "Can't load module '$type'" $DEBUG_LOG_FILE ||
+			error "$type could not be loaded on $facet ($i)"
+	done
+
+	stopall
+}
+run_test 168 "preload the OSD module when mounting a target"
 
 cleanup_200() {
 	local modopts=$1

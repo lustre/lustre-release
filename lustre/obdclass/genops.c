@@ -16,6 +16,7 @@
 
 #define DEBUG_SUBSYSTEM S_CLASS
 
+#include <linux/delay.h>
 #include <linux/pid_namespace.h>
 #include <linux/stringhash.h>
 #include <lustre_compat/linux/rbtree.h>
@@ -90,6 +91,8 @@ SERVER_ONLY struct obd_type *class_get_type(const char *name)
 #ifdef HAVE_MODULE_LOADING_SUPPORT
 	if (!type) {
 		const char *modname = name;
+		bool retry = true;
+		int rc;
 
 #ifdef CONFIG_LUSTRE_FS_SERVER
 		if (strcmp(modname, "obdfilter") == 0 ||
@@ -104,13 +107,25 @@ SERVER_ONLY struct obd_type *class_get_type(const char *name)
 #endif /* CONFIG_LUSTRE_FS_SERVER */
 
 		rcu_read_unlock();
-		if (!request_module("%s", modname)) {
-			CDEBUG(D_INFO, "Loaded module '%s'\n", modname);
-		} else {
-			LCONSOLE_ERROR("Can't load module '%s'\n", modname);
-		}
+again:
+		rc = request_module("%s", modname);
+
 		rcu_read_lock();
 		type = class_search_type(name);
+		if (type) {
+			CDEBUG(D_INFO, "Loaded module '%s'\n", modname);
+		} else if (retry && !fatal_signal_pending(current)) {
+			/* the failure may be transient */
+			CWARN("%s: retry loading module: rc = %d\n",
+			      modname, rc);
+			retry = false;
+			rcu_read_unlock();
+			msleep(100);
+			goto again;
+		} else {
+			LCONSOLE_ERROR("Can't load module '%s': rc = %d\n",
+				       modname, rc);
+		}
 	}
 #endif
 	if (type) {

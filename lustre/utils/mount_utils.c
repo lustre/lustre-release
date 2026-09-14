@@ -26,6 +26,7 @@
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
+#include <sys/wait.h>
 #include <linux/loop.h>
 #include <sys/types.h>
 #include <dirent.h>
@@ -747,6 +748,51 @@ int osd_is_lustre(char *dev, unsigned int *mount_type)
 
 	vprint("not found\n");
 	return 0;
+}
+
+/*
+ * Is the kernel module for the backend OSD loaded?
+ */
+bool osd_module_loaded(enum ldd_mount_type mount_type)
+{
+	char path[64];
+	const char *module;
+
+	module = mt_module(mount_type);
+	if (!module)
+		return true;
+
+	snprintf(path, sizeof(path), "/sys/module/%s", module);
+
+	return access(path, F_OK) == 0;
+}
+
+/*
+ * Load the kernel module for the backend OSD.
+ */
+void osd_modprobe(enum ldd_mount_type mount_type)
+{
+	char cmd[PATH_MAX];
+	const char *module;
+	int rc;
+
+	module = mt_module(mount_type);
+	if (!module)
+		return;
+
+	/* nothing to do if the module is already loaded or built in */
+	if (osd_module_loaded(mount_type))
+		return;
+
+	snprintf(cmd, sizeof(cmd), "/sbin/modprobe %s", module);
+	rc = run_command(cmd, sizeof(cmd));
+	if (rc > 0 && WIFEXITED(rc))
+		fprintf(stderr,
+			"%s: cannot load module '%s': modprobe exited with status %d\n",
+			progname, module, WEXITSTATUS(rc));
+	else if (rc)
+		fprintf(stderr, "%s: cannot load module '%s': rc = %d\n",
+			progname, module, rc);
 }
 
 /* Build fs according to type */

@@ -502,6 +502,12 @@ static int parse_ldd(char *source, struct mount_opts *mop,
 		return ENODEV;
 	}
 
+	/*
+	 * Load the backend OSD module now, so that a failure to do so is
+	 * reported by modprobe rather than as a bare ENODEV from the mount.
+	 */
+	osd_modprobe(ldd->ldd_mount_type);
+
 	rc = osd_read_ldd(source, ldd);
 	if (rc) {
 		fprintf(stderr,
@@ -1211,10 +1217,17 @@ int main(int argc, char *const argv[])
 		if (errno == EBUSY || errno == EINPROGRESS)
 			fprintf(stderr,
 				"Is the backend filesystem mounted?\n Check /proc/mounts\n");
-		else if (errno == ENODEV)
+		else if (errno == ENODEV) {
 			fprintf(stderr,
 				"Are the lustre modules loaded?\n Check /etc/modprobe.conf and /proc/filesystems\n");
-		else if (errno == ENOTBLK)
+#ifdef HAVE_SERVER_SUPPORT
+			if (!client &&
+			    !osd_module_loaded(mop.mo_ldd.ldd_mount_type))
+				fprintf(stderr,
+					"Is the backend module loaded?\n Check 'modprobe %s'\n",
+					mt_module(mop.mo_ldd.ldd_mount_type));
+#endif
+		} else if (errno == ENOTBLK)
 			fprintf(stderr, "Do you need -o loop?\n");
 		else if (errno == ENOMEDIUM)
 			fprintf(stderr,
