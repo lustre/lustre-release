@@ -1,204 +1,226 @@
 #!/usr/bin/env python3
 
 #
-# logic snipped from analyze_patch() here:
-# https://github.com/verygreen/lustretester/blob/master/gerrit_build-and-test-new.py
+# Analyzes a lustre-release commit and reports, as JSON:
+#
+#   updated_tests   suite -> [ test_N, ... ] for every subtest that changed or was added. A
+#                   subtest is only reported when the post-image still has its run_test line,
+#                   so renamed/removed tests and test_* helpers are excluded.
+#   affected_files  { m: [...], a: [...], d: [...] } modified/added/deleted paths
+#   SkipTesting     true when every affected path is non-functional (docs, licenses, ...)
+#
+# A subtest spans from its column 0 test_N() definition to its column 0 "run_test N" line,
+# everything in that range belongs to test_N. Lines outside any range, such as suite setup
+# code and helper functions defined between tests, are not attributed to any subtest. Blank
+# lines, comments, test_N() definition lines and run_test lines (test descriptions) do not
+# count as changes; renames are reported through the new run_test line.
+#
+# The analysis reads the pre- and post-image blobs from the repository, it does not need a
+# checkout and does not run anything from the tree being analyzed.
+#
+# usage: changed.py [-C repo_dir] [rev]
+#
+#   -C repo_dir  path to the lustre-release repository (default: cwd)
+#   rev          commit to analyze (default: FETCH_HEAD)
 #
 
+import argparse
 import json
 import os
 import re
+import subprocess
 import sys
 
-if len(sys.argv[1:]) != 1:
-    print("script takes 1 argument; path to output of git format-patch for the patch to analyze")
-    sys.exit(1)
+TEST_DEF_RE = re.compile(r"^(?:function\s+)?test_([A-Za-z0-9_]+)\s*\(\)")
+HUNK_RE     = re.compile(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", re.M)
+RUN_TEST_RE = re.compile(r"^run_test\s+([A-Za-z0-9_]+)\b", re.M)
+SUITE_DIR   = "lustre/tests/"
 
-# script takes 1 argument; the path to the output of git format-patch
-file_path = sys.argv[1:][0]
+# These tests are wrappers for complete suites rather than individual subtests.
+IGNORED_TESTS = [ "test_sanity", "test_sanityn" ]
 
-# verify the path exists
-if not os.path.exists(file_path):
-    print("'%s' does not exist" % file_path)
-    sys.exit(1)
+# parallel-scale-nfs is run as these two suites
+NFS_SUITE   = "parallel-scale-nfs"
+NFS_TARGETS = [ "parallel-scale-nfsv3", "parallel-scale-nfsv4" ]
+
+ALWAYS_TEST_PREFIXES  = [ "contrib/lbuild/" ]
+NON_TESTABLE_PREFIXES = [ "Documentation/", "LICENSES/", "contrib/" ]
+NON_TESTABLE_EXACT    = [ "lustre/ChangeLog" ]
 
 
-def affected_files(patch_content):
-    """
-    Parse a git patch content and categorize file changes.
+def run(argv):
+    return subprocess.run(argv, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                          encoding="utf-8", errors="replace")
 
-    Args:
-        patch_content (str): Content of the git patch
 
-    Returns:
-        dict: Dictionary with lists of modified, added, and deleted files
-    """
-    changes = { 'm': [ ], 'a': [ ], 'd': [ ] }
-    current_file = None
+def git(repo, *argv):
+    proc = run([ "git", "-C", repo ] + list(argv))
+    if proc.returncode != 0:
+        sys.stderr.write(proc.stderr)
+        sys.exit("git %s failed" % " ".join(argv))
+    return proc.stdout
 
-    for line in patch_content.splitlines():
-        if line.startswith('diff --git'):
-            # Extract filename from: diff --git a/path/to/file b/path/to/file
-            parts = line.split()
-            if len(parts) >= 4:
-                current_file = parts[2][2:]  # Remove 'a/' prefix
-                if current_file not in [f for files in changes.values() for f in files]:
-                    changes['m'].append(current_file)
-        elif line.startswith('new file mode'):
-            if changes['m'] and current_file:
-                changes['m'].pop()  # Remove from modified if added
-            if current_file:
-                changes['a'].append(current_file)
-        elif line.startswith('deleted file mode'):
-            if changes['m'] and current_file:
-                changes['m'].pop()  # Remove from modified if deleted
-            if current_file:
-                changes['d'].append(current_file)
 
+def blob_lines(repo, rev, path):
+    # empty when the path does not exist at rev (added or deleted by the commit)
+    proc = run([ "git", "-C", repo, "show", "%s:%s" % (rev, path) ])
+    return proc.stdout.splitlines() if proc.returncode == 0 else []
+
+
+def affected_files(repo, rev):
+    changes = { "m": [ ], "a": [ ], "d": [ ] }
+    out = git(repo, "diff-tree", "--no-commit-id", "--no-renames", "--name-status", "-r", rev)
+    for line in out.splitlines():
+        status, path = line.split("\t", 1)
+        changes[{ "A": "a", "D": "d" }.get(status[0], "m")].append(path)
     return changes
 
-# read the file in
-with open(file_path, 'r') as file:
-    # Read the entire file into a string
-    patch = file.read()
 
-change = {}
-chfile = None
-function = None
-newtests = [] # captures newly created tests
-for line in patch.splitlines():
-    if line.startswith('+++ '):
-        if newtests:
-            if not change.get('updated_tests'):
-                change['updated_tests'] = {}
-            if basename.endswith('.sh') or basename == 'runtests':
-                change['updated_tests'].update({basename.replace('.sh', ''):newtests})
-            newtests = []
-        chfile = line.replace('+++ b/', '')
-        basename = os.path.basename(chfile)
-    if not chfile: # diff did not start yet - skip
-        continue
-    if line.startswith('--- '): # src file - skip
-        continue
-    if line.startswith('@@ '):
-        tags = line.split(' ', 5)
-        if tags[0] != '@@' or tags[3] != '@@':
-            print("Malformed patch line: " + line)
+def run_test_names(lines):
+    return { "test_" + m.group(1) for m in RUN_TEST_RE.finditer("\n".join(lines)) }
+
+
+def test_ranges(lines):
+    # [ (test_N, first_line, last_line) ] with last_line the run_test N line and first_line
+    # the most recent test_N() definition, or the line after the previous run_test when the
+    # test has no definition of its own
+    ranges, defs, prev = [], { }, 0
+    for i, line in enumerate(lines, 1):
+        m = TEST_DEF_RE.match(line)
+        if m:
+            defs["test_" + m.group(1)] = i
             continue
-        if len(tags) > 4:
-            function = tags[4].replace('()', '')
-            if function.endswith("{"):
-                function = function[:-1]
-        else:
-            function = None
-    if line.startswith(' '): # context line, not a change - skip
-        # context changed to new function, record it.
-        if (basename.endswith(".sh") or basename == 'runtests') and line.startswith(' test_'):
-            tags = line[1:].split(' ')
-            function = tags[0].replace('()', '')
-            if function.endswith("{"):
-                function = function[:-1]
-        continue
-    if re.match(r"^[-+][^\-+]", line): # added/removed/changed line
-        tmp = line.replace(' ', '').replace('\t', '') # remove spaces
-        if not line[1:]: # empty line? skip
-            continue
-        if tmp[1:].startswith('#'): # comment, skip
-            continue
-        if line[1:].startswith('test_'):
-            function = None # Added or removed function, we'll catch with the +run_test
-        if function and function not in newtests:
-            if (basename.endswith('.sh') or basename == 'runtests') and function.startswith("test_"):
-                newtests.append(function)
-            function = None # To ease our work
-    if re.match(r"^[+][^+]", line): # Added/changed line
-        if basename.endswith('.sh') or basename == 'runtests':
-            # Try to detect a new test added.
-            # while we can try and detect new function added, instead
-            # in our framework there's a very specific pattern:
-            # +run_test 65 "Check lfs quota result"
-            # So let's match for that instead
-            if line.startswith("+run_test "):
-                tags = line.split(" ")
-                if len(tags) > 1:
-                    test = "test_" + tags[1]
-                    newtests.append(test)
-# Catch remaining stuff
-if newtests and (basename.endswith('.sh') or basename == 'runtests'):
-    if not change.get('updated_tests'):
-        change['updated_tests'] = {}
-    change['updated_tests'].update({basename.replace('.sh', ''):newtests})
+        m = RUN_TEST_RE.match(line)
+        if m:
+            name = "test_" + m.group(1)
+            ranges.append(( name, defs.pop(name, prev + 1), i ))
+            prev = i
+    return ranges
 
-# Check if parallel-scale-nfs exists in updated_tests and handle it specially
-if 'updated_tests' in change and 'parallel-scale-nfs' in change['updated_tests']:
-    # Get the tests associated with parallel-scale-nfs
-    nfs_tests = change['updated_tests']['parallel-scale-nfs']
 
-    # Define target keys
-    target_keys = ['parallel-scale-nfsv3', 'parallel-scale-nfsv4']
+def enclosing(ranges, n):
+    return [ name for name, s, e in ranges if s <= n <= e ]
 
-    # Process each target key
-    for target_key in target_keys:
-        # Simply assign the tests to each target key
-        # Use list() to create a copy of the list since Python 2 doesn't have list.copy()
-        change['updated_tests'][target_key] = list(nfs_tests)
 
-    # Remove the original entry
-    del change['updated_tests']['parallel-scale-nfs']
+def natural_key(name):
+    # test_1a, test_2f, test_12a, test_27b rather than test_12a, test_1a, test_27b, test_2f
+    return [ int(s) if s.isdigit() else s for s in re.split(r"(\d+)", name) ]
 
-# Add affected files information
-change['affected_files']  = affected_files(patch)
 
-# Check if patch only changes paths that don't require testing
-# Paths that don't require testing: Documentation/*, LICENSES/*, lustre/ChangeLog, contrib/*
-def only_non_testable_paths(affected):
-    """
-    Check if all affected files match paths that don't require testing.
+def significant(lines, n):
+    # blank lines, comments, test_N() definition lines and run_test lines (test descriptions)
+    # do not count as changes
+    line = lines[n - 1] if n <= len(lines) else ""
+    text = line.strip()
+    return text and not text.startswith("#") and not RUN_TEST_RE.match(line) \
+        and not TEST_DEF_RE.match(line)
 
-    Args:
-        affected (dict): Dictionary with 'm', 'a', 'd' keys containing file lists
 
-    Returns:
-        bool: True if all files are in non-testable paths, False otherwise
-    """
-    always_test_prefixes  = [ 'contrib/lbuild/' ]
-    non_testable_prefixes = [ 'Documentation/', 'LICENSES/', 'contrib/' ]
-    non_testable_exact    = [ 'lustre/ChangeLog' ]
+def removed_test(r, new, hunks):
+    # true when a hunk removes the run_test line of pre-image test r without adding a run_test
+    # line for the same name, so the test was removed or renamed rather than its description
+    # changed. hunks: [ [ a, b, c, d ] ] from the "@@ -a,b +c,d @@" headers
+    name, _, run_test_line = r
+    for a, b, c, d in hunks:
+        removes_run_test = a <= run_test_line < a + b
+        added_lines      = new[c - 1:c - 1 + d]
+        if removes_run_test and name not in run_test_names(added_lines):
+            return True
+    return False
 
-    # Collect all affected files from all categories
-    all_files = affected.get('m', [ ]) + affected.get('a', [ ]) + affected.get('d', [ ])
 
-    # If no files were changed, we can't skip testing
-    if not all_files:
+def suite_tests(repo, rev, path):
+    # returns [ test_N, ... ] changed in the suite file at path, or None if not a suite
+    old = blob_lines(repo, rev + "^", path)
+    new = blob_lines(repo, rev, path)
+    run_tests = run_test_names(new)
+    if not run_tests:
+        return None
+
+    # Added lines are attributed by their post-image segment and removed lines by their
+    # pre-image segment, so removing the start of a test or a whole test lands on the right
+    # name. A pre-image name that no longer has a run_test line (the test was removed or
+    # renamed) is dropped by the final intersection with run_tests.
+    diff  = git(repo, "diff-tree", "-p", "-U0", rev + "^", rev, "--", path)
+    hunks = [ [ int(g) if g else 1 for g in h.groups() ] for h in HUNK_RE.finditer(diff) ]
+
+    # Removed lines of a removed or renamed test are not attributed, otherwise they would land
+    # on the old name when another test still uses it.
+    old_ranges = [ r for r in test_ranges(old) if not removed_test(r, new, hunks) ]
+    new_ranges = test_ranges(new)
+    hit = set()
+    for a, b, c, d in hunks:
+        for n in range(a, a + b):
+            if significant(old, n):
+                hit.update(enclosing(old_ranges, n))
+        for n in range(c, c + d):
+            if significant(new, n):
+                hit.update(enclosing(new_ranges, n))
+    # tests whose run_test line is new to this commit
+    hit.update(run_tests - run_test_names(old))
+    return sorted((t for t in hit & run_tests if t not in IGNORED_TESTS), key=natural_key)
+
+
+def suite_path(path):
+    # only lustre/tests/*.sh and lustre/tests/runtests are suites
+    if not path.startswith(SUITE_DIR) or "/" in path[len(SUITE_DIR):]:
         return False
+    name = os.path.basename(path)
+    return name.endswith(".sh") or name == "runtests"
 
-    # Check each file against the non-testable patterns
-    for filepath in all_files:
-        if any(filepath.startswith(p) for p in always_test_prefixes):
-              return False
-        is_non_testable = False
 
-        # Check against exact matches
-        if filepath in non_testable_exact:
-            is_non_testable = True
+def updated_tests(repo, rev, affected):
+    tests = {}
+    for path in affected["m"] + affected["a"]:
+        if not suite_path(path):
+            continue
+        names = suite_tests(repo, rev, path)
+        if names:
+            tests[re.sub(r"\.sh$", "", os.path.basename(path))] = names
+    if NFS_SUITE in tests:
+        for target in NFS_TARGETS:
+            tests[target] = list(tests[NFS_SUITE])
+        del tests[NFS_SUITE]
+    return tests
 
-        # Check against prefix matches
-        for prefix in non_testable_prefixes:
-            if filepath.startswith(prefix):
-                is_non_testable = True
-                break
 
-        # If any file is testable, return False
-        if not is_non_testable:
+def only_non_testable_paths(affected):
+    paths = affected["m"] + affected["a"] + affected["d"]
+    if not paths:
+        return False
+    for path in paths:
+        if any(path.startswith(p) for p in ALWAYS_TEST_PREFIXES):
             return False
-
-    # All files matched non-testable patterns
+        if path not in NON_TESTABLE_EXACT and \
+                not any(path.startswith(p) for p in NON_TESTABLE_PREFIXES):
+            return False
     return True
 
-if only_non_testable_paths(change['affected_files']):
-    change['SkipTesting'] = True
-    if 'updated_tests' in change:
-        del change['updated_tests']
 
-print(json.dumps(change))
+def main():
+    parser = argparse.ArgumentParser(usage="%(prog)s [-C repo_dir] [rev]")
+    parser.add_argument("-C", dest="repo", default=".", help="lustre-release repository")
+    parser.add_argument("rev", nargs="?", default="FETCH_HEAD", help="commit to analyze")
+    args = parser.parse_args()
 
+    if not os.path.isdir(args.repo):
+        sys.exit("'%s' does not exist" % args.repo)
+    if run([ "git", "-C", args.repo, "rev-parse", "-q", "--verify",
+             args.rev + "^{commit}" ]).returncode != 0:
+        sys.exit("'%s' is not a commit in %s" % (args.rev, args.repo))
+
+    change   = {}
+    affected = affected_files(args.repo, args.rev)
+    tests    = updated_tests(args.repo, args.rev, affected)
+    if tests:
+        change["updated_tests"] = tests
+    change["affected_files"] = affected
+    if only_non_testable_paths(affected):
+        change["SkipTesting"] = True
+        change.pop("updated_tests", None)
+
+    print(json.dumps(change))
+
+
+if __name__ == "__main__":
+    main()
