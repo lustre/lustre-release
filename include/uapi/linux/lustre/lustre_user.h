@@ -1122,6 +1122,16 @@ enum layout_version_flags {
 #define lcme_timestamp_id_unpack(time_id) \
 	(((time_id) >> LCME_TIMESTAMP_ID_SHIFT) & LCME_TIMESTAMP_ID_MASK)
 
+/* Before EC was introduced, lcme_timestamp was left unset outside NOSYNC
+ * components, so a value before 2010 or more than a year ahead was never set.
+ */
+#define LCME_TIMESTAMP_MIN	1262304000ULL		/* 2010-01-01 */
+#define LCME_TIMESTAMP_SLACK	(366ULL * 24 * 3600)
+static inline bool lcme_timestamp_is_valid(__u64 time, __u64 now)
+{
+	return time >= LCME_TIMESTAMP_MIN && time <= now + LCME_TIMESTAMP_SLACK;
+}
+
 struct lov_comp_md_entry_v1 {
 	__u32			lcme_id;        /* unique id of component */
 	__u32			lcme_flags;     /* LCME_FL_XXX */

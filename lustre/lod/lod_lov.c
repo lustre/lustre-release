@@ -1285,6 +1285,115 @@ int lod_init_comp_foreign(struct lod_layout_component *lod_comp, void *lmm)
 }
 
 /**
+ * lod_layout_scrub() - Clear EC and timestamp fields a layout cannot have set
+ * @comps: parsed layout components
+ * @cnt: number of components
+ *
+ * Before EC was introduced, servers wrote lcme_timestamp only for NOSYNC
+ * components and never the EC fields or a parity component, so a data
+ * component's link id and stripe counts are only kept while a parity
+ * component links to it.
+ */
+void lod_layout_scrub(struct lod_layout_component *comps, int cnt)
+{
+	__u64 now = ktime_get_real_seconds();
+	int i, j;
+
+	for (i = 0; i < cnt; i++) {
+		struct lod_layout_component *comp = &comps[i];
+		bool linked = false;
+
+		if (comp->llc_timestamp != 0 &&
+		    !lcme_timestamp_is_valid(comp->llc_timestamp, now))
+			comp->llc_timestamp = 0;
+
+		if (comp->llc_flags & (LCME_FL_PARITY | LCME_FL_IS_LINK_ID))
+			continue;
+
+		for (j = 0; j < cnt && !linked; j++) {
+			struct lod_layout_component *parity = &comps[j];
+
+			if (!(parity->llc_flags & LCME_FL_PARITY) ||
+			    (parity->llc_flags & LCME_FL_IS_LINK_ID))
+				continue;
+			linked = parity->llc_mirror_link_id ==
+					mirror_id_of(comp->llc_id) &&
+				 lu_extent_is_equal(&parity->llc_extent,
+						    &comp->llc_extent);
+		}
+		if (linked)
+			continue;
+
+		comp->llc_mirror_link_id = 0;
+		comp->llc_dstripe_count = 0;
+		comp->llc_cstripe_count = 0;
+	}
+}
+
+/**
+ * lod_lovea_scrub() - lod_layout_scrub() for a packed layout
+ * @lcm: composite layout in on-disk byte order
+ * @size: number of valid bytes at @lcm
+ *
+ * For the EA handed to clients, which may predate any rewrite.
+ */
+void lod_lovea_scrub(struct lov_comp_md_v1 *lcm, size_t size)
+{
+	__u64 now = ktime_get_real_seconds();
+	__u16 cnt;
+	int i, j;
+
+	if (size < sizeof(*lcm))
+		return;
+	cnt = le16_to_cpu(lcm->lcm_entry_count);
+	if (size < sizeof(*lcm) + cnt * sizeof(lcm->lcm_entries[0]))
+		return;
+
+	for (i = 0; i < cnt; i++) {
+		struct lov_comp_md_entry_v1 *lcme = &lcm->lcm_entries[i];
+		__u32 flags = le32_to_cpu(lcme->lcme_flags);
+		__u64 time_id = le64_to_cpu(lcme->lcme_time_and_id);
+		__u64 time = lcme_timestamp_time_unpack(time_id);
+		__u16 id = lcme_timestamp_id_unpack(time_id);
+		__u16 mirror_id = mirror_id_of(le32_to_cpu(lcme->lcme_id));
+		bool linked = false;
+
+		if (time != 0 && !lcme_timestamp_is_valid(time, now))
+			time = 0;
+
+		if (flags & (LCME_FL_PARITY | LCME_FL_IS_LINK_ID))
+			goto pack;
+
+		for (j = 0; j < cnt && !linked; j++) {
+			struct lov_comp_md_entry_v1 *parity;
+			__u32 pflags;
+			__u16 plink;
+
+			parity = &lcm->lcm_entries[j];
+			pflags = le32_to_cpu(parity->lcme_flags);
+			if (!(pflags & LCME_FL_PARITY) ||
+			    (pflags & LCME_FL_IS_LINK_ID))
+				continue;
+			plink = lcme_timestamp_id_unpack(
+					le64_to_cpu(parity->lcme_time_and_id));
+			linked = plink == mirror_id &&
+				 parity->lcme_extent.e_start ==
+					lcme->lcme_extent.e_start &&
+				 parity->lcme_extent.e_end ==
+					lcme->lcme_extent.e_end;
+		}
+		if (!linked) {
+			id = 0;
+			lcme->lcme_dstripe_count = 0;
+			lcme->lcme_cstripe_count = 0;
+		}
+pack:
+		lcme->lcme_time_and_id =
+			cpu_to_le64(lcme_timestamp_and_id_pack(time, id));
+	}
+}
+
+/**
  * lod_parse_striping() - Instantiate objects for striping.
  * @env: execution environment for this thread
  * @lo: LOD object
@@ -1567,6 +1676,9 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 				GOTO(out, rc);
 		}
 	}
+
+	if (lo->ldo_is_composite)
+		lod_layout_scrub(lo->ldo_comp_entries, lo->ldo_comp_cnt);
 
 	if (lo->ldo_is_composite && (lvf & LVF_ALL_STALE)) {
 		/* check the last mirror stale-ness */

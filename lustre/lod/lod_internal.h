@@ -752,6 +752,8 @@ int lod_verify_striping(const struct lu_env *env, struct lod_device *d,
 int lod_generate_lovea(const struct lu_env *env, struct lod_object *lo,
 		       struct lov_mds_md *lmm, int *lmm_size, bool is_dir);
 int lod_ea_store_resize(struct lod_thread_info *info, size_t size);
+void lod_layout_scrub(struct lod_layout_component *comps, int cnt);
+void lod_lovea_scrub(struct lov_comp_md_v1 *lcm, size_t size);
 int lod_def_striping_comp_resize(struct lod_default_striping *lds, __u16 count);
 void lod_free_def_comp_entries(struct lod_default_striping *lds);
 void lod_free_comp_entries(struct lod_object *lo);

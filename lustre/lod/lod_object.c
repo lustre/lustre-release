@@ -1560,6 +1560,8 @@ static int lod_xattr_get(const struct lu_env *env, struct dt_object *dt,
 
 		if (lcm->lcm_magic == cpu_to_le32(LOV_MAGIC_SEL))
 			lcm->lcm_magic = cpu_to_le32(LOV_MAGIC_COMP_V1);
+		if (lcm->lcm_magic == cpu_to_le32(LOV_MAGIC_COMP_V1))
+			lod_lovea_scrub(lcm, rc);
 	}
 
 	if (rc != -ENODATA || !S_ISDIR(dt->do_lu.lo_header->loh_attr & S_IFMT))
@@ -4732,6 +4734,8 @@ static int lod_dir_striping_create_internal(const struct lu_env *env,
 		}
 		lmm = info->lti_ea_buf.lb_buf;
 
+		memset(lmm, 0, lmm_size);
+
 		rc = lod_generate_lovea(env, lo, lmm, &lmm_size, true);
 		if (rc != 0)
 			RETURN(rc);
@@ -4821,6 +4825,8 @@ static int lod_generate_and_set_lovea(const struct lu_env *env,
 			RETURN(rc);
 	}
 	lmm = info->lti_ea_buf.lb_buf;
+
+	memset(lmm, 0, lmm_size);
 
 	rc = lod_generate_lovea(env, lo, lmm, &lmm_size, false);
 	if (rc)
@@ -5627,6 +5633,11 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 			llc->llc_ostlist.op_count = 0;
 		}
 	}
+
+	/* unconditional: the O_APPEND path copies the EC stripe counts but
+	 * clears lds_def_striping_is_composite
+	 */
+	lod_layout_scrub(lds->lds_def_comp_entries, lds->lds_def_comp_cnt);
 
 	lds->lds_def_striping_set = 1;
 	RETURN(rc);

@@ -3364,6 +3364,9 @@ int lod_use_defined_striping(const struct lu_env *env,
 		}
 	}
 
+	if (mo->ldo_is_composite)
+		lod_layout_scrub(mo->ldo_comp_entries, mo->ldo_comp_cnt);
+
 	rc = lod_fill_mirrors(mo);
 	GOTO(out, rc);
 out:
@@ -3665,6 +3668,9 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		lod_comp->llc_stripe_offset = v1->lmm_stripe_offset;
 		lod_qos_set_pool(lo, i, pool_name);
 	}
+
+	if (lo->ldo_is_composite)
+		lod_layout_scrub(lo->ldo_comp_entries, lo->ldo_comp_cnt);
 
 	RETURN(0);
 
