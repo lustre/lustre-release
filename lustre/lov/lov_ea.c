@@ -570,6 +570,66 @@ lsme_unpack_comp(struct lov_obd *lov, struct lov_mds_md *lmm,
 	}
 }
 
+/**
+ * lsm_clear_stale_ec() - Clear EC fields that an old server left stale
+ * @lsm: composite layout just unpacked
+ *
+ * Before EC was introduced, servers wrote lcme_timestamp only for NOSYNC
+ * components, memset only the layout header and reused the EA buffer, so
+ * other components can hold stale bytes in what EC reads as the mirror
+ * link id and stripe counts (LU-20718).  A stale data stripe count makes
+ * a plain mirror look like EC data, and a failed read then switches to an
+ * EC reconstruct read that fails with -EIO.
+ *
+ * Keep a data component's link id and stripe counts only while a parity
+ * component, which such a server never wrote, links to it, and keep the
+ * timestamp only for a NOSYNC component or an EC layout.
+ */
+static void lsm_clear_stale_ec(struct lov_stripe_md *lsm)
+{
+	bool is_ec = false;
+	int i, j;
+
+	for (i = 0; i < lsm->lsm_entry_count && !is_ec; i++)
+		is_ec = lsme_is_parity(lsm->lsm_entries[i]);
+
+	for (i = 0; i < lsm->lsm_entry_count; i++) {
+		struct lov_stripe_md_entry *lsme = lsm->lsm_entries[i];
+		bool linked = false;
+
+		if (!is_ec && !(lsme->lsme_flags & LCME_FL_NOSYNC))
+			lsme->lsme_timestamp = 0;
+
+		if (lsme->lsme_flags & (LCME_FL_PARITY | LCME_FL_IS_LINK_ID))
+			continue;
+
+		for (j = 0; is_ec && j < lsm->lsm_entry_count; j++) {
+			struct lov_stripe_md_entry *parity;
+
+			parity = lsm->lsm_entries[j];
+			if (!lsme_is_parity(parity) ||
+			    parity->lsme_flags & LCME_FL_IS_LINK_ID)
+				continue;
+
+			if (parity->lsme_mirror_link_id ==
+			    mirror_id_of(lsme->lsme_id) &&
+			    lu_extent_is_equal(&parity->lsme_extent,
+					       &lsme->lsme_extent)) {
+				linked = true;
+				break;
+			}
+		}
+		if (linked)
+			continue;
+
+		lsme->lsme_mirror_link_id = 0;
+		if (lsme_is_foreign(lsme))
+			continue;
+		lsme->lsme_dstripe_count = 0;
+		lsme->lsme_cstripe_count = 0;
+	}
+}
+
 static struct lov_stripe_md *
 lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 {
@@ -654,8 +714,10 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 				le64_to_cpu(lcme->lcme_time_and_id));
 		lsme->lsme_mirror_link_id = lcme_timestamp_id_unpack(
 					le64_to_cpu(lcme->lcme_time_and_id));
-		lsme->lsme_dstripe_count = lcme->lcme_dstripe_count;
-		lsme->lsme_cstripe_count = lcme->lcme_cstripe_count;
+		if (!lsme_is_foreign(lsme)) {
+			lsme->lsme_dstripe_count = lcme->lcme_dstripe_count;
+			lsme->lsme_cstripe_count = lcme->lcme_cstripe_count;
+		}
 		lu_extent_le_to_cpu(&lsme->lsme_extent, &lcme->lcme_extent);
 
 		if (lsme->lsme_pattern & LOV_PATTERN_COMPRESS) {
@@ -679,6 +741,8 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 				lsm->lsm_maxbytes = MAX_LFS_FILESIZE;
 		}
 	}
+
+	lsm_clear_stale_ec(lsm);
 
 	RETURN(lsm);
 

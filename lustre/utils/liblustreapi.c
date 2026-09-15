@@ -2547,6 +2547,19 @@ static void dump_comp_ec_raidsets(struct find_param *param,
 	*separator = "";
 }
 
+/* true if any component is an EC parity component */
+bool lov_comp_md_is_ec(const struct lov_comp_md_v1 *comp_v1)
+{
+	int i;
+
+	for (i = 0; i < comp_v1->lcm_entry_count; i++) {
+		if (comp_v1->lcm_entries[i].lcme_flags & LCME_FL_PARITY)
+			return true;
+	}
+
+	return false;
+}
+
 static void lov_dump_comp_v1_entry(struct find_param *param,
 				   enum lov_dump_flags flags, int index)
 {
@@ -2595,7 +2608,8 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 	}
 	/* print mirror_link_id and snapshot timestamp */
 	if (verbose & VERBOSE_COMP_FLAGS) {
-		if (entry->lcme_mirror_link_id != 0) {
+		if (entry->lcme_mirror_link_id != 0 &&
+		    lov_comp_md_is_ec(comp_v1)) {
 			llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 			if (verbose & ~VERBOSE_COMP_FLAGS)
 				llapi_printf(LLAPI_MSG_NORMAL,
@@ -2605,7 +2619,8 @@ static void lov_dump_comp_v1_entry(struct find_param *param,
 			separator = "\n";
 		}
 		if ((entry->lcme_flags & LCME_FL_NOSYNC) ||
-		    lcme_timestamp_time_unpack(entry->lcme_time_and_id)) {
+		    (lcme_timestamp_time_unpack(entry->lcme_time_and_id) &&
+		     lov_comp_md_is_ec(comp_v1))) {
 			llapi_printf(LLAPI_MSG_NORMAL, "%s", separator);
 			if (verbose & ~VERBOSE_COMP_FLAGS)
 				llapi_printf(LLAPI_MSG_NORMAL,

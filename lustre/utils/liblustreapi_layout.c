@@ -553,6 +553,7 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 					      enum llapi_layout_get_flags flags)
 {
 	struct lov_user_md *lum = lov_xattr;
+	bool is_ec = false;
 	struct lov_comp_md_v1 *comp_v1 = NULL;
 	struct lov_comp_md_entry_v1 *ent;
 	struct lov_user_md *v1;
@@ -606,6 +607,7 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 		ent_count = comp_v1->lcm_entry_count;
 		layout->llot_gen = comp_v1->lcm_layout_gen;
 		layout->llot_is_composite = true;
+		is_ec = lov_comp_md_is_ec(comp_v1);
 		layout->llot_mirror_count = comp_v1->lcm_mirror_count + 1;
 		layout->llot_gen = comp_v1->lcm_layout_gen;
 		layout->llot_flags = comp_v1->lcm_flags;
@@ -675,8 +677,13 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 			comp->llc_id = ent->lcme_id;
 			comp->llc_mirror_id = mirror_id_of(ent->lcme_id);
 			comp->llc_flags = ent->lcme_flags;
-			comp->llc_timestamp = lcme_timestamp_time_unpack(
-				ent->lcme_time_and_id);
+			/* Before EC was introduced, servers wrote
+			 * lcme_timestamp only for NOSYNC components
+			 */
+			if (is_ec || (ent->lcme_flags & LCME_FL_NOSYNC))
+				comp->llc_timestamp =
+					lcme_timestamp_time_unpack(
+						ent->lcme_time_and_id);
 			comp->llc_mirror_link_id =
 				lcme_timestamp_id_unpack(ent->lcme_time_and_id);
 			comp->llc_dstripe_count = ent->lcme_dstripe_count;
@@ -755,6 +762,41 @@ comp_add:
 		comp->llc_ondisk = true;
 		list_add_tail(&comp->llc_list, &layout->llot_comp_list);
 		layout->llot_cur_comp = comp;
+	}
+
+	/* Before EC was introduced, servers never wrote the EC fields or a
+	 * parity component, so a data component's link id and stripe counts
+	 * are only kept while a parity component links to it.
+	 */
+	list_for_each_entry(comp, &layout->llot_comp_list, llc_list) {
+		struct llapi_layout_comp *parity;
+		bool linked = false;
+
+		if (comp->llc_flags & (LCME_FL_PARITY | LCME_FL_IS_LINK_ID))
+			continue;
+
+		list_for_each_entry(parity, &layout->llot_comp_list,
+				    llc_list) {
+			if (!(parity->llc_flags & LCME_FL_PARITY) ||
+			    (parity->llc_flags & LCME_FL_IS_LINK_ID))
+				continue;
+			if (parity->llc_mirror_link_id == comp->llc_mirror_id &&
+			    parity->llc_extent.e_start ==
+				    comp->llc_extent.e_start &&
+			    parity->llc_extent.e_end ==
+				    comp->llc_extent.e_end) {
+				linked = true;
+				break;
+			}
+		}
+		if (linked)
+			continue;
+
+		comp->llc_mirror_link_id = LLAPI_MIRROR_LINK_NONE;
+		if (comp->llc_pattern == LLAPI_LAYOUT_FOREIGN)
+			continue;
+		comp->llc_dstripe_count = 0;
+		comp->llc_cstripe_count = 0;
 	}
 
 out:

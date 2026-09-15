@@ -275,8 +275,13 @@ ssize_t lov_lsm_pack(const struct lov_stripe_md *lsm, void *buf,
 		lcme->lcme_time_and_id = cpu_to_le64(
 			lcme_timestamp_and_id_pack(lsme->lsme_timestamp,
 				     lsme->lsme_mirror_link_id));
-		lcme->lcme_dstripe_count = lsme->lsme_dstripe_count;
-		lcme->lcme_cstripe_count = lsme->lsme_cstripe_count;
+		if (lsme_is_foreign(lsme)) {
+			lcme->lcme_dstripe_count = 0;
+			lcme->lcme_cstripe_count = 0;
+		} else {
+			lcme->lcme_dstripe_count = lsme->lsme_dstripe_count;
+			lcme->lcme_cstripe_count = lsme->lsme_cstripe_count;
+		}
 		lcme->lcme_extent.e_start =
 			cpu_to_le64(lsme->lsme_extent.e_start);
 		lcme->lcme_extent.e_end =
