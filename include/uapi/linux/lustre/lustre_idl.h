@@ -1908,7 +1908,6 @@ enum {
 	 * stored in LMA. see LMAI_XXXX
 	 */
 	LUSTRE_ORPHAN_FL	= 0x00002000,
-	LUSTRE_SET_SYNC_FL	= 0x00040000, /* Synchronous setattr on OSTs */
 	LUSTRE_ENCRYPT_FL	= 0x00800000, /* encrypted file */
 
 	LUSTRE_LMA_FL_MASKS	= LUSTRE_ENCRYPT_FL | LUSTRE_ORPHAN_FL,

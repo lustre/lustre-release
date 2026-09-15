@@ -757,41 +757,13 @@ static int osp_attr_set(const struct lu_env *env, struct dt_object *dt,
 		RETURN(0);
 
 	if (!is_only_remote_trans(th)) {
-		if (attr->la_flags & LUSTRE_SET_SYNC_FL) {
-			struct ptlrpc_request *req = NULL;
-			struct osp_update_request *update = NULL;
-			struct osp_device *osp = lu2osp_dev(dt->do_lu.lo_dev);
+		struct osp_device *osp = lu2osp_dev(dt->do_lu.lo_dev);
 
-			update = osp_update_request_create(&osp->opd_dt_dev);
-			if (IS_ERR(update))
-				RETURN(PTR_ERR(update));
-
-			rc = OSP_UPDATE_RPC_PACK(env, out_attr_set_pack, update,
-						 lu_object_fid(&dt->do_lu),
-						 attr);
-			if (rc != 0) {
-				CERROR("%s: update error "DFID": rc = %d\n",
-				       osp->opd_obd->obd_name,
-				       PFID(lu_object_fid(&dt->do_lu)), rc);
-
-				osp_update_request_destroy(env, update);
-				RETURN(rc);
-			}
-
-			rc = osp_remote_sync(env, osp, update, &req);
-			if (req != NULL)
-				ptlrpc_req_put(req);
-
-			osp_update_request_destroy(env, update);
-		} else {
-			struct osp_device *osp = lu2osp_dev(dt->do_lu.lo_dev);
-
-			rc = osp_sync_add(env, o, MDS_SETATTR64_REC, th, attr);
-			/* send layout version to OST ASAP */
-			if (attr->la_valid & LA_LAYOUT_VERSION)
-				wake_up(&osp->opd_sync_waitq);
-			/* XXX: send new uid/gid to OST ASAP? */
-		}
+		rc = osp_sync_add(env, o, MDS_SETATTR64_REC, th, attr);
+		/* send layout version to OST ASAP */
+		if (attr->la_valid & LA_LAYOUT_VERSION)
+			wake_up(&osp->opd_sync_waitq);
+		/* XXX: send new uid/gid to OST ASAP? */
 	} else {
 		struct lu_attr	*la;
 

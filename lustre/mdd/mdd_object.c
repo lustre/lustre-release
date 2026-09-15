@@ -1336,10 +1336,6 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 		RETURN(0);
 	}
 
-	/* If an unprivileged user changes group of some file,
-	 * the setattr operation will be processed synchronously to
-	 * honor the quota limit of the corresponding group. see LU-5152
-	 */
 	uc = lu_ucred_check(env);
 	memset(&qi, 0, sizeof(qi));
 	if (S_ISREG(attr->la_mode) && la->la_valid & LA_GID &&
@@ -1374,7 +1370,6 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 			}
 
 			quota_reserved = true;
-			la_copy->la_valid |= LA_FLAGS;
 		}
 
 		chrgrp_by_unprivileged_user = true;
@@ -1436,16 +1431,8 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 		}
 	}
 
-	if (la_copy->la_valid) {
+	if (la_copy->la_valid)
 		rc = mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 1);
-
-		if (rc == -EDQUOT && la_copy->la_flags & LUSTRE_SET_SYNC_FL) {
-			/* rollback to the original gid */
-			la_copy->la_flags &= ~LUSTRE_SET_SYNC_FL;
-			la_copy->la_gid = attr->la_gid;
-			mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 1);
-		}
-	}
 	mdd_write_unlock(env, mdd_obj);
 
 out:

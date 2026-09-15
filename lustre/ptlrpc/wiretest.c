@@ -2919,10 +2919,6 @@ void lustre_assert_wire_constants(void)
 	LASSERTF(LUSTRE_INLINE_DATA_FL == 0x10000000UL, "found 0x%.8xUL\n",
 		 (unsigned)LUSTRE_INLINE_DATA_FL);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
-	LASSERTF(LUSTRE_SET_SYNC_FL == 0x00040000UL, "found 0x%.8xUL\n",
-		 (unsigned)LUSTRE_SET_SYNC_FL);
-#endif /* CONFIG_LUSTRE_FS_SERVER */
 	LASSERTF(LUSTRE_ENCRYPT_FL == 0x00800000UL, "found 0x%.8xUL\n",
 		 (unsigned)LUSTRE_ENCRYPT_FL);
 	LASSERTF(MDS_INODELOCK_LOOKUP == 0x00000001UL, "found 0x%.8xUL\n",
