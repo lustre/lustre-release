@@ -349,7 +349,7 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
 	if (desc->bd_frag_ops->release_frags != NULL)
 		desc->bd_frag_ops->release_frags(desc);
 
-	OBD_FREE_LARGE(desc->bd_vec,
+	OBD_FREE_LARGE_ATOMIC(desc->bd_vec,
 		       desc->bd_max_iov * sizeof(*desc->bd_vec));
 	OBD_FREE_PTR(desc);
 	EXIT;
