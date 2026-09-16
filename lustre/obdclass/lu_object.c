@@ -2026,7 +2026,11 @@ void lu_env_remove(struct lu_env *env)
 
 	for_each_possible_cpu(i) {
 		if (lu_env_percpu[i].lep_env == env) {
-			LASSERT(lu_env_percpu[i].lep_task == task);
+			/* this is racy - the thread can get scheduled onto
+			 * another core and a new thread can be changing
+			 * lep_env/lep_task concurrently, but this is safe:
+			 * in the worst case that thread would have to look
+			 * up env in the hashtable again */
 			lu_env_percpu[i].lep_task = NULL;
 			lu_env_percpu[i].lep_env = NULL;
 		}
@@ -2060,9 +2064,10 @@ struct lu_env *lu_env_find(void)
 
 	if (lu_env_percpu[i].lep_task == current) {
 		env = lu_env_percpu[i].lep_env;
-		put_cpu();
-		LASSERT(env);
-		return env;
+		if (likely(env)) {
+			put_cpu();
+			return env;
+		}
 	}
 
 	lei = rhashtable_lookup_fast(&lu_env_rhash, &task,
