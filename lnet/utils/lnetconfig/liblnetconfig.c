@@ -2069,11 +2069,8 @@ static int lustre_lnet_match_ip_to_intf(struct ifaddrs *ifa,
 				continue;
 
 			/* Check if interface is UP */
-			if ((ifaddr->ifa_flags & IFF_UP) == 0) {
-				list_del(&intf_descr->intf_on_network);
-				free_intf_descr(intf_descr);
+			if ((ifaddr->ifa_flags & IFF_UP) == 0)
 				break;
-			}
 
 			/* Automatic match if no ranges were specified,
 			 * otherwise we check against the ranges

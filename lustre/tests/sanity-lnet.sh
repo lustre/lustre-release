@@ -2380,6 +2380,39 @@ EOF
 }
 run_test 155 "Check ip2nets import failure with no matching rules"
 
+test_155a() {
+	[[ $NETTYPE == tcp* ]] || skip "Need tcp nettype"
+
+	cleanup_lnet || error "Failed to unload modules before test execution"
+	setup_fakeif || error "Failed to add fake IF"
+	reinit_dlc || return $?
+
+	ip link set "$FAKE_IF" down || error "Failed to set $FAKE_IF down"
+
+	cat <<EOF > $TMP/sanity-lnet-$testnum.yaml
+ip2nets:
+  - net-spec: ${NETTYPE}
+    interfaces:
+        0: ${FAKE_IF}
+    ip-range:
+        0: ${FAKE_IP}
+EOF
+
+	local output
+	local rc
+
+	output=$(do_lnetctl import "$TMP/sanity-lnet-$testnum.yaml" 2>&1)
+	rc=$?
+	echo "$output"
+
+	cleanup_fakeif
+
+	(( rc != 0 )) || error "Import should have failed with interface down"
+	grep -q "No ip2nets rules applied" <<<"$output" ||
+		error "Unexpected import failure with interface down, rc=$rc"
+}
+run_test 155a "Check ip2nets import failure with interface down"
+
 test_156() {
 	[[ $NETTYPE == tcp* ]] || skip "Need tcp nettype"
 
