@@ -437,11 +437,6 @@ command_t cmdlist[] = {
 	 "		   [!] --mirror-id=[+-]MIRROR_ID] [--mirror-count|-N]\n"
 	 "		   [--ec-map] [--no-follow]\n"
 	 "		   FILENAME|DIRECTORY"},
-	{"setdirstripe", lfs_setdirstripe, 0,
-	 "Create striped directory on specified MDT, same as mkdir.\n"
-	 "May be restricted to root or group users, depending on settings.\n"
-	 "usage: setdirstripe [OPTION] <directory>\n"
-	 SETDIRSTRIPE_USAGE},
 	{"getdirstripe", lfs_getdirstripe, 0,
 	 "To list the layout pattern info for a given directory\n"
 	 "or recursively for all directories in a directory tree.\n"
@@ -451,9 +446,15 @@ command_t cmdlist[] = {
 	 "		      [--recursive|-r] [--raw|-R]\n"
 	 "		      [--verbose|-v] [--max-inherit|-X]\n"
 	 "		      [--max-inherit-rr] [--yaml|-y] <dir> ...\n"},
+	{"setdirstripe", lfs_setdirstripe, 0,
+	 "Create striped directory on specified MDT, same as mkdir.\n"
+	 "May be restricted to root or group users, depending on settings.\n"
+	 "usage: setdirstripe [OPTIONS] DIRECTORY\n"
+	 SETDIRSTRIPE_USAGE},
 	{"mkdir", lfs_setdirstripe, 0,
-	 "Create striped directory on specified MDT, same as setdirstripe.\n"
-	 "usage: mkdir [OPTION] <directory>\n"
+	 "Create striped directory on specified MDT, same as setdirstripe,\n"
+	 "except that '-D' also creates DIRECTORY if it does not exist.\n"
+	 "usage: mkdir [OPTIONS] DIRECTORY\n"
 	 SETDIRSTRIPE_USAGE},
 	{"rm_entry", lfs_rmentry, 0,
 	 "To remove the name entry of the remote directory. Note: This\n"
@@ -9595,7 +9596,6 @@ static int lfs_setdirstripe(int argc, char **argv)
 	bool default_stripe = false;
 	bool delete = false;
 	bool foreign_mode = false;
-	bool mdt_count_set = false;
 	bool overstriped = false;
 	mode_t mode = S_IRWXU | S_IRWXG | S_IRWXO;
 	mode_t previous_mode = 0;
@@ -9664,11 +9664,10 @@ static int lfs_setdirstripe(int argc, char **argv)
 					       LLAPI_OVERSTRIPE_COUNT_MIN) ||
 			    lsa.lsa_stripe_count > LMV_MAX_STRIPE_COUNT) {
 				fprintf(stderr,
-					"%s: invalid stripe count '%s'\n",
-					progname, optarg);
+					"%s %s: invalid stripe count '%s'\n",
+					progname, argv[0], optarg);
 				return CMD_HELP;
 			}
-			mdt_count_set = true;
 			break;
 		case 'd':
 			delete = true;
@@ -9720,7 +9719,8 @@ static int lfs_setdirstripe(int argc, char **argv)
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 0, 53, 0)
 		case 't':
 			fprintf(stderr,
-				"warning: '--hash-type' and '-t' deprecated, use '--mdt-hash' or '-H' instead\n");
+				"%s %s: warning: '--hash-type' and '-t' deprecated, use '--mdt-hash' or '-H' instead\n",
+				progname, argv[0]);
 			fallthrough;
 #endif
 		case 'H':
@@ -9812,8 +9812,8 @@ static int lfs_setdirstripe(int argc, char **argv)
 			}
 			break;
 		default:
-			fprintf(stderr, "%s: unrecognized option '%s'\n",
-				progname, argv[optind - 1]);
+			fprintf(stderr, "%s %s: unrecognized option '%s'\n",
+				progname, argv[0], argv[optind - 1]);
 			fallthrough;
 		case 'h':
 			return CMD_HELP;
@@ -9865,6 +9865,13 @@ static int lfs_setdirstripe(int argc, char **argv)
 		return CMD_HELP;
 	}
 
+	if (default_stripe && lsa.lsa_nr_tgts > 1) {
+		fprintf(stderr,
+			"%s %s: default layout cannot use a list of MDTs with '-i'\n",
+			progname, argv[0]);
+		return CMD_HELP;
+	}
+
 	if (mode_opt) {
 		mode = strtoul(mode_opt, &end, 8);
 		if (*end != '\0') {
@@ -9891,15 +9898,6 @@ static int lfs_setdirstripe(int argc, char **argv)
 				lsa.lsa_stripe_count);
 	}
 
-	if (default_stripe && lsa.lsa_nr_tgts > 1 && !mdt_count_set) {
-		fprintf(stderr,
-			"%s %s: trying to create unrecommended default striped directory layout,\n"
-			"	'-D -i x,y,z' will stripe every new directory across all MDTs,\n"
-			"	add -c with the number of MDTs to do this anyway\n",
-			progname, argv[0]);
-		return CMD_HELP;
-	}
-
 	if (max_inherit_rr != LAYOUT_INHERIT_UNSET &&
 	    lsa.lsa_stripe_off != LLAPI_LAYOUT_DEFAULT &&
 	    lsa.lsa_stripe_off != LMV_OFFSET_DEFAULT) {
@@ -9923,8 +9921,8 @@ static int lfs_setdirstripe(int argc, char **argv)
 						  xattr);
 		if (result != 0)
 			fprintf(stderr,
-				"%s mkdir: can't create foreign dir '%s': %s\n",
-				progname, dname, strerror(-result));
+				"%s %s: can't create foreign dir '%s': %s\n",
+				progname, argv[0], dname, strerror(-result));
 		return result;
 	}
 
@@ -10006,11 +10004,27 @@ static int lfs_setdirstripe(int argc, char **argv)
 		int rc;
 
 		if (default_stripe) {
+			/* "lfs mkdir -D LAYOUT DIR" also creates DIR */
+			if (param->lsp_is_create && !delete &&
+			    access(dname, F_OK) < 0 && errno == ENOENT) {
+				rc = llapi_dir_create(dname, mode, param);
+				if (rc && rc != -EEXIST) {
+					fprintf(stderr,
+						"%s %s: cannot create dir '%s': %s\n",
+						progname, argv[0], dname,
+						strerror(-rc));
+					if (!result)
+						result = rc;
+					continue;
+				}
+			}
+
 			rc = llapi_dir_set_default_lmv(dname, param);
 			if (rc)
 				fprintf(stderr,
-					"%s setdirstripe: cannot set default stripe on dir '%s': %s\n",
-					progname, dname, strerror(-rc));
+					"%s %s: cannot set default stripe on dir '%s': %s\n",
+					progname, argv[0], dname,
+					strerror(-rc));
 			if (!result)
 				result = rc; /* save first error for return */
 			continue;
@@ -10019,8 +10033,8 @@ static int lfs_setdirstripe(int argc, char **argv)
 		rc = llapi_dir_create(dname, mode, param);
 		if (rc)
 			fprintf(stderr,
-				"%s setdirstripe: cannot create dir '%s': %s\n",
-				progname, dname, strerror(-rc));
+				"%s %s: cannot create dir '%s': %s\n",
+				progname, argv[0], dname, strerror(-rc));
 		if (!result)
 			result = rc;	     /* save first error for return */
 	} while ((dname = argv[++optind]));

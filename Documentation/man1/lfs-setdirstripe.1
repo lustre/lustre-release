@@ -1,13 +1,21 @@
-.TH LFS-SETDIRSTRIPE 1 2017-11-07 "Lustre" "Lustre Utilities"
+.TH LFS-SETDIRSTRIPE 1 2026-09-22 Lustre "Lustre User Utilities"
 .SH NAME
-lfs setdirstripe, mkdir \- set striping pattern of a directory.
+lfs-setdirstripe, lfs-mkdir \- set striping pattern of a directory
 .SH SYNOPSIS
-.B lfs setdirstripe [\fR-cCdDhHioTxX\fR] \fIDIR\fR...
-.br
+.SY "lfs setdirstripe"
+.RB [ -cCdDhHioTxX ]...
+.IR DIR ...
+.YS
+.SY "lfs mkdir"
+.RB [ -cCdDhHioTxX ]...
+.IR DIR ...
+.YS
+.SY "lfs mkdir -D"
+.I DIR_LAYOUT DIR
+.YS
 .SH DESCRIPTION
-Create a striped directory with specified striping pattern. This
-.B lfs
-sub-command is similar to
+Create a striped directory with specified striping pattern.
+This sub-command is similar to
 .BR "lfs setstripe" ,
 but is used to create a striped directory or set the default layout for
 subdirectories.
@@ -17,7 +25,11 @@ and
 .BR --xattr
 options).
 .B lfs mkdir
-is an alias for this command.
+is an alias for this command, except that
+.B lfs mkdir -D
+also creates
+.I DIR
+if it does not exist.
 .SH OPTIONS
 .TP
 .BR \-c ", " \-T ", " \-\-mdt\-count =\fICOUNT\fR
@@ -51,18 +63,11 @@ percent of each other, otherwise the client will prefer to select
 .B COUNT
 MDT(s) proportional to the free space and inodes on each.
 
-Providing multiple
+Multiple
 .I MDT_INDEX
-values while trying to set the default striping pattern of subdirectories using
-.B -D
-will not load balance subdirectory creation amongst the MDTs. Instead, this
-will cause all new subdirectories to be striped across all of the specified
-MDTs. This is discouraged and can lead to filesystem problems if too many
-striped directories are created. To do this anyway,
-.B -c N
-must also be specified, where
-.B N
-matches the number of MDT indices given.
+values cannot be used to set the default striping pattern of subdirectories
+with
+.BR -D .
 .TP
 .BR \-H ", " \-\-mdt-hash =\fIHASH_TYPE\fR
 Use
@@ -98,7 +103,20 @@ sub-directories will use the new default striping pattern,
 but existing sub-directories will not be affected.  The newly
 created sub-directories will also inherit the specified default
 striping pattern.
-
+.IP
+If
+.BI "lfs mkdir -D " "DIR_LAYOUT DIR"
+is run, but
+.I DIR
+does not yet exist, then it is first created using the specified
+.I DIR_LAYOUT
+and then the default layout is set on the new directory.
+This is only done when
+.B lfs mkdir
+is used for the command name to avoid confusion with
+.B lfs setdirstripe
+trying to set the default directory layout on a non-existent directory.
+.IP
 Note that striping all directories across all MDTs by default is
 .B not
 recommended at this time, as the clients will have to do more RPCs to
@@ -216,6 +234,15 @@ This creates a directory striped on two MDTs, whose first stripe is on
 (MDT index 1), and whose hash type is
 .BR all_char .
 .TP
+.B $ lfs mkdir -D -c 2 /mnt/lustre/dir2
+This creates
+.B dir2
+striped over two MDTs, and sets the same default layout on
+.B dir2
+for new subdirectories, which would otherwise need a separate
+.B lfs setdirstripe -D
+command after creating the directory.
+.TP
 .B $ lfs mkdir --foreign=symlink --xattr PUUID/CUUID /mnt/lustre/dir1
 This creates
 .B dir1
@@ -227,8 +254,12 @@ The
 .B lfs setdirstripe
 command is part of the Lustre filesystem.
 .SH SEE ALSO
-.BR lctl (8),
 .BR lfs (1),
 .BR lfs-getdirstripe (1),
 .BR lfs-setstripe (1),
-.BR lustre (7)
+.BR llapi_dir_create (3),
+.BR llapi_dir_create_foreign (3),
+.BR llapi_dir_create_pool (3),
+.BR llapi_dir_set_default_lmv (3),
+.BR lustre (7),
+.BR lctl (8)

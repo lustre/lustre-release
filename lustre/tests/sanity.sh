@@ -31101,20 +31101,18 @@ test_300l() {
 run_test 300l "non-root user to create dir under striped dir with stale layout"
 
 test_300m() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	[ $MDSCOUNT -ge 2 ] && skip_env "Only for single MDT"
-	[ $MDS1_VERSION -lt $(version_code 2.7.55) ] &&
-		skip "Need MDS version at least 2.7.55"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	(( $MDSCOUNT == 1 )) || skip_env "Only for single MDT"
 
-	mkdir -p $DIR/$tdir/striped_dir
-	$LFS setdirstripe -D -c 1 $DIR/$tdir/striped_dir ||
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -D -c 1 $DIR/$tdir/striped_dir ||
 		error "set default stripes dir error"
 
 	mkdir $DIR/$tdir/striped_dir/a || error "mkdir a fails"
 
 	stripe_count=$($LFS getdirstripe -c $DIR/$tdir/striped_dir/a)
-	[ $stripe_count -eq 0 ] ||
-			error "expect 0 get $stripe_count for a"
+	(( $stripe_count == 0 )) ||
+		error "expect 0 get $stripe_count for a"
 
 	$LFS setdirstripe -D -c 2 $DIR/$tdir/striped_dir ||
 		error "set default stripes dir error"
@@ -31122,8 +31120,8 @@ test_300m() {
 	mkdir $DIR/$tdir/striped_dir/b || error "mkdir b fails"
 
 	stripe_count=$($LFS getdirstripe -c $DIR/$tdir/striped_dir/b)
-	[ $stripe_count -eq 0 ] ||
-			error "expect 0 get $stripe_count for b"
+	(( $stripe_count == 0 )) ||
+		error "expect 0 get $stripe_count for b"
 
 	$LFS setdirstripe -D -c1 -i2 $DIR/$tdir/striped_dir ||
 		error "set default stripes dir error"
@@ -34622,22 +34620,36 @@ run_test 413d "inherit ROOT default LMV"
 test_413e() {
 	(( MDSCOUNT >= 2 )) ||
 		skip "We need at least 2 MDTs for this test"
-	(( MDS1_VERSION >= $(version_code 2.14.55) )) ||
-		skip "Need server version at least 2.14.55"
+	(( MDS1_VERSION >= $(version_code v2_14_51-133-g01d34a6b3b) )) ||
+		skip "need MDS >= 2.14.51.133 for default LMV inherit depth"
 
 	local testdir=$DIR/$tdir
 	local tmpfile=$TMP/temp.setdirstripe.stderr.$$
 	local max_inherit
 	local sub_max_inherit
 
-	mkdir -p $testdir || error "failed to create $testdir"
-
 	# set default max-inherit to -1 if stripe count is 0 or 1
-	$LFS setdirstripe -D -c 1 $testdir ||
+	$LFS mkdir -D -c 1 $testdir ||
 		error "failed to set default LMV"
 	max_inherit=$($LFS getdirstripe -D --max-inherit $testdir)
 	(( max_inherit == -1 )) ||
 		error "wrong max_inherit value $max_inherit"
+
+	# only "lfs mkdir -D" creates a missing DIR, with LAYOUT as its own
+	local dir2=$testdir/dir2
+	local count
+
+	! $LFS setdirstripe -D -c 2 $dir2 2>/dev/null ||
+		error "setdirstripe -D created $dir2"
+	! $LFS mkdir -d $dir2 2>/dev/null || error "mkdir -d created $dir2"
+	! $LFS mkdir -D -i 0,1 -c 2 $dir2 2>/dev/null ||
+		error "mkdir -D -i 0,1 created $dir2"
+	[[ ! -e $dir2 ]] || error "$dir2 exists"
+	$LFS mkdir -D -c 2 $dir2 || error "mkdir -D -c 2 $dir2 failed"
+	count=$($LFS getdirstripe -c $dir2)
+	(( count == 2 )) || error "$dir2 stripe count $count != 2"
+	count=$($LFS getdirstripe -D -c $dir2)
+	(( count == 2 )) || error "$dir2 default stripe count $count != 2"
 
 	# set default max_inherit to a fixed value if stripe count is not 0 or 1
 	$LFS setdirstripe -D -c -1 $testdir ||
