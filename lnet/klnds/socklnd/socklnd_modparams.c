@@ -143,16 +143,6 @@ static unsigned int skip_mr_route_setup;
 module_param(skip_mr_route_setup, uint, 0444);
 MODULE_PARM_DESC(skip_mr_route_setup, "skip automatic setup of linux routes for MR");
 
-#ifdef SOCKNAL_BACKOFF
-static int backoff_init = 3;
-module_param(backoff_init, int, 0644);
-MODULE_PARM_DESC(backoff_init, "seconds for initial tcp backoff");
-
-static int backoff_max = 3;
-module_param(backoff_max, int, 0644);
-MODULE_PARM_DESC(backoff_max, "seconds for maximum tcp backoff");
-#endif
-
 #if SOCKNAL_VERSION_DEBUG
 static int protocol = 3;
 module_param(protocol, int, 0644);
@@ -345,11 +335,6 @@ int ksocknal_tunables_init(void)
 		      "# NICs, although you still can set irq_affinity by another way, please check manual for details.\n");
 	}
 	ksocknal_tunables.ksnd_irq_affinity       = &enable_irq_affinity;
-
-#ifdef SOCKNAL_BACKOFF
-	ksocknal_tunables.ksnd_backoff_init       = &backoff_init;
-	ksocknal_tunables.ksnd_backoff_max        = &backoff_max;
-#endif
 
 #if SOCKNAL_VERSION_DEBUG
 	ksocknal_tunables.ksnd_protocol           = &protocol;

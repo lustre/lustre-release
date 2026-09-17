@@ -146,10 +146,6 @@ struct ksock_tunables {
 	int	*ksnd_zc_recv;         /* enable ZC receive (for Chelsio TOE) */
 	int	*ksnd_zc_recv_min_nfrags; /* minimum # of fragments to enable ZC receive */
 	int	*ksnd_irq_affinity;    /* enable IRQ affinity? */
-#ifdef SOCKNAL_BACKOFF
-	int	*ksnd_backoff_init;    /* initial TCP backoff */
-	int	*ksnd_backoff_max;     /* maximum TCP backoff */
-#endif
 #if SOCKNAL_VERSION_DEBUG
 	int	*ksnd_protocol;        /* protocol version */
 #endif

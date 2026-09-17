@@ -4,36 +4,6 @@
 # This file is part of Lustre, http://www.lustre.org/
 #
 
-# LN_CONFIG_BACKOFF
-#
-# check if tunable tcp backoff is available/wanted
-#
-AC_DEFUN([LN_CONFIG_BACKOFF], [
-AC_MSG_CHECKING([whether to enable tunable backoff TCP support])
-AC_ARG_ENABLE([backoff],
-	AS_HELP_STRING([--disable-backoff],
-		[disable socknal tunable backoff]),
-	[], [enable_backoff="yes"])
-AC_MSG_RESULT([$enable_backoff])
-AS_IF([test "x$enable_backoff" = xyes], [
-	AC_MSG_CHECKING([if Linux kernel has tunable backoff TCP support])
-	AS_IF([grep -c TCP_BACKOFF $LINUX/include/linux/tcp.h >/dev/null], [
-		AC_MSG_RESULT([yes])
-		AC_DEFINE(SOCKNAL_BACKOFF, 1, [use tunable backoff TCP])
-		AS_IF([grep rto_max $LINUX/include/linux/tcp.h | grep -q __u16 >/dev/null],
-			[AC_DEFINE(SOCKNAL_BACKOFF_MS, 1,
-				[tunable backoff TCP in ms])])
-	], [
-		AC_MSG_RESULT([no])
-	])
-
-	AC_SUBST(ENABLE_BACKOFF, yes)
-], [
-	AC_SUBST(ENABLE_BACKOFF, no)
-
-])
-]) # LN_CONFIG_BACKOFF
-
 #
 # LN_CONFIG_DLC
 #
@@ -1068,7 +1038,6 @@ AC_DEFUN([LN_PROG_LINUX], [
 AC_MSG_NOTICE([LNet kernel checks
 ==============================================================================])
 
-LN_CONFIG_BACKOFF
 LN_CONFIG_O2IB
 LN_CONFIG_EFALND
 LN_CONFIG_GNILND

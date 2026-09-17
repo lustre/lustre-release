@@ -166,11 +166,6 @@ debs: debs_common
 	elif test "x$(ENABLE_LIBPTHREAD)" = "xno"; then
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nolibpthread"
 	fi
-	if test "x$(ENABLE_BACKOFF)" = "xyes"; then
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} backoff"
-	elif test "x$(ENABLE_BACKOFF)" = "xno"; then
-		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} nobackoff"
-	fi
 	if test "x$(ENABLE_EFENCE)" = "xyes"; then
 		export DEB_BUILD_PROFILES="$${DEB_BUILD_PROFILES} efence"
 	elif test "x$(ENABLE_EFENCE)" = "xno"; then

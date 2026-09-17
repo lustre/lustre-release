@@ -330,39 +330,6 @@ ksocknal_lib_setup_sock(struct socket *sock, struct lnet_ni *ni)
 			 *ksocknal_tunables.ksnd_tx_buffer_size,
 			 *ksocknal_tunables.ksnd_rx_buffer_size);
 
-/* TCP_BACKOFF_* sockopt tunables unsupported in stock kernels */
-#ifdef SOCKNAL_BACKOFF
-	if (*ksocknal_tunables.ksnd_backoff_init > 0) {
-		int option = *ksocknal_tunables.ksnd_backoff_init;
-#ifdef SOCKNAL_BACKOFF_MS
-		option *= 1000;
-#endif
-
-		rc = kernel_setsockopt(sock, SOL_TCP, TCP_BACKOFF_INIT,
-				       (char *)&option, sizeof(option));
-		if (rc != 0) {
-			CERROR("Can't set initial tcp backoff %d: %d\n",
-			       option, rc);
-			return rc;
-		}
-	}
-
-	if (*ksocknal_tunables.ksnd_backoff_max > 0) {
-		int option = *ksocknal_tunables.ksnd_backoff_max;
-#ifdef SOCKNAL_BACKOFF_MS
-		option *= 1000;
-#endif
-
-		rc = kernel_setsockopt(sock, SOL_TCP, TCP_BACKOFF_MAX,
-				       (char *)&option, sizeof(option));
-		if (rc != 0) {
-			CERROR("Can't set maximum tcp backoff %d: %d\n",
-			       option, rc);
-			return rc;
-		}
-	}
-#endif
-
 	/* snapshot tunables */
 	keep_idle  = *ksocknal_tunables.ksnd_keepalive_idle;
 	keep_count = *ksocknal_tunables.ksnd_keepalive_count;
