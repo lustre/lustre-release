@@ -29209,6 +29209,48 @@ test_255c() {
 }
 run_test 255c "suite of ladvise lockahead tests"
 
+test_255d() {
+	(( OST1_VERSION >= $(version_code 2.10.50) )) ||
+		skip "lustre < 2.10.50 does not support lockahead"
+
+	local ost1_imp=$(get_osc_import_name client ost1)
+	local imp_name=$($LCTL list_param osc.$ost1_imp | head -n1 |
+			 cut -d'.' -f2)
+	local file=$DIR/$tfile
+	local mb=$((1024 * 1024))
+	local count
+	local reads
+
+	$LFS setstripe -i 0 -c 1 $file || error "(0) setstripe $file failed"
+	stack_trap "rm -f $file"
+	dd if=/dev/zero of=$file bs=1M count=8 || error "(1) write $file failed"
+	cancel_lru_locks osc
+
+	# Two overlapping PR locks, and a PW lock to the right of both
+	$LFS ladvise -a lockahead -m READ -s 0 -e $((mb - 1)) $file ||
+		error "(2) lockahead PR [0, 1M) failed"
+	$LFS ladvise -a lockahead -m READ -s $((mb / 2)) -e $((2 * mb - 1)) \
+		$file || error "(3) lockahead PR [512K, 2M) failed"
+	$LFS ladvise -a lockahead -m WRITE -s $((4 * mb)) -e $((5 * mb - 1)) \
+		$file || error "(4) lockahead PW [4M, 5M) failed"
+	dd if=$file of=/dev/null bs=1M count=2 || error "(5) read $file failed"
+
+	count=$($LCTL get_param -n ldlm.namespaces.$imp_name.lock_count)
+	(( count == 3 )) || error "(6) expected 3 locks, have $count"
+
+	# Revoke only PR [0, 1M); [512K, 1M) is still covered by PR [512K, 2M)
+	dd if=/dev/zero of=$file bs=4k count=1 conv=notrunc ||
+		error "(7) write $file failed"
+
+	$LCTL set_param -n osc.$imp_name.stats=clear
+	dd if=$file of=/dev/null bs=512k skip=1 count=1 ||
+		error "(8) read $file failed"
+	reads=$(calc_stats osc.$imp_name.stats ost_read)
+	(( reads == 0 )) ||
+		error "(9) $reads read RPCs for pages covered by a PR lock"
+}
+run_test 255d "lock cancel keeps pages covered by another lock"
+
 test_256() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"

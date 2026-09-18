@@ -3612,6 +3612,23 @@ bool osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 }
 EXPORT_SYMBOL(osc_page_gang_lookup);
 
+static pgoff_t osc_first_covered_index(const struct lu_env *env,
+				       struct osc_object *osc, pgoff_t index)
+{
+	struct ldlm_res_id *resname = &osc_env_info(env)->oti_resname;
+	struct ldlm_namespace *ns = osc_export(osc)->exp_obd->obd_namespace;
+	__u64 start;
+
+	ostid_build_res_name(&osc->oo_oinfo->loi_oi, resname);
+	start = ldlm_extent_first_covered(ns, resname,
+					  LCK_PR | LCK_PW | LCK_GROUP,
+					  (__u64)index << PAGE_SHIFT);
+	if (start == OBD_OBJECT_EOF)
+		return CL_PAGE_EOF;
+
+	return start >> PAGE_SHIFT;
+}
+
 /*
  * Check if page @page is covered by an extra lock or discard it.
  */
@@ -3633,42 +3650,28 @@ static bool check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
 			discard = true;
 		} else if (index >= info->oti_fn_index) {
 			struct ldlm_lock *tmp;
+
 			/* refresh non-overlapped index */
 			tmp = osc_dlmlock_at_pgoff(env, osc, index,
-					OSC_DAP_FL_TEST_LOCK |
-					OSC_DAP_FL_AST |
-					OSC_DAP_FL_RIGHT);
+						   OSC_DAP_FL_TEST_LOCK |
+						   OSC_DAP_FL_AST);
 			if (tmp != NULL) {
-				__u64 end =
-					tmp->l_policy_data.l_extent.end;
-				__u64 start =
-					tmp->l_policy_data.l_extent.start;
+				__u64 end = tmp->l_policy_data.l_extent.end;
 
-				/* no lock covering this page */
-				if (index < start >> PAGE_SHIFT) {
-					/* no lock at @index,
-					 * first lock at @start
-					 */
-					info->oti_ng_index =
-						start >> PAGE_SHIFT;
-					discard = true;
-				} else {
-					/* Cache the first-non-overlapped
-					 * index so as to skip all pages
-					 * within [index, oti_fn_index).
-					 * This is safe because if tmp lock
-					 * is canceled, it will discard these
-					 * pages.
-					 */
-					info->oti_fn_index =
-						(end + 1) >> PAGE_SHIFT;
-					if (end == OBD_OBJECT_EOF)
-						info->oti_fn_index =
-							CL_PAGE_EOF;
-				}
+				/* Cache the first-non-overlapped index so as
+				 * to skip all pages within [index,
+				 * oti_fn_index). This is safe because if tmp
+				 * lock is canceled, it will discard these
+				 * pages.
+				 */
+				info->oti_fn_index = (end + 1) >> PAGE_SHIFT;
+				if (end == OBD_OBJECT_EOF)
+					info->oti_fn_index = CL_PAGE_EOF;
 				ldlm_lock_put(tmp);
 			} else {
-				info->oti_ng_index = CL_PAGE_EOF;
+				info->oti_ng_index =
+					osc_first_covered_index(env, osc,
+								index);
 				discard = true;
 			}
 		}

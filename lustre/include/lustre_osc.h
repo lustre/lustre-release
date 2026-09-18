@@ -212,10 +212,6 @@ enum osc_dap_flags {
 	 * check ast data is present, requested to cancel cb
 	 */
 	OSC_DAP_FL_AST	     = BIT(2),
-	/**
-	 * look at right region for the desired lock
-	 */
-	OSC_DAP_FL_RIGHT     = BIT(3),
 };
 
 /*

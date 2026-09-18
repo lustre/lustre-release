@@ -1379,9 +1379,8 @@ static bool lock_matches(struct ldlm_lock *lock, void *vdata)
 
 	switch (lock->l_resource->lr_type) {
 	case LDLM_EXTENT:
-		if (!(data->lmd_match & LDLM_MATCH_RIGHT) &&
-		    (lpol->l_extent.start > data->lmd_policy->l_extent.start ||
-		     lpol->l_extent.end < data->lmd_policy->l_extent.end))
+		if (lpol->l_extent.start > data->lmd_policy->l_extent.start ||
+		    lpol->l_extent.end < data->lmd_policy->l_extent.end)
 			return false;
 
 		if (unlikely(match == LCK_GROUP) &&
@@ -1450,12 +1449,8 @@ struct ldlm_lock *search_itree(struct ldlm_resource *res,
 			       struct ldlm_match_data *data)
 {
 	int idx;
-	__u64 end = data->lmd_policy->l_extent.end;
 
 	data->lmd_lock = NULL;
-
-	if (data->lmd_match & LDLM_MATCH_RIGHT)
-		end = OBD_OBJECT_EOF;
 
 	for (idx = 0; idx < LCK_MODE_NUM; idx++) {
 		struct ldlm_interval_tree *tree = &res->lr_itree[idx];
@@ -1468,7 +1463,7 @@ struct ldlm_lock *search_itree(struct ldlm_resource *res,
 
 		ldlm_extent_search(&tree->lit_root,
 				   data->lmd_policy->l_extent.start,
-				   end,
+				   data->lmd_policy->l_extent.end,
 				   lock_matches, data);
 
 		if (data->lmd_lock)
@@ -1479,6 +1474,70 @@ struct ldlm_lock *search_itree(struct ldlm_resource *res,
 }
 EXPORT_SYMBOL(search_itree);
 
+static bool lock_start_if_live(struct ldlm_lock *lock, void *data)
+{
+	__u64 *start = data;
+
+	/* an unused lock being cancelled, the caller's own included */
+	if ((lock->l_flags & LDLM_FL_CBPENDING) &&
+	    !lock->l_readers && !lock->l_writers)
+		return false;
+
+	if (!lock->l_ast_data)
+		return false;
+
+	*start = lock->l_policy_data.l_extent.start;
+	return true;
+}
+
+/**
+ * ldlm_extent_first_covered() - Find the first offset covered by a lock
+ * @ns: namespace to search
+ * @res_id: resource to search
+ * @mode: lock modes to consider
+ * @start: offset to search from
+ *
+ * Unused locks being cancelled and locks with no ast data are skipped,
+ * as an LDLM_MATCH_AST match skips them. Other locks a match would
+ * reject are not, so the result may be lower than the first offset a
+ * match would find covered, but is never higher.
+ *
+ * Return: the lowest offset at or after @start covered by a granted
+ * lock in @mode on @res_id, or OBD_OBJECT_EOF if there is none.
+ */
+__u64 ldlm_extent_first_covered(struct ldlm_namespace *ns,
+				const struct ldlm_res_id *res_id,
+				enum ldlm_mode mode, __u64 start)
+{
+	struct ldlm_resource *res;
+	__u64 first = OBD_OBJECT_EOF;
+	int idx;
+
+	res = ldlm_resource_get(ns, res_id, LDLM_EXTENT, 0);
+	if (IS_ERR(res))
+		return OBD_OBJECT_EOF;
+	LASSERT(res->lr_type == LDLM_EXTENT);
+
+	lock_res(res);
+	for (idx = 0; idx < LCK_MODE_NUM && first > start; idx++) {
+		struct ldlm_interval_tree *tree = &res->lr_itree[idx];
+		__u64 found = OBD_OBJECT_EOF;
+
+		if (!(tree->lit_mode & mode) ||
+		    RB_EMPTY_ROOT(&tree->lit_root.rb_root))
+			continue;
+
+		/* walks in start order, so the first live lock is lowest */
+		ldlm_extent_search(&tree->lit_root, start, first,
+				   lock_start_if_live, &found);
+		first = min(first, found);
+	}
+	unlock_res(res);
+	ldlm_resource_putref(res);
+
+	return max(first, start);
+}
+EXPORT_SYMBOL(ldlm_extent_first_covered);
 
 /**
  * Search for a lock with given properties in a queue.
@@ -1566,8 +1625,6 @@ EXPORT_SYMBOL(ldlm_lock_allow_match);
  *    ast_data
  * If @match_flags contains LDLM_MATCH_AST_ANY, then we'd match lock with
  *    ast_data
- * If @match_flags contains LDLM_MATCH_RIGHT, then we'd match extent lock at
- *    the right region for the desired lock
  * If @match_flags contains LDLM_MATCH_GROUP, then we'd match group lock
  * If @match_flags contains LDLM_MATCH_SKIP_UNUSED, then we don't match any
  *    unused locks

@@ -1147,7 +1147,6 @@ enum ldlm_match_flags {
 	LDLM_MATCH_UNREF   = BIT(0),
 	LDLM_MATCH_AST     = BIT(1),
 	LDLM_MATCH_AST_ANY = BIT(2),
-	LDLM_MATCH_RIGHT   = BIT(3),
 	LDLM_MATCH_GROUP   = BIT(4),
 	LDLM_MATCH_SKIP_UNUSED = BIT(5),
 };
@@ -1761,6 +1760,9 @@ static inline enum ldlm_mode ldlm_lock_match(struct ldlm_namespace *ns,
 }
 struct ldlm_lock *search_itree(struct ldlm_resource *res,
 			       struct ldlm_match_data *data);
+__u64 ldlm_extent_first_covered(struct ldlm_namespace *ns,
+				const struct ldlm_res_id *res_id,
+				enum ldlm_mode mode, __u64 start);
 enum ldlm_mode ldlm_revalidate_lock_handle(const struct lustre_handle *lockh,
 					   enum mds_ibits_locks *bits);
 void ldlm_lock_mode_downgrade(struct ldlm_lock *lock, enum ldlm_mode new_mode);
