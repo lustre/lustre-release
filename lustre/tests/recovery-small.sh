@@ -3758,6 +3758,7 @@ test_158a() {
 	$LCTL --device $mdc2 activate
 	active=$($LCTL get_param -n mdc.$mdc2.active)
 	(( active == 1 )) || error "import status is not 'active'"
+	wait_import_state FULL mdc.$mdc2.mds_server_uuid
 	status=$($LFS check mdts | grep $mdc2 | grep -c active)
 	(( status == 1 )) || {
 		$LFS check mdts
