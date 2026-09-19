@@ -24,18 +24,18 @@
 
 #include <linux/libcfs/libcfs.h>
 
-static void *(*__cfs_kallsyms_lookup_name)(const char *name);
+static unsigned long (*__cfs_kallsyms_lookup_name)(const char *name);
 
 void *cfs_kallsyms_lookup_name(const char *name)
 {
-	return __cfs_kallsyms_lookup_name(name);
+	return (void *)__cfs_kallsyms_lookup_name(name);
 }
 EXPORT_SYMBOL_GPL(cfs_kallsyms_lookup_name);
 
 #ifdef HAVE_KALLSYMS_LOOKUP_NAME
 static int find_kallsyms_lookup_name(void)
 {
-	__cfs_kallsyms_lookup_name = (void *(*)(const char *))kallsyms_lookup_name;
+	__cfs_kallsyms_lookup_name = kallsyms_lookup_name;
 
 	return 0;
 }
