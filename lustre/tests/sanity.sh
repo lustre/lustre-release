@@ -30266,13 +30266,16 @@ test_276() {
 	remote_ost_nodsh && skip "remote OST with nodsh"
 	local pid
 
+	# ensure recovery is done so the subsequent tests have a healthy system
+	stack_trap "wait_recovery_complete ost1; wait_osc_import_state mds ost1 FULL"
+
 	do_facet ost1 "(while true; do \
 		$LCTL get_param obdfilter.*.filesfree > /dev/null 2>&1; \
 		done) & pid=\\\$!; echo \\\$pid > $TMP/sanity_276_pid" &
 	pid=$!
 
 	local end=$(($SECONDS + 120))
-	[[ "$SLOW" == "yes" ]] && $((end += 600))
+	[[ "$SLOW" == "yes" ]] && ((end += 600))
 
 	while (($SECONDS < end)); do
 		stop ost1
@@ -30504,6 +30507,13 @@ test_300d() {
 
 	local stripe_count
 	local file
+
+	# ensure all OSPs are healthy and can provide objects
+	do_nodes $(mdts_nodes) "$LCTL get_param osp.*.ping"
+	local i
+	for i in $(seq $OSTCOUNT); do
+		wait_osc_import_state mds ost$i FULL
+	done
 
 	mkdir -p $DIR/$tdir
 	$LFS setstripe -c 2 $DIR/$tdir
