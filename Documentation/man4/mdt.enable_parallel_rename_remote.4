@@ -1,0 +1,102 @@
+.TH MDT.ENABLE_PARALLEL_RENAME_REMOTE 4 2026-09-25 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+mdt.enable_parallel_rename_remote \- parallel rename of remote-source files
+.SH SYNOPSIS
+.SY
+.RI "lctl get_param mdt." FSNAME *.enable_parallel_rename_remote
+.SY
+.RI "lctl set_param mdt." FSNAME *.enable_parallel_rename_remote= ENABLE
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.BR 644 | -rw-r--r--
+.TP
+.B Scope
+.br
+Per-MDT device.
+.TP
+.B Config
+.br
+Always present for MDT devices.
+.TP
+.B Default
+.RB enable_parallel_rename_remote= 1
+.SH DESCRIPTION
+The boolean
+.B enable_parallel_rename_remote
+parameter controls whether renaming a non-directory may proceed without
+the filesystem-wide rename lock when the source parent directory or the
+source object is located on another MDT.
+.PP
+The rename lock is an exclusive lock on a single resource held for the
+duration of the distributed transaction, so taking it serialises every
+such rename across the whole filesystem and limits the aggregate rate to
+a few hundred per second regardless of how many MDTs are configured.
+Renaming a non-directory cannot create a directory loop, which is what
+the rename lock exists to prevent, so it is not required for this case.
+If
+.I ENABLE
+is
+.B 1
+(or aliases
+.BR on " or " true ),
+these renames are permitted to run in parallel. If it is
+.B 0
+or
+.B off
+they take the rename lock as before.
+.PP
+During a rolling upgrade, keep this parameter at
+.B 0
+until every MDT runs a release that has it: a directory migration on an
+MDT running an older release relies on the rename lock to keep these
+renames out.
+.PP
+This parameter applies only to non-directories. A directory rename
+takes the rename lock whenever the two parents differ or the source
+parent is on another MDT, since it can change the directory hierarchy;
+a same-directory rename of a directory whose object alone is remote
+does not, and is governed by
+.BR enable_parallel_rename_dir .
+.PP
+Three parameters apply to the rename of a non-directory, and it takes
+the rename lock unless every one of them that applies permits it.
+.B enable_parallel_rename_file
+governs every non-directory rename, so setting it to
+.B 0
+also disables the behaviour described here.
+.B enable_parallel_rename_crossdir
+governs those that cross directories, including remote ones, so
+setting it to
+.B 0
+disables this behaviour for a cross-directory rename but not for a
+same-directory one. This parameter governs renames whose source parent
+or source object is on another MDT.
+.SH MODULES
+This parameter is in the following module:
+.EX
+.B mdt.*.enable_parallel_rename_remote
+.EE
+.SH EXAMPLES
+Disable parallel rename of files with a remote source on the
+.B testfs
+filesystem:
+.EX
+.RB "mgs# " "lctl set_param -P mdt.testfs-*.enable_parallel_rename_remote=0"
+.EE
+.SH AVAILABILITY
+The
+.B enable_parallel_rename_remote
+parameter is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" Added in commit v2_17_58
+.SH SEE ALSO
+.BR mdt.enable_parallel_rename_crossdir (4),
+.BR mdt.enable_parallel_rename_dir (4),
+.BR mdt.enable_parallel_rename_file (4),
+.BR mdt.enable_remote_dir (4),
+.BR mdt.rename_stats (4),
+.BR lustre (7),
+.BR lctl-set_param (8)

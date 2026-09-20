@@ -1,0 +1,78 @@
+.TH MDT.ENABLE_PARALLEL_RENAME_CROSSDIR 4 2026-10-06 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+mdt.enable_parallel_rename_crossdir \- parallel cross-directory rename of files
+.SH SYNOPSIS
+.SY
+.RI "lctl get_param mdt." FSNAME *.enable_parallel_rename_crossdir
+.SY
+.RI "lctl set_param mdt." FSNAME *.enable_parallel_rename_crossdir= ENABLE
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.BR 644 | -rw-r--r--
+.TP
+.B Scope
+.br
+Per-MDT device.
+.TP
+.B Config
+.br
+Always present for MDT devices.
+.TP
+.B Default
+.RB enable_parallel_rename_crossdir= 1
+.SH DESCRIPTION
+The boolean
+.B enable_parallel_rename_crossdir
+parameter controls whether renaming a non-directory from one directory
+to another may proceed without the filesystem-wide rename lock.
+If
+.I ENABLE
+is
+.B 1
+(or aliases
+.BR on " or " true ),
+these renames are permitted to run in parallel. If it is
+.B 0
+or
+.B off
+they take the rename lock.
+.PP
+Within a striped directory the parent of a name is the stripe that
+holds it, so a rename between names on different stripes is a
+cross-directory rename.
+.PP
+This parameter applies only when
+.B enable_parallel_rename_file
+is enabled. A rename whose source parent or source object is on another
+MDT is also governed by
+.BR enable_parallel_rename_remote .
+A directory renamed between two directories always takes the rename
+lock, since it can change the directory hierarchy.
+.SH MODULES
+This parameter is in the following module:
+.EX
+.B mdt.*.enable_parallel_rename_crossdir
+.EE
+.SH EXAMPLES
+Disable parallel cross-directory rename of files on the
+.B testfs
+filesystem:
+.EX
+.RB "mgs# " "lctl set_param -P mdt.testfs-*.enable_parallel_rename_crossdir=0"
+.EE
+.SH AVAILABILITY
+The
+.B enable_parallel_rename_crossdir
+parameter is part of the
+.BR lustre (7)
+filesystem package since release 2.16.0.
+.\" Added in commit v2_15_60-28-ge66dd92775
+.SH SEE ALSO
+.BR mdt.enable_parallel_rename_dir (4),
+.BR mdt.enable_parallel_rename_file (4),
+.BR mdt.enable_parallel_rename_remote (4),
+.BR mdt.rename_stats (4),
+.BR lustre (7),
+.BR lctl-set_param (8)

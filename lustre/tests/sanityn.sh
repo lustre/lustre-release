@@ -6207,6 +6207,297 @@ test_81d() {
 }
 run_test 81d "parallel rename file cross-dir on same MDT"
 
+# sum one mdt md_stats counter across all MDTs
+rename_stat_sum() {
+	local name=$1
+
+	do_nodes $(mdts_nodes) "$LCTL get_param -n mdt.*.md_stats" |
+		awk -v n="$name" '$1 == n { sum += $2 } END { print sum+0 }'
+}
+
+# build a $levels deep tree under $1, each level on a different MDT
+mk_deep_dne() {
+	local base=$1
+	local levels=$2
+	local start=$3
+	local path=$base
+	local i
+
+	for ((i = 0; i < levels; i++)); do
+		path=$path/l$i
+		$LFS mkdir -i $(((start + i) % MDSCOUNT)) $path ||
+			return 1
+	done
+	echo $path
+}
+
+test_81e() {
+	(( MDSCOUNT >= 2 )) || skip_env "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.17.58.65) )) ||
+		skip "Need MDS version at least 2.17.58.65"
+
+	local mdts=$(mdts_nodes)
+	local count=100
+	local par
+	local rem
+	local try
+	local ab
+	local param=enable_parallel_rename_remote
+	local old=$(do_facet mds1 \
+		"$LCTL get_param -n mdt.$FSNAME-MDT0000.$param")
+
+	stack_trap "do_nodes $mdts \
+		\"$LCTL set_param -n mdt.*.$param=$old\" > /dev/null"
+
+	test_mkdir $DIR1/$tdir || error "(0) mkdir failed"
+	$LFS mkdir -i 1 $DIR1/$tdir/src || error "(1) mkdir src failed"
+	$LFS mkdir -i 0 $DIR1/$tdir/tgt || error "(2) mkdir tgt failed"
+
+	# the rename is served by the target's MDT, so a source parent on
+	# another MDT is the remote case
+	for ab in 1 0; do
+		do_nodes $mdts "$LCTL set_param -n \
+			mdt.*.enable_parallel_rename_remote=$ab" > /dev/null
+		createmany -o $DIR1/$tdir/src/$tfile. $count ||
+			error "($ab.3) createmany failed"
+		do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear" \
+			> /dev/null
+
+		for ((i = 0; i < count; i++)); do
+			mrename $DIR1/$tdir/src/$tfile.$i \
+				$DIR1/$tdir/tgt/$tfile.$i > /dev/null ||
+				error "($ab.4) rename $i failed"
+		done
+
+		par=$(rename_stat_sum parallel_rename_file)
+		rem=$(rename_stat_sum parallel_rename_remote)
+		try=$(rename_stat_sum rename_trylocks)
+		echo "remote=$ab parallel_rename_file=$par" \
+			"parallel_rename_remote=$rem trylocks=$try"
+
+		if (( ab == 1 )); then
+			(( par == count )) ||
+				error "($ab.5) parallel $par != $count"
+			(( rem == count )) ||
+				error "($ab.5a) parallel remote $rem != $count"
+			(( try == 0 )) ||
+				error "($ab.6) took the BFL $try times"
+		else
+			(( par == 0 && rem == 0 )) ||
+				error "($ab.7) skipped the BFL $par/$rem times"
+		fi
+
+		unlinkmany $DIR1/$tdir/tgt/$tfile. $count ||
+			error "($ab.8) unlinkmany failed"
+	done
+}
+run_test 81e "enable_parallel_rename_remote gates BFL for remote parent"
+
+test_81f() {
+	(( MDSCOUNT >= 2 )) || skip_env "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.17.58.65) )) ||
+		skip "Need MDS version at least 2.17.58.65"
+
+	local mdts=$(mdts_nodes)
+	local count=100
+	local par
+	local rem
+	local try
+	local ab
+	local param=enable_parallel_rename_remote
+	local old=$(do_facet mds1 \
+		"$LCTL get_param -n mdt.$FSNAME-MDT0000.$param")
+
+	stack_trap "do_nodes $mdts \
+		\"$LCTL set_param -n mdt.*.$param=$old\" > /dev/null"
+
+	test_mkdir $DIR1/$tdir || error "(0) mkdir failed"
+	$LFS mkdir -i 0 $DIR1/$tdir/a || error "(1) mkdir a failed"
+	$LFS mkdir -i 1 $DIR1/$tdir/b || error "(2) mkdir b failed"
+	$LFS mkdir -i 1 $DIR1/$tdir/c || error "(3) mkdir c failed"
+
+	# a file keeps its birth MDT across a cross-MDT rename, so after the
+	# move into b only its object is remote, not its parent
+	for ab in 1 0; do
+		do_nodes $mdts "$LCTL set_param -n \
+			mdt.*.enable_parallel_rename_remote=$ab" > /dev/null
+		createmany -o $DIR1/$tdir/a/$tfile. $count ||
+			error "($ab.4) createmany failed"
+		for ((i = 0; i < count; i++)); do
+			mrename $DIR1/$tdir/a/$tfile.$i \
+				$DIR1/$tdir/b/$tfile.$i > /dev/null ||
+				error "($ab.5) seed rename $i failed"
+		done
+
+		do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear" \
+			> /dev/null
+		for ((i = 0; i < count; i++)); do
+			mrename $DIR1/$tdir/b/$tfile.$i \
+				$DIR1/$tdir/c/$tfile.$i > /dev/null ||
+				error "($ab.6) rename $i failed"
+		done
+
+		par=$(rename_stat_sum parallel_rename_file)
+		rem=$(rename_stat_sum parallel_rename_remote)
+		try=$(rename_stat_sum rename_trylocks)
+		echo "remote=$ab parallel_rename_file=$par" \
+			"parallel_rename_remote=$rem trylocks=$try"
+
+		if (( ab == 1 )); then
+			(( par == count )) ||
+				error "($ab.7) parallel $par != $count"
+			(( rem == count )) ||
+				error "($ab.7a) parallel remote $rem != $count"
+			(( try == 0 )) ||
+				error "($ab.8) took the BFL $try times"
+		else
+			(( par == 0 && rem == 0 )) ||
+				error "($ab.9) skipped the BFL $par/$rem times"
+		fi
+
+		unlinkmany $DIR1/$tdir/c/$tfile. $count ||
+			error "($ab.10) unlinkmany failed"
+	done
+}
+run_test 81f "remote source object still honours the BFL tunable"
+
+test_81g() {
+	(( MDSCOUNT >= 2 )) || skip_env "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.17.58.65) )) ||
+		skip "Need MDS version at least 2.17.58.65"
+
+	local mdts=$(mdts_nodes)
+	local ren
+	local par
+	local src
+
+	test_mkdir $DIR1/$tdir || error "(0) mkdir failed"
+	$LFS mkdir -i 0 $DIR1/$tdir/tgt || error "(1) mkdir tgt failed"
+	$LFS mkdir -i 0 $DIR1/$tdir/src0 || error "(2) mkdir src0 failed"
+	$LFS mkdir -i 1 $DIR1/$tdir/src1 || error "(3) mkdir src1 failed"
+	$LFS mkdir -i 0 $DIR1/$tdir/src0/d || error "(4) mkdir src0/d failed"
+	$LFS mkdir -i 1 $DIR1/$tdir/src1/d || error "(5) mkdir src1/d failed"
+
+	# a client only sends a file mode for a directory if it races with
+	# a replacement of the source name, so make the MDT see one
+	#define OBD_FAIL_MDS_RENAME_FILE_HINT	0x2404
+	do_facet mds1 $LCTL set_param fail_loc=0x2404
+	stack_trap "do_facet mds1 $LCTL set_param fail_loc=0"
+
+	for src in src0 src1; do
+		do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear" \
+			> /dev/null
+		mrename $DIR1/$tdir/$src/d $DIR1/$tdir/tgt/$src > /dev/null ||
+			error "(6) rename $src/d failed"
+
+		ren=$(rename_stat_sum crossdir_rename)
+		par=$(( $(rename_stat_sum parallel_rename_file) +
+			$(rename_stat_sum parallel_rename_dir) ))
+		echo "$src/d: crossdir_rename=$ren parallel=$par"
+		(( ren == 1 )) || error "(7) $src/d: crossdir_rename $ren != 1"
+		(( par == 0 )) || error "(8) $src/d: skipped the BFL"
+	done
+
+	[[ -d $DIR2/$tdir/tgt/src0 && -d $DIR2/$tdir/tgt/src1 ]] ||
+		error "(9) renamed directories missing"
+}
+run_test 81g "directory rename sent with a file mode takes the BFL"
+
+test_81h() {
+	(( MDSCOUNT >= 2 )) || skip_env "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.17.58.65) )) ||
+		skip "Need MDS version at least 2.17.58.65"
+
+	local workers=${RENAME_WORKERS:-8}
+	local secs=${RENAME_SECS:-20}
+
+	[[ "$SLOW" == "yes" ]] && secs=${RENAME_SECS:-60}
+	local shared=$DIR1/$tdir/shared_dir
+	local pids=""
+	local w
+	local p
+	local leaf
+
+	stack_trap "rm -rf $DIR1/$tdir"
+
+	test_mkdir $DIR1/$tdir || error "(0) mkdir failed"
+	mkdir_on_mdt0 $shared || error "(1) mkdir shared_dir failed"
+
+	# one tree per worker, a different MDT at every level, renames
+	# running between trees at maximum depth
+	for ((w = 0; w < workers; w++)); do
+		$LFS mkdir -i $((w % MDSCOUNT)) $shared/uuid$w ||
+			error "(2) mkdir uuid$w failed"
+		leaf=$(mk_deep_dne $shared/uuid$w 4 $((w + 1))) ||
+			error "(3) mk_deep_dne uuid$w failed"
+		mkdir $leaf/from || error "(4) mkdir from failed"
+		mkdir $leaf/to || error "(5) mkdir to failed"
+	done
+
+	for ((w = 0; w < workers; w++)); do
+		(
+			local peer=$(((w + 1) % workers))
+			local mine=$shared/uuid$w/l0/l1/l2/l3
+			local other=$shared/uuid$peer/l0/l1/l2/l3
+			local n=0
+			local bad=0
+			local end=$((SECONDS + secs))
+
+			while ((SECONDS < end)); do
+				touch $mine/from/f.$n 2> /dev/null || break
+				mrename $mine/from/f.$n $other/to/w$w.$n \
+					2> /dev/null || bad=$((bad + 1))
+				# and back into a third directory
+				mrename $other/to/w$w.$n $mine/to/f.$n \
+					2> /dev/null || bad=$((bad + 1))
+				rm -f $mine/to/f.$n $other/to/w$w.$n 2>/dev/null
+				n=$((n + 1))
+			done
+			echo "worker $w rounds=$n failures=$bad"
+			(( n > 0 && bad == 0 ))
+		) &
+		pids="$pids $!"
+	done
+
+	for p in $pids; do
+		wait $p || error "(6) worker failed a rename"
+	done
+
+	for ((w = 0; w < workers; w++)); do
+		stat $DIR2/$tdir/shared_dir/uuid$w/l0/l1/l2/l3/to \
+			> /dev/null || error "(7) uuid$w tree damaged"
+	done
+	return 0
+}
+run_test 81h "rename files back and forth between deep DNE trees"
+
+test_81i() {
+	(( MDSCOUNT >= 2 )) || skip_env "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.17.58.65) )) ||
+		skip "Need MDS version at least 2.17.58.65"
+
+	local mdts=$(mdts_nodes)
+	local par
+	local try
+
+	test_mkdir $DIR1/$tdir || error "(0) mkdir failed"
+	$LFS mkdir -i 0 $DIR1/$tdir/p || error "(1) mkdir p failed"
+	$LFS mkdir -i 1 $DIR1/$tdir/p/d || error "(2) mkdir d failed"
+
+	# a same-directory rename cannot change the hierarchy, so a remote
+	# source object must not pull in the BFL
+	do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear" > /dev/null
+	mrename $DIR1/$tdir/p/d $DIR1/$tdir/p/e > /dev/null ||
+		error "(3) rename failed"
+
+	par=$(rename_stat_sum parallel_rename_dir)
+	try=$(rename_stat_sum rename_trylocks)
+	echo "samedir remote dir: parallel_rename_dir=$par trylocks=$try"
+	(( par == 1 )) || error "(4) not parallel: $par != 1"
+	(( try == 0 )) || error "(5) took the BFL $try times"
+}
+run_test 81i "samedir rename of a remote directory stays parallel"
+
 cleanup_81j() {
 	local damaged=$1
 

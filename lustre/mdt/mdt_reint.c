@@ -1751,7 +1751,7 @@ static int mdt_rename_source_lock(struct mdt_thread_info *info,
 	if (unlikely(rc && !(ibits & MDS_INODELOCK_LOOKUP)))
 		mdt_object_unlock(info, NULL, lh_lookup, rc);
 
-	return 0;
+	return rc;
 }
 
 static void mdt_rename_source_unlock(struct mdt_thread_info *info,
@@ -2812,6 +2812,18 @@ static int mdt_lock_two_dirs(struct mdt_thread_info *info,
 	return rc;
 }
 
+static bool mdt_rename_need_bfl(struct mdt_device *mdt, bool isdir,
+				bool remote, bool samedir)
+{
+	if (isdir)
+		return remote || !samedir ||
+		       !mdt->mdt_enable_parallel_rename_dir;
+
+	return !mdt->mdt_enable_parallel_rename_file ||
+	       (!samedir && !mdt->mdt_enable_parallel_rename_crossdir) ||
+	       (remote && !mdt->mdt_enable_parallel_rename_remote);
+}
+
 /*
  * VBR: rename versions in reply: 0 - srcdir parent; 1 - tgtdir parent;
  * 2 - srcdir child; 3 - tgtdir child.
@@ -2841,6 +2853,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	ktime_t kstart = ktime_get();
 	enum mdt_stat_idx msi = 0;
 	bool remote;
+	bool old_isdir;
 	bool need_bfl = false;
 	bool preempt_done = false;
 	bool got_bfl = false;
@@ -2857,6 +2870,11 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	if (!fid_is_md_operative(rr->rr_fid1) ||
 	    !fid_is_md_operative(rr->rr_fid2))
 		RETURN(-EPERM);
+
+	/* only a hint: the client sends the target's mode when it exists */
+	old_isdir = S_ISDIR(ma->ma_attr.la_mode);
+	if (CFS_FAIL_CHECK(OBD_FAIL_MDS_RENAME_FILE_HINT))
+		old_isdir = false;
 
 lock_bfl:
 	msrcdir = mtgtdir = NULL;
@@ -2922,14 +2940,8 @@ lock_bfl:
 		if (!mdt->mdt_enable_remote_rename && remote)
 			GOTO(out_put_tgtdir, rc = -EXDEV);
 
-		need_bfl |= remote ||
-			    (S_ISDIR(ma->ma_attr.la_mode) &&
-			     (msrcdir != mtgtdir ||
-			      !mdt->mdt_enable_parallel_rename_dir)) ||
-			    (!S_ISDIR(ma->ma_attr.la_mode) &&
-			     (!mdt->mdt_enable_parallel_rename_file ||
-			      (msrcdir != mtgtdir &&
-			       !mdt->mdt_enable_parallel_rename_crossdir)));
+		need_bfl |= mdt_rename_need_bfl(mdt, old_isdir, remote,
+						msrcdir == mtgtdir);
 		if (need_bfl && preempt_done) {
 			rc = mdt_rename_lock(info, rename_lh, false);
 			if (rc != 0) {
@@ -2940,7 +2952,7 @@ lock_bfl:
 			got_bfl = true;
 			msi = 0;
 		} else {
-			if (S_ISDIR(ma->ma_attr.la_mode))
+			if (old_isdir)
 				msi = LPROC_MDT_RENAME_PAR_DIR;
 			else
 				msi = LPROC_MDT_RENAME_PAR_FILE;
@@ -2949,7 +2961,7 @@ lock_bfl:
 			       "%s: %s %s parallel rename "DFID"/"DNAME"\n",
 			       mdt_obd_name(mdt),
 			       msrcdir == mtgtdir ? "samedir" : "crossdir",
-			       S_ISDIR(ma->ma_attr.la_mode) ? "dir" : "file",
+			       old_isdir ? "dir" : "file",
 			       PFID(rr->rr_fid1),
 			       encode_fn_luname(&rr->rr_name));
 		}
@@ -3026,10 +3038,16 @@ lock_bfl:
 	if (mdt_object_remote(mold) && !mdt->mdt_enable_remote_rename)
 		GOTO(out_put_old, rc = -EXDEV);
 
-	/* we used msrcdir as a hint to take BFL, but it may be wrong */
+	/* msrcdir and the client's mode were only hints to take BFL. */
+	old_isdir = S_ISDIR(lu_object_attr(&mold->mot_obj));
 	need_bfl |= !req_is_replay(req) &&
-		    !S_ISDIR(ma->ma_attr.la_mode) &&
-		    mdt_object_remote(mold);
+		    mdt_rename_need_bfl(mdt, old_isdir,
+					remote || (!old_isdir &&
+						   mdt_object_remote(mold)),
+					msrcdir == mtgtdir);
+	if (msi)
+		msi = old_isdir ? LPROC_MDT_RENAME_PAR_DIR :
+				  LPROC_MDT_RENAME_PAR_FILE;
 
 	/* Check if @mtgtdir is subdir of @mold, before locking child
 	 * to avoid reverse locking.
@@ -3261,6 +3279,7 @@ lock_bfl:
 		}
 		mdt_rename_counter_tally(info, info->mti_mdt, req,
 					 msrcdir, mtgtdir, msi,
+					 remote || mdt_object_remote(mold),
 					 ktime_us_delta(ktime_get(), kstart));
 	}
 

@@ -1,0 +1,85 @@
+.TH MDT.RENAME_STATS 4 2026-10-06 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+mdt.rename_stats \- parent directory sizes of renames on an MDT
+.SH SYNOPSIS
+.SY
+.RI "lctl get_param mdt." FSNAME *.rename_stats
+.SY
+.RI "lctl set_param mdt." FSNAME *.rename_stats=clear
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.BR 644 | -rw-r--r--
+.TP
+.B Scope
+.br
+Per-MDT device.
+.TP
+.B Config
+.br
+Always present for MDT devices.
+.SH DESCRIPTION
+The
+.B rename_stats
+parameter reports, for each successful rename handled by this MDT, a
+log2-bucketed histogram of the size of the parent directories involved.
+Writing any value to the parameter clears it.
+.PP
+Output is YAML. After the
+.BR snapshot_time ", " start_time " and " elapsed_time
+of the sampling interval come up to three histograms:
+.B same_dir
+for renames within one directory,
+and
+.BR crossdir_src " and " crossdir_tgt
+for the source and target parents of renames between two directories.
+A histogram with no samples is omitted. Each entry reports the bucket
+upper bound in bytes, KB or MB, the number of renames in that bucket
+.RB ( sample ),
+that bucket's percentage of the total
+.RB ( pct ),
+and the cumulative percentage
+.RB ( cum_pct ).
+.PP
+The
+.B md_stats
+parameter of the MDT counts renames with their latency:
+.B rename
+counts every successful rename,
+.BR samedir_rename " and " crossdir_rename
+split them as above,
+.BR parallel_rename_file " and " parallel_rename_dir
+count those that ran without the filesystem-wide rename lock,
+.B parallel_rename_remote
+those of them whose source parent or source file is on another MDT, and
+.B rename_trylocks
+those that took it without waiting.
+.SH MODULES
+This parameter is in the following module:
+.EX
+.B mdt.*.rename_stats
+.EE
+.SH EXAMPLES
+Show and then clear the rename statistics of the
+.B testfs
+filesystem's first MDT:
+.EX
+.RB "mds# " "lctl get_param mdt.testfs-MDT0000.rename_stats"
+.RB "mds# " "lctl set_param mdt.testfs-MDT0000.rename_stats=clear"
+.EE
+.SH AVAILABILITY
+The
+.B rename_stats
+parameter is part of the
+.BR lustre (7)
+filesystem package since release 2.2.0.
+.\" Added in commit v2_1_53_0-35-g7c8ebf7b98
+.SH SEE ALSO
+.BR mdt.enable_parallel_rename_crossdir (4),
+.BR mdt.enable_parallel_rename_dir (4),
+.BR mdt.enable_parallel_rename_file (4),
+.BR mdt.enable_parallel_rename_remote (4),
+.BR lustre (7),
+.BR lctl-get_param (8),
+.BR lctl-set_param (8)

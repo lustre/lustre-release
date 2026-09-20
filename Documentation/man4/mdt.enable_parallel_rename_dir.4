@@ -1,0 +1,74 @@
+.TH MDT.ENABLE_PARALLEL_RENAME_DIR 4 2026-10-06 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+mdt.enable_parallel_rename_dir \- parallel same-directory rename of directories
+.SH SYNOPSIS
+.SY
+.RI "lctl get_param mdt." FSNAME *.enable_parallel_rename_dir
+.SY
+.RI "lctl set_param mdt." FSNAME *.enable_parallel_rename_dir= ENABLE
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.BR 644 | -rw-r--r--
+.TP
+.B Scope
+.br
+Per-MDT device.
+.TP
+.B Config
+.br
+Always present for MDT devices.
+.TP
+.B Default
+.RB enable_parallel_rename_dir= 1
+.SH DESCRIPTION
+The boolean
+.B enable_parallel_rename_dir
+parameter controls whether renaming a directory within its parent
+directory may proceed without the filesystem-wide rename lock.
+If
+.I ENABLE
+is
+.B 1
+(or aliases
+.BR on " or " true ),
+these renames are permitted to run in parallel. If it is
+.B 0
+or
+.B off
+they take the rename lock.
+.PP
+A directory renamed between two directories always takes the rename
+lock, since it can change the directory hierarchy, and so does one
+whose parent is on another MDT. Renames of non-directories are governed by
+.BR enable_parallel_rename_file ,
+.B enable_parallel_rename_crossdir
+and
+.BR enable_parallel_rename_remote .
+.SH MODULES
+This parameter is in the following module:
+.EX
+.B mdt.*.enable_parallel_rename_dir
+.EE
+.SH EXAMPLES
+Disable parallel rename of directories on the
+.B testfs
+filesystem:
+.EX
+.RB "mgs# " "lctl set_param -P mdt.testfs-*.enable_parallel_rename_dir=0"
+.EE
+.SH AVAILABILITY
+The
+.B enable_parallel_rename_dir
+parameter is part of the
+.BR lustre (7)
+filesystem package since release 2.16.0.
+.\" Added in commit v2_15_50-213-gf238540c87
+.SH SEE ALSO
+.BR mdt.enable_parallel_rename_crossdir (4),
+.BR mdt.enable_parallel_rename_file (4),
+.BR mdt.enable_parallel_rename_remote (4),
+.BR mdt.rename_stats (4),
+.BR lustre (7),
+.BR lctl-set_param (8)

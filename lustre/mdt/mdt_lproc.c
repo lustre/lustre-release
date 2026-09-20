@@ -145,7 +145,8 @@ void mdt_rename_counter_tally(struct mdt_thread_info *info,
 			      struct mdt_device *mdt,
 			      struct ptlrpc_request *req,
 			      struct mdt_object *src, struct mdt_object *tgt,
-			      enum mdt_stat_idx msi, s64 ktime_delta)
+			      enum mdt_stat_idx msi, bool remote,
+			      s64 ktime_delta)
 {
 	struct md_attr *ma = &info->mti_attr;
 	struct rename_stats *rstats = &mdt->mdt_rename_stats;
@@ -164,6 +165,8 @@ void mdt_rename_counter_tally(struct mdt_thread_info *info,
 
 	if (msi) /* parallel rename type */
 		mdt_counter_incr(req, msi, ktime_delta);
+	if (msi == LPROC_MDT_RENAME_PAR_FILE && remote)
+		mdt_counter_incr(req, LPROC_MDT_RENAME_PAR_REMOTE, ktime_delta);
 
 	if (src == tgt) {
 		mdt_counter_incr(req, LPROC_MDT_RENAME_SAMEDIR, ktime_delta);
@@ -759,6 +762,7 @@ MDT_BOOL_RW_ATTR(enable_remote_rename);
 MDT_BOOL_RW_ATTR(enable_parallel_rename_dir);
 MDT_BOOL_RW_ATTR(enable_parallel_rename_file);
 MDT_BOOL_RW_ATTR(enable_parallel_rename_crossdir);
+MDT_BOOL_RW_ATTR(enable_parallel_rename_remote);
 MDT_BOOL_RW_ATTR(enable_striped_dir);
 MDT_BOOL_RW_ATTR(enable_dir_migration);
 MDT_BOOL_RW_ATTR(enable_dir_restripe);
@@ -1411,6 +1415,7 @@ static struct attribute *mdt_attrs[] = {
 	&lustre_attr_enable_parallel_rename_dir.attr,
 	&lustre_attr_enable_parallel_rename_file.attr,
 	&lustre_attr_enable_parallel_rename_crossdir.attr,
+	&lustre_attr_enable_parallel_rename_remote.attr,
 	&lustre_attr_enable_pin_gid.attr,
 	&lustre_attr_enable_remote_dir.attr,
 	&lustre_attr_enable_remote_dir_gid.attr,
@@ -1578,6 +1583,7 @@ static const char * const mdt_stats[] = {
 	[LPROC_MDT_RENAME_SAMEDIR]	= "samedir_rename",
 	[LPROC_MDT_RENAME_PAR_FILE]	= "parallel_rename_file",
 	[LPROC_MDT_RENAME_PAR_DIR]	= "parallel_rename_dir",
+	[LPROC_MDT_RENAME_PAR_REMOTE]	= "parallel_rename_remote",
 	[LPROC_MDT_RENAME_CROSSDIR]	= "crossdir_rename",
 	[LPROC_MDT_RENAME_TRYLOCK]	= "rename_trylocks",
 	[LPROC_MDT_IO_READ_BYTES]	= "read_bytes",

@@ -279,6 +279,7 @@ struct mdt_device {
 				   mdt_enable_parallel_rename_dir:1,
 				   mdt_enable_parallel_rename_file:1,
 				   mdt_enable_parallel_rename_crossdir:1,
+				   mdt_enable_parallel_rename_remote:1,
 				   mdt_enable_remote_dir:1,
 				   mdt_enable_remote_rename:1,
 				   mdt_enable_rename_trylock:1,
@@ -1345,6 +1346,7 @@ enum mdt_stat_idx {
 	LPROC_MDT_RENAME_SAMEDIR,
 	LPROC_MDT_RENAME_PAR_FILE,
 	LPROC_MDT_RENAME_PAR_DIR,
+	LPROC_MDT_RENAME_PAR_REMOTE,
 	LPROC_MDT_RENAME_CROSSDIR,
 	LPROC_MDT_RENAME_TRYLOCK,
 	LPROC_MDT_IO_READ,
@@ -1371,7 +1373,7 @@ void mdt_rename_counter_tally(struct mdt_thread_info *info,
 			      struct mdt_device *mdt,
 			      struct ptlrpc_request *req,
 			      struct mdt_object *src, struct mdt_object *tgt,
-			      enum mdt_stat_idx msi, s64 count);
+			      enum mdt_stat_idx msi, bool remote, s64 count);
 
 static inline struct obd_device *mdt2obd_dev(const struct mdt_device *mdt)
 {
