@@ -1618,7 +1618,7 @@ kefalnd_handle_getr_ack(struct kefa_ni *efa_ni,
 	return 0;
 }
 
-static void
+static int
 kefalnd_handle_lnet_request_msg(struct kefa_ni *efa_ni, struct kefa_rx *rx)
 {
 	struct kefa_msg *msg = rx->msg;
@@ -1649,6 +1649,8 @@ kefalnd_handle_lnet_request_msg(struct kefa_ni *efa_ni, struct kefa_rx *rx)
 	rc = lnet_parse(efa_ni->lnet_ni, &hdr, &hdr.src_nid, rx, rdma_req);
 	if (rc < 0)
 		EFA_DEV_ERR(efa_ni->efa_dev, "error parsing lnet msg\n");
+
+	return rc;
 }
 
 static void
@@ -1670,7 +1672,7 @@ kefalnd_handle_rx(struct kefa_ni *efa_ni, struct kefa_rx *rx)
 	case EFALND_MSG_GETR_REQ:
 	case EFALND_MSG_PUTR_REQ:
 	case EFALND_MSG_IMMEDIATE:
-		kefalnd_handle_lnet_request_msg(efa_ni, rx);
+		rc = kefalnd_handle_lnet_request_msg(efa_ni, rx);
 		break;
 
 	case EFALND_MSG_GETR_ACK:
