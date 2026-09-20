@@ -1860,7 +1860,9 @@ kefalnd_rx_complete(struct kefa_ni *efa_ni, struct ib_wc *wc)
 		/* Reaching here means FW or LND did something bad */
 		CERROR("cpu[%u] received bad RX handle with status[%u] nob[%u]",
 		       smp_processor_id(), wc->status, nob);
-		return;
+
+		rx->rx_nob = 0;
+		goto failed;
 	}
 
 	if (wc->status != IB_WC_SUCCESS) {
@@ -1868,6 +1870,7 @@ kefalnd_rx_complete(struct kefa_ni *efa_ni, struct ib_wc *wc)
 			    "QP[%u] received RX completion with err[%u]\n",
 			    wc->qp->qp_num, wc->status);
 
+		rx->rx_nob = 0;
 		goto failed;
 	}
 
@@ -1883,6 +1886,7 @@ kefalnd_rx_complete(struct kefa_ni *efa_ni, struct ib_wc *wc)
 
 failed:
 	kefalnd_free_rx(rx);
+	kefalnd_refill_rx(rx->qp, 1);
 }
 
 static void
