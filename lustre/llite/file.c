@@ -1111,6 +1111,14 @@ int ll_file_open(struct inode *inode, struct file *file)
 				ll_release_openhandle(file_dentry(file), it);
 			GOTO(out_nofiledata, rc);
 		}
+#ifdef FMODE_CAN_ODIRECT
+		/* Lustre implements O_DIRECT itself. ->do_dentry_open() cannot
+		 * tell from ->a_ops->direct_IO, as the mapping may carry the
+		 * ->a_ops of the PCC backend once the file has been mmapped,
+		 * until it is detached.
+		 */
+		file->f_mode |= FMODE_CAN_ODIRECT;
+#endif
 	}
 
 	lfd = ll_file_data_get();
