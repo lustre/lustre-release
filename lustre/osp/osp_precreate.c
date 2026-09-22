@@ -20,7 +20,7 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/kthread.h>
-#include <lustre_compat/linux/timer.h>
+#include <linux/timer.h>
 
 #include <lustre_obdo.h>
 
@@ -56,11 +56,10 @@ static inline int osp_statfs_need_update(struct osp_device *d)
  *
  * each time OSP gets connected to OST, we should start from precreation cleanup
  */
-static void osp_statfs_timer_cb(cfs_timer_cb_arg_t data)
+static void osp_statfs_timer_cb(struct timer_list *data)
 {
-	struct osp_device *d = cfs_from_timer(d, data, opd_statfs_timer);
+	struct osp_device *d = timer_container_of(d, data, opd_statfs_timer);
 
-	LASSERT(d);
 	/* invalidate statfs data so osp_precreate_thread() can refresh */
 	d->opd_statfs_fresh_till = ktime_sub_ns(ktime_get(), NSEC_PER_SEC);
 	if (d->opd_pre_task)
@@ -1823,8 +1822,7 @@ int osp_init_statfs(struct osp_device *d)
 	CDEBUG(D_OTHER, "current %lldns, fresh till %lldns\n",
 	       ktime_get_ns(),
 	       ktime_to_ns(d->opd_statfs_fresh_till));
-	cfs_timer_setup(&d->opd_statfs_timer, osp_statfs_timer_cb,
-			(unsigned long)d, 0);
+	timer_setup(&d->opd_statfs_timer, osp_statfs_timer_cb, 0);
 
 	if (d->opd_storage->dd_rdonly)
 		RETURN(0);

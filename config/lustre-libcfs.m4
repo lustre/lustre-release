@@ -853,6 +853,35 @@ AC_DEFUN([LIBCFS_LINUX_BIO_INTEGRITY_HEADER], [
 	])
 ]) # LIBCFS_LINUX_BIO_INTEGRITY_HEADER
 
+#
+# LIBCFS_TIMER_CONTAINER_OF
+#
+# Linux commit v6.15-13744-g41cb08555c41
+#   treewide, timers: Rename from_timer() to timer_container_of()
+#
+
+AC_DEFUN([LIBCFS_SRC_TIMER_CONTAINER_OF],[
+	LB2_LINUX_TEST_SRC([timer_container_of], [
+		#include <linux/workqueue.h>
+		#include <linux/timer.h>
+
+		struct timer_list *t = NULL;
+	],[
+		struct delayed_work *dwork = timer_container_of(dwork, t, timer);
+	],[-Werror])
+])
+AC_DEFUN([LIBCFS_TIMER_CONTAINER_OF],[
+	LB2_MSG_LINUX_TEST_RESULT([if timer_container_of() is available],
+	[timer_container_of], [
+		AC_DEFINE(HAVE_TIMER_CONTAINER_OF, 1,
+			[timer_container_of() is available])
+	],[
+		AC_DEFINE([timer_container_of(var, callback_timer, timer_fieldname)],
+			  [container_of(callback_timer, typeof(*var), timer_fieldname)],
+			  [timer_container_of() is not available])
+	])
+]) # LIBCFS_TIMER_CONTAINER_OF
+
 dnl #
 dnl # Generate and compile all of the kernel API test cases to determine
 dnl # which interfaces are available.  By invoking the kernel build system
@@ -906,6 +935,8 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	LIBCFS_SRC_TIMER_DELETE
 	# 6.11
 	LIBCFS_SRC_BLK_INTEGRITY_NOVERIFY
+	# 6.15
+	LIBCFS_SRC_TIMER_CONTAINER_OF
 ])
 
 dnl #
@@ -959,6 +990,8 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	LIBCFS_TIMER_DELETE
 	# 6.11
 	LIBCFS_BLK_INTEGRITY_NOVERIFY
+	# 6.15
+	LIBCFS_TIMER_CONTAINER_OF
 ])
 
 #

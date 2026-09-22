@@ -523,9 +523,10 @@ static void kfilnd_tn_timeout_work(struct work_struct *work)
 	kfilnd_tn_event_handler(tn, TN_EVENT_TIMEOUT, 0);
 }
 
-static void kfilnd_tn_timeout(cfs_timer_cb_arg_t data)
+static void kfilnd_tn_timeout(struct timer_list *data)
 {
-	struct kfilnd_transaction *tn = cfs_from_timer(tn, data, timeout_timer);
+	struct kfilnd_transaction *tn = timer_container_of(tn, data,
+							   timeout_timer);
 
 	queue_work(kfilnd_wq, &tn->timeout_work);
 }
@@ -544,8 +545,7 @@ static void kfilnd_tn_timeout_enable(struct kfilnd_transaction *tn)
 	if (CFS_FAIL_CHECK(CFS_KFI_FAIL_BULK_TIMEOUT))
 		expires = jiffies;
 
-	cfs_timer_setup(&tn->timeout_timer, kfilnd_tn_timeout,
-			(unsigned long)tn, 0);
+	timer_setup(&tn->timeout_timer, kfilnd_tn_timeout, 0);
 	mod_timer(&tn->timeout_timer, expires);
 }
 

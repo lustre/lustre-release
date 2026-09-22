@@ -26,7 +26,7 @@
 #include <linux/key-type.h>
 #include <linux/mutex.h>
 #include <linux/list.h>
-#include <lustre_compat/linux/timer.h>
+#include <linux/timer.h>
 
 #include <obd.h>
 #include <obd_class.h>
@@ -116,10 +116,10 @@ static inline void key_invalidate_unlink_locked(struct key *key)
 	}
 }
 
-static void ctx_upcall_timeout_kr(cfs_timer_cb_arg_t data)
+static void ctx_upcall_timeout_kr(struct timer_list *data)
 {
-	struct gss_cli_ctx_keyring *gctx_kr = cfs_from_timer(gctx_kr,
-							     data, gck_timer);
+	struct gss_cli_ctx_keyring *gctx_kr = timer_container_of(gctx_kr, data,
+								 gck_timer);
 	struct ptlrpc_cli_ctx *ctx = &(gctx_kr->gck_base.gc_base);
 	struct obd_import *imp = ctx->cc_sec->ps_import;
 
@@ -142,8 +142,7 @@ static void ctx_start_timer_kr(struct ptlrpc_cli_ctx *ctx, time64_t timeout)
 
 	CDEBUG(D_SEC, "ctx %p: start timer %llds\n", ctx, timeout);
 
-	cfs_timer_setup(timer, ctx_upcall_timeout_kr,
-			(unsigned long)gctx_kr, 0);
+	timer_setup(timer, ctx_upcall_timeout_kr, 0);
 	timer->expires = cfs_time_seconds(timeout) + jiffies;
 	add_timer(timer);
 }
@@ -173,7 +172,7 @@ struct ptlrpc_cli_ctx *ctx_create_kr(struct ptlrpc_sec *sec,
 	if (gctx_kr == NULL)
 		return NULL;
 
-	cfs_timer_setup(&gctx_kr->gck_timer, NULL, 0, 0);
+	timer_setup(&gctx_kr->gck_timer, NULL, 0);
 
 	ctx = &gctx_kr->gck_base.gc_base;
 

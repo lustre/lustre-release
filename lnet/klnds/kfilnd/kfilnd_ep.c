@@ -674,9 +674,9 @@ static void kfilnd_ep_replay_work(struct work_struct *work)
 	kfilnd_ep_flush_replay_queue(ep);
 }
 
-static void kfilnd_ep_replay_timer(cfs_timer_cb_arg_t data)
+static void kfilnd_ep_replay_timer(struct timer_list *data)
 {
-	struct kfilnd_ep *ep = cfs_from_timer(ep, data, replay_timer);
+	struct kfilnd_ep *ep = timer_container_of(ep, data, replay_timer);
 	unsigned int cpu =
 		cpumask_first(*cfs_cpt_cpumask(lnet_cpt_table(), ep->end_cpt));
 
@@ -796,8 +796,7 @@ struct kfilnd_ep *kfilnd_ep_alloc(struct kfilnd_dev *dev,
 	INIT_LIST_HEAD(&ep->tn_replay);
 	INIT_LIST_HEAD(&ep->imm_buffer_replay);
 	spin_lock_init(&ep->replay_lock);
-	cfs_timer_setup(&ep->replay_timer, kfilnd_ep_replay_timer,
-			(unsigned long)ep, 0);
+	timer_setup(&ep->replay_timer, kfilnd_ep_replay_timer, 0);
 	INIT_WORK(&ep->replay_work, kfilnd_ep_replay_work);
 	atomic_set(&ep->replay_count, 0);
 	ida_init(&ep->keys);

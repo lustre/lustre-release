@@ -22,10 +22,6 @@
 #include <linux/time.h>
 #include <asm/div64.h>
 
-#ifndef timer_container_of
-#define timer_container_of(var, callback_timer, timer_fieldname)	\
-	container_of(callback_timer, typeof(*var), timer_fieldname)
-#endif
 #define cfs_timer_cb_arg_t struct timer_list *
 #define cfs_from_timer(var, callback_timer, timer_fieldname) \
 	timer_container_of(var, callback_timer, timer_fieldname)

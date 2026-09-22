@@ -50,7 +50,7 @@
 #include <linux/in.h>
 #include <linux/nmi.h>
 
-#include <lustre_compat/linux/timer.h>
+#include <linux/timer.h>
 #include <linux/libcfs/libcfs_fail.h>
 #include <linux/lnet/lib-lnet.h>
 
@@ -1822,8 +1822,8 @@ void kgnilnd_consume_rx(kgn_rx_t *rx);
 
 void kgnilnd_schedule_device(kgn_device_t *dev);
 void kgnilnd_device_callback(__u32 devid, __u64 arg);
-void kgnilnd_schedule_device_timer(cfs_timer_cb_arg_t data);
-void kgnilnd_schedule_device_timer_rd(cfs_timer_cb_arg_t data);
+void kgnilnd_schedule_device_timer(struct timer_list *data);
+void kgnilnd_schedule_device_timer_rd(struct timer_list *data);
 
 int kgnilnd_reaper(void *arg);
 int kgnilnd_scheduler(void *arg);

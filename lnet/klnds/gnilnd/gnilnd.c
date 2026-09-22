@@ -2241,15 +2241,12 @@ int kgnilnd_base_startup(void)
 		atomic_set(&dev->gnd_ndgrams, 0);
 		atomic_set(&dev->gnd_nwcdgrams, 0);
 		/* setup timer for RDMAQ processing */
-		cfs_timer_setup(&dev->gnd_rdmaq_timer,
-				kgnilnd_schedule_device_timer,
-				(unsigned long)dev, 0);
+		timer_setup(&dev->gnd_rdmaq_timer,
+			    kgnilnd_schedule_device_timer_rd, 0);
 
 		/* setup timer for mapping processing */
-		cfs_timer_setup(&dev->gnd_map_timer,
-				kgnilnd_schedule_device_timer,
-				(unsigned long)dev, 0);
-
+		timer_setup(&dev->gnd_map_timer,
+			    kgnilnd_schedule_device_timer, 0);
 	}
 
 	/* CQID 0 isn't allowed, set to MAX_MSG_ID - 1 to check for conflicts early */

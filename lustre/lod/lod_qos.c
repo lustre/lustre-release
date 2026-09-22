@@ -18,7 +18,7 @@
 
 #include <asm/div64.h>
 #include <linux/random.h>
-#include <lustre_compat/linux/timer.h>
+#include <linux/timer.h>
 
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_swab.h>
@@ -1850,7 +1850,7 @@ struct semaphore_timer {
 
 static void process_semaphore_timer(struct timer_list *t)
 {
-	struct semaphore_timer *timeout = cfs_from_timer(timeout, t, timer);
+	struct semaphore_timer *timeout = timer_container_of(timeout, t, timer);
 
 	send_sig(SIGKILL, timeout->task, 1);
 }
@@ -2069,7 +2069,7 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		 */
 		allow_signal(SIGKILL);
 		timer.task = current;
-		cfs_timer_setup(&timer.timer, process_semaphore_timer, 0, 0);
+		timer_setup(&timer.timer, process_semaphore_timer, 0);
 		mod_timer(&timer.timer, jiffies + cfs_time_seconds(2));
 		/* Do actual allocation, use write lock here. */
 		rc = down_write_killable(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);

@@ -74,16 +74,16 @@ kgnilnd_schedule_device(kgn_device_t *dev)
 		wake_up(&dev->gnd_waitq);
 }
 
-void kgnilnd_schedule_device_timer(cfs_timer_cb_arg_t data)
+void kgnilnd_schedule_device_timer(struct timer_list *data)
 {
-	kgn_device_t *dev = cfs_from_timer(dev, data, gnd_map_timer);
+	kgn_device_t *dev = timer_container_of(dev, data, gnd_map_timer);
 
 	kgnilnd_schedule_device(dev);
 }
 
-void kgnilnd_schedule_device_timer_rd(cfs_timer_cb_arg_t data)
+void kgnilnd_schedule_device_timer_rd(struct timer_list *data)
 {
-	kgn_device_t *dev = cfs_from_timer(dev, data, gnd_rdmaq_timer);
+	kgn_device_t *dev = timer_container_of(dev, data, gnd_rdmaq_timer);
 
 	kgnilnd_schedule_device(dev);
 }
@@ -2923,7 +2923,7 @@ kgnilnd_update_reaper_timeout(long timeout)
 }
 
 static void
-kgnilnd_reaper_poke_with_stick(cfs_timer_cb_arg_t arg)
+kgnilnd_reaper_poke_with_stick(struct timer_list *arg)
 {
 	wake_up(&kgnilnd_data.kgn_reaper_waitq);
 }
@@ -2966,8 +2966,7 @@ kgnilnd_reaper(void *arg)
 			prepare_to_wait(&kgnilnd_data.kgn_reaper_waitq, &wait,
 					TASK_INTERRUPTIBLE);
 			spin_unlock(&kgnilnd_data.kgn_reaper_lock);
-			cfs_timer_setup(&timer, kgnilnd_reaper_poke_with_stick,
-					next_check_time, 0);
+			timer_setup(&timer, kgnilnd_reaper_poke_with_stick, 0);
 			mod_timer(&timer, (long) jiffies + timeout);
 
 			/* check flag variables before committing */

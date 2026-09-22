@@ -2425,9 +2425,9 @@ struct kgnilnd_dgram_timer {
 };
 
 static void
-kgnilnd_dgram_poke_with_stick(cfs_timer_cb_arg_t arg)
+kgnilnd_dgram_poke_with_stick(struct timer_list *arg)
 {
-	struct kgnilnd_dgram_timer *t = cfs_from_timer(t, arg, timer);
+	struct kgnilnd_dgram_timer *t = timer_container_of(t, arg, timer);
 
 	wake_up(&t->dev->gnd_dgram_waitq);
 }
@@ -2510,9 +2510,7 @@ kgnilnd_dgram_mover(void *arg)
 
 		prepare_to_wait(&dev->gnd_dgram_waitq, &wait, TASK_INTERRUPTIBLE);
 
-		cfs_timer_setup(&timer.timer,
-				kgnilnd_dgram_poke_with_stick,
-				dev, 0);
+		timer_setup(&timer.timer, kgnilnd_dgram_poke_with_stick, 0);
 		timer.dev = dev;
 		mod_timer(&timer.timer, (long) jiffies + timeout);
 

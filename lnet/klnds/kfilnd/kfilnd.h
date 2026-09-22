@@ -30,7 +30,7 @@
 #include <linux/debugfs.h>
 #include <linux/seq_file.h>
 #include <linux/ktime.h>
-#include <lustre_compat/linux/timer.h>
+#include <linux/timer.h>
 
 #include <asm/uaccess.h>
 #include <asm/io.h>

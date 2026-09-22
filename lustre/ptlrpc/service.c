@@ -17,7 +17,7 @@
 #include <linux/fs_struct.h>
 #include <linux/kthread.h>
 #include <linux/ratelimit.h>
-#include <lustre_compat/linux/timer.h>
+#include <linux/timer.h>
 
 #include <obd_support.h>
 #include <obd_class.h>
@@ -465,11 +465,10 @@ static int ptlrpc_server_post_idle_rqbds(struct ptlrpc_service_part *svcpt)
 	return -1;
 }
 
-static void ptlrpc_at_timer(cfs_timer_cb_arg_t data)
+static void ptlrpc_at_timer(struct timer_list *data)
 {
-	struct ptlrpc_service_part *svcpt;
-
-	svcpt = cfs_from_timer(svcpt, data, scp_at_timer);
+	struct ptlrpc_service_part *svcpt = timer_container_of(svcpt, data,
+							       scp_at_timer);
 
 	svcpt->scp_at_check = 1;
 	svcpt->scp_at_checktime = ktime_get();
@@ -653,8 +652,7 @@ static int ptlrpc_service_part_init(struct ptlrpc_service *svc,
 	if (array->paa_reqs_count == NULL)
 		goto failed;
 
-	cfs_timer_setup(&svcpt->scp_at_timer, ptlrpc_at_timer,
-			(unsigned long)svcpt, 0);
+	timer_setup(&svcpt->scp_at_timer, ptlrpc_at_timer, 0);
 
 	/*
 	 * At SOW, service time should be quick; 10s seems generous. If client
@@ -1442,7 +1440,7 @@ static void ptlrpc_at_set_timer(struct ptlrpc_service_part *svcpt)
 	next = array->paa_deadline - ktime_get_real_seconds() -
 	       at_early_margin;
 	if (next <= 0) {
-		ptlrpc_at_timer(cfs_timer_cb_arg(svcpt, scp_at_timer));
+		ptlrpc_at_timer(&svcpt->scp_at_timer);
 	} else {
 		mod_timer(&svcpt->scp_at_timer,
 			  jiffies + nsecs_to_jiffies(next * NSEC_PER_SEC));
