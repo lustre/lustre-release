@@ -381,7 +381,7 @@ kefalnd_create_conn(struct kefa_ni *efa_ni, struct lnet_nid *peer_nid,
 	conn->hash_key = kefalnd_nid_to_key(&conn->remote_nid);
 	conn->local_nid = efa_ni->lnet_ni->ni_nid;
 	conn->remote_epoch = 0;
-	conn->last_use_time = ktime_get_seconds();
+	atomic64_set(&conn->last_use_time, ktime_get_seconds());
 	conn->state = KEFA_CONN_INACTIVE;
 
 	if (nid_same(&conn->local_nid, &conn->remote_nid))
@@ -544,7 +544,7 @@ __must_hold(&efa_ni->conn_lock)
 		if (conn->type != conn_type && conn->type != KEFA_CONN_TYPE_LB)
 			continue;
 
-		conn->last_use_time = ktime_get_seconds();
+		atomic64_set(&conn->last_use_time, ktime_get_seconds());
 		return conn;
 	}
 	return NULL;
@@ -1149,7 +1149,7 @@ kefalnd_scan_ni_conns(struct kefa_ni *efa_ni)
 	hash_for_each(efa_ni->conns, bkt, conn, ni_node) {
 		timeout = conn->type == KEFA_CONN_TYPE_INITIATOR ?
 						init_timeout : resp_timeout;
-		if (now > conn->last_use_time + timeout ||
+		if (now > atomic64_read(&conn->last_use_time) + timeout ||
 		    conn->state == KEFA_CONN_DEACTIVATING)
 			list_add_tail(&conn->cleanup_node, &candidates);
 	}
@@ -1166,7 +1166,7 @@ kefalnd_scan_ni_conns(struct kefa_ni *efa_ni)
 		timeout = conn->type == KEFA_CONN_TYPE_INITIATOR ?
 				init_timeout : resp_timeout;
 
-		if (now <= conn->last_use_time + timeout &&
+		if (now <= atomic64_read(&conn->last_use_time) + timeout &&
 		    conn->state != KEFA_CONN_DEACTIVATING) {
 			list_del_init(&conn->cleanup_node);
 			continue;
@@ -1251,7 +1251,7 @@ kefalnd_drain_ni_conns(struct kefa_ni *efa_ni)
 		timeout = conn->type == KEFA_CONN_TYPE_INITIATOR ?
 				init_timeout : resp_timeout;
 
-		if (now <= conn->last_use_time + timeout)
+		if (now <= atomic64_read(&conn->last_use_time) + timeout)
 			continue;
 
 		spin_lock_irqsave(&conn->lock, flags);
