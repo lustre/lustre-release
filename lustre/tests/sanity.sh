@@ -21202,6 +21202,29 @@ test_154j()
 }
 run_test 154j "fid2path for long path crossing MDT boundary"
 
+test_154k() {
+	(( $MDS1_VERSION >= $(version_code v2_17_58-63-g3e796ae) )) ||
+		skip "Need MDS with LU-15533 non-MD getattr fix"
+	[ "$mds1_FSTYPE" = "zfs" ] ||
+		skip "internal OI-scrub FID only exists on osd-zfs"
+
+	# LU-15533: getattr of the OI scrub tracker, an OSD-internal object
+	# with no MDD slice, must return an error instead of an MDS LBUG.
+	# The FLD maps all IGIF sequences to MDT0000, hence oid 0x1 only.
+	local fid="[0xffffffff:0x1:0x0]"
+
+	echo "getattr internal FID $fid"
+	stat "$MOUNT/.lustre/fid/$fid" &&
+		error "stat of internal FID $fid should fail"
+	$LFS fid2path $MOUNT "$fid" &&
+		error "fid2path of internal FID $fid should fail"
+
+	# the regression: the MDS must still be alive
+	stat $MOUNT > /dev/null ||
+		error "MDS unresponsive after internal-FID getattr (LBUG?)"
+}
+run_test 154k "getattr of OSD-internal FID must not crash the MDS"
+
 test_155_small_load() {
     local temp=$TMP/$tfile
     local file=$DIR/$tfile

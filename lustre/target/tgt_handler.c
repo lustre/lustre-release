@@ -78,7 +78,13 @@ static int tgt_mdt_body_unpack(struct tgt_session_info *tsi, __u32 flags)
 			     &tsi->tsi_tgt->lut_bottom->dd_lu_dev,
 			     &body->mbo_fid1, NULL);
 	if (!IS_ERR(obj)) {
-		if ((flags & HAS_BODY) && !lu_object_exists(obj)) {
+		/*
+		 * Reject a non-MD object regardless of HAS_BODY: any handler
+		 * whose format carries an MDT_BODY can reach
+		 * mdt_obj(tsi_corpus) via tsi2mdt_info() (e.g. MDS_RMFID).
+		 */
+		if (!lu_object_is_md(obj) ||
+		    ((flags & HAS_BODY) && !lu_object_exists(obj))) {
 			lu_object_put(tsi->tsi_env, obj);
 			rc = -ENOENT;
 		} else {

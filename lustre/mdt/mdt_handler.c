@@ -3808,10 +3808,18 @@ struct mdt_object *mdt_object_find(const struct lu_env *env,
 	CDEBUG(D_INFO, "Find object for "DFID"\n", PFID(f));
 	o = lu_object_find(env, &d->mdt_lu_dev, f, NULL);
 	if (unlikely(IS_ERR(o)))
-		m = (struct mdt_object *)o;
-	else
-		m = mdt_obj(o);
+		RETURN((struct mdt_object *)o);
 
+	/* check before mdt_obj(): an OSD-only object is not an mdt_object */
+	if (!lu_object_is_md(o)) {
+		CDEBUG_LIMIT(D_ERROR,
+			     "%s: "DFID" is not a metadata object: rc = %d\n",
+			     mdt_obd_name(d), PFID(f), -ENOENT);
+		lu_object_put(env, o);
+		RETURN(ERR_PTR(-ENOENT));
+	}
+
+	m = mdt_obj(o);
 	RETURN(m);
 }
 

@@ -787,6 +787,12 @@ static inline struct lu_object *lu_object_next(const struct lu_object *o)
 	return container_of(o->lo_linkage.next, struct lu_object, lo_linkage);
 }
 
+/* True if this object slice is on a metadata device, i.e. safe for lu2md() */
+static inline bool lu_object_is_md(const struct lu_object *o)
+{
+	return lu_device_is_md(o->lo_dev);
+}
+
 /* Pointer to the fid of this object. */
 static inline const struct lu_fid *lu_object_fid(const struct lu_object *o)
 {
