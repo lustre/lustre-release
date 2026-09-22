@@ -71,6 +71,7 @@
 #include <linux/topology.h>
 #include <linux/version.h>
 #include <linux/vmalloc.h>
+#include <linux/sched/mm.h>
 #include <lustre_compat/linux/workqueue.h>
 
 /* any CPU partition */
@@ -383,6 +384,9 @@ cfs_cpt_malloc(struct cfs_cpt_table *cptab, int cpt, size_t nr_bytes,
 static inline void *
 cfs_cpt_vzalloc(struct cfs_cpt_table *cptab, int cpt, size_t nr_bytes)
 {
+	void *p;
+	unsigned int nofs_flags = memalloc_nofs_save();
+
 	/* vzalloc_node() sets __GFP_FS by default but no current Kernel
 	 * exported entry-point allows for both a NUMA node specification
 	 * and a custom allocation flags mask. This may be an issue since
@@ -390,8 +394,13 @@ cfs_cpt_vzalloc(struct cfs_cpt_table *cptab, int cpt, size_t nr_bytes)
 	 * like when memory reclaim started, within the same context of a
 	 * thread doing FS operations, that can also attempt conflicting FS
 	 * operations, ...
+	 * So we are forcing GFP_NOFS to be set using the per-thread
+	 * set of memory allocation mask.
 	 */
-	return vzalloc_node(nr_bytes, cfs_cpt_spread_node(cptab, cpt));
+	p = vzalloc_node(nr_bytes, cfs_cpt_spread_node(cptab, cpt));
+	memalloc_nofs_restore(nofs_flags);
+
+	return p;
 }
 
 /**
