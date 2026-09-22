@@ -1074,6 +1074,8 @@ again:
 		GOTO(out, rc = 0);
 
 	filp = osd_get_filp_for_inode(oti, inode);
+	if (IS_ERR(filp))
+		GOTO(out, rc = PTR_ERR(filp));
 
 	CFS_FAIL_CHECK_RESET(OBD_FAIL_OFD_IGET_FAIL_TO_START,
 			     OBD_FAIL_OFD_IGET_FAIL);
@@ -5453,6 +5455,8 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt,
 
 	ENTRY;
 	file = osd_get_filp_for_inode(osd_oti_get(env), inode);
+	if (IS_ERR(file))
+		RETURN(PTR_ERR(file));
 
 	rc = vfs_fsync_range(file, start, end, 0);
 	security_file_free(file);
