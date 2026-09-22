@@ -75,7 +75,7 @@ static void job_reclaim_rcu(struct rcu_head *head)
 	lprocfs_stats_free(&job->js_stats);
 	OBD_FREE_PTR(job);
 	if (atomic64_dec_and_test(&stats->ojs_jobs))
-		clear_bit(OJS_ACTIVE_JOBS, &stats->ojs_flags);
+		clear_and_wake_up_bit(OJS_ACTIVE_JOBS, &stats->ojs_flags);
 }
 
 static void job_purge_locked(struct obd_job_stats *stats, unsigned int sched)
@@ -260,7 +260,7 @@ static struct job_stat *job_get_next_pos(struct job_stat *job)
 	return NULL;
 }
 
-/* find and add a ref to a job with pos_id <= pos or NULL */
+/* find and add a ref to a job with pos_id >= pos or NULL */
 static struct job_stat *job_find_first_pos(struct obd_job_stats *stats, u64 pos)
 {
 	struct rb_node *node = stats->ojs_postree.rb_node;
@@ -462,7 +462,6 @@ void lprocfs_job_stats_fini(struct obd_device *obd)
 {
 	struct obd_job_stats *stats = &obd2obt(obd)->obt_jobstats;
 	struct job_stat *job, *n;
-	int retry = 0;
 	bool purge = false;
 
 	set_bit(OJS_FINI, &stats->ojs_flags);
@@ -491,15 +490,23 @@ void lprocfs_job_stats_fini(struct obd_device *obd)
 				purge = true;
 			}
 		}
-
-		if (atomic64_read(&stats->ojs_jobs))
+		/* jobs whose last ref was just dropped are purged next pass */
+		if (!llist_empty(&stats->ojs_deleted))
 			purge = true;
-	} while (purge && retry++ < 3);
-	wait_on_bit_timeout(&stats->ojs_flags, OJS_ACTIVE_JOBS,
-			    TASK_UNINTERRUPTIBLE, cfs_time_seconds(30));
+		if (purge)
+			continue;
+
+		if (!wait_on_bit_timeout(&stats->ojs_flags, OJS_ACTIVE_JOBS,
+					 TASK_UNINTERRUPTIBLE,
+					 cfs_time_seconds(30)))
+			break;
+
+		LCONSOLE_WARN("%s: waiting for %lld job stats to clear\n",
+			      obd->obd_name,
+			      (long long)atomic64_read(&stats->ojs_jobs));
+		purge = true;
+	} while (purge);
 	rcu_barrier();
-	LASSERTF(atomic64_read(&stats->ojs_jobs) == 0, "jobs:%llu flags:%lx\n",
-		 (long long)atomic64_read(&stats->ojs_jobs), stats->ojs_flags);
 	LASSERT(RB_EMPTY_ROOT(&stats->ojs_idtree));
 	LASSERT(list_empty(&stats->ojs_lru));
 	LASSERT(llist_empty(&stats->ojs_deleted));
@@ -523,14 +530,15 @@ static void *lprocfs_jobstats_seq_start(struct seq_file *p, loff_t *pos)
 
 static void *lprocfs_jobstats_seq_next(struct seq_file *p, void *v, loff_t *pos)
 {
-	struct job_stat *job = v, *next = NULL;
+	struct job_stat *prev = v;
+	struct job_stat *next;
 
-	++*pos;
-	if (!job)
-		return next;
-	next = job_get_next_pos(job);
+	next = job_get_next_pos(prev);
 	if (next)
 		*pos = next->js_pos_id;
+	else
+		++*pos;
+	job_putref(prev);
 
 	return next;
 }
@@ -538,6 +546,10 @@ static void *lprocfs_jobstats_seq_next(struct seq_file *p, void *v, loff_t *pos)
 static void lprocfs_jobstats_seq_stop(struct seq_file *p, void *v)
 {
 	struct obd_job_stats *stats = p->private;
+	struct job_stat *job = v;
+
+	if (job)
+		job_putref(job);
 
 	up_read(&stats->ojs_rwsem);
 }
@@ -596,9 +608,6 @@ static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 	char escaped[LUSTRE_JOBID_SIZE * 4] = "";
 	char *quote = "", *c, *end;
 	int i, joblen = 0;
-
-	if (v == SEQ_START_TOKEN)
-		return 0;
 
 	if (test_and_clear_bit(OJS_HEADER, &stats->ojs_flags))
 		seq_puts(p, "job_stats:\n");
@@ -689,16 +698,20 @@ static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 		}
 		seq_puts(p, " }\n");
 	}
-	job_putref(job);
 
 	return 0;
 }
 
+/*
+ * start() -> show() -> next() -> show() [-> next() -> show() ...] -> stop()
+ * but stop() can also follow start() or next() with no show() in between,
+ * so the ref taken by start() and next() is dropped by next() and stop().
+ */
 static const struct seq_operations lprocfs_jobstats_seq_sops = {
 	.start	= lprocfs_jobstats_seq_start,
-	.stop	= lprocfs_jobstats_seq_stop,
-	.next	= lprocfs_jobstats_seq_next,
 	.show	= lprocfs_jobstats_seq_show,
+	.next	= lprocfs_jobstats_seq_next,
+	.stop	= lprocfs_jobstats_seq_stop,
 };
 
 static int lprocfs_jobstats_seq_open(struct inode *inode, struct file *file)
