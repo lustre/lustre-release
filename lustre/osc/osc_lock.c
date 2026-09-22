@@ -672,9 +672,9 @@ static bool weigh_cb(const struct lu_env *env, struct cl_io *io,
 		struct osc_page *ops = pvec[i];
 		struct cl_page *page = ops->ops_cl.cpl_page;
 
-		if (PageLocked(page->cp_vmpage) ||
-		    PageDirty(page->cp_vmpage) ||
-		    PageWriteback(page->cp_vmpage))
+		if (folio_test_locked(page->cp_folio) ||
+		    folio_test_dirty(page->cp_folio) ||
+		    folio_test_writeback(page->cp_folio))
 			return false;
 
 		*(pgoff_t *)cbdata = osc_index(ops) + 1;

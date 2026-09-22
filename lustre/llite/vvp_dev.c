@@ -338,7 +338,8 @@ struct vvp_seq_private {
 	u16			vsp_refcheck;
 	struct cl_object	*vsp_clob;
 	struct rhashtable_iter	vsp_iter;
-	u32			vsp_page_index;
+	pgoff_t			vsp_page_index;
+	struct folio *		vsp_folio; /* ref'd folio or NULL */
 	/*
 	 * prev_pos is the 'pos' of the last object returned
 	 * by ->start of ->next.
@@ -348,32 +349,45 @@ struct vvp_seq_private {
 
 static unsigned int
 ll_filemap_get_one_page_contig(struct address_space *mapping,
-			       pgoff_t start, struct page **pg)
+			       pgoff_t start, struct folio **folios)
 {
-#ifdef HAVE_FILEMAP_GET_FOLIOS_CONTIG
+#if defined(HAVE_FILEMAP_GET_FOLIOS_CONTIG)
 	struct folio_batch fbatch;
 	int nr;
 
 	folio_batch_init(&fbatch);
-	*pg = NULL;
+	*folios = NULL;
 
 	nr = filemap_get_folios_contig(mapping, &start, start, &fbatch);
-	if (nr == FOLIO_BATCH_SIZE) {
+	if (nr > 0) {
 		--nr;
-		*pg = folio_page(fbatch.folios[nr], 0);
+		*folios = fbatch.folios[nr];
 		return 1;
 	}
 	return 0;
-#else /* !HAVE_FILEMAP_GET_FOLIOS_CONTIG */
-	return find_get_pages_contig(mapping, start, 1, pg);
+#elif defined(HAVE___FILEMAP_GET_FOLIO)
+	struct page *pages[1];
+	unsigned int rc;
+
+	rc = find_get_pages_contig(mapping, start, 1, pages);
+	folios[0] = (rc == 1) ? page_folio(pages[0]) : NULL;
+
+	return rc;
+#else
+	return find_get_pages_contig(mapping, start, 1, folios);
 #endif
 }
 
-static struct page *vvp_pgcache_current(struct vvp_seq_private *priv)
+static struct folio *vvp_pgcache_current(struct vvp_seq_private *priv)
 {
 	struct lu_device *dev = &priv->vsp_sbi->ll_cl->cd_lu_dev;
 	struct lu_object_header *h;
-	struct page *vmpage = NULL;
+	struct folio *folio = NULL;
+
+	if (priv->vsp_folio) {
+		folio_put(priv->vsp_folio);
+		priv->vsp_folio = NULL;
+	}
 
 	rhashtable_walk_start(&priv->vsp_iter);
 	while ((h = rhashtable_walk_next(&priv->vsp_iter)) != NULL) {
@@ -400,9 +414,10 @@ static struct page *vvp_pgcache_current(struct vvp_seq_private *priv)
 		inode = vvp_object_inode(priv->vsp_clob);
 		nr = ll_filemap_get_one_page_contig(inode->i_mapping,
 						    priv->vsp_page_index,
-						    &vmpage);
+						    &folio);
 		if (nr > 0) {
-			priv->vsp_page_index = folio_index_page(vmpage);
+			priv->vsp_folio = folio;
+			priv->vsp_page_index = folio->index;
 			break;
 		}
 		cl_object_put(priv->vsp_env, priv->vsp_clob);
@@ -410,7 +425,7 @@ static struct page *vvp_pgcache_current(struct vvp_seq_private *priv)
 		priv->vsp_page_index = 0;
 	}
 	rhashtable_walk_stop(&priv->vsp_iter);
-	return vmpage;
+	return folio;
 }
 
 #define seq_page_flag(seq, page, flag, has_flags) do {                  \
@@ -421,53 +436,55 @@ static struct page *vvp_pgcache_current(struct vvp_seq_private *priv)
 } while (0)
 
 static void vvp_pgcache_page_show(const struct lu_env *env,
-				  struct seq_file *seq, struct cl_page *page)
+				  struct seq_file *seq, struct cl_page *cl_page)
 {
-	struct page *vmpage;
+	struct folio *folio;
 	int has_flags;
 
-	vmpage = page->cp_vmpage;
+	folio = cl_page->cp_folio;
 	seq_printf(seq, " %5i | %pK %pK %s %s | %pK "DFID"(%pK) %lu %u [",
 		   0 /* gen */,
 		   NULL, /* was vvp_page */
-		   page,
+		   cl_page,
 		   "none",
-		   PageWriteback(vmpage) ? "wb" : "-",
-		   vmpage,
-		   PFID(ll_inode2fid(vmpage->mapping->host)),
-		   vmpage->mapping->host, folio_index_page(vmpage),
-		   page_count(vmpage));
+		   folio_test_writeback(folio) ? "wb" : "-",
+		   folio,
+		   PFID(ll_inode2fid(folio->mapping->host)),
+		   folio->mapping->host, folio->index,
+		   folio_ref_count(folio));
 	has_flags = 0;
-	seq_page_flag(seq, vmpage, locked, has_flags);
+	seq_page_flag(seq, folio, locked, has_flags);
 #ifdef HAVE_PG_ERROR
-	seq_page_flag(seq, vmpage, error, has_flags);
+	seq_page_flag(seq, folio, error, has_flags);
 #endif
-	seq_page_flag(seq, vmpage, referenced, has_flags);
-	seq_page_flag(seq, vmpage, uptodate, has_flags);
-	seq_page_flag(seq, vmpage, dirty, has_flags);
-	seq_page_flag(seq, vmpage, writeback, has_flags);
+	seq_page_flag(seq, folio, referenced, has_flags);
+	seq_page_flag(seq, folio, uptodate, has_flags);
+	seq_page_flag(seq, folio, dirty, has_flags);
+	seq_page_flag(seq, folio, writeback, has_flags);
 	seq_printf(seq, "%s]\n", has_flags ? "" : "-");
 }
 
 static int vvp_pgcache_show(struct seq_file *f, void *v)
 {
 	struct vvp_seq_private *priv = f->private;
-	struct page *vmpage = v;
-	struct cl_page *page;
+	struct folio *folio = v;
+	struct cl_page *cl_page;
 
-	seq_printf(f, "%8lx@" DFID ": ", folio_index_page(vmpage),
+	seq_printf(f, "%8lx@" DFID ": ", folio->index,
 		   PFID(lu_object_fid(&priv->vsp_clob->co_lu)));
-	lock_page(vmpage);
-	page = cl_vmpage_page(vmpage, priv->vsp_clob);
-	unlock_page(vmpage);
-	put_page(vmpage);
+	folio_lock(folio);
+	cl_page = cl_page_from_folio(folio, folio->index, true);
+	folio_unlock(folio);
 
-	if (page) {
-		vvp_pgcache_page_show(priv->vsp_env, f, page);
-		cl_page_put(priv->vsp_env, page);
+	if (cl_page) {
+		vvp_pgcache_page_show(priv->vsp_env, f, cl_page);
+		cl_page_put(priv->vsp_env, cl_page);
 	} else {
 		seq_puts(f, "missing\n");
 	}
+	LASSERT(folio == priv->vsp_folio);
+	priv->vsp_folio = NULL;
+	folio_put(folio);
 
 	return 0;
 }
@@ -487,7 +504,7 @@ static void vvp_pgcache_rewind(struct vvp_seq_private *priv)
 	}
 }
 
-static struct page *vvp_pgcache_next_page(struct vvp_seq_private *priv)
+static struct folio *vvp_pgcache_next_page(struct vvp_seq_private *priv)
 {
 	priv->vsp_page_index += 1;
 	return vvp_pgcache_current(priv);
@@ -549,6 +566,7 @@ static int vvp_dump_pgcache_seq_open(struct inode *inode, struct file *filp)
 	priv->vsp_sbi = inode->i_private;
 	priv->vsp_env = cl_env_get(&priv->vsp_refcheck);
 	priv->vsp_clob = NULL;
+	priv->vsp_folio = NULL;
 	if (IS_ERR(priv->vsp_env)) {
 		int err = PTR_ERR(priv->vsp_env);
 
@@ -567,6 +585,11 @@ static int vvp_dump_pgcache_seq_release(struct inode *inode, struct file *file)
 	struct seq_file *seq = file->private_data;
 	struct vvp_seq_private *priv = seq->private;
 
+	/* release any folio from _start()/_next() but not _show()n */
+	if (priv->vsp_folio) {
+		folio_put(priv->vsp_folio);
+		priv->vsp_folio = NULL;
+	}
 	if (priv->vsp_clob) {
 		cl_object_put(priv->vsp_env, priv->vsp_clob);
 	}

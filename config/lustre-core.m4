@@ -2997,56 +2997,6 @@ AC_DEFUN([LC_HAVE_PG_ERROR], [
 ]) # LC_HAVE_PG_ERROR
 
 #
-# LC_HAVE_FOLIO_TEST_MLOCKED
-#
-# Linux v6.11-rc6-233-g99f86bbda317
-#   mm: remove PageMlocked
-#
-AC_DEFUN([LC_SRC_HAVE_FOLIO_TEST_MLOCKED], [
-	LB2_LINUX_TEST_SRC([folio_test_mlocked], [
-		#include <linux/pagemap.h>
-	],[
-		bool x __attribute__ ((unused)) = folio_test_mlocked(NULL);
-	],[-Werror])
-])
-AC_DEFUN([LC_HAVE_FOLIO_TEST_MLOCKED], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'folio_test_mlocked()' is available],
-	[folio_test_mlocked], [
-		AC_DEFINE([folio_test_mlocked_page(pg)],
-			  [folio_test_mlocked(page_folio((pg)))],
-			  ['folio_test_mlocked()' is available])
-	],[
-		AC_DEFINE([folio_test_mlocked_page(pg)], [PageMlocked((pg))],
-			  ['folio_test_mlocked()' replacement])
-	])
-]) # LC_HAVE_FOLIO_TEST_MLOCKED
-
-#
-# LC_HAVE_PAGE_MAPCOUNT_IS_TYPE
-#
-# Linux v6.11-rc6-225-ge880034cf718
-#   mm: introduce page_mapcount_is_type()
-#
-AC_DEFUN([LC_SRC_HAVE_PAGE_MAPCOUNT_IS_TYPE], [
-	LB2_LINUX_TEST_SRC([page_mapcount_is_type], [
-		#include <linux/pagemap.h>
-	],[
-		bool x __attribute__ ((unused)) = page_mapcount_is_type(0);
-	],[-Werror])
-])
-AC_DEFUN([LC_HAVE_PAGE_MAPCOUNT_IS_TYPE], [
-	LB2_MSG_LINUX_TEST_RESULT([if 'page_mapcount_is_type()' is available],
-	[page_mapcount_is_type], [
-		AC_DEFINE(HAVE_PAGE_MAPCOUNT_IS_TYPE, 1,
-			['page_mapcount_is_type()' is available])
-	],[
-		AC_DEFINE(page_mapcount_is_type(count),
-			  (count < PAGE_MAPCOUNT_RESERVE + 1),
-			  [need 'page_mapcount_is_type()' replacement])
-	])
-]) # LC_HAVE_PAGE_MAPCOUNT_IS_TYPE
-
-#
 # LC_HAVE_MODULE_IMPORT_STRING_LITERAL
 #
 # Linux v6.13-rc1-2-gcdd30ebb1b9f
@@ -4061,8 +4011,6 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_WRITE_BEGIN_FOLIO
 	LC_SRC_HAVE_STRUCT_FILE_F_VERSION
 	LC_SRC_HAVE_PG_ERROR
-	LC_SRC_HAVE_FOLIO_TEST_MLOCKED
-	LC_SRC_HAVE_PAGE_MAPCOUNT_IS_TYPE
 
 	# 6.13
 	LC_SRC_HAVE_MODULE_IMPORT_STRING_LITERAL
@@ -4289,8 +4237,6 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_WRITE_BEGIN_FOLIO
 	LC_HAVE_STRUCT_FILE_F_VERSION
 	LC_HAVE_PG_ERROR
-	LC_HAVE_FOLIO_TEST_MLOCKED
-	LC_HAVE_PAGE_MAPCOUNT_IS_TYPE
 
 	# 6.13
 	LC_HAVE_MODULE_IMPORT_STRING_LITERAL

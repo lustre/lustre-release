@@ -661,13 +661,6 @@ static inline void **page_from_bulkdesc(void *array, int index)
 	return (void **)&desc->bd_enc_vec[index].bv_page;
 }
 
-static inline void **page_from_pagearray(void *array, int index)
-{
-	struct page **pa = (struct page **)array;
-
-	return (void **)&pa[index];
-}
-
 static inline void **folio_from_folioarray(void *array, int index)
 {
 	struct folio **pa = (struct folio **)array;
@@ -845,17 +838,10 @@ int obd_pool_get_desc_pages(struct ptlrpc_bulk_desc *desc)
 }
 EXPORT_SYMBOL(obd_pool_get_desc_pages);
 
-int obd_pool_get_pages_array(struct page **pa, unsigned int count)
-{
-	return __obd_pool_get_objects((void *)pa, count, 0,
-					page_from_pagearray);
-}
-EXPORT_SYMBOL(obd_pool_get_pages_array);
-
 int obd_pool_get_folios_array(struct folio **pa, unsigned int count)
 {
 	return __obd_pool_get_objects((void *)pa, count, 0,
-					folio_from_folioarray);
+				      folio_from_folioarray);
 }
 EXPORT_SYMBOL(obd_pool_get_folios_array);
 
@@ -868,8 +854,8 @@ int obd_pool_get_objects(void **pages, unsigned int order)
 EXPORT_SYMBOL(obd_pool_get_objects);
 
 static int __obd_pool_put_objects(void *array, unsigned int count,
-				    unsigned int order,
-				    void **(*object_from)(void *, int))
+				  unsigned int order,
+				  void **(*object_from)(void *, int))
 {
 	struct obd_page_pool *page_pool;
 	unsigned long this_idle;
@@ -951,17 +937,6 @@ void obd_pool_put_desc_pages(struct ptlrpc_bulk_desc *desc)
 	desc->bd_enc_vec = NULL;
 }
 EXPORT_SYMBOL(obd_pool_put_desc_pages);
-
-void obd_pool_put_pages_array(struct page **pa, unsigned int count)
-{
-	int rc;
-
-	rc = __obd_pool_put_objects((void *)pa, count, 0, page_from_pagearray);
-
-	if (rc)
-		CDEBUG(D_SEC, "error putting pages in pool: %d\n", rc);
-}
-EXPORT_SYMBOL(obd_pool_put_pages_array);
 
 void obd_pool_put_folios_array(struct folio **pa, unsigned int count)
 {

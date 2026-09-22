@@ -552,41 +552,44 @@ static void osc_lru_use(struct client_obd *cli, struct osc_page *opg)
 static void discard_cl_pages(const struct lu_env *env, struct cl_io *io,
 			     struct cl_page **pvec, int max_index)
 {
-	struct folio_batch *fbatch = &osc_env_info(env)->oti_fbatch;
+	struct folio_batch fbatch;
 	int i;
 
-	ll_folio_batch_init(fbatch);
+	ll_folio_batch_init(&fbatch);
 	for (i = 0; i < max_index; i++) {
-		struct cl_page *page = pvec[i];
+		struct cl_page *cl_page = pvec[i];
 
-		LASSERT(page->cp_type != CPT_TRANSIENT);
-		LASSERT(cl_page_is_owned(page, io));
-		cl_page_discard(env, io, page);
-		cl_page_disown(env, io, page);
-		cl_batch_put(env, page, fbatch);
+		LASSERT(cl_page->cp_type != CPT_TRANSIENT);
+		LASSERT(cl_page_is_owned(cl_page, io));
+		cl_page_discard(env, io, cl_page);
+		cl_page_disown(env, io, cl_page);
+		cl_batch_put(env, cl_page, &fbatch);
 
 		pvec[i] = NULL;
 	}
-	folio_batch_release(fbatch);
+	folio_batch_release(&fbatch);
 }
 
 /**
  * Check if a cl_page can be released, i.e, it's not being used.
  *
  * If unstable account is turned on, bulk transfer may hold one refcount
- * for recovery so we need to check vmpage refcount as well; otherwise,
- * even we can destroy cl_page but the corresponding vmpage can't be reused.
+ * for recovery so we need to check folio refcount as well; otherwise,
+ * even we can destroy cl_page but the corresponding folio can't be reused.
  */
-static inline bool lru_page_busy(struct client_obd *cli, struct cl_page *page)
+static inline bool lru_page_busy(struct client_obd *cli,
+				 struct cl_page *cl_page)
 {
-	if (cl_page_in_use_noref(page))
+	if (cl_page_in_use_noref(cl_page))
 		return true;
 
 	if (cli->cl_cache->ccc_unstable_check) {
-		struct page *vmpage = cl_page_vmpage(page);
+		struct folio *folio = cl_page->cp_folio;
+		int refs = folio_ref_count(folio);
 
-		/* vmpage have two known users: cl_page and VM page cache */
-		if ((page_count(vmpage) - folio_mapcount_page(vmpage)) > 2)
+		/* folio has two known users: cl_page and system cache */
+		refs -= folio_mapcount(folio);
+		if (refs > 2)
 			return true;
 	}
 	return false;
@@ -597,7 +600,7 @@ static inline bool lru_page_busy(struct client_obd *cli, struct cl_page *page)
  */
 static inline bool lru_page_unevictable(struct cl_page *clpage)
 {
-	return folio_test_mlocked_page(cl_page_vmpage(clpage));
+	return folio_test_mlocked(clpage->cp_folio);
 }
 
 enum shrink_action {

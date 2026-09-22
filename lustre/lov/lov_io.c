@@ -1907,22 +1907,22 @@ enum ec_data_pg_state {
  * @soff:       start offset of recovery group
  * @eoff:       end offset of recovery group
  * @pg_start:   first page position in stripe
- * @npages:     number of page positions
- * @out_pages:  array[npages] of cl_page pointers (output)
- * @out_states: array[npages] of page states (output)
+ * @nfolios:    number of PAGE_SIZE positions
+ * @out_pages:  array[nfolios] of cl_page pointers (output)
+ * @out_states: array[nfolios] of page states (output)
  * @dlist:	cl_page_list for pages that need reading (output)
  *
  * Returns 0 on success. Pages in state of EC_DPG_UPTODATE are assumed (owned)
  * in out_pages[], pages in state of EC_DPG_READ are owned in dlist, and pages
  * in state of EC_DPG_ERROR are owned in ec_page_list. Vmpages can be accessed
- * via out_pages[]->cp_vmpage.
+ * via out_pages[]->cp_folio.
  */
 static int
 lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 			 int comp_i, int stripe_i,
 			 struct lov_stripe_md_entry *lsme,
 			 unsigned long long soff, unsigned long long eoff,
-			 int pg_start, int npages, struct cl_page **out_pages,
+			 int pg_start, int nfolios, struct cl_page **out_pages,
 			 enum ec_data_pg_state *out_states,
 			 struct cl_page_list *dlist)
 {
@@ -1945,53 +1945,50 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 	/* stripe_i is the i-th stripe within the recovery group */
 	stripe = (base_stripe + stripe_i) % r0->lo_nr;
 	/* Phase 1: grab all pages, classify them */
-	for (j = 0; j < npages; j++) {
-		pgoff_t page_idx;
+	for (j = 0; j < nfolios; j++) {
+		pgoff_t index;
 		struct cl_page *clpage;
-		struct page *vmpage;
-		struct folio *_folio;
+		struct folio *folio;
 
 		out_pages[j] = NULL;
 
-		page_idx = ((soff + stripe_i * ss) >> PAGE_SHIFT) +
-			   pg_start + j;
+		index = ((soff + stripe_i * ss) >> PAGE_SHIFT) + pg_start + j;
 
-		if ((page_idx << PAGE_SHIFT) >= eoff ||
-		    (page_idx << PAGE_SHIFT) >= io->u.ci_ec.ec_inode_size) {
+		if ((index << PAGE_SHIFT) >= eoff ||
+		    (index << PAGE_SHIFT) >= io->u.ci_ec.ec_inode_size) {
 			out_states[j] = EC_DPG_ZERO;
 			continue;
 		}
 
-		_folio = get_folio_grab(inode->i_mapping, page_idx,
-					FGP_LOCK | FGP_ACCESSED | FGP_CREAT,
-					mapping_gfp_mask(inode->i_mapping));
-		if (IS_ERR_OR_NULL(_folio))
+		folio = get_folio_grab(inode->i_mapping, index,
+				       FGP_LOCK | FGP_ACCESSED | FGP_CREAT,
+				       mapping_gfp_mask(inode->i_mapping));
+		if (IS_ERR_OR_NULL(folio))
 			GOTO(out_err, rc = -ENOMEM);
-		vmpage = fpgptr(_folio);
-		if (vmpage->mapping != inode->i_mapping) {
-			unlock_page(vmpage);
-			put_page(vmpage);
+		if (folio->mapping != inode->i_mapping) {
+			folio_unlock(folio);
+			folio_put(folio);
 			GOTO(out_err, rc = -EAGAIN);
 		}
 
 		/* Create cl_page for this page. Determine state based on:
-		 * - PageUptodate: already in cache (UPTODATE)
+		 * - folio_test_uptodate: already in cache (UPTODATE)
 		 * - LSS_READ_ERR: stripe is down (ERROR)
 		 * - Otherwise: needs I/O (READ)
 		 */
-		clpage = cl_page_find(env, cl_object_top(obj), page_idx, vmpage,
+		clpage = cl_page_find(env, cl_object_top(obj), index, folio, 0,
 				      CPT_CACHEABLE);
 		if (IS_ERR(clpage)) {
-			unlock_page(vmpage);
-			put_page(vmpage);
+			folio_unlock(folio);
+			folio_put(folio);
 			GOTO(out_err, rc = PTR_ERR(clpage));
 		}
 		cl_page_assume(env, io, clpage);
 		out_pages[j] = clpage;
 		/* drop vmpage refcount added by get_folio_grab() */
-		folio_put(_folio);
+		folio_put(folio);
 
-		if (PageUptodate(vmpage)) {
+		if (folio_test_uptodate(folio)) {
 			out_states[j] = EC_DPG_UPTODATE;
 		} else if (r0->lo_sub[stripe]->lso_status == LSS_READ_ERR) {
 			out_states[j] = EC_DPG_ERROR;
@@ -2014,7 +2011,7 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 		 * move them to ec_page_list (matching the submit-failure
 		 * path).
 		 */
-		for (j = 0; j < npages; j++) {
+		for (j = 0; j < nfolios; j++) {
 			if (out_states[j] == EC_DPG_READ) {
 				cl_page_list_add(&io->u.ci_ec.ec_page_list,
 						 out_pages[j], false);
@@ -2026,7 +2023,7 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 
 	queue = &lov_env_info(sub->sub_env)->lti_cl2q;
 	cl_2queue_init(queue);
-	for (j = 0; j < npages; j++) {
+	for (j = 0; j < nfolios; j++) {
 		if (out_states[j] == EC_DPG_READ)
 			cl_page_list_add(&queue->c2_qin,
 					 out_pages[j], false);
@@ -2040,7 +2037,7 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 		cl_page_list_splice(&queue->c2_qin, &io->u.ci_ec.ec_page_list);
 		cl_page_list_splice(&queue->c2_qout, &io->u.ci_ec.ec_page_list);
 		cl_2queue_fini(env, queue);
-		for (j = 0; j < npages; j++) {
+		for (j = 0; j < nfolios; j++) {
 			if (out_states[j] == EC_DPG_READ)
 				out_states[j] = EC_DPG_ERROR;
 		}
@@ -2050,9 +2047,9 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 	/* Success: pages are in c2_qout, assumed.  Splice to dlist and NULL
 	 * out_pages
 	 */
-	for (j = 0; j < npages; j++) {
+	for (j = 0; j < nfolios; j++) {
 		if (out_states[j] == EC_DPG_READ)
-			SetPageUptodate(out_pages[j]->cp_vmpage);
+			folio_mark_uptodate(out_pages[j]->cp_folio);
 	}
 	cl_page_list_splice(&queue->c2_qin, dlist);
 	cl_page_list_splice(&queue->c2_qout, dlist);
@@ -2070,7 +2067,7 @@ out_err:
 	 * - ERROR: already in ec_page_list; vvp_io_ec_rd_end will disown and
 	 *   fini it, so just NULL the pointer.
 	 */
-	for (j = 0; j < npages; j++) {
+	for (j = 0; j < nfolios; j++) {
 		if (out_pages[j]) {
 			if (out_states[j] == EC_DPG_UPTODATE ||
 			    out_states[j] == EC_DPG_READ) {
@@ -2089,9 +2086,9 @@ out_err:
  *
  * @parity_idx: which parity stripe (0..pcount-1)
  * @pg_start:   first page position
- * @npages:     number of page positions
- * @out_vmpages: array[npages] of vmpage pointers (output)
- * @out_clpages: array[npages] of cl_page pointers (output)
+ * @nfolios:    number of PAGE_SIZE positions
+ * @out_folios: array[nfolios] of folio pointers (output)
+ * @out_clpages: array[nfolios] of cl_page pointers (output)
  * @plist:      page list to track allocated pages for cleanup
  */
 static int
@@ -2099,7 +2096,7 @@ lov_ec_read_parity_stripe(const struct lu_env *env, struct lov_io *lio,
 			  int pcomp_i, int parity_idx,
 			  struct lov_stripe_md_entry *lsme,
 			  unsigned long long parity_foff, int pg_start,
-			  int npages, struct page **out_vmpages,
+			  int nfolios, struct folio **out_folios,
 			  struct cl_page **out_clpages,
 			  struct cl_page_list *plist)
 {
@@ -2134,25 +2131,25 @@ lov_ec_read_parity_stripe(const struct lu_env *env, struct lov_io *lio,
 	subobj = lovsub2cl(r0->lo_sub[stripe]);
 
 	/* Phase 1: allocate all pages */
-	for (j = 0; j < npages; j++) {
-		pgoff_t page_idx = (obdoff >> PAGE_SHIFT) + pg_start + j;
-		struct page *vmpage;
+	for (j = 0; j < nfolios; j++) {
+		pgoff_t index = (obdoff >> PAGE_SHIFT) + pg_start + j;
+		struct folio *folio;
 
-		vmpage = alloc_page(GFP_NOFS);
-		if (!vmpage)
+		folio = folio_alloc(GFP_NOFS, 0);
+		if (!folio)
 			GOTO(out_err, rc = -ENOMEM);
-		lock_page(vmpage);
-		out_vmpages[j] = vmpage;
+		folio_lock(folio);
+		out_folios[j] = folio;
 
 		out_clpages[j] = cl_page_alloc_sub(env, sub->sub_env, obj,
-						   subobj, page_idx, vmpage,
+						   subobj, index, folio, 0,
 						   CPT_TRANSIENT);
 		if (IS_ERR(out_clpages[j])) {
 			rc = PTR_ERR(out_clpages[j]);
 			out_clpages[j] = NULL;
-			unlock_page(vmpage);
-			__free_page(vmpage);
-			out_vmpages[j] = NULL;
+			folio_unlock(folio);
+			folio_put(folio);
+			out_folios[j] = NULL;
 			GOTO(out_err, rc);
 		}
 	}
@@ -2164,12 +2161,12 @@ lov_ec_read_parity_stripe(const struct lu_env *env, struct lov_io *lio,
 	 */
 	queue = &lov_env_info(sub->sub_env)->lti_cl2q;
 	cl_2queue_init(queue);
-	for (j = 0; j < npages; j++) {
+	for (j = 0; j < nfolios; j++) {
 		out_clpages[j]->cp_sync_io = &anchor;
 		cl_page_list_add(&queue->c2_qin, out_clpages[j], false);
 	}
 
-	cl_sync_io_init(&anchor, npages);
+	cl_sync_io_init(&anchor, nfolios);
 	rc = cl_io_submit_rw(sub->sub_env, &sub->sub_io, CRT_READ, queue);
 	if (rc == 0) {
 		struct cl_page *clpage;
@@ -2187,17 +2184,17 @@ lov_ec_read_parity_stripe(const struct lu_env *env, struct lov_io *lio,
 		 * to 0, cl_page freed).  Null out_clpages[] before the
 		 * out_err loop so it doesn't cl_page_put() the freed pages
 		 * again -- that's a refcount underflow + UAF (LU-12668).
-		 * Vmpages are still ours to unlock_page + __free_page.
+		 * folios are still ours to folio_unlock + folio_put.
 		 */
 		cl_2queue_fini(env, queue);
-		for (j = 0; j < npages; j++)
+		for (j = 0; j < nfolios; j++)
 			out_clpages[j] = NULL;
 		GOTO(out_err, rc);
 	}
 
 	/* Success: move pages to plist for tracking */
-	for (j = 0; j < npages; j++)
-		SetPageUptodate(out_vmpages[j]);
+	for (j = 0; j < nfolios; j++)
+		folio_mark_uptodate(out_folios[j]);
 	cl_page_list_splice(&queue->c2_qin, plist);
 	cl_page_list_splice(&queue->c2_qout, plist);
 	cl_2queue_fini(env, queue);
@@ -2205,15 +2202,15 @@ lov_ec_read_parity_stripe(const struct lu_env *env, struct lov_io *lio,
 	RETURN(0);
 
 out_err:
-	for (j = 0; j < npages; j++) {
+	for (j = 0; j < nfolios; j++) {
 		if (out_clpages[j]) {
 			cl_page_put(env, out_clpages[j]);
 			out_clpages[j] = NULL;
 		}
-		if (out_vmpages[j]) {
-			unlock_page(out_vmpages[j]);
-			__free_page(out_vmpages[j]);
-			out_vmpages[j] = NULL;
+		if (out_folios[j]) {
+			folio_unlock(out_folios[j]);
+			folio_put(out_folios[j]);
+			out_folios[j] = NULL;
 		}
 	}
 	RETURN(rc);
@@ -2273,7 +2270,7 @@ struct ec_recover_ctx {
  * allocated together on the RG-wide lov_ec_recover_init() call, before
  * the kmap loop starts, even though @ecr_pp_gf_tbls is only used by
  * later per-page calls inside the loop -- per-page calls happen while
- * kmap_local_page() mappings may be atomic (kernels < 5.10), where
+ * kmap_local_folio() mappings may be atomic (kernels < 5.10), where
  * OBD_ALLOC() must not sleep.  @ecr_decode_matrix is sized for the
  * worst case (pcount) since either context may need an unavail_nr up
  * to pcount.
@@ -2572,10 +2569,10 @@ out:
  * @state:	EC working buffers (ptrs, recov_ptrs, zerobuf, encode_matrix,
  *		err_array reused as per-page scratch, parity_used)
  * @recover_ctx: shared recovery tables built for @err_nr full-stripe errors
- * @all_pages:	[npages * dcount] cl_page pointers, indexed [stripe*npages + j]
- * @all_states:	[npages * dcount] page states, same indexing
- * @par_vmpages: [err_nr * npages] parity vmpages, indexed [pstripe*npages + j]
- * @npages:	number of page positions in this RG
+ * @all_pages:	[nfolios * dcount] cl_page pointers, indexed [stripe*nfolios + j]
+ * @all_states:	[nfolios * dcount] page states, same indexing
+ * @par_folios: [err_nr * nfolios] parity vmpages, indexed [pstripe*nfolios + j]
+ * @nfolios:	number of page positions in this RG
  * @j:		page position to reconstruct
  * @err_nr:	number of error stripes for the shared ctx
  * @dcount:	data stripe count
@@ -2596,8 +2593,8 @@ static int lov_ec_recover_page_pos(const struct lu_env *env,
 				   struct ec_recover_ctx *recover_ctx,
 				   struct cl_page **all_pages,
 				   enum ec_data_pg_state *all_states,
-				   struct page **par_vmpages,
-				   int npages, int j, int err_nr,
+				   struct folio **par_folios,
+				   int nfolios, int j, int err_nr,
 				   unsigned int dcount, unsigned int pcount)
 {
 	struct ec_recover_ctx per_page_ctx = { 0 };
@@ -2607,11 +2604,11 @@ static int lov_ec_recover_page_pos(const struct lu_env *env,
 	int k;
 
 	for (k = 0; k < dcount; k++) {
-		struct page *vmpage = NULL;
-		int idx = k * npages + j;
+		struct folio *folio = NULL;
+		int idx = k * nfolios + j;
 
 		if (all_pages[idx])
-			vmpage = all_pages[idx]->cp_vmpage;
+			folio = all_pages[idx]->cp_folio;
 
 		switch (all_states[idx]) {
 		case EC_DPG_ZERO:
@@ -2619,18 +2616,18 @@ static int lov_ec_recover_page_pos(const struct lu_env *env,
 			break;
 		case EC_DPG_UPTODATE:
 		case EC_DPG_READ:
-			if (vmpage)
+			if (folio)
 				state->ecr_ptrs[p_j++] =
-					kmap_local_page(vmpage);
+					cl_kmap_local(all_pages[idx]);
 			break;
 		case EC_DPG_ERROR:
 			LASSERTF(r_j < pcount,
 				 "error data index %d >= pcount %d\n",
 				 r_j, pcount);
 			state->ecr_err_array[r_j] = k;
-			if (vmpage)
+			if (folio)
 				state->ecr_recov_ptrs[r_j] =
-					kmap_local_page(vmpage);
+					cl_kmap_local(all_pages[idx]);
 			r_j++;
 			break;
 		}
@@ -2639,15 +2636,15 @@ static int lov_ec_recover_page_pos(const struct lu_env *env,
 	/* Skip recovery if no errors, too many errors, or no parity pages
 	 * available.
 	 */
-	if (r_j == 0 || r_j > pcount || !par_vmpages)
+	if (r_j == 0 || r_j > pcount || !par_folios)
 		goto skip_recovery;
 
 	/* Fill parity ptrs from batch */
 	for (k = 0; k < r_j; k++) {
-		int pidx = k * npages + j;
+		int pidx = k * nfolios + j;
 
 		state->ecr_ptrs[p_j + k] =
-			kmap_local_page(par_vmpages[pidx]);
+			kmap_local_folio(par_folios[pidx], 0);
 	}
 
 	if (r_j == err_nr) {
@@ -2692,11 +2689,11 @@ skip_recovery:
 	 * "if (vmpage)" guards that gated each kmap_local_page().
 	 */
 	for (k = (int)dcount - 1; k >= 0; k--) {
-		struct page *vmpage = NULL;
-		int idx = k * npages + j;
+		struct folio *folio = NULL;
+		int idx = k * nfolios + j;
 
 		if (all_pages[idx])
-			vmpage = all_pages[idx]->cp_vmpage;
+			folio = all_pages[idx]->cp_folio;
 
 		switch (all_states[idx]) {
 		case EC_DPG_ZERO:
@@ -2704,7 +2701,7 @@ skip_recovery:
 			break;
 		case EC_DPG_UPTODATE:
 		case EC_DPG_READ:
-			if (vmpage) {
+			if (folio) {
 				p_j--;
 				kunmap_local(state->ecr_ptrs[p_j]);
 				state->ecr_ptrs[p_j] = NULL;
@@ -2712,7 +2709,7 @@ skip_recovery:
 			break;
 		case EC_DPG_ERROR:
 			r_j--;
-			if (vmpage) {
+			if (folio) {
 				kunmap_local(state->ecr_recov_ptrs[r_j]);
 				state->ecr_recov_ptrs[r_j] = NULL;
 			}
@@ -2765,7 +2762,7 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 	unsigned int array_count = 0;
 
 	struct cl_page **par_clpages = NULL;
-	struct page **par_vmpages = NULL;
+	struct folio **par_folios = NULL;
 	unsigned int par_arr_cnt;
 
 	struct cl_page_list dlist;
@@ -2895,7 +2892,7 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 		loff_t eoff; /* end offset of a recovery group */
 		unsigned int pg_seq_start;
 		unsigned int pg_seq_end;
-		unsigned int npages = 0;
+		unsigned int nfolios = 0;
 		int par_stripes_used = 0;
 		loff_t outer_start = io->u.ci_ec.ec_outer.crw_pos;
 		loff_t outer_end = io->u.ci_ec.ec_outer.crw_pos +
@@ -2944,24 +2941,24 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 		       pg_seq_start, pg_seq_end);
 
 		/* Batched per-stripe reads for this RG */
-		npages = pg_seq_end - pg_seq_start;
+		nfolios = pg_seq_end - pg_seq_start;
 
-		array_count = npages * dcount;
+		array_count = nfolios * dcount;
 		OBD_ALLOC_PTR_ARRAY_LARGE(all_pages, array_count);
 		OBD_ALLOC_PTR_ARRAY_LARGE(all_states, array_count);
 		if (!all_pages || !all_states)
 			GOTO(out_err, rc = -ENOMEM);
 
 		/* Read all pages per stripe: one cl_io_submit_sync per
-		 * stripe with all npages pages.  Arrays indexed as
-		 * [stripe * npages + page_pos].
+		 * stripe with all nfolios pages.  Arrays indexed as
+		 * [stripe * nfolios + page_pos].
 		 */
 		for (k = 0; k < dcount; k++) {
 			rc = lov_ec_read_stripe_pages(env, lio, index, k,
 					lsme_d, soff, eoff,
-					pg_seq_start, npages,
-					&all_pages[k * npages],
-					&all_states[k * npages],
+					pg_seq_start, nfolios,
+					&all_pages[k * nfolios],
+					&all_states[k * nfolios],
 					&dlist);
 			if (rc) {
 				CWARN("%s: "DFID": fail to read stripe %d: rc = %d\n",
@@ -2981,8 +2978,8 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 			int pg;
 			bool has_error = false;
 
-			for (pg = 0; pg < npages; pg++) {
-				if (all_states[k * npages + pg] ==
+			for (pg = 0; pg < nfolios; pg++) {
+				if (all_states[k * nfolios + pg] ==
 				    EC_DPG_ERROR) {
 					has_error = true;
 					break;
@@ -3012,10 +3009,10 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 			GOTO(rg_cleanup, rc = -EAGAIN);
 		}
 
-		/* Batch parity reads if needed. par_vmpages/par_clpages
-		 * indexed as [parity_stripe * npages + page_pos].
+		/* Batch parity reads if needed. par_folios/par_clpages
+		 * indexed as [parity_stripe * nfolios + page_pos].
 		 */
-		par_arr_cnt = npages * err_nr;
+		par_arr_cnt = nfolios * err_nr;
 		if (err_nr > 0 && err_nr <= pcount) {
 			unsigned long long poff;
 			int pi, ps;
@@ -3024,9 +3021,9 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 				raid_set * (u64)pcount *
 				lsme_p->lsme_stripe_size;
 
-			OBD_ALLOC_PTR_ARRAY_LARGE(par_vmpages, par_arr_cnt);
+			OBD_ALLOC_PTR_ARRAY_LARGE(par_folios, par_arr_cnt);
 			OBD_ALLOC_PTR_ARRAY_LARGE(par_clpages, par_arr_cnt);
-			if (!par_vmpages || !par_clpages) {
+			if (!par_folios || !par_clpages) {
 				io->u.ci_ec.ec_recovery_failed = true;
 				GOTO(rg_cleanup, rc = -ENOMEM);
 			}
@@ -3039,9 +3036,9 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 				ps = par_stripes_used;
 				rc = lov_ec_read_parity_stripe(env, lio, pindex,
 						pi, lsme_p, poff,
-						pg_seq_start, npages,
-						&par_vmpages[ps * npages],
-						&par_clpages[ps * npages],
+						pg_seq_start, nfolios,
+						&par_folios[ps * nfolios],
+						&par_clpages[ps * nfolios],
 						&plist);
 				if (rc) {
 					rc = 0; /* skip, try next */
@@ -3095,11 +3092,11 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 		 * because recover_ctx already baked the original contents
 		 * into erc_tbls.
 		 */
-		for (j = 0; j < npages; j++) {
+		for (j = 0; j < nfolios; j++) {
 			rc = lov_ec_recover_page_pos(env, io, &state,
 						     &recover_ctx, all_pages,
-						     all_states, par_vmpages,
-						     npages, j, err_nr,
+						     all_states, par_folios,
+						     nfolios, j, err_nr,
 						     dcount, pcount);
 			if (rc)
 				GOTO(rg_cleanup, rc);
@@ -3112,16 +3109,16 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 		 */
 		if (!io->u.ci_ec.ec_recovery_failed) {
 			cl_page_list_for_each(page, &io->u.ci_ec.ec_page_list)
-				SetPageUptodate(cl_page_vmpage(page));
+				folio_mark_uptodate(page->cp_folio);
 		}
 
 rg_cleanup:
 		/* release parity pages */
-		if (par_vmpages) {
+		if (par_folios) {
 			for (k = 0; k < par_arr_cnt; k++) {
-				if (par_vmpages[k]) {
-					unlock_page(par_vmpages[k]);
-					__free_page(par_vmpages[k]);
+				if (par_folios[k]) {
+					folio_unlock(par_folios[k]);
+					folio_put(par_folios[k]);
 				}
 			}
 		}
@@ -3131,8 +3128,8 @@ rg_cleanup:
 		cl_page_list_fini(env, &plist);
 		OBD_FREE_PTR_ARRAY_LARGE(par_clpages, par_arr_cnt);
 		par_clpages = NULL;
-		OBD_FREE_PTR_ARRAY_LARGE(par_vmpages, par_arr_cnt);
-		par_vmpages = NULL;
+		OBD_FREE_PTR_ARRAY_LARGE(par_folios, par_arr_cnt);
+		par_folios = NULL;
 
 		/* Release data pages */
 		cl_page_list_disown(env, &dlist);

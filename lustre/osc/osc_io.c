@@ -149,7 +149,7 @@ int osc_io_submit(const struct lu_env *env, struct cl_io *io,
 		brw_flags |= OBD_BRW_NOCACHE;
 		transient = true;
 	}
-	if (lnet_is_rdma_only_page(page->cp_vmpage))
+	if (lnet_is_rdma_only_page(cl_folio_page(page)))
 		brw_flags |= OBD_BRW_RDMA_ONLY;
 
 	/*
@@ -254,7 +254,7 @@ int osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 	struct osc_object *osc  = cl2osc(ios->cis_obj);
 	struct cl_io	  *top_io = cl_io_top(io);
 	struct client_obd *cli  = osc_cli(osc);
-	struct page	  *vmpage;
+	struct folio *folio;
 	LIST_HEAD(list);
 	/* pages per chunk bits */
 	unsigned int ppc_bits = cli->cl_chunkbits - PAGE_SHIFT;
@@ -278,29 +278,29 @@ int osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 	if (crt == CRT_READ && ios->cis_io->ci_ndelay)
 		brw_flags |= OBD_BRW_NDELAY;
 
-	vmpage = cdp->cdp_pages[0];
+	folio = cdp->cdp_folios[0];
 	brw_flags |= OBD_BRW_NOCACHE;
-	if (lnet_is_rdma_only_page(vmpage))
+	if (lnet_is_rdma_only_page(folio_page(folio, cdp->cdp_pgno[0])))
 		brw_flags |= OBD_BRW_RDMA_ONLY;
 
 	/* Fast-fail P2P pages if route to the OST does not support it */
-	if (lustre_is_p2prdma_page(vmpage)) {
+	if (lustre_is_p2prdma_page(folio_page(folio, cdp->cdp_pgno[0]))) {
 		if (cli->cl_import && !cli->cl_import->imp_p2pdma)
 			return -EOPNOTSUPP;
 	}
 
 	/*
-	 * NOTE: here @page is a top-level page. This is done to avoid
+	 * NOTE: here @cl_page is a top-level cl_page. This is done to avoid
 	 *       creation of sub-page-list.
 	 */
 	for (i = 0; i < cdp->cdp_page_count; i++) {
-		struct cl_page *page = cdp->cdp_cl_pages[i];
+		struct cl_page *cl_page = cdp->cdp_cl_pages[i];
 		struct osc_async_page *oap;
 		struct osc_page	  *opg;
 
 		LASSERT(top_io != NULL);
 
-		opg = osc_cl_page_osc(page, osc);
+		opg = osc_cl_page_osc(cl_page, osc);
 		oap = &opg->ops_oap;
 		if (from == -1)
 			from = i;
@@ -317,10 +317,10 @@ int osc_dio_submit(const struct lu_env *env, struct cl_io *io,
 			unsigned int chunks;
 
 			chunks = (queued + ppc - 1) >> ppc_bits;
-			/* chunk number if add another page */
+			/* chunk number if add another cl_page */
 			next_chunks = (queued + ppc) >> ppc_bits;
 
-			/* next page will excceed write chunk limit */
+			/* next cl_page will exceed write chunk limit */
 			if (chunks == osc_max_write_chunks(cli) &&
 			    next_chunks > chunks)
 				sync_queue = true;
@@ -416,61 +416,62 @@ int osc_io_commit_async(const struct lu_env *env,
 	struct cl_io *io = ios->cis_io;
 	struct osc_io *oio = cl2osc_io(env, ios);
 	struct osc_object *osc = cl2osc(ios->cis_obj);
-	struct cl_page *page;
+	struct cl_page *cl_page;
 	struct cl_page *last_page;
 	struct osc_page *opg;
-	struct folio_batch *fbatch = &osc_env_info(env)->oti_fbatch;
+	struct cl_page_batch *cl_batch = &osc_env_info(env)->oti_cl_batch;
 	int result = 0;
 	ENTRY;
 
 	LASSERT(qin->pl_nr > 0);
 
-	/* Handle partial page cases */
+	/* Handle partial cl_page cases */
 	last_page = cl_page_list_last(qin);
 	if (oio->oi_lockless) {
-		page = cl_page_list_first(qin);
-		if (page == last_page) {
-			cl_page_clip(env, page, from, to);
+		cl_page = cl_page_list_first(qin);
+		if (cl_page == last_page) {
+			cl_page_clip(env, cl_page, from, to);
 		} else {
 			if (from != 0)
-				cl_page_clip(env, page, from, PAGE_SIZE);
+				cl_page_clip(env, cl_page, from, PAGE_SIZE);
 			if (to != PAGE_SIZE)
 				cl_page_clip(env, last_page, 0, to);
 		}
 	}
 
-	ll_folio_batch_init(fbatch);
+	cl_page_batch_init(cl_batch);
 
 	while (qin->pl_nr > 0) {
 		struct osc_async_page *oap;
 
-		page = cl_page_list_first(qin);
-		opg = osc_cl_page_osc(page, osc);
+		cl_page = cl_page_list_first(qin);
+		opg = osc_cl_page_osc(cl_page, osc);
 		oap = &opg->ops_oap;
 
 		if (!list_empty(&oap->oap_rpc_item)) {
-			CDEBUG(D_CACHE, "Busy oap %p page %p for submit.\n",
+			CDEBUG(D_CACHE, "Busy oap %p osc_page %p for submit.\n",
 			       oap, opg);
 			result = -EBUSY;
 			break;
 		}
 
-		/* The page may be already in dirty cache. */
+		/* The cl_page may be already in dirty cache. */
 		if (list_empty(&oap->oap_pending_item)) {
+			/* osc_page_cache_add() may modify oti_cl_batch */
 			result = osc_page_cache_add(env, osc, opg, io, cb);
 			if (result != 0)
 				break;
 		}
 
 		osc_page_touch_at(env, osc2cl(osc), osc_index(opg),
-				  page == last_page ? to : PAGE_SIZE);
+				  cl_page == last_page ? to : PAGE_SIZE);
 
-		cl_page_list_del(env, qin, page, true);
+		cl_page_list_del(env, qin, cl_page, true);
 
 		/* if there are no more slots, do the callback & reinit */
-		if (!folio_batch_add_page(fbatch, page->cp_vmpage)) {
-			(*cb)(env, io, fbatch);
-			folio_batch_reinit(fbatch);
+		if (!cl_page_batch_add(cl_batch, cl_page)) {
+			(*cb)(env, io, cl_batch);
+			cl_page_batch_reinit(cl_batch);
 		}
 	}
 	/* The shrink interval is in seconds, so we can update it once per
@@ -480,8 +481,8 @@ int osc_io_commit_async(const struct lu_env *env,
 
 
 	/* Clean up any partially full folio_batches */
-	if (folio_batch_count(fbatch) != 0)
-		(*cb)(env, io, fbatch);
+	if (cl_page_batch_count(cl_batch) != 0)
+		(*cb)(env, io, cl_batch);
 
 	/* Can't access these pages any more. Page can be in transfer and
 	 * complete at any time. */
@@ -647,7 +648,7 @@ static bool trunc_check_cb(const struct lu_env *env, struct cl_io *io,
 			CL_PAGE_DEBUG(D_ERROR, env, page, "exists %llu/%s.\n",
 				      start, current->comm);
 
-		if (PageLocked(page->cp_vmpage))
+		if (folio_test_locked(page->cp_folio))
 			CDEBUG(D_CACHE, "page %p index %lu locked for cmd=%d\n",
 			       ops, osc_index(ops), oap->oap_cmd);
 	}

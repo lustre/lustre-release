@@ -1342,8 +1342,8 @@ static int osc_checksum_bulk(int nob, size_t pg_count,
 		}
 		cfs_crypto_hash_update_page(req, brw_folio_page(pga[i]),
 					    brw_page_offset(pga[i]), count);
-		LL_CDEBUG_PAGE(D_PAGE, brw_folio_page(pga[i]), "off %d\n",
-			       brw_page_offset(pga[i]));
+		LL_CDEBUG_FOLIO(D_PAGE, pga[i]->bp_folio, "off %d\n",
+				brw_page_offset(pga[i]));
 
 		nob -= pga[i]->bp_count;
 		pg_count--;
@@ -2378,7 +2378,8 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 
 			while (offs < PAGE_SIZE) {
 				/* do not decrypt if page is all 0s */
-				if (is_empty_folio(brwpg->bp_folio, offs,
+				if (is_empty_folio(brwpg->bp_folio,
+						   brw_pgno(brwpg), offs,
 				    LUSTRE_ENCRYPTION_UNIT_SIZE)) {
 					/* if page is empty forward info to
 					 * upper layers (ll_io_zero_page) by

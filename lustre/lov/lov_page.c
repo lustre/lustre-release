@@ -197,10 +197,10 @@ int lov_page_init_empty(const struct lu_env *env, struct cl_object *obj,
 	BUILD_BUG_ON(!__same_type(cl_page->cp_lov_index, CP_LOV_INDEX_EMPTY));
 	cl_page->cp_lov_index = CP_LOV_INDEX_EMPTY;
 
-	addr = kmap_local_page(cl_page->cp_vmpage);
+	addr = cl_kmap_local(cl_page);
 	memset(addr, 0, PAGE_SIZE);
 	kunmap_local(addr);
-	SetPageUptodate(cl_page->cp_vmpage);
+	folio_mark_uptodate(cl_page->cp_folio);
 	RETURN(0);
 }
 

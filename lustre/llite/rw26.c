@@ -49,8 +49,9 @@ static void ll_invalidate_folio(struct folio *folio, size_t offset, size_t len)
 {
 	struct inode *inode;
 	struct lu_env *env;
-	struct cl_page *page;
+	struct cl_page *cl_page;
 	struct cl_object *obj;
+	pgoff_t index = folio->index;
 
 	LASSERT(!folio_test_writeback(folio));
 	LASSERT(folio_test_locked(folio));
@@ -62,26 +63,18 @@ static void ll_invalidate_folio(struct folio *folio, size_t offset, size_t len)
 	/* Drop the pages from the folio */
 	env = cl_env_percpu_get();
 	LASSERT(!IS_ERR(env));
+	LASSERT(folio_nr_pages(folio) == 1);
 
 	inode = folio_inode(folio);
 	obj = ll_i2info(inode)->lli_clob;
-	if (obj != NULL) {
-		int n, npgs = folio_nr_pages(folio);
-
-		for (n = 0; n < npgs; n++) {
-			struct page *vmpage = folio_page(folio, n);
-
-			LASSERT(PageLocked(vmpage));
-			LASSERT(!PageWriteback(vmpage));
-
-			page = cl_vmpage_page(vmpage, obj);
-			if (page != NULL) {
-				cl_page_delete(env, page);
-				cl_page_put(env, page);
-			}
+	if (obj) {
+		cl_page = cl_page_from_folio(folio, index, true);
+		if (cl_page) {
+			cl_page_delete(env, cl_page);
+			cl_page_put(env, cl_page);
 		}
 	} else {
-		LASSERT(!folio_get_private(folio));
+		LASSERT(!cl_page_from_folio(folio, index, false));
 	}
 	cl_env_percpu_put(env);
 }
@@ -124,9 +117,10 @@ static void ll_invalidatepage(struct page *vmpage,
 
 		inode = vmpage->mapping->host;
 		obj = ll_i2info(inode)->lli_clob;
-		if (obj != NULL) {
-			page = cl_vmpage_page(vmpage, obj);
-			if (page != NULL) {
+		if (obj) {
+			page = cl_page_from_folio(page_folio(vmpage),
+						  vmpage->index, true);
+			if (page) {
 				cl_page_delete(env, page);
 				cl_page_put(env, page);
 			}
@@ -145,21 +139,21 @@ static void ll_invalidatepage(struct page *vmpage,
 }
 #endif
 
-static bool do_release_page(struct page *vmpage, gfp_t wait)
+static bool do_release_folio(struct folio *folio, gfp_t wait)
 {
 	struct address_space *mapping;
 	struct cl_object *obj;
-	struct cl_page *page;
+	struct cl_page *cl_page;
 	struct lu_env *env;
 	int result = 0;
 
 	ENTRY;
 
-	LASSERT(PageLocked(vmpage));
-	if (PageWriteback(vmpage) || PageDirty(vmpage))
+	LASSERT(folio_test_locked(folio));
+	if (folio_test_writeback(folio) || folio_test_dirty(folio))
 		RETURN(0);
 
-	mapping = vmpage->mapping;
+	mapping = folio->mapping;
 	if (mapping == NULL)
 		RETURN(1);
 
@@ -167,33 +161,33 @@ static bool do_release_page(struct page *vmpage, gfp_t wait)
 	if (obj == NULL)
 		RETURN(1);
 
-	page = cl_vmpage_page(vmpage, obj);
-	if (page == NULL)
+	cl_page = cl_page_from_folio(folio, folio->index, true);
+	if (cl_page == NULL)
 		RETURN(1);
 
 	env = cl_env_percpu_get();
 	LASSERT(!IS_ERR(env));
 
-	if (!cl_page_in_use(page)) {
+	if (!cl_page_in_use(cl_page)) {
 		result = 1;
-		cl_page_delete(env, page);
+		cl_page_delete(env, cl_page);
 	}
 
 	/* To use percpu env array, the call path can not be rescheduled;
 	 * otherwise percpu array will be messed if ll_releaspage() called
 	 * again on the same CPU.
 	 *
-	 * If this page holds the last refc of cl_object, the following
+	 * If this cl_page holds the last refc of cl_object, the following
 	 * call path may cause reschedule:
 	 *   cl_page_put -> cl_page_free -> cl_object_put ->
 	 *     lu_object_put -> lu_object_free -> lov_delete_raid0.
 	 *
-	 * However, the kernel can't get rid of this inode until all pages have
-	 * been cleaned up. Now that we hold page lock here, it's pretty safe
-	 * that we won't get into object delete path.
+	 * However, the kernel can't get rid of this inode until all folios
+	 * have been cleaned up. Now that we hold folio lock here, it's pretty
+	 * safe that we won't get into object delete path.
 	 */
 	LASSERT(cl_object_refc(obj) > 1);
-	cl_page_put(env, page);
+	cl_page_put(env, cl_page);
 
 	cl_env_percpu_put(env);
 	RETURN(result);
@@ -202,12 +196,7 @@ static bool do_release_page(struct page *vmpage, gfp_t wait)
 #ifdef HAVE_AOPS_RELEASE_FOLIO
 static bool ll_release_folio(struct folio *folio, gfp_t wait)
 {
-	struct page *vmpage = folio_page(folio, 0);
-
-	/* folio_nr_pages(folio) == 1 is fixed with grab_cache_page* */
-	BUG_ON(folio_nr_pages(folio) != 1);
-
-	return do_release_page(vmpage, wait);
+	return do_release_folio(folio, wait);
 }
 #else /* !HAVE_AOPS_RELEASE_FOLIO */
 #ifdef HAVE_RELEASEPAGE_WITH_INT
@@ -217,7 +206,7 @@ static bool ll_release_folio(struct folio *folio, gfp_t wait)
 #endif
 static int ll_releasepage(struct page *vmpage, RELEASEPAGE_ARG_TYPE gfp_mask)
 {
-	return do_release_page(vmpage, gfp_mask);
+	return do_release_folio(page_folio(vmpage), gfp_mask);
 }
 #endif /* HAVE_AOPS_RELEASE_FOLIO */
 
@@ -237,17 +226,19 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	struct cl_page *page;
 	int iot = rw == READ ? CRT_READ : CRT_WRITE;
 	loff_t offset = cdp->cdp_file_offset;
+	long io_pages = 0;
 	ssize_t rc = 0;
-	unsigned int i = 0;
 
 	ENTRY;
 
 	while (size > 0) {
 		size_t from = offset & ~PAGE_MASK;
 		size_t to = min(from + size, PAGE_SIZE);
+		pgoff_t index = offset >> PAGE_SHIFT;
+		s32 pgno = cdp->cdp_pgno[io_pages];
 
-		page = cl_page_find(env, obj, offset >> PAGE_SHIFT,
-				    cdp->cdp_pages[i], CPT_TRANSIENT);
+		page = cl_page_find(env, obj, index, cdp->cdp_folios[io_pages],
+				    pgno, CPT_TRANSIENT);
 		if (IS_ERR(page))
 			GOTO(out, rc = PTR_ERR(page));
 
@@ -264,7 +255,7 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 			 */
 			page->cp_inode = inode;
 		}
-		cdp->cdp_cl_pages[i] = page;
+		cdp->cdp_cl_pages[io_pages] = page;
 		/*
 		 * Call page clip for incomplete pages, to set range of bytes
 		 * in the page and to tell transfer formation engine to send
@@ -272,7 +263,7 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 		 */
 		if (from != 0 || to != PAGE_SIZE)
 			cl_page_clip(env, page, from, to);
-		i++;
+		++io_pages;
 
 		offset += to - from;
 		size -= to - from;
@@ -280,7 +271,7 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	/* on success, we should hit every page in the cdp and have no bytes
 	 * left in 'size'
 	 */
-	LASSERT(i == cdp->cdp_page_count);
+	LASSERT(io_pages == cdp->cdp_page_count);
 	LASSERT(size == 0);
 
 	atomic_add(cdp->cdp_page_count, &anchor->csi_sync_nr);
@@ -291,10 +282,9 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 	smp_mb();
 	rc = cl_dio_submit_rw(env, io, iot, cdp);
 	if (rc != 0) {
-		atomic_add(-cdp->cdp_page_count,
-			   &anchor->csi_sync_nr);
-		for (i = 0; i < cdp->cdp_page_count; i++) {
-			page = cdp->cdp_cl_pages[i];
+		atomic_add(-cdp->cdp_page_count, &anchor->csi_sync_nr);
+		for (io_pages = 0; io_pages < cdp->cdp_page_count; io_pages++) {
+			page = cdp->cdp_cl_pages[io_pages];
 			page->cp_sync_io = NULL;
 		}
 	}
@@ -595,7 +585,7 @@ static int ll_prepare_partial_page(const struct lu_env *env, struct cl_io *io,
 	 * purposes here we can treat it like i_size.
 	 */
 	if (attr->cat_kms <= offset) {
-		char *kaddr = kmap_local_page(pg->cp_vmpage);
+		char *kaddr = cl_kmap_local(pg);
 
 		memset(kaddr, 0, PAGE_SIZE);
 		kunmap_local(kaddr);
@@ -614,7 +604,7 @@ static int ll_prepare_partial_page(const struct lu_env *env, struct cl_io *io,
 	/* ll_io_read_page() disowns the page */
 	result = cl_page_own(env, io, pg);
 	if (!result) {
-		if (!PageUptodate(cl_page_vmpage(pg))) {
+		if (!folio_test_uptodate(pg->cp_folio)) {
 			cl_page_disown(env, io, pg);
 			result = -EIO;
 		}
@@ -628,11 +618,37 @@ out:
 	return result;
 }
 
-static int ll_tiny_write_begin(struct page *vmpage, struct address_space *mapping)
+static inline unsigned int fgf_nowait(struct inode *inode)
+{
+	unsigned int flag = 0;
+	unsigned int create = 0;
+
+#if defined(HAVE___FILEMAP_GET_FOLIO)
+	create = FGP_CREAT;
+	flag = FGP_LOCK | FGP_NOFS | FGP_NOWAIT;
+#endif
+
+	return flag | create;
+}
+
+static inline unsigned int fgf_begin_size(struct inode *inode, size_t size)
+{
+	unsigned int flag = 0;
+	unsigned int order = 0;
+
+#if defined(HAVE___FILEMAP_GET_FOLIO)
+	flag = FGP_WRITEBEGIN;
+#endif
+	return flag | order;
+}
+
+static int ll_tiny_write_begin(struct folio *folio,
+			       struct address_space *mapping)
 {
 	/* Page must be present, up to date, dirty, and not in writeback. */
-	if (!vmpage || !PageUptodate(vmpage) || !PageDirty(vmpage) ||
-	    PageWriteback(vmpage) || vmpage->mapping != mapping)
+	if (!folio || !folio_test_uptodate(folio) ||
+	    !folio_test_dirty(folio) || folio_test_writeback(folio) ||
+	    folio->mapping != mapping)
 		return -ENODATA;
 
 	return 0;
@@ -667,9 +683,10 @@ static int ll_write_begin(
 	struct inode *inode = file_inode(file);
 	struct cl_object *clob = ll_i2info(mapping->host)->lli_clob;
 	pgoff_t index = pos >> PAGE_SHIFT;
-	struct page *vmpage = NULL;
+	struct folio *folio = NULL;
 	unsigned int from = pos & (PAGE_SIZE - 1);
 	unsigned int to = from + len;
+	unsigned int size;
 	int result = 0;
 
 	ENTRY;
@@ -678,8 +695,10 @@ static int ll_write_begin(
 	lcc = ll_cl_find(inode);
 	if (lcc == NULL) {
 		/* do not allocate a page, only find & lock */
-		vmpage = find_lock_page(mapping, index);
-		result = ll_tiny_write_begin(vmpage, mapping);
+		folio = get_folio_lock(mapping, index, FGP_LOCK, 0);
+		if (IS_ERR_OR_NULL(folio))
+			GOTO(out, result = -ENODATA);
+		result = ll_tiny_write_begin(folio, mapping);
 		GOTO(out, result);
 	}
 
@@ -708,10 +727,10 @@ static int ll_write_begin(
 	}
 again:
 	/* To avoid deadlock, try to lock page first. */
-	vmpage = grab_cache_page_nowait(mapping, index);
-
-	if (unlikely(vmpage == NULL ||
-		     PageDirty(vmpage) || PageWriteback(vmpage))) {
+	folio = get_folio_nowait(mapping, index, fgf_nowait(inode),
+				 mapping_gfp_mask(mapping));
+	if (IS_ERR_OR_NULL(folio) || unlikely(folio_test_dirty(folio) ||
+	    folio_test_writeback(folio))) {
 		struct vvp_io *vio = vvp_env_io(env);
 		struct cl_page_list *plist = &vio->u.readwrite.vui_queue;
 
@@ -720,10 +739,10 @@ again:
 		 * because it holds page lock of a dirty page and request for
 		 * more grants. It's okay for the dirty page to be the first
 		 * one in commit page list, though. */
-		if (vmpage != NULL && plist->pl_nr > 0) {
-			unlock_page(vmpage);
-			put_page(vmpage);
-			vmpage = NULL;
+		if (!IS_ERR_OR_NULL(folio) && plist->pl_nr > 0) {
+			folio_unlock(folio);
+			folio_put(folio);
+			folio = NULL;
 		}
 
 		/* commit pages and then wait for page lock */
@@ -731,42 +750,42 @@ again:
 		if (result < 0)
 			GOTO(out, result);
 
-		if (vmpage == NULL) {
-			vmpage = grab_cache_page_write_begin(mapping, index
-#ifdef HAVE_GRAB_CACHE_PAGE_WRITE_BEGIN_WITH_FLAGS
-							     , flags
-#endif
-							     );
-			if (vmpage == NULL)
+		if (IS_ERR_OR_NULL(folio)) {
+			size = min_t(unsigned int, len, MD_MAX_BRW_SIZE);
+			folio = get_folio_write(mapping, index, flags,
+						fgf_begin_size(inode, size),
+						mapping_gfp_mask(mapping));
+			if (!folio)
 				GOTO(out, result = -ENOMEM);
+			if (IS_ERR(folio))
+				GOTO(out, result = PTR_ERR(folio));
 		}
 	}
 
 	/* page was truncated */
-	if (mapping != vmpage->mapping) {
+	if (mapping != folio->mapping) {
 		CDEBUG(D_VFSTRACE, "page: %lu was truncated\n", index);
-		unlock_page(vmpage);
-		put_page(vmpage);
-		vmpage = NULL;
+		folio_unlock(folio);
+		folio_put(folio);
+		folio = NULL;
 		goto again;
 	}
 
-	cl_page = cl_page_find(env, clob, folio_index_page(vmpage), vmpage,
-			    CPT_CACHEABLE);
+	cl_page = cl_page_find(env, clob, index, folio, 0, CPT_CACHEABLE);
 	if (IS_ERR(cl_page))
 		GOTO(out, result = PTR_ERR(cl_page));
 
 	lcc->lcc_page = cl_page;
 
 	cl_page_assume(env, io, cl_page);
-	if (!PageUptodate(vmpage)) {
+	if (!folio_test_uptodate(folio)) {
 		/*
-		 * We're completely overwriting an existing page,
+		 * We're completely overwriting an existing folio,
 		 * so _don't_ set it up to date until commit_write
 		 */
 		if (from == 0 && to == PAGE_SIZE) {
 			CL_PAGE_HEADER(D_PAGE, env, cl_page,
-				       "full page write\n");
+				       "full folio write\n");
 		} else {
 			/* TODO: can be optimized at OSC layer to check if it
 			 * is a lockless IO. In that case, it's not necessary
@@ -774,9 +793,9 @@ again:
 			result = ll_prepare_partial_page(env, io, cl_page,
 							 file);
 			if (result) {
-				/* vmpage should have been unlocked */
-				put_page(vmpage);
-				vmpage = NULL;
+				/* folio should have been unlocked */
+				folio_put(folio);
+				folio = NULL;
 
 				if (result == -EAGAIN)
 					goto again;
@@ -787,17 +806,17 @@ again:
 	EXIT;
 out:
 	if (result < 0) {
-		if (vmpage != NULL) {
-			unlock_page(vmpage);
-			put_page(vmpage);
+		if (!IS_ERR_OR_NULL(folio)) {
+			folio_unlock(folio);
+			folio_put(folio);
 		}
-		/* On tiny_write failure, page and io are always null. */
+		/* On tiny_write failure, cl_page and io are always null. */
 		if (!IS_ERR_OR_NULL(cl_page))
 			cl_page_put(env, cl_page);
 		if (io)
 			io->ci_result = result;
 	} else {
-		*foliop = wbe_page_folio(vmpage);
+		*foliop = wbe_folio_reply(folio);
 		*fsdata = lcc;
 	}
 	RETURN(result);
@@ -805,11 +824,11 @@ out:
 
 static int ll_tiny_write_end(struct file *file, struct address_space *mapping,
 			     loff_t pos, unsigned int len, unsigned int copied,
-			     struct page *vmpage)
+			     struct wbe_folio *folio)
 {
-	struct cl_page *clpage = (struct cl_page *) vmpage->private;
-	loff_t kms = pos+copied;
-	loff_t to = kms & (PAGE_SIZE-1) ? kms & (PAGE_SIZE-1) : PAGE_SIZE;
+	struct cl_page *clpage = wbe_folio_get_private(folio);
+	loff_t kms = pos + copied;
+	loff_t to = kms & (PAGE_SIZE - 1) ? kms & (PAGE_SIZE - 1) : PAGE_SIZE;
 	struct lu_env *env;
 	int rc = 0;
 
@@ -818,7 +837,7 @@ static int ll_tiny_write_end(struct file *file, struct address_space *mapping,
 	/* This page is dirty in cache, so it should have a cl_page pointer
 	 * set in vmpage->private.
 	 */
-	LASSERT(clpage != NULL);
+	LASSERT(clpage);
 
 	if (copied == 0)
 		goto out;
@@ -834,7 +853,7 @@ static int ll_tiny_write_end(struct file *file, struct address_space *mapping,
 	cl_env_percpu_put(env);
 out:
 	/* Must return page unlocked. */
-	unlock_page(vmpage);
+	wbe_folio_unlock(folio);
 
 	RETURN(rc);
 }
@@ -858,7 +877,6 @@ static int ll_write_end(
 	struct cl_io *io;
 	struct vvp_io *vio;
 	struct cl_page *cl_page;
-	struct page *vmpage = wbe_folio_page(folio);
 	unsigned int from = pos & (PAGE_SIZE - 1);
 	enum cl_io_priority prio = IO_PRIO_NORMAL;
 	bool unplug = false;
@@ -866,13 +884,13 @@ static int ll_write_end(
 
 	ENTRY;
 
-	put_page(vmpage);
+	wbe_folio_put(folio);
 
 	CDEBUG(D_VFSTRACE, "pos %llu, len %u, copied %u\n", pos, len, copied);
 
 	if (lcc == NULL) {
 		result = ll_tiny_write_end(file, mapping, pos, len, copied,
-					   vmpage);
+					   folio);
 		GOTO(out, result);
 	}
 
@@ -916,9 +934,9 @@ static int ll_write_end(
 		vio->u.readwrite.vui_to = from + copied;
 
 		/* To address the deadlock in balance_dirty_pages() where
-		 * this dirty cl_page may be written back in the same thread.
+		 * this dirty folio may be written back in the same thread.
 		 */
-		if (PageDirty(vmpage))
+		if (wbe_folio_test_dirty(folio))
 			unplug = true;
 
 		/* We may have one full RPC, commit it soon */

@@ -622,22 +622,22 @@ static int memfs_write_end(
 #endif
 			   struct address_space *mapping,
 			   loff_t pos, unsigned int len, unsigned int copied,
-			   struct wbe_folio *vmfolio, void *fsdata)
+			   struct wbe_folio *folio, void *fsdata)
 {
-	struct page *page = wbe_folio_page(vmfolio);
-	struct inode *inode = page->mapping->host;
+	struct inode *inode = folio->mapping->host;
 	loff_t last_pos = pos + copied;
 
 	/* zero the stale part of the page if we did a short copy */
-	if (!PageUptodate(page)) {
+	if (!wbe_folio_test_uptodate(folio)) {
 		if (copied < len) {
 			unsigned int from = pos & (PAGE_SIZE - 1);
 			unsigned int start = from + copied;
 			unsigned int size = len - copied;
 
-			zero_user_segments(page, start, start + size, 0, 0);
+			zero_user_segments(wbe_folio_page(folio),
+					   start, start + size, 0, 0);
 		}
-		SetPageUptodate(page);
+		wbe_folio_mark_uptodate(folio);
 	}
 	/*
 	 * No need to use i_size_read() here, the i_size
@@ -646,9 +646,9 @@ static int memfs_write_end(
 	if (last_pos > inode->i_size)
 		i_size_write(inode, last_pos);
 
-	set_page_dirty(page);
-	unlock_page(page);
-	put_page(page);
+	wbe_folio_mark_dirty(folio);
+	wbe_folio_unlock(folio);
+	wbe_folio_put(folio);
 
 	return copied;
 }

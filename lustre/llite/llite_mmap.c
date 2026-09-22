@@ -134,26 +134,26 @@ restart:
 	RETURN(io);
 }
 
-static int __ll_page_mkwrite(struct vm_area_struct *vma, struct page *vmpage,
-			     bool *retry)
+static int __ll_page_mkwrite(struct vm_area_struct *vma, struct folio *folio,
+			    pgoff_t index, bool *retry)
 {
-	struct lu_env           *env;
-	struct cl_io            *io;
-	struct vvp_io           *vio;
-	int                      result;
-	__u16			 refcheck;
+	struct lu_env *env;
+	struct cl_io *io;
+	struct vvp_io *vio;
+	int result;
+	u16 refcheck;
 	sigset_t old, new;
-	struct inode             *inode = NULL;
-	struct ll_inode_info     *lli;
+	struct inode *inode = NULL;
+	struct ll_inode_info *lli;
 
 	ENTRY;
 
-	LASSERT(vmpage != NULL);
+	LASSERT(folio);
 	env = cl_env_get(&refcheck);
 	if (IS_ERR(env))
 		RETURN(PTR_ERR(env));
 
-	io = ll_fault_io_init(env, vma, folio_index_page(vmpage), true);
+	io = ll_fault_io_init(env, vma, index, true);
 	if (IS_ERR(io))
 		GOTO(out, result = PTR_ERR(io));
 
@@ -162,8 +162,8 @@ static int __ll_page_mkwrite(struct vm_area_struct *vma, struct page *vmpage,
 		GOTO(out_io, result);
 
 	vio = vvp_env_io(env);
-	vio->u.fault.ft_vma    = vma;
-	vio->u.fault.ft_vmpage = vmpage;
+	vio->u.fault.ft_vma = vma;
+	vio->u.fault.ft_folio = folio;
 
 	siginitsetinv(&new, sigmask(SIGKILL) | sigmask(SIGTERM));
 	sigprocmask(SIG_BLOCK, &new, &old);
@@ -176,26 +176,26 @@ static int __ll_page_mkwrite(struct vm_area_struct *vma, struct page *vmpage,
 	sigprocmask(SIG_SETMASK, &old, NULL);
 
 	if (result == 0) {
-		lock_page(vmpage);
-		if (vmpage->mapping == NULL) {
-			unlock_page(vmpage);
+		folio_lock(folio);
+		if (folio->mapping == NULL) {
+			folio_unlock(folio);
 
 			/* page was truncated and lock was cancelled, return
 			 * ENODATA so that VM_FAULT_NOPAGE will be returned
 			 * to handle_mm_fault().
 			 */
 			result = -ENODATA;
-		} else if (!PageDirty(vmpage)) {
+		} else if (!folio_test_dirty(folio)) {
 			/* race, the page has been cleaned by ptlrpcd after
 			 * it was unlocked, it has to be added into dirty
 			 * cache again otherwise this soon-to-dirty page won't
 			 * consume any grants, even worse if this page is being
 			 * transferred because it will break RPC checksum.
 			 */
-			unlock_page(vmpage);
+			folio_unlock(folio);
 
 			CDEBUG(D_MMAP, "Race on page_mkwrite %p/%lu, page has been written out, retry.\n",
-			       vmpage, folio_index_page(vmpage));
+			       folio, index);
 
 			*retry = true;
 			result = -EAGAIN;
@@ -211,7 +211,7 @@ out_io:
 out:
 	cl_env_put(env, &refcheck);
 	CDEBUG(D_MMAP, "%s mkwrite with %d\n", current->comm, result);
-	LASSERT(ergo(result == 0, PageLocked(vmpage)));
+	LASSERT(ergo(result == 0, folio_test_locked(folio)));
 
 	/* if page has been unmapped, presumably due to lock reclaim for
 	 * concurrent usage, add some delay before retrying to prevent
@@ -275,13 +275,13 @@ int ll_filemap_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 static vm_fault_t __ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
 	struct inode *inode = file_inode(vma->vm_file);
-	struct lu_env           *env;
-	struct cl_io            *io;
-	struct vvp_io           *vio = NULL;
-	struct page             *vmpage;
-	int                      result = 0;
-	int                      fault_ret = 0;
-	__u16			 refcheck;
+	struct lu_env *env;
+	struct cl_io *io;
+	struct vvp_io *vio = NULL;
+	struct folio *folio;
+	int result = 0;
+	int fault_ret = 0;
+	u16 refcheck;
 
 	ENTRY;
 
@@ -329,8 +329,8 @@ static vm_fault_t __ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 	result = io->ci_result;
 	if (result == 0) {
 		vio = vvp_env_io(env);
-		vio->u.fault.ft_vma       = vma;
-		vio->u.fault.ft_vmpage    = NULL;
+		vio->u.fault.ft_vma = vma;
+		vio->u.fault.ft_folio = NULL;
 		vio->u.fault.ft_vmf = vmf;
 		vio->u.fault.ft_flags = 0;
 		vio->u.fault.ft_flags_valid = 0;
@@ -346,9 +346,9 @@ static vm_fault_t __ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 		if (vio->u.fault.ft_flags_valid)
 			fault_ret = vio->u.fault.ft_flags;
 
-		vmpage = vio->u.fault.ft_vmpage;
-		if (result != 0 && vmpage != NULL) {
-			put_page(vmpage);
+		folio = vio->u.fault.ft_folio;
+		if (result && folio) {
+			folio_put(folio);
 			vmf->page = NULL;
 		}
 	}
@@ -399,16 +399,15 @@ restart:
 	result = __ll_fault(vma, vmf);
 	if (vmf->page &&
 	    !(result & (VM_FAULT_RETRY | VM_FAULT_ERROR | VM_FAULT_LOCKED))) {
-		struct page *vmpage = vmf->page;
+		struct folio *folio = page_folio(vmf->page);
 
 		/* lock the page, then check if this page has been truncated
 		 * or deleted from Lustre and retry if so
 		 */
-		lock_page(vmpage);
-		if (unlikely(vmpage->mapping == NULL) ||
-		    vmpage->private == 0) { /* unlucky */
-			unlock_page(vmpage);
-			put_page(vmpage);
+		folio_lock(folio);
+		if (unlikely(!folio->mapping) || !folio->private) {
+			folio_unlock(folio);
+			folio_put(folio);
 			vmf->page = NULL;
 
 			if (!printed && ++count > 16) {
@@ -469,9 +468,10 @@ static vm_fault_t ll_page_mkwrite(struct vm_fault *vmf)
 
 	file_update_time(vma->vm_file);
 	do {
-		retry = false;
-		result = __ll_page_mkwrite(vma, vmf->page, &retry);
+		struct folio *folio = page_folio(vmf->page);
 
+		retry = false;
+		result = __ll_page_mkwrite(vma, folio, vmf->pgoff, &retry);
 		if (!printed && ++count > 16) {
 			const struct dentry *de = file_dentry(vma->vm_file);
 

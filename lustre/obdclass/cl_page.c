@@ -138,6 +138,7 @@ static ssize_t ll_get_iov_memory(struct cl_io *io, int rw,
 				 struct cl_dio_pages *cdp,
 				 size_t maxsize)
 {
+	struct page **pages = NULL;
 	ssize_t bytes;
 	size_t start;
 	unsigned int maxpages = DIV_ROUND_UP(maxsize, PAGE_SIZE) + 1;
@@ -146,16 +147,42 @@ static ssize_t ll_get_iov_memory(struct cl_io *io, int rw,
 	if (io && !cl_io_top(io)->ci_p2pdma_unsupported)
 		flags |= ITER_ALLOW_P2PDMA;
 
-	bytes = ll_iov_iter_extract_pages(iter, &cdp->cdp_pages, maxsize,
+	cdp->cdp_folios = NULL;
+	cdp->cdp_pgno = kvcalloc(maxpages, sizeof(*cdp->cdp_pgno), GFP_NOFS);
+	if (!cdp->cdp_pgno)
+		return -ENOMEM;
+
+	bytes = ll_iov_iter_extract_pages(iter, &pages, maxsize,
 					  maxpages, flags, &start);
 	if (bytes > 0) {
+		int i;
+		struct folio **folios = (struct folio **)pages;
+
 		cdp->cdp_page_count = DIV_ROUND_UP(bytes + start, PAGE_SIZE);
 #ifdef HAVE_IOV_ITER_EXTRACT_PAGES
 		if (iov_iter_extract_will_pin(iter))
 			cdp->cdp_pinned = 1;
 #endif
+		LASSERTF(cdp->cdp_page_count <= maxpages,
+			"bytes:%zd start:%zu [pages:%u] maxpages:%u\n",
+			bytes, start, cdp->cdp_page_count, maxpages);
+		for (i = 0; i < cdp->cdp_page_count; i++) {
+			struct folio *ftmp;
+
+			if (!pages[i])
+				continue;
+			ftmp = page_folio(pages[i]);
+			cdp->cdp_pgno[i] = folio_page_idx(ftmp, pages[i]);
+			folios[i] = ftmp;
+		}
+		cdp->cdp_folios = folios;
+
 		if (user_backed_iter(iter))
 			iov_iter_revert(iter, bytes);
+	} else {
+		kvfree(pages);
+		kvfree(cdp->cdp_pgno);
+		cdp->cdp_pgno = NULL;
 	}
 	return bytes;
 }
@@ -242,7 +269,7 @@ static void cl_page_free(const struct lu_env *env, struct cl_page *cp,
 {
 	struct cl_object *obj  = cp->cp_obj;
 	unsigned short bufsize;
-	struct page *vmpage;
+	struct folio *folio;
 
 	ENTRY;
 	PASSERT(env, cp, list_empty(&cp->cp_batch));
@@ -250,18 +277,17 @@ static void cl_page_free(const struct lu_env *env, struct cl_page *cp,
 	if (cp->cp_type == CPT_CACHEABLE) {
 		PASSERT(env, cp, cp->cp_owner == NULL);
 		PASSERT(env, cp, cp->cp_state == CPS_FREEING);
-		/* vmpage->private was already cleared when page was
+		/* folio->private was already cleared when page was
 		 * moved into CPS_FREEING state.
 		 */
-		vmpage = cp->cp_vmpage;
-		LASSERT(vmpage != NULL);
-		LASSERT((struct cl_page *)vmpage->private != cp);
-
-		if (fbatch != NULL) {
-			if (!folio_batch_add_page(fbatch, vmpage))
+		folio = cp->cp_folio;
+		LASSERT(folio);
+		LASSERT(folio_get_private(folio) != cp);
+		if (fbatch) {
+			if (!folio_batch_add(fbatch, folio))
 				folio_batch_release(fbatch);
 		} else {
-			put_page(vmpage);
+			folio_put(folio);
 		}
 	}
 
@@ -347,7 +373,7 @@ struct cl_page *cl_page_alloc_sub(const struct lu_env *env,
 				  const struct lu_env *subenv,
 				  struct cl_object *o,
 				  struct cl_object *subobj,
-				  pgoff_t ind, struct page *vmpage,
+				  pgoff_t ind, struct folio *folio, s32 pgno,
 				  enum cl_page_type type)
 {
 	struct cl_page *cl_page;
@@ -370,7 +396,8 @@ struct cl_page *cl_page_alloc_sub(const struct lu_env *env,
 		cl_page->cp_obj = o;
 		if (type != CPT_TRANSIENT)
 			cl_object_get(o);
-		cl_page->cp_vmpage = vmpage;
+		cl_page->cp_folio = folio;
+		cl_page->cp_pgno = pgno;
 		if (cl_page->cp_type != CPT_TRANSIENT)
 			cl_page->cp_state = CPS_CACHED;
 		cl_page->cp_type = type;
@@ -378,7 +405,7 @@ struct cl_page *cl_page_alloc_sub(const struct lu_env *env,
 			/* correct inode to be added in ll_direct_rw_pages */
 			cl_page->cp_inode = NULL;
 		else
-			cl_page->cp_inode = page2inode(vmpage);
+			cl_page->cp_inode = folio2inode(folio);
 		INIT_LIST_HEAD(&cl_page->cp_batch);
 		if (subobj) {
 			/* only initialize page part from subobj if specified,
@@ -417,10 +444,10 @@ struct cl_page *cl_page_alloc_sub(const struct lu_env *env,
 EXPORT_SYMBOL(cl_page_alloc_sub);
 
 struct cl_page *cl_page_alloc(const struct lu_env *env, struct cl_object *o,
-			      pgoff_t ind, struct page *vmpage,
+			      pgoff_t ind, struct folio *folio, s32 pgno,
 			      enum cl_page_type type)
 {
-	return cl_page_alloc_sub(env, NULL, o, NULL, ind, vmpage, type);
+	return cl_page_alloc_sub(env, NULL, o, NULL, ind, folio, pgno, type);
 }
 
 /**
@@ -429,7 +456,8 @@ struct cl_page *cl_page_alloc(const struct lu_env *env, struct cl_object *o,
  * @env: current lustre environment
  * @o: layer which is finding the page
  * @idx: offset
- * @vmpage: pointer to kernel struct page
+ * @folio: pointer to kernel struct folio
+ * @pgno: page number of multipage folio
  * @type: IO type (READ/WRITE)
  *
  * This is the main entry point into the cl_page caching interface. First, a
@@ -439,14 +467,14 @@ struct cl_page *cl_page_alloc(const struct lu_env *env, struct cl_object *o,
  *
  * see cl_object_find(), cl_lock_find()
  *
- * Returns struct cl_page derived from @vmpage on success or NULL on failure
+ * Returns struct cl_page derived from @folio on success or ERR_PTR on failure
  */
 struct cl_page *cl_page_find(const struct lu_env *env,
-			     struct cl_object *o,
-			     pgoff_t idx, struct page *vmpage,
+			     struct cl_object *o, pgoff_t idx,
+			     struct folio *folio, s32 pgno,
 			     enum cl_page_type type)
 {
-	struct cl_page          *page = NULL;
+	struct cl_page *cl_page = NULL;
 	struct cl_object_header *hdr;
 
 	LASSERT(type == CPT_CACHEABLE || type == CPT_TRANSIENT);
@@ -457,31 +485,32 @@ struct cl_page *cl_page_find(const struct lu_env *env,
 	hdr = cl_object_header(o);
 	cs_page_inc(o, CS_lookup);
 
-	CDEBUG(D_PAGE, "%lu@"DFID" %p %lx %d\n",
-	       idx, PFID(&hdr->coh_lu.loh_fid), vmpage, vmpage->private, type);
+	CDEBUG(D_PAGE, "%lu@"DFID" %p %p %d\n",
+	       idx, PFID(&hdr->coh_lu.loh_fid), folio,
+	       folio_get_private(folio), type);
 	/* fast path. */
 	if (type == CPT_CACHEABLE) {
-		/* vmpage lock used to protect the child/parent relationship */
-		LASSERT(PageLocked(vmpage));
+		/* folio lock used to protect the child/parent relationship */
+		LASSERT(folio_test_locked(folio));
 		/*
-		 * cl_vmpage_page() can be called here without any locks as
+		 * cl_page_from_folio() can be called here without any locks as
 		 *
-		 *     - "vmpage" is locked (which prevents ->private from
+		 *     - "folio" is locked (which prevents ->private from
 		 *       concurrent updates), and
 		 *
 		 *     - "o" cannot be destroyed while current thread holds a
 		 *       reference on it.
 		 */
-		page = cl_vmpage_page(vmpage, o);
-		if (page != NULL) {
+		cl_page = cl_page_from_folio(folio, idx, true);
+		if (cl_page) {
 			cs_page_inc(o, CS_hit);
-			RETURN(page);
+			RETURN(cl_page);
 		}
 	}
 
 	/* allocate and initialize cl_page */
-	page = cl_page_alloc(env, o, idx, vmpage, type);
-	RETURN(page);
+	cl_page = cl_page_alloc(env, o, idx, folio, pgno, type);
+	RETURN(cl_page);
 }
 EXPORT_SYMBOL(cl_page_find);
 
@@ -500,7 +529,7 @@ static void __cl_page_state_set(const struct lu_env *env,
 	static const int allowed_transitions[CPS_NR][CPS_NR] = {
 		[CPS_CACHED] = {
 			[CPS_CACHED]  = 0,
-			[CPS_OWNED]   = 1, /* io finds existing cached page */
+			[CPS_OWNED]   = 1, /* io finds existing cached cl_page */
 			[CPS_PAGEIN]  = 0,
 			[CPS_PAGEOUT] = 1, /* write-out from the cache */
 			[CPS_FREEING] = 1, /* eviction on the memory pressure */
@@ -623,34 +652,35 @@ void cl_page_put(const struct lu_env *env, struct cl_page *page)
 EXPORT_SYMBOL(cl_page_put);
 
 /**
- * cl_vmpage_page() - Returns a cl_page associated with a VM page, for the
- * given @obj
- * @vmpage: pointer to kernel struct page
- * @obj: cl_object (client side object) to which cl_page is to be returned
+ * cl_page_from_folio() - Returns a cl_page associated with a folio
+ * @folio: pointer to kernel struct page
+ * @index: pgoff of associated inode
+ * @get: bool to increment reference on cl_page
  *
- * Returns pointer to associated cl_page on success
+ * Returns pointer to associated cl_page on success, or NULL if no folio
+ * is associated with this cl_page
  */
-struct cl_page *cl_vmpage_page(struct page *vmpage, struct cl_object *obj)
+struct cl_page *cl_page_from_folio(struct folio *folio, pgoff_t index,
+				   bool get)
 {
-	struct cl_page *page;
+	struct cl_page *cl_page = NULL;
+	int pgno = index - folio->index;
 
-	ENTRY;
-	LASSERT(PageLocked(vmpage));
+	/* non-zero pgno support will be needed with folio_order_min > 0 */
+	LASSERTF(index == folio->index, "index %lu should match folio %lu\n",
+		 index, folio->index);
 
-	/*
-	 * NOTE: absence of races and liveness of data are guaranteed by page
-	 *       lock on a "vmpage". That works because object destruction has
-	 *       bottom-to-top pass.
-	 */
-
-	page = (struct cl_page *)vmpage->private;
-	if (page != NULL) {
-		cl_page_get_trust(page);
-		LASSERT(page->cp_type == CPT_CACHEABLE);
+	if (get)
+		LASSERT(folio_test_locked(folio));
+	if (pgno == 0)
+		cl_page = folio_get_private(folio);
+	if (cl_page && get) {
+		cl_page_get_trust(cl_page);
+		LASSERT(cl_page->cp_type == CPT_CACHEABLE);
 	}
-	RETURN(page);
+	return cl_page;
 }
-EXPORT_SYMBOL(cl_vmpage_page);
+EXPORT_SYMBOL(cl_page_from_folio);
 
 static void cl_page_owner_clear(struct cl_page *page)
 {
@@ -673,7 +703,6 @@ static void cl_page_owner_set(struct cl_page *page)
 
 void __cl_page_disown(const struct lu_env *env, struct cl_page *cp)
 {
-	struct page *vmpage;
 	enum cl_page_state state;
 
 	ENTRY;
@@ -686,10 +715,9 @@ void __cl_page_disown(const struct lu_env *env, struct cl_page *cp)
 	PINVRNT(env, cp, cl_page_invariant(cp) || state == CPS_FREEING);
 	if (state == CPS_OWNED)
 		cl_page_state_set(env, cp, CPS_CACHED);
-	vmpage = cp->cp_vmpage;
-	LASSERT(vmpage != NULL);
-	LASSERT(PageLocked(vmpage));
-	unlock_page(vmpage);
+	LASSERT(cp->cp_folio);
+	LASSERT(folio_test_locked(cp->cp_folio));
+	folio_unlock(cp->cp_folio);
 
 	EXIT;
 }
@@ -728,7 +756,7 @@ EXPORT_SYMBOL(cl_page_is_owned);
 static int __cl_page_own(const struct lu_env *env, struct cl_io *io,
 			 struct cl_page *cl_page, int nonblock)
 {
-	struct page *vmpage = cl_page->cp_vmpage;
+	struct folio *folio = cl_page->cp_folio;
 	int result;
 
 	ENTRY;
@@ -743,22 +771,22 @@ static int __cl_page_own(const struct lu_env *env, struct cl_io *io,
 		goto out;
 	}
 
-	LASSERT(vmpage != NULL);
+	LASSERT(folio);
 
 	if (nonblock) {
-		if (!trylock_page(vmpage)) {
+		if (!folio_trylock(folio)) {
 			result = -EAGAIN;
 			goto out;
 		}
 
-		if (unlikely(PageWriteback(vmpage))) {
-			unlock_page(vmpage);
+		if (unlikely(folio_test_writeback(folio))) {
+			folio_unlock(folio);
 			result = -EAGAIN;
 			goto out;
 		}
 	} else {
-		lock_page(vmpage);
-		wait_on_page_writeback(vmpage);
+		folio_lock(folio);
+		folio_wait_writeback(folio);
 	}
 
 	PASSERT(env, cl_page, cl_page->cp_owner == NULL);
@@ -829,7 +857,7 @@ EXPORT_SYMBOL(cl_page_own_try);
 void cl_page_assume(const struct lu_env *env,
 		    struct cl_io *io, struct cl_page *cp)
 {
-	struct page *vmpage;
+	struct folio *folio;
 
 	ENTRY;
 	PINVRNT(env, cp, cl_object_same(cp->cp_obj, cl_io_top(io)->ci_obj));
@@ -837,10 +865,10 @@ void cl_page_assume(const struct lu_env *env,
 	LASSERT(cp->cp_type != CPT_TRANSIENT);
 	PASSERT(env, cp, cp->cp_owner == NULL);
 
-	vmpage = cp->cp_vmpage;
-	LASSERT(vmpage != NULL);
-	LASSERT(PageLocked(vmpage));
-	wait_on_page_writeback(vmpage);
+	folio = cp->cp_folio;
+	LASSERT(folio);
+	LASSERT(folio_test_locked(folio));
+	folio_wait_writeback(folio);
 	cp->cp_owner = cl_io_top(io);
 	cl_page_owner_set(cp);
 	cl_page_state_set(env, cp, CPS_OWNED);
@@ -864,7 +892,7 @@ EXPORT_SYMBOL(cl_page_assume);
 void cl_page_unassume(const struct lu_env *env,
 		      struct cl_io *io, struct cl_page *cp)
 {
-	struct page *vmpage;
+	struct folio *folio;
 
 	ENTRY;
 
@@ -874,9 +902,9 @@ void cl_page_unassume(const struct lu_env *env,
 	PINVRNT(env, cp, cl_page_invariant(cp));
 	cl_page_owner_clear(cp);
 	cl_page_state_set(env, cp, CPS_CACHED);
-	vmpage = cp->cp_vmpage;
-	LASSERT(vmpage != NULL);
-	LASSERT(PageLocked(vmpage));
+	folio = cp->cp_folio;
+	LASSERT(folio);
+	LASSERT(folio_test_locked(folio));
 
 	EXIT;
 }
@@ -923,7 +951,7 @@ EXPORT_SYMBOL(cl_page_disown);
 void cl_page_discard(const struct lu_env *env,
 		     struct cl_io *io, struct cl_page *cp)
 {
-	struct page *vmpage;
+	struct folio *folio;
 	const struct cl_page_slice *slice;
 	int i;
 
@@ -942,10 +970,10 @@ void cl_page_discard(const struct lu_env *env,
 	 */
 	cl_page_delete(env, cp);
 
-	vmpage = cp->cp_vmpage;
-	LASSERT(vmpage != NULL);
-	LASSERT(PageLocked(vmpage));
-	generic_error_remove_folio(vmpage->mapping, page_folio(vmpage));
+	folio = cp->cp_folio;
+	LASSERT(folio != NULL);
+	LASSERT(folio_test_locked(folio));
+	generic_error_remove_folio(folio->mapping, folio);
 }
 EXPORT_SYMBOL(cl_page_discard);
 
@@ -1060,7 +1088,7 @@ static void cl_page_io_start(const struct lu_env *env,
 int cl_page_prep(const struct lu_env *env, struct cl_io *io,
 		 struct cl_page *cp, enum cl_req_type crt)
 {
-	struct page *vmpage = cp->cp_vmpage;
+	struct folio *folio = cp->cp_folio;
 	int rc;
 
 	LASSERT(cp->cp_type != CPT_TRANSIENT);
@@ -1069,17 +1097,17 @@ int cl_page_prep(const struct lu_env *env, struct cl_io *io,
 	PINVRNT(env, cp, cl_page_invariant(cp));
 
 	if (crt == CRT_READ) {
-		if (PageUptodate(vmpage))
+		if (folio_test_uptodate(folio))
 			GOTO(out, rc = -EALREADY);
 	} else {
-		LASSERT(PageLocked(vmpage));
-		LASSERT(!PageDirty(vmpage));
+		LASSERT(folio_test_locked(folio));
+		LASSERT(!folio_test_dirty(folio));
 
 		/* ll_writepage path is not a sync write, so need to
 		 * set page writeback flag
 		 */
 		if (cp->cp_sync_io == NULL)
-			set_page_writeback(vmpage);
+			folio_start_writeback(folio);
 	}
 
 	cl_page_io_start(env, cp, crt);
@@ -1175,7 +1203,7 @@ EXPORT_SYMBOL(cl_page_complete);
 int cl_page_make_ready(const struct lu_env *env, struct cl_page *cp,
 		       enum cl_req_type crt)
 {
-	struct page *vmpage = cp->cp_vmpage;
+	struct folio *folio = cp->cp_folio;
 	bool unlock = false;
 	int rc = 0;
 
@@ -1183,14 +1211,14 @@ int cl_page_make_ready(const struct lu_env *env, struct cl_page *cp,
 	PASSERT(env, cp, crt == CRT_WRITE);
 	LASSERT(cp->cp_type != CPT_TRANSIENT);
 
-	lock_page(vmpage);
-	PASSERT(env, cp, PageUptodate(vmpage));
+	folio_lock(folio);
+	PASSERT(env, cp, folio_test_uptodate(folio));
 	unlock = true;
 
-	if (clear_page_dirty_for_io(vmpage)) {
+	if (folio_clear_dirty_for_io(folio)) {
 		LASSERT(cp->cp_state == CPS_CACHED);
 		/* This actually clears the dirty bit in the radix tree  */
-		set_page_writeback(vmpage);
+		folio_start_writeback(folio);
 		CL_PAGE_HEADER(D_PAGE, env, cp, "readied\n");
 		rc = 0;
 	} else if (cp->cp_state == CPS_PAGEOUT) {
@@ -1211,7 +1239,7 @@ int cl_page_make_ready(const struct lu_env *env, struct cl_page *cp,
 	}
 
 	if (unlock)
-		unlock_page(vmpage);
+		folio_unlock(folio);
 
 	CL_PAGE_HEADER(D_TRACE, env, cp, "%d %d\n", crt, rc);
 
@@ -1263,22 +1291,20 @@ EXPORT_SYMBOL(cl_page_header_print);
 void cl_page_print(const struct lu_env *env, void *cookie,
 		   lu_printer_t printer, const struct cl_page *cp)
 {
-	struct page *vmpage = cp->cp_vmpage;
+	struct folio *folio = cp->cp_folio;
 	const struct cl_page_slice *slice;
 	int result = 0;
 	int i;
 
 	cl_page_header_print(env, cookie, printer, cp);
 
-	(*printer)(env, cookie, "vmpage @%p", vmpage);
+	(*printer)(env, cookie, "folio @%p", folio);
 
-	if (vmpage != NULL) {
-		(*printer)(env, cookie, " %lx %d:%d %lx %lu %slru",
-			   PAGE_FLAGS(vmpage), page_count(vmpage),
-			   folio_mapcount_page(vmpage), vmpage->private,
-			   folio_index_page(vmpage),
-			   list_empty(&vmpage->lru) ? "not-" : "");
-	}
+	if (folio)
+		(*printer)(env, cookie, " %lx %d:%d %p %lu %slru",
+			   (long)PAGE_FLAGS(folio), folio_ref_count(folio),
+			   folio_mapcount(folio), folio_get_private(folio),
+			   folio->index, list_empty(&folio->lru) ? "not-" : "");
 
 	(*printer)(env, cookie, "\n");
 

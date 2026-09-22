@@ -755,20 +755,32 @@ struct cl_page {
 	pgoff_t			cp_page_index;
 	/** An object this page is a part of. Immutable after creation. */
 	struct cl_object	*cp_obj;
-	/** vmpage */
-	struct page		*cp_vmpage;
+	/** folio */
+	struct folio		*cp_folio;
 	/**
-	 * Assigned if doing direct IO, because in this case cp_vmpage is not
-	 * a valid page cache page, hence the inode cannot be inferred from
-	 * cp_vmpage->mapping->host.
+	 * Assigned if doing direct IO, because in this case cp_folio is not
+	 * held in system cache, hence the inode cannot be inferred from
+	 * cp_folio->mapping->host.
 	 */
 	struct inode		*cp_inode;
 	/** Linkage of pages within group. Pages must be owned */
 	struct list_head	cp_batch;
 	/** array of slices offset. Immutable after creation. */
 	unsigned char		cp_layer_offset[CP_MAX_LAYER];
+	union {
+		/* which slab kmem index this memory allocated from */
+		short int	cp_kmem_index;
+		/* or the page size if it's not in the slab kmem array */
+		short int	cp_kmem_size;
+	};
 	/** current slice index */
-	unsigned char		cp_layer_count:2;
+	unsigned int		cp_layer_count:2,
+	/** folio page #, may be from a 1G hugetlb max: (1 << 18) */
+				cp_pgno:20,
+				cp_defer_uptodate:1,
+				cp_ra_updated:1,
+				cp_ra_used:1,
+				cp_in_kmem_array:1;
 	/**
 	 * Page state. This field is const to avoid accidental update, it is
 	 * modified only internally within cl_page.c. Protected by a VM lock.
@@ -779,17 +791,6 @@ struct cl_page {
 	 * creation.
 	 */
 	enum cl_page_type	cp_type:CP_TYPE_BITS;
-	unsigned		cp_defer_uptodate:1,
-				cp_ra_updated:1,
-				cp_ra_used:1,
-				cp_in_kmem_array:1;
-	union {
-		/* which slab kmem index this memory allocated from */
-		short int	cp_kmem_index;
-		/* or the page size if it's not in the slab kmem array */
-		short int	cp_kmem_size;
-	};
-
 	/**
 	 * Owning IO in cl_page_state::CPS_OWNED state. Sub-page can be owned
 	 * by sub-io. Protected by a VM lock.
@@ -798,6 +799,44 @@ struct cl_page {
 	/** Assigned if doing a sync_io */
 	struct cl_sync_io	*cp_sync_io;
 };
+
+struct cl_page_batch {
+	unsigned char cl_page_count;
+	struct cl_page *cl_pages[FOLIO_BATCH_SIZE];
+};
+
+static inline void cl_page_batch_init(struct cl_page_batch *cl_batch)
+{
+	cl_batch->cl_page_count = 0;
+}
+
+static inline void cl_page_batch_reinit(struct cl_page_batch *cl_batch)
+{
+	cl_page_batch_init(cl_batch);
+}
+
+static inline unsigned int cl_page_batch_count(struct cl_page_batch *cl_batch)
+{
+	return cl_batch->cl_page_count;
+}
+
+static inline unsigned int cl_page_batch_space(struct cl_page_batch *cl_batch)
+{
+	return FOLIO_BATCH_SIZE - cl_batch->cl_page_count;
+}
+
+static inline unsigned int cl_page_batch_add(struct cl_page_batch *cl_batch,
+					     struct cl_page *cl_page)
+{
+	cl_batch->cl_pages[cl_batch->cl_page_count++] = cl_page;
+	return cl_page_batch_space(cl_batch);
+}
+
+static inline struct cl_page *cl_page_batch_at(struct cl_page_batch *cl_batch,
+					       int at)
+{
+	return cl_batch->cl_pages[at];
+}
 
 /**
  * Per-layer part of cl_page.
@@ -956,27 +995,28 @@ do {                                                                          \
 	}                                                                     \
 } while (0)
 
-static inline struct page *cl_page_vmpage(const struct cl_page *page)
+struct cl_page *cl_page_from_folio(struct folio *folio, pgoff_t index,
+				   bool get);
+
+static inline size_t cl_folio_pgno(const struct cl_page *cl_page)
 {
-	LASSERT(page->cp_vmpage != NULL);
-	return page->cp_vmpage;
+	return cl_page->cp_pgno;
 }
 
-static inline int cl_folio_pgno(const struct cl_page *cl_page)
+static inline void *cl_kmap_local(struct cl_page *cl_page)
 {
-#ifdef HAVE___FILEMAP_GET_FOLIO
-	struct folio *folio = page_folio(cl_page->cp_vmpage);
-	int pgno = folio_page_idx(folio, cl_page->cp_vmpage);
-
-	return pgno;
-#else
-	return 0;
-#endif
+	return kmap_local_folio(cl_page->cp_folio,
+				cl_folio_pgno(cl_page) << PAGE_SHIFT);
 }
 
-static inline pgoff_t cl_page_index(const struct cl_page *cp)
+static inline struct page *cl_folio_page(const struct cl_page *cl_page)
 {
-	return folio_index_page(cl_page_vmpage(cp));
+	return folio_page(cl_page->cp_folio, cl_folio_pgno(cl_page));
+}
+
+static inline pgoff_t cl_page_index(const struct cl_page *cl_page)
+{
+	return cl_page->cp_folio->index + cl_folio_pgno(cl_page);
 }
 
 /**
@@ -1393,7 +1433,7 @@ struct cl_io_slice {
 };
 
 typedef void (*cl_commit_cbt)(const struct lu_env *, struct cl_io *,
-			      struct folio_batch *);
+			      struct cl_page_batch *);
 
 struct cl_read_ahead {
 	/* Maximum page index the readahead window will end.
@@ -2282,18 +2322,18 @@ ssize_t cl_dio_pages_init(const struct lu_env *env, struct cl_io *io,
 
 /* cl_page */
 struct cl_page *cl_page_find(const struct lu_env *env,
-			     struct cl_object *obj,
-			     pgoff_t idx, struct page *vmpage,
+			     struct cl_object *obj, pgoff_t idx,
+			     struct folio *folio, s32 pgno,
 			     enum cl_page_type type);
 struct cl_page *cl_page_alloc(const struct lu_env *env,
 			      struct cl_object *o, pgoff_t ind,
-			      struct page *vmpage,
+			      struct folio *folio, s32 pgno,
 			      enum cl_page_type type);
 struct cl_page *cl_page_alloc_sub(const struct lu_env *env,
 				 const struct lu_env *subenv,
 				 struct cl_object *obj,
 				 struct cl_object *subobj,
-				 pgoff_t subidx, struct page *vmpage,
+				 pgoff_t subidx, struct folio *folio, s32 pgno,
 				 enum cl_page_type type);
 void cl_page_get(struct cl_page *page);
 void cl_page_put(const struct lu_env *env,
@@ -2304,7 +2344,6 @@ void cl_page_print(const struct lu_env *env, void *cookie,
 		   lu_printer_t printer, const struct cl_page *pg);
 void cl_page_header_print(const struct lu_env *env, void *cookie,
 			  lu_printer_t printer, const struct cl_page *pg);
-struct cl_page *cl_vmpage_page(struct page *vmpage, struct cl_object *obj);
 
 /**
  * \name ownership
@@ -2626,7 +2665,7 @@ struct cl_dio_pages {
 	 * page array for RDMA - for aligned i/o, this is the user provided
 	 * pages, but for unaligned i/o, this is the internal buffer
 	 */
-	struct page		**cdp_pages;
+	struct folio		**cdp_folios;
 
 	struct cl_page		**cdp_cl_pages;
 	struct cl_sync_io	*cdp_sync_io;
@@ -2644,6 +2683,7 @@ struct cl_dio_pages {
 	 */
 	int			cdp_from;
 	int			cdp_to;
+	s32			*cdp_pgno;
 };
 
 /* Top level struct used for AIO and DIO */

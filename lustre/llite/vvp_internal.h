@@ -49,7 +49,7 @@ struct vvp_io {
 			/**
 			 *  locked page returned from vvp_io
 			 */
-			struct page		*ft_vmpage;
+			struct folio		*ft_folio;
 			/**
 			 * kernel fault info
 			 */
@@ -253,12 +253,9 @@ struct lu_object *vvp_object_alloc(const struct lu_env *env,
 int vvp_global_init(void);
 void vvp_global_fini(void);
 
-#ifdef HAVE_FOLIO_MEMCG_LOCK
-#define folio_memcg_lock_page(page)	folio_memcg_lock(page_folio((page)))
-#define folio_memcg_unlock_page(page)	folio_memcg_unlock(page_folio((page)))
-#else
-#define folio_memcg_lock_page(page)	lock_page_memcg((page))
-#define folio_memcg_unlock_page(page)	unlock_page_memcg((page))
+#ifndef HAVE_FOLIO_MEMCG_LOCK
+#define folio_memcg_lock(page)		lock_page_memcg((page))
+#define folio_memcg_unlock(page)	unlock_page_memcg((page))
 #endif
 
 extern const struct file_operations vvp_dump_pgcache_file_ops;

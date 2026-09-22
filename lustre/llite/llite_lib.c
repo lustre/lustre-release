@@ -2217,7 +2217,7 @@ static int ll_io_zero_page(struct inode *inode, pgoff_t index, pgoff_t offset,
 	struct lu_env *env = NULL;
 	struct cl_io *io = NULL;
 	struct cl_page *clpage = NULL;
-	struct page *vmpage = NULL;
+	struct folio *folio = NULL;
 	unsigned int from = index << PAGE_SHIFT;
 	struct cl_lock *lock = NULL;
 	struct cl_lock_descr *descr = NULL;
@@ -2262,32 +2262,34 @@ static int ll_io_zero_page(struct inode *inode, pgoff_t index, pgoff_t offset,
 		holdinglock = true;
 
 	/* grab page */
-	vmpage = grab_cache_page_nowait(inode->i_mapping, index);
-	if (vmpage == NULL)
+	folio = get_folio_nowait(inode->i_mapping, index,
+				 FGP_LOCK | FGP_CREAT | FGP_NOFS | FGP_NOWAIT,
+				 mapping_gfp_mask(inode->i_mapping));
+	if (IS_ERR_OR_NULL(folio))
 		GOTO(rellock, rc = -EOPNOTSUPP);
 
 	page_locked = true;
-	if (!PageDirty(vmpage)) {
+	if (!folio_test_dirty(folio)) {
 		/* associate cl_page */
-		clpage = cl_page_find(env, clob, folio_index_page(vmpage),
-				      vmpage, CPT_CACHEABLE);
+		clpage = cl_page_find(env, clob, folio->index, folio, 0,
+				      CPT_CACHEABLE);
 		if (IS_ERR(clpage))
 			GOTO(pagefini, rc = PTR_ERR(clpage));
 
 		cl_page_assume(env, io, clpage);
 	}
 
-	if (!PageUptodate(vmpage) && !PageDirty(vmpage) &&
-	    !PageWriteback(vmpage)) {
+	if (!folio_test_uptodate(folio) && !folio_test_dirty(folio) &&
+	    !folio_test_writeback(folio)) {
 		/* read page */
 		/* Set PagePrivate2 to detect special case of empty page
 		 * in osc_brw_fini_request().
 		 * It is also used to tell ll_io_read_page() that we do not
 		 * want the vmpage to be unlocked.
 		 */
-		SetPagePrivate2(vmpage);
+		folio_set_private_2(folio);
 		rc = ll_io_read_page(env, io, clpage, NULL);
-		if (!PagePrivate2(vmpage)) {
+		if (!folio_test_private_2(folio)) {
 			/* PagePrivate2 was cleared in osc_brw_fini_request()
 			 * meaning we read an empty page. In this case, in order
 			 * to avoid allocating unnecessary block in truncated
@@ -2297,7 +2299,7 @@ static int ll_io_zero_page(struct inode *inode, pgoff_t index, pgoff_t offset,
 			cl_page_unassume(env, io, clpage);
 			GOTO(clpfini, rc = 0);
 		}
-		ClearPagePrivate2(vmpage);
+		folio_clear_private_2(folio);
 		if (rc)
 			GOTO(clpfini, rc);
 	}
@@ -2305,7 +2307,7 @@ static int ll_io_zero_page(struct inode *inode, pgoff_t index, pgoff_t offset,
 	/* Thanks to PagePrivate2 flag, ll_io_read_page() did not unlock
 	 * the vmpage, so we are good to proceed and zero range in page.
 	 */
-	zero_user_segments(vmpage, offset, offset + len, 0, 0);
+	folio_zero_range(folio, offset, len);
 
 	if (holdinglock && clpage) {
 		/* explicitly write newly modified page */
@@ -2337,9 +2339,9 @@ clpfini:
 		cl_page_put(env, clpage);
 pagefini:
 	if (page_locked)
-		unlock_page(vmpage);
+		folio_unlock(folio);
 	page_locked = false;
-	put_page(vmpage);
+	folio_put(folio);
 rellock:
 	if (holdinglock)
 		cl_lock_release(env, lock);
@@ -3314,7 +3316,7 @@ void ll_truncate_inode_pages_final(struct inode *inode)
 	if (nrpages) {
 
 		XA_STATE(xas, &mapping->i_pages, 0);
-		struct page *page;
+		struct folio *folio;
 
 		CWARN("%s: inode="DFID"(%p) nrpages=%lu state %#lx, lli_flags %#lx, see https://jira.whamcloud.com/browse/LU-118\n",
 		      ll_i2sbi(inode)->ll_fsname, PFID(ll_inode2fid(inode)),
@@ -3323,21 +3325,20 @@ void ll_truncate_inode_pages_final(struct inode *inode)
 		      ll_i2info(inode)->lli_flags);
 
 		rcu_read_lock();
-		xas_for_each(&xas, page, ULONG_MAX) {
-			if (xas_retry(&xas, page))
+		xas_for_each(&xas, folio, ULONG_MAX) {
+			if (xas_retry(&xas, folio))
 				continue;
 
-			if (xa_is_value(page))
+			if (xa_is_value(folio))
 				continue;
 
 			/*
 			 * We can only have non-uptodate pages
 			 * without internal state at this point
 			 */
-			LASSERTF(!PageUptodate(page) &&
-				 !PageDirty(page) &&
-				 !PagePrivate(page),
-				 "%px", page);
+			LASSERTF(!folio_test_uptodate(folio) &&
+				 !folio_test_dirty(folio) &&
+				 !folio_test_private(folio), "%px", folio);
 		}
 		rcu_read_unlock();
 	}

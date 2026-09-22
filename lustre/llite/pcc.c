@@ -2595,7 +2595,7 @@ ssize_t pcc_file_read_iter(struct kiocb *iocb,
 			unsigned int i;
 
 			/* do not decrypt if page is all 0s */
-			if (is_empty_folio(folio, offs,
+			if (is_empty_folio(folio, 0, offs,
 					   LUSTRE_ENCRYPTION_UNIT_SIZE))
 				break;
 

@@ -1339,9 +1339,10 @@ int ll_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
 
 /* llite/rw.c */
 int ll_writepages(struct address_space *a, struct writeback_control *wbc);
-int ll_readpage(struct file *file, struct page *page);
 #ifdef HAVE_AOPS_READ_FOLIO
 int ll_read_folio(struct file *file, struct folio *folio);
+#else
+int ll_readpage(struct file *file, struct page *page);
 #endif
 int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 			   struct cl_page *page, struct file *file);

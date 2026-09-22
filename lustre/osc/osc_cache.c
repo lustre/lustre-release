@@ -1048,21 +1048,21 @@ static int osc_extent_wait(const struct lu_env *env, struct osc_extent *ext,
 static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 				bool partial)
 {
-	struct lu_env         *env;
-	struct cl_io          *io;
-	struct osc_object     *obj = ext->oe_obj;
-	struct client_obd     *cli = osc_cli(obj);
+	struct lu_env *env;
+	struct cl_io *io;
+	struct osc_object *obj = ext->oe_obj;
+	struct client_obd *cli = osc_cli(obj);
 	struct osc_async_page *oap;
 	struct osc_async_page *tmp;
-	struct folio_batch    *fbatch;
-	int                    pages_in_chunk = 0;
-	int                    ppc_bits    = cli->cl_chunkbits -
-					     PAGE_SHIFT;
-	__u64                  trunc_chunk = trunc_index >> ppc_bits;
-	int                    grants   = 0;
-	int                    nr_pages = 0;
-	int                    rc       = 0;
-	__u16		       refcheck;
+	struct folio_batch fbatch;
+	int pages_in_chunk = 0;
+	int ppc_bits = cli->cl_chunkbits - PAGE_SHIFT;
+	u64 trunc_chunk = trunc_index >> ppc_bits;
+	int grants = 0;
+	int nr_pages = 0;
+	int rc = 0;
+	u16 refcheck;
+
 	ENTRY;
 
 	LASSERT(sanity_check(ext) == 0);
@@ -1079,8 +1079,7 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 	io  = osc_env_new_io(env);
 	io->ci_obj = cl_object_top(osc2cl(obj));
 	io->ci_ignore_layout = 1;
-	fbatch = &osc_env_info(env)->oti_fbatch;
-	ll_folio_batch_init(fbatch);
+	ll_folio_batch_init(&fbatch);
 	rc = cl_io_init(env, io, CIT_MISC, io->ci_obj);
 	if (rc < 0)
 		GOTO(out, rc);
@@ -1089,7 +1088,7 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 	list_for_each_entry_safe(oap, tmp, &ext->oe_pages,
 				     oap_pending_item) {
 		pgoff_t index = osc_index(oap2osc(oap));
-		struct cl_page  *page = oap2cl_page(oap);
+		struct cl_page *cl_page = oap2cl_page(oap);
 
 		LASSERT(list_empty(&oap->oap_rpc_item));
 
@@ -1106,22 +1105,22 @@ static int osc_extent_truncate(struct osc_extent *ext, pgoff_t trunc_index,
 
 		list_del_init(&oap->oap_pending_item);
 
-		cl_page_get(page);
+		cl_page_get(cl_page);
 
-		if (cl_page_own(env, io, page) == 0) {
-			cl_page_discard(env, io, page);
-			cl_page_disown(env, io, page);
+		if (cl_page_own(env, io, cl_page) == 0) {
+			cl_page_discard(env, io, cl_page);
+			cl_page_disown(env, io, cl_page);
 		} else {
-			LASSERT(page->cp_state == CPS_FREEING);
+			LASSERT(cl_page->cp_state == CPS_FREEING);
 			LASSERT(0);
 		}
 
-		cl_batch_put(env, page, fbatch);
+		cl_batch_put(env, cl_page, &fbatch);
 
 		--ext->oe_nr_pages;
 		++nr_pages;
 	}
-	folio_batch_release(fbatch);
+	folio_batch_release(&fbatch);
 
 	EASSERTF(ergo(ext->oe_start >= trunc_index + !!partial,
 		      ext->oe_nr_pages == 0),
@@ -2502,17 +2501,17 @@ int __osc_io_unplug(const struct lu_env *env, struct client_obd *cli,
 EXPORT_SYMBOL(__osc_io_unplug);
 
 int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
-			struct cl_page *page, loff_t offset)
+			struct cl_page *cl_page, loff_t offset)
 {
 	struct osc_async_page *oap = &ops->ops_oap;
 
 	ENTRY;
-	if (!page)
+	if (!cl_page)
 		return round_up(sizeof(*oap), 8);
 
 	oap->oap_obj = osc;
-	oap->oap_brw_page.bp_folio = page_folio(page->cp_vmpage);
-	oap->oap_brw_page.bp_pgno = cl_folio_pgno(page);
+	oap->oap_brw_page.bp_folio = cl_page->cp_folio;
+	oap->oap_brw_page.bp_pgno = cl_folio_pgno(cl_page);
 	oap->oap_obj_off = offset;
 	LASSERT(!(offset & ~PAGE_MASK));
 
@@ -2520,7 +2519,7 @@ int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
 	 * they're submitted.  Setting this here lets us avoid calling
 	 * cl_page_clip later to set this.
 	 */
-	if (page->cp_type == CPT_TRANSIENT)
+	if (cl_page->cp_type == CPT_TRANSIENT)
 		oap->oap_async_flags |= ASYNC_COUNT_STABLE|ASYNC_URGENT|
 					ASYNC_READY;
 
@@ -2539,17 +2538,17 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 		       cl_commit_cbt cb)
 {
 	struct osc_io *oio = osc_env_io(env);
-	struct osc_extent     *ext = NULL;
+	struct osc_extent *ext = NULL;
 	struct osc_async_page *oap = &ops->ops_oap;
-	struct client_obd     *cli = osc_cli(osc);
-	struct folio_batch    *fbatch = &osc_env_info(env)->oti_fbatch;
+	struct client_obd *cli = osc_cli(osc);
+	struct cl_page_batch *cl_batch = &osc_env_info(env)->oti_cl_batch;
 	pgoff_t index;
 	unsigned int tmp;
 	unsigned int grants = 0;
-	u32    brw_flags = OBD_BRW_ASYNC;
-	int    cmd = OBD_BRW_WRITE;
-	int    need_release = 0;
-	int    rc = 0;
+	u32 brw_flags = OBD_BRW_ASYNC;
+	int cmd = OBD_BRW_WRITE;
+	int need_release = 0;
+	int rc = 0;
 
 	ENTRY;
 	if (!cli->cl_import ||
@@ -2678,9 +2677,9 @@ int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
 		 * or osc_extent_find(), so we must mark dirty & unlock
 		 * any pages in the write commit folio_batch.
 		 */
-		if (folio_batch_count(fbatch)) {
-			cb(env, io, fbatch);
-			folio_batch_reinit(fbatch);
+		if (cl_page_batch_count(cl_batch)) {
+			cb(env, io, cl_batch);
+			cl_page_batch_reinit(cl_batch);
 		}
 
 		if (grants == 0) {
@@ -3524,20 +3523,20 @@ bool osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 			  osc_page_gang_cbt cb, void *cbdata)
 {
 	struct osc_page *ops;
-	struct folio_batch *fbatch;
-	void            **pvec;
-	pgoff_t         idx;
-	unsigned int    nr;
-	unsigned int    i;
-	unsigned int    j;
-	bool            res = true;
-	bool            tree_lock = true;
+	struct folio_batch fbatch;
+	void **pvec;
+	pgoff_t idx;
+	unsigned int nr;
+	unsigned int i;
+	unsigned int j;
+	bool res = true;
+	bool tree_lock = true;
+
 	ENTRY;
 
 	idx = start;
 	pvec = osc_env_info(env)->oti_pvec;
-	fbatch = &osc_env_info(env)->oti_fbatch;
-	ll_folio_batch_init(fbatch);
+	ll_folio_batch_init(&fbatch);
 	spin_lock(&osc->oo_tree_lock);
 	while ((nr = radix_tree_gang_lookup(&osc->oo_tree, pvec,
 					    idx, OTI_PVEC_SIZE)) > 0) {
@@ -3579,9 +3578,9 @@ bool osc_page_gang_lookup(const struct lu_env *env, struct cl_io *io,
 		for (i = 0; i < j; ++i) {
 			ops = pvec[i];
 			page = ops->ops_cl.cpl_page;
-			cl_batch_put(env, page, fbatch);
+			cl_batch_put(env, page, &fbatch);
 		}
-		folio_batch_release(fbatch);
+		folio_batch_release(&fbatch);
 
 		if (nr < OTI_PVEC_SIZE || end_of_region)
 			break;
@@ -3702,7 +3701,7 @@ bool osc_discard_cb(const struct lu_env *env, struct cl_io *io,
 		info->oti_next_index = osc_index(ops) + 1;
 		if (cl_page_own(env, io, page) == 0) {
 			if (!ergo(page->cp_type == CPT_CACHEABLE,
-				  !PageDirty(cl_page_vmpage(page))))
+				  !folio_test_dirty(page->cp_folio)))
 				CL_PAGE_DEBUG(D_ERROR, env, page,
 					      "discard dirty page?\n");
 

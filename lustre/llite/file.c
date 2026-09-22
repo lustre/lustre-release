@@ -526,23 +526,32 @@ out:
 	RETURN(rc);
 }
 
-static inline int ll_dom_readpage(void *data, struct page *page)
+/* parameters for do_dom_read_folio */
+struct dom_read_folio_param {
+	struct niobuf_local	drfp_lnb;
+	pgoff_t			drfp_index;
+};
+
+static inline int do_dom_read_folio(void *data, struct folio *folio)
 {
-	/* since ll_dom_readpage is a page cache helper, it is safe to assume
-	 * mapping and host pointers are set here
+	/* since ll_dom_read_folio is a folio cache helper, it is safe to
+	 * assume mapping and host pointers are set here
 	 */
 	struct inode *inode;
-	struct niobuf_local *lnb = data;
+	struct dom_read_folio_param *drfp = data;
+	struct niobuf_local *lnb = &drfp->drfp_lnb;
 	void *kaddr;
 	int rc = 0;
+	size_t pgno = drfp->drfp_index - folio->index;
 
-	inode = page2inode(page);
+	LASSERT(folio_nr_pages(folio) == 1);
+	inode = folio2inode(folio);
 
-	kaddr = kmap_local_page(page);
+	/* note that caller caps lnb_len to at most one page */
+	kaddr = kmap_local_folio(folio, pgno << PAGE_SHIFT);
 	memcpy(kaddr, lnb->lnb_data, lnb->lnb_len);
 	if (lnb->lnb_len < PAGE_SIZE)
-		memset(kaddr + lnb->lnb_len, 0,
-		       PAGE_SIZE - lnb->lnb_len);
+		memset(kaddr + lnb->lnb_len, 0, PAGE_SIZE - lnb->lnb_len);
 	kunmap_local(kaddr);
 
 	if (inode && IS_ENCRYPTED(inode) && S_ISREG(inode->i_mode)) {
@@ -554,19 +563,14 @@ static inline int ll_dom_readpage(void *data, struct page *page)
 			unsigned int offs = 0;
 
 			while (offs < PAGE_SIZE) {
-				struct folio *vmfolio;
-				s32 pgno;
-
 				/* decrypt only if page is not empty */
-				if (memcmp(page_address(page) + offs,
-					   page_address(ZERO_PAGE(0)),
-					   LUSTRE_ENCRYPTION_UNIT_SIZE) == 0)
+				if (is_empty_folio(folio, pgno, offs,
+						   LUSTRE_ENCRYPTION_UNIT_SIZE))
 					break;
-				vmfolio = page_folio(page);
-				pgno = folio_page_idx(vmfolio, page);
-				rc = llcrypt_decrypt_pagecache_blocks(vmfolio,
+
+				rc = llcrypt_decrypt_pagecache_blocks(folio,
 								      pgno,
-						    LUSTRE_ENCRYPTION_UNIT_SIZE,
+						LUSTRE_ENCRYPTION_UNIT_SIZE,
 								      offs);
 				if (rc)
 					break;
@@ -576,10 +580,11 @@ static inline int ll_dom_readpage(void *data, struct page *page)
 		}
 	}
 	if (!rc) {
-		flush_dcache_page(page);
-		SetPageUptodate(page);
+		flush_dcache_folio(folio);
+		if ((pgno + 1) == folio_nr_pages(folio))
+			folio_mark_uptodate(folio);
 	}
-	unlock_page(page);
+	folio_unlock(folio);
 
 	return rc;
 }
@@ -587,10 +592,13 @@ static inline int ll_dom_readpage(void *data, struct page *page)
 #ifdef HAVE_READ_CACHE_FOLIO_WANTS_FILE
 static inline int ll_dom_read_folio(struct file *file, struct folio *folio0)
 {
-	return ll_dom_readpage(file->private_data, folio_page(folio0, 0));
+	return do_dom_read_folio(file->private_data, folio0);
 }
 #else
-#define ll_dom_read_folio	ll_dom_readpage
+static inline int ll_dom_read_folio(void *data, struct page *page0)
+{
+	return do_dom_read_folio(data, page_folio(page0));
+}
 #endif
 
 void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req)
@@ -600,12 +608,12 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req)
 	struct ll_inode_info *lli = ll_i2info(inode);
 	struct cl_object *obj = lli->lli_clob;
 	struct address_space *mapping = inode->i_mapping;
-	struct page *vmpage;
+	struct folio *folio;
 	struct niobuf_remote *rnb;
 	struct mdt_body *body;
 	char *data;
 	unsigned long index, start;
-	struct niobuf_local lnb;
+	struct dom_read_folio_param drfp;
 	__u16 refcheck;
 	int rc;
 
@@ -655,48 +663,51 @@ void ll_dom_finish_open(struct inode *inode, struct ptlrpc_request *req)
 
 	data = (char *)rnb + sizeof(*rnb);
 
-	lnb.lnb_file_offset = rnb->rnb_offset;
-	start = lnb.lnb_file_offset >> PAGE_SHIFT;
+	drfp.drfp_lnb.lnb_file_offset = rnb->rnb_offset;
+	start = drfp.drfp_lnb.lnb_file_offset >> PAGE_SHIFT;
 	index = 0;
-	LASSERT((lnb.lnb_file_offset & ~PAGE_MASK) == 0);
-	lnb.lnb_page_offset = 0;
+	LASSERT((drfp.drfp_lnb.lnb_file_offset & ~PAGE_MASK) == 0);
+	drfp.drfp_lnb.lnb_page_offset = 0;
 	do {
-		struct cl_page *page;
+		struct cl_page *cl_page;
 
-		lnb.lnb_data = data + (index << PAGE_SHIFT);
-		lnb.lnb_len = rnb->rnb_len - (index << PAGE_SHIFT);
-		if (lnb.lnb_len > PAGE_SIZE)
-			lnb.lnb_len = PAGE_SIZE;
+		drfp.drfp_lnb.lnb_data = data + (index << PAGE_SHIFT);
+		drfp.drfp_lnb.lnb_len = rnb->rnb_len - (index << PAGE_SHIFT);
 
-		vmpage = ll_read_cache_page(mapping, index + start,
-					    ll_dom_read_folio, &lnb);
-		if (IS_ERR(vmpage)) {
-			CWARN("%s: cannot fill page %lu for "DFID" with data: rc = %li\n",
+		/* cap the length to at most one page */
+		if (drfp.drfp_lnb.lnb_len > PAGE_SIZE)
+			drfp.drfp_lnb.lnb_len = PAGE_SIZE;
+		drfp.drfp_index = index + start;
+
+		folio = ll_read_cache_folio(mapping, drfp.drfp_index,
+					    ll_dom_read_folio, &drfp);
+		if (IS_ERR(folio)) {
+			CWARN("%s: cannot fill folio %lu for "DFID" with data: rc = %li\n",
 			      ll_i2sbi(inode)->ll_fsname, index + start,
 			      PFID(lu_object_fid(&obj->co_lu)),
-			      PTR_ERR(vmpage));
+			      PTR_ERR(folio));
 			break;
 		}
-		lock_page(vmpage);
-		if (vmpage->mapping == NULL) {
-			unlock_page(vmpage);
-			put_page(vmpage);
+		folio_lock(folio);
+		if (folio->mapping == NULL) {
+			folio_unlock(folio);
+			folio_put(folio);
 			/* page was truncated */
 			break;
 		}
 		/* attach VM page to CL page cache */
-		page = cl_page_find(env, obj, folio_index_page(vmpage), vmpage,
-				    CPT_CACHEABLE);
-		if (IS_ERR(page)) {
-			ClearPageUptodate(vmpage);
-			unlock_page(vmpage);
-			put_page(vmpage);
+		cl_page = cl_page_find(env, obj, folio->index, folio, 0,
+				       CPT_CACHEABLE);
+		if (IS_ERR(cl_page)) {
+			folio_clear_uptodate(folio);
+			folio_unlock(folio);
+			folio_put(folio);
 			break;
 		}
-		SetPageUptodate(vmpage);
-		cl_page_put(env, page);
-		unlock_page(vmpage);
-		put_page(vmpage);
+		folio_mark_uptodate(folio);
+		cl_page_put(env, cl_page);
+		folio_unlock(folio);
+		folio_put(folio);
 		index++;
 	} while (rnb->rnb_len > (index << PAGE_SHIFT));
 

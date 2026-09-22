@@ -1410,7 +1410,7 @@ struct cl_sub_dio *cl_sub_dio_alloc(struct cl_dio_aio *ll_aio,
 		init_waitqueue_head(&sdio->csd_write_waitq);
 		spin_lock_init(&sdio->csd_write_lock);
 
-		atomic_add(1,  &ll_aio->cda_sync.csi_sync_nr);
+		atomic_add(1, &ll_aio->cda_sync.csi_sync_nr);
 
 		if (sdio->csd_unaligned) {
 			size_t v_sz = 0;
@@ -1500,19 +1500,24 @@ int ll_allocate_dio_buffer(struct cl_dio_pages *cdp, size_t io_size)
 		io_size -= min_t(size_t, PAGE_SIZE - pg_offset, io_size);
 	}
 
+	cdp->cdp_folios = NULL;
 	/* calculate pages for the rest of the buffer */
 	cdp->cdp_page_count += (io_size + PAGE_SIZE - 1) >> PAGE_SHIFT;
-
-	cdp->cdp_pages = kvzalloc(cdp->cdp_page_count * sizeof(struct page *),
-				  GFP_NOFS);
-	if (cdp->cdp_pages == NULL)
+	cdp->cdp_pgno = kvcalloc(cdp->cdp_page_count, sizeof(*cdp->cdp_pgno),
+				 GFP_NOFS);
+	if (!cdp->cdp_pgno)
+		GOTO(out, result = -ENOMEM);
+	cdp->cdp_folios = kvcalloc(cdp->cdp_page_count,
+				   sizeof(*cdp->cdp_folios), GFP_NOFS);
+	if (!cdp->cdp_folios)
 		GOTO(out, result = -ENOMEM);
 
 	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_DIO_BUFFER_ALLOC) ||
 	    CFS_FAIL_CHECK(OBD_FAIL_LLITE_DIO_DRAIN_RETRY))
 		GOTO(out, result = -ENOMEM);
 
-	result = obd_pool_get_pages_array(cdp->cdp_pages, cdp->cdp_page_count);
+	result = obd_pool_get_folios_array(cdp->cdp_folios,
+					   cdp->cdp_page_count);
 	if (result)
 		GOTO(out, result);
 
@@ -1529,13 +1534,19 @@ EXPORT_SYMBOL(ll_allocate_dio_buffer);
 
 void ll_free_dio_buffer(struct cl_dio_pages *cdp)
 {
-	if (!cdp->cdp_pages)
+	struct folio **folio_array = cdp->cdp_folios;
+	s32 *pgno_array = cdp->cdp_pgno;
+	int nfolios = cdp->cdp_page_count;
+
+	cdp->cdp_pgno = NULL;
+	cdp->cdp_folios = NULL;
+
+	kvfree(pgno_array);
+	if (!folio_array)
 		return;
 
-	obd_pool_put_pages_array(cdp->cdp_pages, cdp->cdp_page_count);
-
-	kvfree(cdp->cdp_pages);
-	cdp->cdp_pages = NULL;
+	obd_pool_put_folios_array(folio_array, nfolios);
+	kvfree(folio_array);
 }
 EXPORT_SYMBOL(ll_free_dio_buffer);
 
@@ -1545,80 +1556,79 @@ EXPORT_SYMBOL(ll_free_dio_buffer);
  */
 void ll_release_user_pages(struct cl_dio_pages *cdp)
 {
-	struct page **pages = cdp->cdp_pages;
-	int npages = cdp->cdp_page_count;
+	struct folio **folio_array = cdp->cdp_folios;
+	s32 *pgno_array = cdp->cdp_pgno;
+	int nfolios = cdp->cdp_page_count;
 	bool pinned = cdp->cdp_pinned;
 	int i;
+	s32 pgno;
 
-	cdp->cdp_pages = NULL;
+	cdp->cdp_pgno = NULL;
+	cdp->cdp_folios = NULL;
 	/*
 	 * npages can be 0 if cl_dio_pages_init failed after allocating
-	 * cdp_pages. We still need to free the pages array in this case.
+	 * cdp_folios. We still need to free the folio array in this case.
 	 */
-	if (!npages) {
-		kvfree(pages);
+	if (!nfolios) {
+		kvfree(folio_array);
 		return;
 	}
 
-	for (i = 0; i < npages; i++) {
-		if (!pages[i])
+	for (i = 0; i < nfolios; i++) {
+		if (!folio_array[i])
 			break;
-		ll_release_page(pages[i], pinned);
+		pgno = pgno_array ? pgno_array[i] : 0;
+		ll_release_page(folio_page(folio_array[i], pgno), pinned);
 	}
-
-	kvfree(pages);
+	kvfree(folio_array);
+	kvfree(pgno_array);
 }
 EXPORT_SYMBOL(ll_release_user_pages);
 
-static inline size_t folio_from_iter(struct page *pg,
+static inline size_t folio_from_iter(struct folio *folio, s32 pgno,
 				     unsigned long offset, size_t bytes,
 				     struct iov_iter *iter)
 {
 	size_t copied; /* bytes successfully copied */
 
 #if defined(HAVE_COPY_FOLIO_FROM_ITER_ATOMIC)
-	struct folio *folio = page_folio(pg);
-	int pgno = folio_page_idx(folio, pg);
-
 	offset += pgno * PAGE_SIZE;
 	copied = copy_folio_from_iter_atomic(folio, offset, bytes, iter);
-	flush_dcache_folio(folio);
 #elif defined(HAVE_COPY_PAGE_FROM_ITER_ATOMIC)
-	copied = copy_page_from_iter_atomic(pg, offset, bytes, iter);
-	flush_dcache_page(pg);
+	copied = copy_page_from_iter_atomic(folio_page(folio, pgno), offset,
+					    bytes, iter);
 #else
-	copied = iov_iter_copy_from_user_atomic(pg, iter, offset, bytes);
+	copied = iov_iter_copy_from_user_atomic(folio_page(folio, pgno), iter,
+						offset, bytes);
 	iov_iter_advance(iter, copied);
-	flush_dcache_page(pg);
 #endif
+	flush_dcache_folio(folio);
 	return copied;
 }
 
-static inline size_t folio_to_iter(struct page *pg,
+static inline size_t folio_to_iter(struct folio *folio, s32 pgno,
 				   unsigned long offset, size_t bytes,
 				   struct iov_iter *iter)
 {
 	size_t copied; /* bytes successfully copied */
 
 #ifdef HAVE___FILEMAP_GET_FOLIO
-	struct folio *folio = page_folio(pg);
-	int pgno = folio_page_idx(folio, pg);
-
 	offset += pgno * PAGE_SIZE;
 	copied = copy_folio_to_iter(folio, offset, bytes, iter);
 #else
-	copied = copy_page_to_iter(pg, offset, bytes, iter);
+	copied = copy_page_to_iter(folio_page(folio, pgno), offset, bytes,
+				   iter);
 #endif
 	return copied;
 }
 
-static inline size_t folio_iter(struct page *page,
+static inline size_t folio_iter(struct folio *folio, s32 pgno,
 				unsigned long offset, size_t bytes,
 				struct iov_iter *iter, int rw)
 {
 	if (rw == WRITE)
-		return folio_from_iter(page, offset, bytes, iter);
-	return folio_to_iter(page, offset, bytes, iter);
+		return folio_from_iter(folio, pgno, offset, bytes, iter);
+	return folio_to_iter(folio, pgno, offset, bytes, iter);
 }
 
 /* copy IO data to/from internal buffer and userspace iovec */
@@ -1720,19 +1730,22 @@ static ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
 	 * at the iovec
 	 */
 	while (true) {
-		struct page *page = cdp->cdp_pages[i];
+		struct folio *folio;
 		unsigned long offset; /* offset into kernel buffer page */
 		size_t copied; /* bytes successfully copied */
 		size_t bytes; /* bytes to copy for this page */
+		s32 pgno;
 
 		LASSERT(i < cdp->cdp_page_count);
 
+		folio = cdp->cdp_folios[i];
+		pgno = cdp->cdp_pgno[i];
 		offset = pos & ~PAGE_MASK;
 		bytes = min_t(unsigned long, PAGE_SIZE - offset, count);
 
 		CDEBUG(D_VFSTRACE,
-		       "count %zd, offset %lu, pos %lld, cdp_page_count %u\n",
-		       count, offset, pos, cdp->cdp_page_count);
+		       "count %zd, offset %lu, pos %lld, pgno %d cdp_page_count %u\n",
+		       count, offset, pos, pgno, cdp->cdp_page_count);
 
 		if (fatal_signal_pending(current)) {
 			status = -EINTR;
@@ -1746,9 +1759,9 @@ static ssize_t __ll_dio_user_copy(struct cl_sub_dio *sdio)
 		 * NB: This is a noop on x86 but active on other
 		 * architectures
 		 */
-		flush_dcache_page(page);
+		flush_dcache_folio(folio);
 
-		copied = folio_iter(page, offset, bytes, iter, rw);
+		copied = folio_iter(folio, pgno, offset, bytes, iter, rw);
 		pos += copied;
 		count -= copied;
 

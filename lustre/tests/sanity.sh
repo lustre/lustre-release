@@ -39,7 +39,6 @@ init_logging
 ALWAYS_EXCEPT="$SANITY_EXCEPT "
 always_except LU-9693  42a 42c
 always_except LU-6493  42b
-always_except LU-16515 118c 118d
 always_except LU-8411  407
 always_except LU-18032 119i
 always_except LU-12550 216

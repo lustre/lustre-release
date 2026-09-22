@@ -35,10 +35,10 @@ static void vvp_page_discard(const struct lu_env *env,
 			     struct cl_io *unused)
 {
 	struct cl_page *cp = slice->cpl_page;
-	struct page *vmpage = cp->cp_vmpage;
+	struct folio *folio = cp->cp_folio;
 
-	if (cp->cp_defer_uptodate && !cp->cp_ra_used && vmpage->mapping != NULL)
-		ll_ra_stats_inc(vmpage->mapping->host, RA_STAT_DISCARDED);
+	if (cp->cp_defer_uptodate && !cp->cp_ra_used && folio->mapping != NULL)
+		ll_ra_stats_inc(folio->mapping->host, RA_STAT_DISCARDED);
 }
 
 static void vvp_page_delete(const struct lu_env *env,
@@ -47,18 +47,19 @@ static void vvp_page_delete(const struct lu_env *env,
 	struct cl_page *cp = slice->cpl_page;
 
 	if (cp->cp_type == CPT_CACHEABLE) {
-		struct page *vmpage = cp->cp_vmpage;
-		struct inode *inode = vmpage->mapping->host;
+		struct folio *folio = cp->cp_folio;
+		struct inode *inode = folio->mapping->host;
 
-		LASSERT((struct cl_page *)vmpage->private == cp);
+		LASSERT(folio_get_private(folio) == cp);
 
-		CDEBUG(D_CACHE, "delete page %pK index %ld\n",
-		       vmpage, folio_index_page(vmpage));
+		CDEBUG(D_CACHE, "delete page %p index %ld\n",
+		       folio, folio->index);
 		/* Drop the reference count held in vvp_page_init */
 		refcount_dec(&cp->cp_ref);
 
-		ClearPagePrivate(vmpage);
-		vmpage->private = 0;
+		/* cl_page was attached to folio in vvp_page_init, detach it */
+		folio_clear_private(folio);
+		folio_change_private(folio, NULL);
 
 		/* clearpageuptodate prevents the page being read by the
 		 * kernel after it has been deleted from Lustre, which avoids
@@ -66,9 +67,9 @@ static void vvp_page_delete(const struct lu_env *env,
 		 * that a page was potentially deleted and catch the resulting
 		 * SIGBUS - see ll_filemap_fault() (LU-16160)
 		 */
-		if (PageUptodate(vmpage)) {
+		if (folio_test_uptodate(folio)) {
 			write_seqlock(&ll_i2info(inode)->lli_page_inv_lock);
-			ClearPageUptodate(vmpage);
+			folio_clear_uptodate(folio);
 			write_sequnlock(&ll_i2info(inode)->lli_page_inv_lock);
 		}
 		/* The reference from vmpage to cl_page is removed,
@@ -82,28 +83,28 @@ static void vvp_page_delete(const struct lu_env *env,
  * vvp_vmpage_error() - Handles page transfer errors at VM level.
  *
  * @inode: inode linked with vmpage(struct page)
- * @vmpage: struct page that has error
+ * @folio: struct folio that has error
  * @ioret: type of error
  *
  * This takes inode as a separate argument, because inode on which error is to
  * be set can be different from \a vmpage inode in case of direct-io.
  */
-static void vvp_vmpage_error(struct inode *inode, struct page *vmpage,
+static void vvp_vmpage_error(struct inode *inode, struct folio *folio,
 			     int ioret)
 {
 	struct vvp_object *obj = cl_inode2vvp(inode);
 
 	if (ioret == 0) {
-		ClearPageError(vmpage);
+		ClearPageError(folio_page(folio, 0));
 		obj->vob_discard_page_warned = 0;
 	} else {
-		SetPageError(vmpage);
+		SetPageError(folio_page(folio, 0));
 		if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_PANIC_ON_ESTALE))
 			LASSERTF(ioret == -ENOSPC,
 				 "%s:"DFID" got a stale page %p: rc = %d.\n",
 				 obj->vob_cl.co_lu.lo_dev->ld_obd->obd_name,
 				 PFID(lu_object_fid(&obj->vob_cl.co_lu)),
-				 vmpage, ioret);
+				 folio, ioret);
 
 		mapping_set_error(inode->i_mapping, ioret);
 
@@ -120,11 +121,11 @@ static void vvp_page_complete_read(const struct lu_env *env,
 				   int ioret)
 {
 	struct cl_page *cp = slice->cpl_page;
-	struct page *vmpage = cp->cp_vmpage;
+	struct folio *folio = cp->cp_folio;
 	struct inode *inode = vvp_object_inode(cp->cp_obj);
 
 	ENTRY;
-	LASSERT(PageLocked(vmpage));
+	LASSERT(folio_test_locked(folio));
 	CL_PAGE_HEADER(D_PAGE, env, cp, "completing READ with %d\n", ioret);
 
 	if (cp->cp_defer_uptodate)
@@ -133,11 +134,11 @@ static void vvp_page_complete_read(const struct lu_env *env,
 	if (ioret == 0)  {
 		/**
 		 * cp_defer_uptodate is used for readahead page, and the
-		 * vmpage Uptodate bit is deferred to set in ll_readpage/
+		 * folio Uptodate bit is deferred to set in ll_readpage/
 		 * ll_io_read_page.
 		 */
 		if (!cp->cp_defer_uptodate)
-			SetPageUptodate(vmpage);
+			folio_mark_uptodate(folio);
 	} else if (cp->cp_defer_uptodate) {
 		cp->cp_defer_uptodate = 0;
 		if (ioret == -EAGAIN) {
@@ -145,13 +146,12 @@ static void vvp_page_complete_read(const struct lu_env *env,
 			 * because subpage would be from wrong osc when trying
 			 * to read from a new mirror
 			 */
-			generic_error_remove_folio(vmpage->mapping,
-						   page_folio(vmpage));
+			generic_error_remove_folio(folio->mapping, folio);
 		}
 	}
 
 	if (cp->cp_sync_io == NULL)
-		unlock_page(vmpage);
+		folio_unlock(folio);
 
 	EXIT;
 }
@@ -161,23 +161,23 @@ static void vvp_page_complete_write(const struct lu_env *env,
 				    int ioret)
 {
 	struct cl_page *cp = slice->cpl_page;
-	struct page *vmpage = cp->cp_vmpage;
+	struct folio *folio = cp->cp_folio;
 
 	ENTRY;
 	CL_PAGE_HEADER(D_PAGE, env, cp, "completing WRITE with %d\n", ioret);
 
 	if (cp->cp_sync_io != NULL) {
-		LASSERT(PageLocked(vmpage));
-		LASSERT(!PageWriteback(vmpage));
+		LASSERT(folio_test_locked(folio));
+		LASSERT(!folio_test_writeback(folio));
 	} else {
-		LASSERT(PageWriteback(vmpage));
+		LASSERT(folio_test_writeback(folio));
 		/*
 		 * Only mark the page error only when it's an async write
 		 * because applications won't wait for IO to finish.
 		 */
-		vvp_vmpage_error(vvp_object_inode(cp->cp_obj), vmpage, ioret);
+		vvp_vmpage_error(vvp_object_inode(cp->cp_obj), folio, ioret);
 
-		end_page_writeback(vmpage);
+		folio_end_writeback(folio);
 	}
 	EXIT;
 }
@@ -199,26 +199,24 @@ static const struct cl_page_operations vvp_transient_page_ops = {
 };
 
 int vvp_page_init(const struct lu_env *env, struct cl_object *obj,
-		struct cl_page *page, pgoff_t index)
+		struct cl_page *cl_page, pgoff_t index)
 {
-	struct cl_page_slice *cpl = cl_object_page_slice(obj, page);
-	struct page *vmpage = page->cp_vmpage;
+	struct cl_page_slice *cpl = cl_object_page_slice(obj, cl_page);
 
 	CLOBINVRNT(env, obj, vvp_object_invariant(obj));
 
-	if (page->cp_type == CPT_TRANSIENT) {
+	if (cl_page->cp_type == CPT_TRANSIENT) {
 		/* DIO pages are referenced by userspace, we don't need to take
-		 * a reference on them. (contrast with get_page() call above)
+		 * a reference on them. (contrast with folio_attach_private()
+		 * call in the CPT_CACHEABLE branch)
 		 */
-		cl_page_slice_add(page, cpl, obj,
+		cl_page_slice_add(cl_page, cpl, obj,
 				  &vvp_transient_page_ops);
 	} else {
-		get_page(vmpage);
+		folio_attach_private(cl_page->cp_folio, cl_page);
 		/* in cache, decref in cl_page_delete() */
-		refcount_inc(&page->cp_ref);
-		SetPagePrivate(vmpage);
-		vmpage->private = (unsigned long)page;
-		cl_page_slice_add(page, cpl, obj, &vvp_page_ops);
+		refcount_inc(&cl_page->cp_ref);
+		cl_page_slice_add(cl_page, cpl, obj, &vvp_page_ops);
 	}
 
 	return 0;

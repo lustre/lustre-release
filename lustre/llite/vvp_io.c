@@ -986,7 +986,7 @@ static int vvp_io_commit_sync(const struct lu_env *env, struct cl_io *io,
 
 			cl_page_clip(env, page, 0, PAGE_SIZE);
 
-			SetPageUptodate(cl_page_vmpage(page));
+			folio_mark_uptodate(page->cp_folio);
 			cl_page_disown(env, io, page);
 
 			/* held in ll_cl_init() */
@@ -1006,27 +1006,24 @@ static int vvp_io_commit_sync(const struct lu_env *env, struct cl_io *io,
  * Backwards compat for 3.x, 5.x kernels relating to memcg handling
  * & rename of radix tree to xarray.
  */
-static void vvp_set_batch_dirty(struct folio_batch *fbatch)
+static void vvp_set_batch_dirty(struct cl_page_batch *fbatch)
 {
-	struct page *page = fbatch_at_pg(fbatch, 0, 0);
-	int count = folio_batch_count(fbatch);
+	struct cl_page *cl_page = cl_page_batch_at(fbatch, 0);
+	struct folio *folio = cl_page->cp_folio;
+	int count = cl_page_batch_count(fbatch);
+	struct address_space *mapping = folio->mapping;
 #ifdef HAVE_ACCOUNT_PAGE_DIRTIED
-	struct address_space *mapping = page->mapping;
-	unsigned long flags;
+	unsigned long irq_flags;
 	unsigned long skip_pages = 0;
-	int pgno, pg, npgs;
 	int dirtied = 0;
-#elif !defined(HAVE_FOLIO_BATCH) || !defined(HAVE_FILEMAP_GET_FOLIOS)
-	int pg, npgs;
 #endif
 	int i;
 
 	ENTRY;
 
-	BUILD_BUG_ON(FOLIO_BATCH_SIZE > BITS_PER_LONG);
-	LASSERTF(page->mapping,
-		 "mapping must be set. page %px, page->private (cl_page) %px\n",
-		 page, (void *) page->private);
+	LASSERTF(mapping,
+		 "mapping must be set. folio %px, cl_page %px\n",
+		 folio, cl_page);
 
 	/*
 	 * kernels without HAVE_KALLSYMS_LOOKUP_NAME also don't have
@@ -1036,41 +1033,36 @@ static void vvp_set_batch_dirty(struct folio_batch *fbatch)
 	 */
 #ifndef HAVE_ACCOUNT_PAGE_DIRTIED
 	for (i = 0; i < count; i++) {
+		cl_page = cl_page_batch_at(fbatch, i);
 #if defined(HAVE_FOLIO_BATCH) && defined(HAVE_FILEMAP_GET_FOLIOS)
-		filemap_dirty_folio(page->mapping, fbatch->folios[i]);
+		filemap_dirty_folio(mapping, cl_page->cp_folio);
 #else
-		npgs = fbatch_at_npgs(fbatch, i);
-		for (pg = 0; pg < npgs; pg++) {
-			page = fbatch_at_pg(fbatch, i, pg);
-			__set_page_dirty_nobuffers(page);
-		}
+		__set_page_dirty_nobuffers(cl_folio_page(cl_page));
 #endif
 	}
 	EXIT;
 #else
+	BUILD_BUG_ON(FOLIO_BATCH_SIZE > BITS_PER_LONG);
+
 	/* account_page_dirtied is available directly or via kallsyms */
-	for (pgno = i = 0; i < count; i++) {
-		npgs = fbatch_at_npgs(fbatch, i);
-		for (pg = 0; pg < npgs; pg++) {
-			page = fbatch_at_pg(fbatch, i, pg);
-
-			ClearPageReclaim(page);
-
-			folio_memcg_lock_page(page);
-			if (TestSetPageDirty(page)) {
-				/* page is already dirty .. no extra work needed
-				 * set a flag for the i'th page to be skipped
-				 */
-				folio_memcg_unlock_page(page);
-				skip_pages |= (1ul << pgno++);
-				LASSERTF(pgno <= BITS_PER_LONG,
-					 "Limit exceeded pgno: %d/%d\n", pgno,
-					 BITS_PER_LONG);
-			}
+	for (i = 0; i < count; i++) {
+		cl_page = cl_page_batch_at(fbatch, i);
+		folio = cl_page->cp_folio;
+		folio_clear_reclaim(folio);
+		folio_memcg_lock(folio);
+		if (folio_test_set_dirty(folio)) {
+			/* page is already dirty .. no extra work needed
+			 * set a flag for the i'th page to be skipped
+			 */
+			folio_memcg_unlock(folio);
+			skip_pages |= (1ul << i);
+			LASSERTF(i <= BITS_PER_LONG,
+				 "Limit exceeded i: %d/%d\n", i,
+				 BITS_PER_LONG);
 		}
 	}
 
-	xa_lock_irqsave(&mapping->i_pages, flags);
+	xa_lock_irqsave(&mapping->i_pages, irq_flags);
 
 	/* Notes on differences with __set_page_dirty_nobuffers:
 	 * 1. We don't need to call page_mapping because we know this is a page
@@ -1081,26 +1073,25 @@ static void vvp_set_batch_dirty(struct folio_batch *fbatch)
 	 * dirty_nobuffers should be impossible because we hold the page lock.)
 	 * 4. All mappings are the same because i/o is only to one file.
 	 */
-	for (pgno = i = 0; i < count; i++) {
-		npgs = fbatch_at_npgs(fbatch, i);
-		for (pg = 0; pg < npgs; pg++) {
-			page = fbatch_at_pg(fbatch, i, pg);
-			/* if the i'th page was unlocked above, skip it here */
-			if ((skip_pages >> pgno++) & 1)
-				continue;
+	for (i = 0; i < count; i++) {
+		cl_page = cl_page_batch_at(fbatch, i);
+		folio = cl_page->cp_folio;
+		/* if the i'th page was unlocked above, skip it here */
+		if ((skip_pages >> i) & 1)
+			continue;
 
-			LASSERTF(page->mapping == mapping,
-				 "all pages must have the same mapping.  page %px, mapping %px, first mapping %px\n",
-				 page, page->mapping, mapping);
-			WARN_ON_ONCE(!PagePrivate(page) && !PageUptodate(page));
-			account_page_dirtied(page, mapping);
-			__xa_set_mark(&mapping->i_pages, folio_index_page(page),
-				      PAGECACHE_TAG_DIRTY);
-			dirtied++;
-			folio_memcg_unlock_page(page);
-		}
+		LASSERTF(folio->mapping == mapping,
+			 "all folios must have the same mapping.  folio %px, mapping %px, first mapping %px\n",
+			 folio, folio->mapping, mapping);
+		WARN_ON_ONCE(!folio_test_private(folio) &&
+			     !folio_test_uptodate(folio));
+		account_page_dirtied(folio, mapping);
+		__xa_set_mark(&mapping->i_pages, folio->index,
+			      PAGECACHE_TAG_DIRTY);
+		dirtied++;
+		folio_memcg_unlock(folio);
 	}
-	xa_unlock_irqrestore(&mapping->i_pages, flags);
+	xa_unlock_irqrestore(&mapping->i_pages, irq_flags);
 
 	CDEBUG(D_VFSTRACE, "mapping %p, count %d, dirtied %d\n", mapping,
 	       count, dirtied);
@@ -1114,35 +1105,26 @@ static void vvp_set_batch_dirty(struct folio_batch *fbatch)
 }
 
 static void write_commit_callback(const struct lu_env *env, struct cl_io *io,
-				  struct folio_batch *fbatch)
+				  struct cl_page_batch *fbatch)
 {
-	struct page *vmpage;
-	struct cl_page *page;
-	int pg, npgs;
+	struct cl_page *cl_page;
 	int count = 0;
 	int i = 0;
 
 	ENTRY;
 
-	count = folio_batch_count(fbatch);
+	count = cl_page_batch_count(fbatch);
 	LASSERT(count > 0);
 
-	for (i = 0; i < count; i++) {
-		npgs = fbatch_at_npgs(fbatch, i);
-		for (pg = 0; pg < npgs; pg++)
-			SetPageUptodate(fbatch_at_pg(fbatch, i, pg));
-	}
+	for (i = 0; i < count; i++)
+		folio_mark_uptodate(cl_page_batch_at(fbatch, i)->cp_folio);
 
 	vvp_set_batch_dirty(fbatch);
 
 	for (i = 0; i < count; i++) {
-		npgs = fbatch_at_npgs(fbatch, i);
-		for (pg = 0; pg < npgs; pg++) {
-			vmpage = fbatch_at_pg(fbatch, i, pg);
-			page = (struct cl_page *) vmpage->private;
-			cl_page_disown(env, io, page);
-			cl_page_put(env, page);
-		}
+		cl_page = cl_page_batch_at(fbatch, i);
+		cl_page_disown(env, io, cl_page);
+		cl_page_put(env, cl_page);
 	}
 
 	EXIT;
@@ -1244,7 +1226,7 @@ int vvp_io_write_commit(const struct lu_env *env, struct cl_io *io,
 		page = cl_page_list_first(queue);
 		cl_page_list_del(env, queue, page, true);
 
-		if (!PageDirty(cl_page_vmpage(page)))
+		if (!folio_test_dirty(page->cp_folio))
 			cl_page_discard(env, io, page);
 
 		cl_page_disown(env, io, page);
@@ -1584,14 +1566,15 @@ static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
 
 	if (vmf->page) {
 		/* success, vmpage is locked */
-		LL_CDEBUG_PAGE(D_PAGE, vmf->page, "got addr %p type NOPAGE\n",
-			       (void *)vmf->address);
+		LL_CDEBUG_FOLIO(D_PAGE, page_folio(vmf->page),
+				"got addr %p type NOPAGE\n",
+				(void *)vmf->address);
 		if (unlikely(!(cfio->ft_flags & VM_FAULT_LOCKED))) {
 			lock_page(vmf->page);
 			cfio->ft_flags |= VM_FAULT_LOCKED;
 		}
 
-		cfio->ft_vmpage = vmf->page;
+		cfio->ft_folio = page_folio(vmf->page);
 
 		return 0;
 	}
@@ -1615,7 +1598,7 @@ static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
 }
 
 static void mkwrite_commit_callback(const struct lu_env *env, struct cl_io *io,
-				    struct folio_batch *fbatch)
+				    struct cl_page_batch *fbatch)
 {
 	vvp_set_batch_dirty(fbatch);
 }
@@ -1632,8 +1615,8 @@ static int vvp_io_fault_start(const struct lu_env *env,
 	struct vvp_fault_io *cfio = &vio->u.fault;
 	loff_t offset;
 	int result = 0;
-	struct page *vmpage = NULL;
-	struct cl_page *page;
+	struct folio *folio = NULL;
+	struct cl_page *cl_page;
 	loff_t size;
 	pgoff_t last_index;
 
@@ -1652,9 +1635,9 @@ static int vvp_io_fault_start(const struct lu_env *env,
 
 	/* must return locked page */
 	if (fio->ft_mkwrite) {
-		LASSERT(cfio->ft_vmpage != NULL);
-		vmpage = cfio->ft_vmpage;
-		lock_page(vmpage);
+		LASSERT(cfio->ft_folio != NULL);
+		folio = cfio->ft_folio;
+		folio_lock(folio);
 		/**
 		 * page was turncated and lock was cancelled, return ENODATA
 		 * so that VM_FAULT_NOPAGE will be returned to handle_mm_fault()
@@ -1662,7 +1645,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
 		 * release mmap_lock and VM_FAULT_RETRY implies that the
 		 * mmap_lock is released.
 		 */
-		if (!PageUptodate(vmpage))
+		if (!folio_test_uptodate(folio))
 			GOTO(out, result = -ENODATA);
 	} else {
 		result = vvp_io_kernel_fault(cfio);
@@ -1670,18 +1653,18 @@ static int vvp_io_fault_start(const struct lu_env *env,
 			RETURN(result);
 	}
 
-	vmpage = cfio->ft_vmpage;
-	LASSERT(PageLocked(vmpage));
+	folio = cfio->ft_folio;
+	LASSERT(folio_test_locked(folio));
 
 	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_FAULT_TRUNC_RACE))
-		generic_error_remove_folio(vmpage->mapping, page_folio(vmpage));
+		generic_error_remove_folio(folio->mapping, folio);
 
 	size = i_size_read(inode);
 	/* Though we have already held a cl_lock upon this page, but
 	 * it still can be truncated locally.
 	 */
-	if (unlikely((vmpage->mapping != inode->i_mapping) ||
-		     (page_offset(vmpage) > size))) {
+	if (unlikely((folio->mapping != inode->i_mapping) ||
+		     (folio_pos(folio) > size))) {
 		CDEBUG(D_PAGE, "llite: fault and truncate race happened!\n");
 
 		/* return +1 to stop cl_io_loop() and ll_fault() will catch
@@ -1702,7 +1685,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
 		if (last_index < fio->ft_index) {
 			CDEBUG(D_PAGE,
 				"llite: mkwrite and truncate race happened: %p: 0x%lx 0x%lx\n",
-				vmpage->mapping, fio->ft_index, last_index);
+				folio->mapping, fio->ft_index, last_index);
 			/*
 			 * We need to return if we are
 			 * passed the end of the file. This will propagate
@@ -1718,25 +1701,26 @@ static int vvp_io_fault_start(const struct lu_env *env,
 		}
 	}
 
-	page = cl_page_find(env, obj, fio->ft_index, vmpage, CPT_CACHEABLE);
-	if (IS_ERR(page))
-		GOTO(out, result = PTR_ERR(page));
+	cl_page = cl_page_find(env, obj, fio->ft_index, folio, 0,
+			       CPT_CACHEABLE);
+	if (IS_ERR(cl_page))
+		GOTO(out, result = PTR_ERR(cl_page));
 
 	/* if page will be written, then add this page into cache earlier. */
 	if (fio->ft_mkwrite) {
-		wait_on_page_writeback(vmpage);
-		if (!PageDirty(vmpage)) {
+		folio_wait_writeback(folio);
+		if (!folio_test_dirty(folio)) {
 			struct cl_page_list *plist = &vio->u.fault.ft_queue;
 			int to = PAGE_SIZE;
 
 			/* vvp_page_assume() calls wait_on_page_writeback(). */
-			cl_page_assume(env, io, page);
+			cl_page_assume(env, io, cl_page);
 
 			cl_page_list_init(plist);
-			cl_page_list_add(plist, page, true);
+			cl_page_list_add(plist, cl_page, true);
 
 			/* size fixup */
-			if (last_index == cl_page_index(page))
+			if (last_index == cl_page_index(cl_page))
 				to = ((size - 1) & ~PAGE_MASK) + 1;
 
 			/* Do not set Dirty bit here so that in case IO is
@@ -1750,32 +1734,33 @@ static int vvp_io_fault_start(const struct lu_env *env,
 			 * whether indeed out of quota
 			 */
 			if (result == -EDQUOT) {
-				cl_page_get(page);
+				cl_page_get(cl_page);
 				result = vvp_io_commit_sync(env, io,
 							    plist, 0, to);
 				if (result >= 0) {
 					io->ci_noquota = 1;
-					cl_page_own(env, io, page);
-					cl_page_list_add(plist, page, true);
+					cl_page_own(env, io, cl_page);
+					cl_page_list_add(plist, cl_page, true);
 					result = cl_io_commit_async(env, io,
-						plist, 0, to,
-						mkwrite_commit_callback,
-						IO_PRIO_NORMAL);
+								    plist, 0,
+								    to,
+								    mkwrite_commit_callback,
+								    IO_PRIO_NORMAL);
 					io->ci_noquota = 0;
 				} else {
-					cl_page_put(env, page);
+					cl_page_put(env, cl_page);
 				}
 			}
 
-			LASSERT(cl_page_is_owned(page, io));
+			LASSERT(cl_page_is_owned(cl_page, io));
 			cl_page_list_fini(env, plist);
 
-			vmpage = NULL;
+			folio = NULL;
 			if (result < 0) {
-				cl_page_discard(env, io, page);
-				cl_page_disown(env, io, page);
+				cl_page_discard(env, io, cl_page);
+				cl_page_disown(env, io, cl_page);
 
-				cl_page_put(env, page);
+				cl_page_put(env, cl_page);
 
 				/* we're in big trouble, what can we do now? */
 				if (result == -EDQUOT)
@@ -1786,7 +1771,7 @@ static int vvp_io_fault_start(const struct lu_env *env,
 				       "inode %p need_sync_to_oss "DFID"\n",
 				       inode, PFID(&ll_i2info(inode)->lli_fid));
 				ll_i2info(inode)->lli_need_sync_to_oss = true;
-				cl_page_disown(env, io, page);
+				cl_page_disown(env, io, cl_page);
 			}
 		}
 	}
@@ -1803,13 +1788,13 @@ static int vvp_io_fault_start(const struct lu_env *env,
 	else
 		fio->ft_bytes = PAGE_SIZE;
 
-	fio->ft_page = page;
+	fio->ft_page = cl_page;
 	EXIT;
 
 out:
 	/* return unlocked vmpage to avoid deadlocking */
-	if (vmpage != NULL)
-		unlock_page(vmpage);
+	if (folio != NULL)
+		folio_unlock(folio);
 
 	cfio->ft_flags &= ~VM_FAULT_LOCKED;
 

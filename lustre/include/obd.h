@@ -1584,16 +1584,11 @@ static inline void client_adjust_max_dirty(struct client_obd *cli)
 /* Must be used for page cache pages only,
  * not safe otherwise (e.g. direct IO pages)
  */
-static inline struct inode *page2inode(struct page *page)
+static inline struct inode *folio2inode(struct folio *folio)
 {
-	if (page->mapping) {
-		if (PageAnon(page))
-			return NULL;
-		else
-			return page->mapping->host;
-	} else {
-		return NULL;
-	}
+	if (folio->mapping && !folio_test_anon(folio))
+		return folio->mapping->host;
+	return NULL;
 }
 
 #endif /* __OBD_H */

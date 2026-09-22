@@ -192,12 +192,12 @@ static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
 			      enum ll_ra_page_hint hint)
 {
 	struct cl_object *clob  = io->ci_obj;
-	struct inode     *inode = vvp_object_inode(clob);
-	struct page      *vmpage = NULL;
-	struct cl_page   *cp;
-	enum ra_stat      which = _NR_RA_STAT; /* keep gcc happy */
-	int               rc    = 0;
-	const char       *msg   = NULL;
+	struct inode *inode = vvp_object_inode(clob);
+	struct folio *folio = NULL;
+	struct cl_page *cp;
+	enum ra_stat which = _NR_RA_STAT; /* keep gcc happy */
+	int rc = 0;
+	const char *msg = NULL;
 
 	ENTRY;
 
@@ -208,21 +208,22 @@ static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
 		 * the process will fail with OOM killed due to memcg limit.
 		 * See @readahead_gfp_mask for an example.
 		 */
-		vmpage = pagecache_get_page(inode->i_mapping, index,
-					    FGP_LOCK | FGP_CREAT |
-					    FGP_NOFS | FGP_NOWAIT,
-					    mapping_gfp_mask(inode->i_mapping) |
-					    __GFP_NORETRY | __GFP_NOWARN);
-		if (vmpage == NULL) {
+		folio = get_folio_cache(inode->i_mapping, index,
+					FGP_LOCK | FGP_CREAT |
+					FGP_NOFS | FGP_NOWAIT,
+					mapping_gfp_mask(inode->i_mapping) |
+					__GFP_NORETRY | __GFP_NOWARN);
+		if (IS_ERR_OR_NULL(folio)) {
 			which = RA_STAT_FAILED_GRAB_PAGE;
 			msg   = "g_c_p_n failed";
 			GOTO(out, rc = -EBUSY);
 		}
 		break;
 	case WILLNEED:
-		vmpage = find_or_create_page(inode->i_mapping, index,
-					     GFP_NOFS);
-		if (vmpage == NULL)
+		folio = get_folio_create(inode->i_mapping, index,
+					 FGP_LOCK | FGP_ACCESSED | FGP_CREAT |
+					 FGP_NOFS, GFP_NOFS);
+		if (IS_ERR_OR_NULL(folio))
 			GOTO(out, rc = -ENOMEM);
 		break;
 	default:
@@ -231,14 +232,13 @@ static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
 	}
 
 	/* Check if vmpage was truncated or reclaimed */
-	if (vmpage->mapping != inode->i_mapping) {
+	if (folio->mapping != inode->i_mapping) {
 		which = RA_STAT_WRONG_GRAB_PAGE;
 		msg   = "g_c_p_n returned invalid page";
 		GOTO(out, rc = -EBUSY);
 	}
 
-	cp = cl_page_find(env, clob, folio_index_page(vmpage), vmpage,
-			  CPT_CACHEABLE);
+	cp = cl_page_find(env, clob, index, folio, 0, CPT_CACHEABLE);
 	if (IS_ERR(cp)) {
 		which = RA_STAT_FAILED_GRAB_PAGE;
 		msg   = "cl_page_find failed";
@@ -247,7 +247,7 @@ static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
 
 	cl_page_assume(env, io, cp);
 
-	if (!cp->cp_defer_uptodate && !PageUptodate(vmpage)) {
+	if (!cp->cp_defer_uptodate && !folio_test_uptodate(folio)) {
 		if (hint == MAYNEED) {
 			cp->cp_defer_uptodate = 1;
 			cp->cp_ra_used = 0;
@@ -266,15 +266,14 @@ static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
 	cl_page_put(env, cp);
 
 out:
-	if (vmpage != NULL) {
+	if (!IS_ERR_OR_NULL(folio)) {
 		if (rc != 0)
-			unlock_page(vmpage);
-		put_page(vmpage);
+			folio_unlock(folio);
+		folio_put(folio);
 	}
 	if (msg != NULL && hint == MAYNEED) {
 		ll_ra_stats_inc(inode, which);
 		CDEBUG(D_READA, "%s\n", msg);
-
 	}
 
 	RETURN(rc);
@@ -1631,7 +1630,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	/* PagePrivate2 is set in ll_io_zero_page() to tell us the vmpage
 	 * must not be unlocked after processing.
 	 */
-	if (page->cp_vmpage && PagePrivate2(page->cp_vmpage))
+	if (folio_test_private_2(page->cp_folio))
 		unlockpage = false;
 
 	uptodate = page->cp_defer_uptodate;
@@ -1649,7 +1648,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	cl_2queue_init(queue);
 	if (uptodate) {
 		page->cp_ra_used = 1;
-		SetPageUptodate(page->cp_vmpage);
+		folio_mark_uptodate(page->cp_folio);
 		cl_page_disown(env, io, page);
 	} else {
 		anchor = &vvp_env_info(env)->vti_anchor;
@@ -1734,7 +1733,7 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 		cl_page_assume(env, io, page);
 		cl_page_list_del(env, &queue->c2_qout, page, true);
 
-		if (!PageUptodate(cl_page_vmpage(page))) {
+		if (!folio_test_uptodate(page->cp_folio)) {
 			/* Failed to read a mirror, discard this page so that
 			 * new page can be created with new mirror.
 			 *
@@ -1866,7 +1865,7 @@ static bool ll_use_fast_io(struct file *file,
 	return false;
 }
 
-int ll_readpage(struct file *file, struct page *vmpage)
+static int do_read_folio(struct file *file, struct folio *folio)
 {
 	struct inode *inode = file_inode(file);
 	struct cl_object *clob = ll_i2info(inode)->lli_clob;
@@ -1876,16 +1875,17 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	struct cl_read_ahead ra = { 0 };
 	struct ll_cl_context *lcc;
 	struct cl_io *io = NULL;
+	pgoff_t index = folio->index;
 	bool ra_assert = false;
-	struct cl_page *page;
+	struct cl_page *cl_page;
 	struct vvp_io *vio;
 	int result;
 
 	ENTRY;
 	if (CFS_FAIL_PRECHECK(OBD_FAIL_LLITE_READPAGE_PAUSE)) {
-		unlock_page(vmpage);
+		folio_unlock(folio);
 		CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_READPAGE_PAUSE, cfs_fail_val);
-		lock_page(vmpage);
+		folio_lock(folio);
 	}
 
 	/*
@@ -1898,12 +1898,12 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	if (inode->i_op != &ll_file_inode_operations) {
 		CERROR("%s: readpage() on invalidated PCC inode %llu: rc=%d\n",
 		       sb->s_id, (u64)inode->i_ino, -EIO);
-		unlock_page(vmpage);
+		folio_unlock(folio);
 		RETURN(-EIO);
 	}
 
 	/*
-	 * The @vmpage got truncated.
+	 * The @folio got truncated.
 	 * This is a kernel bug introduced since kernel 5.12:
 	 * comment: cbd59c48ae2bcadc4a7599c29cf32fd3f9b78251
 	 * ("mm/filemap: use head pages in generic_file_buffered_read")
@@ -1926,8 +1926,8 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	 * add the truncated page into batches as it was removed from page
 	 * cache of the file.
 	 */
-	if (vmpage->mapping != inode->i_mapping) {
-		unlock_page(vmpage);
+	if (folio->mapping != inode->i_mapping) {
+		folio_unlock(folio);
 		RETURN(AOP_TRUNCATED_PAGE);
 	}
 
@@ -1943,24 +1943,23 @@ int ll_readpage(struct file *file, struct page *vmpage)
 		struct ll_readahead_state *ras = &lfd->fd_ras;
 		struct lu_env  *local_env = NULL;
 
-		CDEBUG(D_VFSTRACE, "fast read pgno: %ld\n",
-		       folio_index_page(vmpage));
+		CDEBUG(D_VFSTRACE, "fast read pgno: %ld\n", index);
 
 		result = -ENODATA;
 
 		/* TODO: need to verify the layout version to make sure
-		 * the page is not invalid due to layout change.
+		 * the cl_page is not invalid due to layout change.
 		 */
-		page = cl_vmpage_page(vmpage, clob);
-		if (page == NULL) {
-			unlock_page(vmpage);
+		cl_page = cl_page_from_folio(folio, index, true);
+		if (cl_page == NULL) {
+			folio_unlock(folio);
 			CDEBUG(D_READA, "fast read: failed to find page %ld\n",
-			       folio_index_page(vmpage));
+			       index);
 			ll_ra_stats_inc_sbi(sbi, RA_STAT_FAILED_FAST_READ);
 			RETURN(result);
 		}
 
-		if (page->cp_defer_uptodate) {
+		if (cl_page->cp_defer_uptodate) {
 			enum ras_update_flags flags = LL_RAS_HIT;
 
 			if (lcc && lcc->lcc_type == LCC_MMAP)
@@ -1970,11 +1969,12 @@ int ll_readpage(struct file *file, struct page *vmpage)
 			 * if the page is hit in cache because non cache page
 			 * case will be handled by slow read later.
 			 */
-			ras_update(sbi, inode, ras, cl_page_index(page), flags, io);
+			ras_update(sbi, inode, ras, cl_page_index(cl_page),
+				   flags, io);
 			/* avoid duplicate ras_update() call */
-			page->cp_ra_updated = 1;
+			cl_page->cp_ra_updated = 1;
 
-			if (ll_use_fast_io(file, ras, cl_page_index(page)))
+			if (ll_use_fast_io(file, ras, cl_page_index(cl_page)))
 				result = 0;
 		}
 
@@ -1985,18 +1985,18 @@ int ll_readpage(struct file *file, struct page *vmpage)
 
 		/* export the page and skip io stack */
 		if (result == 0) {
-			page->cp_ra_used = 1;
-			SetPageUptodate(vmpage);
+			cl_page->cp_ra_used = 1;
+			folio_mark_uptodate(folio);
 		} else {
 			ll_ra_stats_inc_sbi(sbi, RA_STAT_FAILED_FAST_READ);
 		}
 
-		/* release page refcount before unlocking the page to ensure
+		/* release cl_page refcount before unlocking the page to ensure
 		 * the object won't be destroyed in the calling path of
 		 * cl_page_put(). Please see comment in ll_releasepage().
 		 */
-		cl_page_put(env, page);
-		unlock_page(vmpage);
+		cl_page_put(env, cl_page);
+		folio_unlock(folio);
 		if (local_env)
 			cl_env_percpu_put(local_env);
 
@@ -2028,11 +2028,10 @@ int ll_readpage(struct file *file, struct page *vmpage)
 		 * This should never occur except in kernels with the bug
 		 * mentioned above.
 		 */
-		if (lcc->lcc_end_index > 0 &&
-		    folio_index_page(vmpage) >= lcc->lcc_end_index) {
+		if (lcc->lcc_end_index > 0 && index >= lcc->lcc_end_index) {
 			CDEBUG(D_VFSTRACE,
 			       "pgno:%ld, beyond read end_index:%ld\n",
-			       folio_index_page(vmpage), lcc->lcc_end_index);
+			       index, lcc->lcc_end_index);
 
 			/* For EC recovery reads, the page beyond end_index
 			 * has no DLM lock (EC recovery only locks the actual
@@ -2042,17 +2041,14 @@ int ll_readpage(struct file *file, struct page *vmpage)
 			 * truncated.
 			 */
 			if (io->ci_type == CIT_EC_RD) {
-				unlock_page(vmpage);
+				folio_unlock(folio);
 				RETURN(-EIO);
 			}
 
-			result = cl_io_read_ahead_prep(env, io,
-						       folio_index_page(vmpage),
-						       &ra);
-			if (result < 0 ||
-			    folio_index_page(vmpage) > ra.cra_end_idx) {
+			result = cl_io_read_ahead_prep(env, io, index, &ra);
+			if (result < 0 || index > ra.cra_end_idx) {
 				cl_read_ahead_release(env, &ra);
-				unlock_page(vmpage);
+				folio_unlock(folio);
 				RETURN(AOP_TRUNCATED_PAGE);
 			}
 		}
@@ -2066,18 +2062,12 @@ int ll_readpage(struct file *file, struct page *vmpage)
 		 * return -EIO to prevent LBUG in osc_req_attr_set().
 		 */
 		if (io->ci_type == CIT_EC_RD) {
-			result = cl_io_read_ahead_prep(env, io,
-						       folio_index_page(vmpage),
-						       &ra);
-			if (result < 0 ||
-			    folio_index_page(vmpage) > ra.cra_end_idx) {
+			result = cl_io_read_ahead_prep(env, io, index, &ra);
+			if (result < 0 || index > ra.cra_end_idx) {
 				if (result >= 0)
-					cl_read_ahead_release(env,
-							      &ra);
-				unlock_page(vmpage);
-				if (PageUptodate(vmpage))
-					RETURN(0);
-				RETURN(-EIO);
+					cl_read_ahead_release(env, &ra);
+				folio_unlock(folio);
+				RETURN(folio_test_uptodate(folio) ? 0 : -EIO);
 			}
 			cl_read_ahead_release(env, &ra);
 			/* The cra_release helper does not clear cra_release;
@@ -2093,21 +2083,16 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	 * truly disabled
 	 */
 	if (lcc && lcc->lcc_type == LCC_MMAP &&
-	    io->u.ci_fault.ft_index != folio_index_page(vmpage)) {
+	    io->u.ci_fault.ft_index != index) {
 		if (!(vio->u.fault.ft_vma->vm_flags & VM_HUGEPAGE)) {
-
-			CERROR("%s: ft_index %lu, vmpage index %lu\n",
-			       sbi->ll_fsname, io->u.ci_fault.ft_index,
-			       folio_index_page(vmpage));
+			CERROR("%s: ft_index %lu, folio index %lu\n",
+			       sbi->ll_fsname, io->u.ci_fault.ft_index, index);
 			ra_assert = true;
 		} else {
-			result = cl_io_read_ahead_prep(env, io,
-						       folio_index_page(vmpage),
-						       &ra);
-			if (result < 0 ||
-			    folio_index_page(vmpage) > ra.cra_end_idx) {
+			result = cl_io_read_ahead_prep(env, io, index, &ra);
+			if (result < 0 || index > ra.cra_end_idx) {
 				cl_read_ahead_release(env, &ra);
-				unlock_page(vmpage);
+				folio_unlock(folio);
 				RETURN(AOP_TRUNCATED_PAGE);
 			}
 		}
@@ -2136,32 +2121,30 @@ int ll_readpage(struct file *file, struct page *vmpage)
 	if (iocb_ki_flags_check(vio->vui_iocb, IOCB_DIRECT) &&
 	    lcc && lcc->lcc_type == LCC_RW &&
 	    !io->ci_dio_lock) {
-		unlock_page(vmpage);
+		folio_unlock(folio);
 		io->ci_dio_lock = 1;
 		io->ci_need_restart = 1;
 		GOTO(out, result = -ENOLCK);
 	}
 
 	LASSERT(io->ci_state == CIS_IO_GOING);
-	page = cl_page_find(env, clob, folio_index_page(vmpage), vmpage,
-			    CPT_CACHEABLE);
-	if (!IS_ERR(page)) {
-		LASSERT(page->cp_type == CPT_CACHEABLE);
-		if (likely(!PageUptodate(vmpage))) {
-			cl_page_assume(env, io, page);
-
-			result = ll_io_read_page(env, io, page, file);
+	cl_page = cl_page_find(env, clob, index, folio, 0, CPT_CACHEABLE);
+	if (!IS_ERR(cl_page)) {
+		LASSERT(cl_page->cp_type == CPT_CACHEABLE);
+		if (likely(!folio_test_uptodate(folio))) {
+			cl_page_assume(env, io, cl_page);
+			result = ll_io_read_page(env, io, cl_page, file);
 		} else {
 			/* Page from a non-object file. */
-			unlock_page(vmpage);
+			folio_unlock(folio);
 			result = 0;
 		}
-		cl_page_put(env, page);
+		cl_page_put(env, cl_page);
 	} else {
-		unlock_page(vmpage);
-		result = PTR_ERR(page);
-		CDEBUG(D_CACHE, "failed to alloc page@%pK index%ld: rc = %d\n",
-		       vmpage, folio_index_page(vmpage), result);
+		folio_unlock(folio);
+		result = PTR_ERR(cl_page);
+		CDEBUG(D_CACHE, "failed to alloc page@%p index%ld: rc = %d\n",
+		       folio, index, result);
 	}
 
 out:
@@ -2182,6 +2165,11 @@ out:
 #ifdef HAVE_AOPS_READ_FOLIO
 int ll_read_folio(struct file *file, struct folio *folio)
 {
-	return ll_readpage(file, folio_page(folio, 0));
+	return do_read_folio(file, folio);
+}
+#else
+int ll_readpage(struct file *file, struct page *page)
+{
+	return do_read_folio(file, page_folio(page));
 }
 #endif

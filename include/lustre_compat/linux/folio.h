@@ -166,8 +166,6 @@ static inline void *ll_kmap_local_folio(struct page *page, size_t offset)
 #define ll_kunmap_local(kaddr)		kunmap(kmap_to_page((kaddr)))
 #define page_folio(page)		(page)
 #define fpgptr(page)			(page)
-#define fpgno(folio, page)		0
-
 /* private: */
 #define folio_get_private(p)		((void *)page_private((p)))
 #define folio_clear_private(p)		ClearPagePrivate((p))
@@ -223,8 +221,6 @@ do {						\
 	__page_cache_alloc((gfp))
 #define folio_ref_count(p)		page_count((p))
 #define virt_to_folio(addr)		virt_to_page((addr))
-#define copy_folio_to_iter(f, o, b, i)	\
-	copy_page_to_iter((f), (o), (b), (i))
 #define sg_set_folio(sg, p, len, off)	\
 	sg_set_page((sg), (p), (len), (off))
 #define bio_add_folio(bio, pg, sz, off)	\
@@ -234,20 +230,11 @@ do {						\
 #define folio_page_idx(folio, pg)	0
 #endif /* HAVE___FILEMAP_GET_FOLIO */
 
-static inline struct page *ll_read_cache_page(struct address_space *mapping,
-					      pgoff_t index, filler_t *filler,
-					      void *data)
-{
-	struct folio *f = ll_read_cache_folio(mapping, index, filler, data);
-
-	return fpgptr(f);
-}
-
-static inline bool is_empty_folio(struct folio *folio, size_t off,
+static inline bool is_empty_folio(struct folio *folio, size_t fpgno, size_t off,
 				  size_t len)
 {
 	bool is_zero;
-	void *addr = kmap_local_folio(folio, 0);
+	void *addr = kmap_local_folio(folio, fpgno << PAGE_SHIFT);
 
 	is_zero = memchr_inv(addr + off, 0, len) == NULL;
 	kunmap_local(addr);
@@ -266,12 +253,6 @@ static inline bool is_empty_folio(struct folio *folio, size_t off,
 #if defined(HAVE_FOLIO_BATCH)
 # define ll_folio_batch_init(batch)	folio_batch_init(batch)
 # define fbatch_at(fbatch, f)		((fbatch)->folios[(f)])
-# define fbatch_at_npgs(fbatch, f)	\
-	 folio_nr_pages((fbatch)->folios[(f)])
-# define fbatch_at_pg(fbatch, f, pg)	\
-	 (fpgptr((fbatch)->folios[(f)]))
-# define folio_batch_add_page(fbatch, page) \
-	 folio_batch_add(fbatch, page_folio(page))
 # ifndef HAVE_FOLIO_BATCH_REINIT
 static inline void folio_batch_reinit(struct folio_batch *fbatch)
 {
@@ -297,14 +278,10 @@ static inline pgoff_t folio_index_page(struct page *page)
 # define folio_batch_space(pvec)	pagevec_space(pvec)
 # define folio_batch_add(pvec, page) \
 	 pagevec_add(pvec, page)
-# define folio_batch_add_page(pvec, page) \
-	 pagevec_add(pvec, page)
 # define folio_batch_release(pvec) \
 	 pagevec_release(((struct pagevec *)pvec))
 # define ll_folio_batch_init(pvec)	pagevec_init(pvec)
 # define fbatch_at(pvec, n)		((pvec)->pages[(n)])
-# define fbatch_at_npgs(pvec, n)	1
-# define fbatch_at_pg(pvec, n, pg)	((pvec)->pages[(n)])
 # define folio_index_page(pg)		((pg)->index)
 
 #endif /* HAVE_FOLIO_BATCH */
@@ -369,18 +346,41 @@ static inline void cfs_folio_delete_from_cache(struct folio *folio)
 #ifdef HAVE_WRITE_BEGIN_FOLIO
 /* .write_begin is passed **folio which is put with .write_end *folio */
 #define wbe_folio			folio
-#define wbe_page_folio(page)		page_folio((page))
-static inline struct page *wbe_folio_page(struct folio *folio)
+#define wbe_folio_mark_dirty(folio)	folio_mark_dirty(folio)
+#define wbe_folio_test_uptodate(folio)	folio_test_uptodate(folio)
+#define wbe_folio_mark_uptodate(folio)	folio_mark_uptodate(folio)
+#define wbe_folio_reply(folio)		(folio)
+#define wbe_folio_folio(folio)		(folio)
+#define wbe_folio_page(folio)		folio_page((folio), 0)
+#define wbe_folio_put(folio)		folio_put((folio))
+#define wbe_folio_test_dirty(folio)	folio_test_dirty((folio))
+static inline struct cl_page *wbe_folio_get_private(struct wbe_folio *folio)
 {
-	BUG_ON(folio_nr_pages(folio) != 1);
-	return folio_page(folio, 0);
+	return folio_get_private(folio);
 }
+#define wbe_folio_unlock(folio)		folio_unlock((folio))
 #else
 /* .write_begin is passed **page which is put with .write_end *page */
 #define wbe_folio			page
-#define wbe_page_folio(page)		(page)
+# if defined(HAVE___FILEMAP_GET_FOLIO)
+#  define wbe_folio_reply(folio)	fpgptr((folio))
+#  define wbe_folio_folio(folio)	(folio)
+# else
+#  define wbe_folio_reply(page)		(page)
+#  define wbe_folio_folio(folio)	page_folio(folio)
+# endif /* HAVE___FILEMAP_GET_FOLIO */
 #define wbe_folio_page(page)		(page)
-#endif
+#define wbe_folio_put(page)		put_page((page))
+#define wbe_folio_test_dirty(page)	PageDirty((page))
+static inline struct cl_page *wbe_folio_get_private(struct wbe_folio *folio)
+{
+	return (struct cl_page *)page_private(folio);
+}
+#define wbe_folio_unlock(page)		unlock_page((page))
+#define wbe_folio_mark_dirty(page)	set_page_dirty(page)
+#define wbe_folio_test_uptodate(page)	PageUptodate(page)
+#define wbe_folio_mark_uptodate(page)	SetPageUptodate(page)
+#endif /* HAVE_WRITE_BEGIN_FOLIO */
 
 #ifndef HAVE_PAGE_PRIVATE_2
 #define PagePrivate2(page)	test_bit(PG_private_2, &PAGE_FLAGS(page))
@@ -388,25 +388,8 @@ static inline struct page *wbe_folio_page(struct folio *folio)
 #define ClearPagePrivate2(page)	clear_bit(PG_private_2, &PAGE_FLAGS(page))
 #endif
 
-#ifdef HAVE_FOLIO_MAPCOUNT
-/* clone of fs/proc/internal.h:
- *   folio_precise_page_mapcount(struct folio *folio, struct page *page)
- */
-static inline int folio_mapcount_page(struct page *page)
-{
-	struct folio *folio = page_folio(page);
-	int mapcount = atomic_read(&page->_mapcount) + 1;
-
-	if (page_mapcount_is_type(mapcount))
-		mapcount = 0;
-	if (folio_test_large(folio))
-		mapcount += folio_entire_mapcount(folio);
-
-	return mapcount;
-}
-#else /* !HAVE_FOLIO_MAPCOUNT */
+#ifndef HAVE_FOLIO_MAPCOUNT
 #define folio_mapcount(folio)			page_mapcount(fpgptr(folio))
-#define folio_mapcount_page(pg)			page_mapcount((pg))
 #endif /* HAVE_FOLIO_MAPCOUNT */
 
 #ifndef kvcalloc
