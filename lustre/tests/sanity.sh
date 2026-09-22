@@ -15118,31 +15118,42 @@ test_105g() {
 run_test 105g "ldlm_lock_debug stack test"
 
 test_105h() {
+	(( $MDS1_VERSION >= $(version_code v2_16_51-35-gf785bca0a9) )) ||
+		skip "need MDS >= 2.16.51.35 for flock lock split fix"
+
 	local info
 	touch $DIR/$tfile
 
 	stack_trap "rm $DIR/$tfile" EXIT
 	# enqueue 2 non-overlap locks
 	info=$(echo -e "W20,40\nR100,200\nT0" | flocks_test 6 $DIR/$tfile)
-	[ x$info == 'xW20,40;R100,200.' ] || error "flock error1-$info"
+	[[ "$info" == "W20,40;R100,200." ]] || error "flock error1-$info"
 	# enqueue overlap locks
-	info=$(echo -e "W20,400\nR100,2000\nR10,1000\nW500,1000\nT0" | flocks_test 6 $DIR/$tfile)
-	[ x$info == 'xR10,490;W500,1000;R1500,600.' ] || error "flock error2-$info"
+	info=$(echo -e "W20,400\nR100,2000\nR10,1000\nW500,1000\nT0" |
+	       flocks_test 6 $DIR/$tfile)
+	[[ "$info" == "R10,490;W500,1000;R1500,600." ]] ||
+		error "flock error2-$info"
 	# split a lock
-	info=$(echo -e "W2000,1000\nR2200, 200\nT0" |flocks_test 6 $DIR/$tfile)
-	[ x$info == 'xW2000,200;R2200,200;W2400,600.' ] || error "flock error3-$info"
+	info=$(echo -e "W2000,1000\nR2200, 200\nT0" | flocks_test 6 $DIR/$tfile)
+	[[ "$info" == "W2000,200;R2200,200;W2400,600." ]] ||
+		error "flock error3-$info"
 	# merge 2 locks
-	info=$(echo -e "R200,1000\nR9000,200\nW100,10000\nT0" | flocks_test 6 $DIR/$tfile)
-	[ x$info == 'xW100,10000.' ] || error "flock error4-$info"
+	info=$(echo -e "R200,1000\nR9000,200\nW100,10000\nT0" |
+	       flocks_test 6 $DIR/$tfile)
+	[[ "$info" == "W100,10000." ]] || error "flock error4-$info"
 	# adjoining locks
-	info=$(echo -e "R200,100\nR300, 200\nR500,100\nT0" | flocks_test 6 $DIR/$tfile)
-	[ x$info == 'xR200,400.' ] || error "flock error5-$info"
+	info=$(echo -e "R200,100\nR300, 200\nR500,100\nT0" |
+	       flocks_test 6 $DIR/$tfile)
+	[[ "$info" == "R200,400." ]] || error "flock error5-$info"
 	# adjoining locks with diff mode
-	info=$(echo -e "R200,100\nW300, 200\nR500,100\nT0" | flocks_test 6 $DIR/$tfile)
-	[ x$info == 'xR200,100;W300,200;R500,100.' ] || error "flock error6-$info"
+	info=$(echo -e "R200,100\nW300, 200\nR500,100\nT0" |
+	       flocks_test 6 $DIR/$tfile)
+	[[ "$info" == "R200,100;W300,200;R500,100." ]] ||
+		error "flock error6-$info"
 	# split & merge
-	info=$(echo -e "R200,1000\nW300, 200\nR100,200\nR300,200\nT0" | flocks_test 6 $DIR/$tfile)
-	[ x$info == 'xR100,1100.' ] || error "flock error7-$info"
+	info=$(echo -e "R200,1000\nW300, 200\nR100,200\nR300,200\nT0" |
+	       flocks_test 6 $DIR/$tfile)
+	[[ "$info" == "R100,1100." ]] || error "flock error7-$info"
 }
 run_test 105h "Flock functional verify"
 
