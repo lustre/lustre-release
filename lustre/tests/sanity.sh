@@ -19053,8 +19053,8 @@ test_130h() {
 run_test 130h "FIEMAP deadlock"
 
 test_130i() {
-	(( $MDS1_VERSION >= $(version_code 2.15.63.195) )) ||
-		skip "Need MDS version at least 2.15.63.195 for DoM support"
+	(( $MDS1_VERSION >= $(version_code v2_16_50-12-g5921e1571f) )) ||
+		skip "Need MDS version at least 2.16.50 for DoM FIEMAP support"
 	local filefrag_op=$(filefrag -l 2>&1 | grep "invalid option")
 	[[ -z "$filefrag_op" ]] || skip_env "filefrag missing Lustre support"
 	[[ "$ost1_FSTYPE" != "zfs" ]] ||
