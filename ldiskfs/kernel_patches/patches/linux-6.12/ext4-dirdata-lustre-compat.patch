@@ -73,7 +73,7 @@ Index: linux-stage/fs/ext4/namei.c
  	if (ext4_has_metadata_csum(inode->i_sb))
  		csum_size = sizeof(struct ext4_dir_entry_tail);
  
-@@ -3268,20 +3272,50 @@ struct ext4_dir_entry_2 *ext4_init_dot_d
+@@ -3268,26 +3272,54 @@ struct ext4_dir_entry_2 *ext4_init_dot_d
  			  int blocksize, int csum_size,
  			  unsigned int parent_ino, int dotdot_real_len)
  {
@@ -128,7 +128,13 @@ Index: linux-stage/fs/ext4/namei.c
  	else
  		de->rec_len = ext4_rec_len_to_disk(
  					ext4_dir_entry_len(de, NULL),
-@@ -3404,6 +3438,29 @@ out_retry:
+ 					blocksize);
+-	strcpy(de->name, "..");
+-	ext4_set_de_type(inode->i_sb, de, S_IFDIR);
+
+ 	return ext4_next_entry(de, blocksize);
+ }
+@@ -3404,6 +3436,29 @@ out_retry:
  	return err;
  }
  
