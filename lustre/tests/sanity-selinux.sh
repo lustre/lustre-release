@@ -898,6 +898,42 @@ test_21c() {
 }
 run_test 21c "Persist send_sepol via lctl set_param -P"
 
+test_22() {
+	local ctx="system_u:object_r:nfs_t:s0"
+	local file=$DIR2/$tdir/$tfile
+	local mntopts
+	local seen
+
+	test_mkdir $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	if grep -q " $MOUNT2 " /proc/mounts; then
+		umount_client $MOUNT2 || error "umount $MOUNT2 failed (1)"
+	fi
+	stack_trap "umount_client $MOUNT2 || true;
+		    mount_client $MOUNT2 $MOUNT_OPTS || true"
+
+	mount_client $MOUNT2 "$MOUNT_OPTS,rootcontext=$ctx" ||
+		error "mount with rootcontext= failed"
+
+	mntopts=$(awk -v mnt=$MOUNT2 '$2 == mnt { print $4 }' /proc/mounts)
+	if [[ ",$mntopts," == *",ro,"* ]]; then
+		error "rootcontext= mounted $MOUNT2 read-only"
+	fi
+
+	touch $file || error "cannot touch $file (1)"
+	rm -f $file || error "cannot remove $file"
+
+	umount_client $MOUNT2 || error "umount $MOUNT2 failed (2)"
+	mount_client $MOUNT2 "$MOUNT_OPTS,context=$ctx" ||
+		error "mount with context= failed"
+
+	touch $file || error "cannot touch $file (2)"
+	seen=$(get_sel_ctx $file)
+	[[ "$seen" == "$ctx" ]] ||
+		error "context= ignored, got '$seen' instead of '$ctx'"
+}
+run_test 22 "SELinux context mount option"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

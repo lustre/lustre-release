@@ -2011,6 +2011,18 @@ LB_CHECK_EXPORT([add_to_page_cache_locked], [mm/filemap.c],
 ]) # LC_HAVE_ADD_TO_PAGE_CACHE_LOCKED
 
 #
+# LC_SECURITY_SB_EAT_LSM_OPTS
+#
+# Linux version v5.1 introduced the ->sb_eat_lsm_opts() LSM hook along
+# with the fs_context API.
+#
+AC_DEFUN([LC_SECURITY_SB_EAT_LSM_OPTS], [
+LB_CHECK_EXPORT([security_sb_eat_lsm_opts], [security/security.c],
+	[AC_DEFINE(HAVE_SECURITY_SB_EAT_LSM_OPTS, 1,
+			[security_sb_eat_lsm_opts is exported by the kernel])])
+]) # LC_SECURITY_SB_EAT_LSM_OPTS
+
+#
 # LC_HAVE_DEBUGFS_LOOKUP_AND_REMOVE
 #
 # Linux commit v6.0-rc2-12-gdec9b2f1e045
@@ -4344,6 +4356,9 @@ AC_DEFUN([LC_PROG_LINUX], [
 	LC_GLIBC_SUPPORT_COPY_FILE_RANGE
 	LC_OPENSSL_SSK
 	LC_OPENSSL_GETSEPOL
+
+	# 5.1 - Check export
+	LC_SECURITY_SB_EAT_LSM_OPTS
 
 	# 5.2 - Check export
 	LC_ACCOUNT_PAGE_DIRTIED

@@ -1252,10 +1252,10 @@ static int ll_options(char *options, struct super_block *sb)
 		args[0].from = NULL;
 		token = match_token(s1, ll_sbi_flags_name, args);
 		if (token == LL_SBI_NUM_MOUNT_OPT) {
-			if (match_wildcard("context", s1) ||
-			    match_wildcard("fscontext", s1) ||
-			    match_wildcard("defcontext", s1) ||
-			    match_wildcard("rootcontext", s1))
+			if (match_wildcard("context=*", s1) ||
+			    match_wildcard("fscontext=*", s1) ||
+			    match_wildcard("defcontext=*", s1) ||
+			    match_wildcard("rootcontext=*", s1))
 				continue;
 			if (match_wildcard("skid=*", s1)) {
 				sbi->ll_skid = simple_strtoul(s1 + 5, NULL, 10);

@@ -21,6 +21,7 @@
 #include <linux/types.h>
 #include <linux/parser.h>
 #include <linux/random.h>
+#include <linux/security.h>
 #include <linux/uuid.h>
 #include <linux/version.h>
 
@@ -1660,6 +1661,19 @@ bad_string:
 			strncat(lmd->lmd_fileset, s1, s2 - s1 + 1);
 		}
 	}
+
+#ifdef HAVE_SECURITY_SB_EAT_LSM_OPTS
+	/*
+	 * security_sb_eat_lsm_opts() removes the options it consumed from the
+	 * options string, and what it collected is applied to our super block
+	 * later on by vfs_get_tree() -> security_sb_set_mnt_opts().
+	 */
+	if (lmd_is_client(lmd)) {
+		rc = security_sb_eat_lsm_opts(options, &fc->security);
+		if (rc)
+			GOTO(invalid, rc);
+	}
+#endif
 
 	/* Save mount options */
 	s1 = options + strlen(options) - 1;

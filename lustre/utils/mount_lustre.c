@@ -170,15 +170,19 @@ static int parse_one_option(const char *check, int *flagp)
 	const struct opt_map *opt;
 
 	for (opt = &opt_map[0]; opt->opt != NULL; opt++) {
-		if (strncmp(check, opt->opt, strlen(opt->opt)) == 0) {
-			if (opt->mask) {
-				if (opt->inv)
-					*flagp &= ~(opt->mask);
-				else
-					*flagp |= opt->mask;
-			}
-			return 1;
+		size_t len = strlen(opt->opt);
+
+		if (strncmp(check, opt->opt, len) != 0 ||
+		    (check[len] != '\0' && check[len] != '='))
+			continue;
+
+		if (opt->mask) {
+			if (opt->inv)
+				*flagp &= ~(opt->mask);
+			else
+				*flagp |= opt->mask;
 		}
+		return 1;
 	}
 	/*
 	 * Assume any unknown options are valid and pass them on.  The mount
