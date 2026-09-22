@@ -7180,7 +7180,7 @@ struct osd_it_ea *osd_it_dir_init(const struct lu_env *env,
 	file = &oie->oie_file;
 	rc = security_file_alloc(file);
 	if (rc)
-		GOTO(out_free, rc);
+		GOTO(out_buf, rc);
 
 	/* Only FMODE_64BITHASH or FMODE_32BITHASH should be set, NOT both. */
 	if (attr & LUDA_64BITHASH)
@@ -7201,10 +7201,17 @@ struct osd_it_ea *osd_it_dir_init(const struct lu_env *env,
 	if (file->f_op->open && !file->private_data) {
 		rc = file->f_op->open(inode, file);
 		if (rc)
-			GOTO(out_free, rc);
+			GOTO(out_security, rc);
 	}
 	RETURN(oie);
 
+out_security:
+	security_file_free(file);
+out_buf:
+	if (oie->oie_buf != info->oti_it_ea_buf)
+		OBD_FREE(oie->oie_buf, OSD_IT_EA_BUFSIZE);
+	else
+		info->oti_it_ea_buf_used = 0;
 out_free:
 	OBD_SLAB_FREE_PTR(oie, osd_itea_cachep);
 
@@ -7247,6 +7254,7 @@ void osd_it_dir_fini(const struct lu_env *env, struct osd_it_ea *oie,
 
 	ENTRY;
 	oie->oie_file.f_op->release(inode, &oie->oie_file);
+	security_file_free(&oie->oie_file);
 	if (unlikely(oie->oie_buf != info->oti_it_ea_buf))
 		OBD_FREE(oie->oie_buf, OSD_IT_EA_BUFSIZE);
 	else
