@@ -1425,7 +1425,7 @@ kefalnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 
 	msg = rx->msg;
 	nid = &msg->msg_v2.srcnid;
-	conn = kefalnd_lookup_conn(efa_ni, nid, KEFA_CONN_TYPE_RESPONDER);
+	conn = kefalnd_lookup_conn(efa_ni, nid, KEFA_CONN_TYPE_RESPONDER, true);
 	if (IS_ERR_OR_NULL(conn)) {
 		EFA_DEV_ERR(efa_ni->efa_dev,
 			    "failed to get connection for RX from peer NI[%s]. err[%ld]\n",

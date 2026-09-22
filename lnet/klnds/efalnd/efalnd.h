@@ -465,7 +465,8 @@ void kefalnd_debugfs_exit(void);
 
 struct kefa_conn *kefalnd_lookup_conn(struct kefa_ni *efa_ni,
 				      struct lnet_nid *nid,
-				      enum kefa_conn_type conn_type);
+				      enum kefa_conn_type conn_type,
+				      bool update_use_time);
 struct kefa_conn *kefalnd_lookup_or_init_conn(struct kefa_ni *efa_ni,
 					      struct lnet_nid *nid,
 					      enum kefa_conn_type conn_type);
