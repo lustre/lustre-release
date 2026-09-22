@@ -1,4 +1,4 @@
-.TH LCTL-LIST_PARAM 8 2026-03-06 Lustre "Lustre Configuration Utilities"
+.TH LCTL-LIST_PARAM 8 2026-09-22 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-list_param \- list configuration parameter names
 .SH SYNOPSIS
@@ -62,8 +62,19 @@ Do not merge parameters. All parameters will be shown, regardless if they are
 have the same name or not. Duplicate parameters will be printed in yellow.
 .TP
 .BR -o ", " --module
-Include modules params in the parameter search path, meaning that matching
-module parameters will be shown along side with Lustre parameters.
+Also search kernel module parameters, in addition to Lustre parameters.
+A module parameter named
+.IR MODULE . PARAMETER
+is found in
+.BI /sys/module/ MODULE /parameters/ PARAMETER
+and the module name is required to distinguish identically-named parameters
+in different modules, such as
+.B lnet.peer_buffer_credits
+and
+.BR ksocklnd.peer_buffer_credits .
+If
+.I MODULE
+contains wildcards, only the Lustre and LNet modules are searched.
 .TP
 .BR -p ", " --path
 Print the parameter path instead of the parameter name.

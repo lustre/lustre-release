@@ -13,13 +13,18 @@
 
 #include <glob.h>
 #include <stdbool.h>
+#include <libcfs/util/string.h>
+
+#define CFS_MODULE_PARAM_DIR	"/sys/module"
 
 static inline void cfs_free_param_data(glob_t *paths)
 {
 	globfree(paths);
 }
 
-int cfs_get_param_paths(glob_t *paths, const char *pattern, ...)
-		       __attribute__((__format__(__printf__, 2, 3)));
+__printf(2, 3)
+int cfs_get_param_paths(glob_t *paths, const char *pattern, ...);
+__printf(2, 3)
+int cfs_get_param_paths_modules(glob_t *paths, const char *pattern, ...);
 
 #endif /* _LIBCFS_UTIL_PARAM_H_ */

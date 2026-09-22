@@ -107,6 +107,7 @@ LIBMAN = 					\
 	llapi_open_by_fid.3			\
 	llapi_open_by_fid_at.3			\
 	llapi_param_get_paths.3			\
+	llapi_param_get_paths_flags.3		\
 	llapi_param_get_value.3			\
 	llapi_path2fid.3			\
 	llapi_path2parent.3			\

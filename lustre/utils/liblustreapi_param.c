@@ -97,14 +97,8 @@ get_lustre_param_path(const char *obd_type, const char *filter,
 	}
 
 	if (type == FILTER_BY_NONE) {
-		if (filter && strstr(filter, "module")) {
-			if (cfs_get_param_paths(param, "%s%s", "module",
-						param_name) != 0)
-				rc = -errno;
-		} else {
-			if (cfs_get_param_paths(param, "%s", param_name) != 0)
-				rc = -errno;
-		}
+		if (cfs_get_param_paths(param, "%s", param_name) != 0)
+			rc = -errno;
 	} else if (param_name != NULL) {
 		if (cfs_get_param_paths(param, "%s/%s/%s",
 				       obd_type, pattern, param_name) != 0)
@@ -181,12 +175,34 @@ err:
 	return rc;
 }
 
-int llapi_param_get_paths(const char *pattern, glob_t *paths,
-			  enum llapi_param_flags flags)
+/**
+ * llapi_param_get_paths_flags() - Find parameter files matching a pattern
+ * @pattern: parameter path pattern, e.g. "mdc/lustre-MDT0000-mdc-*"
+ * @paths: [out] matching parameter file paths
+ * @flags: which parameter directories to search
+ *
+ * Search the Lustre parameter directories for files matching @pattern,
+ * and also the /sys/module/MODULE/parameters directories as requested
+ * by @flags.  Free @paths with llapi_param_paths_free().
+ *
+ * Return:
+ * * %0 on success
+ * * %-errno on failure
+ */
+int llapi_param_get_paths_flags(const char *pattern, glob_t *paths,
+				enum llapi_param_flags flags)
 {
-	return get_lustre_param_path(NULL, flags & LLAPI_PARAM_MODULES ?
-				     "module" : NULL, FILTER_BY_NONE,
+	if (flags & LLAPI_PARAM_MODULES)
+		return cfs_get_param_paths_modules(paths, "%s", pattern) ?
+		       -errno : 0;
+
+	return get_lustre_param_path(NULL, NULL, FILTER_BY_NONE,
 				     pattern, paths);
+}
+
+int llapi_param_get_paths(const char *pattern, glob_t *paths)
+{
+	return llapi_param_get_paths_flags(pattern, paths, 0);
 }
 
 /**

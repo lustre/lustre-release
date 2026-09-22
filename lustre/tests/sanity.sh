@@ -34057,14 +34057,66 @@ test_401fa() {
 run_test 401fa "check 'lctl list_param' doesn't follow symlinks with --no-links"
 
 test_401fb() {
-	local modules=$(ls /sys/module/{lnet,osc,mdd,obdclass,ofd,ptlrpc,mgc,ksocklnd,mdt,osd_ldiskfs,lquota}/parameters/* | wc -l)
-	local params=$($LCTL list_param -M "*" | wc -l)
-	local module_params=$($LCTL list_param -M --module "*" | wc -l)
+	# module parameters are only visible with --module
+	! $LCTL list_param -Rp "*" | grep "^/sys/module/" ||
+		error "list_param found module params without --module"
 
-	(( modules + params == module_params )) ||
-		error "expected $((modules+params)) params, got $module_params"
+	local modules="lnet,libcfs,ptlrpc,obdclass,osc,mdc,lov,lmv,ksocklnd"
+	local found=$($LCTL find_param --module -N "^[a-z0-9_]+\.[^.]+$")
+	local param
+	local path
+	local val
+
+	for path in $(eval ls -d /sys/module/{$modules}/parameters/* \
+		      2>/dev/null); do
+		[[ -f $path && -r $path ]] || continue
+		# /sys/module/MODULE/parameters/PARAM -> MODULE.PARAM
+		param=${path#/sys/module/}
+		param=${param/\/parameters\//.}
+
+		$LCTL list_param --module -p $param | grep -qx "$path" ||
+			error "list_param $param != $path"
+		grep -qx "$param" <<< "$found" || error "find_param no $param"
+		val=$($LCTL get_param --module -n $param) ||
+			error "get_param $param failed"
+		[[ "$val" == "$(< $path)" ]] ||
+			error "get_param $param=$val != $(< $path)"
+	done
+
+	# same parameter name in different modules is distinguishable
+	for param in $($LCTL get_param -N --module "*.peer_buffer_credits"); do
+		[[ $param =~ ^[a-z0-9_]+\.peer_buffer_credits$ ]] ||
+			error "bad param name '$param'"
+	done
+	val=$($LCTL get_param -N --module peer_buffer_credits 2>/dev/null)
+	[[ -z "$val" ]] || error "found '$val' without module name"
+
+	# wildcard module names only match Lustre/LNet modules
+	! $LCTL list_param -p --module "*" |
+		grep -E "^/sys/module/(kernel|printk)/" ||
+		error "list_param found non-Lustre modules"
+	val=$($LCTL list_param -p --module "{lnet,k*}")
+	grep -q "^/sys/module/lnet/" <<< "$val" ||
+		error "list_param {lnet,k*} missing lnet"
+	! grep -E "^/sys/module/(kernel|printk)/" <<< "$val" ||
+		error "list_param {lnet,k*} found non-Lustre modules"
+
+	# ptlrpc.at_max and at_max are the same variable but have distinct names
+	param=ptlrpc.at_max
+	path=/sys/module/ptlrpc/parameters/at_max
+	val=$($LCTL list_param --module -p at_max)
+	[[ $val == /sys/fs/lustre/at_max ]] || error "at_max path '$val'"
+	val=$($LCTL list_param --module -p $param)
+	[[ $val == $path ]] || error "$param path '$val'"
+	[[ -w $path ]] || return 0
+
+	val=$(< $path)
+	stack_trap "echo $val > $path"
+	$LCTL set_param --module $param=$((val + 1)) ||
+		error "set_param $param failed"
+	(( $(< $path) == val + 1 )) || error "$param=$(< $path) != $((val + 1))"
 }
-run_test 401fb "check 'lctl {get,list,set}_param' only sees modules params with --module"
+run_test 401fb "check 'lctl {get,list,find,set}_param --module MODULE.PARAM'"
 
 test_401ga() {
 	local paramdir=/etc/lustre

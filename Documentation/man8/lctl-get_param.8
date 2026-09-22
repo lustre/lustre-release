@@ -1,4 +1,4 @@
-.TH LCTL-GET_PARAM 8 2026-03-06 Lustre "Lustre Configuration Utilities"
+.TH LCTL-GET_PARAM 8 2026-09-22 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-get_param \- retrieve configuration parameters
 .SH SYNOPSIS
@@ -13,7 +13,7 @@ lctl-get_param \- retrieve configuration parameters
 .RB [ --no-merge | -M ]
 .RB [ --no-name | -n ]
 .RB [ --only-name | -N ]
-.BR [ --module | -o ]
+.RB [ --module | -o ]
 .RB [ --path | -p ]
 .RB [ --readable | -r ]
 .RB [ --recursive | -R ]
@@ -101,8 +101,19 @@ Print only matched parameter names and not the values. This is especially
 useful when using patterns. This option is equivalent to
 .TP
 .BR -o ", " --module
-Include modules params in the parameter search path, meaning that matching
-module parameters will be shown along side with Lustre parameters.
+Also search kernel module parameters, in addition to Lustre parameters.
+A module parameter named
+.IR MODULE . PARAMETER
+is found in
+.BI /sys/module/ MODULE /parameters/ PARAMETER
+and the module name is required to distinguish identically-named parameters
+in different modules, such as
+.B lnet.peer_buffer_credits
+and
+.BR ksocklnd.peer_buffer_credits .
+If
+.I MODULE
+contains wildcards, only the Lustre and LNet modules are searched.
 .TP
 .BR -p ", " --path
 Print the parameter path instead of the parameter name.
@@ -147,14 +158,14 @@ and to list short options type
 Use wildcards to obtain all matching parameters:
 .RS
 .EX
-.B # lctl get_param osc.*.max_pages_per_rpc
+.RB client# " lctl get_param osc.*.max_pages_per_rpc"
 osc.myth-OST0000-osc-ffff8803c9c0f000.max_pages_per_rpc=1024
 osc.myth-OST0001-osc-ffff8803c9c0f000.max_pages_per_rpc=1024
 osc.testfs-OST0000-osc-ffff8803c9c0f000.max_pages_per_rpc=1024
 osc.testfs-OST0001-osc-ffff8803c9c0f000.max_pages_per_rpc=1024
 osc.testfs-OST0002-osc-ffff8803c9c0f000.max_pages_per_rpc=1024
 .P
-.B # lctl get_param {mdc,osc}.testfs-*.max_rpcs_in_flight
+.RB client# " lctl get_param {mdc,osc}.testfs-*.max_rpcs_in_flight"
 mdc.testfs-MDT0000-mdc-ffff8803c9c0f000.max_rpcs_in_flight=16
 osc.testfs-OST0000-osc-ffff8803c9c0f000.max_rpcs_in_flight=8
 osc.testfs-OST0001-osc-ffff8803c9c0f000.max_rpcs_in_flight=8
@@ -162,13 +173,23 @@ osc.testfs-OST0002-osc-ffff8803c9c0f000.max_rpcs_in_flight=8
 .EE
 .RE
 .PP
+Use --module to get kernel module parameters:
+.RS
+.EX
+.RB client# " lctl get_param --module ptlrpc.send_sepol *.peer_buffer_credits"
+ptlrpc.send_sepol=0
+ksocklnd.peer_buffer_credits=0
+lnet.peer_buffer_credits=0
+.EE
+.RE
+.PP
 Use -n to obtain output that can be pipped into further commands:
 .RS
 .EX
-.B # lctl get_param -n debug
+.RB client# " lctl get_param -n debug"
 super warning dlmtrace error emerg rpctrace vfstrace config console
 .P
-.B # lctl get_param -n devices
+.RB client# " lctl get_param -n devices"
 0 UP osd-ldiskfs MGS-osd MGS-osd_UUID 4
 .EE
 .RE

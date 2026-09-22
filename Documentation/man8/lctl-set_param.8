@@ -1,4 +1,4 @@
-.TH LCTL-SET_PARAM 8 2026-08-19 Lustre "Lustre Configuration Utilities"
+.TH LCTL-SET_PARAM 8 2026-09-22 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-set_param \- Lustre tunable parameter setting utility
 .SH SYNOPSIS
@@ -91,10 +91,21 @@ or from any other valid llog configuration log as listed by
 Disable printing of the parameter name after setting it.
 .TP
 .BR -o ", " --module
-Allow module parameters to be visible to the
-.B lctl set_param
-command.
-The module parameters will be set on the local node at module load time.
+Also search kernel module parameters, in addition to Lustre parameters.
+A module parameter named
+.IR MODULE . PARAMETER
+is found in
+.BI /sys/module/ MODULE /parameters/ PARAMETER
+and the module name is required to distinguish identically-named parameters
+in different modules, such as
+.B lnet.peer_buffer_credits
+and
+.BR ksocklnd.peer_buffer_credits .
+If
+.I MODULE
+contains wildcards, only the Lustre and LNet modules are searched.
+Module parameters are only set on the local node, and only those that are
+writable at runtime can be changed.
 .TP
 .BR -P ", " --permanent
 Set

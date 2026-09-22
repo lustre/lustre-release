@@ -1,4 +1,4 @@
-.TH LCTL-FIND_PARAM 8 "2025-01-07" Lustre "Lustre Configuration Utilities"
+.TH LCTL-FIND_PARAM 8 2026-09-22 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-find_param \- search for parameters matching patterns
 .SH SYNOPSIS
@@ -62,8 +62,19 @@ which is useful to avoid printing copies of the same parameter when their values
 are different like many of the '.stats' parameters.
 .TP
 .BR -o ", " --module
-Include modules params in the parameter search path, meaning that matching
-module parameters will be shown along side with Lustre parameters.
+Also search kernel module parameters, in addition to Lustre parameters.
+A module parameter named
+.IR MODULE . PARAMETER
+is found in
+.BI /sys/module/ MODULE /parameters/ PARAMETER
+and the module name is required to distinguish identically-named parameters
+in different modules, such as
+.B lnet.peer_buffer_credits
+and
+.BR ksocklnd.peer_buffer_credits .
+If
+.I MODULE
+contains wildcards, only the Lustre and LNet modules are searched.
 .TP
 .B -p ", " --path
 Print the parameter path instead of the parameter name.

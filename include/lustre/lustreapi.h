@@ -1925,12 +1925,14 @@ void llapi_layout_sanity_perror(int error);
 int llapi_layout_dom_size(struct llapi_layout *layout, uint64_t *size);
 
 enum llapi_param_flags {
+	/* also match MODULE/PARAM in /sys/module/MODULE/parameters/PARAM */
 	LLAPI_PARAM_MODULES	= 0x0001,
 	LLAPI_PARAM_ALL		= LLAPI_PARAM_MODULES,
 };
 
-int llapi_param_get_paths(const char *pattern, glob_t *paths,
-			  enum llapi_param_flags flags);
+int llapi_param_get_paths(const char *pattern, glob_t *paths);
+int llapi_param_get_paths_flags(const char *pattern, glob_t *paths,
+				enum llapi_param_flags flags);
 int llapi_param_get_value(const char *path, char **buf, size_t *buflen);
 void llapi_param_paths_free(glob_t *paths);
 

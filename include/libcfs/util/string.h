@@ -21,10 +21,10 @@
 #include <errno.h>
 #include <stddef.h>
 #include <stdarg.h>
+#include <stdio.h>
 #include <string.h>
 #include <sys/random.h>
 #include <unistd.h>
-#include <stdio.h>
 
 #include <linux/types.h>
 #include <linux/lnet/lnet-types.h>

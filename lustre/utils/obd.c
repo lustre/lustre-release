@@ -953,7 +953,7 @@ static int lcfg_get_nm_offset_limit(char *nodemap)
 	int rc;
 
 	snprintf(param, sizeof(param), "nodemap/%s/offset", nodemap);
-	rc = llapi_param_get_paths(param, &paths, 0);
+	rc = llapi_param_get_paths(param, &paths);
 	if (rc)
 		return -errno;
 

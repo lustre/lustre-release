@@ -114,6 +114,13 @@ static int sp_parse_param_value(int argc, char **argv, char **param,
 	return 2;
 }
 
+/* Is @path a module parameter (/sys/module/MODULE/parameters[/PARAM])? */
+static bool is_module_param(const char *path)
+{
+	return strncmp(path, CFS_MODULE_PARAM_DIR"/",
+		       strlen(CFS_MODULE_PARAM_DIR"/")) == 0;
+}
+
 /**
  * format_param() - Format a parameter path in the same format as sysctl.
  * @filename: file name of the parameter
@@ -143,8 +150,8 @@ static char *format_param(const char *filename, struct stat *st,
 	}
 
 	/* Take the original filename string and chop off the glob addition */
-	if ((tmp = strstr(filename, "/parameters/")))
-		tmp += strlen("/parameters/");
+	if (is_module_param(filename))
+		tmp = filename + strlen(CFS_MODULE_PARAM_DIR"/");
 	else if ((tmp = strstr(filename, "/lustre/")))
 		tmp += strlen("/lustre/");
 	else if ((tmp = strstr(filename, "/lnet/")))
@@ -158,6 +165,13 @@ static char *format_param(const char *filename, struct stat *st,
 	if (!param_name)
 		return NULL;
 	strcpy(param_name, tmp);
+	/* MODULE/parameters/PARAM -> MODULE/PARAM */
+	if (is_module_param(filename)) {
+		p = strstr(param_name, "/parameters");
+		if (p)
+			memmove(p, p + strlen("/parameters"),
+				strlen(p + strlen("/parameters")) + 1);
+	}
 	/* replace '/' with '.' to match conf_param and sysctl */
 	for (p = strchr(param_name, '/'); p != NULL; p = strchr(p, '/'))
 		*p = '.';
@@ -717,7 +731,7 @@ static int do_param_op(struct param_opts *popt, char *pattern, char *value,
 	if (popt->po_module)
 		flags |= LLAPI_PARAM_MODULES;
 
-	rc = llapi_param_get_paths(pattern, &paths, flags);
+	rc = llapi_param_get_paths_flags(pattern, &paths, flags);
 	if (rc) {
 		rc = -errno;
 		if (!popt->po_recursive && !(rc == -ENOENT && getuid() != 0)) {
@@ -829,8 +843,6 @@ paths_loop:
 		    (st.st_mode & popt->po_permissions) ^ popt->po_permissions)
 			continue;
 		if (popt->po_tunable && stats_param(paths.gl_pathv[i]))
-			continue;
-		if (!popt->po_module && strstr(paths.gl_pathv[i], "/module/"))
 			continue;
 
 		param_name = format_param(paths.gl_pathv[i], &st, popt);
@@ -959,24 +971,35 @@ op_switch:
 			continue;
 		}
 
-		/* Use param_name to grab subdirectory tree from full path */
-		snprintf(param_dir, sizeof(param_dir), "/%s", param_name);
-		tmp = strstr(paths.gl_pathv[i], param_dir);
-
-		/* cleanup param_name now that we are done with it */
-		free(param_name);
-		param_name = NULL;
-		memset(&param_dir, '\0', sizeof(param_dir));
+		/* Use param_name to grab subdirectory tree from full path.
+		 * Module parameter paths don't match the parameter name
+		 * (MODULE/parameters vs. MODULE), so use the name directly.
+		 */
+		if (is_module_param(paths.gl_pathv[i])) {
+			tmp = param_name;
+		} else {
+			snprintf(param_dir, sizeof(param_dir), "/%s",
+				 param_name);
+			tmp = strstr(paths.gl_pathv[i], param_dir);
+			memset(&param_dir, '\0', sizeof(param_dir));
+			if (tmp)
+				tmp++;
+		}
 
 		/* Shouldn't happen but just in case */
 		if (!tmp) {
+			free(param_name);
+			param_name = NULL;
 			if (!rc)
 				rc = -EINVAL;
 			continue;
 		}
-		tmp++;
 
 		rc2 = snprintf(pathname, sizeof(pathname), "%s/*", tmp);
+
+		/* cleanup param_name now that we are done with it */
+		free(param_name);
+		param_name = NULL;
 		if (rc2 < 0) {
 			/*
 			 * snprintf() should never an error, and if it does
@@ -1732,7 +1755,7 @@ static int lcfg_setparam_client(char *func, char *buf, struct param_opts *popt)
 				jt_cmdname(func), param_name, strerror(-rc));
 			goto out;
 		}
-		rc = llapi_param_get_paths(tmp_path, &paths, 0);
+		rc = llapi_param_get_paths(tmp_path, &paths);
 		if (rc) {
 			rc = -errno;
 			fprintf(stderr,
