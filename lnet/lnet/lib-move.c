@@ -2010,11 +2010,16 @@ lnet_initiate_peer_discovery(struct lnet_peer_ni *lpni, struct lnet_msg *msg,
 	msg->msg_sending = 0;
 	msg->msg_txpeer = NULL;
 	lnet_net_unlock(cpt);
-	lnet_peer_queue_message(peer, msg);
+	rc = lnet_peer_queue_message(peer, msg);
 	lnet_net_lock(cpt);
 
 	lnet_peer_ni_decref_locked(lpni);
 	lnet_peer_ni_decref_locked(new_lpni);
+
+	if (rc) {
+		msg->msg_sending = 1;
+		return rc;
+	}
 
 	CDEBUG(D_NET, "msg %p delayed. %s pending discovery\n",
 	       msg, libcfs_nidstr(&peer->lp_primary_nid));

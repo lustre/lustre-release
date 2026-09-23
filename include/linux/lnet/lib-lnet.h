@@ -1006,7 +1006,7 @@ void lnet_peer_net_added(struct lnet_net *net);
 int lnet_peer_primary_nid_locked(struct lnet_nid *nid,
 				 struct lnet_nid *result);
 int lnet_discover_peer_locked(struct lnet_peer_ni *lpni, int cpt, bool block);
-void lnet_peer_queue_message(struct lnet_peer *lp, struct lnet_msg *msg);
+int lnet_peer_queue_message(struct lnet_peer *lp, struct lnet_msg *msg);
 int lnet_peer_discovery_start(void);
 void lnet_peer_discovery_stop(void);
 void lnet_push_update_to_peers(int force);

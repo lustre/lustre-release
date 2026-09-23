@@ -1023,10 +1023,11 @@ lnet_push_update_to_peers(int force)
 	int lncpt;
 	int cpt;
 
-	if (the_lnet.ln_dc_state != LNET_DC_STATE_RUNNING)
-		return;
-
 	lnet_net_lock(LNET_LOCK_EX);
+	if (the_lnet.ln_dc_state != LNET_DC_STATE_RUNNING) {
+		lnet_net_unlock(LNET_LOCK_EX);
+		return;
+	}
 	if (lnet_peer_discovery_disabled)
 		force = 0;
 	lncpt = cfs_percpt_number(the_lnet.ln_peer_tables);
@@ -1789,7 +1790,8 @@ int LNetPeerDiscovered(struct lnet_nid *nid, bool recreate)
 		lnet_net_unlock(cpt);
 		cpt = LNET_LOCK_EX;
 		lnet_net_lock(cpt);
-		lnet_peer_queue_for_discovery(lp);
+		if (the_lnet.ln_dc_state == LNET_DC_STATE_RUNNING)
+			lnet_peer_queue_for_discovery(lp);
 	}
 	/* Drop refcount from lookup */
 	lnet_peer_decref_locked(lp);
@@ -2683,24 +2685,40 @@ __must_hold(&lp->lp_lock)
 	return rc;
 }
 
-/* Add the message to the peer's lp_dc_pendq and queue the peer for discovery */
-void
+/*
+ * Add the message to the peer's lp_dc_pendq and queue the peer for discovery.
+ * Returns 0 on success, or -ESHUTDOWN if discovery is no longer running, in
+ * which case the message is not queued and the caller must finalize it.
+ */
+int
 lnet_peer_queue_message(struct lnet_peer *lp, struct lnet_msg *msg)
 {
-	/* The discovery thread holds net_lock/EX and lp_lock when it splices
+	/*
+	 * The discovery thread holds net_lock/EX and lp_lock when it splices
 	 * the lp_dc_pendq onto a local list for resending. Thus, we do the same
-	 * when adding to the list and queuing the peer to ensure that we do not
-	 * strand any messages on the lp_dc_pendq. This scheme ensures the
-	 * message will be resent even if the peer is already being discovered.
-	 * Therefore we needn't check the return value of
+	 * when adding to the list and queuing the peer. While discovery is
+	 * running this guarantees the message will be resent even if the peer
+	 * is already being discovered, so we needn't check the return value of
 	 * lnet_peer_queue_for_discovery(lp).
+	 *
+	 * Once discovery has stopped nobody will resend or finalize messages
+	 * on lp_dc_pendq until the peer is destroyed, and a message may pin
+	 * an NI (e.g. msg_rxni of a forwarded message), which would block
+	 * the zombie NI cleanup that must happen before the peer tables are
+	 * cleaned up. So refuse the message instead of parking it.
 	 */
 	lnet_net_lock(LNET_LOCK_EX);
+	if (the_lnet.ln_dc_state != LNET_DC_STATE_RUNNING) {
+		lnet_net_unlock(LNET_LOCK_EX);
+		return -ESHUTDOWN;
+	}
 	spin_lock(&lp->lp_lock);
 	list_add_tail(&msg->msg_list, &lp->lp_dc_pendq);
 	spin_unlock(&lp->lp_lock);
 	lnet_peer_queue_for_discovery(lp);
 	lnet_net_unlock(LNET_LOCK_EX);
+
+	return 0;
 }
 
 /*
@@ -2978,7 +2996,8 @@ out:
 	 */
 	spin_unlock(&lp->lp_lock);
 	lnet_net_lock(LNET_LOCK_EX);
-	if (!lnet_peer_is_uptodate(lp) && lnet_peer_queue_for_discovery(lp)) {
+	if (the_lnet.ln_dc_state == LNET_DC_STATE_RUNNING &&
+	    !lnet_peer_is_uptodate(lp) && lnet_peer_queue_for_discovery(lp)) {
 		list_move(&lp->lp_dc_list, &the_lnet.ln_dc_request);
 		wake_up(&the_lnet.ln_dc_waitq);
 	}
