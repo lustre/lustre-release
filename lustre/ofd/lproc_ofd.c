@@ -606,8 +606,13 @@ static ssize_t failure_domain_show(struct kobject *kobj,
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	unsigned int bytes;
 
-	return scnprintf(buf, PAGE_SIZE, "%u\n", ofd->ofd_failure_domain);
+	spin_lock(&ofd->ofd_flags_lock);
+	bytes = ofd->ofd_failure_domain;
+	spin_unlock(&ofd->ofd_flags_lock);
+
+	return scnprintf(buf, PAGE_SIZE, "%u\n", bytes);
 }
 
 /**

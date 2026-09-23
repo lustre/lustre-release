@@ -608,14 +608,20 @@ out:
 
 int ofd_failure_domain_write(const struct lu_env *env, struct ofd_device *ofd)
 {
-	struct ofd_thread_info	*info = ofd_info(env);
+	struct ofd_thread_info *info = ofd_info(env);
 	struct dt_object *fd;
 	struct thandle *th;
+	unsigned int vals;
 	int rc;
 
 	memset(&info->fti_attr, 0, sizeof(info->fti_attr));
-	info->fti_buf.lb_buf = &ofd->ofd_failure_domain;
-	info->fti_buf.lb_len = sizeof(ofd->ofd_failure_domain);
+
+	spin_lock(&ofd->ofd_flags_lock);
+	vals = ofd->ofd_failure_domain;
+	spin_unlock(&ofd->ofd_flags_lock);
+
+	info->fti_buf.lb_buf = &vals;
+	info->fti_buf.lb_len = sizeof(vals);
 	info->fti_dof.dof_type = dt_mode_to_dft(S_IFREG);
 	info->fti_off = 0;
 
