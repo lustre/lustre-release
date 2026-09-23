@@ -6207,6 +6207,85 @@ test_81d() {
 }
 run_test 81d "parallel rename file cross-dir on same MDT"
 
+cleanup_81j() {
+	local damaged=$1
+
+	[[ -e $damaged ]] || return 0
+	rm -f $damaged
+	do_facet mds1 "$LCTL lfsck_start -M $(facet_svc mds1) -t namespace \
+		-A -r -C on" > /dev/null
+	wait_update_facet mds1 "$LCTL get_param -n \
+		mdd.$(facet_svc mds1).lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 300 ||
+		error "namespace LFSCK did not complete"
+	cancel_lru_locks mdc
+	rm -rf $DIR1/$tdir
+}
+
+test_81j() {
+	(( MDSCOUNT >= 2 )) || skip_env "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.17.58.64) )) ||
+		skip "Need MDS version at least 2.17.58.64"
+
+	local mdts=$(mdts_nodes)
+	local fv
+	local fs1
+	local fs2
+	local fd
+	local fk
+	local pid2
+	local pid1
+	local damaged=$TMP/rename_remote_victim.$$
+
+	stack_trap "do_nodes $mdts \"$LCTL set_param fail_loc=0\" > /dev/null"
+	stack_trap "cleanup_81j $damaged"
+
+	# A on MDT0; its entries name files whose objects are on MDT1, so
+	# both renames onto dst are served by MDT1 with A remote
+	mkdir_on_mdt0 $DIR1/$tdir || error "(0) mkdir failed"
+	$LFS mkdir -i 0 $DIR1/$tdir/A || error "(1) mkdir A failed"
+	$LFS mkdir -i 1 $DIR1/$tdir/B || error "(2) mkdir B failed"
+	echo v > $DIR1/$tdir/B/v && echo s1 > $DIR1/$tdir/B/s1 &&
+		echo s2 > $DIR1/$tdir/B/s2 || error "(3) create failed"
+	fv=$($LFS path2fid $DIR1/$tdir/B/v)
+	fs1=$($LFS path2fid $DIR1/$tdir/B/s1)
+	fs2=$($LFS path2fid $DIR1/$tdir/B/s2)
+	mv $DIR1/$tdir/B/v $DIR1/$tdir/A/dst &&
+		ln $DIR1/$tdir/A/dst $DIR1/$tdir/A/keep &&
+		mv $DIR1/$tdir/B/s1 $DIR1/$tdir/A/a &&
+		mv $DIR1/$tdir/B/s2 $DIR1/$tdir/A/b || error "(4) setup failed"
+	stat $DIR1/$tdir/A/{a,b,dst,keep} $DIR2/$tdir/A/{a,b,dst,keep} \
+		> /dev/null || error "(5) stat failed"
+
+	#define OBD_FAIL_MDS_RENAME_TARGET_DELAY 0x2405
+	do_nodes $mdts "$LCTL set_param fail_val=20 fail_loc=0x80002405" \
+		> /dev/null
+
+	# the second rename resolves dst to v and waits before its children
+	mrename $DIR2/$tdir/A/b $DIR2/$tdir/A/dst > /dev/null 2>&1 &
+	pid2=$!
+	wait_update_facet mds2 "$LCTL get_param -n fail_loc" \
+		"$((0xc0002405))" 30 || error "(6) the rename did not park"
+
+	# the first renames onto dst and finishes while the second waits
+	mrename $DIR1/$tdir/A/a $DIR1/$tdir/A/dst > /dev/null 2>&1 &
+	pid1=$!
+	wait $pid1 || error "(7) first rename failed"
+	wait $pid2 || error "(8) second rename failed"
+
+	touch $damaged
+	cancel_lru_locks mdc
+	fd=$($LFS path2fid $DIR1/$tdir/A/dst 2> /dev/null)
+	fk=$($LFS path2fid $DIR1/$tdir/A/keep 2> /dev/null)
+	[[ "$fk" == "$fv" ]] ||
+		error "(9) keep no longer names $fv"
+	[[ "$fd" == "$fs2" && ! -e $MOUNT/.lustre/fid/$fs1 ]] ||
+		[[ "$fd" == "$fs1" && ! -e $MOUNT/.lustre/fid/$fs2 ]] ||
+		error "(10) dst names $fd with both sources alive"
+	rm -f $damaged
+}
+run_test 81j "a remote same-directory rename must lock its target's name"
+
 test_82() {
 	[[ "$MDS1_VERSION" -gt $(version_code 2.6.91) ]] ||
 		skip "Need MDS version at least 2.6.92"
