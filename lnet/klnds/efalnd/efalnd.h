@@ -327,6 +327,7 @@ struct kefa_conn {
 	atomic_t last_qp_idx;
 	struct lnet_nid remote_nid;
 	atomic64_t last_use_time;	/* last time the conn was used in seconds */
+	atomic_t refcount;		/* active TX and lookup references */
 	struct hlist_node ni_node;	/* node on kefa_ni hashmap */
 	struct kefa_ni *efa_ni;
 	u64 hash_key;
@@ -421,6 +422,24 @@ kefalnd_thread_stop(void)
 	atomic_dec(&kefalnd.nthreads);
 }
 
+/* Connection reference counting. A connection is destroyed only once its
+ * reference count drops to zero. References come from two independent
+ * sources: a lookup or creation returns a reference that the calling context
+ * owns and releases before it returns, and a TX takes its own reference when
+ * it adopts a connection, released when the TX completes.
+ */
+static inline void
+kefalnd_conn_incref(struct kefa_conn *conn)
+{
+	atomic_inc(&conn->refcount);
+}
+
+static inline void
+kefalnd_conn_decref(struct kefa_conn *conn)
+{
+	atomic_dec(&conn->refcount);
+}
+
 static inline void
 kefalnd_msg_set_epoch(struct kefa_msg *msg, u64 remote_epoch)
 {
@@ -463,13 +482,13 @@ void kefalnd_put_peer_ni(struct kefa_peer_ni *peer_ni);
 void kefalnd_debugfs_init(void);
 void kefalnd_debugfs_exit(void);
 
-struct kefa_conn *kefalnd_lookup_conn(struct kefa_ni *efa_ni,
-				      struct lnet_nid *nid,
-				      enum kefa_conn_type conn_type,
-				      bool update_use_time);
-struct kefa_conn *kefalnd_lookup_or_init_conn(struct kefa_ni *efa_ni,
-					      struct lnet_nid *nid,
-					      enum kefa_conn_type conn_type);
+struct kefa_conn *kefalnd_get_conn(struct kefa_ni *efa_ni,
+				   struct lnet_nid *nid,
+				   enum kefa_conn_type conn_type,
+				   bool update_use_time);
+struct kefa_conn *kefalnd_get_or_init_conn(struct kefa_ni *efa_ni,
+					   struct lnet_nid *nid,
+					   enum kefa_conn_type conn_type);
 void kefalnd_handle_conn_establishment(struct kefa_ni *efa_ni,
 				       struct kefa_msg *msg);
 void kefalnd_deactivate_conn(struct kefa_conn *conn);

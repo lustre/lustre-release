@@ -572,7 +572,14 @@ kefalnd_launch_tx(struct kefa_conn *conn, struct kefa_tx *tx)
 	atomic_inc(&tx->ref_cnt);
 	list_add_tail(&tx->list_node, &conn->pend_tx);
 
-	tx->conn = conn;
+	/* The TX takes its own reference on the connection the first time it
+	 * adopts one, released in Tx done. Re-launches of a TX that
+	 * already holds the connection skip this.
+	 */
+	if (!tx->conn) {
+		kefalnd_conn_incref(conn);
+		tx->conn = conn;
+	}
 
 	/* TODO - consider all pending connections. i.e. connection arbitration */
 	if (conn->state == KEFA_CONN_ACTIVE)
@@ -864,21 +871,12 @@ kefalnd_tx_done(struct kefa_tx *tx)
 		return;
 	}
 
-	if (tx->conn) {
-		spin_lock_irqsave(&tx->conn->lock, flags);
-		if (!list_empty(&tx->list_node))
-			list_del_init(&tx->list_node);
-
-		spin_unlock_irqrestore(&tx->conn->lock, flags);
-	}
-
 	CDEBUG(D_NET, "Completed TX type[%s] from[%s] to[%s]\n",
 	       kefalnd_msgtype2str(tx->type),
 	       tx->conn ? libcfs_nidstr(&tx->conn->local_nid) : "NA",
 	       tx->conn ? libcfs_nidstr(&tx->conn->remote_nid) : "NA");
 
 	LASSERT(atomic_read(&tx->ref_cnt) == 0);
-	LASSERT(list_empty(&tx->list_node));
 	atomic64_set(&tx->send_time, 0);
 	kefalnd_unmap_tx(tx);
 
@@ -900,7 +898,20 @@ kefalnd_tx_done(struct kefa_tx *tx)
 	}
 
 	tx->hstatus = LNET_MSG_STATUS_OK;
-	tx->conn = NULL;
+
+	/* All uses of the connection are done: unlink the TX and release the
+	 * reference it held on the connection.
+	 */
+	if (tx->conn) {
+		spin_lock_irqsave(&tx->conn->lock, flags);
+		if (!list_empty(&tx->list_node))
+			list_del_init(&tx->list_node);
+		spin_unlock_irqrestore(&tx->conn->lock, flags);
+
+		kefalnd_conn_decref(tx->conn);
+		tx->conn = NULL;
+	}
+
 	tx->dmadir = DMA_BIDIRECTIONAL;
 	tx->type = 0;
 
@@ -1043,8 +1054,8 @@ kefalnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		return -ENOMEM;
 	}
 
-	conn = kefalnd_lookup_or_init_conn(efa_ni, &target->nid,
-					   KEFA_CONN_TYPE_INITIATOR);
+	conn = kefalnd_get_or_init_conn(efa_ni, &target->nid,
+					KEFA_CONN_TYPE_INITIATOR);
 	if (IS_ERR(conn)) {
 		EFA_DEV_DEBUG(efa_ni->efa_dev,
 			      "can't establish connection to peer NI[%s]\n",
@@ -1088,7 +1099,8 @@ kefalnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 				    libcfs_nidstr(&target->nid), rc);
 
 			kefalnd_tx_done(tx);
-			return -EIO;
+			rc = -EIO;
+			goto out;
 		}
 
 		/* setup the message */
@@ -1100,7 +1112,8 @@ kefalnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 
 			tx->hstatus = LNET_MSG_STATUS_LOCAL_ERROR;
 			kefalnd_tx_done(tx);
-			return -EIO;
+			rc = -EIO;
+			goto out;
 		}
 
 		atomic_set(&tx->resp_id, EFALND_RESP_ID(++tx->resp_counter, 1));
@@ -1109,7 +1122,8 @@ kefalnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		tx->lntmsg[0] = lntmsg;
 		atomic_inc(&tx->ref_cnt); /* wait for GETR_{ACK,NACK} */
 		kefalnd_launch_tx(conn, tx);
-		return 0;
+		rc = 0;
+		goto out;
 
 	case LNET_MSG_REPLY:
 	case LNET_MSG_PUT:
@@ -1129,7 +1143,8 @@ kefalnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 				    libcfs_nidstr(&target->nid), rc);
 
 			kefalnd_tx_done(tx);
-			return -EIO;
+			rc = -EIO;
+			goto out;
 		}
 
 		/* setup the message */
@@ -1139,22 +1154,29 @@ kefalnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		tx->lntmsg[0] = lntmsg;
 		atomic_inc(&tx->ref_cnt); /* wait for PUT_DONE */
 		kefalnd_launch_tx(conn, tx);
-		return 0;
+		rc = 0;
+		goto out;
 	}
 
 	/* SEND based (non-RDMA flow) */
 	rc = kefalnd_fill_imm_msg(conn, lntmsg, tx, hdr);
 	if (rc < 0) {
 		kefalnd_tx_done(tx);
-		return rc;
+		goto out;
 	}
 
 	/* finalise lntmsg on completion */
 	tx->lntmsg[0] = lntmsg;
 
 	kefalnd_launch_tx(conn, tx);
+	rc = 0;
 
-	return 0;
+out:
+	/* Release the connection reference taken by the lookup above. The TX,
+	 * if launched, holds its own reference for its lifetime.
+	 */
+	kefalnd_conn_decref(conn);
+	return rc;
 }
 
 static void
@@ -1425,7 +1447,7 @@ kefalnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 
 	msg = rx->msg;
 	nid = &msg->msg_v2.srcnid;
-	conn = kefalnd_lookup_conn(efa_ni, nid, KEFA_CONN_TYPE_RESPONDER, true);
+	conn = kefalnd_get_conn(efa_ni, nid, KEFA_CONN_TYPE_RESPONDER, true);
 	if (IS_ERR_OR_NULL(conn)) {
 		EFA_DEV_ERR(efa_ni->efa_dev,
 			    "failed to get connection for RX from peer NI[%s]. err[%ld]\n",
@@ -1476,6 +1498,10 @@ kefalnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 		break;
 	}
 
+	/* Release the connection reference taken by the lookup above. Any TX
+	 * launched by a handler holds its own reference for its lifetime.
+	 */
+	kefalnd_conn_decref(conn);
 	kefalnd_free_rx(rx);
 	return rc;
 }

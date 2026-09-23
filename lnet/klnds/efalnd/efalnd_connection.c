@@ -82,6 +82,7 @@ kefalnd_post_conn_message(struct kefa_conn *conn, struct kefa_tx *tx)
 	unsigned long flags;
 	int rc;
 
+	kefalnd_conn_incref(conn);
 	tx->conn = conn;
 
 	srd_wr = &tx->wrq.wr;
@@ -118,6 +119,7 @@ kefalnd_post_conn_message(struct kefa_conn *conn, struct kefa_tx *tx)
 		list_del_init(&tx->list_node);
 		spin_unlock_irqrestore(&conn->lock, flags);
 
+		kefalnd_conn_decref(tx->conn);
 		tx->conn = NULL;
 		atomic_set(&tx->ref_cnt, 0);
 		atomic64_set(&tx->send_time, 0);
@@ -382,6 +384,7 @@ kefalnd_create_conn(struct kefa_ni *efa_ni, struct lnet_nid *peer_nid,
 	conn->local_nid = efa_ni->lnet_ni->ni_nid;
 	conn->remote_epoch = 0;
 	atomic64_set(&conn->last_use_time, ktime_get_seconds());
+	atomic_set(&conn->refcount, 0);
 	conn->state = KEFA_CONN_INACTIVE;
 
 	if (nid_same(&conn->local_nid, &conn->remote_nid))
@@ -522,8 +525,8 @@ kefalnd_establish_conn(struct kefa_conn *conn)
 }
 
 static struct kefa_conn *
-kefalnd_lookup_conn_locked(struct kefa_ni *efa_ni, struct lnet_nid *nid,
-			   enum kefa_conn_type conn_type, bool update_use_time)
+kefalnd_get_conn_locked(struct kefa_ni *efa_ni, struct lnet_nid *nid,
+			enum kefa_conn_type conn_type, bool update_use_time)
 __must_hold(&efa_ni->conn_lock)
 {
 	struct kefa_conn *conn;
@@ -547,6 +550,7 @@ __must_hold(&efa_ni->conn_lock)
 		if (update_use_time)
 			atomic64_set(&conn->last_use_time, ktime_get_seconds());
 
+		kefalnd_conn_incref(conn);
 		return conn;
 	}
 	return NULL;
@@ -570,6 +574,15 @@ kefalnd_remove_conn(struct kefa_ni *efa_ni, struct kefa_conn *conn)
 }
 
 static void
+kefalnd_put_and_destroy_conn(struct kefa_ni *efa_ni, struct kefa_conn *conn,
+			     enum lnet_msg_hstatus hstatus, int status)
+{
+	kefalnd_conn_decref(conn);
+	kefalnd_remove_conn(efa_ni, conn);
+	kefalnd_destroy_conn(conn, hstatus, status);
+}
+
+static void
 kefalnd_add_conn_locked(struct kefa_ni *efa_ni, struct kefa_conn *conn)
 __must_hold(&efa_ni->conn_lock)
 {
@@ -577,8 +590,8 @@ __must_hold(&efa_ni->conn_lock)
 }
 
 struct kefa_conn *
-kefalnd_lookup_or_init_conn(struct kefa_ni *efa_ni, struct lnet_nid *nid,
-			    enum kefa_conn_type conn_type)
+kefalnd_get_or_init_conn(struct kefa_ni *efa_ni, struct lnet_nid *nid,
+			 enum kefa_conn_type conn_type)
 {
 	struct kefa_conn *conn, *new_conn;
 	unsigned long flags;
@@ -588,7 +601,7 @@ kefalnd_lookup_or_init_conn(struct kefa_ni *efa_ni, struct lnet_nid *nid,
 	 * connection
 	 */
 	read_lock_irqsave(&efa_ni->conn_lock, flags);
-	conn = kefalnd_lookup_conn_locked(efa_ni, nid, conn_type, true);
+	conn = kefalnd_get_conn_locked(efa_ni, nid, conn_type, true);
 	if (conn) {
 		read_unlock_irqrestore(&efa_ni->conn_lock, flags);
 		return conn;
@@ -605,13 +618,15 @@ kefalnd_lookup_or_init_conn(struct kefa_ni *efa_ni, struct lnet_nid *nid,
 
 	/* Retry with write lock */
 	write_lock_irqsave(&efa_ni->conn_lock, flags);
-	conn = kefalnd_lookup_conn_locked(efa_ni, nid, conn_type, true);
+	conn = kefalnd_get_conn_locked(efa_ni, nid, conn_type, true);
 	if (conn) {
 		write_unlock_irqrestore(&efa_ni->conn_lock, flags);
 		kefalnd_destroy_conn(new_conn, LNET_MSG_STATUS_OK, 0);
 		return conn;
 	}
 
+	/* Reference returned to the caller. */
+	kefalnd_conn_incref(new_conn);
 	/* Add the new connection atomically so anyone will see it */
 	kefalnd_add_conn_locked(efa_ni, new_conn);
 	write_unlock_irqrestore(&efa_ni->conn_lock, flags);
@@ -628,9 +643,9 @@ kefalnd_lookup_or_init_conn(struct kefa_ni *efa_ni, struct lnet_nid *nid,
 	 */
 	rc = kefalnd_establish_conn(new_conn);
 	if (rc) {
-		kefalnd_remove_conn(efa_ni, new_conn);
-		kefalnd_destroy_conn(new_conn, LNET_MSG_STATUS_REMOTE_TIMEOUT,
-				     rc);
+		kefalnd_put_and_destroy_conn(efa_ni, new_conn,
+					     LNET_MSG_STATUS_REMOTE_TIMEOUT,
+					     rc);
 		return ERR_PTR(rc);
 	}
 
@@ -638,15 +653,15 @@ kefalnd_lookup_or_init_conn(struct kefa_ni *efa_ni, struct lnet_nid *nid,
 }
 
 struct kefa_conn *
-kefalnd_lookup_conn(struct kefa_ni *efa_ni, struct lnet_nid *nid,
-		    enum kefa_conn_type conn_type, bool update_use_time)
+kefalnd_get_conn(struct kefa_ni *efa_ni, struct lnet_nid *nid,
+		 enum kefa_conn_type conn_type, bool update_use_time)
 {
 	struct kefa_conn *conn;
 	unsigned long flags;
 
 	read_lock_irqsave(&efa_ni->conn_lock, flags);
-	conn = kefalnd_lookup_conn_locked(efa_ni, nid, conn_type,
-					  update_use_time);
+	conn = kefalnd_get_conn_locked(efa_ni, nid, conn_type,
+				       update_use_time);
 	read_unlock_irqrestore(&efa_ni->conn_lock, flags);
 	return conn;
 }
@@ -665,8 +680,8 @@ kefalnd_handle_conn_req_ack(struct kefa_ni *efa_ni,
 	CDEBUG(D_NET, "Received connection ack from[%s] to[%s]\n",
 	       libcfs_nidstr(srcnid), libcfs_nidstr(dstnid));
 
-	conn = kefalnd_lookup_conn(efa_ni, srcnid, KEFA_CONN_TYPE_INITIATOR,
-				   true);
+	conn = kefalnd_get_conn(efa_ni, srcnid, KEFA_CONN_TYPE_INITIATOR,
+				true);
 	if (!conn) {
 		EFA_DEV_ERR(efa_ni->efa_dev,
 			    "Unexpected connection from[%s] to[%s]\n",
@@ -683,6 +698,7 @@ kefalnd_handle_conn_req_ack(struct kefa_ni *efa_ni,
 			    conn->state, libcfs_nidstr(srcnid),
 			    libcfs_nidstr(dstnid));
 
+		kefalnd_conn_decref(conn);
 		return -EINVAL;
 	}
 
@@ -713,11 +729,11 @@ kefalnd_handle_conn_req_ack(struct kefa_ni *efa_ni,
 	kefalnd_conn_post_tx_locked(conn);
 	spin_unlock_irqrestore(&conn->lock, flags);
 
+	kefalnd_conn_decref(conn);
 	return 0;
 
 cleanup_conn:
-	kefalnd_remove_conn(efa_ni, conn);
-	kefalnd_destroy_conn(conn, hstatus, rc);
+	kefalnd_put_and_destroy_conn(efa_ni, conn, hstatus, rc);
 	return rc;
 }
 
@@ -735,8 +751,8 @@ kefalnd_handle_conn_req(struct kefa_ni *efa_ni,
 	CDEBUG(D_NET, "Received connection request from[%s] to[%s]\n",
 	       libcfs_nidstr(srcnid), libcfs_nidstr(dstnid));
 
-	conn = kefalnd_lookup_conn(efa_ni, srcnid, KEFA_CONN_TYPE_RESPONDER,
-				   true);
+	conn = kefalnd_get_conn(efa_ni, srcnid, KEFA_CONN_TYPE_RESPONDER,
+				true);
 	if (!conn) {
 		EFA_DEV_ERR(efa_ni->efa_dev,
 			    "Unexpected connection from[%s] to[%s]\n",
@@ -763,6 +779,7 @@ kefalnd_handle_conn_req(struct kefa_ni *efa_ni,
 		if (rc) {
 			spin_unlock_irqrestore(&conn->lock, flags);
 			kefalnd_send_conn_req_ack(conn, rc);
+			kefalnd_conn_decref(conn);
 			return rc;
 		}
 
@@ -782,10 +799,12 @@ kefalnd_handle_conn_req(struct kefa_ni *efa_ni,
 			    conn->state, libcfs_nidstr(srcnid),
 			    libcfs_nidstr(dstnid));
 
+		kefalnd_conn_decref(conn);
 		return -EINVAL;
 	}
 
 	rc = kefalnd_send_conn_req_ack(conn, 0);
+	kefalnd_conn_decref(conn);
 	return rc;
 }
 
@@ -804,8 +823,8 @@ kefalnd_handle_conn_probe_resp(struct kefa_ni *efa_ni, struct lnet_nid *srcnid,
 	CDEBUG(D_NET, "Received connection probe response from[%s] to[%s]\n",
 	       libcfs_nidstr(srcnid), libcfs_nidstr(dstnid));
 
-	conn = kefalnd_lookup_conn(efa_ni, srcnid, KEFA_CONN_TYPE_INITIATOR,
-				   true);
+	conn = kefalnd_get_conn(efa_ni, srcnid, KEFA_CONN_TYPE_INITIATOR,
+				true);
 	if (!conn) {
 		EFA_DEV_ERR(efa_ni->efa_dev,
 			    "Unexpected connection from[%s] to[%s]\n",
@@ -822,6 +841,7 @@ kefalnd_handle_conn_probe_resp(struct kefa_ni *efa_ni, struct lnet_nid *srcnid,
 			    conn->state, libcfs_nidstr(srcnid),
 			    libcfs_nidstr(dstnid));
 
+		kefalnd_conn_decref(conn);
 		return -EINVAL;
 	}
 
@@ -846,8 +866,10 @@ kefalnd_handle_conn_probe_resp(struct kefa_ni *efa_ni, struct lnet_nid *srcnid,
 			conn->proto_ver = min_t(u8, EFALND_MAX_PROTO_VER,
 						max_proto);
 			rc = kefalnd_send_conn_probe(conn);
-			if (!rc)
+			if (!rc) {
+				kefalnd_conn_decref(conn);
 				return 0;
+			}
 		}
 
 		hstatus = LNET_MSG_STATUS_REMOTE_DROPPED;
@@ -870,11 +892,11 @@ kefalnd_handle_conn_probe_resp(struct kefa_ni *efa_ni, struct lnet_nid *srcnid,
 		goto cleanup_conn;
 	}
 
+	kefalnd_conn_decref(conn);
 	return 0;
 
 cleanup_conn:
-	kefalnd_remove_conn(efa_ni, conn);
-	kefalnd_destroy_conn(conn, hstatus, rc);
+	kefalnd_put_and_destroy_conn(efa_ni, conn, hstatus, rc);
 	return rc;
 }
 
@@ -916,18 +938,19 @@ kefalnd_deactivate_conn(struct kefa_conn *conn)
 	write_unlock_irqrestore(&efa_ni->conn_lock, flags);
 }
 
-static struct kefa_conn *
-kefalnd_refresh_connection(struct kefa_ni *efa_ni, struct kefa_conn *old_conn,
+static int
+kefalnd_refresh_connection(struct kefa_ni *efa_ni, struct kefa_conn **conn,
 			   struct lnet_nid *nid, union ib_gid *gid, u16 cm_qpn,
 			   u32 cm_qkey)
 {
+	struct kefa_conn *old_conn = *conn;
 	struct kefa_peer_ni *peer_ni;
 	struct kefa_conn *new_conn;
 	unsigned long flags;
 
 	new_conn = kefalnd_create_conn(efa_ni, nid, KEFA_CONN_TYPE_RESPONDER);
 	if (IS_ERR(new_conn))
-		return new_conn;
+		return PTR_ERR(new_conn);
 
 	kefalnd_set_conn_state(new_conn, KEFA_CONN_PROBE_EFA_PASSIVE);
 
@@ -942,7 +965,7 @@ kefalnd_refresh_connection(struct kefa_ni *efa_ni, struct kefa_conn *old_conn,
 			kefalnd_destroy_conn(new_conn,
 					     LNET_MSG_STATUS_LOCAL_ERROR,
 					     PTR_ERR(peer_ni));
-			return ERR_CAST(peer_ni);
+			return PTR_ERR(peer_ni);
 		}
 
 		kefalnd_update_peer_ni(peer_ni, gid, cm_qpn, cm_qkey);
@@ -954,10 +977,16 @@ kefalnd_refresh_connection(struct kefa_ni *efa_ni, struct kefa_conn *old_conn,
 	 */
 	write_lock_irqsave(&efa_ni->conn_lock, flags);
 	kefalnd_deactivate_conn_locked(old_conn);
+	/* Consume the caller's reference on the old connection and hand back a
+	 * fresh reference on the new one in its place.
+	 */
+	kefalnd_conn_decref(old_conn);
+	kefalnd_conn_incref(new_conn);
 	kefalnd_add_conn_locked(efa_ni, new_conn);
 	write_unlock_irqrestore(&efa_ni->conn_lock, flags);
 
-	return new_conn;
+	*conn = new_conn;
+	return 0;
 }
 
 static int
@@ -977,8 +1006,8 @@ kefalnd_handle_conn_probe(struct kefa_ni *efa_ni,
 	CDEBUG(D_NET, "Received connection probe from[%s] to[%s]\n",
 	       libcfs_nidstr(srcnid), libcfs_nidstr(dstnid));
 
-	conn = kefalnd_lookup_or_init_conn(efa_ni, srcnid,
-					   KEFA_CONN_TYPE_RESPONDER);
+	conn = kefalnd_get_or_init_conn(efa_ni, srcnid,
+					KEFA_CONN_TYPE_RESPONDER);
 	if (IS_ERR(conn))
 		return PTR_ERR(conn);
 
@@ -1018,15 +1047,18 @@ kefalnd_handle_conn_probe(struct kefa_ni *efa_ni,
 		if (conn->remote_epoch == probe_msg->src_epoch) {
 			spin_unlock_irqrestore(&conn->lock, flags);
 			kefalnd_send_conn_probe_resp(conn, 0);
+			kefalnd_conn_decref(conn);
 			return 0;
 		}
 
 		spin_unlock_irqrestore(&conn->lock, flags);
-		conn = kefalnd_refresh_connection(efa_ni, conn, srcnid, &gid,
-						  probe_msg->cm_qp.qp_num,
-						  probe_msg->cm_qp.qkey);
-		if (IS_ERR(conn))
-			return PTR_ERR(conn);
+		rc = kefalnd_refresh_connection(efa_ni, &conn, srcnid, &gid,
+						probe_msg->cm_qp.qp_num,
+						probe_msg->cm_qp.qkey);
+		if (rc) {
+			kefalnd_conn_decref(conn);
+			return rc;
+		}
 
 		break;
 
@@ -1043,12 +1075,13 @@ kefalnd_handle_conn_probe(struct kefa_ni *efa_ni,
 			    conn->state, libcfs_nidstr(srcnid),
 			    libcfs_nidstr(dstnid));
 
+		kefalnd_conn_decref(conn);
 		return -EINVAL;
 	}
 
 	/* We check if TX connection is valid as well and if not remove it */
-	init_conn = kefalnd_lookup_conn(efa_ni, srcnid,
-					KEFA_CONN_TYPE_INITIATOR, false);
+	init_conn = kefalnd_get_conn(efa_ni, srcnid,
+				     KEFA_CONN_TYPE_INITIATOR, false);
 	if (init_conn) {
 		spin_lock_irqsave(&init_conn->lock, flags);
 		init_conn_active = init_conn->state == KEFA_CONN_ACTIVE;
@@ -1057,6 +1090,8 @@ kefalnd_handle_conn_probe(struct kefa_ni *efa_ni,
 		if (init_conn_active &&
 		    init_conn->remote_epoch != probe_msg->src_epoch)
 			kefalnd_deactivate_conn(init_conn);
+
+		kefalnd_conn_decref(init_conn);
 	}
 
 	conn->remote_epoch = probe_msg->src_epoch;
@@ -1075,11 +1110,12 @@ proto_check:
 	if (rc)
 		goto cleanup_conn;
 
+	kefalnd_conn_decref(conn);
 	return 0;
 
 cleanup_conn:
-	kefalnd_remove_conn(efa_ni, conn);
-	kefalnd_destroy_conn(conn, LNET_MSG_STATUS_LOCAL_ERROR, rc);
+	kefalnd_put_and_destroy_conn(efa_ni, conn,
+				     LNET_MSG_STATUS_LOCAL_ERROR, rc);
 	return rc;
 }
 
@@ -1135,28 +1171,40 @@ kefalnd_handle_conn_establishment(struct kefa_ni *efa_ni, struct kefa_msg *msg)
 	}
 }
 
+static bool
+kefalnd_conn_is_idle(struct kefa_ni *efa_ni, struct kefa_conn *conn,
+		     time64_t now)
+__must_hold(&efa_ni->conn_lock)
+{
+	int timeout;
+
+	if (conn->state == KEFA_CONN_DEACTIVATING)
+		return true;
+
+	timeout = efa_ni->lnet_ni->ni_net->net_tunables.lct_peer_timeout;
+	if (conn->type == KEFA_CONN_TYPE_RESPONDER)
+		timeout += RESP_CONN_EXTRA_TIME;
+
+	return now > (atomic64_read(&conn->last_use_time) + timeout);
+}
+
 static void
 kefalnd_scan_ni_conns(struct kefa_ni *efa_ni)
 {
-	int init_timeout, resp_timeout, timeout, bkt;
 	struct kefa_conn *conn, *temp_conn;
 	LIST_HEAD(candidates);
 	unsigned long flags;
 	time64_t now;
+	int bkt;
 
 	now = ktime_get_seconds();
-	init_timeout = efa_ni->lnet_ni->ni_net->net_tunables.lct_peer_timeout;
-	resp_timeout = init_timeout + RESP_CONN_EXTRA_TIME;
 
 	/* Collect idle/deactivating candidates under read lock onto a local
 	 * list to avoid touching cleanup_conns until validated.
 	 */
 	read_lock_irqsave(&efa_ni->conn_lock, flags);
 	hash_for_each(efa_ni->conns, bkt, conn, ni_node) {
-		timeout = conn->type == KEFA_CONN_TYPE_INITIATOR ?
-						init_timeout : resp_timeout;
-		if (now > atomic64_read(&conn->last_use_time) + timeout ||
-		    conn->state == KEFA_CONN_DEACTIVATING)
+		if (kefalnd_conn_is_idle(efa_ni, conn, now))
 			list_add_tail(&conn->cleanup_node, &candidates);
 	}
 	read_unlock_irqrestore(&efa_ni->conn_lock, flags);
@@ -1169,11 +1217,7 @@ kefalnd_scan_ni_conns(struct kefa_ni *efa_ni)
 	 */
 	write_lock_irqsave(&efa_ni->conn_lock, flags);
 	list_for_each_entry_safe(conn, temp_conn, &candidates, cleanup_node) {
-		timeout = conn->type == KEFA_CONN_TYPE_INITIATOR ?
-				init_timeout : resp_timeout;
-
-		if (now <= atomic64_read(&conn->last_use_time) + timeout &&
-		    conn->state != KEFA_CONN_DEACTIVATING) {
+		if (!kefalnd_conn_is_idle(efa_ni, conn, now)) {
 			list_del_init(&conn->cleanup_node);
 			continue;
 		}
@@ -1254,14 +1298,15 @@ kefalnd_drain_ni_conns(struct kefa_ni *efa_ni)
 				 cleanup_node) {
 		kefalnd_cleanup_conn_txs(conn, now);
 
-		timeout = conn->type == KEFA_CONN_TYPE_INITIATOR ?
-				init_timeout : resp_timeout;
+		timeout = conn->type == KEFA_CONN_TYPE_RESPONDER ?
+				resp_timeout : init_timeout;
 
 		if (now <= atomic64_read(&conn->last_use_time) + timeout)
 			continue;
 
 		spin_lock_irqsave(&conn->lock, flags);
-		if (list_empty(&conn->pend_tx) &&
+		if (!atomic_read(&conn->refcount) &&
+		    list_empty(&conn->pend_tx) &&
 		    list_empty(&conn->active_tx) &&
 		    list_empty(&conn->abort_tx))
 			list_move_tail(&conn->cleanup_node, &destroy);
