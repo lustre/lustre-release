@@ -192,6 +192,7 @@ struct kefa_rx {
 	struct kefa_msg *msg;		/* message buffer (host vaddr) */
 	struct ib_recv_wr wrq;		/* receive work item... */
 	struct ib_sge sge;		/* ...and its memory */
+	struct kefa_conn *conn;		/* looked-up conn */
 	int rx_nob;			/* # bytes received (-1 while posted) */
 };
 

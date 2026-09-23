@@ -1425,6 +1425,8 @@ kefalnd_free_rx(struct kefa_rx *rx)
 	struct kefa_qp *qp = rx->qp;
 	unsigned long flags;
 
+	rx->conn = NULL;
+
 	spin_lock_irqsave(&qp->rq_lock, flags);
 	qp->rq_space++;
 	list_move_tail(&rx->list_node, &qp->free_rx);
@@ -1447,14 +1449,15 @@ kefalnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 
 	msg = rx->msg;
 	nid = &msg->msg_v2.srcnid;
-	conn = kefalnd_get_conn(efa_ni, nid, KEFA_CONN_TYPE_RESPONDER, true);
-	if (IS_ERR_OR_NULL(conn)) {
+	if (!rx->conn) {
 		EFA_DEV_ERR(efa_ni->efa_dev,
-			    "failed to get connection for RX from peer NI[%s]. err[%ld]\n",
-			    libcfs_nidstr(nid), PTR_ERR(conn));
+			    "RX with no connection to peer NI[%s]\n",
+			    libcfs_nidstr(nid));
 
 		return -ENOTCONN;
 	}
+
+	conn = rx->conn;
 
 	switch (msg->hdr.type) {
 	default:
@@ -1498,9 +1501,7 @@ kefalnd_recv(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg,
 		break;
 	}
 
-	/* Release the connection reference taken by the lookup above. Any TX
-	 * launched by a handler holds its own reference for its lifetime.
-	 */
+	/* Release the connection reference stashed on the RX by handle_rx. */
 	kefalnd_conn_decref(conn);
 	kefalnd_free_rx(rx);
 	return rc;
@@ -1683,8 +1684,18 @@ static void
 kefalnd_handle_rx(struct kefa_ni *efa_ni, struct kefa_rx *rx)
 {
 	struct kefa_msg *msg = rx->msg;
+	struct lnet_nid srcnid;
 	bool free_rx = false;
 	int rc = 0;
+
+	/* Look the responder connection up once and stash it on the RX,
+	 * refreshing its use time. The reference is released once this message
+	 * is done with: here for messages handled entirely within handle_rx,
+	 * or in recv() for request messages passed up to LNet.
+	 */
+	kefalnd_get_srcnid_from_msg(msg, &srcnid);
+	rx->conn = kefalnd_get_conn(efa_ni, &srcnid,
+				    KEFA_CONN_TYPE_RESPONDER, true);
 
 	switch (msg->hdr.type) {
 	default:
@@ -1698,6 +1709,14 @@ kefalnd_handle_rx(struct kefa_ni *efa_ni, struct kefa_rx *rx)
 	case EFALND_MSG_GETR_REQ:
 	case EFALND_MSG_PUTR_REQ:
 	case EFALND_MSG_IMMEDIATE:
+		if (!rx->conn) {
+			EFA_DEV_ERR(efa_ni->efa_dev,
+				    "failed to get connection for RX from peer NI[%s]\n",
+				    libcfs_nidstr(&srcnid));
+			rc = -ENOTCONN;
+			break;
+		}
+
 		rc = kefalnd_handle_lnet_request_msg(efa_ni, rx);
 		break;
 
@@ -1722,8 +1741,12 @@ kefalnd_handle_rx(struct kefa_ni *efa_ni, struct kefa_rx *rx)
 		break;
 	}
 
-	if (free_rx || rc < 0)
+	if (free_rx || rc < 0) {
+		if (rx->conn)
+			kefalnd_conn_decref(rx->conn);
+
 		kefalnd_free_rx(rx);
+	}
 
 	kefalnd_refill_rx(rx->qp, 1);
 }
