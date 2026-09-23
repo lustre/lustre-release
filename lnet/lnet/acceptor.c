@@ -20,9 +20,13 @@
 #include <linux/module.h>
 #include <linux/libcfs/libcfs.h>
 #include <linux/lnet/lib-lnet.h>
+#include <uapi/linux/lustre/lustre_ver.h>
 
-static int   accept_port    = 988;
-static int   accept_port_bulk = 988;
+#define LNET_ACCEPTOR_PORT_DEFAULT	988
+
+static int   accept_port    = LNET_ACCEPTOR_PORT_DEFAULT;
+static int   accept_port_bulk;	/* 0 = use accept_port */
+static int   accept_port_extra;	/* second listener, 0 = none */
 static int   accept_backlog = 127;
 static int   accept_timeout = 5;
 
@@ -73,6 +77,33 @@ lnet_acceptor_port_bulk(void)
 }
 EXPORT_SYMBOL(lnet_acceptor_port_bulk);
 
+/**
+ * lnet_acceptor_init() - Resolve acceptor module parameter defaults
+ *
+ * Use accept_port for bulk conns unless accept_port_bulk is set, so
+ * that peers before LU-19139 with a custom accept_port still work.
+ *
+ * Context: module load, before any LND is started.
+ */
+void __init lnet_acceptor_init(void)
+{
+	if (!accept_port_bulk) {
+		accept_port_bulk = accept_port;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 19, 53, 0)
+		/* Only for compatibility with 2.17 peers, which always send
+		 * bulk conns to port 988 (LU-19139).  Very few 2.17 systems
+		 * are expected to change accept_port, and listening on 988
+		 * when accept_port is set is counter-intuitive, so remove
+		 * this once 2.17 peers no longer need to be supported.
+		 */
+		if (accept_port != LNET_ACCEPTOR_PORT_DEFAULT)
+			accept_port_extra = LNET_ACCEPTOR_PORT_DEFAULT;
+#endif
+	} else if (accept_port_bulk != accept_port) {
+		accept_port_extra = accept_port_bulk;
+	}
+}
+
 static inline int
 lnet_accept_magic(__u32 magic, __u32 constant)
 {
@@ -88,7 +119,7 @@ MODULE_PARM_DESC(accept, "Accept connections (secure|all|none)");
 module_param(accept_port, int, 0444);
 MODULE_PARM_DESC(accept_port, "Acceptor's port for control conns (same on all nodes)");
 module_param(accept_port_bulk, int, 0444);
-MODULE_PARM_DESC(accept_port_bulk, "Acceptor's port for bulk conns (same on all nodes)");
+MODULE_PARM_DESC(accept_port_bulk, "Acceptor's port for bulk conns (same on all nodes, default accept_port)");
 module_param(accept_backlog, int, 0444);
 MODULE_PARM_DESC(accept_backlog, "Acceptor's listen backlog");
 module_param(accept_timeout, int, 0644);
@@ -173,6 +204,7 @@ static int lnet_acceptor_add_socket(const char *iface, struct sockaddr *addr,
 
 	if (IS_ERR(lsock->liss_sock)) {
 		rc = PTR_ERR(lsock->liss_sock);
+		kfree(lsock);
 		return rc;
 	}
 
@@ -214,7 +246,7 @@ static int lnet_acceptor_add_socket(const char *iface, struct sockaddr *addr,
 	return 0;
 }
 
-static void lnet_acceptor_remove_socket(const char *iface, int port)
+static int lnet_acceptor_remove_socket(const char *iface, int port)
 {
 	struct listening_socket *lsock, *tmp, *to_free = NULL;
 	bool found = false;
@@ -248,8 +280,7 @@ static void lnet_acceptor_remove_socket(const char *iface, int port)
 		kfree(to_free);
 	}
 
-	if (!found)
-		CERROR("Interface %s not found\n", iface);
+	return found ? 0 : -ENOENT;
 }
 
 int lnet_acceptor_add_sockets(const char *iface, struct sockaddr *addr,
@@ -260,9 +291,17 @@ int lnet_acceptor_add_sockets(const char *iface, struct sockaddr *addr,
 	rc = lnet_acceptor_add_socket(iface, addr, ifindex, ni_net_ns,
 				      accept_port);
 
-	if (!rc && accept_port_bulk != accept_port) {
+	if (!rc && accept_port_extra) {
 		rc = lnet_acceptor_add_socket(iface, addr, ifindex, ni_net_ns,
-					      accept_port_bulk);
+					      accept_port_extra);
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 19, 53, 0)
+		/* implicit port 988 listener is only for 2.17 peers */
+		if (rc && accept_port_bulk == accept_port) {
+			CWARN("%s: cannot listen on port %d for 2.17 peers: rc = %d\n",
+			      iface, accept_port_extra, rc);
+			rc = 0;
+		}
+#endif
 		if (rc)
 			lnet_acceptor_remove_socket(iface, accept_port);
 	}
@@ -272,10 +311,22 @@ EXPORT_SYMBOL(lnet_acceptor_add_sockets);
 
 void lnet_acceptor_remove_sockets(const char *iface)
 {
-	lnet_acceptor_remove_socket(iface, accept_port);
+	int rc2 = 0;
+	int rc;
 
-	if (accept_port_bulk != accept_port)
-		lnet_acceptor_remove_socket(iface, accept_port_bulk);
+	rc = lnet_acceptor_remove_socket(iface, accept_port);
+	if (accept_port_extra) {
+		rc2 = lnet_acceptor_remove_socket(iface, accept_port_extra);
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 19, 53, 0)
+		/* implicit port 988 listener for 2.17 may not have started */
+		if (accept_port_bulk == accept_port)
+			rc2 = 0;
+#endif
+	}
+	if (!rc)
+		rc = rc2;
+	if (rc)
+		CERROR("%s: listening socket not found: rc = %d\n", iface, rc);
 }
 EXPORT_SYMBOL(lnet_acceptor_remove_sockets);
 
@@ -290,21 +341,18 @@ lnet_connect(struct lnet_nid *peer_nid, int interface,
 	int crsize;
 	struct socket *sock;
 	struct sockaddr_storage destaddr;
-	int rc;
+	int dstport;
 	int port;
+	int rc;
 
 	BUILD_BUG_ON(sizeof(cr) > 16); /* not too big to be on the stack */
 
 	LASSERT(peeraddr->sa_family == AF_INET ||
 		peeraddr->sa_family == AF_INET6);
 	rpc_copy_addr((struct sockaddr *)&destaddr, peeraddr);
-	if (control)
-		rpc_set_port((struct sockaddr *)&destaddr,
-			     lnet_acceptor_port());
-	else
-		rpc_set_port((struct sockaddr *)&destaddr,
-			     lnet_acceptor_port_bulk());
-
+	dstport = control ? lnet_acceptor_port() : lnet_acceptor_port_bulk();
+retry:
+	rpc_set_port((struct sockaddr *)&destaddr, dstport);
 	for (port = LNET_ACCEPTOR_MAX_RESERVED_PORT;
 	     port >= LNET_ACCEPTOR_MIN_RESERVED_PORT;
 	     --port) {
@@ -358,7 +406,14 @@ lnet_connect(struct lnet_nid *peer_nid, int interface,
 failed_sock:
 	sock_release(sock);
 failed:
-	lnet_connect_console_error(rc, peer_nid, peeraddr);
+	/* peers before LU-19139 don't listen on a separate bulk port */
+	if (rc == -ECONNREFUSED && dstport != lnet_acceptor_port()) {
+		CDEBUG(D_NET, "%s: bulk port %d refused, retry port %d\n",
+		       libcfs_nidstr(peer_nid), dstport, lnet_acceptor_port());
+		dstport = lnet_acceptor_port();
+		goto retry;
+	}
+	lnet_connect_console_error(rc, peer_nid, (struct sockaddr *)&destaddr);
 	return ERR_PTR(rc);
 }
 EXPORT_SYMBOL(lnet_connect);

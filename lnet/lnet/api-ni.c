@@ -3237,6 +3237,7 @@ int __init lnet_lib_init(void)
 	int rc;
 
 	lnet_assert_wire_constants();
+	lnet_acceptor_init();
 
 	/* refer to global cfs_cpt_table for now */
 	the_lnet.ln_cpt_table = cfs_cpt_tab;

@@ -880,6 +880,7 @@ int lnet_count_acceptor_nets(void);
 int lnet_acceptor_timeout(void);
 int lnet_acceptor_port(void);
 int lnet_acceptor_port_bulk(void);
+void lnet_acceptor_init(void);
 int lnet_acceptor_start(void);
 void lnet_acceptor_stop(void);
 int lnet_acceptor_add_sockets(const char *iface, struct sockaddr *addr,

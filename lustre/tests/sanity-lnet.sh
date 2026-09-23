@@ -6091,6 +6091,43 @@ test_291() {
 }
 run_test 291 "load lnet using custom accept port for bulk tcp connections"
 
+test_292() {
+	[[ ${NETTYPE} == tcp* ]] ||
+		skip "Need tcp NETTYPE"
+
+	reinit_dlc || return $?
+	cleanup_lnet || return $?
+
+	# bulk conns use accept_port unless accept_port_bulk is set, so
+	# that peers before LU-19139 with a custom accept_port still work
+	load_lnet "accept_port=7988" || error "Failed to load LNet"
+	$LCTL net up $LNET_CONFIG_OPT ||
+		error "Failed to load LNet with accept_port=7988"
+
+	local bulk_port=$(cat /sys/module/lnet/parameters/accept_port_bulk)
+
+	(( bulk_port == 7988 )) || error "accept_port_bulk=$bulk_port != 7988"
+
+	local lnid="$(lctl list_nids | head -n 1)"
+
+	do_lnetctl ping "$lnid" || error "failed to ping myself"
+
+	# one control and one bulk conn to the acceptor, as in test_291
+	local cmd="printf 'network tcp\nconn_list\n' | lctl | grep -c ':7988'"
+
+	wait_update $HOSTNAME "$cmd" "2" 10 ||
+		error "expected 2 tcp connections on port 7988"
+	# also listen on port 988 for 2.17 peers, until 2.19.53
+	if (( CLIENT_VERSION < $(version_code 2.19.53) )); then
+		ss -ltn | grep -q ':988 ' || error "no listener on port 988"
+	else
+		! ss -ltn | grep -q ':988 ' || error "listener on port 988"
+	fi
+
+	cleanup_lnet || return $?
+}
+run_test 292 "bulk tcp connections use accept_port by default"
+
 test_300() {
 	# LU-13274
 	local header
