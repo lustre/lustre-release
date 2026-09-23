@@ -21787,6 +21787,209 @@ test_157c()
 }
 run_test 157c "lfs pool pin/unpin commands"
 
+test_157d()
+{
+	(( $MDS1_VERSION >= $(version_code v2_17_53-1-g1bf8713c57) )) ||
+		skip "Need MDS >= 2.17.53 for lustre.pin inheritance support"
+
+	[[ -z "$(which setfattr 2>/dev/null)" ]] &&
+		skip_env "could not find setfattr"
+	which getfattr > /dev/null || skip_env "could not find getfattr"
+
+	local dir_only=$DIR/${tdir}.only
+	local file_only=$dir_only/$tfile
+	local subdir_only=$dir_only/subdir
+	local pool
+	local pool2
+	local parent_val
+	local out
+
+	test_mkdir $dir_only
+
+	if [[ -n "$FS_POOL" ]]; then
+		pool=${FS_POOL%% *}
+	else
+		pool="only_pool"
+		pool_add $pool 1 || error "pool_add $pool failed"
+	fi
+	pool2="${pool}2"
+	pool_add $pool2 1 || error "pool_add $pool2 failed"
+
+	local pinval_only="[pool: [$pool,^any]]"
+	setfattr -n lustre.pin -v "$pinval_only" $dir_only ||
+		error "failed to set only lustre.pin on $dir_only"
+
+	touch $file_only || error "touch $file_only failed"
+	mkdir $subdir_only || error "mkdir $subdir_only failed"
+
+	parent_val=$(getfattr --only-values -n lustre.pin $dir_only 2> /dev/null) ||
+		error "getfattr lustre.pin on only parent failed"
+	file_val=$(getfattr --only-values -n lustre.pin $file_only 2> /dev/null) ||
+		error "getfattr lustre.pin on only file failed"
+	subdir_val=$(getfattr --only-values -n lustre.pin $subdir_only 2> /dev/null) ||
+		error "getfattr lustre.pin on only subdir failed"
+
+	[[ "$file_val" = "$parent_val" ]] ||
+		error "only file lustre.pin '$file_val' != parent '$parent_val'"
+	[[ "$subdir_val" = "$parent_val" ]] ||
+		error "only subdir lustre.pin '$subdir_val' != parent '$parent_val'"
+
+	# Cross-check with "lfs pool pin_info", which parses lustre.pin via
+	# parse_pin_xattr_advanced()/read_pin_xattr_object(), unlike getfattr
+	# which only ever reads the raw xattr string.
+	out=$($LFS pool pin_info --pool $pool --file $dir_only $file_only \
+	      $subdir_only)
+	rc=$?
+	(( rc == 0 )) ||
+		error "lfs pool pin_info on only-pinned targets failed rc=$rc"
+	echo "$out" | grep -F -q "$dir_only:$pool: pinned" ||
+		error "pin_info did not report $dir_only pinned to $pool"
+	echo "$out" | grep -F -q "$file_only:$pool: pinned" ||
+		error "pin_info did not report $file_only pinned to $pool"
+	echo "$out" | grep -F -q "$subdir_only:$pool: pinned" ||
+		error "pin_info did not report $subdir_only pinned to $pool"
+
+	# A file pinned exclusively to a *set* of pools (^any alongside more
+	# than one positive pool) must still allow pinning to any pool that
+	# is already part of that set -- only pools outside the set should
+	# be rejected.
+	local file_multi=$dir_only/multi
+	local val_multi
+
+	touch $file_multi || error "touch $file_multi failed"
+	setfattr -n lustre.pin -v "[pool: [$pool,$pool2,^any]]" $file_multi ||
+		error "failed to set multi-pool only lustre.pin on $file_multi"
+
+	$LFS pool pin --pool $pool2 --file $file_multi ||
+		error "lfs pool pin to already-listed pool '$pool2' failed"
+
+	val_multi=$(getfattr --only-values -n lustre.pin $file_multi 2>/dev/null) ||
+		error "getfattr lustre.pin on $file_multi failed"
+	echo "$val_multi" | grep -q "$pool2" ||
+		error "lustre.pin '$val_multi' lost pool '$pool2' after re-pinning it"
+}
+run_test 157d "lustre.pin [pool: [pool_name,^any]] only syntax"
+
+test_157e()
+{
+	(( $MDS1_VERSION >= $(version_code v2_17_53-1-g1bf8713c57) )) ||
+		skip "Need MDS >= 2.17.53 for lustre.pin pool/deny syntax support"
+
+	[[ -z "$(which setfattr 2>/dev/null)" ]] &&
+		skip_env "could not find setfattr"
+	which getfattr > /dev/null || skip_env "could not find getfattr"
+
+	local dir=$DIR/$tdir
+	local file=$dir/${tfile}.deny
+	local pool
+	local val
+	local val2
+	local pinval
+
+	test_mkdir $dir
+
+	if [[ -n "$FS_POOL" ]]; then
+		pool=${FS_POOL%% *}
+	else
+		pool="deny_pool"
+		pool_add $pool 1 || error "pool_add $pool failed"
+	fi
+
+	rm -f $file
+	touch $file || error "touch $file failed"
+
+	pinval="[pool: ^$pool]"
+	setfattr -n lustre.pin -v "$pinval" $file ||
+		error "failed to set deny pool lustre.pin on $file"
+
+	val=$(getfattr --only-values -n lustre.pin $file 2>/dev/null) ||
+		error "getfattr lustre.pin on $file (initial deny pool) failed"
+	[[ "$val" = "$pinval" ]] ||
+		error "lustre.pin '$val' != expected '$pinval' after setfattr"
+
+	$LFS pool pin --pool $pool --file $dir $file 2>/dev/null &&
+		error "lfs pool pin to deny pool '$pool' unexpectedly succeeded"
+
+	val2=$(getfattr --only-values -n lustre.pin $file 2>/dev/null) ||
+		error "getfattr lustre.pin on $file after deny pin failed"
+	[[ "$val2" = "$val" ]] ||
+		error "lustre.pin changed after pin to deny pool: '$val2' != '$val'"
+}
+run_test 157e "lustre.pin [pool: ^pool] deny syntax"
+
+test_157f()
+{
+	(( $MDS1_VERSION >= $(version_code v2_17_53-1-g1bf8713c57) )) ||
+		skip "Need MDS >= 2.17.53 for lustre.pin pool/deny syntax support"
+
+	which getfattr > /dev/null || skip_env "could not find getfattr"
+
+	local dir=$DIR/$tdir
+	local file=$dir/$tfile
+	local pool="hsm_poolpin"
+	local val
+
+	test_mkdir $dir
+	touch $file || error "touch $file failed"
+	pool_add $pool 1 || error "pool_add $pool failed"
+
+	$LFS pcc pin --id 1 $file ||
+		error "lfs pcc pin failed"
+
+	$LFS pool pin --pool $pool --file $dir $file ||
+		error "lfs pool pin failed"
+
+	val=$(getfattr --only-values -n lustre.pin $file 2>/dev/null) ||
+		error "getfattr lustre.pin on $file failed"
+	echo "$val" | grep -q "hsm: 1" ||
+		error "lustre.pin '$val' missing HSM entry 'hsm: 1'"
+	echo "$val" | cut -d, -f2,3 | grep -q "pool: $pool" ||
+		error "lustre.pin '$val' missing pool '$pool'"
+
+	$LFS pool unpin --pool $pool --file $dir $file ||
+		error "lfs pool unpin failed"
+
+	val=$(getfattr --only-values -n lustre.pin $file 2>/dev/null) ||
+		error "getfattr lustre.pin on $file failed"
+	echo "$val" | grep -q "hsm: 1" ||
+		error "lustre.pin '$val' missing HSM entry 'hsm: 1'"
+
+	$LFS pcc unpin --id 1 $file ||
+		error "lfs pcc unpin failed"
+
+	val=$(getfattr --only-values -n lustre.pin $file 2>/dev/null)
+	[[ -z "$val" ]] ||
+		error "lustre.pin still present after HSM+pool unpin: '$val'"
+
+	# Check it again in reverse order
+	$LFS pool pin --pool $pool --file $dir $file ||
+		error "lfs pool pin failed"
+	$LFS pcc pin --id 1 $file ||
+		error "lfs pcc pin failed"
+
+	val=$(getfattr --only-values -n lustre.pin $file 2>/dev/null) ||
+		error "getfattr lustre.pin on $file failed"
+	echo "$val" | cut -d, -f2,3 | grep -q "pool: $pool" ||
+		error "lustre.pin '$val' missing pool '$pool'"
+	echo "$val" | grep -q "hsm: 1" ||
+		error "lustre.pin '$val' missing HSM entry 'hsm: 1'"
+
+	$LFS pcc unpin --id 1 $file ||
+		error "lfs pcc unpin failed"
+
+	val=$(getfattr --only-values -n lustre.pin $file 2>/dev/null)
+	echo "$val" | cut -d, -f2,3 | grep -q "pool: $pool" ||
+		error "lustre.pin '$val' missing pool '$pool'"
+
+	$LFS pool unpin --pool $pool --file $dir $file ||
+		error "lfs pool unpin failed"
+
+	val=$(getfattr --only-values -n lustre.pin $file 2>/dev/null)
+	[[ -z "$val" ]] ||
+		error "lustre.pin still present after HSM+pool unpin: '$val'"
+}
+run_test 157f "lfs pcc pin/unpin with pool pin"
+
 test_160a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"

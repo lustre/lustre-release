@@ -18,7 +18,61 @@
 
 #include "lustreapi_internal.h"
 
-#define PIN_YAML_POOL_STR	"pool"
+#define PIN_YAML_POOL_STR		"pool"
+/* Optional constraint: if present, only this pool may be used for pinning. */
+#define PIN_YAML_ONLY_POOL_STR		"only_pool"
+/* Pools that must never be used for pinning. */
+#define PIN_YAML_DENY_POOL_STR		"deny_pool"
+
+/*
+ * Enforce pinning constraints encoded in the lustre.pin YAML object.
+ *
+ * - If one or more "deny_pool: <name>" entries are present, @pool_name must
+ *   not match any of them.
+ * - If an "only_pool: <name>" entry is present, the file is pinned
+ *   exclusively to the set of pools already named by "pool: <name>"
+ *   entries; @pool_name is only allowed if it is already one of them. The
+ *   value stored in "only_pool" itself is just one representative member
+ *   of that set (however many pools were listed alongside the original
+ *   "^any" marker) and is not the full constraint -- callers must check
+ *   membership in the "pool" entries, not equality with "only_pool".
+ *
+ * Return: 0 if allowed; on violation, -EPERM is returned and errno is set to
+ *         EPERM.
+ */
+static int pool_pin_check_constraints(struct cYAML *yaml,
+				      const char *pool_name)
+{
+	struct cYAML *node;
+	bool have_only = false;
+	bool already_pinned = false;
+
+	for (node = yaml->cy_child; node != NULL; node = node->cy_next) {
+		if (node->cy_type != CYAML_TYPE_STRING ||
+		    node->cy_valuestring == NULL)
+			continue;
+
+		if (strcmp(node->cy_string, PIN_YAML_DENY_POOL_STR) == 0 &&
+		    strcmp(node->cy_valuestring, pool_name) == 0) {
+			errno = EPERM;
+			return -EPERM;
+		}
+
+		if (strcmp(node->cy_string, PIN_YAML_ONLY_POOL_STR) == 0)
+			have_only = true;
+
+		if (strcmp(node->cy_string, PIN_YAML_POOL_STR) == 0 &&
+		    strcmp(node->cy_valuestring, pool_name) == 0)
+			already_pinned = true;
+	}
+
+	if (have_only && !already_pinned) {
+		errno = EPERM;
+		return -EPERM;
+	}
+
+	return 0;
+}
 
 /* check validity of the supplied pool name, stripping off the
  * leading fsname portion, if supplied.
@@ -79,8 +133,15 @@ static int pool_unpin_update_entry(struct cYAML *yaml, const char *pool_name,
 				   char *buff, size_t bufflen)
 {
 	struct cYAML *node;
+	struct cYAML *only_node = NULL;
+	bool was_positive_pool = true;
 
-	/* We have a valid pin object, search for the entry to be deleted. */
+	/*
+	 * Search for the entry to be deleted: prefer a positive "pool"
+	 * entry, but fall back to a "deny_pool" entry for the same name so
+	 * that unpin can also clear a deny rule (there is no separate way
+	 * to remove one).
+	 */
 	for (node = yaml->cy_child; node != NULL; node = node->cy_next) {
 		if (strcmp(node->cy_string, PIN_YAML_POOL_STR) == 0 &&
 		    node->cy_type == CYAML_TYPE_STRING &&
@@ -89,7 +150,17 @@ static int pool_unpin_update_entry(struct cYAML *yaml, const char *pool_name,
 			break;
 	}
 	if (node == NULL) {
-		/* No matching pool entry in lustre.pin. */
+		was_positive_pool = false;
+		for (node = yaml->cy_child; node != NULL; node = node->cy_next) {
+			if (strcmp(node->cy_string, PIN_YAML_DENY_POOL_STR) == 0 &&
+			    node->cy_type == CYAML_TYPE_STRING &&
+			    node->cy_valuestring != NULL &&
+			    strcmp(node->cy_valuestring, pool_name) == 0)
+				break;
+		}
+	}
+	if (node == NULL) {
+		/* No matching pool or deny_pool entry in lustre.pin. */
 		errno = ENOENT;
 		return -ENOENT;
 	}
@@ -109,6 +180,58 @@ static int pool_unpin_update_entry(struct cYAML *yaml, const char *pool_name,
 	node->cy_prev = node->cy_next = NULL;
 	cYAML_free_tree(node);
 
+	/*
+	 * If an only_pool entry names the pool that was just unpinned,
+	 * either repoint it at another surviving "pool" entry (so the
+	 * remaining pools stay exclusively pinned) or drop it if none
+	 * remain. Simply deleting it here would silently turn off
+	 * exclusivity for the other pools that are still pinned.
+	 */
+	if (was_positive_pool) {
+		for (only_node = yaml->cy_child; only_node != NULL;
+		     only_node = only_node->cy_next) {
+			if (strcmp(only_node->cy_string,
+				  PIN_YAML_ONLY_POOL_STR) == 0 &&
+			    only_node->cy_type == CYAML_TYPE_STRING &&
+			    only_node->cy_valuestring != NULL &&
+			    strcmp(only_node->cy_valuestring, pool_name) == 0)
+				break;
+		}
+	}
+	if (only_node != NULL) {
+		struct cYAML *remaining = NULL;
+
+		for (node = yaml->cy_child; node != NULL; node = node->cy_next) {
+			if (strcmp(node->cy_string, PIN_YAML_POOL_STR) == 0 &&
+			    node->cy_type == CYAML_TYPE_STRING &&
+			    node->cy_valuestring != NULL) {
+				remaining = node;
+				break;
+			}
+		}
+
+		if (remaining != NULL) {
+			if (cYAML_create_string(yaml, PIN_YAML_ONLY_POOL_STR,
+						remaining->cy_valuestring) == NULL) {
+				errno = ENOMEM;
+				return -ENOMEM;
+			}
+		}
+
+		if (only_node == yaml->cy_child) {
+			if (only_node->cy_next)
+				only_node->cy_next->cy_prev = NULL;
+			yaml->cy_child = only_node->cy_next;
+		} else {
+			only_node->cy_prev->cy_next = only_node->cy_next;
+			if (only_node->cy_next)
+				only_node->cy_next->cy_prev =
+					only_node->cy_prev;
+		}
+		only_node->cy_prev = only_node->cy_next = NULL;
+		cYAML_free_tree(only_node);
+	}
+
 	errno = -dump_pin_object(yaml, buff, bufflen);
 	if (errno)
 		return -errno;
@@ -122,7 +245,8 @@ static int pool_is_pinned_from_yaml(struct cYAML *yaml, const char *pool_name)
 	int pinned = 0;
 
 	for (node = yaml->cy_child; node != NULL; node = node->cy_next) {
-		if (strcmp(node->cy_string, PIN_YAML_POOL_STR) == 0 &&
+		if ((strcmp(node->cy_string, PIN_YAML_POOL_STR) == 0 ||
+		     strcmp(node->cy_string, PIN_YAML_ONLY_POOL_STR) == 0) &&
 		    node->cy_type == CYAML_TYPE_STRING &&
 		    node->cy_valuestring != NULL &&
 		    strcmp(node->cy_valuestring, pool_name) == 0) {
@@ -158,13 +282,17 @@ int llapi_pool_pin_fd(int fd, const char *pool_name)
 		return rc;
 
 	yaml = read_pin_xattr_object_fd(fd);
-
 	if (yaml == NULL && errno == ENODATA) {
 		snprintf(buff, sizeof(buff), "[%s: %s]", PIN_YAML_POOL_STR,
 			 pool_name);
 	} else if (yaml == NULL) {
 		return -errno;
 	} else {
+		/* Enforce any existing only_pool constraint, if present. */
+		rc = pool_pin_check_constraints(yaml, pool_name);
+		if (rc < 0)
+			goto out;
+
 		rc = pool_pin_ensure_entry(yaml, pool_name, buff, sizeof(buff));
 		if (rc < 0)
 			goto out;
@@ -204,7 +332,6 @@ int llapi_pool_pin_file(const char *path, const char *pool_name)
 		return rc;
 
 	yaml = read_pin_xattr_object(path);
-
 	if (yaml == NULL && errno == ENODATA) {
 		snprintf(buff, sizeof(buff), "[%s: %s]", PIN_YAML_POOL_STR,
 			 pool_name);
@@ -215,7 +342,15 @@ int llapi_pool_pin_file(const char *path, const char *pool_name)
 		rc = -errno;
 		goto out;
 	} else {
-		rc = pool_pin_ensure_entry(yaml, pool_name, buff, sizeof(buff));
+		/* Enforce any existing only_pool constraint, if
+		 * present.
+		 */
+		rc = pool_pin_check_constraints(yaml, pool_name);
+		if (rc < 0)
+			goto out;
+
+		rc = pool_pin_ensure_entry(yaml, pool_name, buff,
+					   sizeof(buff));
 		if (rc < 0)
 			goto out;
 	}
