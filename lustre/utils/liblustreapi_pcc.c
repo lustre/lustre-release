@@ -862,7 +862,7 @@ int llapi_pcc_backend_id_get(const char *path, enum lu_pcc_type type, __u32 *id)
 
 #define PIN_YAML_HSM_STR	"hsm"
 
-int verify_pin_xattr_object(struct cYAML *yaml)
+int llapi_verify_pin_xattr_object(struct cYAML *yaml)
 {
 	struct cYAML *node = NULL;
 
@@ -882,6 +882,31 @@ int verify_pin_xattr_object(struct cYAML *yaml)
 	}
 
 	return 0;
+}
+
+/*
+ * A value may itself contain commas (e.g. a pool list), so it only ends at a
+ * comma that starts the next "key:" pair, or at @end if there is none.
+ */
+static int pin_value_end(const char *buff, int pos, int end)
+{
+	int i, j, k;
+
+	for (i = pos; i < end; i++) {
+		if (buff[i] != ',')
+			continue;
+		j = i + 1;
+		while (j < end && isspace((unsigned char)buff[j]))
+			j++;
+		k = j;
+		while (k < end && buff[k] != ':' && buff[k] != ',' &&
+		       !isspace((unsigned char)buff[k]))
+			k++;
+		if (k < end && buff[k] == ':')
+			return i;
+	}
+
+	return end;
 }
 
 /*
@@ -963,33 +988,7 @@ static struct cYAML *parse_pin_xattr_advanced(char *buff, int len)
 		while (pos < end && isspace((unsigned char)buff[pos]))
 			pos++;
 		val_start = pos;
-
-		/*
-		 * Find the end of this value. We keep everything up to the
-		 * comma that clearly starts the next key (", <ident>:") or to
-		 * the closing ']'.
-		 */
-		v_end = end;
-		int i;
-
-		for (i = pos; i < end; i++) {
-			if (buff[i] != ',')
-				continue;
-			int j = i + 1;
-			int k;
-
-			while (j < end && isspace((unsigned char)buff[j]))
-				j++;
-			k = j;
-			while (k < end && buff[k] != ':' && buff[k] != ',' &&
-			       !isspace((unsigned char)buff[k]))
-				k++;
-			if (k < end && buff[k] == ':') {
-				v_end = i;
-				break;
-			}
-		}
-
+		v_end = pin_value_end(buff, pos, end);
 		val_end = v_end;
 		while (val_end > val_start &&
 		       isspace((unsigned char)buff[val_end - 1]))
@@ -1083,6 +1082,9 @@ static struct cYAML *parse_pin_xattr_advanced(char *buff, int len)
 					goto invalid;
 			}
 		} else {
+			char *v = val;
+			bool is_num = false;
+
 			/* Generic key: parse as integer if possible, else as
 			 * string. Explicit pool-constraint keys such as
 			 * "only_pool" and "deny_pool" are not accepted in the
@@ -1092,8 +1094,6 @@ static struct cYAML *parse_pin_xattr_advanced(char *buff, int len)
 			if (strcmp(key, "only_pool") == 0 ||
 			    strcmp(key, "deny_pool") == 0)
 				goto invalid;
-			char *v = val;
-			bool is_num = false;
 
 			if (*v == '-' || isdigit((unsigned char)*v)) {
 				char *endp;
@@ -1155,7 +1155,7 @@ static int pin_obj_putc(char **pp, char *buff, int buflen, char c)
  *   - an "only_pool: <name>" constraint is encoded as a trailing
  *     ^any element, provided at least one positive pool entry exists.
  */
-int dump_pin_object(struct cYAML *yaml, char *buff, int buflen)
+int llapi_dump_pin_object(struct cYAML *yaml, char *buff, int buflen)
 {
 	int rc = 0, remained;
 	struct cYAML *node;
@@ -1184,8 +1184,7 @@ int dump_pin_object(struct cYAML *yaml, char *buff, int buflen)
 		} else if (strcmp(node->cy_string, "deny_pool") == 0) {
 			have_deny = true;
 			deny_count++;
-		}
-		else if (strcmp(node->cy_string, "only_pool") == 0) {
+		} else if (strcmp(node->cy_string, "only_pool") == 0) {
 			have_only = true;
 		}
 	}
@@ -1406,7 +1405,7 @@ out:
 	return rc;
 }
 
-struct cYAML *read_pin_xattr_object(const char *path)
+struct cYAML *llapi_read_pin_xattr_object(const char *path)
 {
 	int rc;
 	struct cYAML *yaml = NULL;
@@ -1420,7 +1419,7 @@ struct cYAML *read_pin_xattr_object(const char *path)
 	if (yaml == NULL)
 		goto out;
 
-	rc = verify_pin_xattr_object(yaml);
+	rc = llapi_verify_pin_xattr_object(yaml);
 	if (rc) {
 		llapi_error(LLAPI_MSG_ERROR, -rc, "Invalid pin object.");
 		cYAML_free_tree(yaml);
@@ -1433,7 +1432,7 @@ out:
 	return yaml;
 }
 
-struct cYAML *read_pin_xattr_object_fd(int fd)
+struct cYAML *llapi_read_pin_xattr_object_fd(int fd)
 {
 	int rc;
 	struct cYAML *yaml = NULL;
@@ -1447,7 +1446,7 @@ struct cYAML *read_pin_xattr_object_fd(int fd)
 	if (yaml == NULL)
 		goto out;
 
-	rc = verify_pin_xattr_object(yaml);
+	rc = llapi_verify_pin_xattr_object(yaml);
 	if (rc) {
 		llapi_error(LLAPI_MSG_ERROR, -rc, "Invalid pin object.");
 		cYAML_free_tree(yaml);
@@ -1466,7 +1465,7 @@ int llapi_pcc_pin_file(const char *path, __u32 id)
 	struct cYAML *yaml, *node;
 	char buff[XATTR_SIZE_MAX];
 
-	yaml = read_pin_xattr_object(path);
+	yaml = llapi_read_pin_xattr_object(path);
 
 	if (yaml == NULL && errno == ENODATA) {
 		snprintf(buff, sizeof(buff), "[%s: %d]", PIN_YAML_HSM_STR, id);
@@ -1498,7 +1497,7 @@ int llapi_pcc_pin_file(const char *path, __u32 id)
 		goto out;
 	}
 
-	rc = dump_pin_object(yaml, buff, sizeof(buff));
+	rc = llapi_dump_pin_object(yaml, buff, sizeof(buff));
 	if (rc)
 		goto out;
 
@@ -1516,7 +1515,7 @@ int llapi_pcc_unpin_file(const char *path, __u32 id)
 	struct cYAML *yaml, *node;
 	char buff[XATTR_SIZE_MAX];
 
-	yaml = read_pin_xattr_object(path);
+	yaml = llapi_read_pin_xattr_object(path);
 
 	if (yaml == NULL && errno == ENODATA) {
 		rc = 0;
@@ -1556,7 +1555,7 @@ int llapi_pcc_unpin_file(const char *path, __u32 id)
 	node->cy_prev = node->cy_next = NULL;
 	cYAML_free_tree(node);
 
-	rc = dump_pin_object(yaml, buff, sizeof(buff));
+	rc = llapi_dump_pin_object(yaml, buff, sizeof(buff));
 	if (rc)
 		goto out;
 

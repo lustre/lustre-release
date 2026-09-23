@@ -9,8 +9,21 @@ lfs-pool-unpin \- unpin files, directories or FIDs from an OST pool
 .RB [ --file ]
 .IR FILE " | " DIRECTORY " ..."
 .SY "lfs pool unpin"
+.B --not-pool
+.IR POOL
+.RB [ --quiet ]
+.RB [ --file ]
+.IR FILE " | " DIRECTORY " ..."
+.SY "lfs pool unpin"
 .RB [ --pool
 .IR POOL ]
+.RB [ --quiet ]
+.B --fid
+.IR MOUNT
+.IR FID " ..."
+.SY "lfs pool unpin"
+.B --not-pool
+.IR POOL
 .RB [ --quiet ]
 .B --fid
 .IR MOUNT
@@ -24,7 +37,10 @@ subcommand removes the restriction on the named
 and/or files in the named
 .IR DIRECTORY (/ies),
 so that there are no longer restrictions on migrating the file from the named
-.IR POOL .
+.IR POOL ,
+or to the pool if
+.B --not-pool
+is specified.
 .PP
 .B lfs pool unpin
 removes a
@@ -33,8 +49,10 @@ entry for the selected
 .IR POOL
 from the
 .B lustre.pin
-attribute.  If no matching entry is present, the command succeeds without
-modifying the attribute.  When the last entry is removed, the
+attribute, or if there is none, a deny rule for that
+.IR POOL .
+If neither is present, the attribute is left unchanged and the target counts
+as not unpinned in the exit status.  When the last entry is removed, the
 .B lustre.pin
 attribute itself may be deleted.
 .PP
@@ -45,6 +63,24 @@ option is omitted,
 is inferred from the primary mirror layout of each file or directory.  If the
 layout does not have an associated pool, the operation fails for that target
 and an error message is printed.
+.PP
+When the
+.B --not-pool
+option is used instead of
+.BR --pool ,
+a deny rule for the named pool (previously added via
+.BR "lfs pool pin --not-pool" )
+is removed instead of a positive pin, without disturbing any other pin or
+deny entry for a different pool.
+.B --not-pool
+always requires an explicit
+.I POOL
+argument; unlike
+.BR --pool ,
+it is never inferred from the target's layout, since a denied pool cannot
+appear there by definition.  If no matching deny entry is present, the
+attribute is left untouched and the exit status is
+.BR 1 .
 .PP
 The
 .B --fid
@@ -77,6 +113,11 @@ prefix (e.g.
 .IR fsname . POOL ),
 which is discarded before the pool name is used.
 .TP
+.BR --not-pool " " POOL
+Remove a deny rule for the named pool instead of a positive pin.  The pool
+name must be provided explicitly, and this option cannot be combined with
+.BR --pool .
+.TP
 .BR -f ", " --file
 Interpret remaining arguments as filesystem paths (this is the default if
 neither
@@ -103,9 +144,11 @@ subcommand.
 The
 .B lfs pool unpin
 command returns 0 if every target was pinned to the requested (or inferred)
-pool and is now unpinned, or 1 if one or more targets were not pinned there to
-begin with, could not be unpinned (for example due to insufficient
-privileges; see
+pool -- or, with
+.BR --not-pool ,
+denied from the named pool -- and is now unpinned, or 1 if one or more
+targets were not pinned (or denied) there to begin with, could not be
+unpinned (for example due to insufficient privileges; see
 .BR mdt.enable_pin_gid (4)
 for the MDT-side policy controlling which users may pin or unpin files), or
 otherwise did not end up unpinned; unpinning a target that had nothing to

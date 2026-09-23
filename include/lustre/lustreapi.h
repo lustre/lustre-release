@@ -1282,6 +1282,9 @@ int llapi_pool_unpin_fd(int fd, const char *pool_name);
 int llapi_pool_unpin_file(const char *path, const char *pool_name);
 int llapi_pool_unpin_fid(const char *lustre_dir, const struct lu_fid *fid,
 		       const char *pool_name);
+int llapi_pool_undeny_fd(int fd, const char *pool_name);
+int llapi_pool_pin_only_fd(int fd, const char *pool_name);
+int llapi_pool_deny_fd(int fd, const char *pool_name);
 int llapi_pool_is_pinned_fd(int fd, const char *pool_name);
 int llapi_pool_is_pinned_file(const char *path, const char *pool_name);
 int llapi_pool_is_pinned_fid(const char *lustre_dir,

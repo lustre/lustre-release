@@ -44,8 +44,10 @@ entry for
 .I pool_name
 from the
 .B lustre.pin
-attribute of the referenced file.
-If no matching entry is found,
+attribute of the referenced file,
+or if there is none, a deny rule for
+.IR pool_name .
+If neither is found,
 or if the
 .B lustre.pin
 attribute is missing, the call fails with

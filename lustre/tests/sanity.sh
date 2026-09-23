@@ -22267,9 +22267,38 @@ test_157c()
 	echo "$val" | grep -q "pool: $pool" ||
 		error "lustre.pin value '$val' is missing '$pool'"
 
+	# Exclusive pin to $pool and verify the xattr encodes an exclusive
+	# constraint using the canonical shorthand [pool: [$pool,^any]]. Also
+	# verify that pinning to a different pool is rejected.
+	$LFS pool unpin --pool $pool --file $dir $file ||
+		error "lfs pool unpin before exclusive pin failed"
+
+	$LFS pool pin --only --pool $pool --file $dir $file ||
+		error "lfs pool pin --only failed"
+
+	val=$(getfattr --only-values -n lustre.pin $file 2>/dev/null) ||
+		error "getfattr lustre.pin on $file (exclusive) failed"
+	local expected_only="[pool: [$pool,^any]]"
+	[[ "$val" == "$expected_only" ]] ||
+		error "exclusive lustre.pin '$val' != expected '$expected_only'"
+
+	# $pool may come from $FS_POOL (site config) and be as long as
+	# LOV_MAXPOOLNAME (15); truncate before appending so other_pool
+	# never overflows that limit. It doesn't need to be a real pool:
+	# "lfs pool pin --pool" never checks that the pool exists, and this
+	# is only testing that the --only exclusivity check rejects it.
+	local other_pool="${pool:0:13}_2"
+	$LFS pool pin --pool $other_pool --file $dir $file 2>/dev/null &&
+		error "lfs pool pin to other_pool '$other_pool' succeeded on exclusive pin"
+
+	val2=$(getfattr --only-values -n lustre.pin $file 2>/dev/null) ||
+		error "getfattr lustre.pin on $file (after other_pool) failed"
+	[[ "$val2" == "$val" ]] ||
+		error "lustre.pin changed after failed pin to other_pool:'$val2' != '$val'"
+
 	val=$(getfattr --only-values -n lustre.pin $dir 2>/dev/null) ||
 		error "getfattr lustre.pin on $dir failed"
-	echo "$val" | grep -q "pool: $pool" ||
+	[[ "$val" =~ $pool ]] ||
 		error "directory lustre.pin '$val' is missing pool '$pool'"
 
 	out=$($LFS pool pin_info --pool $pool --file $dir $file)
@@ -22332,6 +22361,66 @@ test_157c()
 		error "fail 'lfs pool pin_info --fid' after unpin (set pool): rc=$rc"
 	echo "$out" | grep -F -q "$fid:$pool: UNPINNED" ||
 		error "pin_info did not report FID $fid unpinned from $pool"
+
+	# Test --not-pool: add a deny constraint and ensure pinning to the
+	# denied pool fails and does not change lustre.pin. Kept here (after
+	# $dir/$file have been unpinned above, so a freshly-created file in
+	# $dir does not inherit a conflicting positive pin) but before the
+	# inferred-pool subtest below, which can skip, so this coverage
+	# always runs.
+	local deny_file=$dir/${tfile}.deny
+
+	rm -f $deny_file
+	touch $deny_file || error "touch $deny_file failed"
+
+	$LFS pool pin --not-pool $pool --file $deny_file ||
+		error "lfs pool pin --not-pool failed"
+
+	# Verify the deny rule through the public "lfs pool pin_info" query
+	# and the pinning behaviour it enforces, rather than matching the
+	# lustre.pin xattr against a specific internal encoding.
+	out=$($LFS pool pin_info --pool $pool --file $deny_file)
+	rc=$?
+	(( rc == 1 )) ||
+		error "lfs pool pin_info on denied file failed with rc=$rc"
+	echo "$out" | grep -F -q "$deny_file:$pool: UNPINNED" ||
+		error "pin_info reported $deny_file as pinned to denied pool $pool"
+
+	val2=$(getfattr --only-values -n lustre.pin $deny_file 2>/dev/null) ||
+		error "getfattr lustre.pin on $deny_file (deny) failed"
+	[[ -n "$val2" ]] ||
+		error "lustre.pin is empty after lfs pool pin --not-pool $pool"
+
+	$LFS pool pin --pool $pool --file $deny_file 2>/dev/null &&
+		error "lfs pool pin to denied pool '$pool' unexpectedly worked"
+
+	val3=$(getfattr --only-values -n lustre.pin $deny_file 2>/dev/null) ||
+		error "getfattr lustre.pin on $deny_file failed"
+	[[ "$val3" == "$val2" ]] ||
+		error "lustre.pin changed after failed pin to denied pool:'$val3' != '$val2'"
+
+	# "lfs pool unpin --not-pool" removes the deny rule, and only the
+	# deny rule: it must not fall back to removing a same-named positive
+	# pin once one exists.
+	$LFS pool unpin --not-pool $pool --file $deny_file ||
+		error "lfs pool unpin --not-pool failed"
+
+	val2=$(getfattr --only-values -n lustre.pin $deny_file 2>/dev/null)
+	[[ -z "$val2" ]] ||
+		error "lustre.pin still present after unpin --not-pool: '$val2'"
+
+	$LFS pool pin --pool $pool --file $deny_file ||
+		error "lfs pool pin to '$pool' failed after removing deny rule"
+
+	$LFS pool unpin --not-pool $pool --file $deny_file
+	rc=$?
+	(( rc == 1 )) ||
+		error "lfs pool unpin --not-pool (no deny rule present) failed with rc=$rc"
+
+	val2=$(getfattr --only-values -n lustre.pin $deny_file 2>/dev/null) ||
+		error "getfattr lustre.pin on $deny_file (after unpin --not-pool) failed"
+	echo "$val2" | grep -q "pool: $pool" ||
+		error "unpin --not-pool removed the positive pin for '$pool': '$val2'"
 
 	# Test inferred-pool behaviour: create a file whose primary mirror
 	# layout is in $pool, then call "lfs pool pin/unpin" without --pool and

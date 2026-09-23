@@ -34,10 +34,10 @@
 
 struct cYAML;
 
-int verify_pin_xattr_object(struct cYAML *yaml);
-int dump_pin_object(struct cYAML *yaml, char *buff, int buflen);
-struct cYAML *read_pin_xattr_object(const char *path);
-struct cYAML *read_pin_xattr_object_fd(int fd);
+int llapi_verify_pin_xattr_object(struct cYAML *yaml);
+int llapi_dump_pin_object(struct cYAML *yaml, char *buff, int buflen);
+struct cYAML *llapi_read_pin_xattr_object(const char *path);
+struct cYAML *llapi_read_pin_xattr_object_fd(int fd);
 int llapi_yaml_get_device_index(const char *source);
 
 #define MAX_IOC_BUFLEN	8192

@@ -121,7 +121,7 @@ static int pool_pin_ensure_entry(struct cYAML *yaml, const char *pool_name,
 	}
 
 	/* Serialise the (possibly updated) YAML object into buff. */
-	errno = -dump_pin_object(yaml, buff, bufflen);
+	errno = -llapi_dump_pin_object(yaml, buff, bufflen);
 	if (errno)
 		return -errno;
 
@@ -130,27 +130,35 @@ static int pool_pin_ensure_entry(struct cYAML *yaml, const char *pool_name,
 }
 
 static int pool_unpin_update_entry(struct cYAML *yaml, const char *pool_name,
-				   char *buff, size_t bufflen)
+				   char *buff, size_t bufflen, bool deny_only)
 {
-	struct cYAML *node;
+	struct cYAML *node = NULL;
 	struct cYAML *only_node = NULL;
-	bool was_positive_pool = true;
+	bool was_positive_pool = false;
 
 	/*
-	 * Search for the entry to be deleted: prefer a positive "pool"
-	 * entry, but fall back to a "deny_pool" entry for the same name so
-	 * that unpin can also clear a deny rule (there is no separate way
-	 * to remove one).
+	 * Search for the entry to be deleted. @deny_only restricts the
+	 * search to a "deny_pool" entry, for callers that specifically want
+	 * to clear a deny rule (lfs pool unpin --not-pool) without touching
+	 * a same-named positive pin -- though a pool can never be both, since
+	 * llapi_pool_deny_fd() refuses to deny a pool that is already
+	 * positively pinned.
+	 *
+	 * Otherwise, prefer a positive "pool" entry, but fall back to a
+	 * "deny_pool" entry for the same name so that a plain unpin can also
+	 * clear a deny rule.
 	 */
-	for (node = yaml->cy_child; node != NULL; node = node->cy_next) {
-		if (strcmp(node->cy_string, PIN_YAML_POOL_STR) == 0 &&
-		    node->cy_type == CYAML_TYPE_STRING &&
-		    node->cy_valuestring != NULL &&
-		    strcmp(node->cy_valuestring, pool_name) == 0)
-			break;
+	if (!deny_only) {
+		for (node = yaml->cy_child; node != NULL; node = node->cy_next) {
+			if (strcmp(node->cy_string, PIN_YAML_POOL_STR) == 0 &&
+			    node->cy_type == CYAML_TYPE_STRING &&
+			    node->cy_valuestring != NULL &&
+			    strcmp(node->cy_valuestring, pool_name) == 0)
+				break;
+		}
+		was_positive_pool = node != NULL;
 	}
 	if (node == NULL) {
-		was_positive_pool = false;
 		for (node = yaml->cy_child; node != NULL; node = node->cy_next) {
 			if (strcmp(node->cy_string, PIN_YAML_DENY_POOL_STR) == 0 &&
 			    node->cy_type == CYAML_TYPE_STRING &&
@@ -232,7 +240,7 @@ static int pool_unpin_update_entry(struct cYAML *yaml, const char *pool_name,
 		cYAML_free_tree(only_node);
 	}
 
-	errno = -dump_pin_object(yaml, buff, bufflen);
+	errno = -llapi_dump_pin_object(yaml, buff, bufflen);
 	if (errno)
 		return -errno;
 
@@ -245,8 +253,7 @@ static int pool_is_pinned_from_yaml(struct cYAML *yaml, const char *pool_name)
 	int pinned = 0;
 
 	for (node = yaml->cy_child; node != NULL; node = node->cy_next) {
-		if ((strcmp(node->cy_string, PIN_YAML_POOL_STR) == 0 ||
-		     strcmp(node->cy_string, PIN_YAML_ONLY_POOL_STR) == 0) &&
+		if (strcmp(node->cy_string, PIN_YAML_POOL_STR) == 0 &&
 		    node->cy_type == CYAML_TYPE_STRING &&
 		    node->cy_valuestring != NULL &&
 		    strcmp(node->cy_valuestring, pool_name) == 0) {
@@ -281,7 +288,7 @@ int llapi_pool_pin_fd(int fd, const char *pool_name)
 	if (rc)
 		return rc;
 
-	yaml = read_pin_xattr_object_fd(fd);
+	yaml = llapi_read_pin_xattr_object_fd(fd);
 	if (yaml == NULL && errno == ENODATA) {
 		snprintf(buff, sizeof(buff), "[%s: %s]", PIN_YAML_POOL_STR,
 			 pool_name);
@@ -331,7 +338,7 @@ int llapi_pool_pin_file(const char *path, const char *pool_name)
 	if (rc)
 		return rc;
 
-	yaml = read_pin_xattr_object(path);
+	yaml = llapi_read_pin_xattr_object(path);
 	if (yaml == NULL && errno == ENODATA) {
 		snprintf(buff, sizeof(buff), "[%s: %s]", PIN_YAML_POOL_STR,
 			 pool_name);
@@ -401,30 +408,18 @@ int llapi_pool_pin_fid(const char *lustre_dir, const struct lu_fid *fid,
 	return 0;
 }
 
-/**
- * llapi_pool_unpin_fd() - Remove a pool pin from a file (by fd).
- * @fd: Open file descriptor for a Lustre file.
- * @pool_name: Name of the pool to unpin (optionally fsname-qualified).
- *
- * Remove the "pool: pool_name" entry from the lustre.pin xattr of the file
- * referenced by @fd. If no matching entry exists (or the attribute is
- * missing), this is treated as an error and ENOENT is reported. When the last
- * entry is removed, the lustre.pin xattr itself is deleted.
- *
- * Return: 0 on success; on failure, a negative errno value is returned and
- *         errno is set to the corresponding error code.
- */
-int llapi_pool_unpin_fd(int fd, const char *pool_name)
+static int pool_unpin_or_undeny_fd(int fd, const char *pool_name,
+				   bool deny_only)
 {
+	int rc = 0;
 	struct cYAML *yaml = NULL;
 	char buff[XATTR_SIZE_MAX];
-	int rc;
 
 	rc = llapi_pool_name_validate(&pool_name);
 	if (rc)
 		return rc;
 
-	yaml = read_pin_xattr_object_fd(fd);
+	yaml = llapi_read_pin_xattr_object_fd(fd);
 
 	if (yaml == NULL && errno == ENODATA) {
 		errno = ENOENT;
@@ -433,7 +428,8 @@ int llapi_pool_unpin_fd(int fd, const char *pool_name)
 	if (yaml == NULL)
 		return -errno;
 
-	rc = pool_unpin_update_entry(yaml, pool_name, buff, sizeof(buff));
+	rc = pool_unpin_update_entry(yaml, pool_name, buff, sizeof(buff),
+				     deny_only);
 	if (rc < 0)
 		goto out;
 
@@ -456,14 +452,263 @@ out:
 }
 
 /**
+ * llapi_pool_unpin_fd() - Remove a pool pin from a file (by fd).
+ * @fd: Open file descriptor for a Lustre file.
+ * @pool_name: Name of the pool to unpin (optionally fsname-qualified).
+ *
+ * Remove the "pool: pool_name" entry from the lustre.pin xattr of the file
+ * referenced by @fd, or if there is none, a deny rule for @pool_name. If
+ * neither exists (or the attribute is missing), this is treated as an error
+ * and ENOENT is reported. When the last entry is removed, the lustre.pin
+ * xattr itself is deleted.
+ *
+ * Return: 0 on success; on failure, a negative errno value is returned and
+ *         errno is set to the corresponding error code.
+ */
+int llapi_pool_unpin_fd(int fd, const char *pool_name)
+{
+	return pool_unpin_or_undeny_fd(fd, pool_name, false);
+}
+
+/**
+ * llapi_pool_undeny_fd() - Remove a pool deny rule from a file (by fd).
+ * @fd: Open file descriptor for a Lustre file.
+ * @pool_name: Name of the denied pool to clear (optionally fsname-qualified).
+ *
+ * Remove the "deny_pool: pool_name" entry from the lustre.pin xattr of the
+ * file referenced by @fd, without touching a same-named positive pin (a pool
+ * can never be both positively pinned and denied at once). If no matching
+ * deny entry exists (or the attribute is missing), this is treated as an
+ * error and ENOENT is reported. When the last entry is removed, the
+ * lustre.pin xattr itself is deleted.
+ *
+ * Return: 0 on success; on failure, a negative errno value is returned and
+ *         errno is set to the corresponding error code.
+ */
+int llapi_pool_undeny_fd(int fd, const char *pool_name)
+{
+	return pool_unpin_or_undeny_fd(fd, pool_name, true);
+}
+
+static int pool_pin_mark_exclusive_entry(struct cYAML *yaml,
+					 const char *pool_name,
+					 char *buff, size_t bufflen)
+{
+	struct cYAML *node;
+
+	for (node = yaml->cy_child; node != NULL; node = node->cy_next) {
+		if (strcmp(node->cy_string, PIN_YAML_ONLY_POOL_STR) == 0 &&
+		    node->cy_type == CYAML_TYPE_STRING &&
+		    node->cy_valuestring != NULL)
+			break;
+	}
+
+	if (node == NULL) {
+		node = cYAML_create_string(yaml, (char *)PIN_YAML_ONLY_POOL_STR,
+					   (char *)pool_name);
+		if (node == NULL)
+			return -errno ? -errno : -ENOMEM;
+	}
+
+	errno = -llapi_dump_pin_object(yaml, buff, bufflen);
+	if (errno)
+		return -errno;
+
+	return 0;
+}
+
+/**
+ * llapi_pool_pin_only_fd() - Pin a file exclusively to a given pool name.
+ * @fd: Open file descriptor for a Lustre file.
+ * @pool_name: Name of the pool to pin for (optionally fsname-qualified).
+ *
+ * Ensure that a "pool: pool_name" entry exists in the lustre.pin xattr of the
+ * file referenced by @fd, and mark the pin exclusive by adding an
+ * "only_pool" entry if one is not already present. Both steps happen in a
+ * single read-modify-write of the xattr, so the file is never left
+ * observably pinned-but-not-yet-exclusive the way calling llapi_pool_pin_fd()
+ * followed by a separate exclusivity update would.
+ *
+ * llapi_dump_pin_object() encodes an "only_pool" entry as a "^any" element
+ * in the "pool" YAML list, e.g. [pool: [<name>,^any]]. lustre.pin supports
+ * exclusivity to a whole *set* of pools (e.g. "[pool: [p1,p2,^any]]" pins
+ * exclusively to {p1,p2}), so only_pool's stored value is not "the"
+ * exclusive pool -- it is reduced to a single representative "pool" entry
+ * by the round trip through the on-disk string form, and which one survives
+ * that round trip can change across re-reads. Only its presence is
+ * meaningful to this function: @pool_name is added to the "pool" entries
+ * regardless, so there is nothing else to enforce once an only_pool entry
+ * exists.
+ *
+ * Return: 0 on success; on failure, a negative errno value is returned and
+ *         errno is set to the corresponding error code.
+ */
+int llapi_pool_pin_only_fd(int fd, const char *pool_name)
+{
+	int rc = 0;
+	struct cYAML *yaml = NULL;
+	char buff[XATTR_SIZE_MAX];
+
+	rc = llapi_pool_name_validate(&pool_name);
+	if (rc)
+		return rc;
+
+	yaml = llapi_read_pin_xattr_object_fd(fd);
+	if (yaml == NULL && errno == ENODATA) {
+		yaml = cYAML_create_object(NULL, NULL);
+		if (yaml == NULL) {
+			if (!errno)
+				errno = ENOMEM;
+			return -errno;
+		}
+	} else if (yaml == NULL) {
+		return -errno;
+	} else {
+		/* Enforce any existing only_pool constraint, if present. */
+		rc = pool_pin_check_constraints(yaml, pool_name);
+		if (rc < 0)
+			goto out;
+	}
+
+	rc = pool_pin_ensure_entry(yaml, pool_name, buff, sizeof(buff));
+	if (rc < 0)
+		goto out;
+
+	rc = pool_pin_mark_exclusive_entry(yaml, pool_name, buff, sizeof(buff));
+	if (rc < 0)
+		goto out;
+
+	if (fsetxattr(fd, XATTR_LUSTRE_PIN, buff, strlen(buff), 0) < 0)
+		rc = -errno;
+	else
+		rc = 0;
+
+out:
+	if (yaml)
+		cYAML_free_tree(yaml);
+	return rc;
+}
+
+/**
+ * llapi_pool_deny_fd() - Add a pool deny rule to a file (by fd).
+ * @fd: Open file descriptor for a Lustre file.
+ * @pool_name: Name of the pool to deny (optionally fsname-qualified).
+ *
+ * Ensure that a deny constraint for @pool_name exists in the lustre.pin
+ * xattr of the file referenced by @fd (serialised as a "^pool_name" element
+ * of the "pool" list). If such a constraint already exists, this function
+ * succeeds without modifying the xattr.
+ *
+ * Return: 0 on success; -EEXIST if @pool_name is already positively pinned
+ *         (plain or exclusive) for this file, since the same target cannot
+ *         be both pinned to and denied from the same pool; on any other
+ *         failure, a negative errno value is returned and errno is set to
+ *         the corresponding error code.
+ */
+int llapi_pool_deny_fd(int fd, const char *pool_name)
+{
+	int rc = 0;
+	struct cYAML *yaml = NULL;
+	struct cYAML *node;
+	char buff[XATTR_SIZE_MAX];
+	bool has_deny = false;
+
+	rc = llapi_pool_name_validate(&pool_name);
+	if (rc)
+		return rc;
+
+	yaml = llapi_read_pin_xattr_object_fd(fd);
+	if (yaml == NULL && errno == ENODATA) {
+		yaml = cYAML_create_object(NULL, NULL);
+		if (yaml == NULL) {
+			if (!errno)
+				errno = ENOMEM;
+			return -errno;
+		}
+	} else if (yaml == NULL) {
+		return -errno;
+	} else {
+		/*
+		 * Reject denying a pool that is currently pinned (positively
+		 * or exclusively) for this file; otherwise the file could end
+		 * up both pinned to and denied from the same pool.
+		 */
+		for (node = yaml->cy_child; node != NULL;
+		     node = node->cy_next) {
+			if (node->cy_type != CYAML_TYPE_STRING ||
+			    node->cy_valuestring == NULL)
+				continue;
+
+			if ((strcmp(node->cy_string, PIN_YAML_POOL_STR) == 0 ||
+			     strcmp(node->cy_string,
+				   PIN_YAML_ONLY_POOL_STR) == 0) &&
+			    strcmp(node->cy_valuestring, pool_name) == 0) {
+				errno = EEXIST;
+				rc = -EEXIST;
+				goto out;
+			}
+
+			if (strcmp(node->cy_string,
+				  PIN_YAML_DENY_POOL_STR) == 0 &&
+			    strcmp(node->cy_valuestring, pool_name) == 0)
+				has_deny = true;
+		}
+	}
+
+	/*
+	 * Always go through cYAML + llapi_dump_pin_object() rather than
+	 * hand-writing the string: the "deny_pool" key is an in-memory
+	 * cYAML node name only, and must be serialised as a "^pool_name"
+	 * element of the "pool" list, not as a literal "deny_pool: ..."
+	 * entry, which the pin string parser rejects.
+	 */
+	if (has_deny) {
+		/*
+		 * Already denied: nothing to change, so skip the
+		 * serialise+fsetxattr() below entirely rather than issuing
+		 * a no-op MDT setxattr RPC, which could needlessly fail with
+		 * EPERM under mdt.enable_pin_gid(4) or bump the file's ctime
+		 * for no reason.
+		 */
+		rc = 0;
+		goto out;
+	}
+
+	if (cYAML_create_string(yaml, (char *)PIN_YAML_DENY_POOL_STR,
+				(char *)pool_name) == NULL) {
+		if (!errno)
+			errno = ENOMEM;
+		rc = -errno;
+		goto out;
+	}
+
+	rc = llapi_dump_pin_object(yaml, buff, sizeof(buff));
+	if (rc < 0) {
+		errno = -rc;
+		rc = -errno;
+		goto out;
+	}
+
+	if (fsetxattr(fd, XATTR_LUSTRE_PIN, buff, strlen(buff), 0) < 0)
+		rc = -errno;
+	else
+		rc = 0;
+
+out:
+	if (yaml)
+		cYAML_free_tree(yaml);
+	return rc;
+}
+
+/**
  * llapi_pool_unpin_file() - Remove a pool pin from a file.
  * @path: Path to a Lustre file.
  * @pool_name: Name of the pool to unpin (optionally fsname-qualified).
  *
- * Remove the "pool: pool_name" entry from the lustre.pin xattr of @path. If
- * no matching entry exists (or the attribute is missing), this is treated as
- * an error and ENOENT is reported. When the last entry is removed, the
- * lustre.pin xattr itself is deleted.
+ * Remove the "pool: pool_name" entry from the lustre.pin xattr of @path, or
+ * if there is none, a deny rule for @pool_name. If neither exists (or the
+ * attribute is missing), this is treated as an error and ENOENT is reported.
+ * When the last entry is removed, the lustre.pin xattr itself is deleted.
  *
  * Return: 0 on success; on failure, a negative errno value is returned and
  *         errno is set to the corresponding error code.
@@ -478,7 +723,7 @@ int llapi_pool_unpin_file(const char *path, const char *pool_name)
 	if (rc)
 		return rc;
 
-	yaml = read_pin_xattr_object(path);
+	yaml = llapi_read_pin_xattr_object(path);
 
 	if (yaml == NULL && errno == ENODATA) {
 		errno = ENOENT;
@@ -493,7 +738,7 @@ int llapi_pool_unpin_file(const char *path, const char *pool_name)
 		goto out;
 	}
 
-	rc = pool_unpin_update_entry(yaml, pool_name, buff, sizeof(buff));
+	rc = pool_unpin_update_entry(yaml, pool_name, buff, sizeof(buff), false);
 	if (rc < 0)
 		goto out;
 
@@ -570,7 +815,7 @@ int llapi_pool_is_pinned_fd(int fd, const char *pool_name)
 	if (rc)
 		return rc;
 
-	yaml = read_pin_xattr_object_fd(fd);
+	yaml = llapi_read_pin_xattr_object_fd(fd);
 	if (yaml == NULL) {
 		/*
 		 * No lustre.pin attribute: treat as "not pinned".
@@ -604,7 +849,7 @@ int llapi_pool_is_pinned_file(const char *path, const char *pool_name)
 	if (rc)
 		return rc;
 
-	yaml = read_pin_xattr_object(path);
+	yaml = llapi_read_pin_xattr_object(path);
 	if (yaml == NULL) {
 		if (errno == ENODATA)
 			return 0;

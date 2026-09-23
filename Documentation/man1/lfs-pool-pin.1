@@ -3,14 +3,29 @@
 lfs-pool-pin \- pin files or files in directory to OST pool
 .SH SYNOPSIS
 .SY "lfs pool pin"
-.RB [ --pool
-.IR POOL ]
+.B --not-pool
+.IR POOL
 .RB [ --quiet ]
 .RB [ --file ]
 .IR FILE " | " DIRECTORY " ..."
 .SY "lfs pool pin"
 .RB [ --pool
 .IR POOL ]
+.RB [ --only ]
+.RB [ --quiet ]
+.RB [ --file ]
+.IR FILE " | " DIRECTORY " ..."
+.SY "lfs pool pin"
+.B --not-pool
+.IR POOL
+.RB [ --quiet ]
+.B --fid
+.IR MOUNT
+.IR FID " ..."
+.SY "lfs pool pin"
+.RB [ --pool
+.IR POOL ]
+.RB [ --only ]
 .RB [ --quiet ]
 .B --fid
 .IR MOUNT
@@ -45,6 +60,33 @@ layout does not have an associated pool, the operation fails for that target
 and an error message is printed.
 .PP
 The
+.B --only
+option indicates that the file must exclusively reside on OSTs in the
+specified
+.I POOL
+and may not be migrated or mirrored to an OST pool that is not listed.
+Without this option, the pool pin means that a copy of the file must reside
+on the specified
+.IR POOL ", but " may
+also be mirrored to other (unspecified) OST pools.  Attempting to add a new
+non-exclusive pin to a file is contrary to the
+.B --only
+restriction and will fail with
+.BR EPERM .
+.PP
+When the
+.B --not-pool
+option is used, no positive pin is created.  Instead, a deny rule is added to
+.B lustre.pin
+indicating that the file must not be migrated or mirrored to the named
+.IR POOL .
+Subsequent attempts to pin the target for a denied pool are rejected.
+Adding a deny rule for a pool the target is currently pinned to (positively or
+exclusively) fails with
+.BR EEXIST ,
+since the same target cannot be both pinned to and denied from the same pool.
+.PP
+The
 .B --fid
 form of the command operates on files referenced by Lustre FIDs beneath the
 filesystem mounted at
@@ -74,6 +116,20 @@ may optionally be qualified with an
 prefix (e.g.
 .IR fsname . POOL ),
 which is discarded before the pool name is used.
+.TP
+.BR --only
+Mark the pin as exclusive to the pool set by this pin operation, together with
+any other pool the target is already positively pinned to.  May be used
+together with
+.BR --pool
+or with implicit pool inference from the file's primary mirror layout.  This
+option cannot be combined with
+.BR --not-pool .
+.TP
+.BR --not-pool " " POOL
+Add a deny rule for the named pool instead of creating a positive pin.  The
+pool name must be provided explicitly, and this option cannot be combined with
+.BR --only .
 .TP
 .BR -f ", " --file
 Interpret remaining arguments as filesystem paths (this is the default if
@@ -110,7 +166,13 @@ indicates that the client was not permitted to modify
 .BR lustre.pin ;
 see
 .BR mdt.enable_pin_gid (4)
-for the MDT-side policy controlling which users may pin or unpin files.
+for the MDT-side policy controlling which users may pin or unpin files. An
+exit status of
+.B EEXIST
+from
+.B --not-pool
+indicates a purely client-side conflict (the target is already pinned to the
+pool being denied) and is unrelated to MDT-side permissions.
 .SH EXAMPLES
 Pin a directory tree and a single file to the pool scratch:
 .EX

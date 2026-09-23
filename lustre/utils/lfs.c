@@ -56,6 +56,7 @@
 #include <linux/lnet/nidstr.h>
 #include <linux/lustre/lustre_idl.h>
 #include <linux/lustre/lustre_param.h>
+#include <linux/lustre/lustre_user.h>
 #include <linux/lustre/lustre_ver.h>
 #include <lnetconfig/cyaml.h>
 #include <lustre/lustreapi.h>
@@ -384,13 +385,17 @@ command_t pool_cmdlist[] = {
 	  .pc_help = "List pools or pool OSTs.\n"
 		"usage: lfs pool list <fsname>[.<pool>] | <pathname>\n" },
 	{ .pc_name = "pin", .pc_func = lfs_pool_pin,
-	  .pc_help = "Pin files or directories to an OST pool.\n"
-		"usage: lfs pool pin [--pool POOL] [-q] [--file] FILE...\n"
-		"\tlfs pool pin [--pool POOL] [-q] --fid MOUNT FID...\n" },
+	  .pc_help = "Pin files or directories to an OST pool or add deny rules.\n"
+		"usage: lfs pool pin [--pool POOL] [--only] [-q] [--file] FILE...\n"
+		"\tlfs pool pin --not-pool POOL [-q] [--file] FILE...\n"
+		"\tlfs pool pin [--pool POOL] [--only] [-q] --fid MOUNT FID...\n"
+		"\tlfs pool pin --not-pool POOL [-q] --fid MOUNT FID...\n" },
 	{ .pc_name = "unpin", .pc_func = lfs_pool_unpin,
-	  .pc_help = "Remove an OST pool pin from files or directories.\n"
+	  .pc_help = "Remove an OST pool pin or deny rule from files or directories.\n"
 		"usage: lfs pool unpin [--pool POOL] [-q] [--file] FILE...\n"
-		"\tlfs pool unpin [--pool POOL] [-q] --fid MOUNT FID...\n" },
+		"\tlfs pool unpin --not-pool POOL [-q] [--file] FILE...\n"
+		"\tlfs pool unpin [--pool POOL] [-q] --fid MOUNT FID...\n"
+		"\tlfs pool unpin --not-pool POOL [-q] --fid MOUNT FID...\n" },
 	{ .pc_name = "pin_info", .pc_func = lfs_pool_pin_info,
 	  .pc_help = "Report whether files, directories or FIDs are pinned to an OST pool.\n"
 		"usage: lfs pool pin_info --pool POOL [-q] [--file] FILE...\n"
@@ -10500,10 +10505,11 @@ static int lfs_pool_pin_open_target(const char *prefix, const char *target,
  * @argc: The count of lfs pool pin command line arguments.
  * @argv: Array of strings for lfs pool pin command line arguments.
  *
- * This function parses the "lfs pool pin" options and pins each specified
- * file, directory or FID to an OST pool by updating its lustre.pin extended
- * attribute. When --pool is omitted, the pool name is inferred from the
- * primary mirror layout of each target.
+ * This function parses the "lfs pool pin" options and, for each specified
+ * file, directory or FID, either pins it to an OST pool or adds a
+ * deny_pool entry by updating its lustre.pin extended attribute. When
+ * --pool is omitted, the pool name is inferred from the primary mirror
+ * layout of each target for normal pin operations.
  *
  * Return: 0 if all specified targets are successfully pinned, 1 if one
  *	or more targets could not be pinned to the requested pool, a
@@ -10522,6 +10528,9 @@ static int lfs_pool_pin(int argc, char **argv)
 	bool by_fid = false;
 	bool mode_set = false;
 	bool quiet = false;
+	bool only = false;
+	bool deny = false;
+	bool pool_given = false;
 	bool any_not_pinned = false;
 	const char *client_mount = NULL;
 	int rootfd = -1;
@@ -10529,13 +10538,15 @@ static int lfs_pool_pin(int argc, char **argv)
 	{ .val = 'f', .name = "file", .has_arg = no_argument },
 	{ .val = 'F', .name = "fid", .has_arg = required_argument },
 	{ .val = 'h', .name = "help", .has_arg = no_argument },
+	{ .val = 'n', .name = "not-pool", .has_arg = required_argument },
+	{ .val = 'o', .name = "only", .has_arg = no_argument },
 	{ .val = LFS_POOL_OPT, .name = "pool", .has_arg = required_argument },
 	{ .val = 'q', .name = "quiet", .has_arg = no_argument },
 	{ .name = NULL }
 	};
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "fF:hq", long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "fF:hn:oq", long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'f':
 			if (mode_set && by_fid) {
@@ -10557,10 +10568,41 @@ static int lfs_pool_pin(int argc, char **argv)
 			break;
 		case 'h':
 			return CMD_HELP;
-		case LFS_POOL_OPT:
+		case 'n':
+			if (only) {
+				fprintf(stderr, "%s: cannot mix --not-pool and --only\n",
+					argv[0]);
+				return CMD_HELP;
+			}
+			if (pool_given) {
+				fprintf(stderr, "%s: cannot mix --not-pool and --pool\n",
+					argv[0]);
+				return CMD_HELP;
+			}
+			deny = true;
 			optarg = lfs_poolarg_strip_fsname(optarg);
 			if (llint_pool_name_verify(optarg))
 				return CMD_HELP;
+			pool = optarg;
+			break;
+		case 'o':
+			if (deny) {
+				fprintf(stderr, "%s: cannot mix --not-pool and --only\n",
+					argv[0]);
+				return CMD_HELP;
+			}
+			only = true;
+			break;
+		case LFS_POOL_OPT:
+			if (deny) {
+				fprintf(stderr, "%s: cannot mix --not-pool and --pool\n",
+					argv[0]);
+				return CMD_HELP;
+			}
+			optarg = lfs_poolarg_strip_fsname(optarg);
+			if (llint_pool_name_verify(optarg))
+				return CMD_HELP;
+			pool_given = true;
 			pool = optarg;
 			break;
 		case 'q':
@@ -10572,6 +10614,12 @@ static int lfs_pool_pin(int argc, char **argv)
 				argv[0], argv[optind - 1]);
 			return CMD_HELP;
 		}
+	}
+
+	if (deny && only) {
+		fprintf(stderr, "%s: --not-pool and --only cannot be used together\n",
+			argv[0]);
+		return CMD_HELP;
 	}
 
 	if (argc <= optind) {
@@ -10612,22 +10660,57 @@ static int lfs_pool_pin(int argc, char **argv)
 			continue;
 		}
 
-		rc2 = llapi_pool_pin_fd(fd, pool_for_target);
-		if (rc2 < 0) {
-			int saved_errno = errno;
+		if (deny) {
+			/* Add a deny_pool entry for pool_for_target. */
+			rc2 = llapi_pool_deny_fd(fd, pool_for_target);
+			if (rc2 < 0) {
+				int saved_errno = errno;
 
-			any_not_pinned = true;
-			if (rc == 0)
-				rc = -saved_errno;
-			if (!quiet) {
-				fprintf(stderr,
-					"%s: cannot pin %s to pool '%s': %s\n",
-					argv[0], desc, pool_for_target,
-					strerror(saved_errno));
-				if (saved_errno == EPERM)
+				any_not_pinned = true;
+				if (!quiet) {
 					fprintf(stderr,
-						"%s: permission denied while updating lustre.pin; see mdt.enable_pin_gid(4).\n",
-						argv[0]);
+						"%s: cannot add not-pool '%s' for %s: %s\n",
+						argv[0], pool_for_target, desc,
+						strerror(saved_errno));
+					if (saved_errno == EPERM)
+						fprintf(stderr,
+							"%s: permission denied while updating lustre.pin; see mdt.enable_pin_gid(4).\n",
+							argv[0]);
+				}
+			}
+		} else if (only) {
+			rc2 = llapi_pool_pin_only_fd(fd, pool_for_target);
+			if (rc2 < 0) {
+				int saved_errno = errno;
+
+				any_not_pinned = true;
+				if (!quiet) {
+					fprintf(stderr,
+						"%s: cannot pin %s only to '%s': %s\n",
+						argv[0], desc, pool_for_target,
+						strerror(saved_errno));
+					if (saved_errno == EPERM)
+						fprintf(stderr,
+							"%s: permission denied while updating lustre.pin; see mdt.enable_pin_gid(4).\n",
+							argv[0]);
+				}
+			}
+		} else {
+			rc2 = llapi_pool_pin_fd(fd, pool_for_target);
+			if (rc2 < 0) {
+				int saved_errno = errno;
+
+				any_not_pinned = true;
+				if (!quiet) {
+					fprintf(stderr,
+						"%s: cannot pin %s to pool '%s': %s\n",
+						argv[0], desc, pool_for_target,
+						strerror(saved_errno));
+					if (saved_errno == EPERM)
+						fprintf(stderr,
+							"%s: permission denied while updating lustre.pin; see mdt.enable_pin_gid(4).\n",
+							argv[0]);
+				}
 			}
 		}
 
@@ -10650,26 +10733,34 @@ static int lfs_pool_pin(int argc, char **argv)
  *
  * This function parses the "lfs pool unpin" options and removes an OST pool
  * pin from each specified file, directory or FID by updating its lustre.pin
- * extended attribute. When --pool is omitted, the pool name is inferred from
- * the primary mirror layout of each target.
+ * extended attribute. When --pool is omitted (and --not-pool is not given
+ * either), the pool name is inferred from the primary mirror layout of each
+ * target.
  *
- * Unpinning a target that has no matching pin entry does not fail the
+ * --not-pool removes a deny rule (added via "lfs pool pin --not-pool") for
+ * the named pool instead of a positive pin.
+ * It always takes an explicit pool name; unlike --pool, it never infers one
+ * from the target's layout, since a denied pool by definition cannot appear
+ * there.
+ *
+ * Unpinning a target that has no matching pin/deny entry does not fail the
  * operation (lustre.pin is left untouched), but the target still counts
  * as "not unpinned" in the exit status below, the same as a target that
- * was pinned to a different pool.
+ * was pinned to (or, with --not-pool, denied from) a different pool.
  *
- * Like lfs_pool_pin(), a failed unpin operation on an opened target (e.g.
- * EPERM from llapi_pool_unpin_fd()) is folded into the same "1" outcome as
- * a target that had nothing to unpin, rather than propagating its errno as
- * the exit status; errno itself is still left set to the real failure for
- * the diagnostic message.
+ * Like lfs_pool_pin(), a failed unpin/undeny operation on an opened target
+ * (e.g. EPERM from llapi_pool_unpin_fd()/llapi_pool_undeny_fd()) is folded
+ * into the same "1" outcome as a target that had nothing to unpin, rather
+ * than propagating its errno as the exit status; errno itself is still
+ * left set to the real failure for the diagnostic message.
  *
- * Return: 0 if all specified targets were pinned to the requested/
- *	inferred pool and are now unpinned, 1 if one or more targets were
- *	not pinned there to begin with or could not be unpinned, a negative
- *	error code if a target could not be opened, its FID could not be
- *	parsed, or (when --pool is omitted) its pool could not be inferred
- *	from its layout, or CMD_HELP if arguments are invalid.
+ * Return: 0 if all specified targets were pinned to (or, with --not-pool,
+ *	denied from) the requested/inferred pool and are now unpinned, 1 if
+ *	one or more targets were not pinned/denied there to begin with or
+ *	could not be unpinned, a negative error code if a target could not
+ *	be opened, its FID could not be parsed, or (when --pool is omitted)
+ *	its pool could not be inferred from its layout, or CMD_HELP if
+ *	arguments are invalid.
  */
 static int lfs_pool_unpin(int argc, char **argv)
 {
@@ -10682,6 +10773,8 @@ static int lfs_pool_unpin(int argc, char **argv)
 	bool by_fid = false;
 	bool mode_set = false;
 	bool quiet = false;
+	bool deny = false;
+	bool pool_given = false;
 	bool any_not_pinned = false;
 	const char *client_mount = NULL;
 	int rootfd = -1;
@@ -10689,13 +10782,14 @@ static int lfs_pool_unpin(int argc, char **argv)
 	{ .val = 'f', .name = "file", .has_arg = no_argument },
 	{ .val = 'F', .name = "fid", .has_arg = required_argument },
 	{ .val = 'h', .name = "help", .has_arg = no_argument },
+	{ .val = 'n', .name = "not-pool", .has_arg = required_argument },
 	{ .val = LFS_POOL_OPT, .name = "pool", .has_arg = required_argument },
 	{ .val = 'q', .name = "quiet", .has_arg = no_argument },
 	{ .name = NULL }
 	};
 
 	optind = 0;
-	while ((c = getopt_long(argc, argv, "fF:hq", long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "fF:hn:q", long_opts, NULL)) != -1) {
 		switch (c) {
 		case 'f':
 			if (mode_set && by_fid) {
@@ -10717,10 +10811,28 @@ static int lfs_pool_unpin(int argc, char **argv)
 			break;
 		case 'h':
 			return CMD_HELP;
-		case LFS_POOL_OPT:
+		case 'n':
+			if (pool_given) {
+				fprintf(stderr, "%s: cannot mix --not-pool and --pool\n",
+					argv[0]);
+				return CMD_HELP;
+			}
+			deny = true;
 			optarg = lfs_poolarg_strip_fsname(optarg);
 			if (llint_pool_name_verify(optarg))
 				return CMD_HELP;
+			pool = optarg;
+			break;
+		case LFS_POOL_OPT:
+			if (deny) {
+				fprintf(stderr, "%s: cannot mix --not-pool and --pool\n",
+					argv[0]);
+				return CMD_HELP;
+			}
+			optarg = lfs_poolarg_strip_fsname(optarg);
+			if (llint_pool_name_verify(optarg))
+				return CMD_HELP;
+			pool_given = true;
 			pool = optarg;
 			break;
 		case 'q':
@@ -10772,24 +10884,33 @@ static int lfs_pool_unpin(int argc, char **argv)
 			continue;
 		}
 
-		rc2 = llapi_pool_unpin_fd(fd, pool_for_target);
+		rc2 = deny ? llapi_pool_undeny_fd(fd, pool_for_target) :
+			     llapi_pool_unpin_fd(fd, pool_for_target);
 		if (rc2 < 0) {
 			int saved_errno = errno;
 
 			any_not_pinned = true;
 			if (saved_errno == ENOENT) {
 				/*
-				 * Not currently pinned to pool_for_target:
-				 * not an error, lustre.pin is left untouched.
-				 * No message is printed here, matching the
-				 * documented idempotent behavior; the target
-				 * still counts against the exit status below.
+				 * Not currently pinned to (or, with --not-pool,
+				 * denied from) pool_for_target: not an error,
+				 * lustre.pin is left untouched. No message is
+				 * printed here, matching the documented
+				 * idempotent behavior; the target still counts
+				 * against the exit status below.
 				 */
 			} else if (!quiet) {
-				fprintf(stderr,
-					"%s: cannot unpin %s from pool '%s': %s\n",
-					argv[0], desc, pool_for_target,
-					strerror(saved_errno));
+				if (deny)
+					fprintf(stderr,
+						"%s: cannot remove not-pool '%s' from %s: %s\n",
+						argv[0], pool_for_target,
+						desc,
+						strerror(saved_errno));
+				else
+					fprintf(stderr,
+						"%s: cannot unpin %s from pool '%s': %s\n",
+						argv[0], desc, pool_for_target,
+						strerror(saved_errno));
 				if (saved_errno == EPERM)
 					fprintf(stderr,
 						"%s: permission denied while updating lustre.pin; see mdt.enable_pin_gid(4).\n",
