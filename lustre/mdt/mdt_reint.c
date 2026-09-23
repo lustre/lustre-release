@@ -2878,6 +2878,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 	bool need_bfl = false;
 	bool preempt_done = false;
 	bool got_bfl = false;
+	bool old_is_dir;
 	int rc;
 
 	ENTRY;
@@ -3071,9 +3072,11 @@ lock_bfl:
 				  LPROC_MDT_RENAME_PAR_FILE;
 
 	/* Check if @mtgtdir is subdir of @mold, before locking child
-	 * to avoid reverse locking.
+	 * to avoid reverse locking.  Only a directory can be an ancestor,
+	 * so skip walking up the tree (possibly across MDTs) otherwise.
 	 */
-	if (mtgtdir != msrcdir) {
+	old_is_dir = S_ISDIR(lu_object_attr(&mold->mot_obj));
+	if (mtgtdir != msrcdir && old_is_dir) {
 		rc = mdo_is_subdir(info->mti_env, mdt_object_child(mtgtdir),
 				   old_fid);
 		if (rc) {
@@ -3171,9 +3174,10 @@ lock_bfl:
 		mdt_version_get_save(info, mold, 2);
 
 		/* Check if @msrcdir is subdir of @mnew, before locking child
-		 * to avoid reverse locking.
+		 * to avoid reverse locking.  @mnew is a directory only if
+		 * @mold is also a directory, checked above.
 		 */
-		if (mtgtdir != msrcdir) {
+		if (mtgtdir != msrcdir && old_is_dir) {
 			rc = mdo_is_subdir(info->mti_env,
 					   mdt_object_child(msrcdir), new_fid);
 			if (rc) {
@@ -3234,7 +3238,7 @@ lock_bfl:
 			got_bfl = true;
 			msi = LPROC_MDT_RENAME_TRYLOCK;
 
-			if (mtgtdir != msrcdir) {
+			if (mtgtdir != msrcdir && old_is_dir) {
 				/* Check if @mtgtdir is subdir of @mold */
 				rc = mdo_is_subdir(info->mti_env,
 						   mdt_object_child(mtgtdir),

@@ -1752,6 +1752,47 @@ test_24I() {
 }
 run_test 24I "large striped mkdir with limit check"
 
+test_24J() {
+	(( MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.17.58.63) )) ||
+		skip "need MDS >= 2.17.58.63 for non-dir rename fix"
+
+	# target dir on MDT0001 nested under $depth parents on MDT0000
+	local depth=8
+	local path=$DIR/$tdir
+	local i
+
+	test_mkdir -i 0 -c 1 $path
+	for ((i = 1; i <= depth; i++)); do
+		path=$path/d$i
+		test_mkdir -i 0 -c 1 $path
+	done
+	test_mkdir -i 1 -c 1 $path/dst
+	test_mkdir -i 1 -c 1 $DIR/$tdir/src
+
+	local count=10
+
+	createmany -o $DIR/$tdir/src/f $count || error "createmany $count"
+
+	local osp=$FSNAME-MDT0000-osp-MDT0001
+
+	do_facet mds2 $LCTL set_param osp.$osp.stats=clear ||
+		error "clear $osp stats"
+	for ((i = 0; i < count; i++)); do
+		mrename $DIR/$tdir/src/f$i $path/dst/f$i || error "rename f$i"
+	done
+
+	local rpcs=$(do_facet mds2 $LCTL get_param -n osp.$osp.stats |
+		     awk '/^out_update/ { print $2 }')
+
+	echo "$count renames at depth $depth: ${rpcs:-0} OUT_UPDATE RPCs"
+	# parent lock ordering still reads the source dir parent linkEA,
+	# but the $depth remote target dir parents should not be walked
+	(( ${rpcs:-0} < count * 3 )) ||
+		error "$rpcs OUT_UPDATE RPCs for $count renames"
+}
+run_test 24J "cross-dir file rename does not walk target parents"
+
 test_25a() {
 	echo '== symlink sanity ============================================='
 
