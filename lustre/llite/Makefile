@@ -19,6 +19,9 @@ lustre-objs += llite_foreign.o llite_foreign_symlink.o
 lustre-$(CONFIG_FS_POSIX_ACL) += acl.o
 lustre-objs += $(lustre-y)
 
+# Compilation check to disable ll_new_node workarround (LU-20779)
+# ccflags-y := -DDISABLE_LL_NEW_NODE_WORKAROUND
+
 ifdef CONFIG_GCOV_PROFILE_LUSTRE
 GCOV_PROFILE := y
 endif

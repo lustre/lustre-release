@@ -1945,6 +1945,74 @@ static int ll_new_node_finish(struct inode *dir, struct dentry *dchild,
 	RETURN(err);
 }
 
+#if !defined(DISABLE_LL_NEW_NODE_WORKAROUND) && \
+	LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 1, 53, 0)
+#define __LL_NEW_NODE_WORKAROUND
+static int __ll_fetch_default_lmv(struct inode *dir)
+{
+	struct ll_inode_info *lli = ll_i2info(dir);
+	struct ll_sb_info *sbi = ll_i2sbi(dir);
+	struct ptlrpc_request *request = NULL;
+	struct lustre_md md = { NULL };
+	struct lmv_user_md *lum;
+	int lumsize;
+	int rc;
+
+	ENTRY;
+	rc = ll_dir_getstripe(dir, (void **)&lum, &lumsize, &request,
+				OBD_MD_DEFAULT_MEA);
+	if (rc == -ENODATA && lli->lli_def_lsm_obj) {
+		/*
+		 * If there are no default stripe EA on the MDT, but the
+		 * client has default stripe, then it probably means
+		 * default stripe EA has just been deleted.
+		 */
+		down_write(&lli->lli_lsm_sem);
+		lmv_stripe_object_put(&lli->lli_def_lsm_obj);
+		up_write(&lli->lli_lsm_sem);
+
+		GOTO(out, rc = 0);
+	}
+
+	if (rc)
+		GOTO(out, rc);
+
+	md.body = req_capsule_server_get(&request->rq_pill,
+					 &RMF_MDT_BODY);
+	if (!md.body)
+		GOTO(out, rc = -EPROTO);
+
+	OBD_ALLOC_PTR(md.def_lsm_obj);
+	if (!md.def_lsm_obj)
+		GOTO(out, rc = -ENOMEM);
+
+	md.def_lsm_obj->lso_lsm.lsm_md_magic = lum->lum_magic;
+	md.def_lsm_obj->lso_lsm.lsm_md_stripe_count =
+		lum->lum_stripe_count;
+	md.def_lsm_obj->lso_lsm.lsm_md_master_mdt_index =
+		lum->lum_stripe_offset;
+	md.def_lsm_obj->lso_lsm.lsm_md_hash_type =
+		lum->lum_hash_type;
+	md.def_lsm_obj->lso_lsm.lsm_md_max_inherit =
+		lum->lum_max_inherit;
+	md.def_lsm_obj->lso_lsm.lsm_md_max_inherit_rr =
+		lum->lum_max_inherit_rr;
+	kref_init(&md.def_lsm_obj->lso_refs);
+
+	rc = ll_update_inode(dir, &md);
+	md_put_lustre_md(sbi->ll_md_exp, &md);
+
+	EXIT;
+out:
+	ptlrpc_req_put(request);
+
+	return rc;
+}
+#else
+#pragma message \
+	"Consider removing the -EREMOTE default-LMV fetch workaround in ll_new_node() (LU-20779)."
+#endif
+
 static int ll_new_node(struct inode *dir, struct dentry *dchild,
 		       const char *tgt, umode_t mode, __u64 rdev, __u32 opc)
 {
@@ -1969,6 +2037,9 @@ static int ll_new_node(struct inode *dir, struct dentry *dchild,
 		datalen = disk_link->len;
 	}
 
+#ifdef __LL_NEW_NODE_WORKAROUND
+again:
+#endif
 	err = ll_new_node_prepare(dir, dchild, mode, opc, &encrypt, tgt,
 				  &op_data, &lum, &data, &datalen, disk_link);
 	if (err)
@@ -1978,6 +2049,24 @@ static int ll_new_node(struct inode *dir, struct dentry *dchild,
 			from_kuid(&init_user_ns, current_fsuid()),
 			from_kgid(&init_user_ns, current_fsgid()),
 			current_cap(), rdev, &request);
+#ifdef __LL_NEW_NODE_WORKAROUND
+	/*
+	 * server < 2.15.63 doesn't pack default LMV in REINT_CREATE reply,
+	 * fetch default LMV here.
+	 */
+	if (unlikely(err == -EREMOTE)) {
+		ptlrpc_req_put(request);
+		request = NULL;
+		ll_finish_md_op_data(op_data);
+		op_data = NULL;
+
+		err = __ll_fetch_default_lmv(dir);
+		if (err)
+			GOTO(err_exit, err);
+
+		goto again;
+	}
+#endif
 
 	if (err < 0)
 		GOTO(err_exit, err);
