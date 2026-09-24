@@ -223,14 +223,20 @@ lnet_try_match_md(struct lnet_libmd *md,
 }
 
 static struct lnet_match_table *
-lnet_match2mt(struct lnet_portal *ptl, struct lnet_processid *id, __u64 mbits)
+lnet_match2mt(struct lnet_portal *ptl, __u64 mbits)
 {
 	if (LNET_CPT_NUMBER == 1)
 		return ptl->ptl_mtables[0]; /* the only one */
 
-	/* if it's a unique portal, return match-table hashed by NID */
-	return lnet_ptl_is_unique(ptl) ?
-	       ptl->ptl_mtables[lnet_nid2cpt(&id->nid, NULL)] : NULL;
+	if (!lnet_ptl_is_unique(ptl))
+		return NULL;
+
+	/* Use more bits than LNET_MT_HASH_BITS. With the same bits, the
+	 * table index would fix the mt_mhash bucket modulo LNET_CPT_NUMBER,
+	 * and each table would use only 1/LNET_CPT_NUMBER of its buckets.
+	 */
+	return ptl->ptl_mtables[hash_64(mbits, 2 * LNET_MT_HASH_BITS) %
+				LNET_CPT_NUMBER];
 }
 
 struct lnet_match_table *
@@ -248,7 +254,7 @@ lnet_mt_of_attach(unsigned int index, struct lnet_processid *id,
 
 	ptl = the_lnet.ln_portals[index];
 
-	mtable = lnet_match2mt(ptl, id, mbits);
+	mtable = lnet_match2mt(ptl, mbits);
 	if (mtable != NULL) /* unique portal or only one match-table */
 		return mtable;
 
@@ -283,7 +289,7 @@ lnet_mt_of_match(struct lnet_match_info *info, struct lnet_msg *msg)
 
 	LASSERT(lnet_ptl_is_wildcard(ptl) || lnet_ptl_is_unique(ptl));
 
-	mtable = lnet_match2mt(ptl, &info->mi_id, info->mi_mbits);
+	mtable = lnet_match2mt(ptl, info->mi_mbits);
 	if (mtable != NULL)
 		return mtable;
 
@@ -363,19 +369,16 @@ lnet_mt_set_exhausted(struct lnet_match_table *mtable, int pos, int exhausted)
 }
 
 struct list_head *
-lnet_mt_match_head(struct lnet_match_table *mtable,
-		   struct lnet_processid *id, __u64 mbits)
+lnet_mt_match_head(struct lnet_match_table *mtable, __u64 mbits)
 {
 	struct lnet_portal *ptl = the_lnet.ln_portals[mtable->mt_portal];
 
 	if (lnet_ptl_is_wildcard(ptl)) {
 		return &mtable->mt_mhash[mbits & LNET_MT_HASH_MASK];
 	} else {
-		unsigned long hash = mbits + nidhash(&id->nid) + id->pid;
-
 		LASSERT(lnet_ptl_is_unique(ptl));
-		hash = hash_long(hash, LNET_MT_HASH_BITS);
-		return &mtable->mt_mhash[hash & LNET_MT_HASH_MASK];
+		return &mtable->mt_mhash[hash_64(mbits, LNET_MT_HASH_BITS) &
+					 LNET_MT_HASH_MASK];
 	}
 }
 
@@ -393,8 +396,7 @@ lnet_mt_match_md(struct lnet_match_table *mtable,
 	if (!list_empty(&mtable->mt_mhash[LNET_MT_HASH_IGNORE]))
 		head = &mtable->mt_mhash[LNET_MT_HASH_IGNORE];
 	else
-		head = lnet_mt_match_head(mtable, &info->mi_id,
-					  info->mi_mbits);
+		head = lnet_mt_match_head(mtable, info->mi_mbits);
  again:
 	/* NB: only wildcard portal needs to return LNET_MATCHMD_EXHAUSTED */
 	if (lnet_ptl_is_wildcard(the_lnet.ln_portals[mtable->mt_portal]))
@@ -425,8 +427,7 @@ lnet_mt_match_md(struct lnet_match_table *mtable,
 	}
 
 	if (exhausted == 0 && head == &mtable->mt_mhash[LNET_MT_HASH_IGNORE]) {
-		head = lnet_mt_match_head(mtable, &info->mi_id,
-					  info->mi_mbits);
+		head = lnet_mt_match_head(mtable, info->mi_mbits);
 		goto again; /* re-check MEs w/o ignore-bits */
 	}
 

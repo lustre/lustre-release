@@ -716,7 +716,7 @@ lnet_ptl_unsetopt(struct lnet_portal *ptl, int opt)
 
 /* match-table functions */
 struct list_head *lnet_mt_match_head(struct lnet_match_table *mtable,
-			       struct lnet_processid *id, __u64 mbits);
+				     __u64 mbits);
 struct lnet_match_table *lnet_mt_of_attach(unsigned int index,
 					   struct lnet_processid *id,
 					   __u64 mbits, __u64 ignore_bits,

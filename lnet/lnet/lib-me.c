@@ -87,7 +87,7 @@ LNetMEAttach(unsigned int portal,
 	if (ignore_bits != 0)
 		head = &mtable->mt_mhash[LNET_MT_HASH_IGNORE];
 	else
-		head = lnet_mt_match_head(mtable, match_id, match_bits);
+		head = lnet_mt_match_head(mtable, match_bits);
 
 	me->me_pos = head - &mtable->mt_mhash[0];
 	if (pos == LNET_INS_AFTER || pos == LNET_INS_LOCAL)
