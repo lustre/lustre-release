@@ -368,6 +368,7 @@ out_free:
 	OBD_FREE_PTR(trd);
 
 	mdt_thread_info_fini(info);
+	info->mti_batch_env = 0;
 	tsi->tsi_reply_fail_id = OBD_FAIL_BUT_UPDATE_NET_REP;
 	RETURN(rc);
 }

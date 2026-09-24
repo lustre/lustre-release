@@ -5640,8 +5640,16 @@ static int mdt_intent_policy(const struct lu_env *env,
 	info = mdt_th_info(env);
 	LASSERT(info != NULL);
 
-	/* Check whether it is a sub request processing in a batch request */
-	if (info->mti_batch_env) {
+	/*
+	 * Check whether it is a sub request processing in a batch request.
+	 *
+	 * Ask the session, not the thread: the thread info has not been set
+	 * up for this request yet at this point, so mti_batch_env holds
+	 * whatever the thread last left in it. The session is set up afresh
+	 * for every request, so its flag, which mdt_batch() sets along with
+	 * mti_batch_env, describes this one.
+	 */
+	if (tsi->tsi_batch_env) {
 		pill = info->mti_pill;
 		LASSERT(pill == &info->mti_sub_pill);
 	} else {
