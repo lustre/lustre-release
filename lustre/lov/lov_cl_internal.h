@@ -633,6 +633,8 @@ struct lu_object *lovsub_object_alloc(const struct lu_env *env,
 
 int lov_io_layout_at(struct lov_io *lio, __u64 offset);
 int lov_io_layout_at_mirror(struct lov_io *lio, __u64 offset, int mirror_index);
+size_t lov_dio_max_bytes(const struct lu_env *env, struct cl_object *obj,
+			 struct cl_io *io, loff_t offset, size_t bytes);
 bool lov_io_layout_at_confirm(struct lov_io *lio, int entry, __u64 offset);
 
 static inline int lov_parity_mirror_index_from_data(struct lov_io *lio,

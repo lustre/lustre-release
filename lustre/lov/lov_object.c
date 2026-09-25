@@ -2493,6 +2493,7 @@ static void lov_io_set_range(const struct lu_env *env, struct cl_object *obj,
 static const struct cl_object_operations lov_ops = {
 	.coo_page_init    = lov_page_init,
 	.coo_dio_pages_init = lov_dio_pages_init,
+	.coo_dio_max_bytes = lov_dio_max_bytes,
 	.coo_lock_init    = lov_lock_init,
 	.coo_io_init      = lov_io_init,
 	.coo_attr_get     = lov_attr_get,

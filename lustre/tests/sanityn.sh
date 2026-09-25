@@ -7621,6 +7621,63 @@ test_200() {
 }
 run_test 200 "service remains healthy while able to process request"
 
+test_300() {
+	(( CLIENT_VERSION >= $(version_code 2.17.58.63) )) ||
+		skip "need client >= 2.17.58.63 for DIO append split"
+	(( OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
+
+	local tf=$DIR/$tfile
+	local blk_a=$TMP/$tfile.a
+	local blk_b=$TMP/$tfile.b
+	local num=100
+	local bs_kb=68
+
+	# one distinct block per mount, so every record can be identified
+	yes A | dd of=$blk_a bs=${bs_kb}K count=1 iflag=fullblock status=none ||
+		error "create $blk_a failed"
+	yes B | dd of=$blk_b bs=${bs_kb}K count=1 iflag=fullblock status=none ||
+		error "create $blk_b failed"
+	stack_trap "rm -f $blk_a $blk_b $TMP/$tfile.rec.*"
+
+	# 68K appends regularly cross the 4M component end and 1M stripes
+	$LFS setstripe -E 4M -c 1 -E -1 -c -1 -S 1M $tf ||
+		error "setstripe $tf failed"
+	stack_trap "rm -f $tf"
+
+	# concurrent O_DIRECT appends from both mounts
+	local i
+
+	for ((i = 0; i < num; i++)); do
+		dd if=$blk_a of=$DIR1/$tfile bs=${bs_kb}K conv=notrunc \
+			oflag=direct,append status=none || exit 1
+	done &
+	local pid=$!
+
+	for ((i = 0; i < num; i++)); do
+		dd if=$blk_b of=$DIR2/$tfile bs=${bs_kb}K conv=notrunc \
+			oflag=direct,append status=none ||
+			error "dd $DIR2/$tfile failed at ${bs_kb}K*$i"
+	done
+	wait $pid || error "dd $DIR1/$tfile failed"
+
+	local size=$(stat -c %s $tf)
+	local expect=$((2 * num * bs_kb * 1024))
+
+	(( size == expect )) || error "$tf size $size != expect $expect"
+
+	# every append must be one whole record, not split or overwritten
+	split -a 4 -b ${bs_kb}K $tf $TMP/$tfile.rec. || error "split $tf failed"
+
+	local sum_a=$(md5sum < $blk_a)
+	local sum_b=$(md5sum < $blk_b)
+	local count_a=$(md5sum $TMP/$tfile.rec.* | grep -c "^${sum_a%% *} ")
+	local count_b=$(md5sum $TMP/$tfile.rec.* | grep -c "^${sum_b%% *} ")
+
+	(( count_a == num && count_b == num )) ||
+		error "records A=$count_a B=$count_b != expect $num"
+}
+run_test 300 "concurrent DIO appends across stripe boundaries"
+
 log "cleanup: ======================================================"
 
 # kill and wait in each test only guarentee script finish, but command in script

@@ -198,6 +198,12 @@ ssize_t cl_dio_pages_init(const struct lu_env *env, struct cl_io *io,
 
 	ENTRY;
 
+	cl_object_for_each(obj, head) {
+		if (obj->co_ops->coo_dio_max_bytes)
+			bytes = obj->co_ops->coo_dio_max_bytes(env, obj, io,
+							       offset, bytes);
+	}
+
 	cdp->cdp_file_offset = offset;
 	cdp->cdp_from = offset & ~PAGE_MASK;
 	cdp->cdp_to = ((offset + bytes - 1) & ~PAGE_MASK);

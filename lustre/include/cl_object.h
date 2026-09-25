@@ -321,6 +321,14 @@ struct cl_object_operations {
 				   struct cl_dio_pages *cdp,
 				   pgoff_t index);
 	/**
+	 * Limit the size of one dio page array starting at @offset, so that
+	 * it can be submitted by a single sub-object.  Called top-to-bottom
+	 * before the user pages are pinned.  Optional.
+	 */
+	size_t (*coo_dio_max_bytes)(const struct lu_env *env,
+				    struct cl_object *obj, struct cl_io *io,
+				    loff_t offset, size_t bytes);
+	/**
 	 * Initialize lock slice for this layer. Called top-to-bottom through
 	 * every object layer when a new cl_lock is instantiated. Layer
 	 * keeping private per-lock data, or requiring its own lock operations

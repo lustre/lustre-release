@@ -45,6 +45,12 @@ int lov_dio_pages_init_composite(const struct lu_env *env,
 
 	ENTRY;
 
+	/* an append may have one page array per stripe chunk in the same IO
+	 * (lov_dio_max_bytes()), so the cached stripe of the previous page
+	 * array is not valid for this one
+	 */
+	lio->lis_cached_entry = LIS_CACHE_ENTRY_NONE;
+
 	offset = index << PAGE_SHIFT;
 
 	entry = lov_io_layout_at(lio, offset);

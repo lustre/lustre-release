@@ -2757,6 +2757,40 @@ test_100a() {
 }
 run_test 100a "set stripe component with nocompr"
 
+test_300() {
+	(( CLIENT_VERSION >= $(version_code 2.17.58.63) )) ||
+		skip "need client >= 2.17.58.63 for DIO append split"
+
+	local src=$TMP/$tfile.src
+	local tf=$DIR/$tfile
+
+	dd if=/dev/urandom of=$src bs=512K count=3 status=none ||
+		error "create $src failed"
+	stack_trap "rm -f $src $tf"
+
+	# the second append [512K, 1536K) crosses the boundary at 1M
+	local layouts=("-E 1M -c 1 -E -1 -c 1")
+
+	(( OSTCOUNT >= 2 )) && layouts+=("-c 2 -S 1M")
+
+	local layout
+
+	for layout in "${layouts[@]}"; do
+		rm -f $tf
+		$LFS setstripe $layout $tf || error "setstripe $layout failed"
+
+		dd if=$src of=$tf bs=512K count=1 conv=notrunc \
+			oflag=direct,append status=none ||
+			error "1st append failed for '$layout'"
+		dd if=$src of=$tf bs=1M count=1 skip=512K iflag=skip_bytes \
+			conv=notrunc oflag=direct,append status=none ||
+			error "2nd append failed for '$layout'"
+
+		cmp $src $tf || error "data mismatch for '$layout'"
+	done
+}
+run_test 300 "DIO append across stripe and component boundary"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

@@ -1316,13 +1316,75 @@ static int lov_io_iter_init(const struct lu_env *env,
 	RETURN(rc);
 }
 
+/**
+ * lov_stripe_chunk_end() - end of the stripe chunk holding a file offset
+ * @lse: layout component containing @pos
+ * @pos: file offset
+ *
+ * Find the end of the contiguous part of @lse that is on the same OST
+ * object as @pos, either the end of its stripe or the end of @lse.
+ *
+ * Return: file offset of the end of the stripe chunk (exclusive)
+ */
+static loff_t lov_stripe_chunk_end(struct lov_stripe_md_entry *lse, loff_t pos)
+{
+	loff_t next = MAX_LFS_FILESIZE;
+
+	if (lse->lsme_stripe_count > 1) {
+		unsigned long ssize = lse->lsme_stripe_size;
+		loff_t stripe = div64_u64(pos, ssize);
+
+		next = (stripe + 1) * ssize;
+		if (next <= stripe * ssize)
+			next = MAX_LFS_FILESIZE;
+	}
+
+	return min_t(__u64, next, lse->lsme_extent.e_end);
+}
+
+/**
+ * lov_dio_max_bytes() - limit a DIO page array to one stripe chunk
+ * @env: execution environment
+ * @obj: lov object
+ * @io: top-level IO
+ * @offset: file offset of the page array
+ * @bytes: requested size of the page array
+ *
+ * A cl_dio_pages array is submitted to the sub-object of its first page
+ * (lov_dio_submit()), so it must not cross a stripe or component boundary.
+ * Non-append IO is already split per stripe by lov_io_rw_iter_init(), but
+ * an append only learns its offset under the lock, and it has to stay in a
+ * single iteration so it is written atomically at the end of the file.
+ *
+ * Context: called from cl_dio_pages_init() before the user pages are pinned
+ *
+ * Return: number of bytes, at most @bytes, to put in this page array
+ */
+size_t lov_dio_max_bytes(const struct lu_env *env, struct cl_object *obj,
+			 struct cl_io *io, loff_t offset, size_t bytes)
+{
+	struct lov_object *lov = cl2lov(obj);
+	loff_t next;
+	int index;
+
+	if (!cl_io_is_append(io) || lov->lo_type != LLT_COMP)
+		return bytes;
+
+	index = lov_io_layout_at(lov_env_io(env), offset);
+	if (index < 0)
+		return bytes;
+
+	next = lov_stripe_chunk_end(lov_lse(lov, index), offset);
+
+	return min_t(u64, bytes, next - offset);
+}
+
 static int lov_io_rw_iter_init(const struct lu_env *env,
 			       const struct cl_io_slice *ios)
 {
 	struct lov_io *lio = cl2lov_io(env, ios);
 	struct cl_io *io = ios->cis_io;
 	struct lov_stripe_md_entry *lse;
-	loff_t start = io->u.ci_rw.crw_pos;
 	loff_t next;
 	int index;
 
@@ -1376,20 +1438,10 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 	if (lsme_is_foreign(lse))
 		RETURN(-EINVAL);
 
-	next = MAX_LFS_FILESIZE;
-	if (lse->lsme_stripe_count > 1) {
-		unsigned long ssize = lse->lsme_stripe_size;
-
-		start = div64_u64(start, ssize);
-		next = (start + 1) * ssize;
-		if (next <= start * ssize)
-			next = MAX_LFS_FILESIZE;
-	}
-
 	LASSERTF(io->u.ci_rw.crw_pos >= lse->lsme_extent.e_start,
 		 "pos %lld, [%lld, %lld)\n", io->u.ci_rw.crw_pos,
 		 lse->lsme_extent.e_start, lse->lsme_extent.e_end);
-	next = min_t(__u64, next, lse->lsme_extent.e_end);
+	next = lov_stripe_chunk_end(lse, io->u.ci_rw.crw_pos);
 	next = min_t(__u64, next, lio->lis_io_endpos);
 
 	io->ci_continue = next < lio->lis_io_endpos;
@@ -1397,8 +1449,8 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 	lio->lis_pos    = io->u.ci_rw.crw_pos;
 	lio->lis_endpos = io->u.ci_rw.crw_pos + io->u.ci_rw.crw_bytes;
 	CDEBUG(D_VFSTRACE,
-	       "stripe: %llu chunk: [%llu, %llu) %llu, %zd\n",
-	       (__u64)start, lio->lis_pos, lio->lis_endpos,
+	       "comp: %d chunk: [%llu, %llu) %llu, %zd\n",
+	       index, lio->lis_pos, lio->lis_endpos,
 	       (__u64)lio->lis_io_endpos, io->u.ci_rw.crw_bytes);
 
 	/*
