@@ -4238,10 +4238,8 @@ int lov_io_layout_at_mirror(struct lov_io *lio, __u64 offset, int mirror_index)
 
 		LASSERT(!lsme_is_foreign(lle->lle_lsme));
 
-		if ((offset >= lle->lle_extent->e_start &&
-		     offset < lle->lle_extent->e_end) ||
-		    (offset == OBD_OBJECT_EOF &&
-		     lle->lle_extent->e_end == OBD_OBJECT_EOF))
+		if (offset >= lle->lle_extent->e_start &&
+		    offset < lle->lle_extent->e_end)
 			return i;
 	}
 
