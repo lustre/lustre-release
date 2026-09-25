@@ -2230,8 +2230,7 @@ static int mdd_migrate_close(struct mdt_thread_info *info,
 	struct close_data *data;
 	struct mdt_body *repbody;
 	struct ldlm_lock *lease;
-	int rc;
-	int rc2;
+	int rc, rc2;
 
 	rc = -EPROTO;
 	if (!req_capsule_field_present(info->mti_pill, &RMF_MDT_EPOCH,
@@ -2251,7 +2250,7 @@ static int mdd_migrate_close(struct mdt_thread_info *info,
 
 	/* check if the lease was already canceled */
 	lock_res_and_lock(lease);
-	rc = (lease->l_flags & LDLM_FL_CANCEL);
+	rc = !!(lease->l_flags & LDLM_FL_CANCEL);
 	unlock_res_and_lock(lease);
 
 	if (rc) {
