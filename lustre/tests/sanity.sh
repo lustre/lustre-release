@@ -11333,6 +11333,31 @@ test_60j() {
 }
 run_test 60j "llog_reader reports corruptions"
 
+test_60k() {
+	local tracefs
+
+	for tracefs in /sys/kernel/tracing /sys/kernel/debug/tracing; do
+		[[ -d $tracefs/events/lustre_debug ]] && break
+	done
+	[[ -d $tracefs/events/lustre_debug ]] ||
+		skip_env "no lustre_debug tracepoints in tracefs"
+
+	# use a private instance so other tracing users are not disturbed
+	local inst=$tracefs/instances/$tfile
+	local event=$inst/events/lustre_debug/lustre_debug_msg/enable
+	local mark="$tfile-$RANDOM"
+
+	mkdir $inst || skip_env "cannot create tracefs instance $inst"
+	stack_trap "rmdir $inst"
+	echo 1 > $event || error "cannot enable lustre_debug_msg"
+	stack_trap "echo 0 > $event"
+
+	$LCTL mark "$mark"
+	grep "lustre_debug_msg:.*DEBUG MARKER: $mark\$" $inst/trace ||
+		error "'$mark' not found in lustre_debug_msg trace"
+}
+run_test 60k "debug messages reach lustre_debug tracepoints"
+
 test_61a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 

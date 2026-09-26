@@ -26,6 +26,9 @@
 #include <lustre_compat/linux/mm.h>
 #include <linux/libcfs/libcfs.h>
 
+#define CREATE_TRACE_POINTS
+#include <trace/events/lustre_debug.h>
+
 enum cfs_trace_buf_type {
 	CFS_TCD_TYPE_PROC = 0,
 	CFS_TCD_TYPE_SOFTIRQ,
@@ -539,8 +542,16 @@ void libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
 	const char *fn = msgdata->msg_fn;
 	struct cfs_debug_limit_state *cdls = msgdata->msg_cdls;
 	struct debug_format_buffer *dfb = NULL;
+	struct va_format vaf;
 
 	format = debug_format(format, &dfb);
+
+	trace_lustre_debug_location(msgdata);
+	va_start(ap, format);
+	vaf.fmt = format;
+	vaf.va = &ap;
+	trace_lustre_debug_msg(msgdata, &vaf);
+	va_end(ap);
 
 	if (strchr(file, '/'))
 		file = strrchr(file, '/') + 1;
@@ -694,8 +705,6 @@ console:
 		cfs_print_to_console(&header, file, fn, "%s", string_buf);
 		cfs_trace_put_tcd(tcd);
 	} else {
-		struct va_format vaf;
-
 		va_start(ap, format);
 		vaf.fmt = format;
 		vaf.va = &ap;
