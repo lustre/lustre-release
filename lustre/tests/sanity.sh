@@ -37289,8 +37289,10 @@ test_802c() {
 	cancel_lru_locks
 	sync_all_data
 
-	do_facet ost1 $LCTL set_param obdfilter.*.readonly=1
-	stack_trap "do_facet ost1 $LCTL set_param obdfilter.*.readonly=0" EXIT
+	local osts=$(osts_nodes)
+
+	do_nodes $osts $LCTL set_param obdfilter.*.readonly=1
+	stack_trap "do_nodes $osts $LCTL set_param obdfilter.*.readonly=0" EXIT
 
 	echo "Modify should be refused"
 	touch $DIR/$tdir/guard && error "(6) Touch should fail under ro mode"
@@ -37372,13 +37374,15 @@ test_803b() {
 
 	stat $DIR/$tdir.* >/dev/null || error "stat $tdir.*"
 	for i in $(seq 0 $((MDSCOUNT - 1))); do
-		tmp=$(do_facet mds$i $LCTL get_param mdt.*-MDT000$i.md_stats |
+		tmp=$(do_facet mds$((i + 1)) \
+		      $LCTL get_param mdt.$(mdtname_from_index $i).md_stats |
 			awk '/getattr/ { print $2 }')
 		before=$((before + tmp))
 	done
 	stat $DIR/$tdir.* >/dev/null || error "stat $tdir.*"
 	for i in $(seq 0 $((MDSCOUNT - 1))); do
-		tmp=$(do_facet mds$i $LCTL get_param mdt.*-MDT000$i.md_stats |
+		tmp=$(do_facet mds$((i + 1)) \
+		      $LCTL get_param mdt.$(mdtname_from_index $i).md_stats |
 			awk '/getattr/ { print $2 }')
 		after=$((after + tmp))
 	done

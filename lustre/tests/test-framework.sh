@@ -2830,12 +2830,12 @@ mount_facet() {
 		case $fstype in
 		ldiskfs)
 			wait_update_facet ${facet} "$E2LABEL $dm_dev \
-				2>/dev/null | grep -E ':[a-zA-Z]{3}[0-9]{4}'" \
+				2>/dev/null | grep -E ':[A-Z]{3}[0-9a-f]{4}'" \
 				"" || error "$dm_dev failed to initialize!";;
 		zfs)
 			wait_update_facet ${facet} "$ZFS get -H -o value \
 				lustre:svname $dm_dev 2>/dev/null | \
-				grep -E ':[a-zA-Z]{3}[0-9]{4}'" "" ||
+				grep -E ':[A-Z]{3}[0-9a-f]{4}'" "" ||
 				error "$dm_dev failed to initialize!";;
 
 		wbcfs)
@@ -2846,7 +2846,7 @@ mount_facet() {
 	fi
 
 	# commit the device label change to disk
-	if [[ $devicelabel =~ (:[a-zA-Z]{3}[0-9]{4}) ]]; then
+	if [[ $devicelabel =~ (:[A-Z]{3}[0-9a-f]{4}) ]]; then
 		echo "Commit the device label on ${!dev}"
 		do_facet $facet "sync; sleep 1; sync"
 	fi
@@ -2854,7 +2854,8 @@ mount_facet() {
 
 	label=$(devicelabel ${facet} $dm_dev)
 	[ -z "$label" ] && echo no label for $dm_dev && exit 1
-	eval export ${facet}_svc=${label}
+	# use the registered name, even if the label has ':', '=' or '+'
+	eval export ${facet}_svc=${label/[:=+]/-}
 	echo Started ${label}
 
 	export_dm_dev $facet $dm_dev
@@ -6386,7 +6387,8 @@ init_facet_vars () {
 
 	[ -z "$label" ] && echo no label for ${!dev} && exit 1
 
-	eval export ${facet}_svc=${label}
+	# use the registered name, even if the label has ':', '=' or '+'
+	eval export ${facet}_svc=${label/[:=+]/-}
 
 	local varname=${facet}failover_HOST
 	if [ -z "${!varname}" ]; then
