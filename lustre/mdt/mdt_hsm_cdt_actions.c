@@ -247,6 +247,10 @@ free:
 /* seq_file iterator for agent_action entry */
 
 #define AGENT_ACTIONS_IT_MAGIC 0x19660426
+#define HSM_ACTIONS_EST_REC_BYTES 256
+#define HSM_ACTIONS_TARGET_BUF_MB 64
+#define HSM_ACTIONS_BATCH_COUNT ((HSM_ACTIONS_TARGET_BUF_MB << 20) / \
+		HSM_ACTIONS_EST_REC_BYTES)
 struct agent_action_iterator {
 	int			 aai_magic;	 /**< magic number */
 	bool			 aai_eof;	 /**< all done */
@@ -255,6 +259,7 @@ struct agent_action_iterator {
 	struct llog_ctxt	*aai_ctxt;	 /**< llog context */
 	int			 aai_cat_index;	 /**< cata idx already shown */
 	int			 aai_index;	 /**< idx in cata shown */
+	int			 aai_show_count; /**< actions in cur show */
 };
 
 /*
@@ -350,10 +355,16 @@ static int hsm_actions_show_cb(const struct lu_env *env,
 		   agent_req_status2name(larr->arr_status),
 		   hai_dump_data_field(&larr->arr_hai, buf, sizeof(buf)));
 
+	if (seq_has_overflowed(s))
+		RETURN(LLOG_PROC_BREAK);
+
+	if (++aai->aai_show_count < HSM_ACTIONS_BATCH_COUNT)
+		RETURN(0);
+
 	aai->aai_cat_index = llh->lgh_hdr->llh_cat_idx;
 	aai->aai_index = hdr->lrh_index;
 
-	RETURN(0);
+	RETURN(LLOG_PROC_BREAK);
 }
 
 /*
@@ -376,12 +387,15 @@ static int mdt_hsm_actions_debugfs_show(struct seq_file *s, void *v)
 	if (aai->aai_eof)
 		RETURN(0);
 
+	aai->aai_show_count = 0;
 	rc = llog_cat_process(&aai->aai_env, aai->aai_ctxt->loc_handle,
 			      hsm_actions_show_cb, s,
 			      aai->aai_cat_index, aai->aai_index);
-	if (rc == 0) /* all llog parsed */
+
+	if (!seq_has_overflowed(s) && rc == 0) /* all llog parsed */
 		aai->aai_eof = true;
-	if (rc == LLOG_PROC_BREAK) /* buffer full */
+
+	if (rc == LLOG_PROC_BREAK) /* batch complete */
 		rc = 0;
 
 	RETURN(rc);
