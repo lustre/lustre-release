@@ -715,6 +715,15 @@ init_test_env() {
 	export KEEP_POOLS=${KEEP_POOLS:-false}
 	export PARALLEL=${PARALLEL:-"no"}
 
+	# Run setup operations on multiple targets concurrently (LU-17240).
+	# PARALLEL_OPS (0/1) sets the default for each operation, *_TARGETS
+	# lists the target types run concurrently, and *_TYPES allows different
+	# target types to overlap instead of finishing one type at a time.
+	export PARALLEL_OPS=${PARALLEL_OPS:-1}
+	export PARALLEL_FORMAT=${PARALLEL_FORMAT:-$PARALLEL_OPS}
+	export PARALLEL_FORMAT_TARGETS=${PARALLEL_FORMAT_TARGETS:-"mgs mdt ost"}
+	export PARALLEL_FORMAT_TYPES=${PARALLEL_FORMAT_TYPES:-$PARALLEL_FORMAT}
+
 	export BLCKSIZE=${BLCKSIZE:-4096}
 	export MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 	get_lustre_env
@@ -5026,15 +5035,18 @@ do_node() {
 	   [[ "$myPDSH" == *pdsh* && "$myPDSH" != *-S* ]]; then
 		# we need this because rsh and pdsh do not return
 		# exit code of an executed command
-		local command_status="$TMP/cs"
+		local command_status="$TMP/cs.$BASHPID"
+
 		eval $myPDSH $HOST ":> $command_status"
 		eval $myPDSH $HOST "(PATH=\$PATH:$RLUSTRE/utils:$RLUSTRE/tests;
 				     PATH=\$PATH:/sbin:/usr/sbin;
 				     cd $RPWD;
 				     LUSTRE=\"$RLUSTRE\" bash -c \"$*\") ||
 				     echo command failed >$command_status"
-		[[ -n "$($myPDSH $HOST cat $command_status)" ]] && return 1 ||
-			return 0
+		local status=$($myPDSH $HOST \
+			"cat $command_status; rm $command_status")
+
+		[[ -n "$status" ]] && return 1 || return 0
 	fi
 
 	if [[ -n "$verbose" ]]; then
@@ -5882,7 +5894,80 @@ format_ost() {
 		$(ostvdevname ${num}) ${quiet:+>/dev/null} || exit 10
 }
 
+# Usage: parallel_enabled_for <operation> <target_type>
+#   operation: FORMAT
+#   target_type: mgs, mdt, ost
+# Return 0 if <operation> should run concurrently on <target_type> targets
+parallel_enabled_for() {
+	local enabled=PARALLEL_$1
+	local targets=PARALLEL_$1_TARGETS
+
+	(( ${!enabled:-0} == 1 )) && [[ " ${!targets} " == *" $2 "* ]]
+}
+
+# Usage: parallel_start <operation> <facet> <command> [args...]
+# Run <command> for <facet>, in the background if <operation> is enabled
+# for the facet type.  Uses par_logs[] and par_pids[] from the caller,
+# which must then call parallel_wait().
+parallel_start() {
+	local op=$1
+	local facet=$2
+	local type=${facet%%[0-9]*}
+	local log=$TMP/${op,,}_$facet
+
+	shift 2
+	[[ $type != mds ]] || type=mdt
+	if ! parallel_enabled_for $op $type; then
+		"$@"
+		return
+	fi
+
+	# show which targets are in progress, in case one of them hangs
+	echo "$op $facet: $*"
+	"$@" > $log.log 2>&1 &
+	par_pids+=($!)
+	par_logs+=($log)
+}
+
+# Wait for commands started by parallel_start() and print their output in
+# order.  Return the first error.
+parallel_wait() {
+	local rc=0
+	local i
+
+	for ((i = 0; i < ${#par_pids[@]}; i++)); do
+		local log=${par_logs[i]}
+		local rc2=0
+
+		wait ${par_pids[i]} || rc2=$?
+		if (( rc2 == 0 )); then
+			cat $log.log
+		else
+			cat $log.log >&2
+			echo "${log##*/} failed: rc = $rc2" >&2
+			(( rc != 0 )) || rc=$rc2
+		fi
+		rm -f $log.log
+	done
+	par_pids=()
+	par_logs=()
+
+	return $rc
+}
+
+# Wait for background formats, and exit like format_{mgs,mdt,ost}() on error
+format_wait() {
+	local rc=0
+
+	parallel_wait || rc=$?
+	(( rc == 0 )) || { echo "format failed: rc = $rc" >&2; exit $rc; }
+}
+
 formatall() {
+	local -a par_logs
+	local -a par_pids
+	local num
+
 	stopall -f
 	# Set hostid for ZFS/SPL zpool import protection
 	# (Assumes MDS version is also OSS version)
@@ -5895,19 +5980,24 @@ formatall() {
 	load_modules
 	[ -n "$CLIENTONLY" ] && return
 	echo Formatting mgs, mds, osts
-	if ! combined_mgs_mds ; then
-		format_mgs
-	fi
-
-	for num in $(seq $MDSCOUNT); do
-		format_mdt $num
-	done
 
 	export OST_INDICES=($(hostlist_expand "$OST_INDEX_LIST"))
 	check_ost_indices
-	for num in $(seq $OSTCOUNT); do
-		format_ost $num
+
+	if ! combined_mgs_mds ; then
+		parallel_start FORMAT mgs format_mgs
+		(( PARALLEL_FORMAT_TYPES == 1 )) || format_wait
+	fi
+
+	for ((num = 1; num <= MDSCOUNT; num++)); do
+		parallel_start FORMAT mds$num format_mdt $num
 	done
+	(( PARALLEL_FORMAT_TYPES == 1 )) || format_wait
+
+	for ((num = 1; num <= OSTCOUNT; num++)); do
+		parallel_start FORMAT ost$num format_ost $num
+	done
+	format_wait
 }
 
 mount_client() {
