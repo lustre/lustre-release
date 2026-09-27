@@ -59,7 +59,7 @@ extern int failover;
 #define MO_NOMMP		0x100
 #define MO_MMP			0x200
 
-#define MAX_LOOP_DEVICES	16
+#define LOOP_MAX_RETRIES	16
 #define INDEX_UNASSIGNED	0xFFFF
 
 /* Maximum length of on-disk parameters in the form key=<value> */

@@ -394,7 +394,9 @@ int loop_setup(struct mkfs_opts *mop)
 {
 	char loop_base[20];
 	char l_device[64];
-	int i, ret = 0;
+	int last_idx = -1;
+	int retry = 0;
+	int ret = 0;
 
 	/* Figure out the loop device names */
 	if (!access("/dev/loop0", F_OK | R_OK) ||
@@ -407,10 +409,11 @@ int loop_setup(struct mkfs_opts *mop)
 		return EACCES;
 	}
 
-	/* Find unused loop device */
-	for (i = 0; i < MAX_LOOP_DEVICES; i++) {
+	/* Find unused loop device, retrying if another process races us */
+	while (retry < LOOP_MAX_RETRIES) {
 		char cmd[PATH_MAX];
 		int cmdsz = sizeof(cmd);
+		int idx;
 
 		ret = open("/dev/loop-control", O_RDWR);
 		if (ret < 0) {
@@ -419,14 +422,20 @@ int loop_setup(struct mkfs_opts *mop)
 			return EACCES;
 		}
 		/* find or allocate a free loop device to use */
-		i = ioctl(ret, LOOP_CTL_GET_FREE);
+		idx = ioctl(ret, LOOP_CTL_GET_FREE);
+		if (idx < 0)
+			idx = -errno;
 		close(ret);
-		if (i < 0) {
-			fprintf(stderr, "%s: access loop control error\n",
-				progname);
-			return EACCES;
+		if (idx < 0) {
+			fprintf(stderr, "%s: can't get free loop device: %s\n",
+				progname, strerror(-idx));
+			return -idx;
 		}
-		sprintf(l_device, "%s%d", loop_base, i);
+		/* count a retry unless the free index advanced (lost a race) */
+		if (idx <= last_idx)
+			retry++;
+		last_idx = idx;
+		snprintf(l_device, sizeof(l_device), "%s%d", loop_base, idx);
 
 		snprintf(cmd, cmdsz, "losetup %s > /dev/null 2>&1", l_device);
 		ret = system(cmd);
@@ -455,8 +464,9 @@ int loop_setup(struct mkfs_opts *mop)
 		}
 	}
 
-	fprintf(stderr, "%s: out of loop devices!\n", progname);
-	return EMFILE;
+	fprintf(stderr, "%s: can't set up loop device for '%s'\n",
+		progname, mop->mo_device);
+	return EBUSY;
 }
 
 int loop_cleanup(struct mkfs_opts *mop)
