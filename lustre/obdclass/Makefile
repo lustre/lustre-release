@@ -28,6 +28,7 @@ obdclass-objs += llog_osd.o
 obdclass-objs += local_storage.o
 obdclass-objs += lprocfs_jobstats.o
 obdclass-objs += lprocfs_status_server.o
+obdclass-objs += lu_tgt_alloc.o
 obdclass-objs += lu_ucred.o
 obdclass-objs += md_attrs.o
 obdclass-objs += obdo_server.o

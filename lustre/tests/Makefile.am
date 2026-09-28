@@ -76,7 +76,7 @@ THETESTS += check_fallocate splice-test lseek_test expand_truncate_test
 THETESTS += foreign_symlink_striping lov_getstripe_old io_uring_probe
 THETESTS += fadvise_dontneed_helper llapi_root_test llapi_pool_test aheadmany
 THETESTS += llapi_scan_test
-THETESTS += monitor_lustrefs test_parity_read
+THETESTS += monitor_lustrefs test_parity_read lod_rr_test
 
 if LIBAIO
 THETESTS += aiocp

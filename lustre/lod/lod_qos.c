@@ -17,12 +17,12 @@
 #define DEBUG_SUBSYSTEM S_LOV
 
 #include <asm/div64.h>
-#include <linux/random.h>
 #include <linux/timer.h>
 
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_swab.h>
 #include <obd_class.h>
+#include <lu_tgt_alloc.h>
 
 #include "lod_internal.h"
 
@@ -187,8 +187,6 @@ void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
 	EXIT;
 }
 
-#define LOV_QOS_EMPTY ((__u32)-1)
-
 /**
  * lod_qos_calc_rr() - Calculate optimal round-robin order with regard to OSSes
  * @lod: LOD device
@@ -248,7 +246,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 		RETURN(rc);
 	}
 	for (i = 0; i < lqr->lqr_pool.op_count; i++)
-		lqr->lqr_pool.op_array[i] = LOV_QOS_EMPTY;
+		lqr->lqr_pool.op_array[i] = LU_RR_EMPTY;
 
 	/* Place all the tgts from 1 svr at the same time. */
 	placed = 0;
@@ -256,8 +254,6 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 		int j = 0;
 
 		for (i = 0; i < lqr->lqr_pool.op_count; i++) {
-			int next;
-
 			if (!test_bit(src_pool->op_array[i],
 				      ltd->ltd_tgt_bitmap))
 				continue;
@@ -267,12 +263,8 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 			if (tgt->ltd_qos.ltq_svr != svr)
 				continue;
 
-			/* Evenly space these tgts across arrayspace */
-			next = j * lqr->lqr_pool.op_count / svr->lsq_tgt_count;
-			while (lqr->lqr_pool.op_array[next] != LOV_QOS_EMPTY)
-				next = (next + 1) % lqr->lqr_pool.op_count;
-
-			lqr->lqr_pool.op_array[next] = src_pool->op_array[i];
+			lu_rr_place_tgt(&lqr->lqr_pool, src_pool->op_array[i],
+					j, svr->lsq_tgt_count);
 			j++;
 			placed++;
 		}
@@ -460,9 +452,6 @@ static int lod_stripe_count_min(struct lod_layout_component *lod_comp,
 	return (flags & LOD_USES_DEFAULT_STRIPE ?
 		stripe_count - (stripe_count / 4) : stripe_count);
 }
-
-#define LOV_CREATE_RESEED_MULT 30
-#define LOV_CREATE_RESEED_MIN  2000
 
 /**
  * lod_qos_tgt_in_use_clear() - Initialize temporary tgt-in-use array.
@@ -1513,23 +1502,7 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 		GOTO(out_pool, rc);
 
 	down_read(&m->lod_ost_descs.ltd_qos.lq_rw_sem);
-	spin_lock(&lqr->lqr_alloc);
-	if (--lqr->lqr_start_count <= 0) {
-		atomic_set(&lqr->lqr_start_idx,
-			    get_random_u32_below(osts->op_count));
-		lqr->lqr_start_count =
-			(LOV_CREATE_RESEED_MIN / max(osts->op_count, 1U) +
-			 LOV_CREATE_RESEED_MULT) * max(osts->op_count, 1U);
-	} else if (atomic_read(&lqr->lqr_start_idx) >= osts->op_count) {
-		/* If we have allocated from all of the tgts, slowly
-		 * precess the next start OST if the tgt/stripe count
-		 * difference isn't already doing this for us.
-		 */
-		atomic_sub(osts->op_count, &lqr->lqr_start_idx);
-		if (stripe_count > 1 && (osts->op_count % stripe_count) != 1)
-			++lqr->lqr_offset_idx;
-	}
-	spin_unlock(&lqr->lqr_alloc);
+	lu_rr_start(lqr, osts->op_count, stripe_count);
 	if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)
 		stripes_per_ost =
 			(lod_comp->llc_stripe_count - 1) / osts->op_count + 1;
@@ -1544,8 +1517,7 @@ repeat_find:
 	for (i = 0, idx = 0; i < osts->op_count * stripes_per_ost &&
 		    stripe_idx < stripe_count; i++) {
 		if (likely(speed < 2) || i == 0) {
-			idx = atomic_inc_return(&lqr->lqr_start_idx) +
-			      lqr->lqr_offset_idx;
+			idx = lu_rr_next(lqr);
 		} else {
 			/*
 			 * For last speed, use OSTs one by one
@@ -1559,7 +1531,7 @@ repeat_find:
 		       i, idx, /* XXX: active*/ 0,
 		       stripe_idx, array_idx, ost_idx);
 
-		if ((ost_idx == LOV_QOS_EMPTY) ||
+		if ((ost_idx == LU_RR_EMPTY) ||
 		    !test_bit(ost_idx, m->lod_ost_bitmap))
 			continue;
 
@@ -1822,24 +1794,7 @@ int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 		RETURN(rc);
 
 	down_read(&ltd->ltd_qos.lq_rw_sem);
-	spin_lock(&lqr->lqr_alloc);
-	if (--lqr->lqr_start_count <= 0) {
-		atomic_set(&lqr->lqr_start_idx,
-			    get_random_u32_below(pool->op_count));
-		lqr->lqr_start_count =
-			(LOV_CREATE_RESEED_MIN / max(pool->op_count, 1U) +
-			 LOV_CREATE_RESEED_MULT) * max(pool->op_count, 1U);
-	} else if (atomic_read(&lqr->lqr_start_idx) >= pool->op_count) {
-		/* If we have allocated from all of the tgts, slowly
-		 * precess the next start if the tgt/stripe count isn't
-		 * already doing this for us.
-		 */
-		atomic_sub(pool->op_count, &lqr->lqr_start_idx);
-		if (stripe_count - 1 > 1 &&
-		    (pool->op_count % (stripe_count - 1)) != 1)
-			++lqr->lqr_offset_idx;
-	}
-	spin_unlock(&lqr->lqr_alloc);
+	lu_rr_start(lqr, pool->op_count, stripe_count - 1);
 
 repeat_find:
 	CDEBUG(D_OTHER,
@@ -1859,9 +1814,8 @@ repeat_find:
 		bool local_alloc = false;
 		int idx;
 
-		idx = atomic_inc_return(&lqr->lqr_start_idx);
-		pool_idx = (idx + lqr->lqr_offset_idx) %
-			    (pool->op_count + overstriped);
+		idx = lu_rr_next(lqr);
+		pool_idx = idx % (pool->op_count + overstriped);
 		/* in the overstriped case, we must be able to allocate a stripe
 		 * to the local MDT, ie, the one doing the allocation
 		 */
@@ -1895,7 +1849,7 @@ repeat_find:
 		       i, idx, /* XXX: active*/ 0,
 		       stripe_idx, pool_idx, mdt_idx);
 
-		if (!local_alloc &&  (mdt_idx == LOV_QOS_EMPTY ||
+		if (!local_alloc &&  (mdt_idx == LU_RR_EMPTY ||
 		    !test_bit(mdt_idx, ltd->ltd_tgt_bitmap))) {
 			CDEBUG(D_OTHER, "mdt_idx not found %d\n", mdt_idx);
 			continue;

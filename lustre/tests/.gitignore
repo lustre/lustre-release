@@ -50,6 +50,7 @@
 /llverdev
 /llverfs
 /lockahead_test
+/lod_rr_test
 /logs
 /lov_getstripe_old
 /lovstripe

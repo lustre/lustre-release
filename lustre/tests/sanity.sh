@@ -7159,6 +7159,14 @@ test_51f() {
 }
 run_test 51f "check many open files limit"
 
+test_51g() {
+	# userspace build of lu_tgt_alloc.c, so it needs no particular OSTCOUNT
+	lod_rr_test -o 3-64 -s 1-4 || error "lod_rr_test failed"
+	# layouts from several MDTs into one striped directory
+	lod_rr_test -o 3-64 -s 1-4 -m 4 || error "lod_rr_test -m 4 failed"
+}
+run_test 51g "check LOD round-robin allocation in userspace"
+
 test_52a() {
 	[ -f $DIR/$tdir/foo ] && chattr -a $DIR/$tdir/foo
 	test_mkdir $DIR/$tdir
