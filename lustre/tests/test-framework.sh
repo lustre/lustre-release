@@ -3883,8 +3883,8 @@ wait_update_facet() {
 
 sync_all_data_mdts() {
 # force flush delayed destroy
-	do_nodes $(mdts_nodes) "lctl set_param -n mdt.*.force_sync=1"
-	do_nodes $(mdts_nodes) "lctl set_param -n os[cd]*.*MDT*.force_sync=1"
+	do_nodes $(mdts_nodes) \
+		"lctl set_param -n mdt.*.force_sync=1 os[cd]*.*MDT*.force_sync=1"
 }
 
 sync_all_data_osts() {
@@ -4276,8 +4276,18 @@ fstrim_inram_devs() {
 }
 
 wait_delete_completed() {
-	wait_delete_completed_mds $1 || return $?
-	wait_destroy_complete $1 || return $?
+	local pending
+
+	# usually nothing is pending, so check both in one remote command
+	pending=$(do_nodes $(mdts_nodes) \
+		  "$LCTL get_param -n osc.*MDT*.sync_* \
+		   osp.*.destroys_in_flight 2>/dev/null" | calc_sum)
+	if (( pending == 0 )); then
+		wait_zfs_commit $SINGLEMDS
+	else
+		wait_delete_completed_mds $1 || return $?
+		wait_destroy_complete $1 || return $?
+	fi
 	# ignore fstrim errors - this is an optimization to save space
 	fstrim_inram_devs || true
 }
