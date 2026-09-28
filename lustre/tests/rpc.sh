@@ -9,7 +9,9 @@ if [[ ! -f "$LUSTRE/tests/rpc.sh" ]]; then
 fi
 
 . "$LUSTRE/tests/test-framework.sh"
-RPC_MODE=true init_test_env
+# not a prefix assignment, so RPC_MODE is still set after init_test_env
+export RPC_MODE=true
+init_test_env
 
 # Reset the trap on ERR set by the framework.  Noticing this failure is the
 # framework's job.

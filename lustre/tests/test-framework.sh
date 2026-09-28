@@ -7857,6 +7857,13 @@ log() {
 	echo "$*" >&2
 	load_module ../libcfs/libcfs/libcfs
 
+	# rpc.sh runs on a node that do_rpc_nodes() already reached, so only
+	# mark the local debug log instead of starting pdsh to all nodes again
+	if $RPC_MODE; then
+		$LCTL mark "$*" 2> /dev/null || true
+		return
+	fi
+
 	local MSG="$*"
 	# Get rid of '
 	MSG=${MSG//\'/\\\'}
@@ -7868,7 +7875,9 @@ log() {
 	MSG=${MSG//\>/\\\>}
 	MSG=${MSG//\</\\\<}
 	MSG=${MSG//\//\\\/}
-	do_nodes $(comma_list $(nodes_list)) $LCTL mark "$MSG" 2> /dev/null || true
+	# --quiet, since with VERBOSE do_nodes() would first mark this command
+	do_nodes --quiet $(comma_list $(nodes_list)) $LCTL mark "$MSG" \
+		2> /dev/null || true
 }
 
 trace() {
