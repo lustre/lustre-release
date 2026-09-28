@@ -723,6 +723,8 @@ init_test_env() {
 	export PARALLEL_FORMAT=${PARALLEL_FORMAT:-$PARALLEL_OPS}
 	export PARALLEL_FORMAT_TARGETS=${PARALLEL_FORMAT_TARGETS:-"mgs mdt ost"}
 	export PARALLEL_FORMAT_TYPES=${PARALLEL_FORMAT_TYPES:-$PARALLEL_FORMAT}
+	export PARALLEL_MOUNT=${PARALLEL_MOUNT:-$PARALLEL_OPS}
+	export PARALLEL_MOUNT_TARGETS=${PARALLEL_MOUNT_TARGETS:-"mdt ost"}
 
 	export BLCKSIZE=${BLCKSIZE:-4096}
 	export MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
@@ -5895,7 +5897,7 @@ format_ost() {
 }
 
 # Usage: parallel_enabled_for <operation> <target_type>
-#   operation: FORMAT
+#   operation: FORMAT, MOUNT
 #   target_type: mgs, mdt, ost
 # Return 0 if <operation> should run concurrently on <target_type> targets
 parallel_enabled_for() {
@@ -5907,8 +5909,8 @@ parallel_enabled_for() {
 
 # Usage: parallel_start <operation> <facet> <command> [args...]
 # Run <command> for <facet>, in the background if <operation> is enabled
-# for the facet type.  Uses par_logs[] and par_pids[] from the caller,
-# which must then call parallel_wait().
+# for the facet type.  Uses par_facets[] and par_logs[] and par_pids[] from
+# the caller, which must then call parallel_wait().
 parallel_start() {
 	local op=$1
 	local facet=$2
@@ -5924,19 +5926,26 @@ parallel_start() {
 
 	# show which targets are in progress, in case one of them hangs
 	echo "$op $facet: $*"
-	"$@" > $log.log 2>&1 &
+	# save the variables set by <command> for parallel_wait() to import,
+	# even if it exits early via error()
+	rm -f $log.env
+	( trap "export -p > $log.env" EXIT; "$@" ) > $log.log 2>&1 &
 	par_pids+=($!)
+	par_facets+=($facet)
 	par_logs+=($log)
 }
 
 # Wait for commands started by parallel_start() and print their output in
-# order.  Return the first error.
+# order.  Import the <facet>_* variables that each command exported, since
+# they were set in a subshell.  Return the first error.
 parallel_wait() {
 	local rc=0
 	local i
 
 	for ((i = 0; i < ${#par_pids[@]}; i++)); do
+		local facet=${par_facets[i]}
 		local log=${par_logs[i]}
+		local vars="$facet|${facet}failover"
 		local rc2=0
 
 		wait ${par_pids[i]} || rc2=$?
@@ -5947,9 +5956,16 @@ parallel_wait() {
 			echo "${log##*/} failed: rc = $rc2" >&2
 			(( rc != 0 )) || rc=$rc2
 		fi
-		rm -f $log.log
+		[[ $facet != mds1 ]] || ! combined_mgs_mds ||
+			vars+="|mgs|mgsfailover"
+		# "export" sets a caller's local <facet>_dev, as start() does
+		local expr="s/^declare -x (($vars)_\w*=)/export \\1/p"
+
+		[[ ! -f $log.env ]] || source <(sed -n -E "$expr" $log.env)
+		rm -f $log.log $log.env
 	done
 	par_pids=()
+	par_facets=()
 	par_logs=()
 
 	return $rc
@@ -5964,6 +5980,7 @@ format_wait() {
 }
 
 formatall() {
+	local -a par_facets
 	local -a par_logs
 	local -a par_pids
 	local num
@@ -6018,9 +6035,11 @@ switch_identity() {
 	local num=$1
 	local enable=$2
 	local facet=mds$num
-	local MDT="$(mdtname_from_index $((num - 1)) $MOUNT)"
+	# setupall() calls this before the client is mounted
+	local MDT="$(facet_svc $facet)"
 	local upcall="$L_GETIDENTITY"
 
+	[[ -n "$MDT" ]] || MDT="$(mdtname_from_index $((num - 1)) $MOUNT)"
 	[[ -n "$MDT" ]] || return 2
 
 	local param="mdt.$MDT.identity_upcall"
@@ -6079,10 +6098,16 @@ unmountmgs() {
 }
 
 mountmgs() {
-	if ! combined_mgs_mds ; then
-		start mgs $(mgsdevname) $MGS_MOUNT_OPTS
-		do_facet mgs "$LCTL set_param -P debug_raw_pointers=Y"
+	combined_mgs_mds && return 0
+
+	local mounted=" $(mounted_targets | tr '\n' ' ') "
+
+	if [[ $mounted == *" $(facet_mntpt mgs) "* ]]; then
+		init_facet_vars mgs $(mgsdevname) $MGS_MOUNT_OPTS
+	else
+		start mgs $(mgsdevname) $MGS_MOUNT_OPTS || return $?
 	fi
+	do_facet mgs "$LCTL set_param -P debug_raw_pointers=Y"
 }
 
 unmountmds() {
@@ -6099,33 +6124,60 @@ unmountmds() {
 	return $rc
 }
 
+# Set <facet>_HOST and <facet>failover_HOST after starting <facet>, if unset
+set_facet_hosts() {
+	local facet=$1
+	local host=$(facet_host $facet)
+	local varname
+
+	for varname in ${facet}_HOST ${facet}failover_HOST; do
+		[[ -n "${!varname}" ]] || eval $varname=$host
+	done
+}
+
+# Print the mount points of Lustre targets mounted on any server, so that
+# setupall() can skip targets that are still mounted
+mounted_targets() {
+	do_nodes $(comma_list $(all_server_nodes)) \
+		"grep -E ' lustre(_tgt)? ' /proc/mounts | cut -d' ' -f2 || true"
+}
+
 mountmds() {
+	local -a par_facets
+	local -a par_logs
+	local -a par_pids
+	local mounted=" $(mounted_targets | tr '\n' ' ') "
 	local mdsnum
+	local rc=0
+
+	# MDT0000 (and a combined MGS) is started first so that the other
+	# MDTs can register and connect to it
+	for ((mdsnum=1; mdsnum <= $MDSCOUNT; mdsnum++)); do
+		local facet=mds$mdsnum
+		local dev=$(mdsdevname $mdsnum)
+
+		if [[ $mounted == *" $(facet_mntpt $facet) "* ]]; then
+			init_facet_vars $facet $dev $MDS_MOUNT_OPTS
+		elif (( mdsnum == 1 )); then
+			start $facet $dev $MDS_MOUNT_OPTS || rc=$?
+		else
+			parallel_start MOUNT $facet start $facet $dev \
+				$MDS_MOUNT_OPTS || rc=$?
+		fi
+	done
+	parallel_wait || rc=$?
 
 	for ((mdsnum=1; mdsnum <= $MDSCOUNT; mdsnum++)); do
-		local devname=$(mdsdevname $mdsnum)
-		local facet=mds$mdsnum
-
-		start $facet $devname $MDS_MOUNT_OPTS
-
-		# We started mds$num, now we should set mds${num}_HOST
-		# and mds${num}failover_HOST variables properly if they
-		# are not set.
-		local host=$(facet_host $facet)
-		local varname
-
-		for varname in ${facet}_HOST ${facet}failover_HOST; do
-			if [[ -z "${!varname}" ]]; then
-				eval $varname=$host
-			fi
-		done
+		set_facet_hosts mds$mdsnum
 		if [[ "$IDENTITY_UPCALL" != "default" ]]; then
-			switch_identity $num $IDENTITY_UPCALL
+			switch_identity $mdsnum $IDENTITY_UPCALL
 		fi
 	done
 	if combined_mgs_mds ; then
 		do_facet mgs "$LCTL set_param -P debug_raw_pointers=Y"
 	fi
+
+	return $rc
 }
 
 unmountoss() {
@@ -6143,26 +6195,31 @@ unmountoss() {
 }
 
 mountoss() {
+	local -a par_facets
+	local -a par_logs
+	local -a par_pids
+	local mounted=" $(mounted_targets | tr '\n' ' ') "
 	local ostnum
+	local rc=0
 
 	for ((ostnum=1; ostnum <= $OSTCOUNT; ostnum++)); do
-		local devname=$(ostdevname $ostnum)
 		local facet=ost$ostnum
+		local dev=$(ostdevname $ostnum)
 
-		start $facet $devname $OST_MOUNT_OPTS
-
-		# We started ost$num, now we should set ost${num}_HOST
-		# and ost${num}failover_HOST variables properly if they
-		# are not set.
-		local host=$(facet_host $facet)
-		local varname
-
-		for varname in ${facet}_HOST ${facet}failover_HOST; do
-			if [[ -z "${!varname}" ]]; then
-				eval $varname=$host
-			fi
-		done
+		if [[ $mounted == *" $(facet_mntpt $facet) "* ]]; then
+			init_facet_vars $facet $dev $OST_MOUNT_OPTS
+		else
+			parallel_start MOUNT $facet start $facet $dev \
+				$OST_MOUNT_OPTS || rc=$?
+		fi
 	done
+	parallel_wait || rc=$?
+
+	for ((ostnum=1; ostnum <= $OSTCOUNT; ostnum++)); do
+		set_facet_hosts ost$ostnum
+	done
+
+	return $rc
 }
 
 mountcli() {
@@ -6216,9 +6273,9 @@ setupall() {
 		if $SK_MOUNTED; then
 			echo "Shared Key file system already mounted"
 		else
-			mountmgs
-			mountmds
-			mountoss
+			mountmgs || error "mountmgs failed"
+			mountmds || error "mountmds failed"
+			mountoss || error "mountoss failed"
 			if $SHARED_KEY; then
 				export SK_MOUNTED=true
 			fi
@@ -6240,9 +6297,9 @@ setupall() {
 					${CLIENTS:-$HOSTNAME}
 				echo "Nodemap set up for SK S2S, remounting."
 				stopall
-				mountmgs
-				mountmds
-				mountoss
+				mountmgs || error "mountmgs failed"
+				mountmds || error "mountmds failed"
+				mountoss || error "mountoss failed"
 			fi
 		fi
 	fi

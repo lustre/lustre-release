@@ -5058,7 +5058,7 @@ test_135() {
 	do_facet ost1 "$LCTL set_param fail_loc=0"
 	mount_facet ost1
 	unmountoss
-	mountoss
+	mountoss || error "mountoss failed"
 	clients_up || clients_up || error "$LFS df $MOUNT failed"
 
 	wait $PID || error "Fail to sync"

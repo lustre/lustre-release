@@ -38252,6 +38252,9 @@ test_817() {
 run_test 817 "nfsd won't cache write lock for exec file"
 
 test_818() {
+	(( MDS1_VERSION >= $(version_code 2.17.58.63) )) ||
+		skip "need MDS >= 2.17.58.63 for fail_val to select the OSP"
+
 	test_mkdir -i0 -c1 $DIR/$tdir
 	$LFS setstripe -c1 -i0 $DIR/$tdir/$tfile
 	$LFS setstripe -c1 -i1 $DIR/$tdir/$tfile
@@ -38265,8 +38268,10 @@ test_818() {
 	do_facet mds1 $LCTL set_param console_ratelimit=0
 	stack_trap "do_facet mds1 $LCTL set_param console_ratelimit=$rl"
 
+	# fail the llog only for OST0000 (fail_val=index+1), where the file is,
+	# since the first OSP to start is not always that one
 	#define OBD_FAIL_OSP_CANT_PROCESS_LLOG		0x2105
-	do_facet $SINGLEMDS lctl set_param fail_loc=0x80002105
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80002105 fail_val=1
 	start $SINGLEMDS $(mdsdevname ${SINGLEMDS//mds/}) $MDS_MOUNT_OPTS ||
 		error "start $SINGLEMDS failed"
 	rm -rf $DIR/$tdir

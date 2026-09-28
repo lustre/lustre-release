@@ -1439,7 +1439,9 @@ again:
 		int	size;
 
 		wrapped = llog_cat_is_wrapped(llh);
-		if (CFS_FAIL_CHECK(OBD_FAIL_OSP_CANT_PROCESS_LLOG)) {
+		/* fail_val selects which OSTs fail, see cfs_fail_index() */
+		if (cfs_fail_index(cfs_fail_val, d->opd_index) &&
+		    CFS_FAIL_CHECK(OBD_FAIL_OSP_CANT_PROCESS_LLOG)) {
 			rc = -EINPROGRESS;
 			goto next;
 		}
