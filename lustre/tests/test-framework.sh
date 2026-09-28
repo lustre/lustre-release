@@ -402,6 +402,13 @@ get_lustre_env() {
 		export mds1_FSTYPE=${mds1_FSTYPE:-$(facet_fstype mds1)}
 		export ost1_FSTYPE=${ost1_FSTYPE:-$(facet_fstype ost1)}
 
+		local facet
+
+		# fill the <facet>_VERSION cache in this shell, since calls in
+		# $(...) below and elsewhere cannot save it for later calls
+		for facet in mgs mds1 ost1 client; do
+			lustre_build_version $facet > /dev/null
+		done
 		export MGS_VERSION=$(lustre_version_code mgs)
 		export MDS1_VERSION=$(lustre_version_code mds1)
 		export OST1_VERSION=$(lustre_version_code ost1)
@@ -811,16 +818,11 @@ lustre_build_version_node() {
 	local ver
 	local lver
 
-	# this is the currently-running version of the kernel modules
-	ver=$(do_node $node "$LCTL get_param -n version 2>/dev/null")
-	# we mostly test 2.10+ systems, only try others if the above fails
-	if [ -z "$ver" ]; then
-		ver=$(do_node $node "$LCTL lustre_build_version 2>/dev/null")
-	fi
-	if [ -z "$ver" ]; then
-		ver=$(do_node $node "$LCTL --version 2>/dev/null" |
-		      cut -d' ' -f2)
-	fi
+	# this is the currently-running version of the kernel modules, and
+	# only try the others (in one remote command) if it is not loaded
+	ver=$(do_node $node "$LCTL get_param -n version 2>/dev/null ||
+			     $LCTL lustre_build_version 2>/dev/null ||
+			     $LCTL --version 2>/dev/null | cut -d' ' -f2")
 	local lver=$(grep -E -i "lustre: |version: " <<<"$ver" | head -n 1)
 	[ -n "$lver" ] && ver="$lver"
 
@@ -874,7 +876,9 @@ lustre_os_release() {
 	local os_release="/etc/os-release"
 	local line
 
-	do_facet $facet "test -r $os_release" || {
+	local release=$(do_facet $facet "cat $os_release 2>/dev/null")
+
+	[[ -n "$release" ]] || {
 		echo "$facet: has no $os_release"
 		do_facet $facet "uname -a; ls -s /etc/*release"
 		return 0
@@ -886,7 +890,7 @@ lustre_os_release() {
 		case $line in
 		VERSION_ID=*|ID=*|ID_LIKE=*) eval export ${facet_os}$line ;;
 		esac
-	done < <(do_facet $facet "cat $os_release")
+	done <<< "$release"
 
 	eval export ${facet_version}CODE=\$\(version_code \$${facet_version}ID\)
 	# add in the "self" ID to ID_LIKE so only one needs to be checked
