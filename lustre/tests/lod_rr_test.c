@@ -48,6 +48,18 @@ static inline __u32 get_random_u32_below(__u32 ceil)
 	return random() % ceil;
 }
 
+static unsigned long gcd(unsigned long a, unsigned long b)
+{
+	while (b) {
+		unsigned long r = a % b;
+
+		a = b;
+		b = r;
+	}
+
+	return a;
+}
+
 static inline void spin_lock(int *lock)
 {
 }
@@ -64,10 +76,21 @@ struct lu_tgt_pool {
 	unsigned int	 op_count;
 };
 
+struct lu_qos_rr_stream {
+	__u64			 lqrs_key;
+	atomic_t		 lqrs_start_idx;
+	__u32			 lqrs_offset_idx;
+	__u32			 lqrs_layouts;
+	__u32			 lqrs_stride;
+	__u32			 lqrs_used;
+};
+
+#define LQR_STREAMS	16
+
 struct lu_qos_rr {
 	int			 lqr_alloc;
-	atomic_t		 lqr_start_idx;
-	__u32			 lqr_offset_idx;
+	struct lu_qos_rr_stream	 lqr_streams[LQR_STREAMS];
+	__u32			 lqr_clock;
 	int			 lqr_start_count;
 	struct lu_tgt_pool	 lqr_pool;
 };
@@ -79,18 +102,29 @@ struct lu_qos_rr {
 
 #define MAX_OSTS 1024
 #define MAX_MDTS 64
+#define MAX_PATTERN 16
 
 static const char *progname;
 static bool verbose;
+static unsigned int unusable;
 static unsigned int unbalanced_first;
+static int pattern[MAX_PATTERN];
+static unsigned int npattern;
+static bool mirrors;
+static unsigned int parity;
 
 struct rr_test {
 	unsigned int	ost_count;
 	unsigned int	oss_count;
 	unsigned int	stripes;
 	unsigned int	stripes_per_ost;
+	bool		skip[MAX_OSTS];
 	unsigned int	objs[MAX_OSTS];
 	unsigned int	objs0[MAX_OSTS];
+	unsigned int	objs0c[MAX_PATTERN][MAX_OSTS];
+	unsigned int	oss_of[MAX_OSTS];
+	unsigned int	mirror_same_oss;
+	bool		no_first;
 };
 
 /* like lod_qos_calc_rr(), with OSTs split evenly and in order among OSSs */
@@ -112,49 +146,104 @@ static void rr_fill(struct lu_tgt_pool *rr, unsigned int ost_count,
 	}
 }
 
-/* like lod_ost_alloc_rr() when every OST is usable */
-static void rr_alloc(struct rr_test *rt, struct lu_qos_rr *lqr)
+/*
+ * Like lod_ost_alloc_rr() for layout component @comp when every OST is
+ * usable, avoiding the OSTs in @used that the file already uses.
+ */
+static void rr_alloc(struct rr_test *rt, struct lu_qos_rr *lqr,
+		     unsigned int comp, __u64 key, bool cont,
+		     unsigned int *used)
 {
-	unsigned int used[MAX_OSTS] = { 0 };
+	struct lu_qos_rr_stream *lqrs;
 	unsigned int found = 0;
 	unsigned int i;
 
-	lu_rr_start(lqr, rt->ost_count, rt->stripes);
+	lqrs = lu_rr_start(lqr, rt->ost_count, rt->stripes, key, cont);
 	for (i = 0; i < rt->ost_count * rt->stripes_per_ost &&
 		    found < rt->stripes; i++) {
-		__u32 ost = lqr->lqr_pool.op_array[lu_rr_next(lqr) %
+		__u32 ost = lqr->lqr_pool.op_array[lu_rr_next(lqrs) %
 						   rt->ost_count];
 
-		if (ost == LU_RR_EMPTY || used[ost] >= rt->stripes_per_ost)
+		if (ost == LU_RR_EMPTY || rt->skip[ost] ||
+		    used[ost] >= rt->stripes_per_ost)
 			continue;
 
 		used[ost]++;
-		if (found++ == 0)
+		if (found++ == 0 && !rt->no_first) {
 			rt->objs0[ost]++;
+			rt->objs0c[comp][ost]++;
+		}
 		rt->objs[ost]++;
 	}
 }
 
 /*
- * Check that every OST has less than 5/4 the objects of any other, and
- * with @check_first less than 3/2 the first objects, the same limits
- * that sanity test_51d uses for adjacent OSTs.
+ * Check that every usable OST has less than 3/2 the first objects of any
+ * other, the limit that sanity test_51d uses for adjacent OSTs.
+ */
+static int rr_check_first(struct rr_test *rt, const unsigned int *objs0,
+			  unsigned int stripes, bool check_first)
+{
+	unsigned int min0 = 0, max0 = 0;
+	bool found = false;
+	unsigned int i;
+
+	for (i = 0; i < rt->ost_count; i++) {
+		if (rt->skip[i])
+			continue;
+		if (!found) {
+			min0 = max0 = i;
+			found = true;
+		}
+		if (objs0[i] < objs0[min0])
+			min0 = i;
+		if (objs0[i] > objs0[max0])
+			max0 = i;
+	}
+
+	if (objs0[max0] == objs0[min0] || objs0[max0] * 2 < objs0[min0] * 3)
+		return 0;
+
+	if (check_first || verbose)
+		printf("ost=%u oss=%u stripes=%u: OST%u has %u #0 objects, OST%u has %u\n",
+		       rt->ost_count, rt->oss_count, stripes,
+		       max0, objs0[max0], min0, objs0[min0]);
+	if (check_first)
+		return -EDOM;
+
+	unbalanced_first++;
+	return 0;
+}
+
+static unsigned int comp_stripes(unsigned int comp, unsigned int ost_count)
+{
+	return pattern[comp] < 0 || pattern[comp] > (int)ost_count ?
+	       ost_count : pattern[comp];
+}
+
+/*
+ * Check that every usable OST has less than 5/4 the objects of any other,
+ * like sanity test_51d, and with @check_first the first objects as well,
+ * separately for each component of a stripe count pattern.
  */
 static int rr_check(struct rr_test *rt, bool check_first)
 {
-	unsigned int min = 0, max = 0, min0 = 0, max0 = 0;
+	unsigned int min = 0, max = 0;
+	bool found = false;
 	unsigned int i;
 	int rc = 0;
 
-	for (i = 1; i < rt->ost_count; i++) {
+	for (i = 0; i < rt->ost_count; i++) {
+		if (rt->skip[i])
+			continue;
+		if (!found) {
+			min = max = i;
+			found = true;
+		}
 		if (rt->objs[i] < rt->objs[min])
 			min = i;
 		if (rt->objs[i] > rt->objs[max])
 			max = i;
-		if (rt->objs0[i] < rt->objs0[min0])
-			min0 = i;
-		if (rt->objs0[i] > rt->objs0[max0])
-			max0 = i;
 	}
 
 	if (rt->objs[max] * 4 >= rt->objs[min] * 5) {
@@ -163,15 +252,20 @@ static int rr_check(struct rr_test *rt, bool check_first)
 		       max, rt->objs[max], min, rt->objs[min]);
 		rc = -EDOM;
 	}
-	if (rt->objs0[max0] * 2 >= rt->objs0[min0] * 3) {
-		if (check_first || verbose)
-			printf("ost=%u oss=%u stripes=%u: OST%u has %u #0 objects, OST%u has %u\n",
-			       rt->ost_count, rt->oss_count, rt->stripes,
-			       max0, rt->objs0[max0], min0, rt->objs0[min0]);
-		if (check_first)
+	if (!npattern) {
+		if (rr_check_first(rt, rt->objs0, rt->stripes, check_first))
 			rc = -EDOM;
-		else
-			unbalanced_first++;
+	}
+	for (i = 0; i < npattern; i++)
+		if (rr_check_first(rt, rt->objs0c[i],
+				   comp_stripes(i, rt->ost_count),
+				   check_first))
+			rc = -EDOM;
+	if (rt->mirror_same_oss) {
+		printf("ost=%u oss=%u stripes=%u: %u files have both mirrors on one OSS\n",
+		       rt->ost_count, rt->oss_count, rt->stripes,
+		       rt->mirror_same_oss);
+		rc = -EDOM;
 	}
 
 	if (rc || verbose) {
@@ -198,14 +292,70 @@ static int rr_test_one(unsigned int ost_count, unsigned int oss_count,
 	};
 	unsigned int i;
 
+	/* spread the unusable OSTs, which still use up an RR index */
+	for (i = 0; i < unusable; i++)
+		rt.skip[i * ost_count / unusable] = true;
+
 	rr_fill(&rr, ost_count, oss_count);
+	for (i = 0; i < ost_count; i++)
+		while ((rt.oss_of[i] + 1) * ost_count / oss_count <= i)
+			rt.oss_of[i]++;
 	memset(lqr, 0, sizeof(lqr));
 	for (i = 0; i < mdt_count; i++)
 		lqr[i].lqr_pool = rr;
 
 	/* files in a striped directory are spread over the MDTs by hash */
-	for (i = 0; i < per_ost * ost_count; i++)
-		rr_alloc(&rt, &lqr[mdt_count > 1 ? random() % mdt_count : 0]);
+	for (i = 0; i < per_ost * ost_count; i++) {
+		struct lu_qos_rr *m = &lqr[mdt_count > 1 ?
+					  random() % mdt_count : 0];
+		unsigned int used[MAX_OSTS] = { 0 };
+		unsigned int c;
+
+		if (mirrors) {
+			/* mirrors of one extent share a key, like EC parity,
+			 * with -P each file has the next stripe count
+			 */
+			unsigned int per_oss[MAX_OSTS] = { 0 };
+			unsigned int j;
+
+			c = npattern ? i % npattern : 0;
+			if (npattern) {
+				rt.stripes = comp_stripes(c, ost_count);
+				rt.stripes_per_ost = 1;
+			}
+			rr_alloc(&rt, m, c, rt.stripes, false, used);
+			rr_alloc(&rt, m, c, rt.stripes, true, used);
+			/* with enough equal OSSs, none should have two OSTs */
+			for (j = 0; j < ost_count; j++)
+				if (used[j] && ++per_oss[rt.oss_of[j]] > 1 &&
+				    2 * rt.stripes <= oss_count &&
+				    ost_count % oss_count == 0) {
+					rt.mirror_same_oss++;
+					break;
+				}
+			continue;
+		}
+		if (!npattern) {
+			rr_alloc(&rt, m, 0, stripes, false, used);
+			/* EC parity continues from the data stripes */
+			if (parity) {
+				rt.stripes = parity;
+				rt.no_first = true;
+				rr_alloc(&rt, m, 0, stripes, true, used);
+				rt.stripes = stripes;
+				rt.no_first = false;
+			}
+			continue;
+		}
+		/* each component of a PFL-like layout in turn */
+		for (c = 0; c < npattern; c++) {
+			rt.stripes = comp_stripes(c, ost_count);
+			rt.stripes_per_ost = (rt.stripes - 1) / ost_count + 1;
+			memset(used, 0, sizeof(used));
+			rr_alloc(&rt, m, c, ((__u64)(c + 1) << 32) + rt.stripes,
+				 false, used);
+		}
+	}
 
 	return rr_check(&rt, check_first);
 }
@@ -232,15 +382,20 @@ static void print_usage(void)
 {
 	printf("usage: %s [-f] [-v] [-C MULT] [-c STRIPES[-MAX]] [-m MDTS]\n"
 	       "\t\t[-n PER_OST] [-o OSTS[-MAX]] [-r SEED] [-s OSSS[-MAX]]\n"
+	       "\t\t[-e PARITY] [-M] [-P STRIPES,...] [-x UNUSABLE]\n"
 	       "\t-C: overstripe up to MULT stripes per OST (default 1)\n"
 	       "\t-c: stripe counts to test (default 1-OSTS)\n"
+	       "\t-e: allocate PARITY more stripes after each layout, like EC\n"
 	       "\t-f: fail if first (#0) objects are unbalanced\n"
+	       "\t-M: allocate two mirrors of each layout\n"
 	       "\t-m: MDTs allocating layouts independently (default 1)\n"
 	       "\t-n: layouts to allocate per OST (default 100)\n"
 	       "\t-o: OST counts to test (default 3-32)\n"
+	       "\t-P: stripe counts of each layout's components, -1 all OSTs\n"
 	       "\t-r: random seed (default 1)\n"
 	       "\t-s: OSS counts to test (default 1-4)\n"
-	       "\t-v: print object counts for every OST\n", progname);
+	       "\t-v: print object counts for every OST\n"
+	       "\t-x: number of unusable OSTs (default 0)\n", progname);
 }
 
 int main(int argc, char **argv)
@@ -259,7 +414,7 @@ int main(int argc, char **argv)
 
 	progname = argv[0];
 	srandom(1);
-	while ((c = getopt(argc, argv, "C:c:fhm:n:o:r:s:v")) != -1) {
+	while ((c = getopt(argc, argv, "C:c:e:fhMm:n:o:P:r:s:vx:")) != -1) {
 		switch (c) {
 		case 'C':
 			ost_mult = strtoul(optarg, NULL, 0);
@@ -272,6 +427,9 @@ int main(int argc, char **argv)
 		case 'c':
 			if (parse_range(optarg, &sc_min, &sc_max, MAX_OSTS))
 				return 1;
+			break;
+		case 'e':
+			parity = strtoul(optarg, NULL, 0);
 			break;
 		case 'f':
 			check_first = true;
@@ -296,6 +454,18 @@ int main(int argc, char **argv)
 			if (parse_range(optarg, &ost_min, &ost_max, MAX_OSTS))
 				return 1;
 			break;
+		case 'M':
+			mirrors = true;
+			break;
+		case 'P': {
+			char *tok, *save = NULL;
+
+			for (tok = strtok_r(optarg, ",", &save);
+			     tok && npattern < MAX_PATTERN;
+			     tok = strtok_r(NULL, ",", &save))
+				pattern[npattern++] = strtol(tok, NULL, 0);
+			break;
+		}
 		case 'r':
 			srandom(strtoul(optarg, NULL, 0));
 			break;
@@ -305,6 +475,9 @@ int main(int argc, char **argv)
 			break;
 		case 'v':
 			verbose = true;
+			break;
+		case 'x':
+			unusable = strtoul(optarg, NULL, 0);
 			break;
 		case 'h':
 			print_usage();
@@ -317,12 +490,19 @@ int main(int argc, char **argv)
 
 	for (ost = ost_min; ost <= ost_max; ost++) {
 		for (oss = oss_min; oss <= oss_max && oss <= ost; oss++) {
-			for (sc = sc_min;
-			     sc <= sc_max && sc <= ost * ost_mult; sc++) {
+			/* with -P, each layout has all of its stripe counts,
+			 * and with -M, the mirrors need different OSTs
+			 */
+			for (sc = npattern ? 1 : sc_min; sc <= sc_max &&
+			     sc + parity + unusable <=
+			     ost * ost_mult / (mirrors + 1);
+			     sc++) {
 				tested++;
 				if (rr_test_one(ost, oss, sc, mdt_count,
 						per_ost, check_first))
 					failed++;
+				if (npattern)
+					break;
 			}
 		}
 	}

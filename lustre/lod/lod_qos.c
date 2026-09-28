@@ -1446,6 +1446,50 @@ static __u32 lod_ec_add_data(const struct lu_env *env, struct lod_object *lo,
 }
 
 /**
+ * lod_rr_key() - Key for the round-robin start index of a component
+ * @env: execution environment for this thread
+ * @lo: LOD object
+ * @lod_comp: layout component to allocate
+ * @lqr: round-robin state to allocate from
+ * @cont: set if the previous allocation was for @lo with the same key
+ *
+ * Each stripe count and component extent has its own start index, see
+ * lu_rr_start().  The mirrors and EC parity of the same extent share
+ * the one of the first component with that extent, and when they are
+ * allocated one after the other they continue from each other in the
+ * round-robin array, which puts them on different OSSs.
+ *
+ * Return: key for lu_rr_start()
+ */
+static __u64 lod_rr_key(const struct lu_env *env, struct lod_object *lo,
+			struct lod_layout_component *lod_comp,
+			struct lu_qos_rr *lqr, bool *cont)
+{
+	const struct lu_fid *fid = lu_object_fid(&lo->ldo_obj.do_lu);
+	struct lod_thread_info *info = lod_env_info(env);
+	__u64 key = lod_comp->llc_extent.e_start;
+	struct lod_layout_component *comp = lod_comp;
+
+	if (lo->ldo_mirror_count > 1 || lod_comp->llc_cstripe_count ||
+	    lod_comp->llc_flags & LCME_FL_PARITY) {
+		/* not a DoM component, which has no OST stripes */
+		for (comp = lo->ldo_comp_entries; comp < lod_comp; comp++)
+			if (comp->llc_extent.e_start == key &&
+			    !(lov_pattern(comp->llc_pattern) & LOV_PATTERN_MDT))
+				break;
+	}
+	key += comp->llc_stripe_count;
+
+	*cont = lu_fid_eq(&info->lti_rr_fid, fid) &&
+		info->lti_rr_lqr == lqr && info->lti_rr_key == key;
+	info->lti_rr_fid = *fid;
+	info->lti_rr_lqr = lqr;
+	info->lti_rr_key = key;
+
+	return key;
+}
+
+/**
  * lod_ost_alloc_rr() - Allocate a striping using round-robin algorithm.
  * @env: execution environment for this thread
  * @lo: LOD object
@@ -1486,9 +1530,12 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	struct lod_pool_desc  *pool = NULL;
 	struct lod_tgt_desc *ost;
 	struct lu_tgt_pool *osts;
+	struct lu_qos_rr_stream *lqrs;
 	struct lu_qos_rr *lqr;
 	unsigned int i, array_idx;
 	__u32 stripe_idx = 0;
+	__u64 key;
+	bool cont;
 	__u32 stripe_count, stripe_count_min, ost_idx;
 	int rc, speed = 0, ost_connecting = 0;
 	int idx, stripes_per_ost = 1;
@@ -1526,7 +1573,8 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 		GOTO(out_pool, rc);
 
 	down_read(&m->lod_ost_descs.ltd_qos.lq_rw_sem);
-	lu_rr_start(lqr, osts->op_count, stripe_count);
+	key = lod_rr_key(env, lo, lod_comp, lqr, &cont);
+	lqrs = lu_rr_start(lqr, osts->op_count, stripe_count, key, cont);
 	if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)
 		stripes_per_ost =
 			(lod_comp->llc_stripe_count - 1) / osts->op_count + 1;
@@ -1534,14 +1582,14 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 repeat_find:
 	CDEBUG(D_OTHER, "pool '%s' want %d start_idx %d start_count %d offset %d active %d count %d\n",
 	       lod_comp->llc_pool ? lod_comp->llc_pool : "",
-	       stripe_count, atomic_read(&lqr->lqr_start_idx),
-	       lqr->lqr_start_count, lqr->lqr_offset_idx, osts->op_count,
+	       stripe_count, atomic_read(&lqrs->lqrs_start_idx),
+	       lqr->lqr_start_count, lqrs->lqrs_offset_idx, osts->op_count,
 	       osts->op_count);
 
 	for (i = 0, idx = 0; i < osts->op_count * stripes_per_ost &&
 		    stripe_idx < stripe_count; i++) {
 		if (likely(speed < 2) || i == 0) {
-			idx = lu_rr_next(lqr);
+			idx = lu_rr_next(lqrs);
 		} else {
 			/*
 			 * For last speed, use OSTs one by one
@@ -1782,6 +1830,7 @@ int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lu_tgt_descs *ltd = &lod->lod_mdt_descs;
 	struct lu_tgt_pool *pool;
+	struct lu_qos_rr_stream *lqrs;
 	struct lu_qos_rr *lqr;
 	struct lu_object_conf conf = { .loc_flags = LOC_F_NEW };
 	struct lu_fid fid = { 0 };
@@ -1818,13 +1867,14 @@ int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 		RETURN(rc);
 
 	down_read(&ltd->ltd_qos.lq_rw_sem);
-	lu_rr_start(lqr, pool->op_count, stripe_count - 1);
+	lqrs = lu_rr_start(lqr, pool->op_count, stripe_count - 1,
+			   stripe_count - 1, false);
 
 repeat_find:
 	CDEBUG(D_OTHER,
 	       "want=%d start_idx=%d start_count=%d offset=%d active=%d count=%d\n",
-	       stripe_count - 1, atomic_read(&lqr->lqr_start_idx),
-	       lqr->lqr_start_count, lqr->lqr_offset_idx,
+	       stripe_count - 1, atomic_read(&lqrs->lqrs_start_idx),
+	       lqr->lqr_start_count, lqrs->lqrs_offset_idx,
 	       /* if we're overstriped, the local MDT is available and is
 		* included in the count
 		*/
@@ -1838,7 +1888,7 @@ repeat_find:
 		bool local_alloc = false;
 		int idx;
 
-		idx = lu_rr_next(lqr);
+		idx = lu_rr_next(lqrs);
 		pool_idx = idx % (pool->op_count + overstriped);
 		/* in the overstriped case, we must be able to allocate a stripe
 		 * to the local MDT, ie, the one doing the allocation

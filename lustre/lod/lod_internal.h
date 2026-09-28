@@ -435,6 +435,10 @@ struct lod_thread_info {
 	struct lu_attr			lti_layout_attr;
 	/* object allocation avoid guide info */
 	struct lod_avoid_guide		lti_avoid;
+	/* the previous round-robin allocation, see lod_rr_key() */
+	struct lu_fid			lti_rr_fid;
+	struct lu_qos_rr		*lti_rr_lqr;
+	__u64				lti_rr_key;
 	union lmv_mds_md		lti_lmv;
 	struct dt_allocation_hint	lti_ah;
 	int lti_obj_count;

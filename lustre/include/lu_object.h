@@ -1556,11 +1556,23 @@ enum lq_flag {
 };
 
 #ifdef CONFIG_LUSTRE_FS_SERVER
+/* round-robin state of the layouts that share a start index */
+struct lu_qos_rr_stream {
+	__u64			 lqrs_key;	/* stripe count, extent */
+	atomic_t		 lqrs_start_idx; /* start index of new layout */
+	__u32			 lqrs_offset_idx;/* aliasing for start_idx */
+	__u32			 lqrs_layouts;	/* since offset_idx shift */
+	__u32			 lqrs_stride;	/* stripes, with mirrors */
+	__u32			 lqrs_used;	/* lqr_clock when last used */
+};
+
+#define LQR_STREAMS	16
+
 /* round-robin QoS data for LOD/LMV */
 struct lu_qos_rr {
 	spinlock_t		 lqr_alloc;	/* protect allocation index */
-	atomic_t		 lqr_start_idx;	/* start index of new inode */
-	__u32			 lqr_offset_idx;/* aliasing for start_idx */
+	struct lu_qos_rr_stream	 lqr_streams[LQR_STREAMS];
+	__u32			 lqr_clock;	/* for lqrs_used */
 	int			 lqr_start_count;/* reseed counter */
 	struct lu_tgt_pool	 lqr_pool;	/* round-robin optimized list */
 	unsigned long		 lqr_flags;

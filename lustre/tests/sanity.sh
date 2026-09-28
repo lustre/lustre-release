@@ -7360,13 +7360,14 @@ test_51d_sub() {
 	local min=4
 	local max=6 # allow variance of (1 - $min/$max) = 33% by default
 
-	# For some combinations of stripecount and OSTCOUNT current code
-	# is not ideal, and allocates 50% fewer *first* objects to some OSTs
-	# than others. Rather than skipping this test entirely, check that
-	# and keep testing to ensure imbalance does not get worse. LU-15282
-	(( (OSTCOUNT == 6 && stripecount == 4) ||
-	   (OSTCOUNT == 10 && (stripecount == 4 || stripecount == 8)) ||
-	   (OSTCOUNT == 12 && (stripecount == 8 || stripecount == 9)))) && max=9
+	# Before LU-8933, some combinations of stripecount and OSTCOUNT
+	# allocated 50% fewer *first* objects to some OSTs than others.
+	# Keep testing older MDSs to ensure imbalance does not get worse.
+	(( MDS1_VERSION < $(version_code 2.17.59.3) &&
+	   ((OSTCOUNT == 6 && stripecount == 4) ||
+	    (OSTCOUNT == 10 && (stripecount == 4 || stripecount == 8)) ||
+	    (OSTCOUNT == 12 && (stripecount == 8 || stripecount == 9)) ||
+	    (OSTCOUNT == 24 && stripecount == 16)) )) && max=9
 	for ((nlast=0, n = 1; n < $OSTCOUNT; nlast=n,n++)); do
 		(( ${objs[$n]} > ${objs[$nlast]} * 4 / 5 )) ||
 			{ $LFS df && $LFS df -i &&
@@ -7486,9 +7487,21 @@ run_test 51f "check many open files limit"
 
 test_51g() {
 	# userspace build of lu_tgt_alloc.c, so it needs no particular OSTCOUNT
-	lod_rr_test -o 3-64 -s 1-4 || error "lod_rr_test failed"
+	lod_rr_test -f -o 3-64 -s 1-4 || error "lod_rr_test failed"
 	# layouts from several MDTs into one striped directory
-	lod_rr_test -o 3-64 -s 1-4 -m 4 || error "lod_rr_test -m 4 failed"
+	lod_rr_test -f -o 3-64 -s 1-4 -m 4 || error "lod_rr_test -m 4 failed"
+	# overstriped layouts, e.g. "lfs setstripe -C -2"
+	lod_rr_test -f -o 3-32 -s 1-4 -C 4 || error "lod_rr_test -C 4 failed"
+	# PFL layouts, whose components are allocated in turn
+	lod_rr_test -f -o 3-64 -s 1-4 -P 1,4,-1 || error "lod_rr_test -P failed"
+	lod_rr_test -f -o 3-64 -s 1-4 -P 8,4,2,1 ||
+		error "lod_rr_test -P 8,4,2,1 failed"
+	# mirrors of a file, which should be on different OSSs
+	lod_rr_test -f -o 3-48 -s 2-8 -M || error "lod_rr_test -M failed"
+	lod_rr_test -f -o 4-32 -s 1-4 -M -P 3,1 ||
+		error "lod_rr_test -M -P failed"
+	# EC parity, which continues from the data stripes with the same key
+	lod_rr_test -f -o 4-32 -s 1-4 -e 2 || error "lod_rr_test -e 2 failed"
 }
 run_test 51g "check LOD round-robin allocation in userspace"
 

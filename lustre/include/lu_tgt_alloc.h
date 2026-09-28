@@ -16,14 +16,16 @@
 #include <linux/types.h>
 
 struct lu_qos_rr;
+struct lu_qos_rr_stream;
 struct lu_tgt_pool;
 
 #define LU_RR_EMPTY (~0U)
 
 void lu_rr_place_tgt(struct lu_tgt_pool *rr, __u32 tgt_idx,
 		     unsigned int svr_pos, unsigned int svr_count);
-void lu_rr_start(struct lu_qos_rr *lqr, unsigned int count,
-		 unsigned int stripes);
-unsigned int lu_rr_next(struct lu_qos_rr *lqr);
+struct lu_qos_rr_stream *lu_rr_start(struct lu_qos_rr *lqr,
+				     unsigned int count, unsigned int stripes,
+				     __u64 key, bool cont);
+unsigned int lu_rr_next(struct lu_qos_rr_stream *lqrs);
 
 #endif /* _LU_TGT_ALLOC_H */
