@@ -37,6 +37,10 @@ if [[ "$mds1_FSTYPE" == "zfs" ]]; then
 	always_except LU-18652 123F 123G 123H 126 129 132 133 135 136 137 150 152 153a 153b 153c 155 802a
 fi
 
+if (( MDSCOUNT > 9 )); then
+	always_except LU-14058 66
+fi
+
 build_test_filter
 
 # use small MDS + OST size to speed formatting time
@@ -6399,7 +6403,7 @@ test_70e() {
 
 	for i in $(seq $MDSCOUNT); do
 		soc=$(do_facet mds$i "$LCTL get_param -n \
-			mdt.*MDT000$((i - 1)).sync_lock_cancel")
+			mdt.$(mdtname_from_index $((i - 1))).sync_lock_cancel")
 		[ $soc == "blocking" ] || error "SoC not enabled on DNE"
 	done
 
@@ -8281,24 +8285,23 @@ run_test 89b "tunefs --quota keeps the other options and creates quota inodes"
 check_max_mod_rpcs_in_flight() {
 	local dir="$1"
 	local mmr="$2"
-	local idx
-	local facet
 	local tmp
 	local i
 
-	idx=$(printf "%04x" $($LFS getdirstripe -i $dir))
-	facet="mds$((0x$idx + 1))"
+	local idx=$($LFS getdirstripe -i $dir)
+	local facet="mds$((idx + 1))"
+	local mdtname=$(mdtname_from_index $idx)
 
 	if [ -z "$mmr" ]; then
 		# get value of max_mod_rcps_in_flight
 		mmr=$($LCTL get_param -n \
-			mdc.$FSNAME-MDT$idx-mdc-*.max_mod_rpcs_in_flight) ||
+		      mdc.$mdtname-mdc-*.max_mod_rpcs_in_flight) ||
 			error "Unable to get max_mod_rpcs_in_flight"
 		echo "max_mod_rcps_in_flight is $mmr"
 	else
 		# set value of max_mod_rpcs_in_flight
 		$LCTL set_param \
-		    mdc.$FSNAME-MDT$idx-mdc-*.max_mod_rpcs_in_flight=$mmr ||
+			mdc.$mdtname-mdc-*.max_mod_rpcs_in_flight=$mmr ||
 			error "Unable to set max_mod_rpcs_in_flight to $mmr"
 		echo "max_mod_rpcs_in_flight set to $mmr"
 	fi
@@ -8413,11 +8416,6 @@ test_90a() {
 run_test 90a "check max_mod_rpcs_in_flight is enforced"
 
 test_90b() {
-	local idx
-	local facet
-	local tmp
-	local mmrpc
-
 	setup
 
 	[[ $($LCTL get_param mdc.*.import |
@@ -8431,8 +8429,8 @@ test_90b() {
 
 	### test 2.
 	# check client is able to send multiple modify RPCs in paralell
-	tmp=$($LCTL get_param -n mdc.$FSNAME-MDT*-mdc-*.import |
-		grep -c "multi_mod_rpcs")
+	local tmp=$($LCTL get_param -n mdc.$FSNAME-MDT*-mdc-*.import |
+		    grep -c "multi_mod_rpcs")
 	if [ "$tmp" -ne $MDSCOUNT ]; then
 		cleanup
 		skip "Client not able to send multiple modify RPCs in parallel"
@@ -8444,16 +8442,17 @@ test_90b() {
 
 	### test 3.
 	$LFS mkdir -c1 $DIR/${tdir}3 || error "mkdir $DIR/${tdir}3 failed"
-	idx=$(printf "%04x" $($LFS getdirstripe -i $DIR/${tdir}3))
-	facet="mds$((0x$idx + 1))"
-
-	mmrpc=$(get_mdt_max_mod_rpcs_in_flight_val $facet)
+	local idx=$($LFS getdirstripe -i $DIR/${tdir}3)
+	local facet="mds$((idx + 1))"
+	local mdtname=$(mdtname_from_index $idx)
+	local mmrpc=$(get_mdt_max_mod_rpcs_in_flight_val $facet)
 	echo "mdt_max_mod_rpcs_in_flight is $mmrpc"
+
 	# update max_mod_rpcs_in_flight
 	umount_client $MOUNT
 	set_mdt_max_mod_rpcs_in_flight 16 $facet
 	mount_client $MOUNT
-	$LCTL set_param mdc.$FSNAME-MDT$idx-mdc-*.max_rpcs_in_flight=17
+	$LCTL set_param mdc.$mdtname-mdc-*.max_rpcs_in_flight=17
 	check_max_mod_rpcs_in_flight $DIR/${tdir}3 16
 
 	# restore MDT max_mod_rpcs_in_flight initial value
@@ -8587,12 +8586,12 @@ test_90d() {
 		skip "Need MDC with 'multi_mod_rpcs' feature"
 
 	$LFS mkdir -c1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	idx=$(printf "%04x" $($LFS getdirstripe -i $DIR/$tdir))
-	facet="mds$((0x$idx + 1))"
+	idx=$($LFS getdirstripe -i $DIR/$tdir)
+	facet="mds$((idx + 1))"
 
 	# check client version supports multislots
 	tmp=$($LCTL get_param -N \
-		mdc.$FSNAME-MDT$idx-mdc-*.max_mod_rpcs_in_flight)
+		mdc.$(mdtname_from_index $idx)-mdc-*.max_mod_rpcs_in_flight)
 	if [ -z "$tmp" ]; then
 		cleanup
 		skip "Client does not support multiple modify RPCs in flight"
@@ -8600,7 +8599,7 @@ test_90d() {
 
 	# get current value of max_mod_rcps_in_flight
 	mmr=$($LCTL get_param -n \
-		mdc.$FSNAME-MDT$idx-mdc-*.max_mod_rpcs_in_flight)
+		mdc.$(mdtname_from_index $idx)-mdc-*.max_mod_rpcs_in_flight)
 	echo "max_mod_rcps_in_flight is $mmr"
 
 	# create mmr files

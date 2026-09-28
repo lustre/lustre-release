@@ -31,10 +31,6 @@ OPENFILE=${OPENFILE:-openfile}
 MOUNT_2=${MOUNT_2:-"yes"}
 FAIL_ON_ERROR=false
 
-# script only handles up to 10 MDTs (because of MDT_PREFIX)
-[ $MDSCOUNT -gt 9 ] &&
-	error "script cannot handle more than 9 MDTs, please fix" && exit
-
 check_and_setup_lustre
 
 if [[ "$MDS1_VERSION" -lt $(version_code 2.12.52) ]]; then
@@ -169,9 +165,6 @@ check_lpcc_state()
 
 # initiate variables
 init_agt_vars
-
-# populate MDT device array
-get_mdt_devices
 
 # cleanup from previous bad setup
 kill_copytools

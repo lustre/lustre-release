@@ -43,6 +43,10 @@ if [[ $(uname -m) = ppc64 ]]; then
 	ALWAYS_EXCEPT+=" 601      602      603      604      605 "
 fi
 
+if (( MDSCOUNT > 9 )); then
+	always_except LU-14058 251 254b 500
+fi
+
 build_test_filter
 
 [ -n "$FILESET" ] && skip "Not functional for FILESET set"
@@ -50,10 +54,6 @@ build_test_filter
 OPENFILE=${OPENFILE:-openfile}
 MOUNT_2=${MOUNT_2:-"yes"}
 FAIL_ON_ERROR=false
-
-# script only handles up to 10 MDTs (because of MDT_PREFIX)
-[ $MDSCOUNT -gt 9 ] &&
-	error "script cannot handle more than 9 MDTs, please fix"
 
 check_and_setup_lustre
 
@@ -456,9 +456,10 @@ parse_json_event() {
 get_agent_by_uuid_mdt() {
 	local uuid=$1
 	local mdtidx=$2
-	local mds=mds$(($mdtidx + 1))
-	do_facet $mds "$LCTL get_param -n ${MDT_PREFIX}${mdtidx}.hsm.agents |\
-		 grep $uuid"
+	local mds=mds$((mdtidx + 1))
+	local mdtname=$(mdtname_from_index $mdtidx)
+
+	do_facet $mds "$LCTL get_param -n mdt.$mdtname.hsm.agents | grep $uuid"
 }
 
 check_agent_registered_by_mdt() {
@@ -530,10 +531,10 @@ evict_agent() {
 	local -i mdtidx;
 
 	for ((mdtidx = 0; mdtidx < MDSCOUNT; mdtidx++)); do
-		local facet=mds$(($mdtidx + 1))
-		local prefix=${MDT_PREFIX}${mdtidx}
+		local facet=mds$((mdtidx + 1))
 
-		do_facet $facet "$LCTL set_param $prefix.evict_client=$uuid"
+		do_facet $facet \
+			"$LCTL set_param mdt.${MDT[$mdtidx]}.evict_client=$uuid"
 	done
 }
 
@@ -574,9 +575,6 @@ reconnect_agent_node() {
 
 # initiate variables
 init_agt_vars
-
-# populate MDT device array
-get_mdt_devices
 
 # cleanup from previous bad setup
 kill_copytools
@@ -3418,13 +3416,13 @@ test_60() {
 	copytool setup -b 1 --update-interval $interval
 
 	local mdtidx=0
-	local mdt=${MDT_PREFIX}${mdtidx}
+	local mdtname=$(mdtname_from_index $mdtidx)
 	local mds=mds$((mdtidx + 1))
 
 	# Wait for copytool to register
 	wait_update_facet $mds \
-		"$LCTL get_param -n ${mdt}.hsm.agents | grep -o ^uuid" \
-		uuid 100 || error "coyptool failed to register with $mdt"
+		"$LCTL get_param -n mdt.$mdtname.hsm.agents | grep -o ^uuid" \
+		uuid 100 || error "copytool failed to register with $mdtname"
 
 	local start_at=$(date +%s)
 	$LFS hsm_archive --archive $HSM_ARCHIVE_NUMBER $f ||
@@ -3437,7 +3435,7 @@ test_60() {
 	    "grep -o start.copy \"$logfile\"" "start copy" 100 ||
 		error "copytool failed to start"
 
-	local cmd="$LCTL get_param -n ${mdt}.hsm.active_requests"
+	local cmd="$LCTL get_param -n mdt.$mdtname.hsm.active_requests"
 	cmd+=" | awk '/'$fid'.*action=ARCHIVE/ {print \\\$12}' | cut -f2 -d="
 
 	local RESULT
@@ -3492,12 +3490,13 @@ test_70() {
 	stack_trap copytool_monitor_cleanup EXIT
 	copytool_monitor_setup
 	copytool setup --event-fifo "$HSMTOOL_MONITOR_DIR/fifo"
+	local mdtname=$(mdtname_from_index 0)
 
 	# Wait for the copytool to register.
 	wait_update --verbose $(facet_active_host mds1) \
-		"$LCTL get_param -n ${MDT_PREFIX}0.hsm.agents | grep -o ^uuid" \
+		"$LCTL get_param -n mdt.$mdtname.hsm.agents | grep -o ^uuid" \
 		uuid 100 ||
-		error "copytool failed to register with MDT0000"
+		error "copytool failed to register with $mdtname"
 
 	kill_copytools
 	wait_copytools || error "Copytools failed to stop"
@@ -5489,7 +5488,7 @@ mdc_change_state() # facet, MDT_pattern, activate|deactivate
 
 test_402a() {
 	# deactivate all mdc on agent1
-	mdc_change_state $SINGLEAGT "$FSNAME-MDT000." "deactivate"
+	mdc_change_state $SINGLEAGT "$FSNAME-MDT...." "deactivate"
 
 	copytool setup --no-fail
 
@@ -5499,7 +5498,7 @@ test_402a() {
 	search_copytools $agent && error "Copytool start should have failed"
 
 	# reactivate MDCs
-	mdc_change_state $SINGLEAGT "$FSNAME-MDT000." "activate"
+	mdc_change_state $SINGLEAGT "$FSNAME-MDT...." "activate"
 }
 run_test 402a "Copytool start fails if all MDTs are inactive"
 

@@ -3649,12 +3649,12 @@ test_102a() {
 		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
 
 	$LFS mkdir -c1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	idx=$(printf "%04x" $($LFS getdirstripe -i $DIR/$tdir))
-	facet="mds$((0x$idx + 1))"
+	idx=$($LFS getdirstripe -i $DIR/$tdir)
+	facet="mds$((idx + 1))"
 
 	# get current value of max_mod_rcps_in_flight
 	num=$($LCTL get_param -n \
-		mdc.$FSNAME-MDT$idx-mdc-*.max_mod_rpcs_in_flight)
+	      mdc.$(mdtname_from_index $idx)-mdc-*.max_mod_rpcs_in_flight)
 	# set default value if client does not support multi mod RPCs
 	[ -z "$num" ] && num=1
 
@@ -3700,12 +3700,12 @@ test_102b() {
 		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
 
 	$LFS mkdir -c1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	idx=$(printf "%04x" $($LFS getdirstripe -i $DIR/$tdir))
-	facet="mds$((0x$idx + 1))"
+	idx=$($LFS getdirstripe -i $DIR/$tdir)
+	facet="mds$((idx + 1))"
 
 	# get current value of max_mod_rcps_in_flight
 	num=$($LCTL get_param -n \
-		mdc.$FSNAME-MDT$idx-mdc-*.max_mod_rpcs_in_flight)
+	      mdc.$(mdtname_from_index $idx)-mdc-*.max_mod_rpcs_in_flight)
 	# set default value if client does not support multi mod RPCs
 	[ -z "$num" ] && num=1
 
@@ -3751,12 +3751,12 @@ test_102c() {
 		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
 
 	$LFS mkdir -c1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	idx=$(printf "%04x" $($LFS getdirstripe -i $DIR/$tdir))
-	facet="mds$((0x$idx + 1))"
+	idx=$($LFS getdirstripe -i $DIR/$tdir)
+	facet="mds$((idx + 1))"
 
 	# get current value of max_mod_rcps_in_flight
 	num=$($LCTL get_param -n \
-		mdc.$FSNAME-MDT$idx-mdc-*.max_mod_rpcs_in_flight)
+	      mdc.$(mdtname_from_index $idx)-mdc-*.max_mod_rpcs_in_flight)
 	# set default value if client does not support multi mod RPCs
 	[ -z "$num" ] && num=1
 
@@ -3808,12 +3808,12 @@ test_102d() {
 		{ skip "Need MDC with 'multi_mod_rpcs' feature"; return 0; }
 
 	$LFS mkdir -c1 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
-	idx=$(printf "%04x" $($LFS getdirstripe -i $DIR/$tdir))
-	facet="mds$((0x$idx + 1))"
+	idx=$($LFS getdirstripe -i $DIR/$tdir)
+	facet="mds$((idx + 1))"
 
 	# get current value of max_mod_rcps_in_flight
 	num=$($LCTL get_param -n \
-		mdc.$FSNAME-MDT$idx-mdc-*.max_mod_rpcs_in_flight)
+	      mdc.$(mdtname_from_index $idx)-mdc-*.max_mod_rpcs_in_flight)
 	# set default value if client does not support multi mod RPCs
 	[ -z "$num" ] && num=1
 

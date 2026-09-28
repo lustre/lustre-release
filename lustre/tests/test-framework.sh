@@ -12478,8 +12478,6 @@ init_agt_vars() {
 
 	HSM_ARCHIVE_NUMBER=2
 
-	# The test only support up to 10 MDTs
-	MDT_PREFIX="mdt.$FSNAME-MDT000"
 	HSM_PARAM="mdt.$(mdtname_from_index 0).hsm"
 
 	# archive is purged at copytool setup
