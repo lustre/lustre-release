@@ -187,6 +187,37 @@ out:
 }
 EXPORT_SYMBOL(lu_qos_del_tgt);
 
+#ifdef CONFIG_LUSTRE_FS_SERVER
+/**
+ * lu_qos_rr_init() - Initialize round-robin allocation state
+ * @lqr: round-robin state
+ *
+ * Return:
+ * * %0 on success
+ * * %-ENOMEM if the round-robin array could not be allocated
+ */
+int lu_qos_rr_init(struct lu_qos_rr *lqr)
+{
+	spin_lock_init(&lqr->lqr_alloc);
+	set_bit(LQ_DIRTY, &lqr->lqr_flags);
+
+	return lu_tgt_pool_init(&lqr->lqr_pool, 0);
+}
+EXPORT_SYMBOL(lu_qos_rr_init);
+
+/**
+ * lu_qos_rr_fini() - Free a round-robin array and its failure domains
+ * @lqr: round-robin state
+ */
+void lu_qos_rr_fini(struct lu_qos_rr *lqr)
+{
+	lu_tgt_pool_free(&lqr->lqr_pool);
+	OBD_FREE_LARGE(lqr->lqr_fdoms, lqr->lqr_fdoms_size);
+	lqr->lqr_fdoms = NULL;
+}
+EXPORT_SYMBOL(lu_qos_rr_fini);
+#endif /* CONFIG_LUSTRE_FS_SERVER */
+
 /**
  * lu_tgt_qos_weight_calc() - Calculate weight for a given tgt.
  * @tgt: target descriptor

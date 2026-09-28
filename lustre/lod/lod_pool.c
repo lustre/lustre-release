@@ -67,7 +67,7 @@ static void lod_pool_putref_free(struct kref *kref)
 
 	LASSERT(list_empty(&pool->pool_list));
 	LASSERT(pool->pool_proc_entry == NULL);
-	lu_tgt_pool_free(&(pool->pool_rr.lqr_pool));
+	lu_qos_rr_fini(&pool->pool_rr);
 	lu_tgt_pool_free(&(pool->pool_obds));
 	OBD_FREE_RCU(pool, sizeof(*pool), pool_rcu);
 	EXIT;
@@ -415,9 +415,7 @@ int lod_pool_new(struct obd_device *obd, char *poolname)
 	if (rc)
 		GOTO(out_free_pool, rc);
 
-	lu_qos_rr_init(&new_pool->pool_rr);
-
-	rc = lu_tgt_pool_init(&new_pool->pool_rr.lqr_pool, 0);
+	rc = lu_qos_rr_init(&new_pool->pool_rr);
 	if (rc)
 		GOTO(out_free_pool_obds, rc);
 
@@ -485,7 +483,7 @@ out_err:
 	lprocfs_remove(&new_pool->pool_spill_proc_entry);
 	lprocfs_remove(&new_pool->pool_proc_entry);
 
-	lu_tgt_pool_free(&new_pool->pool_rr.lqr_pool);
+	lu_qos_rr_fini(&new_pool->pool_rr);
 out_free_pool_obds:
 	lu_tgt_pool_free(&new_pool->pool_obds);
 out_free_pool:

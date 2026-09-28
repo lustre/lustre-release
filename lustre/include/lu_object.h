@@ -1568,6 +1568,8 @@ struct lu_qos_rr_stream {
 
 #define LQR_STREAMS	16
 
+struct lu_rr_fdoms;
+
 /* round-robin QoS data for LOD/LMV */
 struct lu_qos_rr {
 	spinlock_t		 lqr_alloc;	/* protect allocation index */
@@ -1576,13 +1578,13 @@ struct lu_qos_rr {
 	int			 lqr_start_count;/* reseed counter */
 	struct lu_tgt_pool	 lqr_pool;	/* round-robin optimized list */
 	unsigned long		 lqr_flags;
+	int			 lqr_rr_gen;	/* lq_rr_gen of lqr_pool */
+	struct lu_rr_fdoms	*lqr_fdoms;	/* lqr_pool failure domains */
+	size_t			 lqr_fdoms_size;/* size of lqr_fdoms */
 };
 
-static inline void lu_qos_rr_init(struct lu_qos_rr *lqr)
-{
-	spin_lock_init(&lqr->lqr_alloc);
-	set_bit(LQ_DIRTY, &lqr->lqr_flags);
-}
+int lu_qos_rr_init(struct lu_qos_rr *lqr);
+void lu_qos_rr_fini(struct lu_qos_rr *lqr);
 
 #endif /* CONFIG_LUSTRE_FS_SERVER */
 
@@ -1672,6 +1674,7 @@ struct lu_qos {
 	unsigned int		 lq_threshold_rr;/* priority for rr */
 #ifdef CONFIG_LUSTRE_FS_SERVER
 	struct lu_qos_rr	 lq_rr;          /* round robin qos data */
+	atomic_t		 lq_rr_gen;	/* RR array changes */
 #endif
 	unsigned long		 lq_flags;
 };

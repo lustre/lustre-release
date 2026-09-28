@@ -5758,6 +5758,73 @@ test_35b() {
 }
 run_test 35b "test FLR OSTs allocations using failure domains"
 
+test_35c() {
+	(( MDS1_VERSION >= $(version_code 2.17.59.3) )) ||
+		skip "need MDS >= 2.17.59.3 for failure domain RR balance"
+	(( OSTCOUNT >= 6 )) || skip "needs >= 6 OSTs"
+	enable_ec
+
+	local td=$DIR/$tdir
+	local mdts=$(comma_list $(mdts_nodes))
+	local qos_old=$(do_facet mds1 \
+		"$LCTL get_param -n lod.$FSNAME-*.qos_threshold_rr" | head -n 1)
+
+	do_nodes $mdts "$LCTL set_param lod.$FSNAME-*.qos_threshold_rr=100"
+	stack_trap "do_nodes $mdts \
+		'$LCTL set_param lod.$FSNAME-*.qos_threshold_rr=${qos_old%%%}'"
+
+	test_mkdir -i 0 -c 1 $td
+	stack_trap "rm -rf $td"
+
+	# domains of different sizes: half of the OSTs in domain 1, and the
+	# rest alternating between domains 2 and 3
+	stack_trap "clear_failure_domain"
+	local ost domain ostname
+	local -a fd
+
+	for ((ost = 0; ost < OSTCOUNT; ost++)); do
+		fd[ost]=$((ost < OSTCOUNT / 2 ? 1 : ost % 2 + 2))
+		ostname=$(ostname_from_index $ost)
+		do_facet ost$((ost + 1)) $LCTL set_param -n \
+			obdfilter.$ostname.failure_domain=${fd[ost]}
+		wait_update_facet client \
+			"$LFS df --ost=$ost --output=domain $MOUNT" \
+			"${fd[ost]}" || error "OST$ost domain not ${fd[ost]}"
+	done
+	sleep 10 # MDS statfs cache, see clear_failure_domain()
+
+	# each 2+1 layout needs one OST from every domain
+	local nfiles=$((OSTCOUNT * 20))
+	local i
+
+	for ((i = 0; i < nfiles; i++)); do
+		$LFS setstripe -E -1 -c 2 --ec 2+1 $td/g$i ||
+			error "setstripe $td/g$i failed"
+	done
+
+	# OSTs in the same domain should have about the same number of
+	# objects, and none may be skipped entirely
+	local layouts=$($LFS getstripe $td/g*)
+	local -a objs
+
+	for ((ost = 0; ost < OSTCOUNT; ost++)); do
+		objs[ost]=$(grep -Ec "l_ost_idx: +$ost," <<< "$layouts")
+		echo "OST$ost domain ${fd[ost]} has ${objs[ost]} objects"
+	done
+	for domain in 1 2 3; do
+		local min=$nfiles max=0
+
+		for ((ost = 0; ost < OSTCOUNT; ost++)); do
+			(( fd[ost] == domain )) || continue
+			(( objs[ost] < min )) && min=${objs[ost]}
+			(( objs[ost] > max )) && max=${objs[ost]}
+		done
+		(( min > 0 && max * 4 <= min * 5 )) ||
+			error "domain $domain objects min $min max $max"
+	done
+}
+run_test 35c "check RR balance with unequal failure domains"
+
 test_40a() {
 	(( $OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs for EC rebuild"
 

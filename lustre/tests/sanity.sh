@@ -7502,6 +7502,25 @@ test_51g() {
 		error "lod_rr_test -M -P failed"
 	# EC parity, which continues from the data stripes with the same key
 	lod_rr_test -f -o 4-32 -s 1-4 -e 2 || error "lod_rr_test -e 2 failed"
+	# OSS generations with different OST counts
+	lod_rr_test -f -o 4-48 -s 2-8 -B || error "lod_rr_test -B failed"
+	# EC and FLR layouts need their stripes in different failure domains
+	lod_rr_test -f -o 3-64 -s 1-8 -d 1-8 || error "lod_rr_test -d failed"
+	# some OSTs without a failure domain
+	lod_rr_test -f -o 3-64 -s 2-8 -d 1-8 -u ||
+		error "lod_rr_test -d -u failed"
+	# PFL layouts with EC or FLR components
+	lod_rr_test -f -o 4-64 -s 4-16 -d 3-8 -P 3,1,2 ||
+		error "lod_rr_test -d -P failed"
+	# OSSs with OSTs in several failure domains
+	lod_rr_test -f -o 3-48 -s 1-8 -d 1-8 -D ||
+		error "lod_rr_test -d -D failed"
+	# FLR mirrors in different failure domains
+	lod_rr_test -f -o 4-64 -s 2-8 -d 2-8 -M ||
+		error "lod_rr_test -d -M failed"
+	# EC parity in different failure domains from the data stripes
+	lod_rr_test -f -o 4-32 -s 2-8 -d 2-8 -e 2 ||
+		error "lod_rr_test -d -e 2 failed"
 }
 run_test 51g "check LOD round-robin allocation in userspace"
 

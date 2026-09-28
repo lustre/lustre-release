@@ -2717,7 +2717,7 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 	if (rc)
 		GOTO(out_hash, rc);
 
-	rc = lu_tgt_pool_init(&lod->lod_mdt_descs.ltd_qos.lq_rr.lqr_pool, 0);
+	rc = lu_qos_rr_init(&lod->lod_mdt_descs.ltd_qos.lq_rr);
 	if (rc)
 		GOTO(out_mdt_pool, rc);
 
@@ -2725,7 +2725,7 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 	if (rc)
 		GOTO(out_mdt_rr_pool, rc);
 
-	rc = lu_tgt_pool_init(&lod->lod_ost_descs.ltd_qos.lq_rr.lqr_pool, 0);
+	rc = lu_qos_rr_init(&lod->lod_ost_descs.ltd_qos.lq_rr);
 	if (rc)
 		GOTO(out_ost_pool, rc);
 
@@ -2734,7 +2734,7 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 out_ost_pool:
 	lu_tgt_pool_free(&lod->lod_ost_descs.ltd_tgt_pool);
 out_mdt_rr_pool:
-	lu_tgt_pool_free(&lod->lod_mdt_descs.ltd_qos.lq_rr.lqr_pool);
+	lu_qos_rr_fini(&lod->lod_mdt_descs.ltd_qos.lq_rr);
 out_mdt_pool:
 	lu_tgt_pool_free(&lod->lod_mdt_descs.ltd_tgt_pool);
 out_hash:
@@ -2764,9 +2764,9 @@ int lod_pools_fini(struct lod_device *lod)
 	}
 
 	lod_pool_hash_destroy(&lod->lod_pools_hash_body);
-	lu_tgt_pool_free(&lod->lod_ost_descs.ltd_qos.lq_rr.lqr_pool);
+	lu_qos_rr_fini(&lod->lod_ost_descs.ltd_qos.lq_rr);
 	lu_tgt_pool_free(&lod->lod_ost_descs.ltd_tgt_pool);
-	lu_tgt_pool_free(&lod->lod_mdt_descs.ltd_qos.lq_rr.lqr_pool);
+	lu_qos_rr_fini(&lod->lod_mdt_descs.ltd_qos.lq_rr);
 	lu_tgt_pool_free(&lod->lod_mdt_descs.ltd_tgt_pool);
 
 	RETURN(0);

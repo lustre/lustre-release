@@ -92,7 +92,15 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 		rc = 0;
 	}
 	if (!rc) {
-		tgt->ltd_qos.ltq_failure_domain = tgt->ltd_statfs.os_failure_domain;
+		/* the round-robin arrays are ordered by failure domain */
+		if (tgt->ltd_qos.ltq_failure_domain !=
+		    tgt->ltd_statfs.os_failure_domain) {
+			tgt->ltd_qos.ltq_failure_domain =
+				tgt->ltd_statfs.os_failure_domain;
+			/* pairs with smp_rmb() in lod_qos_calc_rr() */
+			smp_mb__before_atomic();
+			atomic_inc(&ltd->ltd_qos.lq_rr_gen);
+		}
 		rc = lod_statfs_check(ltd, tgt);
 	}
 
@@ -209,7 +217,7 @@ void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
 }
 
 /**
- * lod_qos_calc_rr() - Calculate optimal round-robin order with regard to OSSes
+ * lod_qos_calc_rr() - Calculate optimal round-robin order of targets
  * @lod: LOD device
  * @ltd: tgt table
  * @src_pool: tgt pool
@@ -217,9 +225,9 @@ void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
  *
  * Place all the OSTs from pool @src_pool in a special array to be used for
  * round-robin (RR) stripe allocation.  The placement algorithm interleaves
- * OSTs from the different OSSs so that RR allocation can balance OSSs evenly.
- * Resorts the targets when the number of active targets changes (because of
- * a new target or activation/deactivation).
+ * OSTs from different failure domains and OSSs so that RR allocation can
+ * balance them evenly (see lu_rr_fill()).  Resorts the targets when the
+ * targets in the pool or their failure domains change.
  *
  * Return:
  * * %0 on success
@@ -229,14 +237,17 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 			   const struct lu_tgt_pool *src_pool,
 			   struct lu_qos_rr *lqr)
 {
-	struct lu_svr_qos  *svr;
+	int rr_gen = atomic_read(&ltd->ltd_qos.lq_rr_gen);
+	unsigned int placed, real_count;
+	struct lu_rr_fdoms *fdoms = NULL;
+	struct lu_rr_tgt *tgts;
+	size_t fdoms_size = 0;
 	struct lu_tgt_desc *tgt;
-	unsigned placed, real_count;
 	unsigned int i;
 	int rc;
 	ENTRY;
 
-	if (!test_bit(LQ_DIRTY, &lqr->lqr_flags)) {
+	if (!test_bit(LQ_DIRTY, &lqr->lqr_flags) && lqr->lqr_rr_gen == rr_gen) {
 		LASSERT(lqr->lqr_pool.op_size);
 		RETURN(0);
 	}
@@ -248,13 +259,21 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 	 * Check again. While we were sleeping on @lq_rw_sem something could
 	 * change.
 	 */
-	if (!test_bit(LQ_DIRTY, &lqr->lqr_flags)) {
+	rr_gen = atomic_read(&ltd->ltd_qos.lq_rr_gen);
+	/* read ltq_failure_domain below after lq_rr_gen */
+	smp_rmb();
+	if (!test_bit(LQ_DIRTY, &lqr->lqr_flags) && lqr->lqr_rr_gen == rr_gen) {
 		LASSERT(lqr->lqr_pool.op_size);
 		up_write(&ltd->ltd_qos.lq_rw_sem);
 		RETURN(0);
 	}
 
 	real_count = src_pool->op_count;
+	OBD_ALLOC_PTR_ARRAY_LARGE(tgts, real_count);
+	if (!tgts) {
+		up_write(&ltd->ltd_qos.lq_rw_sem);
+		RETURN(-ENOMEM);
+	}
 
 	/* Zero the pool array */
 	/* alloc_rr is holding a read lock on the pool, so nobody is adding/
@@ -264,35 +283,40 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 	rc = lu_tgt_pool_extend(&lqr->lqr_pool, real_count);
 	if (rc) {
 		up_write(&ltd->ltd_qos.lq_rw_sem);
+		OBD_FREE_PTR_ARRAY_LARGE(tgts, real_count);
 		RETURN(rc);
 	}
 	for (i = 0; i < lqr->lqr_pool.op_count; i++)
 		lqr->lqr_pool.op_array[i] = LU_RR_EMPTY;
 
-	/* Place all the tgts from 1 svr at the same time. */
-	placed = 0;
-	list_for_each_entry(svr, &ltd->ltd_qos.lq_svr_list, lsq_svr_list) {
-		int j = 0;
+	for (placed = 0, i = 0; i < real_count; i++) {
+		if (!test_bit(src_pool->op_array[i], ltd->ltd_tgt_bitmap))
+			continue;
 
-		for (i = 0; i < lqr->lqr_pool.op_count; i++) {
-			if (!test_bit(src_pool->op_array[i],
-				      ltd->ltd_tgt_bitmap))
-				continue;
-
-			tgt = LTD_TGT(ltd, src_pool->op_array[i]);
-			LASSERT(tgt && tgt->ltd_tgt);
-			if (tgt->ltd_qos.ltq_svr != svr)
-				continue;
-
-			lu_rr_place_tgt(&lqr->lqr_pool, src_pool->op_array[i],
-					j, svr->lsq_tgt_count);
-			j++;
-			placed++;
-		}
+		tgt = LTD_TGT(ltd, src_pool->op_array[i]);
+		LASSERT(tgt && tgt->ltd_tgt);
+		tgts[placed].lrrt_idx = src_pool->op_array[i];
+		tgts[placed].lrrt_svr = tgt->ltd_qos.ltq_svr->lsq_id;
+		tgts[placed].lrrt_fdom = tgt->ltd_qos.ltq_failure_domain;
+		if (tgts[placed].lrrt_fdom && !fdoms_size)
+			fdoms_size = lu_rr_fdoms_size(real_count);
+		placed++;
 	}
+	/* without it, failure domains are only balanced for equal sizes */
+	if (fdoms_size)
+		OBD_ALLOC_LARGE(fdoms, fdoms_size);
+	lu_rr_fill(&lqr->lqr_pool, fdoms, tgts, placed);
 
+	OBD_FREE_LARGE(lqr->lqr_fdoms, lqr->lqr_fdoms_size);
+	lqr->lqr_fdoms = fdoms;
+	lqr->lqr_fdoms_size = fdoms ? fdoms_size : 0;
+	lqr->lqr_rr_gen = rr_gen;
 	clear_bit(LQ_DIRTY, &lqr->lqr_flags);
+	/* try to allocate the failure domain state again next time */
+	if (fdoms_size && !fdoms)
+		set_bit(LQ_DIRTY, &lqr->lqr_flags);
 	up_write(&ltd->ltd_qos.lq_rw_sem);
+	OBD_FREE_PTR_ARRAY_LARGE(tgts, real_count);
 
 	if (placed != real_count) {
 		/* This should never happen */
@@ -604,6 +628,47 @@ static inline void lod_avoid_update(struct lod_object *lo,
 		return;
 
 	lag->lag_ost_avail--;
+}
+
+/*
+ * whether the other mirrors of a layout use some of the servers, but not
+ * all of them, so that the ones they don't use can be preferred
+ */
+static bool lod_oss_avoid_some(const struct lu_env *env,
+			       struct lu_tgt_descs *ltd)
+{
+	struct lod_avoid_guide *lag = &lod_env_info(env)->lti_avoid;
+	struct lu_svr_qos *lsq;
+	int count = 0;
+
+	if (!lag->lag_oaa_count)
+		return false;
+	list_for_each_entry(lsq, &ltd->ltd_qos.lq_svr_list, lsq_svr_list)
+		if (++count > lag->lag_oaa_count)
+			return true;
+	return false;
+}
+
+/* whether the other mirrors of the layout already use the OSS of @ost */
+static bool lod_oss_avoided(const struct lu_env *env,
+			    struct lod_tgt_desc *ost)
+{
+	struct lod_avoid_guide *lag = &lod_env_info(env)->lti_avoid;
+	int i;
+
+	for (i = 0; i < lag->lag_oaa_count; i++)
+		if (lag->lag_oss_avoid_array[i] == ost->ltd_qos.ltq_svr->lsq_id)
+			return true;
+	return false;
+}
+
+/* whether to try the next OST of a failure domain for this stripe */
+static bool lod_fdom_tgt_skip(const struct lu_env *env, struct lod_device *m,
+			      __u32 ost_idx, int stripe_idx, bool oss_avoid)
+{
+	return lod_qos_is_tgt_used(env, ost_idx, stripe_idx) ||
+	       (oss_avoid && test_bit(ost_idx, m->lod_ost_bitmap) &&
+		lod_oss_avoided(env, OST_TGT(m, ost_idx)));
 }
 
 static inline bool lod_should_avoid_ost(struct lod_object *lo,
@@ -1532,7 +1597,7 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	struct lu_tgt_pool *osts;
 	struct lu_qos_rr_stream *lqrs;
 	struct lu_qos_rr *lqr;
-	unsigned int i, array_idx;
+	unsigned int i, array_idx, fdom_base = 0;
 	__u32 stripe_idx = 0;
 	__u64 key;
 	bool cont;
@@ -1542,6 +1607,9 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	bool overstriped = false;
 	bool want_overstriping;
 	struct lod_layout_component *linked_comp = NULL;
+	bool fdom_rr = false;
+	bool fdom_slots = false;
+	bool oss_avoid = false;
 	ENTRY;
 
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
@@ -1575,6 +1643,15 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	down_read(&m->lod_ost_descs.ltd_qos.lq_rw_sem);
 	key = lod_rr_key(env, lo, lod_comp, lqr, &cont);
 	lqrs = lu_rr_start(lqr, osts->op_count, stripe_count, key, cont);
+	/* stripes in different failure domains, see lu_rr_fdom_tgt() */
+	if (lqr->lqr_fdoms &&
+	    (lod_comp->llc_cstripe_count || lo->ldo_mirror_count > 1)) {
+		fdom_rr = true;
+		fdom_base = lu_rr_reserve(lqrs, stripe_count);
+		/* FLR mirrors on different OSSs, EC has its domains */
+		oss_avoid = !lod_comp->llc_cstripe_count &&
+			    lod_oss_avoid_some(env, &m->lod_ost_descs);
+	}
 	if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)
 		stripes_per_ost =
 			(lod_comp->llc_stripe_count - 1) / osts->op_count + 1;
@@ -1588,7 +1665,9 @@ repeat_find:
 
 	for (i = 0, idx = 0; i < osts->op_count * stripes_per_ost &&
 		    stripe_idx < stripe_count; i++) {
-		if (likely(speed < 2) || i == 0) {
+		if (fdom_rr) {
+			idx = fdom_base + i + 1;
+		} else if (likely(speed < 2) || i == 0) {
 			idx = lu_rr_next(lqrs);
 		} else {
 			/*
@@ -1624,6 +1703,45 @@ repeat_find:
 				continue;
 		}
 
+		/*
+		 * The next OST of the slot's domain, see lu_rr_fdom_tgt().
+		 * Concurrent creates advance the same counter, so a retry
+		 * uses the OST of each slot to try every OST once.
+		 */
+		if (fdom_rr && !speed && !fdom_slots) {
+			__u32 slot_fdom = ost->ltd_qos.ltq_failure_domain;
+			unsigned int tries = lu_rr_fdom_count(lqr->lqr_fdoms,
+							    array_idx);
+			/* parity doesn't take the first stripes of the data */
+			bool first = !stripe_idx &&
+				     !(lod_comp->llc_flags & LCME_FL_PARITY);
+
+			/* prefer an OST that this layout doesn't use yet,
+			 * on an OSS that its other mirrors don't use
+			 */
+			do {
+				ost_idx = lu_rr_fdom_tgt(lqr->lqr_fdoms,
+					array_idx, lqrs - lqr->lqr_streams,
+					first);
+			} while (--tries &&
+				 lod_fdom_tgt_skip(env, m, ost_idx, stripe_idx,
+						   oss_avoid));
+			/* if none would do, move the rotation on by one */
+			if (!tries && lod_fdom_tgt_skip(env, m, ost_idx,
+						       stripe_idx, oss_avoid))
+				ost_idx = lu_rr_fdom_tgt(lqr->lqr_fdoms,
+					array_idx, lqrs - lqr->lqr_streams,
+					first);
+			CDEBUG(D_OTHER, "#%d ary %d domain gives idx %d\n", i,
+			       array_idx, ost_idx);
+			if (!test_bit(ost_idx, m->lod_ost_bitmap))
+				continue;
+			ost = OST_TGT(m, ost_idx);
+			/* changed since lod_qos_calc_rr() built the array */
+			if (ost->ltd_qos.ltq_failure_domain != slot_fdom)
+				continue;
+		}
+
 		if ((lod_comp->llc_flags & LCME_FL_PARITY) && data_comp &&
 		    !lod_ec_check_data_usable(lo, ost_idx, stripe_idx,
 					     sc, data_comp, lod_comp))
@@ -1646,6 +1764,12 @@ repeat_find:
 					       reserve);
 		if (rc != 0 && ost->ltd_discon)
 			ost_connecting = 1;
+	}
+	/* a domain offers only one OST per slot, so try the slot OSTs too */
+	if (fdom_rr && !speed && !fdom_slots && stripe_idx < stripe_count) {
+		fdom_slots = true;
+		ost_connecting = 0;
+		goto repeat_find;
 	}
 	if ((speed < 2) && (stripe_idx < stripe_count_min)) {
 		/* Try again, allowing slower OSCs */
