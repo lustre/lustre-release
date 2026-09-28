@@ -7932,19 +7932,33 @@ banner() {
 	log "$msg== $(date +"%H:%M:%S (%s)")"
 }
 
+# Print a remote command that prints dmesg errors on a node since the newest
+# $TESTNAME marker, check stamp, or banner, and writes a new check stamp
+dmesg_errors_cmd() {
+	local stamp="Lustre: dmesg checked"
+	local mark="$TESTSUITE:* ${TESTNAME//_/ }[: ]|$stamp"
+	local errors
+
+	mark+="|DEBUG MARKER: == $TESTSUITE test "
+	errors="VFS: Busy inodes after unmount of"
+	errors+="|ldiskfs_check_descriptors: Checksum for group 0 failed"
+	errors+="|group descriptors corrupted"
+	errors+="|JBD2: Spotted dirty metadata buffer"
+	errors+="|UBSAN|KASAN"
+
+	# Filter on the node, rather than copying all of dmesg back.  Check
+	# since the newest of this subtest's marker, the last check's stamp, or
+	# a banner (the modules may not be loaded to mark it, e.g. conf-sanity),
+	# or all of dmesg if none.  The stamp works without Lustre modules.
+	echo "{ dmesg | tac | sed -E -e '/$mark/,\\\$ d' | grep -E '$errors';
+		echo '$stamp' > /dev/kmsg; }"
+}
+
 check_dmesg_for_errors() {
 	local res
-	local errors
-	local testid=$(tr '_' ' ' <<< $TESTNAME)
 
-	errors="VFS: Busy inodes after unmount of"
-	errors+="\|ldiskfs_check_descriptors: Checksum for group 0 failed"
-	errors+="\|group descriptors corrupted"
-	errors+="\|JBD2: Spotted dirty metadata buffer"
-	errors+="\|UBSAN\|KASAN"
-
-	res=$(do_nodes -q $(comma_list $(nodes_list)) "dmesg" |
-		tac | sed "/$testid/,$ d" | grep "$errors")
+	res=$(do_nodes -q $(comma_list $(nodes_list)) \
+	      "$(dmesg_errors_cmd); true")
 	[[ -n "$res" ]] || return 0
 	echo "Kernel error detected: $res"
 	return 1
@@ -7969,10 +7983,8 @@ run_one() {
 	banner "test $testnum: $testmsg"
 	test_${testnum} || error "test_$testnum failed with $?"
 	cd $SAVE_PWD
-	reset_fail_loc
+	check_nodes_after_test
 	check_grant ${testnum} || error "check_grant $testnum failed with $?"
-	check_node_health
-	check_dmesg_for_errors || error "Error in dmesg detected"
 	if [ "$PARALLEL" != "yes" ]; then
 		ps auxww | grep -v grep | grep -q "multiop " &&
 					error "multiop still running"
@@ -8902,12 +8914,14 @@ restore_lustre_params() {
 	done
 }
 
-check_node_health() {
-	local nodes=${1:-$(comma_list $(nodes_list))}
-	local health=$TMP/node_health.$$
+# Report an LBUG from "get_param catastrophe" output in <file>, and check the
+# network of all <nodes> if any of them did not print it
+check_node_health_output() {
+	local nodes=$1
+	local health=$2
+	local node
 
-	do_nodes -q $nodes "$LCTL get_param catastrophe 2>&1" | tee $health |
-		grep "catastrophe=1" && error "LBUG/LASSERT detected"
+	grep "catastrophe=1" $health && error "LBUG/LASSERT detected"
 	# Only check/report network health if get_param isn't reported, since
 	# *clearly* the network is working if get_param returned something.
 	if (( $(grep -c catastro $health) != $(wc -w <<< ${nodes//,/ }) )); then
@@ -8915,7 +8929,35 @@ check_node_health() {
 			check_network $node 60
 		done
 	fi
+}
+
+check_node_health() {
+	local nodes=${1:-$(comma_list $(nodes_list))}
+	local health=$TMP/node_health.$$
+
+	do_nodes -q $nodes "$LCTL get_param catastrophe 2>&1" > $health
+	check_node_health_output $nodes $health
 	rm -f $health
+}
+
+# Reset fail_loc and check every node for an LBUG or dmesg errors after a
+# subtest, with one remote command per node instead of three
+check_nodes_after_test() {
+	local nodes=$(comma_list $(nodes_list))
+	local out=$TMP/node_check.$$
+	local res
+
+	do_nodes -q $nodes \
+		"$LCTL set_param -n fail_loc=0 fail_val=0 2>/dev/null;
+		 $LCTL get_param catastrophe 2>&1;
+		 $(dmesg_errors_cmd) | sed -e 's/^/dmesg: /'" > $out
+	grep -v "^dmesg: " $out > $out.health
+	check_node_health_output $nodes $out.health
+	res=$(sed -n -e 's/^dmesg: //p' $out)
+	rm -f $out $out.health
+	[[ -n "$res" ]] || return 0
+	echo "Kernel error detected: $res"
+	error "Error in dmesg detected"
 }
 
 mdsrate_cleanup () {
