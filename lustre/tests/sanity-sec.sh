@@ -291,6 +291,9 @@ test_5() {
 	local num
 	local uid
 
+	(( MDS1_VERSION >= $(version_code v2_17_51-96-g285bf18567) )) ||
+		skip "Need MDS >= 2.17.51.96 for l_getidentity errno"
+
 	remote_mds || skip_env "needs remote MDS"
 
 	for ((num = 1; num < 500; num++)); do
@@ -7531,6 +7534,8 @@ test_64a() {
 	local local_admin=""
 	local pool_quota=""
 	local lqa_quota=""
+	local projid_set=""
+	local foreign_ops=""
 	local rbac
 
 	(( MDS1_VERSION >= $(version_code v2_15_54-111-g971e025f5f) )) ||
@@ -7548,10 +7553,10 @@ test_64a() {
 	(( MDS1_VERSION >= $(version_code v2_17_52-1-gedcf58d579) )) &&
 		lqa_quota="lqa_quota_ops"
 
-	(( MDS1_VERSION >= $(version_code 2.17.52) )) &&
+	(( MDS1_VERSION >= $(version_code v2_17_52-3-g50aaabfc16) )) &&
 		projid_set="projid_set"
 
-	(( MDS1_VERSION >= $(version_code 2.17.52) )) &&
+	(( MDS1_VERSION >= $(version_code v2_17_52-77-gaec30763f9) )) &&
 		foreign_ops="foreign_ops"
 
 	stack_trap cleanup_local_client_nodemap EXIT
@@ -7579,7 +7584,8 @@ test_64a() {
 	done
 
 	# projid_set is required for 'lfs project'
-	rbac="projid_set,file_perms"
+	rbac="file_perms"
+	[ -z "$projid_set" ] || rbac="$projid_set,$rbac"
 	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	do_facet mgs $LCTL nodemap_modify --name c0 \
 		 --property rbac --value $rbac ||
@@ -7594,11 +7600,11 @@ test_64a() {
 	$LFS project -p 1000 $testfile || error "setting project failed"
 	set +vx
 	rm -f $testfile
-	rbac="projid_set"
-	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
+	rbac="$projid_set"
+	[ -z "$srv_uc" ] || rbac="${rbac:+$rbac,}$srv_uc"
+	rbac=${rbac:-none}
 	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
-		--value $rbac ||
-		error "setting rbac $rbac failed (2)"
+		--value $rbac || error "setting rbac $rbac failed (2)"
 	wait_nm_sync c0 rbac
 	touch $testfile
 	set -vx
@@ -7634,7 +7640,8 @@ test_64a() {
 
 	stack_trap cleanup_defaultnm_for_64
 
-	rbac="projid_set,file_perms"
+	rbac="file_perms"
+	[ -z "$projid_set" ] || rbac="$projid_set,$rbac"
 	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	do_facet mgs $LCTL nodemap_modify --name default \
 		 --property rbac=$rbac ||
@@ -7651,8 +7658,9 @@ test_64a() {
 	set +vx
 	rm -f $testfile
 
-	rbac="projid_set"
-	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
+	rbac="$projid_set"
+	[ -z "$srv_uc" ] || rbac="${rbac:+$rbac,}$srv_uc"
+	rbac=${rbac:-none}
 	do_facet mgs $LCTL nodemap_modify --name default \
 			--property rbac=$rbac ||
 		error "setting rbac $rbac on default nodemap failed (2)"
@@ -7662,8 +7670,7 @@ test_64a() {
 	chmod 777 $testfile && error "chmod should fail on default nodemap"
 	chown $TSTUSR:$TSTUSR $testfile &&
 		error "chown should fail on default nodemap"
-	chgrp $TSTUSR $testfile &&
-		error "chgrp should fail on default nodemap"
+	chgrp $TSTUSR $testfile && error "chgrp should fail on default nodemap"
 	$LFS project -p 1000 $testfile &&
 		error "setting project should fail on default nodemap"
 	set +vx
@@ -8510,6 +8517,7 @@ test_64h() {
 	local offset_limit=200000
 	local projid=1001
 	local srv_uc=""
+	local projid_set=""
 	local rbac
 	local fid
 
@@ -8518,6 +8526,9 @@ test_64h() {
 
 	(( MDS1_VERSION >= $(version_code v2_16_50-98-g3b04d6ac1d) )) &&
 		srv_uc="server_upcall"
+
+	(( MDS1_VERSION >= $(version_code v2_17_52-3-g50aaabfc16) )) &&
+		projid_set="projid_set"
 
 	do_nodes $(all_mdts_nodes) "$LCTL set_param mdt.*.identity_upcall=NONE"
 
@@ -8543,7 +8554,8 @@ test_64h() {
 			error "cannot set offset for c0"
 
 	# projid_set is required for 'lfs project'
-	rbac="projid_set,file_perms,quota_ops"
+	rbac="file_perms,quota_ops"
+	[ -z "$projid_set" ] || rbac="$projid_set,$rbac"
 	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
 		--value $rbac ||
@@ -8560,7 +8572,8 @@ test_64h() {
 	$LFS project -p $((projid+1)) -s $DIR/$tdir &&
 		error "setting projid should fail (1)"
 
-	rbac="projid_set,file_perms,quota_ops,local_admin"
+	rbac="file_perms,quota_ops,local_admin"
+	[ -z "$projid_set" ] || rbac="$projid_set,$rbac"
 	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	do_facet mgs $LCTL nodemap_modify --name c0 \
 		 --property rbac --value $rbac ||
@@ -8594,7 +8607,8 @@ test_64h() {
 	# on client is root on file system side
 	do_facet mgs $LCTL nodemap_del_offset --name c0 ||
 		error "cannot del offset for c0"
-	rbac="projid_set,file_perms,quota_ops"
+	rbac="file_perms,quota_ops"
+	[ -z "$projid_set" ] || rbac="$projid_set,$rbac"
 	[ -z "$srv_uc" ] || rbac="$rbac,$srv_uc"
 	do_facet mgs $LCTL nodemap_modify --name c0 --property rbac \
 		--value $rbac ||
@@ -8806,8 +8820,8 @@ test_64j() {
 	local srv_uc=""
 	local rbac
 
-	(( MDS1_VERSION >= $(version_code 2.17.52) )) ||
-		skip "Need MDS >= 2.17.50 for projid_set RBAC role"
+	(( MDS1_VERSION >= $(version_code v2_17_52-3-g50aaabfc16) )) ||
+		skip "Need MDS >= 2.17.52.3 for projid_set RBAC role"
 
 	(( MDS1_VERSION >= $(version_code v2_16_50-98-g3b04d6ac1d) )) &&
 		srv_uc="server_upcall"
@@ -8960,8 +8974,8 @@ test_64j() {
 run_test 64j "Nodemap enforces projid_set RBAC role"
 
 test_64k() {
-	(( MDS1_VERSION >= $(version_code 2.17.52-4) )) ||
-		skip "Need MDS >= 2.17.52.4 for foreign_ops RBAC role"
+	(( MDS1_VERSION >= $(version_code v2_17_52-77-gaec30763f9) )) ||
+		skip "Need MDS >= 2.17.52.77 for foreign_ops RBAC role"
 
 	local param=mdt.$FSNAME-*.enable_foreign_dir
 	local param_gid=${param}_gid
