@@ -16,9 +16,9 @@ llapi_layout_file_open_volatile, llapi_file_open_volatile \- open new temporary 
 .BI "                                 int " mdt_idx ", int " open_flags )
 .PP
 .BI "int llapi_file_open_volatile_param(const char *" directory ,
-.BI "                                 int " mdt_idx ", int " open_flags ,
-.BI "                                 mode_t " mode ,
-.BI "                                 const struct llapi_stripe_param *" param )
+.BI "                                   int " mdt_idx ", int " open_flags ,
+.BI "                                   mode_t " mode ,
+.BI "                                   const struct llapi_stripe_param *" param )
 .fi
 .SH DESCRIPTION
 The
@@ -125,32 +125,32 @@ int main(int argc, char *argv[])
 {
         int fd_src, fd_dst;
         __u64 dv_src, dv_dst;
-	struct llapi_layout *layout = NULL;
+        struct llapi_layout *layout = NULL;
         int rc;
 
-	layout = llapi_layout_alloc();
-	if (!layout) {
+        layout = llapi_layout_alloc();
+        if (!layout) {
                 fprintf(stderr, "%s: layout allocation failed: %s\\n",
                         argv[0], strerror(errno));
-		return errno;
-	}
-	rc = llapi_layout_stripe_count_set(layout, 2);
-	:
+                return errno;
+        }
+        rc = llapi_layout_stripe_count_set(layout, 2);
+        :
 
         fd_dst = llapi_layout_file_open_volatile(argv[1], 2, 0, 0644, layout);
         if (fd_dst < 0) {
-		rc = -fd_dst;
+                rc = -fd_dst;
                 fprintf(stderr, "%s: volatile file creation failed: %s\\n",
                         argv[0], strerror(rc));
                 goto out;
         }
         fd_src = open(argv[2], O_RDWR);
         rc = llapi_get_data_version(fd_src, &dv_src, 0);
-	:
+        :
         /* copy data from @fd_src to @fd_dst */
-	:
+        :
         rc = llapi_get_data_version(fd_src, &dv_dst, LL_DV_RD_FLUSH);
-	:
+        :
         rc = llapi_fswap_layouts(fd_src, fd_dst, dv_src, dv_dst,
                                  SWAP_LAYOUTS_CLOSE);
         if (rc < 0) {
@@ -160,7 +160,7 @@ int main(int argc, char *argv[])
         }
 
 out:
-	llapi_layout_free(layout);
+        llapi_layout_free(layout);
         return rc;
 }
 .fi

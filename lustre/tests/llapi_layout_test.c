@@ -1820,10 +1820,8 @@ static void test351(void)
 
 	llapi_layout_free(filelayout);
 
-	/* A layout naming a pool that does not exist must fail rather than
-	 * return descriptor 0.  llapi_layout_file_open() reports the sanity
-	 * failure with errno cleared, which create_volatile() turned into
-	 * fd = -errno = 0 and the caller read as success.
+	/* A layout naming a pool that does not exist must fail with errno
+	 * set, never return descriptor 0.
 	 */
 	rc = llapi_layout_pool_name_set(layout, "nosuchpool");
 	ASSERTF(rc == 0, "errno = %d", errno);

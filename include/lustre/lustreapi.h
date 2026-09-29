@@ -1065,9 +1065,6 @@ static inline int llapi_file_open_volatile(const char *directory,
 {
 	return llapi_file_open_volatile_idx(directory, -1, open_flags);
 }
-/* allow this name for consistency, but maps to the actual function */
-#define llapi_file_open_volatile_layout(dir, mdt_idx, open_flags, mode, layout)\
-	llapi_layout_file_open_volatile(dir, mdt_idx, open_flags, mode, layout)
 
 /* llapi_create_volatile*() deprecated in 2.18.0, use the equivalent
  * llapi_file_open_volatile*() instead.  These are kept as real functions
