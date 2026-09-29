@@ -3826,6 +3826,40 @@ test_48() {
 }
 run_test 48 "PCC state should check whether the file in local PCC cache"
 
+test_49() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+	local fid
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	setup_loopdev client $loopfile $mntpt 60
+	mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping client \
+		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1"
+
+	echo "QQQQQ" > $file || error "echo $file failed"
+	fid=$($LFS path2fid $file | tr -d '[]')
+	$LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file ||
+		error "attach $file failed"
+	check_lpcc_state $file "readonly" client
+
+	mount -o remount,ro $mntpt || error "remount $mntpt ro failed"
+	stack_trap "mount -o remount,rw $mntpt" EXIT
+	stat $file > /dev/null || error "stat $file failed"
+	$MULTIOP $file oO_RDWR:c && error "open $file O_RDWR should fail"
+
+	cancel_lru_locks mdc
+	do_nodes $(comma_list $(mdts_nodes)) \
+		$LCTL get_param -n "mdt.*.exports.*.open_files" |
+		grep -F "$fid" && error "$fid is still open on the MDT"
+	return 0
+}
+run_test 49 "failed PCC open should close the MDT open handle"
+
 test_96() {
 	local loopfile="$TMP/$tfile"
 	local mntpt="/mnt/pcc.$tdir"

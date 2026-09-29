@@ -1302,8 +1302,10 @@ restart:
 	/* It is not from atomic_open(). */
 	if (it == &oit) {
 		rc = pcc_file_open(inode, file);
-		if (rc)
-			GOTO(out_och_free, rc);
+		if (rc) {
+			ll_md_close(inode, file);
+			GOTO(out_nofiledata, rc);
+		}
 	}
 
 	lfd = NULL;
