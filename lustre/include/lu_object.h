@@ -1552,6 +1552,7 @@ enum lq_flag {
 	LQ_DIRTY	= 0, /* recalc qos data */
 	LQ_SAME_SPACE,	     /* OSTs all have approx the same space avail */
 	LQ_RESET,	     /* zero current penalties */
+	LQ_REBUILD,	     /* RR array rebuild pending or running */
 	LQ_SF_PROGRESS,      /* statfs op in progress */
 };
 
@@ -1579,9 +1580,16 @@ struct lu_qos_rr {
 	struct lu_tgt_pool	 lqr_pool;	/* round-robin optimized list */
 	unsigned long		 lqr_flags;
 	int			 lqr_rr_gen;	/* lq_rr_gen of lqr_pool */
+	int			 lqr_rebuild_gen; /* lq_rr_gen when stale */
 	struct lu_rr_fdoms	*lqr_fdoms;	/* lqr_pool failure domains */
+	time64_t		 lqr_rebuild_retry; /* next timed rebuild */
+	int			 lqr_active_gen; /* lq_active_gen of lqr_pool */
+	bool			 lqr_omitted; /* inactive targets left out */
+	int			 lqr_rebuild_active; /* lq_active_gen retried */
 	size_t			 lqr_fdoms_size;/* size of lqr_fdoms */
 };
+
+int lu_down_write_timeout(struct rw_semaphore *sem, time64_t timeout_sec);
 
 int lu_qos_rr_init(struct lu_qos_rr *lqr);
 void lu_qos_rr_fini(struct lu_qos_rr *lqr);
@@ -1675,6 +1683,7 @@ struct lu_qos {
 #ifdef CONFIG_LUSTRE_FS_SERVER
 	struct lu_qos_rr	 lq_rr;          /* round robin qos data */
 	atomic_t		 lq_rr_gen;	/* RR array changes */
+	atomic_t		 lq_active_gen;	/* targets becoming active */
 #endif
 	unsigned long		 lq_flags;
 };

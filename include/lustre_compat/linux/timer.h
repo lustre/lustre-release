@@ -20,7 +20,12 @@
 #include <linux/hrtimer.h>
 #include <linux/types.h>
 #include <linux/time.h>
+#include <linux/timer.h>
 #include <asm/div64.h>
+
+#ifndef HAVE_TIMER_DESTROY_ON_STACK
+#define timer_destroy_on_stack(timer) destroy_timer_on_stack(timer)
+#endif
 
 #define cfs_timer_cb_arg_t struct timer_list *
 #define cfs_from_timer(var, callback_timer, timer_fieldname) \

@@ -7,7 +7,8 @@
  *
  * lu_tgt_alloc.c is also built in userspace by lustre/tests/lod_rr_test.c,
  * so it must not use kernel interfaces beyond those stubbed there.  The
- * includer provides the definitions of struct lu_qos_rr and lu_tgt_pool.
+ * includer provides time64_t and the definitions of struct lu_qos_rr and
+ * lu_tgt_pool.
  */
 
 #ifndef _LU_TGT_ALLOC_H
@@ -48,6 +49,11 @@ struct lu_rr_fdoms {
 	__u32		  *lrfs_slot;	/* lrfs_fdom index of each array slot */
 	__u32		  *lrfs_tgts;	/* targets in lrfs_fdom order */
 };
+
+bool lu_rr_should_wait(struct lu_qos_rr *lqr, int rr_gen, int active_gen,
+		       time64_t now, time64_t maxage);
+void lu_rr_wait_failed(struct lu_qos_rr *lqr, int active_gen, time64_t now,
+		       time64_t maxage);
 
 size_t lu_rr_fdoms_size(unsigned int count);
 void lu_rr_fill(struct lu_tgt_pool *rr, struct lu_rr_fdoms *fdoms,

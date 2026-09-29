@@ -15,9 +15,131 @@
 #include <linux/gcd.h>
 #include <linux/random.h>
 #include <linux/sort.h>
+#include <lustre_compat/linux/timer.h>
 #include <obd_class.h>
 #include <lu_tgt_alloc.h>
+
+struct semaphore_timer {
+	struct timer_list timer;
+	struct task_struct *task;
+};
+
+static void process_semaphore_timer(struct timer_list *t)
+{
+	struct semaphore_timer *timeout = timer_container_of(timeout, t, timer);
+
+	send_sig(SIGKILL, timeout->task, 1);
+}
+
+/**
+ * lu_down_write_timeout() - Take a rw_semaphore for write, with a timeout
+ * @sem: semaphore to take
+ * @timeout_sec: how long to wait for it, in seconds
+ *
+ * Readers of @sem may sleep for a long time holding it, e.g. allocators
+ * waiting for objects to be precreated on an OST that is failing over
+ * (LU-15393), so don't wait for it for longer than @timeout_sec.
+ *
+ * Context: a service kthread that does not otherwise allow SIGKILL,
+ * since SIGKILL is ignored again on return.
+ *
+ * Return:
+ * * %0 with @sem held for write
+ * * %-EAGAIN if it could not be taken in time
+ */
+int lu_down_write_timeout(struct rw_semaphore *sem, time64_t timeout_sec)
+{
+	struct semaphore_timer timer;
+	int rc;
+
+	if (down_write_trylock(sem))
+		return 0;
+
+	/*
+	 * The timer wakes us from down_write_killable() with
+	 * send_sig(SIGKILL).  Set the SIGKILL disposition to
+	 * SIG_KTHREAD: the kthread default SIG_IGN would discard
+	 * the signal, and SIG_DFL would make sig_fatal() latch
+	 * SIGNAL_GROUP_EXIT on this long-lived service thread at
+	 * the first wakeup, after which kernels >= v6.1 silently
+	 * drop all further signals to this task, leaving later
+	 * waiters stuck for as long as lq_rw_sem is held.
+	 */
+	allow_signal(SIGKILL);
+	timer.task = current;
+	timer_setup_on_stack(&timer.timer, process_semaphore_timer, 0);
+	mod_timer(&timer.timer, jiffies + cfs_time_seconds(timeout_sec));
+	rc = down_write_killable(sem);
+
+	timer_delete_sync(&timer.timer);
+	timer_destroy_on_stack(&timer.timer);
+	disallow_signal(SIGKILL);
+	if (rc) {
+		flush_signals(current);
+		return -EAGAIN;
+	}
+
+	return 0;
+}
+EXPORT_SYMBOL(lu_down_write_timeout);
 #endif
+
+/* a target left out of the RR array became active since it was built */
+static bool lu_rr_missing(struct lu_qos_rr *lqr, int active_gen)
+{
+	return lqr->lqr_omitted && active_gen != lqr->lqr_active_gen;
+}
+
+/**
+ * lu_rr_should_wait() - Check if a stale RR array is worth waiting for
+ * @lqr: round-robin state
+ * @rr_gen: current lq_rr_gen
+ * @active_gen: current lq_active_gen
+ * @now: current time in seconds
+ * @maxage: qos_maxage in seconds
+ *
+ * Record when the array went stale, and wait for it to be rebuilt only
+ * once it has been stale for 10 * @maxage, or at once after each target
+ * left out of it becomes active, and then every @maxage until it is.
+ *
+ * Context: caller holds lqr_alloc.
+ *
+ * Return: true if the caller should wait for lq_rw_sem to rebuild it
+ */
+bool lu_rr_should_wait(struct lu_qos_rr *lqr, int rr_gen, int active_gen,
+		       time64_t now, time64_t maxage)
+{
+	bool missing = lu_rr_missing(lqr, active_gen);
+	time64_t retry = (missing ? 1 : 10) * maxage;
+
+	if (lqr->lqr_rebuild_gen == lqr->lqr_rr_gen) {
+		lqr->lqr_rebuild_gen = rr_gen;
+		lqr->lqr_rebuild_retry = now + retry;
+	}
+	if (missing && lqr->lqr_rebuild_active != active_gen) {
+		lqr->lqr_rebuild_active = active_gen;
+		lqr->lqr_rebuild_retry = now;
+	}
+	return lqr->lqr_rr_gen != rr_gen && now >= lqr->lqr_rebuild_retry;
+}
+EXPORT_SYMBOL(lu_rr_should_wait);
+
+/**
+ * lu_rr_wait_failed() - Put off the next wait for a stale RR array
+ * @lqr: round-robin state
+ * @active_gen: lq_active_gen when the wait started
+ * @now: current time in seconds
+ * @maxage: qos_maxage in seconds
+ *
+ * Context: caller holds lqr_alloc.
+ */
+void lu_rr_wait_failed(struct lu_qos_rr *lqr, int active_gen, time64_t now,
+		       time64_t maxage)
+{
+	lqr->lqr_rebuild_retry = now +
+		(lu_rr_missing(lqr, active_gen) ? 1 : 10) * maxage;
+}
+EXPORT_SYMBOL(lu_rr_wait_failed);
 
 #define LU_RR_RESEED_MULT 30
 #define LU_RR_RESEED_MIN  2000
@@ -232,7 +354,7 @@ EXPORT_SYMBOL(lu_rr_fdoms_size);
 static void lu_rr_fdoms_init(struct lu_rr_fdoms *fdoms, struct lu_rr_tgt *tgts,
 			   unsigned int count)
 {
-	unsigned int i;
+	unsigned int i, seg = 0;
 
 	fdoms->lrfs_count = 0;
 	fdoms->lrfs_fdom = (struct lu_rr_fdom *)(fdoms + 1);
@@ -244,12 +366,13 @@ static void lu_rr_fdoms_init(struct lu_rr_fdoms *fdoms, struct lu_rr_tgt *tgts,
 
 		fdoms->lrfs_tgts[i] = tgts[i].lrrt_idx;
 		if (tgts[i].lrrt_pos == 0) {
-			fdom = &fdoms->lrfs_fdom[fdoms->lrfs_count++];
+			seg = fdoms->lrfs_count++;
+			fdom = &fdoms->lrfs_fdom[seg];
 			memset(fdom, 0, sizeof(*fdom));
 			fdom->lrf_first = i;
 			fdom->lrf_count = tgts[i].lrrt_count;
 		}
-		tgts[i].lrrt_seg = fdoms->lrfs_count - 1;
+		tgts[i].lrrt_seg = seg;
 	}
 }
 

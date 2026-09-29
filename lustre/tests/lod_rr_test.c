@@ -22,6 +22,8 @@
 #include <string.h>
 #include <linux/types.h>
 
+#define time64_t __s64
+
 /* stubs for the kernel interfaces used by lu_tgt_alloc.c */
 typedef struct { int counter; } atomic_t;
 
@@ -108,6 +110,9 @@ struct lu_qos_rr_stream {
 #define LQR_STREAMS	16
 
 struct lu_qos_rr {
+	int lqr_rr_gen, lqr_active_gen, lqr_rebuild_gen, lqr_rebuild_active;
+	time64_t lqr_rebuild_retry;
+	bool lqr_omitted;
 	int			 lqr_alloc;
 	struct lu_qos_rr_stream	 lqr_streams[LQR_STREAMS];
 	__u32			 lqr_clock;
@@ -206,18 +211,6 @@ static void rr_fill(struct lu_tgt_pool *rr, struct lu_rr_fdoms *fdoms,
 	}
 }
 
-/* like lod_oss_avoided(), whether other mirrors use the OSS of @ost */
-static bool oss_used(struct rr_test *rt, const unsigned int *used,
-		     unsigned int ost)
-{
-	unsigned int i;
-
-	for (i = 0; i < rt->ost_count; i++)
-		if (used[i] && rt->oss_of[i] == rt->oss_of[ost])
-			return true;
-	return false;
-}
-
 /*
  * Like lod_ost_alloc_rr() for layout component @comp.  With failure
  * domains the stripes of each layout must be in different ones, as for
@@ -227,30 +220,30 @@ static void rr_alloc(struct rr_test *rt, struct lu_qos_rr *lqr,
 		     unsigned int comp, __u64 key, bool cont,
 		     unsigned int *used)
 {
-	bool fdom_used[2 * MAX_OSTS + 1] = { false };
-	unsigned int mirror_used[MAX_OSTS];
+	bool fdom_used[2 * MAX_OSTS + 1];
 	struct lu_qos_rr_stream *lqrs;
+	bool oss_used[MAX_OSTS];
 	bool oss_avoid = false;
+	bool mirrored = false;
 	unsigned int found = 0;
 	unsigned int base = 0;
 	unsigned int i;
 
-	/* the domains of other mirrors can't be used, as for FLR */
+	/* the domains and OSSs of other mirrors can't be used, as for FLR */
+	memset(fdom_used, 0, (2 * rt->ost_count + 1) * sizeof(fdom_used[0]));
+	memset(oss_used, 0, rt->oss_count * sizeof(oss_used[0]));
 	for (i = 0; i < rt->ost_count; i++) {
 		if (used[i] && rt->fdom[i])
 			fdom_used[rt->fdom[i]] = true;
-		mirror_used[i] = used[i];
+		if (used[i]) {
+			oss_used[rt->oss_of[i]] = true;
+			mirrored = true;
+		}
 	}
 	/* like lod_oss_avoid_some(), only FLR mirrors, not EC parity */
-	if (!rt->no_first)
-		for (i = 0; i < rt->ost_count; i++)
-			if (!oss_used(rt, mirror_used, i))
-				oss_avoid = true;
-	for (i = 0, found = 0; i < rt->ost_count && oss_avoid; i++)
-		if (mirror_used[i])
-			found = 1;
-	oss_avoid = oss_avoid && found;
-	found = 0;
+	for (i = 0; i < rt->ost_count && mirrored && !rt->no_first; i++)
+		if (!oss_used[rt->oss_of[i]])
+			oss_avoid = true;
 
 	lqrs = lu_rr_start(lqr, rt->ost_count, rt->stripes, key, cont);
 	if (lqr->lqr_fdoms)
@@ -274,11 +267,12 @@ static void rr_alloc(struct rr_test *rt, struct lu_qos_rr *lqr,
 						   lqrs - lqr->lqr_streams,
 						   !found && !rt->no_first);
 			} while (--tries &&
-				 (used[ost] || (oss_avoid &&
-				  oss_used(rt, mirror_used, ost))));
+				 (used[ost] ||
+				  (oss_avoid && oss_used[rt->oss_of[ost]])));
 			/* like lod_ost_alloc_rr(), if none would do */
-			if (!tries && (used[ost] || (oss_avoid &&
-			    oss_used(rt, mirror_used, ost))))
+			if (!tries &&
+			    (used[ost] ||
+			     (oss_avoid && oss_used[rt->oss_of[ost]])))
 				ost = lu_rr_fdom_tgt(lqr->lqr_fdoms, slot,
 						   lqrs - lqr->lqr_streams,
 						   !found && !rt->no_first);
@@ -445,24 +439,27 @@ static int rr_test_one(unsigned int ost_count, unsigned int oss_count,
 	for (i = 0; i < per_ost * ost_count; i++) {
 		struct lu_qos_rr *m = &lqr[mdt_count > 1 ?
 					  random() % mdt_count : 0];
-		unsigned int used[MAX_OSTS] = { 0 };
+		unsigned int used[MAX_OSTS];
 		unsigned int c;
+
+		memset(used, 0, ost_count * sizeof(used[0]));
 
 		if (mirrors) {
 			/* mirrors of one extent share a key, like EC parity,
 			 * with -P each file has the next stripe count
 			 */
-			unsigned int per_oss[MAX_OSTS] = { 0 };
+			unsigned int per_oss[MAX_OSTS];
 			unsigned int first[MAX_OSTS];
 			unsigned int j;
 
+			memset(per_oss, 0, oss_count * sizeof(per_oss[0]));
 			c = npattern ? i % npattern : 0;
 			if (npattern) {
 				rt.stripes = comp_stripes(c, ost_count);
 				rt.stripes_per_ost = 1;
 			}
 			rr_alloc(&rt, m, c, rt.stripes, false, used);
-			memcpy(first, used, sizeof(first));
+			memcpy(first, used, ost_count * sizeof(first[0]));
 			rr_alloc(&rt, m, c, rt.stripes, true, used);
 			/* with enough equal OSSs, none should have two OSTs, or
 			 * with -D two OSTs of different mirrors
@@ -500,7 +497,7 @@ static int rr_test_one(unsigned int ost_count, unsigned int oss_count,
 		for (c = 0; c < npattern; c++) {
 			rt.stripes = comp_stripes(c, ost_count);
 			rt.stripes_per_ost = (rt.stripes - 1) / ost_count + 1;
-			memset(used, 0, sizeof(used));
+			memset(used, 0, ost_count * sizeof(used[0]));
 			rr_alloc(&rt, m, c, ((__u64)(c + 1) << 32) + rt.stripes,
 				 false, used);
 		}
@@ -554,6 +551,49 @@ static void print_usage(void)
 	       "\t-u: leave the first OSS without a failure domain\n"
 	       "\t-v: print object counts for every OST\n"
 	       "\t-x: number of unusable OSTs (default 0)\n", progname);
+}
+
+#define CHECK_BACKOFF(cond)						\
+do {									\
+	if (!(cond)) {							\
+		fprintf(stderr, "%s:%d: backoff check failed: %s\n",	\
+			progname, __LINE__, #cond);			\
+		failed++;						\
+	}								\
+} while (0)
+
+/* check when lod_qos_calc_rr() waits for a stale array to be rebuilt */
+static int test_rr_backoff(void)
+{
+	struct lu_qos_rr rr = { .lqr_rr_gen = 1, .lqr_rebuild_gen = 1,
+		.lqr_active_gen = 1, .lqr_rebuild_active = 1 };
+	int failed = 0;
+
+	/* A target that never left the array does not need a quick retry. */
+	CHECK_BACKOFF(!lu_rr_should_wait(&rr, 2, 2, 100, 10));
+	CHECK_BACKOFF(rr.lqr_rebuild_retry == 200);
+	CHECK_BACKOFF(!lu_rr_should_wait(&rr, 3, 3, 199, 10));
+	CHECK_BACKOFF(lu_rr_should_wait(&rr, 3, 3, 200, 10));
+	lu_rr_wait_failed(&rr, 3, 202, 10);
+	CHECK_BACKOFF(rr.lqr_rebuild_retry == 302);
+
+	/* an omitted target became active: at once, then every maxage */
+	rr.lqr_omitted = true;
+	CHECK_BACKOFF(lu_rr_should_wait(&rr, 4, 4, 203, 10));
+	lu_rr_wait_failed(&rr, 4, 205, 10);
+	CHECK_BACKOFF(rr.lqr_rebuild_retry == 215);
+	CHECK_BACKOFF(!lu_rr_should_wait(&rr, 4, 4, 214, 10));
+	CHECK_BACKOFF(lu_rr_should_wait(&rr, 4, 4, 215, 10));
+	CHECK_BACKOFF(lu_rr_should_wait(&rr, 5, 5, 216, 10));
+
+	rr.lqr_rr_gen = rr.lqr_rebuild_gen = 5;
+	rr.lqr_active_gen = rr.lqr_rebuild_active = 5;
+	CHECK_BACKOFF(!lu_rr_should_wait(&rr, 5, 5, 300, 10));
+	CHECK_BACKOFF(!lu_rr_should_wait(&rr, 6, 5, 301, 10));
+	CHECK_BACKOFF(rr.lqr_rebuild_retry == 401);
+	CHECK_BACKOFF(lu_rr_should_wait(&rr, 6, 5, 401, 10));
+
+	return failed;
 }
 
 int main(int argc, char **argv)
@@ -661,6 +701,7 @@ int main(int argc, char **argv)
 		}
 	}
 
+	failed += test_rr_backoff();
 	for (ost = ost_min; ost <= ost_max; ost++) {
 		for (oss = oss_min; oss <= oss_max && oss <= ost; oss++) {
 			for (fdom = fdom_min; fdom <= fdom_max &&

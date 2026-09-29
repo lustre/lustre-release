@@ -17,7 +17,6 @@
 #define DEBUG_SUBSYSTEM S_LOV
 
 #include <asm/div64.h>
-#include <linux/timer.h>
 
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_swab.h>
@@ -126,6 +125,9 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 			LASSERT(desc->ld_active_tgt_count > 0);
 			desc->ld_active_tgt_count--;
 			set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
+			/* rebuild the RR arrays, see lod_qos_calc_rr() */
+			smp_mb__before_atomic();
+			atomic_inc(&ltd->ltd_qos.lq_rr_gen);
 			CDEBUG(D_CONFIG, "%s: turns inactive\n",
 			       tgt->ltd_exp->exp_obd->obd_name);
 		}
@@ -147,6 +149,12 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 			tgt->ltd_discon = 0;
 			desc->ld_active_tgt_count++;
 			set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
+			/* rebuild the RR arrays, see lod_qos_calc_rr() */
+			smp_mb__before_atomic();
+			atomic_inc(&ltd->ltd_qos.lq_active_gen);
+			/* seen with lq_rr_gen, see lod_qos_calc_rr() */
+			smp_mb__after_atomic();
+			atomic_inc(&ltd->ltd_qos.lq_rr_gen);
 			CDEBUG(D_CONFIG, "%s: turns active\n",
 			       tgt->ltd_exp->exp_obd->obd_name);
 		}
@@ -216,6 +224,74 @@ void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
 	EXIT;
 }
 
+/* number of active targets in @pool */
+static unsigned int lod_rr_active_count(struct lu_tgt_descs *ltd,
+					const struct lu_tgt_pool *pool)
+{
+	unsigned int active = 0;
+	unsigned int i;
+
+	for (i = 0; i < pool->op_count; i++)
+		if (test_bit(pool->op_array[i], ltd->ltd_tgt_bitmap) &&
+		    LTD_TGT(ltd, pool->op_array[i])->ltd_active)
+			active++;
+
+	return active;
+}
+
+/* Return true with lq_rw_sem held for write, false to keep the old array. */
+static bool lod_qos_rr_write_lock(struct lu_tgt_descs *ltd,
+				 struct lu_qos_rr *lqr)
+{
+	int rr_gen, active_gen;
+	int rc;
+
+	/*
+	 * If only lq_rr_gen changed, as when a target is deactivated, fills
+	 * up or comes back, don't wait behind allocators that may sleep in
+	 * precreate holding lq_rw_sem (LU-15393), since waiting for it for
+	 * write also stops new readers.  The old array is still
+	 * usable, the allocators skip inactive targets.  Only if it stays
+	 * stale for 10 * qos_maxage, or an omitted target became active,
+	 * does a thread wait at most 2s for it.
+	 */
+	if (!test_bit(LQ_DIRTY, &lqr->lqr_flags) && lqr->lqr_pool.op_size) {
+		time64_t maxage = ltd->ltd_lov_desc.ld_qos_maxage;
+
+		if (!down_write_trylock(&ltd->ltd_qos.lq_rw_sem)) {
+			bool wait;
+
+			spin_lock(&lqr->lqr_alloc);
+			rr_gen = atomic_read(&ltd->ltd_qos.lq_rr_gen);
+			/* lq_active_gen at least as new as lq_rr_gen */
+			smp_rmb();
+			active_gen = atomic_read(&ltd->ltd_qos.lq_active_gen);
+			wait = lu_rr_should_wait(lqr, rr_gen, active_gen,
+						 ktime_get_seconds(), maxage);
+			spin_unlock(&lqr->lqr_alloc);
+
+			if (!wait ||
+			    test_and_set_bit(LQ_REBUILD, &lqr->lqr_flags))
+				return false;
+			rc = lu_down_write_timeout(&ltd->ltd_qos.lq_rw_sem, 2);
+			if (rc) {
+				spin_lock(&lqr->lqr_alloc);
+				lu_rr_wait_failed(lqr, active_gen,
+						  ktime_get_seconds(), maxage);
+				spin_unlock(&lqr->lqr_alloc);
+				clear_bit(LQ_REBUILD, &lqr->lqr_flags);
+				return false;
+			}
+		}
+	} else {
+		down_write(&ltd->ltd_qos.lq_rw_sem);
+	}
+	/* other stale-array threads don't start a timed wait meanwhile */
+	set_bit(LQ_REBUILD, &lqr->lqr_flags);
+
+	return true;
+}
+
 /**
  * lod_qos_calc_rr() - Calculate optimal round-robin order of targets
  * @lod: LOD device
@@ -226,8 +302,11 @@ void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
  * Place all the OSTs from pool @src_pool in a special array to be used for
  * round-robin (RR) stripe allocation.  The placement algorithm interleaves
  * OSTs from different failure domains and OSSs so that RR allocation can
- * balance them evenly (see lu_rr_fill()).  Resorts the targets when the
- * targets in the pool or their failure domains change.
+ * balance them evenly (see lu_rr_fill()).  Inactive targets are left out,
+ * unless all of them are inactive, so that allocations don't skip them
+ * and pile up on the targets after them.  Resorts the targets when the
+ * targets in the pool, their failure domains, or whether they are active
+ * change.
  *
  * Return:
  * * %0 on success
@@ -238,12 +317,13 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 			   struct lu_qos_rr *lqr)
 {
 	int rr_gen = atomic_read(&ltd->ltd_qos.lq_rr_gen);
-	unsigned int placed, real_count;
+	unsigned int placed, real_count, active, inactive;
 	struct lu_rr_fdoms *fdoms = NULL;
 	struct lu_rr_tgt *tgts;
 	size_t fdoms_size = 0;
 	struct lu_tgt_desc *tgt;
 	unsigned int i;
+	int active_gen;
 	int rc;
 	ENTRY;
 
@@ -252,28 +332,28 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 		RETURN(0);
 	}
 
-	/* Do actual allocation. */
-	down_write(&ltd->ltd_qos.lq_rw_sem);
+	if (!lod_qos_rr_write_lock(ltd, lqr))
+		RETURN(0);
 
 	/*
 	 * Check again. While we were sleeping on @lq_rw_sem something could
 	 * change.
 	 */
 	rr_gen = atomic_read(&ltd->ltd_qos.lq_rr_gen);
-	/* read ltq_failure_domain below after lq_rr_gen */
+	/* lq_active_gen, ltd_active, ltq_failure_domain as new as lq_rr_gen */
+	smp_rmb();
+	active_gen = atomic_read(&ltd->ltd_qos.lq_active_gen);
+	/* ltd_active as new as lq_active_gen, see lod_statfs_and_check() */
 	smp_rmb();
 	if (!test_bit(LQ_DIRTY, &lqr->lqr_flags) && lqr->lqr_rr_gen == rr_gen) {
 		LASSERT(lqr->lqr_pool.op_size);
-		up_write(&ltd->ltd_qos.lq_rw_sem);
-		RETURN(0);
+		GOTO(out_unlock, rc = 0);
 	}
 
 	real_count = src_pool->op_count;
 	OBD_ALLOC_PTR_ARRAY_LARGE(tgts, real_count);
-	if (!tgts) {
-		up_write(&ltd->ltd_qos.lq_rw_sem);
-		RETURN(-ENOMEM);
-	}
+	if (!tgts)
+		GOTO(out_unlock, rc = -ENOMEM);
 
 	/* Zero the pool array */
 	/* alloc_rr is holding a read lock on the pool, so nobody is adding/
@@ -282,19 +362,25 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 	lqr->lqr_pool.op_count = real_count;
 	rc = lu_tgt_pool_extend(&lqr->lqr_pool, real_count);
 	if (rc) {
-		up_write(&ltd->ltd_qos.lq_rw_sem);
 		OBD_FREE_PTR_ARRAY_LARGE(tgts, real_count);
-		RETURN(rc);
+		GOTO(out_unlock, rc);
 	}
 	for (i = 0; i < lqr->lqr_pool.op_count; i++)
 		lqr->lqr_pool.op_array[i] = LU_RR_EMPTY;
 
-	for (placed = 0, i = 0; i < real_count; i++) {
+	active = lod_rr_active_count(ltd, src_pool);
+
+place:
+	for (placed = 0, inactive = 0, i = 0; i < real_count; i++) {
 		if (!test_bit(src_pool->op_array[i], ltd->ltd_tgt_bitmap))
 			continue;
 
 		tgt = LTD_TGT(ltd, src_pool->op_array[i]);
 		LASSERT(tgt && tgt->ltd_tgt);
+		if (active && !tgt->ltd_active) {
+			inactive++;
+			continue;
+		}
 		tgts[placed].lrrt_idx = src_pool->op_array[i];
 		tgts[placed].lrrt_svr = tgt->ltd_qos.ltq_svr->lsq_id;
 		tgts[placed].lrrt_fdom = tgt->ltd_qos.ltq_failure_domain;
@@ -302,26 +388,40 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 			fdoms_size = lu_rr_fdoms_size(real_count);
 		placed++;
 	}
+	/* the last active targets became inactive since they were counted */
+	if (!placed && inactive) {
+		active = 0;
+		fdoms_size = 0;
+		goto place;
+	}
 	/* without it, failure domains are only balanced for equal sizes */
 	if (fdoms_size)
 		OBD_ALLOC_LARGE(fdoms, fdoms_size);
 	lu_rr_fill(&lqr->lqr_pool, fdoms, tgts, placed);
+	lqr->lqr_pool.op_count = placed;
 
 	OBD_FREE_LARGE(lqr->lqr_fdoms, lqr->lqr_fdoms_size);
 	lqr->lqr_fdoms = fdoms;
 	lqr->lqr_fdoms_size = fdoms ? fdoms_size : 0;
+	spin_lock(&lqr->lqr_alloc);
+	lqr->lqr_rebuild_gen = rr_gen;
+	lqr->lqr_omitted = active && inactive;
+	lqr->lqr_active_gen = active_gen;
+	lqr->lqr_rebuild_active = active_gen;
 	lqr->lqr_rr_gen = rr_gen;
+	spin_unlock(&lqr->lqr_alloc);
 	clear_bit(LQ_DIRTY, &lqr->lqr_flags);
 	/* try to allocate the failure domain state again next time */
 	if (fdoms_size && !fdoms)
 		set_bit(LQ_DIRTY, &lqr->lqr_flags);
+	clear_bit(LQ_REBUILD, &lqr->lqr_flags);
 	up_write(&ltd->ltd_qos.lq_rw_sem);
 	OBD_FREE_PTR_ARRAY_LARGE(tgts, real_count);
 
-	if (placed != real_count) {
+	if (placed + inactive != real_count) {
 		/* This should never happen */
 		LCONSOLE_ERROR("Failed to place all tgts in the round-robin list (%d of %d).\n",
-			       placed, real_count);
+			       placed + inactive, real_count);
 		for (i = 0; i < lqr->lqr_pool.op_count; i++) {
 			LCONSOLE(D_WARNING, "rr #%d tgt idx=%d\n", i,
 				 lqr->lqr_pool.op_array[i]);
@@ -331,6 +431,12 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct lu_tgt_descs *ltd,
 	}
 
 	RETURN(0);
+
+out_unlock:
+	clear_bit(LQ_REBUILD, &lqr->lqr_flags);
+	up_write(&ltd->ltd_qos.lq_rw_sem);
+
+	RETURN(rc);
 }
 
 /**
@@ -715,6 +821,30 @@ static inline bool lod_should_avoid_ost(struct lod_object *lo,
 		CDEBUG(D_OTHER, "OST%d: been used in conflicting mirror component\n",
 		       index);
 	return used;
+}
+
+/**
+ * lod_tgt_pool_discon() - Check if a target of a pool is disconnected
+ * @ltd: target descriptors
+ * @pool: pool of targets
+ *
+ * An inactive target whose OSP is disconnected or deactivated is left
+ * out of the round-robin array, so the allocators don't see it, though
+ * it may come back.
+ *
+ * Return: true if a target of @pool is disconnected
+ */
+static bool lod_tgt_pool_discon(struct lu_tgt_descs *ltd,
+				const struct lu_tgt_pool *pool)
+{
+	unsigned int i;
+
+	for (i = 0; i < pool->op_count; i++)
+		if (test_bit(pool->op_array[i], ltd->ltd_tgt_bitmap) &&
+		    LTD_TGT(ltd, pool->op_array[i])->ltd_discon)
+			return true;
+
+	return false;
 }
 
 static int lod_check_and_reserve_ost(const struct lu_env *env,
@@ -1583,7 +1713,7 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	struct lu_tgt_pool *osts;
 	struct lu_qos_rr_stream *lqrs;
 	struct lu_qos_rr *lqr;
-	unsigned int i, array_idx, fdom_base = 0;
+	unsigned int i, array_idx, count, fdom_base = 0;
 	__u32 stripe_idx = 0;
 	__u64 key;
 	bool cont;
@@ -1596,6 +1726,7 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	bool fdom_rr = false;
 	bool fdom_slots = false;
 	bool oss_avoid = false;
+	bool rr_missing;
 	ENTRY;
 
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
@@ -1628,7 +1759,9 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 
 	down_read(&m->lod_ost_descs.ltd_qos.lq_rw_sem);
 	key = lod_rr_key(env, lo, lod_comp, lqr, &cont);
-	lqrs = lu_rr_start(lqr, osts->op_count, stripe_count, key, cont);
+	/* inactive OSTs are not in the RR array */
+	count = lqr->lqr_pool.op_count;
+	lqrs = lu_rr_start(lqr, count, stripe_count, key, cont);
 	/* stripes in different failure domains, see lu_rr_fdom_tgt() */
 	if (lqr->lqr_fdoms &&
 	    (lod_comp->llc_cstripe_count || lo->ldo_mirror_count > 1)) {
@@ -1640,16 +1773,16 @@ static int lod_ost_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	}
 	if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)
 		stripes_per_ost =
-			(lod_comp->llc_stripe_count - 1) / osts->op_count + 1;
+			(lod_comp->llc_stripe_count - 1) / max(count, 1U) + 1;
 
 repeat_find:
 	CDEBUG(D_OTHER, "pool '%s' want %d start_idx %d start_count %d offset %d active %d count %d\n",
 	       lod_comp->llc_pool ? lod_comp->llc_pool : "",
 	       stripe_count, atomic_read(&lqrs->lqrs_start_idx),
-	       lqr->lqr_start_count, lqrs->lqrs_offset_idx, osts->op_count,
+	       lqr->lqr_start_count, lqrs->lqrs_offset_idx, count,
 	       osts->op_count);
 
-	for (i = 0, idx = 0; i < osts->op_count * stripes_per_ost &&
+	for (i = 0, idx = 0; i < count * stripes_per_ost &&
 		    stripe_idx < stripe_count; i++) {
 		if (fdom_rr) {
 			idx = fdom_base + i + 1;
@@ -1661,7 +1794,7 @@ repeat_find:
 			 */
 			idx++;
 		}
-		array_idx = idx % osts->op_count;
+		array_idx = idx % count;
 		ost_idx = lqr->lqr_pool.op_array[array_idx];
 
 		CDEBUG(D_OTHER, "#%d strt %d act %d strp %d ary %d idx %d\n",
@@ -1764,6 +1897,8 @@ repeat_find:
 		ost_connecting = 0;
 		goto repeat_find;
 	}
+	rr_missing = lqr->lqr_omitted && lqr->lqr_active_gen !=
+		atomic_read(&m->lod_ost_descs.ltd_qos.lq_active_gen);
 	up_read(&m->lod_ost_descs.ltd_qos.lq_rw_sem);
 
 	/* If there are enough OSTs, a component with overstriping requested
@@ -1794,8 +1929,12 @@ repeat_find:
 		/* at least one stripe is allocated */
 		rc = 0;
 	} else {
-		/* nobody provided us with a single object */
-		if (ost_connecting)
+		/* nobody provided us with a single object, or the stale RR
+		 * array left out the OSTs that became active since
+		 */
+		if (ost_connecting ||
+		    lod_tgt_pool_discon(&m->lod_ost_descs, osts) ||
+		    rr_missing)
 			rc = -EINPROGRESS;
 		else
 			rc = -ENOSPC;
@@ -1948,12 +2087,13 @@ int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	struct lu_object_conf conf = { .loc_flags = LOC_F_NEW };
 	struct lu_fid fid = { 0 };
 	struct dt_object *dto;
-	unsigned int pool_idx;
+	unsigned int pool_idx, count;
 	unsigned int i;
 	u32 saved_idx = stripe_idx;
 	int stripes_per_mdt = 1;
 	u32 mdt_idx;
 	bool use_degraded = false;
+	bool rr_missing;
 	bool overstriped = false;
 	int tgt_connecting = 0;
 	int rc;
@@ -1971,16 +2111,21 @@ int lod_mdt_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	if (stripe_count > lod->lod_remote_mdt_count + 1 && !overstriped)
 		RETURN(-E2BIG);
 
-	if (lo->ldo_dir_hash_type & LMV_HASH_FLAG_OVERSTRIPED)
-		stripes_per_mdt = stripe_count / (pool->op_count + 1);
-
 	rc = lod_qos_mdt_in_use_init(env, ltd, stripe_idx, stripe_count, pool,
 				     stripes);
 	if (rc)
 		RETURN(rc);
 
 	down_read(&ltd->ltd_qos.lq_rw_sem);
-	lqrs = lu_rr_start(lqr, pool->op_count, stripe_count - 1,
+	/* inactive MDTs are not in the RR array */
+	count = lqr->lqr_pool.op_count;
+	if (overstriped) {
+		/* also limits the retry with slower MDTs below */
+		stripe_count = min_t(u32, stripe_count, (count + 1) *
+				     lod->lod_max_stripes_per_mdt);
+		stripes_per_mdt = stripe_count / (count + 1);
+	}
+	lqrs = lu_rr_start(lqr, count, stripe_count - 1,
 			   stripe_count - 1, false);
 
 repeat_find:
@@ -1991,10 +2136,9 @@ repeat_find:
 	       /* if we're overstriped, the local MDT is available and is
 		* included in the count
 		*/
-	       pool->op_count + overstriped,
-	       lqr->lqr_pool.op_count + overstriped);
+	       count + overstriped, pool->op_count + overstriped);
 
-	for (i = 0; i < (pool->op_count + overstriped) * stripes_per_mdt &&
+	for (i = 0; i < (count + overstriped) * stripes_per_mdt &&
 	     stripe_idx < stripe_count; i++) {
 		struct lu_tgt_desc *mdt = NULL;
 		struct dt_device *mdt_tgt;
@@ -2002,17 +2146,17 @@ repeat_find:
 		int idx;
 
 		idx = lu_rr_next(lqrs);
-		pool_idx = idx % (pool->op_count + overstriped);
+		pool_idx = idx % (count + overstriped);
 		/* in the overstriped case, we must be able to allocate a stripe
 		 * to the local MDT, ie, the one doing the allocation
 		 */
-		if (pool_idx == pool->op_count) {
+		if (pool_idx == count) {
 			LASSERT(overstriped);
 			/* because there is already a stripe on the local MDT,
 			 * do not allocate from the local MDT until we've
 			 * allocated at least as many stripes as we have MDTs
 			 */
-			if (stripe_idx < (pool->op_count + 1)) {
+			if (stripe_idx < (count + 1)) {
 				CDEBUG(D_OTHER,
 				       "Skipping local alloc, not enough stripes yet\n");
 				continue;
@@ -2060,6 +2204,9 @@ repeat_find:
 				CDEBUG(D_OTHER, "#%d: unusable\n", mdt_idx);
 				continue;
 			}
+			/* if all are inactive, or the array is not rebuilt */
+			if (!mdt->ltd_active)
+				continue;
 			if (lod_statfs_check(ltd, mdt))
 				continue;
 			if (mdt->ltd_statfs.os_state & OS_STATFS_NOCREATE)
@@ -2103,6 +2250,8 @@ repeat_find:
 		tgt_connecting = 0;
 		goto repeat_find;
 	}
+	rr_missing = lqr->lqr_omitted && lqr->lqr_active_gen !=
+		atomic_read(&ltd->ltd_qos.lq_active_gen);
 	up_read(&ltd->ltd_qos.lq_rw_sem);
 
 	if (stripe_idx > saved_idx) {
@@ -2115,8 +2264,11 @@ repeat_find:
 		RETURN(stripe_idx);
 	}
 
-	/* nobody provided us with a single object */
-	if (tgt_connecting)
+	/* nobody provided us with a single object, or the stale RR array
+	 * left out the MDTs that became active since
+	 */
+	if (tgt_connecting || lod_tgt_pool_discon(ltd, pool) ||
+	    rr_missing)
 		RETURN(-EINPROGRESS);
 
 	RETURN(-ENOSPC);
@@ -2456,18 +2608,6 @@ out:
 	RETURN(rc);
 }
 
-struct semaphore_timer {
-	struct timer_list timer;
-	struct task_struct *task;
-};
-
-static void process_semaphore_timer(struct timer_list *t)
-{
-	struct semaphore_timer *timeout = timer_container_of(timeout, t, timer);
-
-	send_sig(SIGKILL, timeout->task, 1);
-}
-
 /* Whether QoS data in pool is up-to-date and balanced. */
 static bool pool_qos_is_usable(struct lod_pool_desc *pool)
 {
@@ -2672,34 +2812,11 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		stripes_per_ost =
 			(lod_comp->llc_stripe_count - 1)/osts->op_count + 1;
 
-	if (!down_write_trylock(&lod->lod_ost_descs.ltd_qos.lq_rw_sem)) {
-		struct semaphore_timer timer;
-
-		/*
-		 * The timer wakes us from down_write_killable() with
-		 * send_sig(SIGKILL).  Set the SIGKILL disposition to
-		 * SIG_KTHREAD: the kthread default SIG_IGN would discard
-		 * the signal, and SIG_DFL would make sig_fatal() latch
-		 * SIGNAL_GROUP_EXIT on this long-lived service thread at
-		 * the first wakeup, after which kernels >= v6.1 silently
-		 * drop all further signals to this task, leaving later
-		 * waiters stuck for as long as lq_rw_sem is held.
-		 */
-		allow_signal(SIGKILL);
-		timer.task = current;
-		timer_setup(&timer.timer, process_semaphore_timer, 0);
-		mod_timer(&timer.timer, jiffies + cfs_time_seconds(2));
-		/* Do actual allocation, use write lock here. */
-		rc = down_write_killable(&lod->lod_ost_descs.ltd_qos.lq_rw_sem);
-
-		timer_delete_sync(&timer.timer);
-		disallow_signal(SIGKILL);
-		if (rc) {
-			flush_signals(current);
-			CDEBUG(D_OTHER, "%s: wakeup semaphore on timeout rc = %d\n",
-			       lod2obd(lod)->obd_name, rc);
-			GOTO(out_nolock, rc = -EAGAIN);
-		}
+	rc = lu_down_write_timeout(&lod->lod_ost_descs.ltd_qos.lq_rw_sem, 2);
+	if (rc) {
+		CDEBUG(D_OTHER, "%s: wakeup semaphore on timeout rc = %d\n",
+		       lod2obd(lod)->obd_name, rc);
+		GOTO(out_nolock, rc);
 	}
 
 	/*
@@ -3109,7 +3226,8 @@ int lod_mdt_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		mdt = LTD_TGT(ltd, pool->op_array[i]);
 		mdt->ltd_qos.ltq_usable = 0;
 
-		if (mdt->ltd_discon || lod_statfs_check(ltd, mdt))
+		if (mdt->ltd_discon || !mdt->ltd_active ||
+		    lod_statfs_check(ltd, mdt))
 			continue;
 
 		if (mdt->ltd_statfs.os_state &

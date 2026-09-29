@@ -1040,6 +1040,8 @@ static int lod_process_config(const struct lu_env *env,
 		if (strstr(param, "osp") && strstr(param, ".active=")) {
 			struct lod_tgt_desc *sub_tgt = NULL;
 			struct lu_tgt_desc *mdt;
+			struct lu_qos *qos;
+			bool was_active;
 			char *ptr;
 			char *tmp;
 
@@ -1070,6 +1072,7 @@ static int lod_process_config(const struct lu_env *env,
 			*ptr = '.';
 			tmp = strstr(param, "=");
 			tmp++;
+			was_active = sub_tgt->ltd_active;
 			if (*tmp == '1' && sub_tgt->ltd_active == 0) {
 				struct llog_ctxt *ctxt;
 
@@ -1094,6 +1097,17 @@ static int lod_process_config(const struct lu_env *env,
 						  NULL);
 				sub_tgt->ltd_active = 0;
 			}
+			if (sub_tgt->ltd_active == was_active)
+				GOTO(out, rc);
+			/* rebuild the RR array, see lod_qos_calc_rr() */
+			smp_mb__before_atomic();
+			qos = &lod->lod_mdt_descs.ltd_qos;
+			if (sub_tgt->ltd_active) {
+				atomic_inc(&qos->lq_active_gen);
+				/* seen with lq_rr_gen, see lod_qos_calc_rr() */
+				smp_mb__after_atomic();
+			}
+			atomic_inc(&qos->lq_rr_gen);
 			GOTO(out, rc);
 		}
 

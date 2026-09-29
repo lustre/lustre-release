@@ -7729,43 +7729,249 @@ test_51f() {
 run_test 51f "check many open files limit"
 
 test_51g() {
+	# up to 64 OSTs takes over a minute, so only with SLOW=yes
+	local osts=32
+
+	[[ "$SLOW" == "yes" ]] && osts=64
+
 	# userspace build of lu_tgt_alloc.c, so it needs no particular OSTCOUNT
-	lod_rr_test -f -o 3-64 -s 1-4 || error "lod_rr_test failed"
+	lod_rr_test -f -o 3-$osts -s 1-4 || error "lod_rr_test failed"
 	# layouts from several MDTs into one striped directory
-	lod_rr_test -f -o 3-64 -s 1-4 -m 4 || error "lod_rr_test -m 4 failed"
+	lod_rr_test -f -o 3-$osts -s 1-4 -m 4 || error "lod_rr_test -m 4 failed"
 	# overstriped layouts, e.g. "lfs setstripe -C -2"
 	lod_rr_test -f -o 3-32 -s 1-4 -C 4 || error "lod_rr_test -C 4 failed"
 	# PFL layouts, whose components are allocated in turn
-	lod_rr_test -f -o 3-64 -s 1-4 -P 1,4,-1 || error "lod_rr_test -P failed"
-	lod_rr_test -f -o 3-64 -s 1-4 -P 8,4,2,1 ||
+	lod_rr_test -f -o 3-$osts -s 1-4 -P 1,4,-1 ||
+		error "lod_rr_test -P failed"
+	lod_rr_test -f -o 3-$osts -s 1-4 -P 8,4,2,1 ||
 		error "lod_rr_test -P 8,4,2,1 failed"
 	# mirrors of a file, which should be on different OSSs
-	lod_rr_test -f -o 3-48 -s 2-8 -M || error "lod_rr_test -M failed"
+	lod_rr_test -f -o 3-$osts -s 2-8 -M || error "lod_rr_test -M failed"
 	lod_rr_test -f -o 4-32 -s 1-4 -M -P 3,1 ||
 		error "lod_rr_test -M -P failed"
 	# EC parity, which continues from the data stripes with the same key
 	lod_rr_test -f -o 4-32 -s 1-4 -e 2 || error "lod_rr_test -e 2 failed"
 	# OSS generations with different OST counts
-	lod_rr_test -f -o 4-48 -s 2-8 -B || error "lod_rr_test -B failed"
+	lod_rr_test -f -o 4-$osts -s 2-8 -B || error "lod_rr_test -B failed"
 	# EC and FLR layouts need their stripes in different failure domains
-	lod_rr_test -f -o 3-64 -s 1-8 -d 1-8 || error "lod_rr_test -d failed"
+	lod_rr_test -f -o 3-$osts -s 1-8 -d 1-8 || error "lod_rr_test -d failed"
 	# some OSTs without a failure domain
-	lod_rr_test -f -o 3-64 -s 2-8 -d 1-8 -u ||
+	lod_rr_test -f -o 3-$osts -s 2-8 -d 1-8 -u ||
 		error "lod_rr_test -d -u failed"
 	# PFL layouts with EC or FLR components
-	lod_rr_test -f -o 4-64 -s 4-16 -d 3-8 -P 3,1,2 ||
+	lod_rr_test -f -o 4-$osts -s 4-16 -d 3-8 -P 3,1,2 ||
 		error "lod_rr_test -d -P failed"
 	# OSSs with OSTs in several failure domains
-	lod_rr_test -f -o 3-48 -s 1-8 -d 1-8 -D ||
+	lod_rr_test -f -o 3-$osts -s 1-8 -d 1-8 -D ||
 		error "lod_rr_test -d -D failed"
 	# FLR mirrors in different failure domains
-	lod_rr_test -f -o 4-64 -s 2-8 -d 2-8 -M ||
+	lod_rr_test -f -o 4-$osts -s 2-8 -d 2-8 -M ||
 		error "lod_rr_test -d -M failed"
 	# EC parity in different failure domains from the data stripes
 	lod_rr_test -f -o 4-32 -s 2-8 -d 2-8 -e 2 ||
 		error "lod_rr_test -d -e 2 failed"
 }
 run_test 51g "check LOD round-robin allocation in userspace"
+
+# wait until the LOD of MDT0000 has OST @1 active again, which it only
+# notices at the statfs update of a create, at most every 2 * qos_maxage
+wait_lod_ost_active() {
+	local param=lod.$FSNAME-MDT0000-mdtlov.activeobd
+	local ost=$1
+	local i
+
+	for ((i = 0; i < 30; i++)); do
+		touch $DIR/$tfile.active && rm -f $DIR/$tfile.active
+		(( $(do_facet mds1 $LCTL get_param -n $param) == OSTCOUNT )) &&
+			return 0
+		sleep 1
+	done
+	echo "OST$ost not active on MDT0000 after ${i}s"
+	return 1
+}
+
+test_51k() {
+	(( MDS1_VERSION >= $(version_code 2.17.59.3) )) ||
+		skip "need MDS >= 2.17.59.3 for RR without inactive MDTs"
+	(( MDSCOUNT >= 3 )) || skip_env "needs >= 3 MDTs"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	! remote_mds_nodsh || skip "remote MDS with nodsh"
+
+	local lod=lod.$FSNAME-MDT0000-mdtlov
+	local mdts=$(mdts_nodes)
+	local maxage=$(do_facet mds1 $LCTL get_param -n $lod.mdt_qos_maxage)
+	local qos=$(do_facet mds1 $LCTL get_param -n $lod.mdt_qos_threshold_rr)
+	local dir i n osp rr mdt
+
+	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_maxage=1
+	stack_trap "do_nodes $mdts $LCTL set_param lod.*.mdt_qos_maxage=$maxage"
+	stack_trap "do_nodes $mdts $LCTL set_param \
+		lod.*.mdt_qos_threshold_rr=${qos%%%}"
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $DIR/$tdir failed"
+
+	# after reactivating MDT0001, wait until the LODs see it again
+	wait_lod_mdts_active_51k() {
+		local mdts=$1
+		local active i
+
+		for ((i = 0; i < 30; i++)); do
+			$LFS mkdir -c $MDSCOUNT $DIR/$tdir/active &&
+				rmdir $DIR/$tdir/active
+			active=$(do_nodes $mdts $LCTL get_param -n \
+				 lod.*.mdt_activeobd | awk '{ print $NF }' |
+				 sort -u)
+			[[ $active == $((MDSCOUNT - 1)) ]] && return 0
+			sleep 1
+		done
+		error "MDT0001 not active again: mdt_activeobd $active"
+	}
+	stack_trap "wait_lod_mdts_active_51k $mdts"
+
+	# deactivate MDT0001 on the other MDTs, and let statfs see it
+	for ((n = 0; n < MDSCOUNT; n++)); do
+		(( n == 1 )) && continue
+		osp=$FSNAME-MDT0001-osp-MDT$(printf "%04x" $n)
+		do_facet mds$((n + 1)) $LCTL --device %$osp deactivate ||
+			error "deactivate $osp failed"
+		stack_trap "do_facet mds$((n + 1)) \
+			$LCTL --device %$osp activate"
+	done
+	sleep 3
+
+	# without -i, so the MDT RR or QoS allocator picks the stripes, but
+	# not on MDT0001, whose own LOD was not deactivated.  A directory on
+	# MDT0001 can't be removed until it is active again on MDT0000.
+	for rr in 100 0; do
+		do_nodes $mdts $LCTL set_param lod.*.mdt_qos_threshold_rr=$rr
+		for ((i = 0; i < 10; i++)); do
+			dir=$DIR/$tdir/$rr.$i
+			$LFS mkdir -c $MDSCOUNT $dir || error "mkdir $dir"
+			# the lookup fails if the master is on MDT0001
+			mdt=$($LFS getdirstripe -m $dir 2>/dev/null) &&
+				(( mdt != 1 )) && break
+		done
+		(( i < 10 )) || skip "threshold_rr=$rr: always on MDT0001"
+		$LFS getdirstripe $dir
+		(( $($LFS getdirstripe -c $dir) == MDSCOUNT - 1 )) ||
+			error "threshold_rr=$rr: not $((MDSCOUNT - 1)) stripes"
+		(( $($LFS getdirstripe $dir |
+		     awk '$1 == 1 && $2 ~ /^\[/' | wc -l) == 0 )) ||
+			error "threshold_rr=$rr: stripe on MDT0001"
+	done
+}
+run_test 51k "check directory stripes skip a deactivated MDT"
+
+test_51i() {
+	(( MDS1_VERSION >= $(version_code 2.17.59.3) )) ||
+		skip "need MDS >= 2.17.59.3 for RR without inactive OSTs"
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	(( OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
+	! remote_mds_nodsh || skip "remote MDS with nodsh"
+
+	local lod=lod.$FSNAME-MDT0000*
+	local qos_old=$(do_facet mds1 \
+		"$LCTL get_param -n $lod.qos_threshold_rr")
+
+	do_facet mds1 "$LCTL set_param $lod.qos_threshold_rr=100" ||
+		error "set qos_threshold_rr failed"
+	stack_trap "do_facet mds1 $LCTL set_param \
+		$lod.qos_threshold_rr=${qos_old%%%}"
+
+	# an inactive OST should not add its first stripes to the next OST
+	local osp=$FSNAME-OST0001-osc-MDT0000
+
+	do_facet mds1 $LCTL --device %$osp deactivate ||
+		error "deactivate $osp failed"
+	stack_trap "do_facet mds1 $LCTL --device %$osp activate; \
+		    wait_lod_ost_active 1 || error 'OST0001 not active'"
+
+	local nfiles=$((OSTCOUNT * 100))
+	local param="osp.$FSNAME-OST*-osc-MDT0000.create_count"
+	local old=$(do_facet mds1 "$LCTL get_param -n $param" | head -n 1)
+
+	test_mkdir -i 0 -c 1 $DIR/$tdir
+	stack_trap "do_facet mds1 $LCTL set_param $param=$old"
+	test_mkdir -i 0 -c 1 $DIR/$tdir/warmup
+
+	# wait for each active OST to precreate its share of the objects,
+	# which it can't at the end of its FID sequence, see below
+	local need=$((nfiles * 2 / (OSTCOUNT - 1) + 1))
+	local ost
+
+	stack_trap "rm -f $DIR/$tdir/warmup/f*"
+
+	wait_precreated_51i() {
+		local i
+
+		for ((ost = 0; ost < OSTCOUNT; ost++)); do
+			(( ost == 1 )) && continue
+			for ((i = 0; i < 30; i++)); do
+				(( $(precreated_ost_obj_count 0 $ost \
+				     2>/dev/null) >= need )) && break
+				# use up a short FID sequence tail
+				$LFS setstripe -c 1 -i $ost $DIR/$tdir/warmup ||
+					error "setstripe warmup OST$ost failed"
+				createmany -o $DIR/$tdir/warmup/f $need ||
+					error "warmup OST$ost failed"
+				unlinkmany $DIR/$tdir/warmup/f $need ||
+					error "unlink warmup OST$ost failed"
+				do_facet mds1 \
+					"$LCTL set_param $param=$nfiles" ||
+					error "set $param failed"
+				sleep 1
+			done
+			(( i < 30 )) || error "OST$ost: < $need precreated"
+		done
+	}
+
+	# an OST that starts a new FID sequence has no precreated objects
+	# for a while, and its stripes go to other OSTs, so create again
+	local seq="osp.$FSNAME-OST*-osc-MDT0000.prealloc_next_seq"
+	local seqs
+	local try
+
+	$LFS setstripe -c 2 $DIR/$tdir || error "setstripe $DIR/$tdir failed"
+	stack_trap "unlinkmany $DIR/$tdir/f $nfiles"
+	for ((try = 0; try < 3; try++)); do
+		do_facet mds1 "$LCTL set_param $param=$nfiles" ||
+			error "reset $param failed"
+		wait_precreated_51i
+		seqs=$(do_facet mds1 $LCTL get_param $seq)
+		createmany -o $DIR/$tdir/f $nfiles ||
+			error "createmany $nfiles failed"
+		[[ "$(do_facet mds1 $LCTL get_param $seq)" == "$seqs" ]] &&
+			break
+		echo "an OST started a new FID sequence, create again"
+		unlinkmany $DIR/$tdir/f $nfiles
+	done
+	$LFS getstripe $DIR/$tdir > $TMP/$tfile
+	stack_trap "rm -f $TMP/$tfile"
+
+	local -a objs0
+	local min=$nfiles max=0
+
+	for ((ost = 0; ost < OSTCOUNT; ost++)); do
+		objs0[ost]=$(grep -A 1 idx $TMP/$tfile | awk -vobjs=0 \
+			     '($1 == '$ost') { objs += 1 } END { print objs }')
+		echo "OST$ost has ${objs0[ost]} #0 objects"
+		(( ost == 1 )) && continue
+		(( objs0[ost] < min )) && min=${objs0[ost]}
+		(( objs0[ost] > max )) && max=${objs0[ost]}
+	done
+	(( objs0[1] == 0 )) || error "inactive OST1 has ${objs0[1]} objects"
+	(( max * 2 < min * 3 )) || error "#0 objects min $min max $max"
+
+	# overstriping spreads the stripes over the active OSTs only
+	local file=$DIR/$tdir/overstriped
+
+	$LFS setstripe -C $OSTCOUNT $file || error "setstripe -C $file failed"
+	$LFS getstripe $file
+	(( $($LFS getstripe -c $file) == OSTCOUNT )) ||
+		error "$file: not $OSTCOUNT stripes"
+	(( $($LFS getstripe $file | awk '$1 == 1 && NF == 4' | wc -l) == 0 )) ||
+		error "$file: stripe on inactive OST1"
+}
+run_test 51i "check RR balance with an inactive OST"
 
 test_52a() {
 	[ -f $DIR/$tdir/foo ] && chattr -a $DIR/$tdir/foo

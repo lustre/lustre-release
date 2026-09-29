@@ -882,6 +882,29 @@ AC_DEFUN([LIBCFS_TIMER_CONTAINER_OF],[
 	])
 ]) # LIBCFS_TIMER_CONTAINER_OF
 
+#
+# LIBCFS_TIMER_DESTROY_ON_STACK
+#
+# Linux v6.15-rc5-8-gaad823aa3a7d
+#   treewide, timers: Rename destroy_timer_on_stack() as timer_destroy_on_stack()
+#
+AC_DEFUN([LIBCFS_SRC_TIMER_DESTROY_ON_STACK],[
+	LB2_LINUX_TEST_SRC([timer_destroy_on_stack], [
+		#include <linux/timer.h>
+	],[
+		struct timer_list timer;
+
+		timer_destroy_on_stack(&timer);
+	],[-Werror])
+])
+AC_DEFUN([LIBCFS_TIMER_DESTROY_ON_STACK],[
+	LB2_MSG_LINUX_TEST_RESULT([if timer_destroy_on_stack() is available],
+	[timer_destroy_on_stack], [
+		AC_DEFINE(HAVE_TIMER_DESTROY_ON_STACK, 1,
+			[timer_destroy_on_stack() is available])
+	])
+]) # LIBCFS_TIMER_DESTROY_ON_STACK
+
 dnl #
 dnl # Generate and compile all of the kernel API test cases to determine
 dnl # which interfaces are available.  By invoking the kernel build system
@@ -936,6 +959,7 @@ AC_DEFUN([LIBCFS_PROG_LINUX_SRC], [
 	# 6.11
 	LIBCFS_SRC_BLK_INTEGRITY_NOVERIFY
 	# 6.15
+	LIBCFS_SRC_TIMER_DESTROY_ON_STACK
 	LIBCFS_SRC_TIMER_CONTAINER_OF
 ])
 
@@ -991,6 +1015,7 @@ AC_DEFUN([LIBCFS_PROG_LINUX_RESULTS], [
 	# 6.11
 	LIBCFS_BLK_INTEGRITY_NOVERIFY
 	# 6.15
+	LIBCFS_TIMER_DESTROY_ON_STACK
 	LIBCFS_TIMER_CONTAINER_OF
 ])
 
