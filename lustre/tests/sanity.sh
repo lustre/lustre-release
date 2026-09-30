@@ -12339,12 +12339,26 @@ test_65n() {
 	local default_lmv_count=$($LFS getdirstripe -D -c $MOUNT)
 	local default_lmv_index=$($LFS getdirstripe -D -i $MOUNT)
 	local default_lmv_hash=$($LFS getdirstripe -D -H $MOUNT)
+	local default_lmv_inherit=$($LFS getdirstripe -D -X $MOUNT)
+	local default_lmv_inherit_rr=$($LFS getdirstripe -D --max-inherit-rr \
+				       $MOUNT)
 
-	if [ $default_lmv_hash == "none" ]; then
+	# the ROOT default LMV has no hash type, but its max-inherit-rr
+	# spreads new directories over the MDTs for later subtests
+	if (( default_lmv_count == 0 )); then
 		stack_trap "$LFS setdirstripe -D -d $MOUNT" EXIT
 	else
+		local hash_opt
+		local rr_opt
+
+		[[ $default_lmv_hash == "none" ]] ||
+			hash_opt="-H $default_lmv_hash"
+		# max-inherit-rr is only allowed with mdt-index -1
+		(( default_lmv_index != -1 )) ||
+			rr_opt="--max-inherit-rr $default_lmv_inherit_rr"
 		stack_trap "$LFS setdirstripe -D -i $default_lmv_index \
-			-c $default_lmv_count -H $default_lmv_hash $MOUNT" EXIT
+			-c $default_lmv_count $hash_opt \
+			-X $default_lmv_inherit $rr_opt $MOUNT" EXIT
 	fi
 
 	$LFS setdirstripe -D -c 2 $MOUNT ||
