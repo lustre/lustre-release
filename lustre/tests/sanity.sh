@@ -36070,6 +36070,82 @@ test_411b() {
 }
 run_test 411b "confirm Lustre can avoid OOM with reasonable cgroups limits"
 
+test_411c() {
+	local count=$OSTCOUNT
+	local thresh_mb=$(awk '$1 == "nr_dirty_threshold" { print $2 }' \
+			  /proc/vmstat)
+	local total_mb
+	local size_mb
+	local old_bytes=$(sysctl -n vm.dirty_background_bytes)
+	local old_ratio=$(sysctl -n vm.dirty_background_ratio)
+	local pids=()
+	local failed=0
+	local i
+
+	# stay well under the point where writers are throttled, so that
+	# every commit asked for is one background writeback forced
+	thresh_mb=$((thresh_mb * $(getconf PAGE_SIZE) >> 20))
+	total_mb=$((thresh_mb / 4 < 1024 ? thresh_mb / 4 : 1024))
+	size_mb=$((total_mb / count))
+	(( size_mb >= 16 )) || skip_env "dirty limit too small: ${thresh_mb}M"
+
+	local min_size_ost=$($LFS df | awk "/$FSNAME-OST/ { print \$4 }" |
+			     sort -un | head -1)
+	(( size_mb * 1024 < min_size_ost - 100 )) ||
+		skip_env "OST space too small: ${min_size_ost}K"
+
+	# writing 0 to the bytes knob does not bring the ratio back
+	if (( old_bytes > 0 )); then
+		stack_trap "sysctl -qw vm.dirty_background_bytes=$old_bytes"
+	else
+		stack_trap "sysctl -qw vm.dirty_background_ratio=$old_ratio"
+	fi
+
+	test_mkdir $DIR/$tdir
+	stack_trap "rm -rf $DIR/$tdir"
+	for ((i = 0; i < count; i++)); do
+		$LFS setstripe -c 1 -i $i $DIR/$tdir/$tfile.$i ||
+			error "(0) setstripe $tfile.$i failed"
+	done
+
+	# keep background writeback running for the whole write
+	sysctl -qw vm.dirty_background_bytes=$((8 << 20)) ||
+		error "(1) cannot set vm.dirty_background_bytes"
+
+	local syncs=$(calc_stats osc.*.stats ost_sync)
+	local writes=$(calc_stats osc.*.stats ost_write)
+
+	for ((i = 0; i < count; i++)); do
+		dd if=/dev/zero of=$DIR/$tdir/$tfile.$i bs=1M count=$size_mb \
+			conv=notrunc status=none &
+		pids+=($!)
+	done
+	for ((i = 0; i < count; i++)); do
+		wait ${pids[i]} || failed=$((failed + 1))
+	done
+	(( failed == 0 )) || error "(2) $failed writers failed"
+
+	# count the whole writeback, still without an fsync
+	local dirty
+	for ((i = 0; i < 60; i++)); do
+		dirty=$($LCTL get_param -n osc.*.cur_dirty_bytes |
+			awk '{ s += $1 } END { print s + 0 }')
+		(( dirty == 0 )) && break
+		sleep 1
+	done
+	(( dirty == 0 )) || error "(3) $dirty bytes still dirty"
+	sleep 1
+
+	syncs=$(($(calc_stats osc.*.stats ost_sync) - syncs))
+	writes=$(($(calc_stats osc.*.stats ost_write) - writes))
+	echo "$syncs OST_SYNC for $writes OST_WRITE"
+
+	(( writes >= 16 )) || error "(4) only $writes OST_WRITE counted"
+	(( syncs * 10 < writes )) ||
+		error "(5) $syncs OST_SYNC for $writes OST_WRITE"
+}
+run_test 411c "background writeback does not force a commit per pass"
+
 test_412() {
 	(( $MDSCOUNT > 1 )) || skip_env "needs >= 2 MDTs"
 	(( $MDS1_VERSION >= $(version_code 2.10.55) )) ||

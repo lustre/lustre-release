@@ -1494,25 +1494,21 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 
 	if (wbc->sync_mode == WB_SYNC_NONE) {
 		struct bdi_writeback *wb;
+		bool reclaim;
 
 		/*
-		 * As it may break full stripe writes on the inode,
-		 * disable periodic kupdate writeback (@wbc->for_kupdate)?
-		 */
-
-		/*
-		 * The system is under memory pressure and it is now reclaiming
-		 * cache pages.
+		 * Only writeback started for page reclaim forces a commit:
+		 * background writeback runs whenever dirty pages pass the
+		 * background threshold, which is normal for any writer.
 		 */
 		spin_lock(&inode->i_lock);
 		wb = inode_to_wb(inode);
-		if (wbc->for_background ||
-		    (wb->start_all_reason == WB_REASON_VMSCAN &&
-		     test_bit(WB_start_all, &wb->state))) {
+		reclaim = wb->start_all_reason == WB_REASON_VMSCAN &&
+			  test_bit(WB_start_all, &wb->state);
+		if (reclaim)
 			mode = CL_FSYNC_RECLAIM;
-			if (wb->dirty_exceeded)
-				prio = IO_PRIO_DIRTY_EXCEEDED;
-		}
+		if ((reclaim || wbc->for_background) && wb->dirty_exceeded)
+			prio = IO_PRIO_DIRTY_EXCEEDED;
 		spin_unlock(&inode->i_lock);
 	}
 
