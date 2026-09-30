@@ -1171,6 +1171,36 @@ test_28() {
 }
 run_test 28 "Test peer_list"
 
+test_29() {
+	cleanup_lnet || error "Failed to cleanup LNet"
+
+	# The peer show dump skips 0@lo. Use one CPT, and create the 0@lo
+	# peer first. Then 0@lo is entry 0 of the peer list.
+	local MODOPTS_LIBCFS="cpu_npartitions=1"
+
+	configure_dlc || error "configure_dlc failed $?"
+
+	do_lnetctl discover 0@lo || error "Failed to discover 0@lo"
+	$LCTL get_param -n peers | grep -q "^0@lo " ||
+		error "No peer for 0@lo"
+	do_lnetctl peer add --prim_nid 1.1.1.1@tcp ||
+		error "First peer add failed $?"
+	do_lnetctl peer add --prim_nid 1.1.1.2@tcp ||
+		error "Second peer add failed $?"
+
+	local show=$($LNETCTL peer show)
+
+	echo "$show"
+	cleanup_lnet
+
+	local hdrs=$(grep -c "^peer:" <<<"$show")
+	local peers=$(grep -c "primary nid:" <<<"$show")
+
+	((hdrs == 1)) || error "Expected 1 'peer:' key, found $hdrs"
+	((peers == 2)) || error "Expected 2 peers, found $peers"
+}
+run_test 29 "peer show has one peer key when 0@lo is the first peer"
+
 add_net() {
 	local net="$1"
 	local if="$2"

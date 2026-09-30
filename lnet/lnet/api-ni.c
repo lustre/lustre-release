@@ -8123,6 +8123,7 @@ static int lnet_peer_ni_show_dump(struct sk_buff *msg,
 	int portid = NETLINK_CB(cb->skb).portid;
 	int seq = cb->nlh->nlmsg_seq;
 	int idx = plist->lgpl_index;
+	bool first = !idx;
 	int msg_len = genlmsg_len(gnlh);
 	int rc = 0;
 
@@ -8187,8 +8188,13 @@ static int lnet_peer_ni_show_dump(struct sk_buff *msg,
 			GOTO(unlock_api_mutex, rc = -ENOENT);
 		}
 
-		if (idx == 1)
+		/* Put the header in the first message of the dump. The
+		 * loop skips 0@lo, so this message can be for entry 1.
+		 */
+		if (first) {
 			nla_put_string(msg, LNET_PEER_NI_ATTR_HDR, "");
+			first = false;
+		}
 
 		nla_put_string(msg, LNET_PEER_NI_ATTR_PRIMARY_NID,
 			       libcfs_nidstr(&lp->lp_primary_nid));
@@ -9415,6 +9421,7 @@ static int lnet_peer_dist_show_dump(struct sk_buff *msg,
 	int portid = NETLINK_CB(cb->skb).portid;
 	int seq = cb->nlh->nlmsg_seq;
 	int idx = plist->lgpl_index;
+	bool first = !idx;
 	int rc = 0;
 
 	if (!idx) {
@@ -9459,8 +9466,14 @@ static int lnet_peer_dist_show_dump(struct sk_buff *msg,
 			GOTO(send_error, rc = -EMSGSIZE);
 		}
 
-		if (idx == 1)
+		/* Put the header in the first message of the dump. The
+		 * loop skips 0@lo and unreachable NIDs, so this message
+		 * can be for any entry.
+		 */
+		if (first) {
 			nla_put_string(msg, LNET_PEER_DIST_ATTR_HDR, "");
+			first = false;
+		}
 
 		nla_put_string(msg, LNET_PEER_DIST_ATTR_NID,
 			       libcfs_nidstr(&id->nid));
