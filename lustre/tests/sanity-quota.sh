@@ -5511,6 +5511,40 @@ test_62() {
 }
 run_test 62 "Project inherit should be only changed by root"
 
+wait_quota_released() {
+	local qtype=$1
+	local qid=$2
+	local max=$3
+	# two default ZFS transaction group commit intervals of 5s
+	local end=$((SECONDS + 2 * 5))
+	local facets=${4:-$(get_facets MDS OST)}
+	local granted
+	local facet
+	local tgt
+	local val
+
+	while (( SECONDS < end )); do
+		granted=0
+		for facet in ${facets//,/ }; do
+			[[ $facet == mds* ]] && tgt=--mdt || tgt=--ost
+			val=$($LFS quota -q $tgt $(facet_index $facet) \
+			      --bhardlimit -$qtype $qid $DIR)
+			[[ $val =~ ^[0-9]+$ ]] || quota_error $qtype $qid \
+				"bad grant '$val' on $facet"
+			granted=$((granted + val))
+		done
+		(( granted <= max )) && return 0
+		sleep 1
+	done
+
+	quota_error $qtype $qid "granted $granted > $max after cleanup"
+}
+
+wait_quota_release_zfs() {
+	[[ $mds1_FSTYPE == zfs || $ost1_FSTYPE == zfs ]] || return 0
+	wait_quota_released "$@"
+}
+
 test_dom() {
 	[ "$MDS1_VERSION" -lt $(version_code 2.11.55) ] &&
 		skip "Not supported before 2.11.55"
@@ -5539,8 +5573,10 @@ test_dom() {
 	[ $USED -ne 0 ] && error "Used space for $qid isn't 0."
 
 	chown $TSTUSR.$TSTUSR $DIR/$tdir || error "chown $tdir failed"
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir ||
+		error "setstripe $tdir failed"
 
-	mkdir $DIR/$tdir_dom || error "mkdir $tdir_dom failed"
+	mkdir_on_mdt0 $DIR/$tdir_dom || error "mkdir $tdir_dom failed"
 	$LFS setstripe -E 1M -L mdt $DIR/$tdir_dom ||
 		error "setstripe $tdir_dom failed"
 	chown $TSTUSR.$TSTUSR $DIR/$tdir_dom || error "chown $tdir_dom failed"
@@ -5574,6 +5610,7 @@ test_dom() {
 	cancel_lru_locks mdc
 	sync; sync_all_data || true
 	wait_delete_completed
+	wait_quota_release_zfs $qtype $qid $((LIMIT/2 - 1024)) mds1,ost1
 
 	dd_failed=false
 
@@ -5595,6 +5632,7 @@ test_dom() {
 	cancel_lru_locks mdc
 	sync; sync_all_data || true
 	wait_delete_completed
+	wait_quota_release_zfs $qtype $qid $((LIMIT/2 - 1024)) mds1,ost1
 
 	dd_failed=false
 
@@ -6412,6 +6450,8 @@ test_dom_75() {
 	local LIMIT=20480 #20M
 	local qid=$TSTID
 
+	wait_quota_release_zfs u $qid $((LIMIT/2 - 1024)) mds1,ost1
+
 	for ((i = 0; i < $((LIMIT/2048-1)); i++)); do
 		$DD of=$DIR/$tdir_dom/$tfile-$i count=1 \
 			conv=fsync || dd_failed=true
@@ -6431,6 +6471,8 @@ test_dom_75() {
 	# flush cache, ensure noquota flag is set on client
 	cancel_lru_locks
 	sync; sync_all_data || true
+	wait_delete_completed
+	wait_quota_release_zfs u $qid $((LIMIT/2 - 1024)) mds1,ost1
 
 	dd_failed=false
 
@@ -6450,6 +6492,8 @@ test_dom_75() {
 	# flush cache, ensure noquota flag is set on client
 	cancel_lru_locks
 	sync; sync_all_data || true
+	wait_delete_completed
+	wait_quota_release_zfs u $qid $((LIMIT/2 - 1024)) mds1,ost1
 
 	dd_failed=false
 
@@ -6495,7 +6539,8 @@ test_75()
 		error "set user quota failed"
 
 	chmod 777 $DIR/$tdir || error "chmod 777 $DIR/$tdir failed"
-	mkdir $DIR/$tdir_dom
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir || error "setstripe $tdir failed"
+	mkdir_on_mdt0 $DIR/$tdir_dom || error "mkdir $tdir_dom failed"
 	chmod 777 $DIR/$tdir_dom
 	$LFS setstripe -E 1M -L mdt $DIR/$tdir_dom ||
 		error "setstripe $tdir_dom failed"
