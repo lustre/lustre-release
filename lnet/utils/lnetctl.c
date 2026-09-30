@@ -4208,7 +4208,7 @@ static int jt_show_net(int argc, char **argv)
 		case '?':
 			print_help(net_cmds, "net", "show");
 		default:
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
