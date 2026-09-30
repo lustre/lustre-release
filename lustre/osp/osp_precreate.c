@@ -149,6 +149,14 @@ static int osp_statfs_interpret(const struct lu_env *env,
 		  jiffies + cfs_time_seconds(d->opd_statfs_maxage));
 	d->opd_statfs_update_in_progress = 0;
 
+	/*
+	 * we begin with status=EAGAIN after mount and the precreate thread
+	 * is waiting for status=0 to start its natural activity, so wake it
+	 * up.
+	 */
+	if (d->opd_pre && d->opd_pre_task && d->opd_pre_status == 0)
+		wake_up(&d->opd_pre_waitq);
+
 	sfs = &d->opd_statfs;
 	CDEBUG(D_CACHE,
 	       "%s (%p): %llu blocks, %llu free, %llu avail, %u bsize, %u reserved mb low, %u reserved mb high, %u reserved ino low, %u reserved ino high, %llu files, %llu free files %#x\n",
