@@ -1605,7 +1605,7 @@ int llapi_get_obd_count(char *mnt, int *count, int is_mdt)
  * @param real_uuid ends in "_UUID"
  * @param search_uuid may or may not end in "_UUID"
  */
-int llapi_uuid_match(char *real_uuid, char *search_uuid)
+int llapi_uuid_match(const char *real_uuid, const char *search_uuid)
 {
 	int cmplen = strlen(real_uuid);
 	int searchlen = strlen(search_uuid);

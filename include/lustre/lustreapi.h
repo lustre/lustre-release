@@ -554,7 +554,7 @@ struct find_work_queue {
 };
 
 int llapi_ostlist(char *path, struct find_param *param);
-int llapi_uuid_match(char *real_uuid, char *search_uuid);
+int llapi_uuid_match(const char *real_uuid, const char *search_uuid);
 int llapi_getstripe(char *path, struct find_param *param);
 int llapi_find(char *path, struct find_param *param);
 int llapi_find_with_cb(char *path, struct find_param *param,
