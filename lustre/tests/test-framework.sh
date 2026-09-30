@@ -3382,6 +3382,7 @@ shutdown_node () {
 shutdown_node_hard () {
 	local host=$1
 	local attempts=$SHUTDOWN_ATTEMPTS
+	local i
 
 	if ! power_management_available; then
 		skip "HARD shutdown requires power management tools"

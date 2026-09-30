@@ -2084,14 +2084,6 @@ struct cl_io {
 	 * io_uring direct IO with flags IOCB_NOWAIT.
 	 */
 			     ci_iocb_nowait:1,
-	/**
-	 * The filesystem must exclusively acquire invalidate_lock before
-	 * invalidating page cache in truncate / hole punch / DLM extent
-	 * lock blocking AST path (and thus calling into ->invalidatepage)
-	 * to block races between page cache invalidation and page cache
-	 * filling functions (fault, read, ...)
-	 */
-			     ci_invalidate_page_cache:1,
 	/* was this IO switched from BIO to DIO for hybrid IO? */
 			     ci_hybrid_switched:1,
 	/* this IO is to a parity mirror */

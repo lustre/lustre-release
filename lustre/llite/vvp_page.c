@@ -48,7 +48,6 @@ static void vvp_page_delete(const struct lu_env *env,
 
 	if (cp->cp_type == CPT_CACHEABLE) {
 		struct folio *folio = cp->cp_folio;
-		struct inode *inode = folio->mapping->host;
 
 		LASSERT(folio_get_private(folio) == cp);
 
@@ -61,17 +60,6 @@ static void vvp_page_delete(const struct lu_env *env,
 		folio_clear_private(folio);
 		folio_change_private(folio, NULL);
 
-		/* clearpageuptodate prevents the page being read by the
-		 * kernel after it has been deleted from Lustre, which avoids
-		 * potential stale data reads.  The seqlock allows us to see
-		 * that a page was potentially deleted and catch the resulting
-		 * SIGBUS - see ll_filemap_fault() (LU-16160)
-		 */
-		if (folio_test_uptodate(folio)) {
-			write_seqlock(&ll_i2info(inode)->lli_page_inv_lock);
-			folio_clear_uptodate(folio);
-			write_sequnlock(&ll_i2info(inode)->lli_page_inv_lock);
-		}
 		/* The reference from vmpage to cl_page is removed,
 		 * but the reference back is still here. It is removed
 		 * later in cl_page_free().

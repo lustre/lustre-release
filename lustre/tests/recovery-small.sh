@@ -668,6 +668,105 @@ test_18c() {
 }
 run_test 18c "Dropped connect reply after eviction handing (14755)"
 
+test_18d() {
+	(( OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+
+	local file=$DIR/$tfile
+	local pid
+
+	# Two objects of one inode, on OST0000 and OST0001.  Cancelling the
+	# idle lock of the OST0001 object before replaying it used to take
+	# invalidate_lock of this inode, which the read below holds shared
+	# while it waits in ll_read_folio().
+	$LFS setstripe -c 2 -o 0,1 -S 1M $file || error "setstripe $file failed"
+	dd if=/dev/zero of=$file bs=1M count=4 conv=fsync ||
+		error "write $file failed"
+
+	local ns="ldlm.namespaces.*OST0001-osc-[!M]*"
+	local unused
+
+	# Leave an idle extent lock on each object for replay to cancel, with
+	# no pages under it, so the read below fills the page cache.  The
+	# size glimpse of an O_DIRECT read caches the locks without caching
+	# pages (drop_caches can leave a page cached).
+	cancel_lru_locks osc
+	dd if=$file of=/dev/null bs=1M count=4 iflag=direct ||
+		error "read $file failed"
+	unused=$($LCTL get_param -n "$ns.lock_unused_count" |
+		 awk '{ n += $1 } END { print n }')
+	(( unused > 0 )) || error "no idle lock on OST0001 object"
+
+	# Pause the read of the first stripe in ll_read_folio().  The pause
+	# must outlast the OST0001 failover and recovery, or the test passes
+	# without having tested anything; clearing fail_loc ends it early.
+	local pause=$(($(max_recovery_time) * 2))
+
+	#define OBD_FAIL_LLITE_READPAGE_PAUSE	0x1422
+	$LCTL set_param fail_loc=0x80001422 fail_val=$pause
+	stack_trap reset_fail_loc
+	dd if=$file of=/dev/null bs=1M count=1 &
+	pid=$!
+	sleep 5
+	grep -q cfs_fail_timeout /proc/$pid/stack ||
+		error "reader $pid not paused in ll_read_folio()"
+
+	fail_nodf ost2
+
+	# Before LU-20157 the OST0001 lock replay thread blocked in
+	# filemap_invalidate_lock() behind the read, and the import could
+	# not reach FULL until the read completed.
+	wait_clients_import_state ${HOSTNAME} ost2 "\(FULL\|IDLE\)"
+	kill -0 $pid || error "reader $pid finished before replay completed"
+
+	$LCTL set_param fail_loc=0
+	wait $pid || error "read $file failed"
+}
+run_test 18d "lock replay does not wait for a paused page cache fill"
+
+test_18e() {
+	local file=$DIR/$tfile
+	local stop=$TMP/$tfile.stop
+	local pids=()
+	local flags
+	local pid
+	local iteration
+
+	# All the IO goes to the OST which is failed over.
+	$LFS setstripe -c 1 -i 0 $file || error "setstripe $file failed"
+	dd if=/dev/zero of=$file bs=1M count=50 || error "write $file failed"
+	stack_trap "rm -f $stop $file"
+	rm -f $stop
+
+	# Buffered write, buffered read and O_DIRECT read, until $stop exists.
+	# A buffered read waiting for the OST holds invalidate_lock shared.
+	for flags in "if=/dev/zero of=$file conv=notrunc" \
+		     "if=$file of=/dev/null" \
+		     "if=$file of=/dev/null iflag=direct"; do
+		(
+			while [[ ! -e $stop ]]; do
+				dd $flags bs=1M count=50 status=none || exit 1
+				sleep 0.$((RANDOM % 4 + 1))
+			done
+		) &
+		pids+=($!)
+	done
+	stack_trap "touch $stop; kill ${pids[*]} 2>/dev/null || true; wait"
+
+	# Lock replay after each failover cancels the idle locks of the file,
+	# which used to wait for invalidate_lock held by a reader that is
+	# itself waiting for replay to finish (LU-20157).
+	for ((iteration = 0; iteration < 10; iteration++)); do
+		fail ost1
+		sleep 3
+	done
+
+	touch $stop
+	for pid in "${pids[@]}"; do
+		wait $pid || error "IO process $pid failed"
+	done
+}
+run_test 18e "mixed buffered/direct IO does not deadlock with OST failover"
+
 test_19a() {
 	local before=$(date +%s)
 	local evict

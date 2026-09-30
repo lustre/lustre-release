@@ -145,6 +145,7 @@ static bool do_release_folio(struct folio *folio, gfp_t wait)
 	struct cl_object *obj;
 	struct cl_page *cl_page;
 	struct lu_env *env;
+	struct inode *inode;
 	int result = 0;
 
 	ENTRY;
@@ -157,7 +158,8 @@ static bool do_release_folio(struct folio *folio, gfp_t wait)
 	if (mapping == NULL)
 		RETURN(1);
 
-	obj = ll_i2info(mapping->host)->lli_clob;
+	inode = mapping->host;
+	obj = ll_i2info(inode)->lli_clob;
 	if (obj == NULL)
 		RETURN(1);
 
@@ -169,6 +171,17 @@ static bool do_release_folio(struct folio *folio, gfp_t wait)
 	LASSERT(!IS_ERR(env));
 
 	if (!cl_page_in_use(cl_page)) {
+		/* clearpageuptodate prevents the page being read by the
+		 * kernel after it has been deleted from Lustre, which avoids
+		 * potential stale data reads.  The seqlock allows us to see
+		 * that a page was potentially deleted and catch the resulting
+		 * SIGBUS - see ll_filemap_fault() (LU-16160)
+		 */
+		if (folio_test_uptodate(folio)) {
+			write_seqlock(&ll_i2info(inode)->lli_page_inv_lock);
+			folio_clear_uptodate(folio);
+			write_sequnlock(&ll_i2info(inode)->lli_page_inv_lock);
+		}
 		result = 1;
 		cl_page_delete(env, cl_page);
 	}

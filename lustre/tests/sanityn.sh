@@ -8009,6 +8009,111 @@ test_123() {
 }
 run_test 123 "volatile open in a removed directory"
 
+# Set up for test_126*: give $DIR/$tfile two stripes with an idle PR lock on
+# each object for the first mount and no pages cached, then start a read of
+# the first stripe there that pauses in ll_read_folio() for $pause seconds.
+# The kernel holds invalidate_lock shared for the whole page cache fill, so
+# the paused reader keeps it that long.  Sets READER_PID.
+# usage: setup_paused_reader_126 <pause> <read|mmap>
+setup_paused_reader_126() {
+	local pause=$1
+	local how=$2
+	local file=$DIR/$tfile
+
+	(( OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+
+	local ns="ldlm.namespaces.*OST0001-osc-[!M]*"
+	local unused
+
+	$LFS setstripe -c 2 -o 0,1 -S 1M $file || error "setstripe $file failed"
+	dd if=/dev/zero of=$file bs=1M count=4 conv=fsync ||
+		error "write $file failed"
+	# The size glimpse of an O_DIRECT read caches a PR lock on each
+	# object without caching any pages (drop_caches can leave a page
+	# cached, and the read below would then not pause).
+	cancel_lru_locks osc
+	dd if=$file of=/dev/null bs=1M count=4 iflag=direct ||
+		error "read $file failed"
+	unused=$($LCTL get_param -n "$ns.lock_unused_count" |
+		 awk '{ n += $1 } END { print n }')
+	(( unused > 0 )) || error "no idle lock on OST0001 object"
+
+	#define OBD_FAIL_LLITE_READPAGE_PAUSE	0x1422
+	$LCTL set_param fail_loc=0x80001422 fail_val=$pause
+	stack_trap "$LCTL set_param fail_loc=0 fail_val=0"
+	case $how in
+	read) dd if=$file of=/dev/null bs=4k count=1 & ;;
+	mmap) $MULTIOP $file OSMRc & ;;
+	esac
+	READER_PID=$!
+	sleep 3
+	grep -q cfs_fail_timeout /proc/$READER_PID/stack ||
+		error "reader $READER_PID not paused in ll_read_folio()"
+}
+
+# Check that an operation on the second stripe did not wait for the paused
+# reader of the first one, then wait for the reader.  Before LU-20157 the
+# lock cancel waited in vvp_io_init() for invalidate_lock until the pause
+# ended; with a reader waiting for an RPC that the cancel holds up, such as
+# LU-19427, that is a deadlock.
+# usage: check_not_blocked_126 <pause> <elapsed> <description>
+check_not_blocked_126() {
+	local pause=$1
+	local elapsed=$2
+	local what="$3"
+
+	echo "$what took ${elapsed}s, reader paused for ${pause}s"
+	(( elapsed < pause / 2 )) ||
+		error "$what waited ${elapsed}s for reader of other stripe"
+	wait $READER_PID || error "reader $READER_PID failed"
+}
+
+test_126a() {
+	local pause=30
+	local start
+
+	setup_paused_reader_126 $pause read
+
+	# A write to the second object from the second mount revokes the idle
+	# PR lock on it of the first mount by a blocking AST.
+	start=$SECONDS
+	dd if=/dev/zero of=$DIR2/$tfile bs=1M count=1 seek=1 conv=notrunc ||
+		error "write $DIR2/$tfile failed"
+	check_not_blocked_126 $pause $((SECONDS - start)) "blocking AST"
+}
+run_test 126a "blocking AST does not wait for read of other stripe"
+
+test_126b() {
+	local pause=30
+	local start
+
+	# As 126a, with the reader in filemap_fault(), which also holds
+	# invalidate_lock shared, e.g. for an O_DIRECT buffer mmapped from
+	# another Lustre file.
+	setup_paused_reader_126 $pause mmap
+
+	start=$SECONDS
+	dd if=/dev/zero of=$DIR2/$tfile bs=1M count=1 seek=1 conv=notrunc ||
+		error "write $DIR2/$tfile failed"
+	check_not_blocked_126 $pause $((SECONDS - start)) "blocking AST"
+}
+run_test 126b "blocking AST does not wait for mmap fault of other stripe"
+
+test_126c() {
+	local pause=30
+	local start
+
+	setup_paused_reader_126 $pause read
+
+	# Cancel the idle lock on the second object from the client LRU,
+	# neither by the server nor by lock replay.
+	start=$SECONDS
+	$LCTL set_param "ldlm.namespaces.*OST0001-osc-[!M]*.lru_size=clear" ||
+		error "lru_size=clear failed"
+	check_not_blocked_126 $pause $((SECONDS - start)) "lru_size=clear"
+}
+run_test 126c "LRU cancel does not wait for read of other stripe"
+
 test_200() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 

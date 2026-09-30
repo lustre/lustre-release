@@ -1296,29 +1296,6 @@ AC_DEFUN([LC_HAVE_FAULT_IN_IOV_ITER_READABLE], [
 ]) # LC_HAVE_FAULT_IN_IOV_ITER_READABLE
 
 #
-# LC_HAVE_INVALIDATE_LOCK
-#
-# Kernel version v5.15-rc1 commit 730633f0b7f951726e87f912a6323641f674ae34
-# mm: Protect operations adding pages to page cache with invalidate_lock
-#
-AC_DEFUN([LC_SRC_HAVE_INVALIDATE_LOCK], [
-	LB2_LINUX_TEST_SRC([address_space_invalidate_lock], [
-		#include <linux/fs.h>
-	],[
-		struct address_space *mapping = NULL;
-
-		filemap_invalidate_lock(mapping);
-	],[-Werror])
-])
-AC_DEFUN([LC_HAVE_INVALIDATE_LOCK], [
-	LB2_MSG_LINUX_TEST_RESULT([if filemap_invalidate_lock() is available],
-	[address_space_invalidate_lock], [
-		AC_DEFINE(HAVE_INVALIDATE_LOCK, 1,
-			[filemap_invalidate_lock() is available])
-	])
-]) # LC_HAVE_INVALIDATE_LOCK
-
-#
 # LC_HAVE_SECURITY_DENTRY_INIT_WITH_XATTR_NAME_ARG
 #
 # Linux v5.15-rc1-20-g15bf32398ad4
