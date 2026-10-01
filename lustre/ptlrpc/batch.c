@@ -17,6 +17,7 @@
 #include <linux/module.h>
 #include <obd_class.h>
 #include <obd.h>
+#include "ptlrpc_internal.h"
 
 #define OUT_UPDATE_REPLY_SIZE		4096
 
@@ -65,6 +66,29 @@ struct batch_work_resend {
 };
 
 /*
+ * Batches are client work, which may wait on other MDTs: keep them off
+ * OUT_PORTAL. Only a server that advertises OBD_CONNECT2_DNE_INTENT clears
+ * its batch state after a batch; an older one leaves it behind, which breaks
+ * the next intent the same mdt thread handles, so it still gets batches on
+ * OUT_PORTAL.
+ *
+ * Called by ptl_send_rpc() for every send of a batch, a resend included, so
+ * that the portal is that of the server the request now goes to: an MDT can
+ * fail over to a partner running another version while a batch is waiting
+ * to be sent or resent.
+ */
+void ptlrpc_batch_set_portal(struct ptlrpc_request *req)
+{
+	if (OCD_HAS_FLAG2(&req->rq_import->imp_connect_data, DNE_INTENT)) {
+		req->rq_request_portal = MDS_REQUEST_PORTAL;
+		req->rq_reply_portal = MDC_REPLY_PORTAL;
+	} else {
+		req->rq_request_portal = OUT_PORTAL;
+		req->rq_reply_portal = OSC_REPLY_PORTAL;
+	}
+}
+
+/*
  * Prepare inline update request
  *
  * Prepare BUT update ptlrpc inline request, and the request usuanlly includes
@@ -100,8 +124,6 @@ static int batch_prep_inline_update_req(struct batch_update_head *head,
 			     RCL_SERVER, repsize);
 
 	ptlrpc_request_set_replen(req);
-	req->rq_request_portal = OUT_PORTAL;
-	req->rq_reply_portal = OSC_REPLY_PORTAL;
 
 	RETURN(rc);
 }
@@ -208,8 +230,6 @@ static int batch_prep_update_req(struct batch_update_head *head,
 			     RCL_SERVER, repsize);
 
 	ptlrpc_request_set_replen(req);
-	req->rq_request_portal = OUT_PORTAL;
-	req->rq_reply_portal = OSC_REPLY_PORTAL;
 	*reqp = req;
 
 out_req:

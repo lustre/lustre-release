@@ -121,6 +121,9 @@ __u64 ptlrpc_known_replied_xid(struct obd_import *imp);
 void ptlrpc_add_unreplied(struct ptlrpc_request *req);
 void ptlrpc_reqset_free(struct kref *kerf);
 
+/* batch.c */
+void ptlrpc_batch_set_portal(struct ptlrpc_request *req);
+
 /* events.c */
 int ptlrpc_init_portals(void);
 void ptlrpc_exit_portals(void);

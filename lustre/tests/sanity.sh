@@ -18510,6 +18510,49 @@ test_123ad() {
 }
 run_test 123ad "Verify batching statahead works correctly"
 
+test_123ae() {
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	$LCTL get_param -n mdc.*.connect_flags | grep -q batch_rpc ||
+		skip "Server does not support batch RPC"
+	# only an MDS granting dne_lock_intent takes batches on its MDS portal
+	$LCTL get_param -n mdc.$FSNAME-MDT0000-mdc-*.connect_flags |
+		grep -qw dne_lock_intent ||
+		skip "MDS does not take batched RPCs on the MDS request portal"
+
+	local batch_max
+	local served
+	local sent
+	local max
+
+	max=$($LCTL get_param -n llite.*.statahead_max | head -n 1)
+	batch_max=$($LCTL get_param -n llite.*.statahead_batch_max | head -n 1)
+	stack_trap "$LCTL set_param llite.*.statahead_max=$max"
+	stack_trap "$LCTL set_param llite.*.statahead_batch_max=$batch_max"
+	$LCTL set_param llite.*.statahead_max=256
+	$LCTL set_param llite.*.statahead_batch_max=64
+
+	test_mkdir -i 0 -c 1 $DIR/$tdir
+	createmany -o $DIR/$tdir/$tfile 1000 || error "createmany failed"
+	stack_trap "unlinkmany $DIR/$tdir/$tfile 1000"
+	cancel_lru_locks mdc
+	$LCTL set_param mdc.*.stats=clear
+	do_facet mds1 $LCTL set_param mds.MDS.mdt.stats=clear
+	ls -l $DIR/$tdir > /dev/null || error "ls -l $DIR/$tdir failed"
+	wait_update_facet client "pgrep ll_sa" "" 35 ||
+		error "ll_sa thread is still running"
+
+	sent=$(calc_stats mdc.*.stats mds_batch)
+	(( sent > 0 )) || error "no batched statahead RPC was sent"
+
+	# client work: the mdt service, not mdt_out or ost_out, serves it
+	served=$(do_facet mds1 $LCTL get_param -n mds.MDS.mdt.stats |
+		 awk '$1 == "mds_batch" { print $2 }')
+	(( ${served:-0} > 0 )) ||
+		error "none of $sent batched RPCs was served by mdt"
+}
+run_test 123ae "batched statahead RPCs are served by the mdt service"
+
 test_123b () { # statahead(bug 15027)
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 
