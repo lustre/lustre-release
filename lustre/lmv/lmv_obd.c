@@ -961,6 +961,7 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 		struct obd_device *mdc_obd;
 		struct obd_statfs stat_buf = {0};
 		__u32 index;
+		__u32 flags;
 
 		memcpy(&index, data->ioc_inlbuf2, sizeof(__u32));
 
@@ -984,9 +985,15 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 				     (int) sizeof(struct obd_uuid))))
 			RETURN(-EFAULT);
 
+		memcpy(&flags, data->ioc_inlbuf1, sizeof(flags));
+		flags = flags & LL_STATFS_NODELAY ? OBD_STATFS_NODELAY : 0;
+
 		rc = obd_statfs(NULL, tgt->ltd_exp, &stat_buf,
 				ktime_get_seconds() - OBD_STATFS_CACHE_SECONDS,
-				0);
+				flags);
+		/* -ENODEV means "no more targets" to userspace */
+		if (rc == -ENODEV)
+			rc = -EAGAIN;
 		if (rc)
 			RETURN(rc);
 		lmv_statfs_update(lmv, tgt, &stat_buf);

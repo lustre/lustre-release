@@ -1,4 +1,4 @@
-.TH LFS-DF 1 2024-08-15 Lustre "Lustre User Utilities"
+.TH LFS-DF 1 2026-10-01 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-df \- report Lustre filesystem disk usage
 .SH SYNOPSIS
@@ -144,6 +144,12 @@ the client.  This avoids blocking the
 .B lfs df
 output if a target is offline or unreachable, and only returns the
 space on OSTs that can currently be accessed.
+Targets that cannot be contacted are listed with an error, and
+.B lfs df
+returns a non-zero exit status.
+With
+.BR --only-summary ,
+such targets are not listed, but the exit status is still non-zero.
 .TP
 .BR -m ", " --mdt "[="\fIINDEX\fR]
 Filter output to show information on

@@ -8536,14 +8536,12 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 						&stat_buf, &uuid_buf);
 			if (rc2 == -ENODEV)
 				break;
-			if (rc2 == -EAGAIN)
+			/* skip empty index, but report unreachable target */
+			if (rc2 == -EAGAIN && uuid_buf.uuid[0] == '\0')
 				continue;
-			if (rc2 == -ENODATA) { /* Inactive device, OK. */
-				if (!(flags & MNTDF_VERBOSE))
-					continue;
-			} else if (rc2 < 0 && rc == 0) {
-				rc = rc2;
-			}
+
+			if (rc2 == -ENODATA && !(flags & MNTDF_VERBOSE))
+				continue; /* Inactive device, OK. */
 
 			/*
 			 * If we have OSTs then don't report MDT block counts.
@@ -8564,6 +8562,9 @@ static int mntdf(char *mntdir, char *fsname, char *pool, enum mntdf_flags flags,
 			    llapi_search_ost(fsname, poolname,
 					     obd_uuid2str(&uuid_buf)) != 1)
 				continue;
+
+			if (rc2 < 0 && rc2 != -ENODATA && !rc)
+				rc = rc2;
 
 			/*
 			 * the llapi_obd_fstatfs() call may have returned with
@@ -9369,10 +9370,10 @@ static int lfs_df(int argc, char **argv)
 			rc = mntdf(mntdir, fsname, pool_name, flags, ops, NULL,
 				   mdt_idx, ost_idx, fields, field_order,
 				   field_count);
-			if (rc || path[0] != '\0')
-				break;
+			if (rc && !rc1)
+				rc1 = rc;
 		}
-		return rc;
+		return rc1;
 	}
 
 	/* Loop through all the remaining arguments. These are Lustre FS

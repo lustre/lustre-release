@@ -3961,6 +3961,55 @@ test_170() {
 }
 run_test 170 "Reconnect after REPLAY_LOCKS hangs (LU-18154)"
 
+test_190() {
+	(( OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+
+	local mdt=""
+	local tgts="OST0001"
+
+	# connect any idle imports so that stopping OST0001 is noticed
+	$LFS df $MOUNT > /dev/null || error "lfs df failed"
+	wait_osc_import_ready client ost2
+
+	# stop OST0001 (and MDT0001) and wait until the client notices
+	stop ost2 || error "stop ost2 failed"
+	stack_trap "start ost2 $(ostdevname 2) $OST_MOUNT_OPTS; clients_up"
+	wait_osc_import_state client ost2 DISCONN
+	if (( MDSCOUNT >= 2 )); then
+		mdt="mdc.$FSNAME-MDT0001-mdc-*.mds_server_uuid"
+		tgts+=" MDT0001"
+		stop mds2 || error "stop mds2 failed"
+		stack_trap "start mds2 $(mdsdevname 2) $MDS_MOUNT_OPTS"
+		wait_import_state DISCONN "$mdt"
+	fi
+
+	# 'lfs df -l' must not block on the disconnected targets
+	local out=$TMP/$tfile.out
+	local pid
+	local i
+
+	stack_trap "rm -f $out"
+	$LFS df -l $MOUNT > $out 2>&1 &
+	pid=$!
+	for ((i = 0; i < 30; i++)); do
+		kill -0 $pid 2> /dev/null || break
+		sleep 1
+	done
+	cat $out
+	! kill -0 $pid 2> /dev/null || error "lfs df -l blocked ${i}s"
+	wait $pid && error "lfs df -l succeeded with offline targets"
+
+	# and must report each of them instead of silently skipping it
+	local tgt
+	local re=": (Resource temporarily|Connection timed out)"
+
+	for tgt in $tgts; do
+		grep -qE "$FSNAME-${tgt}_UUID.*$re" $out ||
+			error "$tgt not reported unavailable"
+	done
+}
+run_test 190 "lfs df -l reports disconnected targets without blocking"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status
