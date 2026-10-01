@@ -56,6 +56,15 @@ static struct lov_sublock_env *lov_sublock_env_get(const struct lu_env *env,
 	return subenv;
 }
 
+/* This EC read holds no lock on the stripe of @lls, so must not read it */
+static void lov_lock_sub_ec_err(struct lov_io *lio, struct lov_lock_sub *lls)
+{
+	struct lov_io_sub *sub = lov_sub_lookup(lio, lls->sub_index);
+
+	if (sub)
+		sub->sub_ec_err = true;
+}
+
 static int lov_sublock_init(const struct lu_env *env,
 			    const struct cl_lock *parent,
 			    struct lov_lock_sub *lls)
@@ -187,6 +196,7 @@ init_sublock:
 
 			if ((descr->cld_enq_flags & CEF_HEED_ERROR) &&
 			    (r0->lo_sub[i]->lso_status == LSS_READ_ERR)) {
+				lov_lock_sub_ec_err(lio, lls);
 				lls->sub_initialized = 0;
 				nr++;
 				continue;
@@ -311,6 +321,7 @@ static int lov_lock_enqueue(const struct lu_env *env,
 				 */
 				cl2lovsub(lls->sub_lock.cll_descr.cld_obj)->
 					lso_status = LSS_READ_ERR;
+				lov_lock_sub_ec_err(lov_env_io(env), lls);
 				rc = 0;
 				continue;
 			}

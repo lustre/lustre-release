@@ -8232,6 +8232,75 @@ test_49d() {
 }
 run_test 49d "test OST reactivation during EC recovery"
 
+test_49e() {
+	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf"
+
+	# two 2+1 raid sets per row, read 2MB (one raid set) at a time
+	$LFS setstripe -E eof -S 1M -c 4 --ec 2+1 $tf ||
+		error "setstripe --ec 2+1 failed"
+	dd if=/dev/urandom of=$tf bs=1M count=64 || error "dd failed"
+	$LFS mirror resync $tf || error "mirror resync failed"
+
+	local sums=($(md5sum < $tf | awk '{ print $1 }')
+		    $(dd if=$tf bs=2M skip=1 status=none | md5sum |
+		      awk '{ print $1 }'))
+
+	# Stop the OSTs of the second data stripe in each raid set.  A down
+	# OST that is not deactivated passes iter_init but fails the lock
+	# enqueue, and an EC read of the other raid set resets its shared
+	# stripe state to LSS_OK while a reader of this raid set holds no
+	# lock on it (LU-12669).
+	ec_data_stripe_osts $tf 1 3
+	# cancel the locks while the OSTs can still be reached
+	cancel_lru_locks osc
+
+	local ost
+
+	for ost in ${EC_STRIPE_OSTS[@]}; do
+		local facet=ost$((ost + 1))
+
+		stop $facet || error "stop $facet failed"
+		stack_trap "start $facet $(ostdevname $((ost + 1))) \
+			$OST_MOUNT_OPTS; wait_recovery_complete $facet; \
+			wait_osc_import_ready client $facet"
+	done
+	for ost in ${EC_STRIPE_OSTS[@]}; do
+		wait_osc_import_state client ost$((ost + 1)) "\(DISCONN\|IDLE\)"
+	done
+
+	# concurrent readers offset by one raid set, so they read different
+	# raid sets of the same row at the same time
+	local pass
+
+	stack_trap "rm -f $TMP/ec_read_*_$tfile"
+	for pass in {1..10}; do
+		local pids=()
+		local i
+
+		for i in {0..3}; do
+			dd if=$tf bs=2M skip=$((i % 2)) status=none | md5sum \
+				> $TMP/ec_read_${i}_$tfile &
+			pids+=($!)
+		done
+		for i in {0..3}; do
+			local want=${sums[i % 2]}
+			local sum
+
+			wait ${pids[i]} || error "pass $pass reader $i failed"
+			sum=$(awk '{ print $1 }' $TMP/ec_read_${i}_$tfile)
+			[[ $sum == $want ]] ||
+				error "pass $pass reader $i: $sum != $want"
+		done
+		drop_client_cache
+	done
+}
+run_test 49e "concurrent EC reads with stopped OSTs (no deactivation)"
+
 test_50a() {
 	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
 	enable_ec

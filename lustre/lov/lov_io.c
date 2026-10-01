@@ -161,6 +161,27 @@ static int lov_io_sub_init(const struct lu_env *env, struct lov_io *lio,
 	RETURN(result);
 }
 
+/**
+ * lov_sub_lookup() - Find an existing sub IO
+ * @lio: top level lov IO structure
+ * @index: composite index of the stripe, see lov_comp_index()
+ *
+ * Unlike lov_sub_get(), never allocate a new sub IO.
+ *
+ * Return: the sub IO for @index, or NULL if this IO has none
+ */
+struct lov_io_sub *lov_sub_lookup(struct lov_io *lio, int index)
+{
+	struct lov_io_sub *sub;
+
+	list_for_each_entry(sub, &lio->lis_subios, sub_list) {
+		if (sub->sub_subio_index == index)
+			return sub;
+	}
+
+	return NULL;
+}
+
 struct lov_io_sub *lov_sub_get(const struct lu_env *env,
 			       struct lov_io *lio, int index)
 {
@@ -169,14 +190,8 @@ struct lov_io_sub *lov_sub_get(const struct lu_env *env,
 
 	ENTRY;
 
-	list_for_each_entry(sub, &lio->lis_subios, sub_list) {
-		if (sub->sub_subio_index == index) {
-			rc = 1;
-			break;
-		}
-	}
-
-	if (rc == 0) {
+	sub = lov_sub_lookup(lio, index);
+	if (!sub) {
 		sub = lov_sub_alloc(lio, index);
 		if (!sub)
 			GOTO(out, rc = -ENOMEM);
@@ -1552,6 +1567,7 @@ static int lov_ecio_add_data_sub(const struct lu_env *env, struct lov_io *lio,
 				continue;
 			} else {
 				r0->lo_sub[stripe]->lso_status = LSS_OK;
+				sub->sub_ec_err = false;
 			}
 		}
 	}
@@ -1945,6 +1961,33 @@ enum ec_data_pg_state {
 };
 
 /**
+ * lov_ec_readable_sub() - get the sub-IO to read an EC data stripe with
+ * @lio: LOV I/O structure
+ * @comp_i: composite layout component index
+ * @stripe: stripe index in the component
+ *
+ * lso_status is shared with other readers, which can reset it to LSS_OK
+ * while this IO holds no lock on the stripe (LU-12669), so read only a
+ * stripe this IO added at iter_init and holds a granted sub-lock on.
+ *
+ * Return: the sub-IO of @stripe, or NULL if this IO must rebuild the stripe
+ * from parity instead of reading it
+ */
+static struct lov_io_sub *lov_ec_readable_sub(struct lov_io *lio, int comp_i,
+					      int stripe)
+{
+	struct lov_layout_raid0 *r0 = lov_r0(lio->lis_object, comp_i);
+	struct lov_io_sub *sub;
+
+	sub = lov_sub_lookup(lio, lov_comp_index(comp_i, stripe));
+	if (!sub || list_empty(&sub->sub_linkage) || sub->sub_ec_err ||
+	    r0->lo_sub[stripe]->lso_status == LSS_READ_ERR)
+		return NULL;
+
+	return sub;
+}
+
+/**
  * lov_ec_read_stripe_pages() - read all pages for one data stripe across all
  * page positions in a recovery group.
  *
@@ -1986,7 +2029,7 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 	unsigned long ss = lsme->lsme_stripe_size;
 	int base_stripe;
 	int stripe; /* physical stripe index */
-	struct lov_io_sub *sub = NULL;
+	struct lov_io_sub *sub;
 	struct cl_2queue *queue;
 	int need_read = 0;
 	int j;
@@ -1996,6 +2039,7 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 	base_stripe = lov_stripe_number(lov->lo_lsm, comp_i, soff);
 	/* stripe_i is the i-th stripe within the recovery group */
 	stripe = (base_stripe + stripe_i) % r0->lo_nr;
+	sub = lov_ec_readable_sub(lio, comp_i, stripe);
 	/* Phase 1: grab all pages, classify them */
 	for (j = 0; j < nfolios; j++) {
 		pgoff_t index;
@@ -2025,7 +2069,7 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 
 		/* Create cl_page for this page. Determine state based on:
 		 * - folio_test_uptodate: already in cache (UPTODATE)
-		 * - LSS_READ_ERR: stripe is down (ERROR)
+		 * - no readable sub: stripe is down or not locked (ERROR)
 		 * - Otherwise: needs I/O (READ)
 		 */
 		clpage = cl_page_find(env, cl_object_top(obj), index, folio, 0,
@@ -2042,7 +2086,7 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 
 		if (folio_test_uptodate(folio)) {
 			out_states[j] = EC_DPG_UPTODATE;
-		} else if (r0->lo_sub[stripe]->lso_status == LSS_READ_ERR) {
+		} else if (!sub) {
 			out_states[j] = EC_DPG_ERROR;
 			cl_page_list_add(&io->u.ci_ec.ec_page_list, clpage,
 					 false);
@@ -2056,23 +2100,6 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 		RETURN(0);
 
 	/* Phase 2: submit all READ pages in one batch */
-	sub = lov_sub_get(env, lio, lov_comp_index(comp_i, stripe));
-	if (IS_ERR(sub)) {
-		/* Could not get a sub-io for this stripe.  The cl_pages in
-		 * out_pages[j] are assumed (owned) but never submitted, so
-		 * move them to ec_page_list (matching the submit-failure
-		 * path).
-		 */
-		for (j = 0; j < nfolios; j++) {
-			if (out_states[j] == EC_DPG_READ) {
-				cl_page_list_add(&io->u.ci_ec.ec_page_list,
-						 out_pages[j], false);
-				out_states[j] = EC_DPG_ERROR;
-			}
-		}
-		RETURN(0);
-	}
-
 	queue = &lov_env_info(sub->sub_env)->lti_cl2q;
 	cl_2queue_init(queue);
 	for (j = 0; j < nfolios; j++) {
@@ -2085,6 +2112,7 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 			       CRT_READ, queue, 0);
 	if (rc) {
 		r0->lo_sub[stripe]->lso_status = LSS_READ_ERR;
+		sub->sub_ec_err = true;
 		/* EC_DPG_READ cl_pages read error, move them to ec_page_list */
 		cl_page_list_splice(&queue->c2_qin, &io->u.ci_ec.ec_page_list);
 		cl_page_list_splice(&queue->c2_qout, &io->u.ci_ec.ec_page_list);

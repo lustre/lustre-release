@@ -456,6 +456,9 @@ struct lovsub_object {
 	struct cl_object        lso_cl;
 	struct lov_object      *lso_super;
 	int                     lso_index;
+	/* EC read hint shared by every IO on the file, each IO also tracks
+	 * its own stripe failures in lov_io_sub::sub_ec_err
+	 */
 	enum lovsub_status	lso_status;
 };
 
@@ -491,6 +494,10 @@ struct lov_io_sub {
 	struct lu_env		*sub_env;
 	/* environment's refcheck. (cl_env_get()) */
 	__u16			sub_refcheck;
+	/* CIT_EC_RD: this IO holds no granted sub-lock on the stripe or
+	 * failed to read it, so the stripe must be rebuilt from parity
+	 */
+	bool			sub_ec_err;
 };
 
 /* IO state private for LOV. */
@@ -591,6 +598,7 @@ int   lov_io_init_released(const struct lu_env *env, struct cl_object *obj,
 
 struct lov_io_sub *lov_sub_get(const struct lu_env *env, struct lov_io *lio,
 			       int stripe);
+struct lov_io_sub *lov_sub_lookup(struct lov_io *lio, int index);
 struct cl_object *lov_sub_find(const struct lu_env *env, struct cl_device *dev,
 			       const struct lu_fid *fid,
 			       const struct cl_object_conf *conf);
