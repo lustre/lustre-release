@@ -36104,12 +36104,13 @@ run_test 413j "set default LMV by setxattr"
 test_413k() {
 	local index1
 	local index2
-	local old=$($LCTL get_param -n lmv.*.qos_exclude_prefixes)
 	local count=$($LCTL get_param -n lmv.*.qos_exclude_prefixes | wc -l)
 	local prefixes="abc:123:foo bar"
 
+	# prefixes are stored as patterns, save all of them as a ':' list
+	local old=$($LCTL get_param -n lmv.*.qos_exclude_patterns | tr '\n' ':')
 	# add prefixes
-	stack_trap "$LCTL set_param lmv.*.qos_exclude_prefixes=\"$old\""
+	stack_trap "$LCTL set_param lmv.*.qos_exclude_patterns=\":$old\""
 	$LCTL set_param lmv.*.qos_exclude_prefixes="+$prefixes"
 
 	mkdir $DIR/$tdir || error "mkdir $tdir failed"
@@ -36138,12 +36139,11 @@ run_test 413k "QoS mkdir exclude prefixes"
 test_413l() {
 	local index1
 	local index2
-	local old=$($LCTL get_param -n lmv.*.qos_exclude_patterns)
-	local count=$($LCTL get_param -n lmv.*.qos_exclude_patterns | wc -l)
+	local old=$($LCTL get_param -n lmv.*.qos_exclude_patterns | tr '\n' ':')
 	local patterns="????-????:[a-z][0-9]"
 
 	# add patterns
-	stack_trap "$LCTL set_param lmv.*.qos_exclude_patterns=\"$old\""
+	stack_trap "$LCTL set_param lmv.*.qos_exclude_patterns=\":$old\""
 	$LCTL set_param lmv.*.qos_exclude_patterns="+$patterns"
 
 	mkdir $DIR/$tdir || error "mkdir $tdir failed"
@@ -36157,6 +36157,23 @@ test_413l() {
 
 	# remove patterns
 	$LCTL set_param lmv.*.qos_exclude_patterns="-$patterns"
+
+	(( CLIENT_VERSION >= $(version_code 2.17.59.2) )) || return 0
+
+	# '\n' separates patterns like ':', as in "lctl get_param" output
+	local nl_patterns="${patterns/:/$'\n'}"
+
+	$LCTL set_param lmv.*.qos_exclude_patterns="+$nl_patterns" ||
+		error "add newline-separated patterns failed"
+	# round-robin mkdir would put at least one of these on another MDT
+	for dname in c8 d7 e6 f5; do
+		mkdir "$DIR/$tdir/$dname" || error "mkdir $dname failed"
+		index2=$($LFS getstripe -m "$DIR/$tdir/$dname")
+		((index1 == index2)) ||
+			error "$tdir on MDT$index1, $dname on MDT$index2"
+	done
+	$LCTL set_param lmv.*.qos_exclude_patterns="-$nl_patterns" ||
+		error "remove newline-separated patterns failed"
 }
 run_test 413l "QoS mkdir exclude patterns"
 

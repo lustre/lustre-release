@@ -248,7 +248,8 @@ restart:
 /* directories with exclude patterns will be created on the same MDT as its
  * parent directory, the patterns are set with the rule as shell environment
  * PATH: ':' is used as separator for patterns. And for convenience, '+/-' is
- * used to add/remove patterns.
+ * used to add/remove patterns.  '\n' is also a separator, so the output of
+ * qos_exclude_patterns can be written back, and "echo name > file" works.
  */
 static int qos_exclude_patterns_seq_show(struct seq_file *m, void *v)
 {
@@ -258,6 +259,20 @@ static int qos_exclude_patterns_seq_show(struct seq_file *m, void *v)
 static int qos_exclude_prefixes_seq_show(struct seq_file *m, void *v)
 {
 	return qos_exclude_seq_show_internal(m, v, true);
+}
+
+static void qos_exclude_prune(struct lmv_obd *lmv)
+{
+	struct qos_exclude_pattern *pat;
+	struct qos_exclude_pattern *tmp;
+
+	spin_lock(&lmv->lmv_lock);
+	list_for_each_entry_safe(pat, tmp, &lmv->lmv_qos_exclude_list,
+				 qep_list) {
+		list_del(&pat->qep_list);
+		OBD_FREE_PTR(pat);
+	}
+	spin_unlock(&lmv->lmv_lock);
 }
 
 static ssize_t qos_exclude_seq_write_internal(struct file *file,
@@ -277,6 +292,7 @@ static ssize_t qos_exclude_seq_write_internal(struct file *file,
 	int len;
 	bool pruned = false;
 	bool again = false;
+	bool dup;
 
 	/* one extra char to ensure buf ends with '\0' */
 	OBD_ALLOC(buf, count + 1);
@@ -291,7 +307,7 @@ static ssize_t qos_exclude_seq_write_internal(struct file *file,
 	lmv = &obd->u.lmv;
 	p = buf;
 	while (p) {
-		while (*p == ':')
+		while (*p == ':' || *p == '\n')
 			p++;
 		if (*p == '\0')
 			break;
@@ -299,7 +315,7 @@ static ssize_t qos_exclude_seq_write_internal(struct file *file,
 			op = *p++;
 
 		name = p;
-		p = strchr(name, ':');
+		p = strpbrk(name, ":\n");
 		if (p)
 			len = p - name;
 		else
@@ -317,14 +333,7 @@ static ssize_t qos_exclude_seq_write_internal(struct file *file,
 		switch (op) {
 		default:
 			if (!pruned) {
-				spin_lock(&lmv->lmv_lock);
-				list_for_each_entry_safe(pat, tmp,
-						&lmv->lmv_qos_exclude_list,
-						qep_list) {
-					list_del(&pat->qep_list);
-					OBD_FREE_PTR(pat);
-				}
-				spin_unlock(&lmv->lmv_lock);
+				qos_exclude_prune(lmv);
 				pruned = true;
 			}
 			fallthrough;
@@ -336,10 +345,22 @@ again_plus:
 				return -ENOMEM;
 			}
 			strscpy(pat->qep_name, namebuf, len + 1);
+			dup = false;
 			spin_lock(&lmv->lmv_lock);
-			list_add_tail(&pat->qep_list,
-						&lmv->lmv_qos_exclude_list);
+			/* skip duplicates, e.g. from 2 mounts' get_param */
+			list_for_each_entry(tmp, &lmv->lmv_qos_exclude_list,
+					    qep_list) {
+				if (strcmp(tmp->qep_name, namebuf) == 0) {
+					dup = true;
+					break;
+				}
+			}
+			if (!dup)
+				list_add_tail(&pat->qep_list,
+					      &lmv->lmv_qos_exclude_list);
 			spin_unlock(&lmv->lmv_lock);
+			if (dup)
+				OBD_FREE_PTR(pat);
 			if (again) {
 				again = false;
 				namebuf[len++] = '.';
@@ -369,6 +390,10 @@ again_minus:
 			break;
 		}
 	}
+
+	/* a write without names or '+'/'-', like "echo > file", clears all */
+	if (!op && !pruned)
+		qos_exclude_prune(lmv);
 
 	OBD_FREE(buf, count + 1);
 	return count;

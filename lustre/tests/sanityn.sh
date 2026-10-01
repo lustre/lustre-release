@@ -8074,6 +8074,47 @@ test_200() {
 }
 run_test 200 "service remains healthy while able to process request"
 
+test_250() {
+	(( CLIENT_VERSION >= $(version_code 2.17.59.2) )) ||
+		skip "need client >= 2.17.59.2 for qos_exclude duplicates"
+
+	local params=$($LCTL list_param lmv.*.qos_exclude_patterns)
+	local patterns="abc:[a-z][0-9]"
+	local -A counts
+	local param
+
+	(( $(wc -w <<< "$params") >= 2 )) || skip "need 2 LMV devices"
+	for param in $params; do
+		counts[$param]=$($LCTL get_param -n $param | wc -l)
+	done
+
+	# both mounts' lists are printed, so every pattern is saved twice
+	local old=$($LCTL get_param -n lmv.*.qos_exclude_patterns | tr '\n' ':')
+
+	stack_trap "$LCTL set_param lmv.*.qos_exclude_patterns=\":$old\""
+	# adding the same patterns twice keeps one copy of each
+	local i
+
+	for i in 1 2; do
+		$LCTL set_param lmv.*.qos_exclude_patterns="+$patterns" ||
+			error "add patterns #$i failed"
+	done
+
+	# writing back the merged lists of both mounts keeps one copy of each
+	local all=$($LCTL get_param -n lmv.*.qos_exclude_patterns | tr '\n' ':')
+
+	$LCTL set_param lmv.*.qos_exclude_patterns="$all" ||
+		error "write merged patterns failed"
+	for param in $params; do
+		local count=$($LCTL get_param -n $param | wc -l)
+		local expect=$((counts[$param] + 2))
+
+		((count == expect)) ||
+			error "$param: $count patterns != $expect"
+	done
+}
+run_test 250 "qos_exclude_patterns ignores duplicate patterns"
+
 test_300() {
 	(( CLIENT_VERSION >= $(version_code 2.17.58.63) )) ||
 		skip "need client >= 2.17.58.63 for DIO append split"
