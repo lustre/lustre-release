@@ -7561,6 +7561,11 @@ static int lnet_route_show_start(struct netlink_callback *cb)
 					}
 					rc = 0;
 					tmp.lrp_net = libcfs_str2net(strim(nw));
+					if (tmp.lrp_net == LNET_NET_ANY) {
+						NL_SET_ERR_MSG(extack,
+							       "cannot parse net");
+						GOTO(report_err, rc = -ENOENT);
+					}
 				} else if (nla_strcmp(route, "gateway") == 0) {
 					char gw[LNET_NIDSTR_SIZE];
 
