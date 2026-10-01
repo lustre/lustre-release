@@ -3426,18 +3426,35 @@ facet_up() {
 	do_node $host $LCTL dl | awk '{ print $4 }' | grep -q "^$label\$"
 }
 
-facets_up_on_host () {
-	local affected_up
-	local host=$1
-	local facets=$(facets_on_host $host)
+# Usage: facets_up <facet[,facet...]> [host]
+# Print the facets whose target is set up on <host>, or on any of the facets'
+# hosts, checking "lctl dl" once per node rather than once per facet
+facets_up() {
+	local facets=$1
+	local host=$2
+	local facet
 
+	[[ -n "$facets" ]] || return 0
+
+	local nodes
 	for facet in ${facets//,/ }; do
-		if $(facet_up $facet $host); then
-			affected_up="$affected_up $facet"
-		fi
+		nodes+=" ${host:-$(facet_host $facet)}"
 	done
+	local labels=" $(do_nodes $(comma_list $nodes) $LCTL dl |
+			 awk '{ print $4 }' | tr '\n' ' ') "
 
-	echo $(comma_list $affected_up)
+	local up
+	for facet in ${facets//,/ }; do
+		[[ $labels != *" $(convert_facet2label $facet) "* ]] ||
+			up+=" $facet"
+	done
+	echo $(comma_list $up)
+}
+
+facets_up_on_host () {
+	local host=$1
+
+	facets_up "$(facets_on_host $host)" $host
 }
 
 shutdown_facet() {
@@ -12274,15 +12291,15 @@ set_mdt_qtype() {
 		do_facet mgs $PERM_CMD $FSNAME.quota.mdt=$qtype
 	fi
 	# we have to make sure each MDT received config changes
-	for mdt in ${mdts//,/ }; do
+	local mdts_up=$(facets_up $mdts)
+
+	for mdt in ${mdts_up//,/ }; do
 		varsvc=${mdt}_svc
 		cmd="$LCTL get_param -n "
 		cmd=${cmd}osd-$(facet_fstype $mdt).${!varsvc}
 		cmd=${cmd}.quota_slave.enabled
 
-		if $(facet_up $mdt); then
-			wait_update_facet $mdt "$cmd" "$qtype" || return 1
-		fi
+		wait_update_facet $mdt "$cmd" "$qtype" || return 1
 	done
 	return 0
 }
@@ -12304,15 +12321,15 @@ set_ost_qtype() {
 		do_facet mgs $PERM_CMD $FSNAME.quota.ost=$qtype
 	fi
 	# we have to make sure each OST received config changes
-	for ost in ${osts//,/ }; do
+	local osts_up=$(facets_up $osts)
+
+	for ost in ${osts_up//,/ }; do
 		varsvc=${ost}_svc
 		cmd="$LCTL get_param -n "
 		cmd=${cmd}osd-$(facet_fstype $ost).${!varsvc}
 		cmd=${cmd}.quota_slave.enabled
 
-		if $(facet_up $ost); then
-			wait_update_facet $ost "$cmd" "$qtype" || return 1
-		fi
+		wait_update_facet $ost "$cmd" "$qtype" || return 1
 	done
 	return 0
 }

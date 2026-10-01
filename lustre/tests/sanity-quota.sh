@@ -180,19 +180,18 @@ wait_reintegration() {
 		tgts=$(get_facets OST)
 	fi
 
-	for tgt in ${tgts//,/ }; do
+	local tgts_up=$(facets_up $tgts)
+
+	for tgt in ${tgts_up//,/ }; do
 		varsvc=${tgt}_svc
 		cmd="$LCTL get_param -n "
 		cmd=${cmd}osd-$(facet_fstype $tgt).${!varsvc}
 		cmd=${cmd}.quota_slave.info
 
-		if $(facet_up $tgt); then
-			# reintegration starts after recovery completion
-			wait_recovery_complete $tgt
-			wait_update_facet $tgt "$cmd | grep $qtype |
-				awk '{ print \\\$3 }'" "$result" $max ||
-				return 1
-		fi
+		# reintegration starts after recovery completion
+		wait_recovery_complete $tgt
+		wait_update_facet $tgt "$cmd | grep $qtype |
+			awk '{ print \\\$3 }'" "$result" $max || return 1
 	done
 	return 0
 }
