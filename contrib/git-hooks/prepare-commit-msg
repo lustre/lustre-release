@@ -33,7 +33,8 @@ grep -q "^#" "$1" || exit 0
 # Add a commented-out Test-Parameters: line. This will let the developer
 # uncomment it out if they think it's appropriate.
 cat <<- PARAMS >> $1
-# If this patch makes only non-functional changes, or test-only changes,
+# If this patch makes only test, documentation or build changes, or
+# low-risk changes fully covered by sanity or the patch's own tests,
 # consider adding the following 'Test-Parameters' in the commit message:
 #    Test-Parameters: trivial
 #

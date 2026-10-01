@@ -10,14 +10,16 @@ trivial patch so apply some common sense.
 2.	PLEASE remember that submissions must be made under the terms
 	of the Linux Foundation certificate of contribution and should
 	include a Signed-off-by: line.  The current version of this
-	"Developer's Certificate of Origin" (DCO) is listed in the file
-	Documentation/process/submitting-patches.rst.
+	"Developer's Certificate of Origin" (DCO) is listed at
+	https://developercertificate.org/ and the submission process is
+	described at https://wiki.lustre.org/Submitting_Changes.
 
 3.	Make sure your changes compile correctly in multiple
-	configurations. In particular check that changes work both as a
-	module and built into the kernel.
+	configurations. In particular check that changes build both with
+	and without server support (configure --disable-server).
 
-4.	Add reviewers to the patch based on the get_maintainers.pl script.
+4.	Add reviewers to the patch based on the
+	contrib/scripts/get_maintainer.pl script.
 
 5.	PLEASE check your patch with the automated style checker
 	(contrib/scripts/checkpatch.pl) to catch trivial style violations.
@@ -52,7 +54,7 @@ Descriptions of section entries:
 	N: Files and directories with regex patterns.
 	   N:	[^a-z]tegra	all files whose path contains the word tegra
 	   One pattern per line.  Multiple N: lines acceptable.
-	   scripts/get_maintainer.pl has different behavior for files that
+	   contrib/scripts/get_maintainer.pl has different behavior for files that
 	   match F: pattern and matches of N: patterns.  By default,
 	   get_maintainer will not look at git log history when an F: pattern
 	   match occurs.  When an N: match occurs, git log history is used
@@ -80,6 +82,17 @@ to keep this in sync once the client is merged upstream.
 Maintainers List (try to look for most precise areas first)
 
 		-----------------------------------
+
+Lustre AI Agent Guidance
+R:	Andreas Dilger <adilger@thelustrecollective.com>
+R:	Oleg Drokin <green@whamcloud.com>
+R:	Patrick Farrell <pfarrell@whamcloud.com>
+S:	Maintained
+F:	.agents/
+F:	.claude/skills
+F:	AGENTS.md
+F:	Documentation/internals.md
+F:	rustreapi/AGENTS.md
 
 Lustre Build System
 R:	Shaun Tancheff <shaun.tancheff@hpe.com>

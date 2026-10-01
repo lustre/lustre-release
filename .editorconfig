@@ -26,5 +26,5 @@ indent_style = tab
 
 # Python style config
 [*.py]
-indent_size = 8
-indent_style = tab
+indent_size = 4
+indent_style = space

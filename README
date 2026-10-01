@@ -24,10 +24,10 @@ More information about Lustre:
 Many resources for using, configuring, and troubleshooting Lustre are at:
     http://wiki.lustre.org/
 
-For in-tree documentation, see the following directories:
+For in-tree documentation, see:
     Documentation/
-    lustre/doc/
-    lnet/doc/
+Guidance for AI coding agents working on Lustre is in:
+    AGENTS.md
 
 +-----------+
 | Community |

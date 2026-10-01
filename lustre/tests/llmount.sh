@@ -23,8 +23,8 @@ Helper for creating, formatting, and mounting a simple lustre filesystem.
 Environment variables
 See lustre/tests/cfg/local.sh to see more variables.
 	FSTYPE    ldiskfs,zfs  Type of backing filesystem
-	MDSCOUNT  number       Number of MDS
-	OSSCOUNT  number       Number of OSS
+	MDSCOUNT  number       Number of MDTs
+	OSTCOUNT  number       Number of OSTs
 	MOUNTOPT  string       Options passed to client mount command
 
 Example usage:

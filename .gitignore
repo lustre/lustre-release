@@ -106,6 +106,12 @@ TAGS
 # Vagrant artifacts
 .vagrant/
 
+# personal AI agent settings; shared skills are in .agents/skills
+/.claude/*
+!/.claude/skills
+/CLAUDE.md
+/CLAUDE.local.md
+
 # Coverity results
 *.tgz
 
