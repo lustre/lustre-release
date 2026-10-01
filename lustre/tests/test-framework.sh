@@ -2508,12 +2508,11 @@ dm_set_dev_table() {
 	*) error "invalid target type $target_type" ;;
 	esac
 
-	do_facet $facet "$DMSETUP suspend --nolockfs --noflush $dm_dev" ||
-		error "failed to suspend $dm_dev"
-	do_facet $facet "$DMSETUP load $dm_dev --table \\\"$table\\\"" ||
-		error "failed to load $target_type table into $dm_dev"
-	do_facet $facet "$DMSETUP resume $dm_dev" ||
-		error "failed to resume $dm_dev"
+	# one remote command, and resume the device even if the load fails
+	do_facet $facet "$DMSETUP suspend --nolockfs --noflush $dm_dev &&
+		{ $DMSETUP load $dm_dev --table \\\"$table\\\";
+		  rc=\\\$?; $DMSETUP resume $dm_dev && exit \\\$rc; }" ||
+		error "failed to set $target_type table on $dm_dev"
 }
 
 #
@@ -4588,11 +4587,12 @@ replay_barrier() {
 	# make sure there will be no seq change
 	local clients=${CLIENTS:-$HOSTNAME}
 	local f=fsa-\\\$\(hostname\)
-	do_nodes $clients "mcreate $MOUNT/$f; rm $MOUNT/$f"
-	do_nodes $clients "if [ -d $MOUNT2 ]; then mcreate $MOUNT2/$f; rm $MOUNT2/$f; fi"
+	do_nodes $clients "mcreate $MOUNT/$f; rm $MOUNT/$f;
+		if [ -d $MOUNT2 ]; then mcreate $MOUNT2/$f; rm $MOUNT2/$f; fi"
 
 	local svc=${facet}_svc
-	do_facet $facet $LCTL --device ${!svc} notransno
+	do_facet $facet "$LCTL --device ${!svc} notransno; rc=\\\$?;
+		$LCTL mark $facet REPLAY BARRIER on ${!svc}; exit \\\$rc"
 	#
 	# If a ZFS OSD is made read-only here, its pool is "freezed". This
 	# in-memory state has to be cleared by either rebooting the host or
@@ -4609,7 +4609,6 @@ replay_barrier() {
 	# inside fail() and fail_abort().
 	#
 	set_dev_readonly $facet
-	do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
 	$LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
 
@@ -4618,9 +4617,9 @@ replay_barrier_nodf() {
 	do_facet $facet "sync; sync; sync"
 	local svc=${facet}_svc
 	echo Replay barrier on ${!svc}
-	do_facet $facet $LCTL --device ${!svc} notransno
+	do_facet $facet "$LCTL --device ${!svc} notransno; rc=\\\$?;
+		$LCTL mark $facet REPLAY BARRIER on ${!svc}; exit \\\$rc"
 	set_dev_readonly $facet
-	do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
 	$LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
 
@@ -4628,9 +4627,9 @@ replay_barrier_nosync() {
 	local facet=$1    echo running=${running}
 	local svc=${facet}_svc
 	echo Replay barrier on ${!svc}
-	do_facet $facet $LCTL --device ${!svc} notransno
+	do_facet $facet "$LCTL --device ${!svc} notransno; rc=\\\$?;
+		$LCTL mark $facet REPLAY BARRIER on ${!svc}; exit \\\$rc"
 	set_dev_readonly $facet
-	do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
 	$LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
 
