@@ -3774,8 +3774,9 @@ stop_client_loads() {
 # If --verbose is passed as the first argument, the result is printed on each
 # value change, otherwise it is only printed after every 10s interval.
 #
-# If --quiet is passed as the first/second argument, the do_node() command
-# will not print the remote command before executing it each time.
+# With VERBOSE, the remote command is printed and marked in the debug log
+# only for the first poll, or not at all if --quiet is passed as the
+# first/second argument.
 #
 # Using wait_update_cond() or related helper function is preferable to adding
 # a "long enough" wait for some state to change in the background, since
@@ -3801,9 +3802,12 @@ wait_update_cond() {
 	local begin=$SECONDS
 	local sleep=1
 	local print=10
+	local poll_quiet=$quiet
 
 	while (( $waited <= $max_wait )); do
-		result=$(do_node $quiet $node "$check")
+		result=$(do_node $poll_quiet $node "$check")
+		# with VERBOSE, only log and mark the command for the first poll
+		poll_quiet=-q
 
 		if eval [[ "'$result'" $cond "'$expect'" ]]; then
 			[[ -z "$quiet" ]] || return 0
