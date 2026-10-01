@@ -171,13 +171,13 @@ static int ksocknal_iter_for_each_range(struct iov_iter *i, size_t bytes,
 
 	if (iov_iter_type(i) == ITER_BVEC) {
 		struct bvec_iter start = {
-			.bi_size	= bytes,
-			.bi_bvec_done	= skip,
-			.bi_idx = 0,
+			.bi_size = skip + bytes,
+			.bi_idx  = 0,
 		};
 		struct bvec_iter bi;
 		struct bio_vec v;
 
+		bvec_iter_advance(i->bvec, &start, skip);
 		for_each_bvec(v, i->bvec, bi, start) {
 			if (!v.bv_len)
 				continue;
