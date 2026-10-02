@@ -311,18 +311,27 @@ static void test12(void)
 /* Test with sub directories */
 static void test20(void)
 {
+	struct llapi_stripe_param param = {
+		.lsp_stripe_count = 1,
+		.lsp_stripe_offset = 0,
+	};
 	char testpath[PATH_MAX];
 	size_t len;
 	int dir_created = 0;
+	int mdt_count = 0;
 	int rc;
+
+	rc = llapi_lmv_get_uuids(mnt_fd, NULL, &mdt_count);
+	ASSERTF(rc == 0 && mdt_count > 0, "cannot get MDT count: rc = %d",
+		rc);
 
 	rc = snprintf(testpath, sizeof(testpath), "%s", mainpath);
 	ASSERTF((rc > 0 && rc < sizeof(testpath)),
 		"invalid name for testpath '%s'", mainpath);
 
-	rc = mkdir(testpath, 0700);
-	ASSERTF(rc == 0, "mkdir failed for '%s': %s",
-		testpath, strerror(errno));
+	rc = llapi_dir_create(testpath, 0700, &param);
+	ASSERTF(rc == 0, "llapi_dir_create failed for '%s': %s",
+		testpath, strerror(-rc));
 
 	len = strlen(testpath);
 
@@ -333,14 +342,23 @@ static void test20(void)
 		strncat(testpath, "/x", sizeof(testpath) - 1);
 
 		len += 2;
-
-		rc = mkdir(testpath, 0700);
-		ASSERTF(rc == 0, "mkdir failed for '%s': %s",
-			testpath, strerror(errno));
-
 		dir_created++;
 
-		helper_fid2path(testpath, -1);
+		if (mdt_count > 1 && dir_created % 100 == 0) {
+			param.lsp_stripe_offset =
+				(param.lsp_stripe_offset + 1) % mdt_count;
+			rc = llapi_dir_create(testpath, 0700, &param);
+			ASSERTF(rc == 0, "llapi_dir_create failed for '%s': %s",
+				testpath, strerror(-rc));
+		} else {
+			rc = mkdir(testpath, 0700);
+			ASSERTF(rc == 0, "mkdir failed for '%s': %s",
+				testpath, strerror(errno));
+		}
+
+		/* fid2path cost grows with depth, so sample the levels */
+		if (dir_created % 100 == 0)
+			helper_fid2path(testpath, -1);
 	}
 
 	/* And test the last one. */
