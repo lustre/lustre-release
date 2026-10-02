@@ -17138,9 +17138,9 @@ test_123a_base() { # was test 123, statahead(b=11401)
 		(( $swrong >= $ewrong )) ||
 			log "statahead was stopped, maybe too many locks held!"
 		(( $delta_cr <= 90 )) || [[ "$SLOW" == "yes" ]] || break
-		(( $delta != 0 && $delta_sa != 0 )) || continue
-
-		if (( $delta_sa*100 > $delta*105 && $delta_sa > $delta+2)); then
+		if (( $delta != 0 && $delta_sa != 0 &&
+		      $delta_sa * 100 > $delta * 105 &&
+		      $delta_sa > $delta + 2 )); then
 			max=($($LCTL get_param -n llite.*.statahead_max))
 			$LCTL set_param llite.*.statahead_max=0
 			cancel_lru_locks mdc
