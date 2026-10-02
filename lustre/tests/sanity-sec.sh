@@ -3345,6 +3345,7 @@ test_27c() {
 	local fset
 	local prim_fileset
 	local alt_fileset
+	local out
 
 	is_multi_fileset_supported ||
 		skip "Need MGS >= 2.16.57 for multiple filesets"
@@ -3376,10 +3377,14 @@ test_27c() {
 	# each longer than the previous one, up to 941 characters
 	for ((i = 1; i < 256; i++)); do
 		alt_fileset="${alt_fileset}${i}_"
-		do_facet mgs $LCTL nodemap_fileset_add --alt --name $nm \
-			--fileset "$alt_fileset" ||
-			error "cannot add alt fileset $alt_fileset"
 	done
+	# run the whole loop on the MGS to avoid an ssh per fileset
+	out=$(do_facet_vp mgs bash -c "f=/this_is_an_alternate_fileset
+		for ((i = 1; i < 256; i++)); do
+			f=\${f}\${i}_
+			$LCTL nodemap_fileset_add --alt --name $nm \
+				--fileset \$f || { echo \$f; exit 1; }
+		done") || error "cannot add alt fileset $out"
 
 	wait_nm_sync_fileset $nm "$alt_fileset" "$alt_fileset" "alternate"
 
@@ -3391,13 +3396,13 @@ test_27c() {
 	# re-start all components to verify persistence of fileset after restart
 	stopall_restart_servers
 
-	alt_fileset="/this_is_an_alternate_fileset"
-	for ((i = 1; i < 256; i++)); do
-		alt_fileset="${alt_fileset}${i}_"
-		do_facet mgs $LCTL nodemap_fileset_del --name $nm \
-			--fileset "$alt_fileset" ||
-			error "cannot del alt fileset $alt_fileset"
-	done
+	alt_fileset=${alt_fileset%OVERFLOW_}
+	out=$(do_facet_vp mgs bash -c "f=/this_is_an_alternate_fileset
+		for ((i = 1; i < 256; i++)); do
+			f=\${f}\${i}_
+			$LCTL nodemap_fileset_del --name $nm \
+				--fileset \$f || { echo \$f; exit 1; }
+		done") || error "cannot del alt fileset $out"
 
 	wait_nm_sync_fileset $nm "$alt_fileset" "" "alternate"
 	# primary fileset should still be present
