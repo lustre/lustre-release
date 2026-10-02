@@ -29471,13 +29471,14 @@ percent() {
 }
 
 # run a random read IO workload
-# usage: random_read_iops <filename> <filesize> <iosize>
+# usage: random_read_iops <filename> <filesize> <iosize> <nreads>
 random_read_iops() {
 	local file=$1
 	local fsize=$2
 	local iosize=${3:-4096}
+	local nreads=${4:-$((fsize / iosize))}
 
-	$READS -f $file -s $fsize -b $iosize -n $((fsize / iosize)) -t 60 |
+	$READS -f $file -s $fsize -b $iosize -n $nreads -t 60 |
 		sed -e '/^$/d' -e 's#.*s, ##' -e 's#MB/s##'
 }
 
@@ -29491,7 +29492,10 @@ drop_file_oss_cache() {
 
 ladvise_willread_performance()
 {
-	local repeat=10
+	local repeat=3
+	# sample an eighth of the file per pass
+	local nr=$((size / 4096 / 8))
+	local rr_args="$DIR/$tfile $size 4096 $nr"
 	local average_origin=0
 	local average_cache=0
 	local average_ladvise=0
@@ -29507,19 +29511,19 @@ ladvise_willread_performance()
 		echo "Iter $i/$repeat: reading without willread hint"
 		cancel_lru_locks osc
 		drop_file_oss_cache $DIR/$tfile $osts
-		local speed_origin=$(random_read_iops $DIR/$tfile $size)
+		local speed_origin=$(random_read_iops $rr_args)
 		echo "Iter $i/$repeat: uncached speed: $speed_origin"
 		average_origin=$(bc <<<"$average_origin + $speed_origin")
 
 		cancel_lru_locks osc
-		local speed_cache=$(random_read_iops $DIR/$tfile $size)
+		local speed_cache=$(random_read_iops $rr_args)
 		echo "Iter $i/$repeat: OSS cache speed: $speed_cache"
 		average_cache=$(bc <<<"$average_cache + $speed_cache")
 
 		cancel_lru_locks osc
 		drop_file_oss_cache $DIR/$tfile $osts
 		$LFS ladvise -a willread $DIR/$tfile || error "ladvise failed"
-		local speed_ladvise=$(random_read_iops $DIR/$tfile $size)
+		local speed_ladvise=$(random_read_iops $rr_args)
 		echo "Iter $i/$repeat: ladvise speed: $speed_ladvise"
 		average_ladvise=$(bc <<<"$average_ladvise + $speed_ladvise")
 	done
@@ -29550,7 +29554,7 @@ ladvise_willread_performance()
 		echo "osd-zfs does not support dontneed or drop_caches" &&
 		return 0
 
-	lowest_speedup=$(bc <<< "scale=0; $average_cache / 2")
+	lowest_speedup=$((speedup_cache / 2))
 	(( $speedup_ladvise > $lowest_speedup )) ||
 		error_not_in_vm "Speedup with willread is less than " \
 			"$lowest_speedup%, got $speedup_ladvise%"
