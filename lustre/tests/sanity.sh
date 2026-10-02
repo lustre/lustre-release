@@ -23056,7 +23056,10 @@ test_160n() {
 	local cl_user1
 	local pid1
 	local first_rec
-	local last_rec=0
+	local last_rec
+	local end_rec
+	local total=66000
+	local count
 
 	# Create a user
 	changelog_register || error "first changelog_register failed"
@@ -23068,16 +23071,21 @@ test_160n() {
 	test_mkdir -i0 -c1 $DIR/$tdir || error "test_mkdir $tdir failed"
 	first_rec=$(changelog_users $SINGLEMDS |
 			awk '/^current.index:/ { print $NF }')
-	while (( last_rec < (( first_rec + 65000)) )); do
-		createmany -m $DIR/$tdir/$tfile 10000 ||
+	last_rec=$first_rec
+	end_rec=$((first_rec + total))
+
+	# CREAT and UNLNK records for each file
+	count=$(($(mdt_free_inodes 0) - 1000))
+	(( count > 0 )) || skip_env "too few free inodes on MDT0"
+	(( count < total / 2 )) || count=$((total / 2))
+
+	while (( last_rec < end_rec )); do
+		(( last_rec + 2 * count <= end_rec )) ||
+			count=$(((end_rec - last_rec) / 2 + 1))
+		createmany -m $DIR/$tdir/$tfile $count ||
 			error "create $DIR/$tdir/$tfile failed"
 
-		for i in $(seq 0 10000); do
-			mrename $DIR/$tdir/$tfile$i $DIR/$tdir/$tfile-new$i \
-				> /dev/null
-		done
-
-		unlinkmany $DIR/$tdir/$tfile-new 10000 ||
+		unlinkmany $DIR/$tdir/$tfile $count ||
 			error "unlinkmany failed unlink"
 		last_rec=$(changelog_users $SINGLEMDS |
 			awk '/^current.index:/ { print $NF }')
