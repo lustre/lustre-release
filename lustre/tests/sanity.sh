@@ -19708,9 +19708,9 @@ test_133e() {
 }
 run_test 133e "Verifying OST {read,write}_bytes nid stats ================="
 
-test_133f() {
-	[[ $(lustre_version_code $facet) -ge $(version_code 2.7.65) ]] ||
-		skip "too old lustre for get_param -R ($facet_ver)"
+test_133f() (
+	# remount the FS in case writes/reads /proc break the FS
+	stack_trap "cleanup && setup || error_noexit 'remount failed'"
 
 	# verifying readability.
 	$LCTL get_param -R '*' &> /dev/null
@@ -19722,45 +19722,27 @@ test_133f() {
 		grep -E -v "$skipped_params" |
 		xargs -n 1 find $proc_dirs -name |
 		xargs -n 1 badarea_io ||
-		error "client badarea_io failed"
+		error_noexit "client badarea_io failed"
 
-	# remount the FS in case writes/reads /proc break the FS
-	cleanup || error "failed to unmount"
-	setup || error "failed to setup"
-}
-run_test 133f "Check reads/writes of client lustre proc files with bad area io"
+	if ! remote_mds_nodsh && ! remote_ost_nodsh; then
+		local proc_dirs_str=$(eval echo $proc_dirs)
+		local server_skipped_params="'force_lbug|daemon_file'"
+		local facet
 
-test_133g() {
-	remote_mds_nodsh && skip "remote MDS with nodsh"
-	remote_ost_nodsh && skip "remote OST with nodsh"
-
-	local proc_dirs=$(eval \ls -d $proc_regexp 2>/dev/null)
-	local proc_dirs_str=$(eval echo $proc_dirs)
-	local skipped_params="'force_lbug|daemon_file'"
-	local facet
-	for facet in mds1 ost1; do
-		local facet_ver=$(lustre_version_code $facet)
-		if [ $facet_ver -ge $(version_code 2.7.65) ]; then
+		for facet in mds1 ost1; do
 			do_facet $facet "$LCTL get_param -R '*'" &> /dev/null
-		else
-			log "$facet: too old lustre for get_param -R"
-		fi
-		if [ $facet_ver -ge $(version_code 2.5.54) ]; then
-			do_facet $facet "$LCTL list_param -FR '*' | grep '=' |
-				tr -d = | grep -E -v $skipped_params |
+			do_facet $facet "$LCTL list_param -FR '*' |
+				grep '=' | tr -d = |
+				grep -E -v $server_skipped_params |
 				xargs -n 1 find $proc_dirs_str -name |
 				xargs -n 1 badarea_io" ||
-					error "$facet badarea_io failed"
-		else
-			skip_noexit "$facet: too old lustre for get_param -R"
-		fi
-	done
-
-	# remount the FS in case writes/reads /proc break the FS
-	cleanup || error "failed to unmount"
-	setup || error "failed to setup"
-}
-run_test 133g "Check reads/writes of server lustre proc files with bad area io"
+				error_noexit "$facet badarea_io failed"
+		done
+	else
+		echo "server badarea_io skipped: nodsh"
+	fi
+)
+run_test 133f "Check client and server lustre proc files with bad area io"
 
 test_133h() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
