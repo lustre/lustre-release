@@ -1301,13 +1301,21 @@ test_51() {
 run_test 51 "failover MDS during recovery"
 
 test_52_guts() {
+	local running=$TMP/$tfile.running
+
 	do_facet client "mkdir -p $DIR/$tdir"
-	do_facet client "writemany -q -a $DIR/$tdir/$tfile 300 5" &
+	do_facet client "touch $running" || error "create writer sentinel"
+	stack_trap "do_facet client rm -f $running"
+	do_facet client "
+		while [[ -e $running ]]; do
+			writemany -q -a $DIR/$tdir/$tfile 30 5 || exit \\\$?
+		done" &
 	CLIENT_PID=$!
 	echo writemany pid $CLIENT_PID
 	sleep 10
 	FAILURE_MODE="SOFT"
 	fail ost1
+	do_facet client "rm -f $running"
 	rc=0
 	wait $CLIENT_PID || rc=$?
 	# active client process should see an EIO for down OST
