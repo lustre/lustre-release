@@ -608,11 +608,12 @@ test_8() {
 	rm -fr $parent
 	mkdir_on_mdt0 $parent
 
-	$LFS setstripe -E 2M -c 1 -S 1M -E 16M -c 2 -S 2M \
-		-E -1 -c 4 -S 4M $parent ||
+	# dbench client.txt writes no file past 1.9MB
+	$LFS setstripe -E 256K -L mdt -E 1M -c 2 -S 128K \
+		-E -1 -c 4 -S 256K $parent ||
 		error "Set default layout to $parent failed"
 
-	bash rundbench -C -D $parent 2 || error "dbench failed"
+	bash rundbench -C -D $parent 2 -t 60 || error "dbench failed"
 
 	rm -fr $parent || error "Delete dir $parent failed"
 }
