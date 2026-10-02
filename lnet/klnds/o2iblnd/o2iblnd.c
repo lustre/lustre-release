@@ -1207,7 +1207,7 @@ kiblnd_tun_defaults(struct lnet_lnd_tunables *tunables,
 	/* sync to latest module settings */
 	rc = kiblnd_tunables_setup(tunables, cmn);
 	if (rc < 0)
-		return 0;
+		return rc;
 
 	memcpy(&tunables->lnd_tun_u.lnd_o2ib, &kib_default_tunables,
 	       sizeof(kib_default_tunables));
