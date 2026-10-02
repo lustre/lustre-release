@@ -86,7 +86,8 @@ Maintainers List (try to look for most precise areas first)
 Lustre AI Agent Guidance
 R:	Andreas Dilger <adilger@thelustrecollective.com>
 R:	Oleg Drokin <green@whamcloud.com>
-R:	Patrick Farrell <pfarrell@whamcloud.com>
+R:	Patrick Farrell <patrick@thelustrecollective.com>
+R:	Marc Vef <mvef@whamcloud.com>
 S:	Maintained
 F:	.agents/
 F:	.claude/skills

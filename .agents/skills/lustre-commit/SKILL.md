@@ -20,7 +20,8 @@ ln -sf ../../contrib/git-hooks/{prepare-,}commit-msg .git/hooks/
 1. Check what is staged (`git diff --cached`).  If nothing is, look at
    `git diff` and ask what belongs in the commit.
 2. Get the LU ticket from the context, or ask for it.  `LU-0000` is only
-   a placeholder until the real ticket is known.
+   a placeholder until the real ticket is known, never pushed to CI (even
+   for test patches, which should use their parent LU ticket then abandoned).
 3. Choose the component (below), write the message, and commit with a
    heredoc or `git commit -F file` so the formatting survives.
 4. Amend the existing commit for later changes; never add fixup commits.
@@ -61,14 +62,28 @@ ln -sf ../../contrib/git-hooks/{prepare-,}commit-msg .git/hooks/
   Name the key functions or tunables, not every function touched.  Use
   "Also fix ..." for small adjacent fixes.
 - As short as possible while still clear.  Reviewers know Lustre; don't
-  narrate the diff or list every nit fixed.
+  narrate the diff or list every function modified or nit fixed, even
+  when a reviewer or review bot asks for a line per change.  Do mention
+  anything a reviewer would not guess from the summary: new commands,
+  wire protocol or API changes, surprising behaviour changes.
+- The commit-msg hook drops every line that starts with `#`, even with
+  `git commit -F`, so reword or indent such a line.
+- Describe the patch relative to master, never relative to its own
+  earlier patchsets ("old default", "previously", "now" for something
+  the patch itself added).
+- No customer, site or host names in commit messages, code comments,
+  Gerrit or Jira; describe the problem generically.  Private NIDs such
+  as 192.168.x.y or 10.x.y.z identify nothing and are fine.
+- Patches submitted to a mainline or public repo cite only LU tickets;
+  other Jira ids may be allowed on private vendor repos and branches.
 - Don't cite other Gerrit changes to explain duplicated hunks in a
   series; restack the series instead.
 - **Performance claims need evidence**: a brief description of the test
-  (workload, layout, process and client count), then the numbers.
+  (workload, layout, process and client count), then the numbers, even
+  if they come only from a synthetic loop calling the changed function.
   Relative improvement, or fewer RPCs, lock enqueues or reads per
   operation, is enough for results from a VM.  A compact ASCII table
-  works well.  Don't name hosts.
+  works well.  Don't name hosts, but include CPU/RAM/arch if relevant.
 
 ## Trailers
 
@@ -105,19 +120,21 @@ Change-Id: I<40 hex digits>
   rebases and refreshes, and when porting to another branch.  Exactly
   one per commit.  When a reverted patch is resubmitted as a new change,
   add `Was-Change-Id:` with the original Change-Id.
-- Keep each trailer on one line.  The hook silently joins lines ending in
-  `\`.
+- Keep each trailer on one line.  The hook silently joins lines ending in `\`.
 
 ## Ports to another branch
 
-Keep the summary, body, author, original Signed-off-by and Change-Id.
-Turn the original `Reviewed-on:` URL into `Lustre-change:
-https://review.whamcloud.com/NNNNN`, and "cherry picked from commit X"
-into `Lustre-commit: X`.  Always use the short
-`https://review.whamcloud.com/NNNNN` form for a Gerrit change, never the
-`/c/fs/lustre-release/+/NNNNN` form; the hook rejects it.  Drop
-`Tested-by: Maloo` and Jenkins lines.  Describe non-trivial port changes
-in the body, and add your human's Signed-off-by after the original ones.
+- Keep the summary, body, author, original Signed-off-by and Change-Id.
+- Turn the original `Reviewed-on:` URL into `Lustre-change:
+  https://review.whamcloud.com/NNNNN`, and "cherry picked from commit X"
+  into `Lustre-commit: X`.
+- Always use a short `https://review.whamcloud.com/NNNNN` form for a Gerrit
+  change, never the `/c/fs/lustre-release/+/NNNNN` form; the hook rejects
+  it in `Lustre-change:`.
+- Drop `Tested-by: Maloo` and Jenkins lines.  Describe non-trivial port
+  changes in the body, and add your human's Signed-off-by after original ones.
+- When multiple patches are merged into one during porting (e.g. feature and
+  `Fixes:` patches) add `Was-Change-Id:` lines after each commit message.
 
 ## Test-Parameters
 
@@ -125,9 +142,9 @@ Every patch gets the default CI test sessions.  `Test-Parameters:` lines
 change or add to them; the syntax is described at
 https://wiki.whamcloud.com/display/PUB/Changing+Test+Parameters+with+Gerrit+Commit+Messages.
 Each session spends 20-30 minutes setting up its nodes before any test
-runs, a full run costs hundreds of node-hours, and every extra session is
-another chance for an unrelated intermittent failure, so add only what the
-change needs.
+runs, a full patch test run costs hundreds of node-hours, and every extra
+session is another chance for an unrelated intermittent failure, so add
+only what the change needs.
 
 What runs without any line (measured on master, September 2026):
 
@@ -142,12 +159,17 @@ What runs without any line (measured on master, September 2026):
 
 Choosing:
 
-- Use `trivial` for test-only, documentation and build changes, and for
-  low-risk code changes whose effect is fully covered by sanity,
-  sanity-lnet or the patch's own new or changed test, which the
-  subtest-change sessions exercise heavily (for example, changing when
-  an error message is printed).
-- Don't add `testlist=sanity env=ONLY=NNN` for subtests the patch adds or
+- Use `trivial` for test-only, documentation and build changes like code
+  moves, function and variable renaming, comments, whitespace cleanups.
+- In limited circumstances `trivial` can be used for very low-risk and
+  localized code changes whose effect is fully covered by sanity,
+  sanity-lnet, or a specified `testlist=SCRIPT` session, including the
+  patch's own new or changed test, which the subtest-change sessions
+  exercise heavily (for example, changing when an error message is printed).
+- The Gerrit Janitor flags "suspicious trivial usage" on any code change
+  marked `trivial`; that alone is no reason to drop `trivial` when the
+  previous point applies.
+- Don't add `testlist=SCRIPT env=ONLY=NNN` for subtests the patch adds or
   changes: the subtest-change sessions already loop them.
 - Add explicit lines only for coverage the defaults lack: another suite
   that exercises changed code the patch doesn't test itself,
@@ -161,4 +183,7 @@ Choosing:
 - Use the keyword parameters (`ostcount=`, `mdtcount=`, `fstype=`,
   `ostsizegb=`), not `env=OSTCOUNT=...`.
 - `fortestonly` runs only the listed sessions and stops the patch from
-  landing; use it only for experiments.
+  landing; use it only for experiments, such as a patch with extra
+  debugging pushed to reproduce a CI failure, with a `testlist=` for the
+  failing script (and `ONLY=` if the failure reproduces with the subtest
+  run by itself).

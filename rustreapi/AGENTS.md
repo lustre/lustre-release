@@ -12,10 +12,11 @@ unchanged).  See `README.md` here for setup and integration tests.
   `lnetconfig`, `cstrbuf` and `lu-version`.
 - The toolchain is pinned in `rust-toolchain`.  Lints come from the
   `ci_clippy` alias in `.cargo/config.toml` (denies `unwrap_used` and all
-  warnings), the rustflags in `.cargo/ci.toml` (`-D unreachable-pub`)
-  and `.clippy.toml`.  `[workspace.lints]` in `Cargo.toml` is not yet
-  inherited by the crates.  A crate that must break a lint by design has
-  a crate-level `#![allow(...)]` in `lib.rs`, as the `-sys` crates do.
+  warnings), the rustflags in `.cargo/ci.toml` (`-D warnings`,
+  `-D unreachable-pub`, `-D clippy::cast_lossless`) and `.clippy.toml`.
+  `[workspace.lints]` in `Cargo.toml` is not yet inherited by the crates.
+  A crate that must break a lint by design has a crate-level
+  `#![allow(...)]` in `lib.rs`, as the `-sys` crates do.
 
 ## Checks
 
@@ -23,9 +24,8 @@ unchanged).  See `README.md` here for setup and integration tests.
 just check      # fmt (rewrites files), machete, spelling, clippy, tests
 ```
 
-- `Cargo.lock` is not tracked and the `ci_*` aliases use `--locked`, so
+- `Cargo.lock` is not tracked and most `ci_*` aliases use `--locked`, so
   run `cargo generate-lockfile` first in a fresh checkout.
-
 - Run `cargo check` and `cargo clippy` early and often.
 - Integration tests (`cargo test --test layout_test --test hsm_test`)
   need a mounted Lustre filesystem, so run them on a test VM, never on

@@ -67,7 +67,7 @@ working in an unfamiliar part of the tree.
 Two companion projects provide the tooling.  Install them and use their
 skills; their instructions are not repeated here.
 
-- **ltvm** (https://github.com/lustre-tools/lustre-test-vms): builds
+- **ltvm** (https://github.com/lustre/lustre-test-vms): builds
   Lustre and kernels in a container and runs it in QEMU VMs, single node
   or clusters.  Its `ltvm` skill covers creating VMs, building and
   deploying a tree, mounting, running tests and collecting crashes.
@@ -93,9 +93,20 @@ make               # or: make modules, make utils (configured tree only)
 make rpms          # also debs, dkms-rpm; see `make help`
 ```
 
+For ZFS, build against the recommended ZFS version given in
+`lustre/ChangeLog`, unless the work is to support a newer ZFS version;
+newer ZFS releases are untested with Lustre.
+
 After HEAD moves, remove `configure` and `autom4te.cache` before
 rebuilding, or the build keeps a stale version string and test version
 checks will skip.  Check `lctl get_param -n version` on the test node.
+
+Build modules from the top of the tree: `make -C lustre/ptlrpc` does not
+really rebuild the module, so check that the `.ko` files were updated,
+not only the exit status.  Install every module that changed, not only
+the one you edited: a stale dependency gives false test failures.
+`lctl lustre_build_version` prints the utilities' own version when the
+modules are not loaded, so check the version with the modules loaded.
 
 ## Testing
 
@@ -110,8 +121,8 @@ If no filesystem is mounted, auster mounts one described by
 `lustre/tests/cfg/$NAME.sh` (`local.sh` by default; put other
 configurations in their own file rather than changing it), using
 modules from the build tree.  It formats the devices only with `-r`.
-If it did the mount, it unmounts at the end.  Logs go to
-`/tmp/test_logs/`.  Common suites:
+If it did the mount, it unmounts at the end unless a test failed.
+Logs go to `/tmp/test_logs/`.  Common suites:
 sanity, sanityn, sanity-pfl, sanity-flr, sanity-dom, sanity-ec,
 sanity-quota, sanity-sec, sanity-lnet, conf-sanity, recovery-small,
 replay-single, replay-dual, insanity.  The lustre-test-scripts skill
@@ -121,18 +132,20 @@ covers writing and verifying tests.
 
 1. **Every patch has an LU ticket.**  Ask for it if it isn't clear from
    context; `LU-0000` is only a placeholder until then.
-2. **Look for existing work first**: open Gerrit changes on the same
-   topic or touching the same files, and Jira tickets on the same
-   problem.  Report anything similar before writing code.
+2. **Look for existing work first**, at the start of any task that may
+   lead to a patch, even one that begins as an investigation: open
+   Gerrit changes on the same topic or touching the same files, and Jira
+   tickets on the same problem.  Report anything similar before writing
+   code.
 3. **Read the code before making claims about it**, and verify behaviour
    against the current tree.  Raise design choices that aren't obvious
    (where a tunable or stat belongs, which interface to extend, what is in
    scope) with your human *before* implementing.
 4. **Keep each patch to one purpose**, but fold small related cleanups,
-   dead-code removal and style fixes into the patch they follow from,
-   up to roughly 500 changed lines.  In a series, every patch must build
-   and pass tests by itself.  Squash fixes into the patch that introduced
-   the code; never stack fixup patches.
+   dead-code removal and style fixes into the patch they follow from, as
+   long as they don't bloat the patch significantly.  In a series, every
+   patch must build and pass tests by itself.  Squash fixes into the patch
+   that introduced the code; never stack fixup patches.
 5. **Build and test in a VM.**  A new or changed test must fail without
    the fix and pass with it.  Report both runs.
 6. **Run checkpatch** on each commit and fix what it reports:
@@ -146,7 +159,10 @@ covers writing and verifying tests.
    post or reply to review comments, vote, add reviewers, retest, or
    create or comment on Jira tickets unless your human explicitly asks
    for that action.  Present the commit message, diff and test results,
-   then wait.
+   then wait.  The one exception is CI follow-up on a patch you pushed:
+   restarting a build that failed for infrastructure reasons,
+   investigating test failures, and retesting failures unrelated to the
+   patch.
 
 The lustre-patch-workflow skill has the full sequence, including pushing,
 following CI, and when to refresh or retest a patch.
@@ -157,7 +173,7 @@ following CI, and when to refresh or retest a patch.
 LU-NNNNN component: imperative summary of the change
 
 The problem, concretely: what fails, when, and the error or symptom.
-Then how this patch fixes it, in the imperative ("Add ...", "Fix ...").
+Then how this patch fixes it, in the imperative ("Add", "Fix").
 "Also fix ..." for small adjacent changes.  Wrap at 70 columns.
 
 Test-Parameters: trivial
@@ -173,6 +189,8 @@ Change-Id: I0123456789abcdef0123456789abcdef01234567
 - Keep the body terse.  Reviewers know Lustre: explain the problem and
   the approach, and name the key functions, but don't narrate the diff or
   list every small change; those belong under one summary sentence.
+- Write commit messages, code comments and Gerrit or Jira text in short,
+  plain sentences: many readers are not native English speakers.
 - Trailers are one contiguous block, and the hook rejects tags it does
   not know, including `Co-Authored-By:`.  `Signed-off-by:` is your
   human's certification of the Developer Certificate of Origin: use the

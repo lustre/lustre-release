@@ -13,7 +13,7 @@ https://wiki.lustre.org/Lustre_Script_Coding_Style.
 
 Run tests only on test nodes, never on the development host: they format
 devices, load modules and can crash the node.  The ltvm skill
-(https://github.com/lustre-tools/lustre-test-vms) sets up VMs and runs
+(https://github.com/lustre/lustre-test-vms) sets up VMs and runs
 suites on them.
 
 ```bash
@@ -26,12 +26,13 @@ ONLY_MINUTES=30 lustre/tests/auster -v sanity --only 56a
 - If no filesystem is mounted, auster mounts one described by the test
   configuration (below), using modules and utilities from the build tree.  It
   formats the devices only with `-r` (needed the first time).  If it did
-  the mount, it unmounts at the end, even after failures, so mount with
-  `llmount.sh` first to inspect a failed run.  Logs go to
-  `/tmp/test_logs/<date>/<time>/`.
+  the mount, it unmounts at the end unless a test failed; mount with
+  `llmount.sh` first to keep the filesystem mounted after any run.  Logs
+  go to `/tmp/test_logs/<date>/<time>/`.
 - `ONLY=`, `EXCEPT=` and per-suite `SANITY_EXCEPT=` select subtests.
   `ONLY_REPEAT=N` repeats a subtest and `ONLY_MINUTES=M` repeats it for
-  M minutes.
+  M minutes.  Also run a new subtest together with its neighbours, not
+  only with `ONLY=`: subtests can depend on state left by earlier ones.
 - `llmount.sh` formats and mounts; `llmountcleanup.sh` unmounts and
   unloads.
 - Check that the code under test is really there: `lctl get_param -n
@@ -102,11 +103,20 @@ run_test 123b "open after foo is set does not fail"
   them, including between repetitions of a looped subtest, and until then
   they are useful "chaff" that varies the conditions later subtests run
   under.
-- `skip` for a configuration that can never run the test; `skip_env` for
-  something missing from the test environment (a tool, a feature).
+- `errexit` is off in the subtest body (`run_one` calls it with `||`) but
+  on in `stack_trap` handlers, so a cleanup command that can fail there
+  needs `|| true`.
+- `skip_env` only for a tool or package that release testing must have
+  installed: it fails the test when `FAIL_ON_SKIP_ENV` is set.  Use
+  `skip` for a configuration that can never run the test (ldiskfs vs.
+  ZFS, too few MDTs or OSTs) or for missing hardware.
 - Known failures are excluded at the top of the suite with
-  `always_except LU-NNNNN 42a 42c`, not by editing the test.
+  `always_except LU-NNNNN 42a 42c` until fixed, not by editing the test.
+- Patches that fix an excepted test removes it from `always_except`.
 - A new suite or helper binary is added to `lustre/tests/Makefile.am`.
+- New test suites should be rarely added, only for major code features,
+  since they need to be added separately to the CI list of test suites.
+- Pick an appropriate suite for each new subtest, not always `sanity.sh`.
 - Suite-specific helpers stay in the suite; only genuinely shared code
   goes in `test-framework.sh`.
 
@@ -133,8 +143,23 @@ run_test 123b "open after foo is set does not fail"
   check ]] || action`, not `&& action`, so it doesn't return failure.
 - Make the test robust even if the root cause is later fixed elsewhere.
   Give exact thresholds and the reasoning behind them.
+- Keep subtests cheap: cap bulk work such as mass file creation at what
+  is needed to reproduce the problem (hundreds of files, not hundreds of
+  thousands).
+- If file size or count matters to the test, calculate it from the test
+  environment to avoid running out of space or memory.  Use a global
+  such as `SANITY89_SIZE=${SANITY89_SIZE:-<default>}` so the fixed or
+  calculated default can be overridden with `env=` if needed.
+- If run time matters to the test, don't estimate it from bandwidth,
+  which varies widely in CI; use a timed loop or a sentinel file.
+- Complex test setup should be shared between subtests instead of duplicated.
+- Review pre-existing subtests for suitable scenarios that could be re-used
+  instead of creating long duplicate subtests each time.
 - Use `fallocate` for large files only where `check_set_fallocate`
   allows and the contents don't matter.
+- When a patch already modifies a subtest for another reason, also clean
+  up the rest of that subtest to this style: the review-dne-subtest-change
+  sessions will test the whole subtest anyway.
 
 ## Version checks for interop
 
@@ -151,18 +176,27 @@ test needs a check only for a *peer* that might lack the change it tests:
   (`2.17.58-63-g1234abc` -> `2.17.58.63`).  Never use the next release,
   which would skip the test on the patched build.  For a series, use the
   first patch's version for all of them.
+- **Feature from a patch that has already landed:** use that commit's
+  `git describe --abbrev=10 <commit>` form instead of a dotted quad, so
+  the hash shows exactly which commit the check refers to, e.g.
+  `(( MDS1_VERSION >= $(version_code v2_17_52-72-g0631c80b89) ))` for
+  LU-19826.  Dotted quads are only for the new patch's own version.
+  When a patch changes a landed subtest that has a dotted check for an
+  earlier feature, convert the check to that commit's `git describe`
+  form, keeping the skip message dotted: `skip "need MDS >= 2.17.52.72
+  for ..."`.
 - **Client-only change tested on the local client:** no check.  An older
-  client doesn't have the test, and a `CLIENT_VERSION` check can never
-  skip it.
+  client doesn't have the test, and a `CLIENT_VERSION` check cannot skip it.
 - **Change exercised on another client node** (e.g. the remote client in
   sanityn): check that node's version.
 - `MDS1_VERSION` stands for every MDT: MDS versions in one filesystem are
   never more than a few builds apart, so don't check each MDT.
 - When a server change breaks an *existing* subtest for older clients,
-  which run their own unmodified scripts, list it in
-  `lustre/tests/except/<suite>.<tag>.ex` (format in
+  which run their own older unmodified version of the scripts, list it in
+  `lustre/tests/except/<suite>[.<tag>].ex` (format in
   `lustre/tests/except/README`).  Clients read these files from the
-  servers and skip the listed subtests.
+  servers and skip the listed subtests.  Most entries go in the main
+  `<suite>.ex`; a separate `.<tag>` file only avoids patch conflicts.
 
 ## Fault injection
 
@@ -176,9 +210,11 @@ test needs a check only for a *peer* that might lack the change it tests:
   do_facet mds1 $LCTL set_param fail_loc=0x80000107 fail_val=0
   ```
 
-  `0x80000000` (`CFS_FAIL_ONCE`) fires once; other flag bits are in
-  `include/linux/libcfs/libcfs_fail.h`.  Reset with `fail_loc=0` (or
-  `reset_fail_loc`), and add a `stack_trap` so it is reset on failure.
+  Write `fail_loc` before `fail_val`, since `fail_val` is an argument of
+  that `fail_loc`.  `0x80000000` (`CFS_FAIL_ONCE`) fires once; other flag
+  bits are in `include/linux/libcfs/libcfs_fail.h`.  Reset with
+  `fail_loc=0` (or `reset_fail_loc`), and add a `stack_trap` so it is
+  reset on failure.
 - Existing helpers cover common cases: `drop_request`, `drop_reply`,
   `pause_bulk`, `drop_bl_callback`, `replay_barrier`, `fail mds1`.
 
@@ -192,10 +228,10 @@ test needs a check only for a *peer* that might lack the change it tests:
   add two-letter suffixes after `z` or `Z`.
 - Before choosing, list open Gerrit changes to the same script
   (`project:fs/lustre-release branch:master status:open
-  file:^lustre/tests/sanity.sh`) and look at the subtests they add or
-  change.  Stay clear of those numbers, and leave a gap rather than
-  taking the next free number when another open patch works just after
-  it, so neither patch conflicts on rebase.
+  file:^lustre/tests/sanity.sh`) and look at the subtests they add or change.
+  Stay clear of those numbers, prefer a different location in the file, or
+  (less ideal) leave a gap rather than taking the next free number when
+  another open patch works just after it, so neither patch conflicts on rebase.
 
 ## Proving the test
 

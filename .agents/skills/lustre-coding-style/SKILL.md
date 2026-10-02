@@ -24,12 +24,13 @@ guide is https://wiki.lustre.org/Lustre_Coding_Style_Guidelines.
 - Continuation lines align after the open parenthesis they continue.
   Binary operators go at the end of the line.
 - Pack function arguments onto as few lines as fit, not one per line.
-- Only `/* */` comments.  Multi-line comments put `/*` and `*/` on their
-  own lines.  `//` is used only for the SPDX line of a `.c` file.
+- Only `/* */` comments.  Multi-line comments put `*/` on its own line.
+  `//` is used only for the SPDX line of a `.c` file.
 
 ## Declarations and control flow
 
-- One variable per line.  Longest declaration line first, `int rc;`
+- One variable per line.  Longer declaration lines and variables used
+  earlier in the function first.  Shorter/later used variables like `int rc;`
   last.  A blank line after the declarations.  No needless `= 0`, and no
   function calls in initializers.
 - Declare variables in the innermost scope that makes sense.
@@ -47,21 +48,28 @@ guide is https://wiki.lustre.org/Lustre_Coding_Style_Guidelines.
 - `inline` only where it is shown to matter for performance.
 - No new typedefs, except for function-pointer types.  Never typedef a
   struct or a pointer.  Callback parameters use concrete struct pointer
-  types, not `void *`.
+  types when possible, not `void *`.
 - Use designated initializers.  Give struct fields a prefix derived from
   the struct name.  Use a named enum, starting at 1, instead of a list of
   `#define`s.
 - Macros parenthesize every argument.  Multi-statement macros use `do {
   } while (0)` without a trailing `;`.
 - `sizeof(*ptr)` or `sizeof(var)`, not `sizeof(type)`.
+- Don't assume a 4 KiB `PAGE_SIZE`: aarch64 clients and servers run with
+  16 KiB or 64 KiB pages.  Use `PAGE_SIZE`/`PAGE_SHIFT`, and keep wire
+  and on-disk sizes independent of the page size.
 - Use current APIs: `strscpy()` (not `strncpy`/`strcpy`),
   `snprintf()`/`scnprintf()`, `cfs_time_seconds()` instead of `HZ`
   arithmetic, `timeout_t`, `min_t()`/`max_t()`, `wait_event_idle*()`,
   `list_for_each_entry[_safe]()`.  checkpatch names the others.
-- Code that should disappear in a later release is wrapped in `#if
-  LUSTRE_VERSION_CODE < OBD_OCD_VERSION(X, Y, 53, 0)`.  It is compiled
-  out silently once that version is reached, so it is found by grepping
-  for these blocks when preparing a release.
+- Code that should disappear in a later release, such as a short-term
+  workaround for a bug, is wrapped in `#if LUSTRE_VERSION_CODE <
+  OBD_OCD_VERSION(X, Y, 53, 0)`, where Y is typically 4 or more above the
+  current version (assume one release per year, and 2.20 may become
+  3.0).  It is compiled out silently once that version is reached, so
+  these blocks can be found by grepping for them when preparing a release
+  or removing old code.  Compile test it by raising the build version
+  beyond that release.
 
 ## Debug, errors and tracing
 
@@ -75,13 +83,14 @@ guide is https://wiki.lustre.org/Lustre_Coding_Style_Guidelines.
   FID, NID or values needed to diagnose:
   `CERROR("%s: cannot open "DFID": rc = %d\n", obd->obd_name,
   PFID(fid), rc);`.
-  Use `CDEBUG_LIMIT()` rather than `CDEBUG(D_ERROR|D_WARNING, ...)`.
+  Use `CDEBUG_LIMIT()` rather than `CDEBUG(D_ERROR|D_RPCTRACE, ...)`
+  if the debug level is variable, otherwise prefer `CERROR()`, `CWARN()`.
 - `ENTRY`, `EXIT`, `RETURN(rc)` and `GOTO(label, rc = -EFOO)` trace
   function flow.  Use them where the surrounding file does (most of
   `lustre/`, rarely `lnet/`).  A function with `ENTRY` leaves through
   `RETURN` or `EXIT`.  `GOTO()` does not assign its second argument; the
   assignment must be written inside it.
-- Complex cleanup uses a single exit path with labels.
+- Complex cleanup uses a single exit path with labels in reverse setup order.
 - `LASSERT()` only for internal invariants that indicate a code bug.
   Never assert on data from disk, the network or userspace; return an
   error instead.  No side effects inside an assertion.  On paths that
@@ -97,7 +106,7 @@ guide is https://wiki.lustre.org/Lustre_Coding_Style_Guidelines.
   `OBD_ALLOC_PTR_ARRAY(ptr, n)`, `OBD_ALLOC(ptr, size)`/`OBD_FREE(ptr,
   size)` with matching sizes, and `OBD_ALLOC_LARGE()`/`OBD_FREE_LARGE()`
   for buffers that may exceed a few pages.  The memory is zeroed and
-  allocated with `GFP_NOFS`.  The array macros don't check for overflow.
+  allocated with `GFP_NOFS` unless a `OBD_ALLOC*_GFP()` variant is used.
 - In `lnet/`: `LIBCFS_ALLOC()`/`LIBCFS_FREE()` and `CFS_ALLOC_PTR()`.
 - Pointers stored in objects that outlive the caller (xarray, global
   list, netlink dump state) must be owned (copied) or explicitly pinned.
@@ -125,10 +134,11 @@ guide is https://wiki.lustre.org/Lustre_Coding_Style_Guidelines.
   ```
 
   Check with `contrib/scripts/kernel-doc -none -v <file>`.
-- Comments explain why, not what, and sparingly.  Cite bugs as
-  `(LU-NNNNN)`.  Reword a comment that only slightly overflows a line
-  to fit on one line; otherwise write a filled multi-line block.  No
-  hedging, and no comments added only to pre-empt a reviewer.
+- Comments explain why, not what, sparingly and in simple English.  If
+  needed, cite bugs as `(LU-NNNNN)`.  Reword a comment that only slightly
+  overflows a line to fit on one line; otherwise write a filled
+  multi-line block.  No hedging, and no comments added only to pre-empt
+  a reviewer.
 
 ## Headers and includes
 
@@ -136,30 +146,41 @@ guide is https://wiki.lustre.org/Lustre_Coding_Style_Guidelines.
   GPL-2.0` in `.c`, `/* ... */` in `.h`; see
   `Documentation/process/license-rules.rst`), then a copyright line with
   the current year.
-- Include groups, in order: kernel `<linux/...>`; `<lustre_compat/...>`;
+- Include groups, in order: kernel `<linux/...>`;
   libcfs and LNet `<linux/libcfs/...>`, `<linux/lnet/...>`;
   `<uapi/linux/lustre/...>`; `lustre/include` headers; then the local
   `"*_internal.h"`.  Add a new include in sorted position within its
   group, but don't reorder existing blocks just to sort them.  A real
   header dependency takes precedence over the order.
-- LNet code never includes Lustre headers.
 - No `extern` prototypes in `.c` files: put them in the most local header
   (`*_internal.h`).  Prototypes name their parameters.
 - `EXPORT_SYMBOL()` goes right after the function.
 - Kernel code tests `CONFIG_LUSTRE_FS_SERVER` for server-only code.
   `HAVE_SERVER_SUPPORT` is only for userspace.
 
-## Kernel compatibility
+## Kernel compatibility and autoconf/configure
 
-- The oldest supported kernel is RHEL 8 (4.18 with backports); see the
-  top of `lustre/ChangeLog`.
+- The oldest supported kernel on master is RHEL 8 (4.18 with backports);
+  see the top of `lustre/ChangeLog` for kernels supported by the current branch.
 - Detect the *new* kernel API, not the removal of the old one, and put
   the difference in a helper named after the new API.  No `#ifdef` inside
   function bodies.
+- Call the new kernel API directly in the code and let the compat macro
+  hide the difference, unless that is impossible because the new API
+  lacks (rather than adds) function arguments.
+- If the compat macro is small, define it directly in autoconf;
+  otherwise add compat function(s) and map to them with `#ifdef` and
+  `#define` in the header.
 - Compat helpers go in `include/lustre_compat/<kernel header path>`
   (e.g. `<lustre_compat/linux/fs.h>` wraps `<linux/fs.h>`), with code in
   `lustre_compat/`.  `lustre/include/lustre_compat.h` is the legacy
   catch-all; don't add to it.
+- The `<lustre_compat/...>` headers will be implicitly included by include
+  paths before kernel headers and should be referenced by their Linux name.
+  If kernel version compat wrappers are needed they should go in the header
+  and function name matching upstream and use `#include_next <linux/...>`.
+- Use kernel APIs through the Lustre wrappers where they exist, but prefer
+  new compatibility wrappers transparently map to existing kernel functions.
 - Each `HAVE_*` check is a pair of macros, mostly in
   `config/lustre-core.m4`: `LC_SRC_xxx` builds a test with
   `LB2_LINUX_TEST_SRC`, and `LC_xxx` uses `LB2_MSG_LINUX_TEST_RESULT` and
@@ -169,7 +190,6 @@ guide is https://wiki.lustre.org/Lustre_Coding_Style_Guidelines.
   `lustre-libcfs.m4`, `LN_SRC_` in `lustre-lnet.m4`, `LB_SRC_` in
   `lustre-build-ldiskfs.m4`).  Annotate the check with the kernel version
   and commit in `git describe` form, as the neighbouring checks do.
-- Use kernel APIs through the Lustre wrappers where they exist.
 
 ## ABI, wire and disk formats
 
@@ -179,14 +199,21 @@ guide is https://wiki.lustre.org/Lustre_Coding_Style_Guidelines.
 - A new wire structure is added to `lustre/utils/wirecheck.c`,
   `wiretest.c` is regenerated, and the structure is byte-swapped on
   unpack.
-- New `OBD_CONNECT_*` flags and `obd_connect_data` fields are reserved on
-  lustre-devel and landed as a flag-only patch before they are used (see
-  the comments after them in `lustre_idl.h`).
+- New `OBD_CONNECT2_*` flags and `obd_connect_data` fields are reserved
+  on lustre-devel and landed as a flag-only patch before they are used
+  (see the comments after them in `lustre_idl.h`).
 - Keep getopt option tables and similar lists in alphabetical order
   unless ABI order matters.
 - Formats: `%llu`/`%llx` for `__u64` (cast `loff_t` to `long long`),
   `DFID`/`PFID()` for FIDs, `DOSTID`/`POSTID()` for `ost_id`.  Printf-like
   functions get `__attribute__((format(printf, n, m)))`.
+
+## LNet code
+- The `lnet/klnds/socklnd/` module is always built and tested.  For code
+  modifying `lnet/klnds/o2iblnd/` the o2ib module must be enabled with
+  `configure --with-o2ib[=...]` to ensure it is at least build-tested.
+- LNet code never includes Lustre headers (apart from `lustre_ver.h`) or
+  calls `lustre/` functions.
 
 ## Userspace utilities
 
@@ -195,6 +222,9 @@ guide is https://wiki.lustre.org/Lustre_Coding_Style_Guidelines.
   progname, fname, strerror(-rc));` in `lfs`, with
   `jt_cmdname(argv[0])` in place of `progname` in `lctl` commands.  Keep
   the format string on one line, and tell the user what to do about it.
+- A command's usage message lists its options and main arguments, not
+  every option in detail.  Long descriptions of options and arguments go
+  in the man page, updated in the same patch.
 - A new or changed command or option updates the man page
   `Documentation/man{1,8}/<cmd>-<subcmd>.{1,8}`; a new or changed tunable
   gets or updates `Documentation/man4/<param>.4`.

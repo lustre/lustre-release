@@ -9,7 +9,7 @@ The steps below apply to every patch.  The lustre-commit,
 lustre-coding-style and lustre-test-scripts skills hold the detail for
 their parts.  Tool usage (gc, jira, maloo, lreview, ltvm) is in the
 skills of https://github.com/lustre/llm_code_and_review_tools and
-https://github.com/lustre-tools/lustre-test-vms.
+https://github.com/lustre/lustre-test-vms.
 
 ## 1. Start
 
@@ -17,11 +17,13 @@ https://github.com/lustre-tools/lustre-test-vms.
   they often give a reproducer, an existing patch, or the reason an
   earlier approach was dropped.
 - Branch from the current `master` of the Gerrit remote, one branch per
-  independent change.  A checkout holds one build at a time, so use a
-  separate `git worktree` per concurrent patch, outside the main checkout
-  (build cleanup can delete files under the whole tree).
+  independent change.  A checkout holds one build at a time; only when
+  several patches must be built or tested at once, use a separate `git
+  worktree` for each, outside the main checkout (build cleanup can delete
+  files under the whole tree).
 - **Look for existing work** before writing a new patch that isn't a
-  follow-on to one in hand:
+  follow-on to one in hand, at the start of the task, even if it begins
+  as an investigation rather than a request for a patch:
   - open Gerrit changes by keyword and by the files you expect to touch
     (`project:fs/lustre-release branch:master status:open
     message:"<keyword>"`, `... file:^lustre/ptlrpc/sec.c`);
@@ -41,7 +43,8 @@ https://github.com/lustre-tools/lustre-test-vms.
   tunable or statistic lives, what is in scope) and ask about any that
   aren't obvious *before* implementing.  Review rounds are for catching
   mistakes, not for making the first design decision.
-- Reuse or generalize existing code rather than adding a near-copy.
+- Strongly prefer to reuse or generalize existing code rather than adding
+  a near-copy.  Scan code for similar functions before adding new ones.
 - New wire or on-disk formats, `OBD_CONNECT_*` flags and large features
   need agreement on lustre-devel and in Jira first.  Ask your human.
 
@@ -49,16 +52,27 @@ https://github.com/lustre-tools/lustre-test-vms.
 
 - One purpose per patch.  Fold small related cleanups, dead-code removal
   and style fixes on adjacent lines into the patch they follow from, as
-  long as it stays under roughly 500 changed lines and the extras don't
-  overshadow its purpose.  Put unrelated or large refactoring in a
-  separate patch.
+  long as they don't bloat the patch significantly or overshadow its
+  purpose, since Lustre testing, code review and landing are expensive.
+- Put unrelated or large refactoring in a separate patch.
+- Make unrelated changes, including separate cleanups, independent
+  patches based on master rather than a stacked series, unless they touch
+  the same code, so each can be tested, reviewed and landed on its own.
 - Tests and documentation (man pages for new tunables and options) go in
   the same patch as the change.
+- For kernel and ldiskfs patches that have a copy per distro kernel,
+  finish development, testing and review on one kernel before porting to
+  the other copies, since review may change the design.
 - A series is ordered with the uncontroversial patches first.  Every
   patch must build and pass tests by itself.  Fold a fix into the patch
   that introduced the code (`git commit --fixup=<commit>`, then
   `GIT_SEQUENCE_EDITOR=: git rebase -i --autosquash <base>`), never as a
   new patch on top.
+- In an unlanded series, write code the final way in the patch that adds
+  it.  If a later patch renames, moves, restructures or obsoletes code an
+  earlier patch added, fold that into the earlier patch (or drop the code
+  there) and restack the rest, so reviewers don't read code that is soon
+  replaced.  Building new functionality on earlier patches is fine.
 
 ## 4. Build and test
 
@@ -91,10 +105,12 @@ https://github.com/lustre-tools/lustre-test-vms.
 
 ## 6. Human review, then push
 
-- Present to your human: the commit message, the diff, and the test
-  results (for a new or changed test, both the failing run without the
-  fix and the passing run with it).  Wait for their explicit instruction
-  to push that patch.  A dry run is fine before then.
+- Present to your human: the branch or worktree name, the commit message,
+  and the test results (for a new or changed test, both the failing run
+  without the fix and the passing run with it).  Wait for their explicit
+  instruction to push that patch.  A dry run is fine before then.
+- Right before pushing a new patchset, re-read the change for comments
+  posted since you last looked, and address them in the same round.
 - Push to `refs/for/<branch>`:
   `git push ssh://<user>@review.whamcloud.com:29418/fs/lustre-release
   HEAD:refs/for/master`, or `gc upload` (see the gerrit-patch-workflow
@@ -104,6 +120,9 @@ https://github.com/lustre-tools/lustre-test-vms.
   change, not a delta.
 - Don't rebase or re-push another developer's unlanded change that yours
   depends on; base yours on it as it is.
+- Never modify, rebase or refresh a change with the `master-next`
+  hashtag in Gerrit without your human's explicit confirmation: it is
+  being prepared for landing, and a new patchset disrupts that.
 - Suggested reviewers: `contrib/scripts/get_maintainer.pl -f <file>` and
   the `R:` entries in `MAINTAINERS`, usually two or three.  Add them only
   when your human asks.
@@ -112,7 +131,7 @@ https://github.com/lustre-tools/lustre-test-vms.
 
 Jenkins builds each patchset and Autotest runs the test sessions, with
 results in Maloo; the Gerrit Janitor separately runs new or modified
-tests.  Autotest posts links to all of a build's running test sessions
+tests.  Maloo posts links to all of a build's scheduled test sessions
 on the change, and links to any failed sessions before it votes Verified
 +1 or -1, so there is no need to look up or post them by hand.  The
 lustre-ci-triage skill covers reading the results.
@@ -135,15 +154,50 @@ lustre-ci-triage skill covers reading the results.
   depends on unlanded patches that shouldn't be refreshed (patches that
   are reviewed, tested and ready to land), or when it must keep a
   specific parent (bisection or test patches, branch fixes).
-- Retest or refresh within about a week, before the build expires.
+- Try to reproduce a CI failure on a test VM first (e.g. 30 or more runs
+  of the subtest).  If a patch with extra debugging must go through CI to
+  catch it, limit it with `fortestonly` to the failing test script, e.g.
+  `Test-Parameters: fortestonly testlist=sanity env=ONLY=818,ONLY_MINUTES=60`,
+  so no unrelated sessions run.  Use `ONLY=` only if the failure
+  reproduces when the subtest runs by itself; some failures need the
+  earlier subtests of the script to run first.
+- To identify CI-only test failures, request additional sessions on an
+  existing build while it is still in the cache.  Only parameters that
+  `Test-Parameters:` can set may change: arch, distro,
+  `{mds,mdt,oss,ost}count`, fstype, testlist, and `env=` variables
+  (test-specific, or global such as debug masks and sizes).  Submit a
+  `Test-Parameters:` line for each new session via the `Maloo Results`
+  URL that Maloo posts for each build.
+- Answer every review comment, by fixing it or explaining why not, and
+  refresh patches promptly if defects or functional gaps are found.
+- On a patch you pushed, you may restart a build that failed for
+  infrastructure reasons, investigate test failures, and retest failures
+  that are unrelated to the patch, without asking each time.  New patches
+  and patchsets, review comments, debugging patches and other
+  outward-facing actions still need your human's request.
+- Local updates to a patch that do not affect later patches in a series
+  can be pushed directly on its original parent without refreshing later
+  patches if they are already (substantially) ready to land (Maloo +1,
+  one or more Code-Review + 1).
+- Retest or refresh failed sessions must be done within about 2-3 weeks,
+  before the build expires.  Retesting with an older build is not harmful,
+  but will report an error if the build no longer exists.  In the latter
+  case, if the patch has not yet been reviewed it should be refreshed to
+  address outstanding nits to trigger a full build and test cycle.  If it
+  has been reviewed and can still apply cleanly then `BUILD` is preferred.
+- A patchset that changes only the commit message neither restarts CI
+  nor drops existing reviews, but it also ignores any new
+  `Test-Parameters:` it adds.
+- A plain rebase that changes the parent but no code keeps Code-Review
+  votes, but triggers a new build and CI run.
 
 ## 8. Landing
 
 A change lands when it has two Code-Review +1 (or +2) votes from people
 other than the owner, Verified +1 from Jenkins and Maloo (all enforced
 sessions passed), and no Janitor -1 on modified tests.  The gatekeeper
-then lands it.  Answer every review comment, by fixing it or explaining
-why not, and refresh promptly.
+then lands it.  Local builds, logs, worktrees, and branches that no longer
+contain unlanded patches should be removed.
 
 ## Jira
 
