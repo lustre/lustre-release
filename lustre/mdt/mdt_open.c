@@ -873,7 +873,19 @@ static int mdt_object_open_lock(struct mdt_thread_info *info,
 		/* normal open holds read mode of open sem */
 		down_read(&obj->mot_open_sem);
 
-		if (open_flags & MDS_OPEN_LOCK) {
+		if (S_ISLNK(lu_object_attr(&obj->mot_obj))) {
+			/* A symlink is never opened itself, the client will
+			 * follow it and open the target. Return LOOKUP lock
+			 * (with UPDATE|PERM to cache attributes) so that the
+			 * client can keep the symlink dentry valid, and the
+			 * repeated open of the same symlink can be resolved
+			 * locally without an open RPC. No OPEN bit, since
+			 * there is no open handle for the symlink.
+			 */
+			lm = LCK_PR;
+			trybits |= MDS_INODELOCK_LOOKUP |
+				   MDS_INODELOCK_UPDATE | MDS_INODELOCK_PERM;
+		} else if (open_flags & MDS_OPEN_LOCK) {
 			if (open_flags & MDS_FMODE_WRITE)
 				lm = LCK_CW;
 			else if (open_flags & MDS_FMODE_EXEC)
@@ -1052,9 +1064,12 @@ static void mdt_object_open_unlock(struct mdt_thread_info *info,
 
 	if (!(open_flags & MDS_OPEN_LOCK) &&
 	    !(ibits & (MDS_INODELOCK_LAYOUT | MDS_INODELOCK_DOM)) &&
-	    !S_ISDIR(lu_object_attr(&obj->mot_obj))) {
+	    !S_ISDIR(lu_object_attr(&obj->mot_obj)) &&
+	    !S_ISLNK(lu_object_attr(&obj->mot_obj))) {
 		/* for the open request, the lock will only return to client
-		 * if open or layout lock is granted. */
+		 * if open or layout lock is granted, or it is a directory
+		 * or symlink.
+		 */
 		rc = 1;
 	}
 

@@ -978,6 +978,50 @@ test_17q() {
 }
 run_test 17q "set large xattr on fast symlink"
 
+test_17r() {
+	(( $MDS1_VERSION >= $(version_code 2.17.59) )) ||
+		skip "Need MDS >= 2.17.59 for symlink lock on open"
+	$LCTL get_param llite.*.opencache_threshold_count ||
+		skip "client does not have opencache parameter"
+
+	local link=$DIR/$tdir/$tfile.lnk
+	local direct
+	local linked
+
+	# no MDS_OPEN_LOCK, so every open of the target sends one open RPC,
+	# and only an open of the symlink itself can add more
+	set_opencache 0
+	stack_trap "restore_opencache"
+
+	test_mkdir $DIR/$tdir
+	touch $DIR/$tdir/$tfile || error "touch $DIR/$tdir/$tfile failed"
+	ln -s $tfile $link || error "ln -s $tfile $link failed"
+	cancel_lru_locks mdc
+
+	# warm up, cache the symlink lock
+	$MULTIOP $link oc || error "multiop $link failed"
+
+	$LCTL set_param mdc.*.stats=clear
+	for i in {1..10}; do
+		$MULTIOP $DIR/$tdir/$tfile oc ||
+			error "multiop $DIR/$tdir/$tfile failed"
+	done
+	direct=$(calc_stats mdc.*.stats ldlm_ibits_enqueue)
+
+	$LCTL set_param mdc.*.stats=clear
+	for i in {1..10}; do
+		$MULTIOP $link oc || error "multiop $link failed"
+	done
+	linked=$(calc_stats mdc.*.stats ldlm_ibits_enqueue)
+
+	echo "10 opens: $direct enqueue RPCs direct, $linked through symlink"
+	(( ${direct:-0} >= 10 )) ||
+		error "only ${direct:-0} enqueue RPCs for 10 direct opens"
+	(( ${linked:-0} <= ${direct:-0} )) ||
+		error "symlink opens sent $linked RPCs, direct opens $direct"
+}
+run_test 17r "repeated open of symlink does not send open RPC for it"
+
 test_18() {
 	touch $DIR/$tfile || error "Failed to touch $DIR/$tfile: $?"
 	ls $DIR || error "Failed to ls $DIR: $?"
