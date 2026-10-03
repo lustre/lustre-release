@@ -2975,7 +2975,7 @@ void ldlm_lock_dump_handle(int level, const struct lustre_handle *lockh)
 {
 	struct ldlm_lock *lock;
 
-	if (!((libcfs_debug | D_ERROR) & level))
+	if (!((cfs_debug_mask(DEBUG_SUBSYSTEM) | D_ERROR) & level))
 		return;
 
 	lock = ldlm_handle2lock(lockh);

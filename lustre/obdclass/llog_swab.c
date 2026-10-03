@@ -352,7 +352,7 @@ void print_lustre_cfg(struct lustre_cfg *lcfg)
 
 	ENTRY;
 
-	if (!(libcfs_debug & D_OTHER)) /* don't loop on nothing */
+	if (!(cfs_debug_mask(DEBUG_SUBSYSTEM) & D_OTHER))
 		return;
 
 	CDEBUG(D_OTHER, "lustre_cfg: %p\n", lcfg);

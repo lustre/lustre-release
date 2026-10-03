@@ -1452,9 +1452,7 @@ extern const char *ldlm_it2str(enum ldlm_intent_flags it);
  */
 #ifdef LIBCFS_DEBUG
 #define ldlm_lock_debug(msgdata, mask, cdls, lock, fmt, a...) do {      \
-	if (((mask) & D_CANTMASK) != 0 ||                               \
-	    ((libcfs_debug & (mask)) != 0 &&                            \
-	     (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0)) {        \
+	if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                   \
 		_ldlm_lock_debug(lock, msgdata, fmt, ##a);              \
 		if (unlikely(test_bit(LDLM_NS_DUMP_STACK,		\
 				      ldlm_lock_to_ns(lock)->ns_flags)) && \

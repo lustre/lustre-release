@@ -1280,9 +1280,7 @@ void _debug_req(struct ptlrpc_request *req,
  */
 #define debug_req(msgdata, mask, cdls, req, fmt, a...)                        \
 do {                                                                          \
-	if (((mask) & D_CANTMASK) != 0 ||                                     \
-	    ((libcfs_debug & (mask)) != 0 &&                                  \
-	     (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))                \
+	if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM))                           \
 		_debug_req((req), msgdata, fmt, ##a);                         \
 } while (0)
 

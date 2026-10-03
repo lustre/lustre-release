@@ -40,6 +40,10 @@ EXPORT_SYMBOL(libcfs_debug);
 module_param(libcfs_debug, int, 0644);
 MODULE_PARM_DESC(libcfs_debug, "Lustre kernel debug mask");
 
+unsigned int
+	libcfs_subsystem_debug_masks[BITS_PER_TYPE(libcfs_subsystem_debug)];
+EXPORT_SYMBOL(libcfs_subsystem_debug_masks);
+
 static int libcfs_param_debug_mb_set(const char *val,
 				     const struct kernel_param *kp)
 {
@@ -389,11 +393,12 @@ int libcfs_debug_mask2str(char *str, int size, int mask, int is_subsys)
 	return cfs_mask2str(str, size, mask, bit2str, ' ');
 }
 
-int libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
+int libcfs_debug_str2mask(int *mask, const char *str, int is_subsys,
+			  bool is_override)
 {
 	const char *(*bit2str)(int bit) = is_subsys ? libcfs_debug_subsys2str :
 						      libcfs_debug_dbg2str;
-	u64 newmask = *mask;
+	u64 newmask = (u32)*mask;
 	int m = 0;
 	int matched;
 	int n, t;
@@ -413,8 +418,21 @@ int libcfs_debug_str2mask(int *mask, const char *str, int is_subsys)
 		return 0;
 	}
 
+	/* an override's default is 0, inheriting "debug" */
+	if (is_override && strcasecmp(str, "default") == 0) {
+		*mask = 0;
+		return 0;
+	}
+
 	rc = cfs_str2mask(str, bit2str, &newmask, is_subsys ? 0 : D_CANTMASK,
 			  ~0, is_subsys ? LIBCFS_S_DEFAULT : LIBCFS_D_DEFAULT);
+	/* 0 means "inherit debug"; a token list that removes every bit
+	 * down to 0 must not be mistaken for that, so floor it at the
+	 * mandatory bits. A blank write has no tokens and leaves the
+	 * mask as it found it, 0 included.
+	 */
+	if (!rc && is_override && str[strspn(str, ", \t\n")] && !newmask)
+		newmask = D_CANTMASK;
 
 	*mask = newmask;
 

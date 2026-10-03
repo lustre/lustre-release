@@ -1,0 +1,264 @@
+.TH DEBUG 4 2026-10-06 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+debug, debug_subsystem.SUBSYSTEM \- Lustre debug log message masks
+.SH SYNOPSIS
+.SY
+.B lctl get_param debug
+.SY
+.B lctl set_param debug=
+.RI { FLAG_LIST | HEX_MASK }
+.SY
+.BI "lctl set_param debug=+" FLAG
+.SY
+.BI "lctl set_param debug=-" FLAG
+.SY
+.BI "lctl get_param debug_subsystem." SUBSYSTEM
+.SY
+.BI "lctl set_param debug_subsystem." SUBSYSTEM =
+.RI { FLAG_LIST | HEX_MASK }
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.br
+.BR 644 " | " -rw-r--r--
+.TP
+.B Scope
+.br
+Global
+.TP
+.B Config
+.br
+Always present
+.TP
+.B Default
+.br
+.RB debug= "warning+error+emerg+console+neterror+ha+config+ioctl+lfsck"
+.br
+.BI debug_subsystem. SUBSYSTEM =0
+.RB "(inherit " debug )
+.SH DESCRIPTION
+The
+.B debug
+parameter is the global mask of message classes that
+.BR CDEBUG ()
+calls in the kernel are allowed to log.
+A message is kept only if its class is set in the applicable mask --
+.B debug
+itself, or a nonzero per-subsystem override that replaces it (see
+.B debug_subsystem.SUBSYSTEM
+below) -- and its subsystem is set in
+.BR subsystem_debug (4).
+.PP
+.I FLAG_LIST
+is a comma, space, or plus-separated list of flag names, or a
+.I HEX_MASK
+(hexadecimal or decimal number);
+a non-zero, non-all-ones
+.I HEX_MASK
+is deprecated and logs a warning.
+A
+.RI "leading " + " or " -
+adds or removes flags from the current mask instead of replacing it.
+The value
+.B 0
+clears the mask so that only the mandatory classes below are logged;
+the keyword
+.BR all " or the value " -1
+enables every class, and
+.B default
+restores the default mask shown above.
+.PP
+The following classes are supported, with the approximate overhead of
+enabling each one continuously on a busy server
+.RB ( low ", " medium " or " high ).
+A class marked
+.B "(always)"
+is always logged, whatever
+.B debug
+is set to; one marked
+.B "(default)"
+is part of the default mask above, but can still be masked out.
+.TP
+.BR trace " (high)"
+Function entry/exit markers logged by
+.BR ENTRY " and " EXIT
+and direct
+.BR CDEBUG ( D_TRACE )
+callers.
+.TP
+.BR inode " (medium)"
+Inode-level operations.
+.TP
+.BR super " (low)"
+Superblock and mount/umount operations.
+.TP
+.BR iotrace " (low)"
+Simple, low-overhead I/O tracing of read and write calls.
+.TP
+.BR malloc " (high)"
+Logs every memory allocation and free.
+.TP
+.BR cache " (medium)"
+Cache-related operations (e.g. page and lock caches).
+.TP
+.BR info " (medium)"
+General informational messages.
+.TP
+.BR ioctl " (low, default)"
+.BR ioctl (2)
+request handling.
+.TP
+.BR neterror " (low, default)"
+Network errors.
+.TP
+.BR net " (high)"
+Network communication, logged for most RPCs sent and received.
+.TP
+.BR warning " (low, always)"
+.BR CWARN ()
+messages.
+Always logged regardless of the
+.B debug
+mask.
+.TP
+.BR buffs " (medium)"
+Buffer handling.
+.TP
+.BR other " (medium)"
+Miscellaneous messages that do not fit another class.
+.TP
+.BR dentry " (medium)"
+Dentry-level operations.
+.TP
+.BR nettrace " (high)"
+Detailed network tracing, more verbose than
+.BR net .
+.TP
+.BR page " (high)"
+Bulk page handling for I/O.
+.TP
+.BR dlmtrace " (medium)"
+Distributed Lock Manager (DLM) operations.
+.TP
+.BR error " (low, always)"
+.BR CERROR ()
+messages.
+Always logged regardless of the
+.B debug
+mask.
+.TP
+.BR emerg " (low, always)"
+.BR CEMERG ()
+messages for serious, urgent conditions.
+Always logged regardless of the
+.B debug
+mask.
+.TP
+.BR ha " (low, default)"
+Recovery and failover events.
+.TP
+.BR rpctrace " (high)"
+Detailed per-RPC tracing, for distributed debugging.
+.TP
+.BR vfstrace " (high)"
+VFS-level operation tracing.
+.TP
+.BR reada " (medium)"
+Read-ahead decisions and activity.
+.TP
+.BR mmap " (medium)"
+.BR mmap (2)
+related operations.
+.TP
+.BR config " (low, default)"
+Configuration log processing.
+.TP
+.BR console " (low, always)"
+Messages that are also sent to the system console.
+Always logged regardless of the
+.B debug
+mask.
+.TP
+.BR quota " (medium)"
+Quota accounting and enforcement.
+.TP
+.BR sec " (medium)"
+Security and upcall cache operations.
+.TP
+.BR lfsck " (low, default)"
+OI scrub and LFSCK activity.
+.TP
+.BR hsm " (low)"
+Hierarchical Storage Management (HSM) coordinator activity.
+.TP
+.BR snapshot " (low)"
+Snapshot creation and management.
+.TP
+.BR layout " (medium)"
+File layout and mirror handling, including FLR.
+.PP
+Since release 2.18.0, the
+.B debug
+mask can be overridden per subsystem with
+.BR debug_subsystem.SUBSYSTEM (4),
+so that, for example,
+.B osc
+can log
+.B iotrace
+independently of
+.BR llite " and " mdc .
+A subsystem whose override is
+.B 0
+inherits
+.B debug
+unchanged; writing
+.B none
+to the override disables all non-mandatory classes for that subsystem only.
+Once an override is nonzero it is a fixed copy, not a live link: a later
+change to
+.B debug
+does not reach that subsystem until its override is set back to
+.BR 0 " or " default .
+.SH EXAMPLES
+Enable RPC and DLM tracing everywhere:
+.EX
+.RB "client# " "lctl set_param debug=+rpctrace+dlmtrace"
+.EE
+.PP
+Reset to the default mask:
+.EX
+.RB "client# " "lctl set_param debug=default"
+.EE
+.PP
+Enable I/O tracing on OSC only, leaving the global mask alone:
+.EX
+.RB "client# " "lctl set_param debug_subsystem.osc=+iotrace"
+.EE
+.PP
+Go back to inheriting the global mask on OSC:
+.EX
+.RB "client# " "lctl set_param debug_subsystem.osc=0"
+.EE
+.SH AVAILABILITY
+.B debug
+is part of the
+.BR lustre (7)
+filesystem package since release 0.7.0,
+.\" commit 0.7.0-0-g96ec6856f9
+but per-subsystem overrides with
+.BR debug_subsystem.SUBSYSTEM (4)
+are only available since release 2.18.0.
+.\" Added in commit 2.17.6x
+.SH SEE ALSO
+.BR debug_mb (4),
+.BR debug_path (4),
+.BR printk (4),
+.BR subsystem_debug (4),
+.BR subsystem_printk (4),
+.BR lctl-clear (8),
+.BR lctl-debug_daemon (8),
+.BR lctl-debug_kernel (8),
+.BR lctl-dk (8),
+.BR lctl-get_param (8),
+.BR lctl-set_param (8)

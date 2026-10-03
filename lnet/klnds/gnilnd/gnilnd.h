@@ -1022,9 +1022,7 @@ _kgnilnd_debug_msg(kgn_msg_t *msg,
 
 #define kgnilnd_debug_msg(msgdata, mask, cdls, msg, fmt, a...)                \
 do {                                                                          \
-	if (((mask) & D_CANTMASK) != 0 ||                                     \
-	    ((libcfs_debug & (mask)) != 0 &&                                  \
-	     (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))                \
+	if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM))                           \
 		_kgnilnd_debug_msg((msg), msgdata, fmt, ##a);                 \
 } while(0)
 
@@ -1066,9 +1064,7 @@ _kgnilnd_debug_conn(kgn_conn_t *conn,
 
 #define kgnilnd_debug_conn(msgdata, mask, cdls, conn, fmt, a...)               \
 do {                                                                           \
-	if (((mask) & D_CANTMASK) != 0 ||                                      \
-	    ((libcfs_debug & (mask)) != 0 &&                                   \
-	     (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))                 \
+	if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM))                            \
 		_kgnilnd_debug_conn((conn), msgdata, fmt, ##a);                \
 } while(0)
 
@@ -1093,9 +1089,7 @@ _kgnilnd_debug_tx(kgn_tx_t *tx,
 
 #define kgnilnd_debug_tx(msgdata, mask, cdls, tx, fmt, a...)                   \
 do {                                                                           \
-	if (((mask) & D_CANTMASK) != 0 ||                                      \
-	    ((libcfs_debug & (mask)) != 0 &&                                   \
-	     (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))                 \
+	if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM))                            \
 		_kgnilnd_debug_tx((tx), msgdata, fmt, ##a);                    \
 } while(0)
 

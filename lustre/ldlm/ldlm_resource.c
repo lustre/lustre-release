@@ -1875,7 +1875,7 @@ void ldlm_dump_all_namespaces(enum ldlm_side client, int level)
 {
 	struct ldlm_namespace *ns;
 
-	if (!((libcfs_debug | D_ERROR) & level))
+	if (!((cfs_debug_mask(DEBUG_SUBSYSTEM) | D_ERROR) & level))
 		return;
 
 	mutex_lock(ldlm_namespace_lock(client));
@@ -1902,7 +1902,7 @@ static int ldlm_res_hash_dump(struct cfs_hash *hs, struct cfs_hash_bd *bd,
 /* Print info about all locks in this namespace on this node to debug log. */
 void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)
 {
-	if (!((libcfs_debug | D_ERROR) & level))
+	if (!((cfs_debug_mask(DEBUG_SUBSYSTEM) | D_ERROR) & level))
 		return;
 
 	CDEBUG(level, "--- Namespace: %s (rc: %d, side: %s)\n",
@@ -1928,7 +1928,7 @@ void ldlm_resource_dump(int level, struct ldlm_resource *res)
 
 	BUILD_BUG_ON(RES_NAME_SIZE != 4);
 
-	if (!((libcfs_debug | D_ERROR) & level))
+	if (!((cfs_debug_mask(DEBUG_SUBSYSTEM) | D_ERROR) & level))
 		return;
 
 	CDEBUG(level, "--- Resource: "DLDLMRES" (%p) refcount = %d\n",

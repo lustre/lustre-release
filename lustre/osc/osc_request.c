@@ -2998,7 +2998,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 	DEBUG_REQ(D_INODE, req, "%d pages, aa %p, now %ur/%uw/%ud in flight",
 		  page_count, aa, cli->cl_r_in_flight, cli->cl_w_in_flight,
 		  cli->cl_d_in_flight);
-	if (libcfs_debug & D_IOTRACE) {
+	if (cfs_debug_mask(DEBUG_SUBSYSTEM) & D_IOTRACE) {
 		struct lu_fid fid;
 
 		fid.f_seq = crattr->cra_oa->o_parent_seq;

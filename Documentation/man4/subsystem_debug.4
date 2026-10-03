@@ -1,0 +1,216 @@
+.TH SUBSYSTEM_DEBUG 4 2026-10-06 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+subsystem_debug \- global mask of Lustre subsystems that may log debug messages
+.SH SYNOPSIS
+.SY
+.B lctl get_param subsystem_debug
+.SY
+.B lctl set_param subsystem_debug=
+.RI { SUBSYSTEM_LIST | HEX_MASK }
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.br
+.BR 644 " | " -rw-r--r--
+.TP
+.B Scope
+.br
+Global
+.TP
+.B Config
+.br
+Always present
+.TP
+.B Default
+.br
+.RB subsystem_debug= -1
+.RB "(all subsystems)"
+.SH DESCRIPTION
+The
+.B subsystem_debug
+parameter filters non-mandatory message classes by code subsystem.
+A
+.BR CDEBUG ()
+call with a non-mandatory class is only kept if its subsystem is set in
+.B subsystem_debug
+.I and
+its class is set in the applicable mask, from
+.BR debug (4)
+or an override in
+.BR debug_subsystem.SUBSYSTEM (4).
+The mandatory classes
+.BR error ,
+.BR warning ,
+.B emerg
+and
+.B console
+are logged regardless of subsystem selection.
+.PP
+.I SUBSYSTEM_LIST
+is a comma, space, or plus-separated list of subsystem names, or a
+.I HEX_MASK
+(hexadecimal or decimal number).
+The value
+.B -1
+(or
+.BR all )
+enables every subsystem;
+.B 0
+disables non-mandatory messages from all subsystems.
+.PP
+The following subsystems are defined:
+.TP
+.B undefined
+Code that logs with
+.BR CDEBUG ()
+but has not set
+.BR DEBUG_SUBSYSTEM .
+Selected by default (bit 0), but has no
+.B debug_subsystem.undefined
+override file, so its messages always follow the global
+.BR debug (4)
+mask.
+.TP
+.B mdc
+Metadata client.
+.TP
+.B mds
+Metadata server.
+.TP
+.B osc
+Object storage client.
+.TP
+.B ost
+Object storage target (server side of OST).
+.TP
+.B class
+The obd_class device/layering framework shared by all Lustre modules.
+.TP
+.B log
+Llog (on-disk and in-memory configuration/changelog) record handling.
+.TP
+.B llite
+Lustre client filesystem (VFS-facing) code.
+.TP
+.B rpc
+PtlRPC request/reply handling that is not specific to one subsystem.
+.TP
+.B mgmt
+Currently has no code setting
+.B DEBUG_SUBSYSTEM
+to this value.
+.TP
+.B lnet
+Lustre Networking core.
+.TP
+.B lnd
+LNet Network Drivers (all transports).
+.TP
+.B pinger
+Currently has no code setting
+.B DEBUG_SUBSYSTEM
+to this value; the client pinger logs under
+.B rpc
+instead.
+.TP
+.B filter
+OST object storage (OFD).
+.TP
+.B libcfs
+Currently has no code setting
+.B DEBUG_SUBSYSTEM
+to this value; the libcfs portability layer logs under
+.B lnet
+instead.
+.TP
+.B echo
+The echo client and server test modules.
+.TP
+.B ldlm
+The Distributed Lock Manager.
+.TP
+.B lov
+Logical Object Volume (client-side striping).
+.TP
+.B lquota
+Lustre quota accounting and enforcement.
+.TP
+.B osd
+Object Storage Device backend (ldiskfs or ZFS).
+.TP
+.B lfsck
+Distributed filesystem consistency check and repair.
+.TP
+.B snapshot
+Filesystem snapshot creation and management.
+.TP
+.B lmv
+Logical Metadata Volume (client-side directory striping).
+.TP
+.B sec
+PtlRPC security (sptlrpc, GSS/Kerberos, SSK) and identity upcall cache.
+.TP
+.B gss
+Currently has no code setting
+.B DEBUG_SUBSYSTEM
+to this value; GSS/Kerberos code logs under
+.B sec
+instead.
+.TP
+.B mgc
+Management client.
+.TP
+.B mgs
+Management server.
+.TP
+.B fid
+File identifier (FID) allocation and sequence management.
+.TP
+.B fld
+FID location database (maps FID sequences to MDTs).
+.PP
+Since release 2.18.0, a subsystem's contribution to
+.B debug
+can be overridden independently with
+.BR debug_subsystem.SUBSYSTEM (4),
+without changing
+.B subsystem_debug
+or the global
+.B debug
+mask.
+.SH EXAMPLES
+Log only LDLM and LLITE subsystems:
+.EX
+.RB "client# " "lctl set_param subsystem_debug=ldlm+llite"
+.EE
+.PP
+Restore the default (all subsystems):
+.EX
+.RB "client# " "lctl set_param subsystem_debug=-1"
+.EE
+.SH AVAILABILITY
+.B subsystem_debug
+is part of the
+.BR lustre (7)
+filesystem package since release 0.7.0,
+.\" commit 0.7.0-0-g96ec6856f9
+but per-subsystem overrides of the
+.BR debug (4)
+mask with
+.BR debug_subsystem.SUBSYSTEM (4)
+are only available since release 2.18.0.
+.\" Added in commit 2.17.6x
+.SH SEE ALSO
+.BR debug (4),
+.BR debug_mb (4),
+.BR debug_path (4),
+.BR debug_subsystem.SUBSYSTEM (4),
+.BR printk (4),
+.BR subsystem_printk (4),
+.BR lctl-clear (8),
+.BR lctl-debug_daemon (8),
+.BR lctl-debug_kernel (8),
+.BR lctl-dk (8),
+.BR lctl-get_param (8),
+.BR lctl-set_param (8)

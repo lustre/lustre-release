@@ -16,6 +16,7 @@
 #ifndef __LIBCFS_DEBUG_H__
 #define __LIBCFS_DEBUG_H__
 
+#include <linux/bitops.h>
 #include <linux/tty.h>
 #include <linux/limits.h>
 #include <uapi/linux/lnet/libcfs_debug.h>
@@ -25,6 +26,8 @@
  */
 extern unsigned int libcfs_subsystem_debug;
 extern unsigned int libcfs_debug;
+extern unsigned int
+	libcfs_subsystem_debug_masks[BITS_PER_TYPE(libcfs_subsystem_debug)];
 extern unsigned int libcfs_subsystem_printk;
 extern unsigned int libcfs_printk;
 extern unsigned int libcfs_watchdog_ratelimit;
@@ -44,7 +47,8 @@ int cfs_mask2str(char *str, int size, u64 mask, const char *(*bit2str)(int),
 		 char sep);
 
 int libcfs_debug_mask2str(char *str, int size, int mask, int is_subsys);
-int libcfs_debug_str2mask(int *mask, const char *str, int is_subsys);
+int libcfs_debug_str2mask(int *mask, const char *str, int is_subsys,
+			  bool is_override);
 
 /* Has there been an LBUG? */
 extern unsigned int libcfs_catastrophe;
@@ -101,6 +105,26 @@ do {									\
 	LIBCFS_DEBUG_MSG_DATA_DECL_LOC(__FILE__, __func__, __LINE__,	\
 				       msgdata, mask, cdls)
 
+/* subsystem may OR together more than one S_* bit, so combine the
+ * override (or the global mask, where a subsystem has none) for each
+ * bit set in it.
+ */
+static inline unsigned int cfs_debug_mask(unsigned int subsystem)
+{
+	unsigned int mask = 0;
+
+	while (subsystem) {
+		unsigned int override;
+		int bit = __builtin_ctz(subsystem);
+
+		override = READ_ONCE(libcfs_subsystem_debug_masks[bit]);
+		mask |= override ?: READ_ONCE(libcfs_debug);
+		subsystem &= subsystem - 1;
+	}
+
+	return mask;
+}
+
 #ifdef CDEBUG_ENABLED
 
 /**
@@ -109,7 +133,8 @@ do {									\
 static inline int cfs_cdebug_show(unsigned int mask, unsigned int subsystem)
 {
 	return mask & D_CANTMASK ||
-	       ((libcfs_debug & mask) && (libcfs_subsystem_debug & subsystem));
+	       ((cfs_debug_mask(subsystem) & mask) &&
+		(libcfs_subsystem_debug & subsystem));
 }
 
 #  define __CDEBUG_WITH_LOC(file, func, line, mask, cdls, format, ...)	\

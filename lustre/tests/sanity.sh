@@ -12292,6 +12292,133 @@ test_60k() {
 }
 run_test 60k "debug messages reach lustre_debug tracepoints"
 
+test_60o() {
+	[[ $PARALLEL != yes ]] || skip "changes global debug masks"
+	$LCTL get_param -n debug_subsystem.llite >/dev/null 2>&1 ||
+		skip "client lacks subsystem debug masks"
+
+	local olddebug=$($LCTL get_param -n debug)
+	local oldsubsys=$($LCTL get_param -n subsystem_debug)
+	local oldllite=$($LCTL get_param -n debug_subsystem.llite)
+	local oldosc=$($LCTL get_param -n debug_subsystem.osc)
+	local oldmdc=$($LCTL get_param -n debug_subsystem.mdc)
+	local log=$TMP/$tfile.debug
+	local mode
+	local llite osc debug subsys
+	local expect_llite expect_osc
+	local before
+
+	stack_trap "$LCTL set_param -n debug='$olddebug' \
+		subsystem_debug='$oldsubsys' debug_subsystem.llite='$oldllite' \
+		debug_subsystem.osc='$oldosc'" EXIT
+	stack_trap "rm -f '$log' '$DIR/$tfile'" EXIT
+	$LFS setstripe -c 1 $DIR/$tfile || error "(0) setstripe failed"
+
+	for mode in llite osc inherit disabled filter override; do
+		llite=0 osc=0 debug=0 subsys=-1
+		expect_llite=0 expect_osc=0
+		case $mode in
+		llite)
+			llite=iotrace expect_llite=1 ;;
+		osc)
+			osc=iotrace expect_osc=1 ;;
+		inherit)
+			debug=iotrace expect_llite=1 expect_osc=1 ;;
+		disabled)
+			;;
+		filter)
+			llite=iotrace osc=iotrace subsys=llite
+			expect_llite=1 ;;
+		override)
+			debug=iotrace llite=error expect_osc=1 ;;
+		esac
+		$LCTL set_param -n debug=$debug subsystem_debug=$subsys \
+			debug_subsystem.llite=$llite debug_subsystem.osc=$osc ||
+			error "(1) cannot set $mode masks"
+		$LCTL clear
+		dd if=/dev/zero of=$DIR/$tfile bs=64k count=1 \
+			oflag=direct conv=notrunc status=none ||
+			error "(2) $mode write failed"
+		$LCTL dk > $log
+		if grep -q "do_file_write_iter.*$tfile" $log; then
+			(( expect_llite )) ||
+				error "(3) unexpected llite trace in $mode"
+		else
+			(( !expect_llite )) ||
+				error "(4) missing llite trace in $mode"
+		fi
+		if grep -q 'osc_build_rpc.*write pages' $log; then
+			(( expect_osc )) ||
+				error "(5) unexpected osc trace in $mode"
+		else
+			(( !expect_osc )) ||
+				error "(6) missing osc trace in $mode"
+		fi
+	done
+
+	[[ $($LCTL get_param -n debug_subsystem.mdc) == "$oldmdc" ]] ||
+		error "(7) unrelated mdc mask changed"
+	before=$($LCTL get_param -n debug_subsystem.llite)
+	$LCTL set_param -n debug_subsystem.llite='inode+invalid_mask' \
+		2>/dev/null && error "(8) invalid mask accepted"
+	[[ $($LCTL get_param -n debug_subsystem.llite) == "$before" ]] ||
+		error "(9) invalid mask changed the override"
+
+	$LCTL set_param -n debug=iotrace debug_subsystem.osc=0 ||
+		error "(10) cannot reset osc mask"
+	$LCTL set_param -n debug_subsystem.osc=+rpctrace ||
+		error "(11) relative osc mask rejected"
+	osc=$($LCTL get_param -n debug_subsystem.osc)
+	[[ $osc =~ iotrace && $osc =~ rpctrace ]] ||
+		error "(12) relative osc mask is '$osc'"
+	$LCTL set_param -n debug_subsystem.osc=0 debug_subsystem.osc=' ' ||
+		error "(13) cannot write blank osc mask"
+	osc=$($LCTL get_param -n debug_subsystem.osc)
+	[[ $osc == 0 ]] || error "(14) blank write set osc mask to '$osc'"
+
+	$LCTL set_param -n debug=0x8 debug_subsystem.osc=0 ||
+		error "(15) cannot set numeric debug or reset osc mask"
+	$LCTL set_param -n debug_subsystem.osc=+iotrace ||
+		error "(16) relative osc mask rejected"
+	$LCTL set_param -n debug_subsystem.osc=-iotrace ||
+		error "(17) relative osc removal rejected"
+	osc=$($LCTL get_param -n debug_subsystem.osc)
+	[[ $osc != 0 ]] ||
+		error "(18) emptied osc mask reverted to inherit"
+
+	$LCTL set_param -n debug_subsystem.osc=iotrace \
+		debug_subsystem.osc=default ||
+		error "(19) cannot reset osc mask to default"
+	osc=$($LCTL get_param -n debug_subsystem.osc)
+	[[ $osc == 0 ]] || error "(20) default set osc mask to '$osc'"
+
+	$LCTL set_param -n debug=iotrace debug_subsystem.osc=,+rpctrace ||
+		error "(21) relative osc mask after separator rejected"
+	osc=$($LCTL get_param -n debug_subsystem.osc)
+	[[ $osc =~ iotrace && $osc =~ rpctrace ]] ||
+		error "(22) separator-led osc mask is '$osc'"
+	$LCTL set_param -n debug_subsystem.osc=0 debug_subsystem.osc=, ||
+		error "(23) cannot write separator-only osc mask"
+	osc=$($LCTL get_param -n debug_subsystem.osc)
+	[[ $osc == 0 ]] ||
+		error "(24) separator-only write set osc mask to '$osc'"
+
+	$LCTL set_param -n debug_subsystem.osc=none ||
+		error "(25) cannot set mandatory osc mask"
+	before=$($LCTL get_param -n debug_subsystem.osc)
+	for mode in iotrace layout; do
+		$LCTL set_param -n debug_subsystem.osc=$mode ||
+			error "(26) cannot set $mode osc mask"
+		osc="-$mode-warning-error-emerg-console"
+		$LCTL set_param -n debug_subsystem.osc="$osc" ||
+			error "(27) cannot clear $mode osc mask"
+		osc=$($LCTL get_param -n debug_subsystem.osc)
+		[[ $osc == "$before" ]] ||
+			error "(28) $mode mask '$osc' != '$before'"
+	done
+}
+run_test 60o "subsystem debug mask overrides and global inheritance"
+
 test_61a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 

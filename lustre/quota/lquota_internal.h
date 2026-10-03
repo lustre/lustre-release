@@ -365,9 +365,7 @@ struct lquota_thread_info *lquota_info(const struct lu_env *env)
 /* debugging macros */
 #ifdef LIBCFS_DEBUG
 #define lquota_lqe_debug(msgdata, mask, cdls, lqe, fmt, a...) do {      \
-	if (((mask) & D_CANTMASK) != 0 ||                               \
-	    ((libcfs_debug & (mask)) != 0 &&                            \
-	     (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))          \
+	if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM))                     \
 		lquota_lqe_debug0(lqe, msgdata, fmt, ##a);              \
 } while (0)
 

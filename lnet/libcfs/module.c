@@ -50,11 +50,16 @@ static int proc_dobitmasks(const struct lnet_debugfs_table *table,
 			   loff_t *ppos)
 {
 	unsigned int *mask = table->data;
+	int value = READ_ONCE(*mask);
 	int is_subsys = (mask == &libcfs_subsystem_debug ||
 			 mask == &libcfs_subsystem_printk) ? 1 : 0;
 	int is_printk = (mask == &libcfs_printk) ? 1 : 0;
+	bool is_override = mask >= libcfs_subsystem_debug_masks &&
+			   mask < libcfs_subsystem_debug_masks +
+				  ARRAY_SIZE(libcfs_subsystem_debug_masks);
 	const int tmpstrlen = 512;
 	char *tmpstr = NULL;
+	char *str, *op;
 	size_t nob = *lenp;
 	loff_t pos = *ppos;
 	int rc;
@@ -63,7 +68,7 @@ static int proc_dobitmasks(const struct lnet_debugfs_table *table,
 		tmpstr = kmalloc(tmpstrlen, GFP_KERNEL | __GFP_ZERO);
 		if (!tmpstr)
 			return -ENOMEM;
-		libcfs_debug_mask2str(tmpstr, tmpstrlen, *mask, is_subsys);
+		libcfs_debug_mask2str(tmpstr, tmpstrlen, value, is_subsys);
 		rc = strlen(tmpstr);
 		rc += scnprintf(tmpstr + rc, tmpstrlen - rc, "\n");
 
@@ -80,10 +85,17 @@ static int proc_dobitmasks(const struct lnet_debugfs_table *table,
 		if (IS_ERR(tmpstr))
 			return PTR_ERR(tmpstr);
 
-		rc = libcfs_debug_str2mask(mask, strim(tmpstr), is_subsys);
+		str = strim(tmpstr);
+		op = str + strspn(str, ", \t\n");
+		/* relative writes to an inheriting override use "debug" */
+		if (is_override && !value && (*op == '+' || *op == '-'))
+			value = READ_ONCE(libcfs_debug);
+		rc = libcfs_debug_str2mask(&value, str, is_subsys, is_override);
 		/* Always print LBUG/LASSERT to console, so keep this mask */
 		if (is_printk)
-			*mask |= D_EMERG;
+			value |= D_EMERG;
+		if (!rc)
+			WRITE_ONCE(*mask, value);
 	}
 
 	kfree(tmpstr);
@@ -519,17 +531,11 @@ static const struct file_operations *lnet_debugfs_fops_select(
 	return &state[2];
 }
 
-void lnet_insert_debugfs(const struct lnet_debugfs_table *table,
-			 struct module *mod, void **statep)
+static void lnet_insert_debugfs_dir(const struct lnet_debugfs_table *table,
+				    struct module *mod, void **statep,
+				    struct dentry *parent)
 {
 	struct file_operations *state = *statep;
-
-	if (!lnet_debugfs_root)
-		lnet_debugfs_root = debugfs_create_dir("lnet", NULL);
-
-	/* Even if we cannot create, just ignore it altogether) */
-	if (IS_ERR_OR_NULL(lnet_debugfs_root))
-		return;
 
 	if (!state) {
 		state = kmalloc(3 * sizeof(*state), GFP_KERNEL);
@@ -549,9 +555,22 @@ void lnet_insert_debugfs(const struct lnet_debugfs_table *table,
 	 */
 	for (; table && table->procname; table++)
 		debugfs_create_file(table->procname, table->mode,
-				    lnet_debugfs_root, (void *)table,
+				    parent, (void *)table,
 				    lnet_debugfs_fops_select(table->mode,
 							     (const struct file_operations *)state));
+}
+
+void lnet_insert_debugfs(const struct lnet_debugfs_table *table,
+			 struct module *mod, void **statep)
+{
+	if (!lnet_debugfs_root)
+		lnet_debugfs_root = debugfs_create_dir("lnet", NULL);
+
+	/* Even if we cannot create, just ignore it altogether) */
+	if (IS_ERR_OR_NULL(lnet_debugfs_root))
+		return;
+
+	lnet_insert_debugfs_dir(table, mod, statep, lnet_debugfs_root);
 }
 EXPORT_SYMBOL_GPL(lnet_insert_debugfs);
 
@@ -610,6 +629,33 @@ cleanup_lock:
 }
 EXPORT_SYMBOL(libcfs_setup);
 
+static void __init lnet_insert_subsys_debugfs(void)
+{
+	static struct lnet_debugfs_table
+		subsys_table[ARRAY_SIZE(libcfs_subsystem_debug_masks) + 1];
+	static const char *const names[] = LIBCFS_DEBUG_SUBSYS_NAMES;
+	struct lnet_debugfs_table *table = subsys_table;
+	struct dentry *dir;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(libcfs_subsystem_debug_masks) && names[i];
+	     i++) {
+		if (!names[i][0] || BIT(i) == S_UNDEFINED)
+			continue;
+		table->procname = names[i];
+		table->data = &libcfs_subsystem_debug_masks[i];
+		table->maxlen = sizeof(int);
+		table->mode = 0644;
+		table->proc_handler = &proc_dobitmasks;
+		table++;
+	}
+
+	dir = debugfs_create_dir("debug_subsystem", lnet_debugfs_root);
+	if (!IS_ERR_OR_NULL(dir))
+		lnet_insert_debugfs_dir(subsys_table, THIS_MODULE,
+					&debugfs_state, dir);
+}
+
 static int __init debug_module_init(void)
 {
 	int rc;
@@ -623,8 +669,10 @@ static int __init debug_module_init(void)
 	}
 
 	lnet_insert_debugfs(lnet_table, THIS_MODULE, &debugfs_state);
-	if (!IS_ERR_OR_NULL(lnet_debugfs_root))
+	if (!IS_ERR_OR_NULL(lnet_debugfs_root)) {
 		lnet_insert_debugfs_links(lnet_debugfs_symlinks);
+		lnet_insert_subsys_debugfs();
+	}
 
 	return 0;
 }
