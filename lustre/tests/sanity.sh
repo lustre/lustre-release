@@ -10586,6 +10586,21 @@ test_56Edb() {
 }
 run_test 56Edb "check lfs find --links for directory striped on multiple MDTs"
 
+test_56Ee()
+{
+	(( CLIENT_VERSION >= $(version_code 2.17.58.40) )) ||
+		skip "Need client >= 2.17.58.40 for llapi_scan_namespace()"
+
+	# any MDT: nothing here depends on which one holds the tree
+	$LFS mkdir -i $((RANDOM % MDSCOUNT)) $DIR/$tdir ||
+		error "mkdir $tdir failed"
+	# -p is a directory that is NOT Lustre: one case scans one, to check
+	# that a record off Lustre carries no field a stat cannot answer
+	llapi_scan_test -d $DIR/$tdir -p $TMP ||
+		error "llapi_scan_test failed"
+}
+run_test 56Ee "llapi namespace scanner API tests"
+
 test_56Ef() {
 	local dir=$DIR/$tdir
 	local dir1=$dir/d1
@@ -21581,21 +21596,6 @@ test_157b()
 		error "noxatrr_file lustre.pin '$noxatrr_file_val' != ''"
 }
 run_test 157b "lustre.pin inheritance on create"
-
-test_157c()
-{
-	(( CLIENT_VERSION >= $(version_code 2.17.58) )) ||
-		skip "Need client >= 2.17.58 for llapi_scan_namespace()"
-
-	# any MDT: nothing here depends on which one holds the tree
-	$LFS mkdir -i $((RANDOM % MDSCOUNT)) $DIR/$tdir ||
-		error "mkdir $tdir failed"
-	# -p is a directory that is NOT Lustre: one case scans one, to check
-	# that a record off Lustre carries no field a stat cannot answer
-	llapi_scan_test -d $DIR/$tdir -p $TMP ||
-		error "llapi_scan_test failed"
-}
-run_test 157c "llapi namespace scanner API tests"
 
 test_160a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
