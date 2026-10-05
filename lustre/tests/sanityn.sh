@@ -6020,6 +6020,34 @@ test_80b() {
 }
 run_test 80b "Accessing directory during migration"
 
+test_80c() {
+	(( MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.17.58.63) )) ||
+		skip "Need MDS version at least 2.17.58.63"
+
+	local pid
+
+	mkdir_on_mdt0 $DIR1/$tdir || error "(0) mkdir failed"
+	echo foo > $DIR1/$tdir/a || error "(1) create failed"
+
+	# hold the migration of 'a' after its lookup, on MDT0000, while
+	# 'a' is renamed into the directory's new stripe on MDT0001
+	#define OBD_FAIL_MIGRATE_LOOKUP_DELAY	0x1804
+	do_facet mds1 $LCTL set_param fail_loc=0x80001804
+	stack_trap "do_facet mds1 $LCTL set_param fail_loc=0"
+	$LFS migrate -m 1 $DIR1/$tdir &
+	pid=$!
+	sleep 2
+	kill -0 $pid || error "(2) migration was not held"
+	mv $DIR2/$tdir/a $DIR2/$tdir/b || error "(3) rename failed"
+	wait $pid
+
+	[[ "$(cat $DIR2/$tdir/b)" == "foo" ]] ||
+		error "(4) migration destroyed the renamed file"
+	rm -rf $DIR1/$tdir || error "(5) rm failed"
+}
+run_test 80c "migrate a file renamed after its lookup"
+
 test_81a() {
 	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
 

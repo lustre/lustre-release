@@ -2420,6 +2420,7 @@ int mdt_reint_migrate(struct mdt_thread_info *info,
 	/* @spobj is the parent stripe of @sobj if @pobj is striped directory,
 	 * if @pobj is migrating too, tpobj is the target parent stripe.
 	 */
+lookup:
 	rc = mdt_migrate_lookup(info, pobj, ma, &rr->rr_name, &spobj, &tpobj,
 				&sobj);
 	if (rc < 0)
@@ -2429,6 +2430,9 @@ int mdt_reint_migrate(struct mdt_thread_info *info,
 	/* parent unchanged, this happens in dir restripe */
 	if (info->mti_spec.sp_migrate_nsonly && spobj == tpobj)
 		GOTO(put_source, rc = -EALREADY);
+
+	if (!S_ISDIR(lu_object_attr(&sobj->mot_obj)))
+		CFS_FAIL_TIMEOUT(OBD_FAIL_MIGRATE_LOOKUP_DELAY, 5);
 
 lock_parent:
 	LASSERT(spobj);
@@ -2457,6 +2461,23 @@ lock_parent:
 				GOTO(unlock_parent, rc);
 		}
 	}
+
+	/* sobj was looked up before the parent locks were taken */
+	rc = mdo_lookup(env, mdt_object_child(spobj), &rr->rr_name,
+			&info->mti_tmp_fid2, &info->mti_spec);
+	if (rc == -ENOENT ||
+	    (!rc && !lu_fid_eq(&info->mti_tmp_fid2, mdt_object_fid(sobj)))) {
+		mdt_object_unlock(info, spobj, lhsp, 1);
+		mdt_object_unlock(info, tpobj, lhtp, 1);
+		mdt_object_put(env, sobj);
+		mdt_object_put(env, spobj);
+		mdt_object_put(env, tpobj);
+		if (lock_retries-- > 0)
+			goto lookup;
+		GOTO(put_parent, rc = -EBUSY);
+	}
+	if (rc)
+		GOTO(unlock_parent, rc);
 
 	/* if inode is not migrated, or is dir, no need to lock links */
 	if (!info->mti_spec.sp_migrate_nsonly &&
