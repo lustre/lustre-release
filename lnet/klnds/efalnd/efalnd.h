@@ -334,13 +334,16 @@ struct kefa_conn {
 	u64 hash_key;
 
 	/* Low frequency fields */
-	struct list_head abort_tx;	/* Only CM iterates this list */
-	struct list_head cleanup_node;	/* node on kefa_ni cleanup list */
 	enum kefa_conn_type type;
 	struct lnet_nid local_nid;
 	struct kefa_peer_ni *peer_ni; /* my peer NI - only valid for small NID*/
 	u64 remote_caps;
 	u64 requests;
+
+	struct list_head abort_tx;	/* Only CM iterates this list */
+	struct list_head cleanup_node;	/* node on kefa_ni cleanup list */
+	enum lnet_msg_hstatus cleanup_hstatus;
+	int cleanup_status;
 };
 
 struct kefa_cm_deamon {
@@ -492,7 +495,8 @@ struct kefa_conn *kefalnd_get_or_init_conn(struct kefa_ni *efa_ni,
 					   enum kefa_conn_type conn_type);
 void kefalnd_handle_conn_establishment(struct kefa_ni *efa_ni,
 				       struct kefa_msg *msg);
-void kefalnd_deactivate_conn(struct kefa_conn *conn);
+void kefalnd_deactivate_conn(struct kefa_conn *conn,
+			     enum lnet_msg_hstatus hstatus, int status);
 void kefalnd_destroy_conn(struct kefa_conn *conn, enum lnet_msg_hstatus hstatus,
 			  int status);
 int kefalnd_cm_daemon(void *arg);

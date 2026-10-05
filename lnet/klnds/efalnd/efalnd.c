@@ -1584,7 +1584,9 @@ kefalnd_tx_complete(struct kefa_ni *efa_ni, struct ib_wc *wc)
 
 		kefalnd_abort_tx(tx, LNET_MSG_STATUS_REMOTE_DROPPED, -ECOMM);
 		if (conn->type == KEFA_CONN_TYPE_INITIATOR)
-			kefalnd_deactivate_conn(conn);
+			kefalnd_deactivate_conn(conn,
+						LNET_MSG_STATUS_REMOTE_DROPPED,
+						-ECOMM);
 	}
 
 	if (atomic_dec_and_test(&tx->ref_cnt))
