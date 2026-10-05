@@ -2148,7 +2148,6 @@ struct attribute *_get_attr_matches(const struct kobj_type *typ,
 {
 	int i;
 
-#ifdef HAVE_KOBJ_TYPE_DEFAULT_GROUPS
 	for (i = 0; typ->default_groups[i]; i++) {
 		int k;
 		struct attribute **attrs;
@@ -2159,12 +2158,7 @@ struct attribute *_get_attr_matches(const struct kobj_type *typ,
 				return (struct attribute *)attrs[k];
 		}
 	}
-#else
-	for (i = 0; typ->default_attrs[i]; i++) {
-		if (is_match(typ->default_attrs[i]->name, key, keylen))
-			return typ->default_attrs[i];
-	}
-#endif
+
 	return NULL;
 }
 
