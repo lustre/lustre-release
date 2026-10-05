@@ -3696,8 +3696,8 @@ void ll_umount_begin(struct super_block *sb)
 
 	ENTRY;
 
-	CDEBUG(D_VFSTRACE, "VFS Op: superblock %p count %d active %d\n", sb,
-	       sb->s_count, atomic_read(&sb->s_active));
+	CDEBUG(D_VFSTRACE, "VFS Op: superblock %p active %d\n", sb,
+	       atomic_read(&sb->s_active));
 
 	obd = class_exp2obd(sbi->ll_md_exp);
 	if (obd == NULL) {
