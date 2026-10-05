@@ -750,6 +750,7 @@ AC_ARG_WITH([kfi],
 			KFICPPFLAGS="-I$with_kfi/include"
 			EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
 			EXTRA_KCFLAGS="$EXTRA_KCFLAGS $KFICPPFLAGS"
+			KBUILD_EXTRA_SYMBOLS_OLD="$KBUILD_EXTRA_SYMBOLS"
 			KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS $with_kfi/Module.symvers"
 			LB_CHECK_COMPILE([if kfabric headers are present], KFI_header,
 			[
@@ -764,6 +765,7 @@ AC_ARG_WITH([kfi],
 			],[
 				AC_MSG_ERROR([cannot compile kfilnd with given KFICPPFLAGS: $KFICPPFLAGS])
 			])
+			KBUILD_EXTRA_SYMBOLS="$KBUILD_EXTRA_SYMBOLS_OLD"
 		],[
 			AC_MSG_ERROR(["$with_kfi/Module.symvers does not exist"])
 		])
