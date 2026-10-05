@@ -29,8 +29,6 @@
 #define inode_init_owner(ns, inode, dir, mode)  \
 	inode_init_owner(inode, dir, mode)
 #define memfs_mknod(ns, dir, dch, mode, rd)	memfs_mknod(dir, dch, mode, rd)
-#define memfs_create_nd(ns, dir, de, mode, ex)	\
-	memfs_create_nd(dir, de, mode, ex)
 #endif /* HAVE_USER_NAMESPCE_ARG */
 
 /*
@@ -350,7 +348,7 @@ static int memfs_mkdir(struct inode *dir, struct dentry *dchild, umode_t mode)
 #endif
 
 static int memfs_create_nd(struct mnt_idmap *map, struct inode *dir,
-			   struct dentry *dentry, umode_t mode, bool want_excl)
+			   struct dentry *dentry, umode_t mode)
 {
 	return memfs_mknod(map, dir, dentry, mode | S_IFREG, 0);
 }

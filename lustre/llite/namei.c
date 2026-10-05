@@ -2132,17 +2132,15 @@ static int ll_mknod(struct mnt_idmap *map, struct inode *dir,
  * Plain create. Intent create is handled in atomic_open.
  */
 static int ll_create_nd(struct mnt_idmap *map, struct inode *dir,
-			struct dentry *dentry, umode_t mode, bool want_excl)
+			struct dentry *dentry, umode_t mode)
 {
 	ktime_t kstart = ktime_get();
 	int rc;
 
 	CFS_FAIL_TIMEOUT(OBD_FAIL_LLITE_CREATE_FILE_PAUSE, cfs_fail_val);
 
-	CDEBUG(D_VFSTRACE,
-	       "VFS Op:name="DNAME", dir="DFID"(%p), flags=%u, excl=%d\n",
-	       encode_fn_dentry(dentry), PFID(ll_inode2fid(dir)),
-	       dir, mode, want_excl);
+	CDEBUG(D_VFSTRACE, "VFS Op:name="DNAME", dir="DFID"(%p), flags=%u\n",
+	       encode_fn_dentry(dentry), PFID(ll_inode2fid(dir)), dir, mode);
 
 	/* Using mknod(2) to create a regular file is designed to not recognize
 	 * volatile file name, so we use ll_mknod() here.
