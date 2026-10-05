@@ -231,7 +231,7 @@ static int mgc_target_register(struct obd_export *exp,
 	}
 
 	rc = ptlrpc_request_pack(req, LUSTRE_MGS_VERSION, MGS_TARGET_REG);
-	if (rc < 0) {
+	if (rc) {
 		ptlrpc_request_free(req);
 		RETURN(rc);
 	}
@@ -367,7 +367,7 @@ static int mgc_nid_notify(struct obd_export *exp,
 	}
 
 	rc = ptlrpc_request_pack(req, LUSTRE_MGS_VERSION, MGS_TARGET_REG);
-	if (rc < 0) {
+	if (rc) {
 		ptlrpc_request_free(req);
 		RETURN(rc);
 	}

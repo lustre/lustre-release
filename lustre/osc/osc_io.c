@@ -969,7 +969,7 @@ static int osc_io_data_version_start(const struct lu_env *env,
 		RETURN(-ENOMEM);
 
 	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_GETATTR);
-	if (rc < 0) {
+	if (rc) {
 		ptlrpc_request_free(req);
 		RETURN(rc);
 	}
@@ -1377,7 +1377,7 @@ int osc_io_lseek_start(const struct lu_env *env,
 		RETURN(-ENOMEM);
 
 	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_SEEK);
-	if (rc < 0) {
+	if (rc) {
 		ptlrpc_request_free(req);
 		RETURN(rc);
 	}

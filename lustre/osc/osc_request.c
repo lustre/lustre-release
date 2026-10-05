@@ -385,7 +385,7 @@ int osc_punch_send(struct obd_export *exp, struct obdo *oa,
 		RETURN(-ENOMEM);
 
 	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_PUNCH);
-	if (rc < 0) {
+	if (rc) {
 		ptlrpc_request_free(req);
 		RETURN(rc);
 	}

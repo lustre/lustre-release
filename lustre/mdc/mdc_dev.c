@@ -1302,7 +1302,7 @@ static int mdc_io_data_version_start(const struct lu_env *env,
 		RETURN(-ENOMEM);
 
 	rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_GETATTR);
-	if (rc < 0) {
+	if (rc) {
 		ptlrpc_request_free(req);
 		RETURN(rc);
 	}
