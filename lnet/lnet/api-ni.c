@@ -5989,6 +5989,59 @@ static int lnet_net_show_done(struct netlink_callback *cb)
 	return 0;
 }
 
+/* Size of the message send by lnet_genl_send_scalar_list().
+ * Length is from genlmsg_len() for the msg created.
+ *
+ * The universal size for all NI key tables is 2720. LND
+ * tunables added more but its device specific. For now
+ * we just add a generic amount which is simple.
+ */
+#define NI_MSG_MIN_SIZE	(2720 + 760)
+
+/* For 'NI' packet it contains
+ *  nid                 LNET_NIDSTR_SIZE
+ *  interface name      IFNAMSIZ
+ *  tunables & health   10x u32 (256 bytes)
+ *  traffic stats       10x u64 (120 bytes)
+ *  nesting headers     19x nests (76 bytes)
+ *  latency stats	(u32 + 3 padded u64) (170 bytes)
+ *  CPTS		516 bytes
+ *  UDSP policies	dynamic padding
+ *			  128 NID-%d 40 bytes each (5120 bytes)
+ * LND tunables		various so use 256 bytes as passing
+ */
+#define NI_MSG_VALUES_SIZE	(LNET_NIDSTR_SIZE + IFNAMSIZ + 256 + 120 + \
+				 76 + 170 + 516 + 5120 + 256)
+
+/* Calculate the sk_buf size needed for our net_id */
+static inline ssize_t lnet_net_size_skb(u32 net_id)
+{
+	u32 prev_type = LNET_NETTYP(LNET_NET_ANY);
+	struct lnet_net *net;
+	struct lnet_ni *ni;
+	ssize_t len = 0;
+
+	lnet_net_lock(0);
+	list_for_each_entry(net, &the_lnet.ln_nets, net_list) {
+		/* scan all nets */
+		if (net_id == LNET_NET_ANY) {
+			/* We send a new key table for every new type of net */
+			if (LNET_NETTYP(net->net_id) != prev_type) {
+				prev_type = LNET_NETTYP(net_id);
+				len += NI_MSG_MIN_SIZE;
+			}
+		} else if (net_id != net->net_id) {
+			continue;
+		}
+
+		list_for_each_entry(ni, &net->net_ni_list, ni_netlist)
+			len += NI_MSG_VALUES_SIZE;
+	}
+	lnet_net_unlock(0);
+
+	return len;
+}
+
 /* LNet net ->start() handler for GET requests */
 static int lnet_net_show_start(struct netlink_callback *cb)
 {
@@ -5998,6 +6051,7 @@ static int lnet_net_show_start(struct netlink_callback *cb)
 	int msg_len = genlmsg_len(gnlh);
 	struct nlattr *params, *top;
 	int rem, rc = 0;
+	ssize_t len;
 
 	if (the_lnet.ln_refcount == 0) {
 		NL_SET_ERR_MSG(extack, "LNet stack down");
@@ -6012,9 +6066,11 @@ static int lnet_net_show_start(struct netlink_callback *cb)
 	nlist->lngl_idx = 0;
 	cb->args[0] = (long)nlist;
 
-	cb->min_dump_alloc = U16_MAX;
-	if (!msg_len)
-		return 0;
+	if (!msg_len) {
+		/* 0@lo always exist so we will get something */
+		cb->min_dump_alloc = lnet_net_size_skb(nlist->lngl_net_id);
+		GOTO(report_err, rc);
+	}
 
 	params = genlmsg_data(gnlh);
 	if (!(nla_type(params) & LN_SCALAR_ATTR_LIST)) {
@@ -6022,7 +6078,10 @@ static int lnet_net_show_start(struct netlink_callback *cb)
 		return -EINVAL;
 	}
 
+	cb->min_dump_alloc = 0;
+
 	nla_for_each_nested(top, params, rem) {
+		u32 prev_type = LNET_NETTYP(LNET_NET_ANY);
 		struct nlattr *net;
 		int rem2;
 
@@ -6050,6 +6109,20 @@ static int lnet_net_show_start(struct netlink_callback *cb)
 			if (nlist->lngl_net_id == LNET_NET_ANY) {
 				NL_SET_ERR_MSG(extack, "cannot parse net");
 				GOTO(report_err, rc = -ENOENT);
+			}
+
+			len = lnet_net_size_skb(nlist->lngl_net_id);
+			if (len == 0) {
+				NL_SET_ERR_MSG(extack, "No interfaces");
+				GOTO(report_err, rc = -ESRCH);
+			} else {
+				cb->min_dump_alloc += len;
+			}
+
+			/* we send new key table if net_type changes */
+			if (LNET_NETTYP(nlist->lngl_net_id) != prev_type) {
+				prev_type = LNET_NETTYP(nlist->lngl_net_id);
+				cb->min_dump_alloc += NI_MSG_MIN_SIZE;
 			}
 		}
 	}

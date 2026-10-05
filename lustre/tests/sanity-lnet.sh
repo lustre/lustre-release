@@ -2086,6 +2086,47 @@ do_import_test() {
 	compare_yaml_files || return $?
 }
 
+test_113() {
+	[[ ${NETTYPE} == tcp* ]] || skip "Need tcp NETTYPE"
+
+	cleanup_lnet || return $?
+
+	local num_nis=140
+	local log_file=$TMP/lnet_net_show_$$.log
+	local i
+
+	reinit_dlc || return $?
+
+	for ((i = 1; i <= $num_nis; i++)); do
+		add_net "${NETTYPE}$i" "${INTERFACES[0]}"
+	done
+
+	local rc=0
+	timeout 60s $LNETCTL net show -v 4 > $log_file || rc=$?
+
+	if (( $rc == 124 )); then
+		rm -f $log_file
+		error "$LNETCTL timed out"
+	elif (( $rc != 0 )); then
+		rm -f $log_file
+		error "$LNETCTL net show failed with rc $rc"
+	fi
+
+	local count=$(grep -c "net type: tcp" $log_file || true)
+	rm -f $log_file
+
+	if (( $count < $num_nis )); then
+		error "Expected $num_nis NIs, but only got $count"
+	fi
+
+	for ((i = 1; i <= $num_nis; i++)); do
+		del_net "${NETTYPE}$i" "${INTERFACES[0]}"
+	done
+
+	cleanup_lnet
+}
+run_test 113 "Test large skb Netlink dump with many LNet nets (LU-20221)"
+
 test_150() {
 	reinit_dlc || return $?
 
