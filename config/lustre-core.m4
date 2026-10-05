@@ -3890,6 +3890,34 @@ AC_DEFUN([LC_HAVE_SECURITY_INODE_LISTSECURITY_PTR_ARGS],[
 ]) # LC_HAVE_SECURITY_INODE_LISTSECURITY_PTR_ARGS
 
 #
+# LC_HAVE_IOPS_CREATE_NO_EXCL
+#
+# Linux commit v7.2-rc1-9-gb2f1e6301efa
+#   Remove excl arg to ->create inode_operation
+#
+AC_DEFUN([LC_SRC_HAVE_IOPS_CREATE_NO_EXCL], [
+	LB2_LINUX_TEST_SRC([iops_create_no_excl], [
+		#include <linux/fs.h>
+	],[
+		struct inode_operations *iop = NULL;
+		struct dentry *dentry = NULL;
+		struct inode *dir = NULL;
+		umode_t mode = 0600;
+		int rc;
+
+		rc = iop->create(&nop_mnt_idmap, dir, dentry, mode);
+		(void)rc;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_IOPS_CREATE_NO_EXCL], [
+	LB2_MSG_LINUX_TEST_RESULT([if inode_operations.create() has no excl arg],
+	[iops_create_no_excl], [
+		AC_DEFINE(HAVE_IOPS_CREATE_NO_EXCL, 1,
+			[inode_operations.create() has no excl arg])
+	])
+]) # LC_HAVE_IOPS_CREATE_NO_EXCL
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -4108,6 +4136,9 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 
 	# 7.2
 	LC_SRC_HAVE_SECURITY_INODE_LISTSECURITY_PTR_ARGS
+
+	# 7.3
+	LC_SRC_HAVE_IOPS_CREATE_NO_EXCL
 ])
 
 AC_DEFUN([LC_PROG_LINUX_RESULTS], [
@@ -4339,6 +4370,9 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 
 	# 7.2
 	LC_HAVE_SECURITY_INODE_LISTSECURITY_PTR_ARGS
+
+	# 7.3
+	LC_HAVE_IOPS_CREATE_NO_EXCL
 ])
 
 #

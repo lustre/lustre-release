@@ -215,7 +215,10 @@ static inline s64 inode_get_ctime_ns(struct inode *inode)
 #define vfs_mkdir(ns, dir, de, mode)		vfs_mkdir(dir, de, mode)
 #define vfs_unlink(ns, dir, de, delegate)	vfs_unlink(dir, de, delegate)
 #define ll_set_acl(ns, inode, acl, type)	ll_set_acl(inode, acl, type)
-#define ll_create_nd(ns, dir, de, mode, ex)	ll_create_nd(dir, de, mode, ex)
+#define ll_create_nd(ns, dir, de, mode)		\
+	ll_create_nd(dir, de, mode, bool excl)
+#define memfs_create_nd(ns, dir, de, mode)	\
+	memfs_create_nd(dir, de, mode, bool excl)
 #define ll_mknod(ns, dir, dch, mode, rd)	ll_mknod(dir, dch, mode, rd)
 #define ll_rename(ns, src, sdc, tgt, tdc, fl)	ll_rename(src, sdc, tgt, tdc, fl)
 #define ll_symlink(nd, dir, dch, old)		ll_symlink(dir, dch, old)
@@ -252,6 +255,14 @@ static inline bool can_mmap_file(struct file *file)
  * a_ops->direct_IO in do_dentry_open() instead.
  */
 #define FMODE_CAN_ODIRECT	0
+#endif
+
+/* Linux commit v7.2-rc1-9-gb2f1e6301efa removed the excl argument */
+#if defined(HAVE_USER_NAMESPACE_ARG) && !defined(HAVE_IOPS_CREATE_NO_EXCL)
+#define ll_create_nd(ns, dir, de, mode)		\
+	ll_create_nd(ns, dir, de, mode, bool excl)
+#define memfs_create_nd(ns, dir, de, mode)	\
+	memfs_create_nd(ns, dir, de, mode, bool excl)
 #endif
 
 #endif /* __LIBCFS_LINUX_CFS_FS_H__ */
