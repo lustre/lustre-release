@@ -768,6 +768,35 @@ out:
 	RETURN(rc);
 }
 
+/*
+ * Requests a banned client is still allowed to send, so that it can connect and
+ * fetch the config (to avoid retries), but then gets -EPERM for anything else.
+ */
+static bool tgt_banned_opc_allowed(struct obd_export *exp, __u32 opc)
+{
+	switch (opc) {
+	case OBD_PING:
+	case OST_CONNECT:
+	case OST_DISCONNECT:
+	case OST_CLOSE:
+	case MDS_CONNECT:
+	case MDS_DISCONNECT:
+	case MDS_CLOSE:
+	case MGS_CONNECT:
+	case MGS_DISCONNECT:
+	case MGS_CONFIG_READ:
+		return true;
+	case LDLM_ENQUEUE:
+	case LLOG_ORIGIN_HANDLE_CREATE:
+	case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:
+	case LLOG_ORIGIN_HANDLE_READ_HEADER:
+		return strcmp(exp->exp_obd->obd_type->typ_name,
+			      LUSTRE_MGS_NAME) == 0;
+	default:
+		return false;
+	}
+}
+
 int tgt_request_handle(struct ptlrpc_request *req)
 {
 	struct tgt_session_info	*tsi = tgt_ses_info(req->rq_svc_thread->t_env);
@@ -830,10 +859,8 @@ int tgt_request_handle(struct ptlrpc_request *req)
 		GOTO(out, rc);
 	}
 
-	if (req->rq_export->exp_banned && opc != OBD_PING &&
-	    opc != OST_CONNECT && opc != OST_DISCONNECT &&
-	    opc != MDS_CONNECT && opc != MDS_DISCONNECT &&
-	    opc != MDS_CLOSE && opc != OST_CLOSE) {
+	if (req->rq_export->exp_banned &&
+	    !tgt_banned_opc_allowed(req->rq_export, opc)) {
 		struct lu_nodemap *nodemap;
 
 		nodemap = nodemap_get_from_exp(req->rq_export);

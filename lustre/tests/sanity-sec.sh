@@ -12138,6 +12138,26 @@ test_79() {
 }
 run_test 79 "ssk for nodemap identification"
 
+banned_mount_should_fail() {
+	local msg=$1
+	local start=$SECONDS
+	local elapsed
+	local out
+
+	out=$(zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS 2>&1) &&
+		error "remount should fail ($msg)"
+	elapsed=$((SECONDS - start))
+	echo "$out"
+	echo "banned mount failed after ${elapsed}s"
+
+	# Newer server code implements faster mount fail for banned client
+	(( MGS_VERSION >= $(version_code 2.17.59) )) || return 0
+	(( elapsed < 30 )) ||
+		error "banned mount took ${elapsed}s to fail ($msg)"
+	grep -q "Operation not permitted" <<< "$out" ||
+		error "banned mount did not fail with EPERM ($msg)"
+}
+
 test_81a() {
 	local client_ip=$(host_nids_address $HOSTNAME $NETTYPE)
 	local client_nid=$(h2nettype $client_ip)
@@ -12293,9 +12313,8 @@ test_81a() {
 
 	# unmount while in ban list: should succeed
 	umount_client $MOUNT || error "umount $MOUNT failed (1)"
-	# remount while in ban list: should fail
-	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS &&
-		error "remount should fail (1)"
+	# remount while in ban list: should fail quickly with EPERM
+	banned_mount_should_fail 1
 
 	# del ban list again
 	do_facet mgs $LCTL nodemap_banlist_del --name $nm --range $client_nid ||
@@ -12349,9 +12368,8 @@ test_81a() {
 	# unmount while in ban list: should succeed
 	umount_client $MOUNT || error "umount $MOUNT failed (2)"
 
-	# remount while in ban list: should fail
-	zconf_mount_clients $HOSTNAME $MOUNT $MOUNT_OPTS &&
-		error "remount should fail (2)"
+	# remount while in ban list: should fail quickly with EPERM
+	banned_mount_should_fail 2
 
 	# del ban list on dynamic nodemap
 	do_facet mds1 $LCTL nodemap_banlist_del --name $dynnm \

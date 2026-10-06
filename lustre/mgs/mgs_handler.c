@@ -700,7 +700,11 @@ static int mgs_config_read(struct tgt_session_info *tsi)
 		rc = mgs_get_ir_logs(req);
 		break;
 	case MGS_CFG_T_NODEMAP:
-		rc = nodemap_get_config_req(req->rq_export->exp_obd, req);
+		if (req->rq_export->exp_banned)
+			rc = -EPERM;
+		else
+			rc = nodemap_get_config_req(req->rq_export->exp_obd,
+						    req);
 		break;
 	case MGS_CFG_T_CONFIG:
 		rc = -EOPNOTSUPP;
