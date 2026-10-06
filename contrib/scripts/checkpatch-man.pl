@@ -422,7 +422,7 @@ sub get_subject_version {
 		print "Doing long search for AVAILABILITY version: $git_log\n";
 	}
 
-	$git_hash = "awk '/^commit /{print \$2}' <<< \"\$($git_log)\" | tail -1";
+	$git_hash = "($git_log) | awk '/^commit /{print \$2}' | tail -1";
 	my $hash = `$git_hash`;
 	$hash =~ s/\n$//;
 	return "'$subject'\tno git commit hash found: $git_log" if (! $hash);
@@ -431,8 +431,8 @@ sub get_subject_version {
 	my $version = `$git_describe`;
 	$version =~ s/\n$//;
 
-	return "'$subject'\t< $version\t- ".`head -c10 <<< $hash`." no match found" if ($version =~ /\~/);
-	return "'$subject'\t  $version\t- ".`head -c10 <<< $hash`;
+	return "'$subject'\t< $version\t- ".substr($hash, 0, 10)." no match found" if ($version =~ /\~/);
+	return "'$subject'\t  $version\t- ".substr($hash, 0, 10);
 }
 
 my @standard_headers;
