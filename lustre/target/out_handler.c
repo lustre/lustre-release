@@ -964,6 +964,17 @@ int out_handle(struct tgt_session_info *tsi)
 
 	ENTRY;
 
+	if (CFS_FAIL_CHECK(OBD_FAIL_OUT_UPDATE_NO_MDS) ||
+	    !(exp_connect_flags(tsi->tsi_exp) &
+	      (OBD_CONNECT_MDS | OBD_CONNECT_MDS_MDS))) {
+		rc = -EPERM;
+		CDEBUG(D_RPCTRACE,
+		       "%s: refused OUT update from non-MDS connection %s: rc = %d\n",
+		       tgt_name(tsi->tsi_tgt), obd_export_nid2str(tsi->tsi_exp),
+		       rc);
+		RETURN(err_serious(rc));
+	}
+
 	req_capsule_set(pill, &RQF_OUT_UPDATE);
 	ouh_size = req_capsule_get_size(pill, &RMF_OUT_UPDATE_HEADER,
 					RCL_CLIENT);

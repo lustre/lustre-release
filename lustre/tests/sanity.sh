@@ -36758,6 +36758,31 @@ test_434() {
 }
 run_test 434 "Client should not send RPCs for security.selinux with SElinux disabled"
 
+test_435() {
+	(( MDSCOUNT >= 2 )) || skip_env "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.17.59.2) )) ||
+		skip "need MDS >= 2.17.59.2 for OUT update filter"
+
+	local remote=$DIR/$tdir/remote
+
+	test_mkdir -i 0 -c 1 $DIR/$tdir
+
+	# handle an OUT update as if it arrived on a client connection
+	stack_trap "do_nodes $(mdts_nodes) $LCTL set_param fail_loc=0"
+#define OBD_FAIL_OUT_UPDATE_NO_MDS	0x170e
+	do_nodes $(mdts_nodes) $LCTL set_param fail_loc=0x170e
+
+	# a remote directory needs a cross-MDT OUT update to its parent
+	$LFS mkdir -i 1 $remote &&
+		error "remote mkdir with OUT filtered should fail"
+
+	# the same operation works once OUT updates are accepted again
+	do_nodes $(mdts_nodes) $LCTL set_param fail_loc=0
+	$LFS mkdir -i 1 $remote ||
+		error "remote mkdir without OUT filtered should succeed"
+}
+run_test 435 "OUT updates are only handled from an MDS"
+
 test_440() {
 	if [[ -f $LUSTRE/scripts/bash-completion/lustre ]]; then
 		source $LUSTRE/scripts/bash-completion/lustre
