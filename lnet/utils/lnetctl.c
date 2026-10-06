@@ -1542,12 +1542,14 @@ static int jt_calc_cpt_of_nid(int argc, char **argv)
 
 	while ((opt = getopt_long(argc, argv, short_options,
 				   long_options, NULL)) != -1) {
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		switch (opt) {
 		case 'h':
+			rc = 0;
 		case '?':
 			print_help(cmd_list, "", "cpt-of-nid");
 		default:
-			return 0;
+			return rc;
 		}
 	}
 
@@ -1586,7 +1588,7 @@ static int jt_config_lnet(int argc, char **argv)
 			flags |= NLM_F_APPEND;
 			break;
 		default:
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
@@ -1973,7 +1975,7 @@ static int jt_add_route(int argc, char **argv)
 		case '?':
 			print_help(route_cmds, "route", "add");
 		default:
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
@@ -2929,7 +2931,7 @@ static int jt_add_ni(int argc, char **argv)
 		case '?':
 			print_help(net_cmds, "net", "add");
 		default:
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
@@ -3056,7 +3058,7 @@ static int jt_del_route(int argc, char **argv)
 		case '?':
 			print_help(route_cmds, "route", "del");
 		default:
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
@@ -3127,7 +3129,7 @@ static int jt_del_ni(int argc, char **argv)
 		case '?':
 			print_help(net_cmds, "net", "del");
 		default:
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
@@ -3217,7 +3219,7 @@ static int jt_show_route(int argc, char **argv)
 		case '?':
 			print_help(route_cmds, "route", "show");
 		default:
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
@@ -4087,7 +4089,7 @@ static int jt_show_recovery(int argc, char **argv)
 			type = LNET_HEALTH_TYPE_PEER_NI;
 			break;
 		default:
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
@@ -4162,7 +4164,7 @@ static int jt_show_peer_debug_info(int argc, char **argv)
 			peer_nid = optarg;
 			break;
 		default:
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
@@ -4312,7 +4314,7 @@ static int jt_show_udsp(int argc, char **argv)
 		case '?':
 			print_help(net_cmds, "net", "show");
 		default:
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
@@ -5861,7 +5863,7 @@ static int jt_import(int argc, char **argv)
 			       " is assumed by default\n");
 			return 0;
 		default:
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
@@ -6167,11 +6169,12 @@ static int jt_export(int argc, char **argv)
 			backup = true;
 			break;
 		case 'h':
-		default:
 			printf("export > FILE.yaml : export configuration\n"
 			       "\t--backup: export only what's necessary for reconfig\n"
 			       "\t--help: display this help\n");
 			return 0;
+		default:
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
@@ -6422,7 +6425,7 @@ static int jt_peer_nid_common(int argc, char **argv, int cmd)
 			print_help(peer_cmds, "peer",
 				   cmd == LNETCTL_ADD_CMD ? "add" : "del");
 		default:
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
@@ -6483,6 +6486,7 @@ static int jt_show_peer(int argc, char **argv)
 
 	while ((opt = getopt_long(argc, argv, short_opts,
 				  long_opts, NULL)) != -1) {
+		rc = LUSTRE_CFG_RC_BAD_PARAM;
 		switch (opt) {
 		case 'n':
 			nid = optarg;
@@ -6494,10 +6498,12 @@ static int jt_show_peer(int argc, char **argv)
 			    parse_long(argv[optind++], &detail))
 				detail = 1;
 			break;
+		case 'h':
+			rc = 0;
 		case '?':
 			print_help(peer_cmds, "peer", "show");
 		default:
-			return 0;
+			return rc;
 		}
 	}
 
@@ -6880,7 +6886,7 @@ static int jt_ping(int argc, char **argv)
 			       "\t --help: display this help\n");
 			return 0;
 		default:
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 	if (rc < 0)
@@ -6942,7 +6948,7 @@ static int jt_discover(int argc, char **argv)
 			       "\t --help: display this help\n");
 			return 0;
 		default:
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
@@ -7027,7 +7033,7 @@ static int jt_add_udsp(int argc, char **argv)
 		case '?':
 			print_help(udsp_cmds, "udsp", "add");
 		default:
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
@@ -7080,7 +7086,7 @@ static int jt_del_udsp(int argc, char **argv)
 		case '?':
 			print_help(udsp_cmds, "udsp", "del");
 		default:
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
@@ -7290,10 +7296,10 @@ static int jt_fault_add(__u32 opc, int argc, char **argv)
 			break;
 		case '?':
 			fprintf(stderr, "Unrecognized option %c\n", opt);
-			break;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		default:
 			fprintf(stderr, "Unrecognized character %c\n", opt);
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
@@ -7401,7 +7407,7 @@ static int jt_fault_del_common(__u32 opc, int argc, char **argv)
 			fa_src = optarg;
 			break;
 		default:
-			return 0;
+			return LUSTRE_CFG_RC_BAD_PARAM;
 		}
 	}
 
