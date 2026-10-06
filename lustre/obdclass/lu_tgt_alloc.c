@@ -144,10 +144,15 @@ EXPORT_SYMBOL(lu_rr_wait_failed);
 #define LU_RR_RESEED_MULT 30
 #define LU_RR_RESEED_MIN  2000
 
-/* targets without a failure domain are grouped by server instead */
+/*
+ * targets without a failure domain are grouped by failover group, or by
+ * server without one
+ */
 static int lu_rr_cmp_group(const struct lu_rr_tgt *a,
 			   const struct lu_rr_tgt *b)
 {
+	if (a->lrrt_inferred != b->lrrt_inferred)
+		return a->lrrt_inferred ? 1 : -1;
 	if (a->lrrt_fdom != b->lrrt_fdom)
 		return a->lrrt_fdom < b->lrrt_fdom ? -1 : 1;
 	if (!a->lrrt_fdom && a->lrrt_svr != b->lrrt_svr)
@@ -338,6 +343,30 @@ static void lu_rr_separate(struct lu_rr_tgt *tgts, unsigned int count,
 }
 
 /**
+ * lu_rr_group_order() - Order of a failover group in the round-robin array
+ * @rank: rank of the group, in the order of its lowest NID
+ * @groups: number of groups
+ *
+ * Reverse the bits of @rank, so that groups with close NIDs, which are
+ * likely in the same network, rack or subnet, are mostly far apart in
+ * the array.
+ *
+ * Return: order of the group, from 0
+ */
+unsigned int lu_rr_group_order(unsigned int rank, unsigned int groups)
+{
+	unsigned int order = 0;
+	unsigned int bits;
+
+	for (bits = 0; bits < 32 && (1U << bits) < groups; bits++)
+		;
+	for (; bits; bits--, rank >>= 1)
+		order = (order << 1) | (rank & 1);
+
+	return order;
+}
+
+/**
  * lu_rr_fdoms_size() - Size of the failure domain state for lu_rr_fill()
  * @count: number of targets in the round-robin array
  *
@@ -388,7 +417,8 @@ static void lu_rr_fdoms_init(struct lu_rr_fdoms *fdoms, struct lu_rr_tgt *tgts,
  * targets in @rr are in different failure domains and on different
  * servers.  Layouts that need their stripes in different failure domains
  * then rarely skip a target.  Targets with no failure domain are grouped
- * by server, which spaces each server's targets evenly across @rr.  If a
+ * by failover group (see ltd_rr_failover_order()), or by server without
+ * one, which spaces each server's targets evenly across @rr.  If a
  * server has targets in several failure domains, only space the targets
  * of each server evenly, so that consecutive targets are still on
  * different servers.
@@ -417,7 +447,7 @@ void lu_rr_fill(struct lu_tgt_pool *rr, struct lu_rr_fdoms *fdoms,
 	sort(tgts, count, sizeof(*tgts), lu_rr_cmp_svr_only, NULL);
 	for (i = 1; i < count; i++)
 		if (tgts[i].lrrt_svr == tgts[i - 1].lrrt_svr &&
-		    tgts[i].lrrt_fdom != tgts[i - 1].lrrt_fdom)
+		    lu_rr_cmp_group(&tgts[i], &tgts[i - 1]))
 			by_fdom = false;
 
 	sort(tgts, count, sizeof(*tgts), lu_rr_cmp_svr, NULL);
@@ -455,9 +485,9 @@ EXPORT_SYMBOL(lu_rr_fill);
  * Layouts that need their stripes in different failure domains skip the
  * slots of domains they already use, so with domains of different sizes
  * they use the targets in some slots more than others.  Use each slot
- * only to pick a failure domain, or a server for targets without one,
- * and take its targets in turn, separately for the first stripes of
- * each stream so they are balanced as well.
+ * only to pick a failure domain, or a failover group or server for
+ * targets without one, and take its targets in turn, separately for the
+ * first stripes of each stream so they are balanced as well.
  *
  * Context: caller holds lq_rw_sem for read.
  *

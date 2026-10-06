@@ -13,6 +13,7 @@
 #include <linux/module.h>
 #include <linux/list.h>
 #include <linux/random.h>
+#include <linux/sort.h>
 
 #include <lustre_compat/linux/mm.h>
 #include <obd_class.h>
@@ -20,6 +21,9 @@
 #include <lustre_disk.h>
 #include <lustre_fid.h>
 #include <lu_object.h>
+#ifdef CONFIG_LUSTRE_FS_SERVER
+#include <lu_tgt_alloc.h>
+#endif
 
 /**
  * lu_prandom_u64_max() - returns pseudo-rand u64 number in interval [0, ep_ro)
@@ -216,6 +220,113 @@ void lu_qos_rr_fini(struct lu_qos_rr *lqr)
 	lqr->lqr_fdoms = NULL;
 }
 EXPORT_SYMBOL(lu_qos_rr_fini);
+
+/* compare NIDs by network, then address */
+static int ltd_nid_cmp(const struct lnet_nid *a, const struct lnet_nid *b)
+{
+	return memcmp(&a->nid_type, &b->nid_type,
+		      sizeof(*a) - offsetof(struct lnet_nid, nid_type));
+}
+
+/* lowest NID of @tgt, the same for all targets that fail over together */
+static void ltd_tgt_failover_nid(struct lu_tgt_desc *tgt,
+				 struct lnet_nid *nid)
+{
+	struct obd_export *exp = tgt->ltd_exp;
+	struct obd_import *imp = exp->exp_obd->u.cli.cl_import;
+	struct obd_import_conn *conn;
+
+	/* sort targets without a connection last, del_conn can clear it */
+	memset(nid, 0xff, sizeof(*nid));
+	if (!imp)
+		return;
+
+	/* the current connection is also on imp_conn_list */
+	spin_lock(&imp->imp_lock);
+	list_for_each_entry(conn, &imp->imp_conn_list, oic_item)
+		if (conn->oic_conn &&
+		    ltd_nid_cmp(&conn->oic_conn->c_peer.nid, nid) < 0)
+			*nid = conn->oic_conn->c_peer.nid;
+	spin_unlock(&imp->imp_lock);
+}
+
+struct ltd_rr_nid {
+	struct lnet_nid	lrn_nid;
+	unsigned int	lrn_idx;
+	__u32		lrn_svr;
+};
+
+static int ltd_rr_nid_cmp(const void *a, const void *b)
+{
+	return ltd_nid_cmp(&((const struct ltd_rr_nid *)a)->lrn_nid,
+			   &((const struct ltd_rr_nid *)b)->lrn_nid);
+}
+
+static int ltd_rr_svr_nid_cmp(const void *pa, const void *pb)
+{
+	const struct ltd_rr_nid *a = pa, *b = pb;
+
+	if (a->lrn_svr != b->lrn_svr)
+		return a->lrn_svr < b->lrn_svr ? -1 : 1;
+	return ltd_nid_cmp(&a->lrn_nid, &b->lrn_nid);
+}
+
+/**
+ * ltd_rr_failover_order() - Order the round-robin array by failover group
+ * @ltd: target table
+ * @tgts: targets to place with lu_rr_fill()
+ * @count: number of targets in @tgts
+ *
+ * Group the targets without a failure domain by failover group, the
+ * targets with the same lowest NID of their primary and failover NIDs, so
+ * that lu_rr_fill() spreads the targets that can fail over together over
+ * the array, and spreads the groups by NID.  The targets of a server are
+ * all put in the group of its lowest NID, since lu_rr_fill() only orders
+ * the array by server if any server is in several groups.  This assumes
+ * that every target of a group lists the same failover NIDs, as for HA
+ * pairs.  It only orders the array, and does not limit where the stripes
+ * of a layout go.
+ *
+ * Context: caller holds lq_rw_sem for write.
+ */
+void ltd_rr_failover_order(struct lu_tgt_descs *ltd, struct lu_rr_tgt *tgts,
+			   unsigned int count)
+{
+	unsigned int groups, rank, unset, i;
+	struct ltd_rr_nid *nids;
+
+	OBD_ALLOC_PTR_ARRAY_LARGE(nids, count);
+	if (!nids)
+		return;
+
+	for (unset = 0, i = 0; i < count; i++) {
+		if (tgts[i].lrrt_fdom)
+			continue;
+		ltd_tgt_failover_nid(LTD_TGT(ltd, tgts[i].lrrt_idx),
+				     &nids[unset].lrn_nid);
+		nids[unset].lrn_svr = tgts[i].lrrt_svr;
+		nids[unset++].lrn_idx = i;
+	}
+	/* e.g. if one target of a server has a different failover NID */
+	sort(nids, unset, sizeof(*nids), ltd_rr_svr_nid_cmp, NULL);
+	for (i = 1; i < unset; i++)
+		if (nids[i].lrn_svr == nids[i - 1].lrn_svr)
+			nids[i].lrn_nid = nids[i - 1].lrn_nid;
+	sort(nids, unset, sizeof(*nids), ltd_rr_nid_cmp, NULL);
+
+	for (groups = 1, i = 1; i < unset; i++)
+		if (ltd_nid_cmp(&nids[i - 1].lrn_nid, &nids[i].lrn_nid))
+			groups++;
+	for (rank = 0, i = 0; i < unset; i++) {
+		if (i && ltd_nid_cmp(&nids[i - 1].lrn_nid, &nids[i].lrn_nid))
+			rank++;
+		tgts[nids[i].lrn_idx].lrrt_fdom =
+			lu_rr_group_order(rank, groups) + 1;
+		tgts[nids[i].lrn_idx].lrrt_inferred = true;
+	}
+	OBD_FREE_PTR_ARRAY_LARGE(nids, count);
+}
+EXPORT_SYMBOL(ltd_rr_failover_order);
 #endif /* CONFIG_LUSTRE_FS_SERVER */
 
 /**

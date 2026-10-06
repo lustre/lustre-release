@@ -135,7 +135,9 @@ static bool verbose;
 static unsigned int unusable;
 static unsigned int unbalanced_first;
 static bool fdom_unset_first;
+static bool fdom_unset_odd;
 static bool fdom_by_ost;
+static bool failover_pairs;
 static bool big_gen;
 static int pattern[MAX_PATTERN];
 static unsigned int npattern;
@@ -156,6 +158,7 @@ struct rr_test {
 	unsigned int	oss_of[MAX_OSTS];
 	unsigned int	mirror_same_oss;
 	unsigned int	adjacent_same_oss;
+	unsigned int	adjacent_same_pair;
 	bool		no_first;
 };
 
@@ -186,10 +189,20 @@ static void rr_fill(struct lu_tgt_pool *rr, struct lu_rr_fdoms *fdoms,
 		/* like enclosures shared by the OSSs of an HA pair */
 		if (rt->fdom_count && fdom_by_ost)
 			rt->fdom[i] = 2 * (1 + i % rt->fdom_count);
+		/* OSSs with OSTs both with and without a failure domain */
+		if (fdom_unset_odd && i % 2)
+			rt->fdom[i] = 0;
 		tgts[i].lrrt_idx = i;
 		tgts[i].lrrt_svr = oss;
 		rt->oss_of[i] = oss;
 		tgts[i].lrrt_fdom = rt->fdom[i];
+		tgts[i].lrrt_inferred = false;
+		/* OSSs in HA pairs, ordered as ltd_rr_failover_order() */
+		if (failover_pairs && !rt->fdom[i]) {
+			tgts[i].lrrt_fdom = 1 + lu_rr_group_order(oss / 2,
+						(rt->oss_count + 1) / 2);
+			tgts[i].lrrt_inferred = true;
+		}
 	}
 
 	rr->op_count = rt->ost_count;
@@ -208,6 +221,12 @@ static void rr_fill(struct lu_tgt_pool *rr, struct lu_rr_fdoms *fdoms,
 		    (max * rt->oss_count == rt->ost_count ||
 		     (!rt->fdom_count && max * 2 <= rt->ost_count)))
 			rt->adjacent_same_oss++;
+		/* and with equal HA pairs, on different pairs */
+		if (failover_pairs && !rt->fdom_count && !big_gen &&
+		    rt->ost_count % rt->oss_count == 0 &&
+		    rt->oss_count % 2 == 0 && rt->oss_count > 2 &&
+		    a / 2 == b / 2)
+			rt->adjacent_same_pair++;
 	}
 }
 
@@ -382,6 +401,11 @@ static int rr_check(struct rr_test *rt, bool check_first)
 		       rt->adjacent_same_oss);
 		rc = -EDOM;
 	}
+	if (rt->adjacent_same_pair) {
+		printf("ost=%u oss=%u: %u consecutive OSTs on one HA pair\n",
+		       rt->ost_count, rt->oss_count, rt->adjacent_same_pair);
+		rc = -EDOM;
+	}
 	if (rt->mirror_same_oss) {
 		printf("ost=%u oss=%u stripes=%u: %u files have both mirrors on one OSS\n",
 		       rt->ost_count, rt->oss_count, rt->stripes,
@@ -532,14 +556,15 @@ static void print_usage(void)
 {
 	printf("usage: %s [-f] [-v] [-C MULT] [-c STRIPES[-MAX]] [-d FDS[-MAX]]\n"
 	       "\t\t[-m MDTS] [-n PER_OST] [-o OSTS[-MAX]] [-P STRIPES,...]\n"
-	       "\t\t[-B] [-D] [-e PARITY] [-M] [-r SEED] [-s OSSS[-MAX]] [-u]\n"
-	       "\t\t[-x UNUSABLE]\n"
+	       "\t\t[-B] [-D] [-e PARITY] [-F] [-M] [-r SEED] [-s OSSS[-MAX]]\n"
+	       "\t\t[-U] [-u] [-x UNUSABLE]\n"
 	       "\t-B: two OSS generations, the first half with twice the OSTs\n"
 	       "\t-C: overstripe up to MULT stripes per OST (default 1)\n"
 	       "\t-c: stripe counts to test (default 1-OSTS)\n"
 	       "\t-D: assign failure domains by OST index, not by OSS\n"
 	       "\t-d: failure domain counts to test (default none)\n"
 	       "\t-e: allocate PARITY more stripes after each layout, like EC\n"
+	       "\t-F: group OSSs without a domain by HA pair failover group\n"
 	       "\t-f: fail if first (#0) objects are unbalanced\n"
 	       "\t-M: allocate two mirrors of each layout\n"
 	       "\t-m: MDTs allocating layouts independently (default 1)\n"
@@ -548,6 +573,7 @@ static void print_usage(void)
 	       "\t-P: stripe counts of each layout's components, -1 all OSTs\n"
 	       "\t-r: random seed (default 1)\n"
 	       "\t-s: OSS counts to test (default 1-4)\n"
+	       "\t-U: leave every other OST without a failure domain\n"
 	       "\t-u: leave the first OSS without a failure domain\n"
 	       "\t-v: print object counts for every OST\n"
 	       "\t-x: number of unusable OSTs (default 0)\n", progname);
@@ -614,7 +640,7 @@ int main(int argc, char **argv)
 	progname = argv[0];
 	srandom(1);
 	while ((c = getopt(argc, argv,
-			   "BC:c:Dd:e:fhMm:n:o:P:r:s:uvx:")) != -1) {
+			   "BC:c:Dd:e:FfhMm:n:o:P:r:s:Uuvx:")) != -1) {
 		switch (c) {
 		case 'B':
 			big_gen = true;
@@ -640,6 +666,9 @@ int main(int argc, char **argv)
 			break;
 		case 'e':
 			parity = strtoul(optarg, NULL, 0);
+			break;
+		case 'F':
+			failover_pairs = true;
 			break;
 		case 'f':
 			check_first = true;
@@ -685,6 +714,9 @@ int main(int argc, char **argv)
 			break;
 		case 'u':
 			fdom_unset_first = true;
+			break;
+		case 'U':
+			fdom_unset_odd = true;
 			break;
 		case 'v':
 			verbose = true;

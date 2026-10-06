@@ -7786,6 +7786,15 @@ test_51g() {
 	# EC parity in different failure domains from the data stripes
 	lod_rr_test -f -o 4-32 -s 2-8 -d 2-8 -e 2 ||
 		error "lod_rr_test -d -e 2 failed"
+	# OSSs in HA pairs spread over the array without failure domains
+	lod_rr_test -f -o 4-64 -s 2-16 -c 1-4 -F ||
+		error "lod_rr_test -F failed"
+	# and HA pairs of the OSSs without one, with some failure domains
+	lod_rr_test -f -o 3-64 -s 2-8 -d 1-8 -u -F ||
+		error "lod_rr_test -d -u -F failed"
+	# and OSSs with OSTs both with and without a failure domain
+	lod_rr_test -f -o 4-64 -s 2-16 -d 1-8 -U -F -c 1 ||
+		error "lod_rr_test -U -F failed"
 }
 run_test 51g "check LOD round-robin allocation in userspace"
 

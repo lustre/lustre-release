@@ -26,15 +26,16 @@ struct lu_tgt_pool;
 struct lu_rr_tgt {
 	__u32	lrrt_idx;	/* target index */
 	__u32	lrrt_svr;	/* server id, lsq_id */
-	__u32	lrrt_fdom;	/* failure domain, 0 if not set */
+	__u32	lrrt_fdom;	/* domain, or failover group order + 1, or 0 */
 	__u32	lrrt_pos;	/* position within its server or group */
 	__u32	lrrt_count;	/* number of targets in its server or group */
 	__u32	lrrt_rank;	/* rank among servers or groups of its count */
 	__u32	lrrt_ranks;	/* number of servers or groups of its count */
 	__u32	lrrt_seg;	/* index in lrfs_fdom */
+	bool	lrrt_inferred;	/* lrrt_fdom is a failover group order */
 };
 
-/* round-robin state of one failure domain, or server without one */
+/* round-robin state of a failure domain, or failover group or server */
 struct lu_rr_fdom {
 	__u32		lrf_first;	/* first target in lrfs_tgts */
 	__u32		lrf_count;	/* number of targets in the domain */
@@ -56,6 +57,7 @@ void lu_rr_wait_failed(struct lu_qos_rr *lqr, int active_gen, time64_t now,
 		       time64_t maxage);
 
 size_t lu_rr_fdoms_size(unsigned int count);
+unsigned int lu_rr_group_order(unsigned int rank, unsigned int groups);
 void lu_rr_fill(struct lu_tgt_pool *rr, struct lu_rr_fdoms *fdoms,
 		struct lu_rr_tgt *tgts, unsigned int count);
 __u32 lu_rr_fdom_tgt(struct lu_rr_fdoms *fdoms, unsigned int slot,

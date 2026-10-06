@@ -397,6 +397,9 @@ place:
 	/* without it, failure domains are only balanced for equal sizes */
 	if (fdoms_size)
 		OBD_ALLOC_LARGE(fdoms, fdoms_size);
+	/* spread the failover groups of targets without a domain */
+	if (placed > 1)
+		ltd_rr_failover_order(ltd, tgts, placed);
 	lu_rr_fill(&lqr->lqr_pool, fdoms, tgts, placed);
 	lqr->lqr_pool.op_count = placed;
 

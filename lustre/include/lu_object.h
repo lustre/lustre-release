@@ -1729,6 +1729,11 @@ void lu_tgt_descs_fini(struct lu_tgt_descs *ltd);
 int ltd_add_tgt(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt);
 void ltd_del_tgt(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt);
 int ltd_qos_penalties_calc(struct lu_tgt_descs *ltd);
+#ifdef CONFIG_LUSTRE_FS_SERVER
+struct lu_rr_tgt;
+void ltd_rr_failover_order(struct lu_tgt_descs *ltd, struct lu_rr_tgt *tgts,
+			   unsigned int count);
+#endif
 int ltd_qos_update(struct lu_tgt_descs *ltd, struct lu_tgt_desc *tgt,
 		   __u64 *total_wt);
 
