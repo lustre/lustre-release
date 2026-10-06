@@ -16,7 +16,7 @@
 #include <llog_swab.h>
 #include <obd_class.h>
 
-void lustre_swab_object_update(struct object_update *ou)
+static void lustre_swab_object_update(struct object_update *ou)
 {
 	struct object_update_param *param;
 	size_t	i;

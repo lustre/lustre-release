@@ -182,7 +182,7 @@ out_unlock:
 
 	CDEBUG(D_INFO, "%s: insert attr get reply %p index %d: rc = %d\n",
 	       tgt_name(tsi->tsi_tgt), tti->tti_u.update.tti_update_reply,
-	       0, rc);
+	       idx, rc);
 
 	object_update_result_insert(tti->tti_u.update.tti_update_reply, obdo,
 				    sizeof(*obdo), idx, rc);
@@ -271,7 +271,7 @@ static int out_xattr_list(struct tgt_session_info *tsi)
 		RETURN(-ENOENT);
 	}
 
-	update_result = object_update_result_get(reply, 0, NULL);
+	update_result = object_update_result_get(reply, idx, NULL);
 	if (!update_result) {
 		rc = -EPROTO;
 		CERROR("%s: empty buf for xattr list: rc = %d\n",
@@ -311,6 +311,7 @@ static int out_index_lookup(struct tgt_session_info *tsi)
 	struct tgt_thread_info *tti = tgt_th_info(env);
 	struct object_update *update = tti->tti_u.update.tti_update;
 	struct dt_object *obj = tti->tti_u.update.tti_dt_object;
+	int idx = tti->tti_u.update.tti_update_reply_index;
 	char *name;
 	int rc;
 
@@ -351,11 +352,11 @@ out_unlock:
 
 	CDEBUG(D_INFO, "%s: insert lookup reply %p index %d: rc = %d\n",
 	       tgt_name(tsi->tsi_tgt), tti->tti_u.update.tti_update_reply,
-	       0, rc);
+	       idx, rc);
 
 	object_update_result_insert(tti->tti_u.update.tti_update_reply,
-			    &tti->tti_fid1, sizeof(tti->tti_fid1),
-			    tti->tti_u.update.tti_update_reply_index, rc);
+				    &tti->tti_fid1, sizeof(tti->tti_fid1),
+				    idx, rc);
 	RETURN(rc);
 }
 
@@ -1058,8 +1059,6 @@ int out_handle(struct tgt_session_info *tsi)
 			update = object_update_request_get(our, j, NULL);
 			if (update == NULL)
 				GOTO(out, rc = err_serious(-EPROTO));
-			if (req_capsule_req_need_swab(pill))
-				lustre_swab_object_update(update);
 
 			if (!fid_is_sane(&update->ou_fid)) {
 				CERROR("%s: invalid FID "DFID": rc = %d\n",

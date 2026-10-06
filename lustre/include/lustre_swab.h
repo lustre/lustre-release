@@ -42,12 +42,10 @@ void lustre_swab_orphan_ent_v2(struct lu_orphan_ent_v2 *ent);
 void lustre_swab_orphan_ent_v3(struct lu_orphan_ent_v3 *ent);
 void lustre_swab_gl_lquota_desc(struct ldlm_gl_lquota_desc *desc);
 void lustre_swab_gl_barrier_desc(struct ldlm_gl_barrier_desc *desc);
-void lustre_swab_object_update(struct object_update *ou);
 int lustre_swab_object_update_request(struct object_update_request *our,
 				      __u32 len);
 void lustre_swab_out_update_header(struct out_update_header *ouh);
 void lustre_swab_out_update_buffer(struct out_update_buffer *oub);
-void lustre_swab_object_update_result(struct object_update_result *our);
 int lustre_swab_object_update_reply(struct object_update_reply *our, __u32 len);
 #endif /* CONFIG_LUSTRE_FS_SERVER */
 void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
