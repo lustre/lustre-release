@@ -921,6 +921,152 @@ stop:
 }
 
 /**
+ * tgt_update_bufs_get() - get the update buffers of an OUT or batch request
+ * @req: OUT_UPDATE or MDS_BATCH request
+ * @field: request field with a struct out_update_buffer (or the identical
+ *	   struct but_update_buffer) for each bulk buffer
+ * @count: number of update buffers, from the request header
+ * @inline_data: update buffer packed inline in the request header
+ * @inline_len: length of @inline_data, or 0 if the buffers come by bulk
+ * @inline_max: room for @inline_data in the request header buffer
+ * @min_len: smallest valid update buffer
+ * @max_total: largest valid total length of the bulk buffers
+ * @tub: [out] the update buffers, released by tgt_update_bufs_put()
+ *
+ * The count and lengths are sent by the client, so check them against the
+ * request before using them, then fetch the buffers by bulk unless the
+ * only buffer is packed inline.
+ *
+ * Context: process context, sleeps for the bulk transfer.
+ * Return:
+ * * %0 - success
+ * * %-EPROTO - the count or a length is not valid
+ * * %-ENOMEM - out of memory
+ * * negative errno - the bulk transfer failed
+ */
+int tgt_update_bufs_get(struct ptlrpc_request *req,
+			const struct req_msg_field *field, __u32 count,
+			void *inline_data, __u32 inline_len, __u32 inline_max,
+			__u32 min_len, __u32 max_total,
+			struct tgt_update_bufs *tub)
+{
+	struct ptlrpc_bulk_desc *desc = NULL;
+	struct out_update_buffer *oub = NULL;
+	unsigned int page_count = 0;
+	__u64 total = 0;
+	__u32 i;
+	int rc;
+
+	ENTRY;
+
+	BUILD_BUG_ON(sizeof(struct but_update_buffer) != sizeof(*oub));
+	BUILD_BUG_ON(offsetof(struct but_update_buffer, bub_size) !=
+		     offsetof(struct out_update_buffer, oub_size));
+
+	memset(tub, 0, sizeof(*tub));
+	if (count == 0 || (inline_len > 0 &&
+	    (count != 1 || inline_len < min_len || inline_len > inline_max)))
+		GOTO(bad, rc = -EPROTO);
+
+	if (inline_len == 0) {
+		if (req_capsule_get_size(&req->rq_pill, field, RCL_CLIENT) <
+		    count * sizeof(*oub))
+			GOTO(bad, rc = -EPROTO);
+
+		oub = req_capsule_client_get(&req->rq_pill, field);
+		if (!oub)
+			GOTO(bad, rc = -EPROTO);
+
+		for (i = 0; i < count; i++) {
+			if (oub[i].oub_size < min_len ||
+			    oub[i].oub_size >= OUT_MAXREQSIZE) {
+				DEBUG_REQ(D_ERROR, req,
+					  "bad update buffer %u/%u length %u: rc = %d",
+					  i, count, oub[i].oub_size, -EPROTO);
+				RETURN(-EPROTO);
+			}
+
+			total += oub[i].oub_size;
+			/* First *and* last might be partial pages, hence +1 */
+			page_count += DIV_ROUND_UP(oub[i].oub_size,
+						   PAGE_SIZE) + 1;
+		}
+		/* the bulk vector must fit one transfer, which target_bulk_io()
+		 * asserts; an honest sender stays well under this
+		 */
+		if (total > max_total || page_count > PTLRPC_MAX_BRW_PAGES)
+			GOTO(bad, rc = -EPROTO);
+
+		desc = ptlrpc_prep_bulk_exp(req, page_count,
+					    PTLRPC_BULK_OPS_COUNT,
+					    PTLRPC_BULK_GET_SINK,
+					    MDS_BULK_PORTAL,
+					    &ptlrpc_bulk_kiov_nopin_ops);
+		if (!desc)
+			RETURN(-ENOMEM);
+	}
+
+	tub->tub_count = count;
+	OBD_ALLOC_PTR_ARRAY_LARGE(tub->tub_bufs, count);
+	OBD_ALLOC_PTR_ARRAY_LARGE(tub->tub_lens, count);
+	if (!tub->tub_bufs || !tub->tub_lens)
+		GOTO(out, rc = -ENOMEM);
+
+	if (!desc) {
+		tub->tub_bufs[0] = inline_data;
+		tub->tub_lens[0] = inline_len;
+		RETURN(0);
+	}
+
+	tub->tub_bulk = true;
+	for (i = 0; i < count; i++) {
+		OBD_ALLOC_LARGE(tub->tub_bufs[i], oub[i].oub_size);
+		if (!tub->tub_bufs[i])
+			GOTO(out, rc = -ENOMEM);
+
+		tub->tub_lens[i] = oub[i].oub_size;
+		desc->bd_frag_ops->add_iov_frag(desc, tub->tub_bufs[i],
+						tub->tub_lens[i]);
+	}
+
+	req->rq_bulk_write = 1;
+	rc = sptlrpc_svc_prep_bulk(req, desc);
+	if (!rc)
+		rc = target_bulk_io(req->rq_export, desc);
+out:
+	ptlrpc_free_bulk(desc);
+	if (rc < 0)
+		tgt_update_bufs_put(tub);
+
+	RETURN(rc < 0 ? rc : 0);
+bad:
+	DEBUG_REQ(D_ERROR, req,
+		  "bad update buffers: count %u, inline length %u/%u, total %llu: rc = %d",
+		  count, inline_len, inline_max, total, rc);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(tgt_update_bufs_get);
+
+/**
+ * tgt_update_bufs_put() - release the buffers from tgt_update_bufs_get()
+ * @tub: the update buffers
+ */
+void tgt_update_bufs_put(struct tgt_update_bufs *tub)
+{
+	__u32 i;
+
+	if (tub->tub_bufs && tub->tub_bulk)
+		for (i = 0; i < tub->tub_count; i++)
+			OBD_FREE_LARGE(tub->tub_bufs[i], tub->tub_lens[i]);
+
+	OBD_FREE_PTR_ARRAY_LARGE(tub->tub_bufs, tub->tub_count);
+	OBD_FREE_PTR_ARRAY_LARGE(tub->tub_lens, tub->tub_count);
+	/* stay idempotent: mdt_batch() also puts after a failed get() */
+	memset(tub, 0, sizeof(*tub));
+}
+EXPORT_SYMBOL(tgt_update_bufs_put);
+
+/**
  * out_handle() - Object updates between Targets.
  * @tsi: session related info
  *

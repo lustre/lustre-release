@@ -109,6 +109,7 @@ void lustre_swab_hsm_user_item(struct hsm_user_item *hui);
 void lustre_swab_hsm_request(struct hsm_request *hr);
 void lustre_swab_but_update_header(struct but_update_header *buh);
 void lustre_swab_but_update_buffer(struct but_update_buffer *bub);
+void lustre_swab_batch_update_request(struct batch_update_request *bur);
 void lustre_swab_batch_update_reply(struct batch_update_reply *bur);
 int lustre_swab_swap_layouts(struct mdc_swap_layouts *msl, __u32 size);
 void lustre_swab_close_data(struct close_data *data);

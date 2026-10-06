@@ -626,6 +626,28 @@ void tgt_fmd_drop(struct obd_export *exp, const struct lu_fid *fid);
 #define tgt_fmd_drop(exp, fid) do {} while (0)
 #endif
 
+/* target/out_handler.c */
+/**
+ * struct tgt_update_bufs - update buffers of an OUT_UPDATE or MDS_BATCH RPC
+ * @tub_bufs: the buffers, inline in the request or fetched by bulk
+ * @tub_lens: length of each buffer
+ * @tub_count: number of buffers
+ * @tub_bulk: @tub_bufs were allocated for the bulk transfer
+ */
+struct tgt_update_bufs {
+	void	**tub_bufs;
+	__u32	 *tub_lens;
+	__u32	  tub_count;
+	bool	  tub_bulk;
+};
+
+int tgt_update_bufs_get(struct ptlrpc_request *req,
+			const struct req_msg_field *field, __u32 count,
+			void *inline_data, __u32 inline_len, __u32 inline_max,
+			__u32 min_len, __u32 max_total,
+			struct tgt_update_bufs *tub);
+void tgt_update_bufs_put(struct tgt_update_bufs *tub);
+
 /* target/update_trans.c */
 int distribute_txn_init(const struct lu_env *env,
 			struct lu_target *lut,

@@ -725,6 +725,8 @@ extern bool obd_enable_fname_encoding;
 #define OBD_FAIL_OUT_UPDATE_DROP        0x1707
 #define OBD_FAIL_OUT_OBJECT_MISS	0x1708
 #define OBD_FAIL_OUT_EIO		0x1709
+/* 0x171e is out of sequence on purpose, see commit message */
+#define OBD_FAIL_BUT_CORRUPT_REQ	0x171e
 #define OBD_FAIL_BUT_UPDATE_NET_REP	0x170a
 #define OBD_FAIL_OUT_DROP_DESTROY	0x170b
 #define OBD_FAIL_OUT_DROP_PROJID_SET	0x170c

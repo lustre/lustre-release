@@ -105,6 +105,26 @@ static int batch_prep_inline_update_req(struct batch_update_head *head,
 	RETURN(rc);
 }
 
+/*
+ * Flip a random bit near the start of a packed batch request, where the
+ * counts, lengths and magic that the server trusts live (the
+ * but_update_header, and when packed inline the first sub request header
+ * too), to check the server validates a malformed MDS_BATCH instead of
+ * trusting it (see sanity test_123ba).  Driven by OBD_FAIL_BUT_CORRUPT_REQ,
+ * usually with CFS_FAIL_RAND so only some requests are hit and statahead
+ * keeps running.
+ */
+static void batch_update_req_corrupt(struct ptlrpc_request *req)
+{
+	char *data = req_capsule_client_get(&req->rq_pill, &RMF_BUT_HEADER);
+	int len = req_capsule_get_size(&req->rq_pill, &RMF_BUT_HEADER,
+				       RCL_CLIENT);
+
+	len = min_t(int, len, 64);
+	if (len > 0)
+		data[get_random_u32_below(len)] ^= 1 << get_random_u32_below(8);
+}
+
 static int batch_prep_update_req(struct batch_update_head *head,
 				 struct ptlrpc_request **reqp)
 {
@@ -194,6 +214,8 @@ static int batch_prep_update_req(struct batch_update_head *head,
 out_req:
 	if (rc < 0)
 		ptlrpc_req_put(req);
+	else if (CFS_FAIL_CHECK(OBD_FAIL_BUT_CORRUPT_REQ))
+		batch_update_req_corrupt(req);
 
 	RETURN(rc);
 }
@@ -329,13 +351,19 @@ static int batch_update_request_fini(struct batch_update_head *head,
 {
 	struct object_update_callback *ouc, *next;
 	struct lustre_msg *repmsg = NULL;
+	bool swabbed = false;
+	__u32 replen = 0;
 	int count = 0;
 	int index = 0;
 
 	ENTRY;
 
-	if (reply)
+	if (reply) {
 		count = reply->burp_count;
+		replen = req_capsule_get_size(&req->rq_pill, &RMF_BUT_REPLY,
+					      RCL_SERVER) - sizeof(*reply);
+		swabbed = req_capsule_rep_need_swab(&req->rq_pill);
+	}
 
 	list_for_each_entry_safe(ouc, next, &head->buh_cb_list, ouc_item) {
 		int rc1 = 0;
@@ -347,10 +375,15 @@ static int batch_update_request_fini(struct batch_update_head *head,
 		 */
 		if (index < count) {
 			repmsg = batch_update_repmsg_next(reply, repmsg);
-			if (repmsg == NULL)
-				rc1 = -EPROTO;
-			else
+			rc1 = lustre_unpack_sub_msg(repmsg, replen, swabbed);
+			if (rc1 < 0) {
+				/* the later replies cannot be found either */
+				count = index;
+				repmsg = NULL;
+			} else {
+				replen -= rc1;
 				rc1 = repmsg->lm_result;
+			}
 		} else {
 			/*
 			 * The peer did not handle these request, let us return

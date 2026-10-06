@@ -2290,6 +2290,7 @@ int lustre_shrink_msg(struct lustre_msg *msg, int segment,
 int lustre_grow_msg(struct lustre_msg *msg, int segment, unsigned int newlen);
 void lustre_free_reply_state(struct kref *kref);
 int __lustre_unpack_msg(struct lustre_msg *m, int len);
+int lustre_unpack_sub_msg(struct lustre_msg *msg, __u32 len, bool swabbed);
 __u32 lustre_msg_hdr_size(__u32 magic, __u32 count);
 __u32 lustre_msg_size(__u32 magic, int count, __u32 *lengths);
 __u32 lustre_msg_size_v2(int count, __u32 *lengths);

@@ -2869,6 +2869,8 @@ int req_capsule_server_grow(struct req_capsule *pill,
 		 */
 		snewlen = newlen;
 		diff = snewlen - slen;
+		if (req->rq_replen >= BUT_MAXREPSIZE)
+			return -EOVERFLOW;
 		max = BUT_MAXREPSIZE - req->rq_replen;
 		if (diff > max)
 			return -EOVERFLOW;
@@ -3050,6 +3052,9 @@ void req_capsule_subreq_init(struct req_capsule *pill,
 {
 	req_capsule_init(pill, req, loc);
 	req_capsule_set(pill, fmt);
+	/* reused for every sub message, so forget the swabbed fields */
+	pill->rc_req_swab_mask = 0;
+	pill->rc_rep_swab_mask = 0;
 	pill->rc_reqmsg = reqmsg;
 	pill->rc_repmsg = repmsg;
 }

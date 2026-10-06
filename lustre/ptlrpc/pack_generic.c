@@ -583,7 +583,11 @@ static int lustre_unpack_msg_v2(struct lustre_msg_v2 *m, int len)
 		if (swabbed)
 			__swab32s(&m->lm_buflens[i]);
 		buflen = round_up(m->lm_buflens[i], 8);
-		if (buflen < 0 || buflen > PTLRPC_MAX_BUFLEN) {
+		/* test the wire length too: round_up() wraps a near-UINT_MAX
+		 * length to a small value that would pass the limit
+		 */
+		if (m->lm_buflens[i] > PTLRPC_MAX_BUFLEN ||
+		    buflen < 0 || buflen > PTLRPC_MAX_BUFLEN) {
 			CERROR("buffer %d length %d is not valid\n", i, buflen);
 			return -EINVAL;
 		}
@@ -651,6 +655,30 @@ int ptlrpc_unpack_rep_msg(struct ptlrpc_request *req, int len)
 	}
 	return rc;
 }
+
+/**
+ * lustre_unpack_sub_msg() - check and swab a sub message of a batch RPC
+ * @msg: sub request or sub reply in a batch update buffer
+ * @len: bytes left in the buffer from @msg on
+ * @swabbed: the batch RPC holding @msg was swabbed
+ *
+ * Sub messages are not unpacked with the RPC that carries them, so check
+ * that @msg fits in @len bytes, and swab its header like the RPC, before
+ * its size or buffers are used.
+ *
+ * Return: packed size of @msg, or %-EPROTO if it is malformed
+ */
+int lustre_unpack_sub_msg(struct lustre_msg *msg, __u32 len, bool swabbed)
+{
+	int rc;
+
+	rc = __lustre_unpack_msg(msg, len);
+	if (rc < 0 || rc != swabbed || msg->lm_magic != LUSTRE_MSG_MAGIC_V2)
+		return -EPROTO;
+
+	return lustre_packed_msg_size(msg);
+}
+EXPORT_SYMBOL(lustre_unpack_sub_msg);
 
 static inline int
 lustre_unpack_ptlrpc_body_v2(struct ptlrpc_request *req,
@@ -3081,7 +3109,15 @@ void lustre_swab_hsm_request(struct hsm_request *hr)
 	__swab32s(&hr->hr_data_len);
 }
 
-/* TODO: swab each sub reply message. */
+/* sub messages are swabbed by lustre_unpack_sub_msg() */
+void lustre_swab_batch_update_request(struct batch_update_request *bur)
+{
+	__swab32s(&bur->burq_magic);
+	__swab16s(&bur->burq_count);
+	__swab16s(&bur->burq_padding);
+}
+EXPORT_SYMBOL(lustre_swab_batch_update_request);
+
 void lustre_swab_batch_update_reply(struct batch_update_reply *bur)
 {
 	__swab32s(&bur->burp_magic);

@@ -17,6 +17,7 @@
 #include <linux/module.h>
 
 #include <lustre_mds.h>
+#include <lustre_swab.h>
 #include "mdt_internal.h"
 
 static struct ldlm_callback_suite mdt_dlm_cbs = {
@@ -27,14 +28,19 @@ static struct ldlm_callback_suite mdt_dlm_cbs = {
 
 static int mdt_batch_unpack(struct mdt_thread_info *info, __u32 opc)
 {
+	const struct ldlm_intent *it;
 	int rc = 0;
 
 	switch (opc) {
 	case BUT_GETATTR:
 		info->mti_dlm_req = req_capsule_client_get(info->mti_pill,
 							   &RMF_DLM_REQ);
-		if (info->mti_dlm_req == NULL)
-			RETURN(-EFAULT);
+		it = req_capsule_client_get(info->mti_pill, &RMF_LDLM_INTENT);
+		/* other intents and plain enqueues use other reply buffers */
+		if (!info->mti_dlm_req || !it ||
+		    !(info->mti_dlm_req->lock_flags & LDLM_FL_HAS_INTENT) ||
+		    (it->opc != IT_GETATTR && it->opc != IT_LOOKUP))
+			RETURN(-EPROTO);
 		break;
 	default:
 		rc = -EOPNOTSUPP;
@@ -117,15 +123,71 @@ static struct tgt_handler *mdt_batch_handler_find(__u32 opc)
 	return h;
 }
 
+/**
+ * mdt_batch_check_bufs() - check and swab the sub requests of a batch
+ * @req: MDS_BATCH request
+ * @tub: update buffers of @req
+ * @update_count: number of sub requests given in the request header
+ *
+ * The handler walks the sub requests by burq_count and by the size of each
+ * sub request message, so check that they all fit in their buffers, and
+ * swab the headers from a client of the other byte order, before that.
+ * The sub request fields are swabbed when the capsule gets them.
+ *
+ * Return:
+ * * %0 - the buffers hold @update_count valid sub requests
+ * * %-EPROTO - a buffer or sub request is malformed
+ */
+static int mdt_batch_check_bufs(struct ptlrpc_request *req,
+				struct tgt_update_bufs *tub,
+				__u32 update_count)
+{
+	bool swabbed = req_capsule_req_need_swab(&req->rq_pill);
+	unsigned int count = 0;
+	unsigned int i;
+	int rc;
+
+	ENTRY;
+
+	for (i = 0; i < tub->tub_count; i++) {
+		struct batch_update_request *bur = tub->tub_bufs[i];
+		struct lustre_msg *reqmsg = &bur->burq_reqmsg[0];
+		__u32 len = tub->tub_lens[i] - sizeof(*bur);
+		unsigned int j;
+
+		if (swabbed)
+			lustre_swab_batch_update_request(bur);
+		if (bur->burq_magic != BUT_REQUEST_MAGIC)
+			GOTO(out, rc = -EPROTO);
+
+		for (j = 0; j < bur->burq_count; j++, count++) {
+			rc = lustre_unpack_sub_msg(reqmsg, len, swabbed);
+			if (rc < 0)
+				GOTO(out, rc);
+
+			reqmsg = (struct lustre_msg *)((char *)reqmsg + rc);
+			len -= rc;
+		}
+	}
+	if (count == update_count)
+		RETURN(0);
+
+	rc = -EPROTO;
+out:
+	DEBUG_REQ(D_ERROR, req,
+		  "bad batch buffer %u/%u at sub request %u/%u: rc = %d",
+		  i, tub->tub_count, count, update_count, rc);
+	RETURN(rc);
+}
+
 int mdt_batch(struct tgt_session_info *tsi)
 {
 	struct mdt_thread_info *info = tsi2mdt_info(tsi);
 	struct req_capsule *pill = &info->mti_sub_pill;
 	struct ptlrpc_request *req = tgt_ses_req(tsi);
+	struct tgt_update_bufs tub = { NULL };
 	struct but_update_header *buh;
-	struct but_update_buffer *bub = NULL;
 	struct batch_update_reply *reply = NULL;
-	struct ptlrpc_bulk_desc *desc = NULL;
 	struct tg_reply_data *trd = NULL;
 	struct lustre_msg *repmsg = NULL;
 	bool need_reconstruct;
@@ -134,7 +196,7 @@ int mdt_batch(struct tgt_session_info *tsi)
 	__u32 packed_replen;
 	void **update_bufs;
 	bool grown = false;
-	int buh_size;
+	__u32 buh_size;
 	int rc;
 	int i;
 
@@ -142,7 +204,7 @@ int mdt_batch(struct tgt_session_info *tsi)
 
 	buh_size = req_capsule_get_size(&req->rq_pill, &RMF_BUT_HEADER,
 					RCL_CLIENT);
-	if (buh_size <= 0)
+	if (buh_size < sizeof(*buh))
 		RETURN(err_serious(-EPROTO));
 
 	buh = req_capsule_client_get(&req->rq_pill, &RMF_BUT_HEADER);
@@ -156,59 +218,31 @@ int mdt_batch(struct tgt_session_info *tsi)
 		RETURN(err_serious(-EPROTO));
 	}
 
-	update_buf_count = buh->buh_count;
-	if (update_buf_count == 0)
+	if (buh->buh_reply_size < sizeof(*reply)) {
+		DEBUG_REQ(D_ERROR, req, "bad batch reply size %u: rc = %d",
+			  buh->buh_reply_size, -EPROTO);
 		RETURN(err_serious(-EPROTO));
-
-	OBD_ALLOC_PTR_ARRAY(update_bufs, update_buf_count);
-	if (update_bufs == NULL)
-		RETURN(err_serious(-ENOMEM));
-
-	if (buh->buh_inline_length > 0) {
-		update_bufs[0] = buh->buh_inline_data;
-	} else {
-		struct but_update_buffer *tmp;
-		int page_count = 0;
-
-		bub = req_capsule_client_get(&req->rq_pill, &RMF_BUT_BUF);
-		if (bub == NULL)
-			GOTO(out, rc = err_serious(-EPROTO));
-
-		for (i = 0; i < update_buf_count; i++)
-			/* First *and* last might be partial pages, hence +1 */
-			page_count += DIV_ROUND_UP(bub[i].bub_size,
-						   PAGE_SIZE) + 1;
-
-		desc = ptlrpc_prep_bulk_exp(req, page_count,
-					    PTLRPC_BULK_OPS_COUNT,
-					    PTLRPC_BULK_GET_SINK,
-					    MDS_BULK_PORTAL,
-					    &ptlrpc_bulk_kiov_nopin_ops);
-		if (desc == NULL)
-			GOTO(out, rc = err_serious(-ENOMEM));
-
-		tmp = bub;
-		for (i = 0; i < update_buf_count; i++, tmp++) {
-			if (tmp->bub_size >= OUT_MAXREQSIZE)
-				GOTO(out, rc = err_serious(-EPROTO));
-
-			OBD_ALLOC_LARGE(update_bufs[i], tmp->bub_size);
-			if (update_bufs[i] == NULL)
-				GOTO(out, rc = err_serious(-ENOMEM));
-
-			desc->bd_frag_ops->add_iov_frag(desc, update_bufs[i],
-							tmp->bub_size);
-		}
-
-		req->rq_bulk_write = 1;
-		rc = sptlrpc_svc_prep_bulk(req, desc);
-		if (rc != 0)
-			GOTO(out, rc = err_serious(rc));
-
-		rc = target_bulk_io(req->rq_export, desc);
-		if (rc < 0)
-			GOTO(out, rc = err_serious(rc));
 	}
+	/* The reply can never exceed BUT_MAXREPSIZE, which
+	 * req_capsule_server_grow() enforces as each sub reply is packed, so
+	 * clamp an over-large size rather than reject an honest large batch.
+	 */
+	if (buh->buh_reply_size > BUT_MAXREPSIZE)
+		buh->buh_reply_size = BUT_MAXREPSIZE;
+
+	rc = tgt_update_bufs_get(req, &RMF_BUT_BUF, buh->buh_count,
+				 buh->buh_inline_data, buh->buh_inline_length,
+				 buh_size - sizeof(*buh),
+				 sizeof(struct batch_update_request),
+				 BUT_MAXREQSIZE, &tub);
+	if (rc)
+		GOTO(out_free, rc = err_serious(rc));
+
+	update_bufs = tub.tub_bufs;
+	update_buf_count = tub.tub_count;
+	rc = mdt_batch_check_bufs(req, &tub, buh->buh_update_count);
+	if (rc)
+		GOTO(out_free, rc = err_serious(rc));
 
 	req_capsule_set_size(&req->rq_pill, &RMF_BUT_REPLY, RCL_SERVER,
 			     buh->buh_reply_size);
@@ -216,7 +250,7 @@ int mdt_batch(struct tgt_session_info *tsi)
 	if (rc != 0) {
 		DEBUG_REQ(D_ERROR, req, "%s: Can't pack response: rc = %d\n",
 		       tgt_name(tsi->tsi_tgt), rc);
-		GOTO(out, rc);
+		GOTO(out, rc = err_serious(rc));
 	}
 
 	/* Prepare the update reply buffer */
@@ -250,14 +284,6 @@ int mdt_batch(struct tgt_session_info *tsi)
 
 			reqmsg = batch_update_reqmsg_next(bur, reqmsg);
 			repmsg = batch_update_repmsg_next(reply, repmsg);
-
-			if (handled_update_count > buh->buh_update_count)
-				GOTO(out, rc = -EOVERFLOW);
-
-			LASSERT(reqmsg != NULL && repmsg != NULL);
-			LASSERTF(reqmsg->lm_magic == LUSTRE_MSG_MAGIC_V2,
-				 "Invalid reqmsg magic %x expected %x\n",
-				 reqmsg->lm_magic, LUSTRE_MSG_MAGIC_V2);
 
 			h = mdt_batch_handler_find(reqmsg->lm_opc);
 			if (unlikely(h == NULL)) {
@@ -338,22 +364,8 @@ out:
 	}
 
 out_free:
-	if (update_bufs != NULL) {
-		if (bub != NULL) {
-			for (i = 0; i < update_buf_count; i++, bub++) {
-				if (update_bufs[i] != NULL)
-					OBD_FREE_LARGE(update_bufs[i],
-						       bub->bub_size);
-			}
-		}
-
-		OBD_FREE_PTR_ARRAY(update_bufs, update_buf_count);
-	}
-
+	tgt_update_bufs_put(&tub);
 	OBD_FREE_PTR(trd);
-
-	if (desc != NULL)
-		ptlrpc_free_bulk(desc);
 
 	mdt_thread_info_fini(info);
 	tsi->tsi_reply_fail_id = OBD_FAIL_BUT_UPDATE_NET_REP;

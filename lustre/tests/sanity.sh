@@ -17243,6 +17243,49 @@ test_123b () { # statahead(bug 15027)
 }
 run_test 123b "not panic with network error in statahead enqueue (bug 15027)"
 
+test_123ba() {
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	(( MDS1_VERSION >= $(version_code 2.17.59.2) )) ||
+		skip "need MDS >= 2.17.59.2 for batch RPC checks"
+	$LCTL get_param -n mdc.*.connect_flags | grep -q batch_rpc ||
+		skip "server does not support batch RPC"
+
+	local max=$($LCTL get_param -n llite.*.statahead_max | head -n 1)
+	local batch_max=$($LCTL get_param -n llite.*.statahead_batch_max |
+			  head -n 1)
+
+	stack_trap "$LCTL set_param llite.*.statahead_max=$max"
+	stack_trap "$LCTL set_param llite.*.statahead_batch_max=$batch_max"
+	$LCTL set_param llite.*.statahead_max=1024
+
+	test_mkdir -i 0 -c 1 $DIR/$tdir
+	stack_trap "rm -rf $DIR/$tdir"
+	createmany -o $DIR/$tdir/$tfile 1000 || error "createmany failed"
+
+	# fuzz one in eight batched getattr RPCs and check the MDS validates
+	# them rather than trusting the client.  A small batch is packed
+	# inline and a large one uses bulk, so fuzz both paths.
+	local size
+
+	for size in 2 64; do
+		$LCTL set_param llite.*.statahead_batch_max=$size
+		cancel_lru_locks mdc
+		cancel_lru_locks osc
+		#define OBD_FAIL_BUT_CORRUPT_REQ	0x171e | CFS_FAIL_RAND
+		$LCTL set_param fail_loc=0x0800171e fail_val=8
+		ls -l $DIR/$tdir > /dev/null || error "ls -l failed"
+		wait_update_facet client "pgrep ll_sa" "" 35 ||
+			error "ll_sa thread is still running"
+		$LCTL set_param fail_loc=0 fail_val=0
+
+		do_facet mds1 "$LCTL get_param -n health_check" |
+			grep -q healthy ||
+			error "MDS not healthy after fuzzed size=$size batch"
+	done
+}
+run_test 123ba "MDS validates malformed batched RPCs"
+
 test_123c() {
 	[[ $MDSCOUNT -lt 2 ]] && skip_env "needs >= 2 MDTs"
 
