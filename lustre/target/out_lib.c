@@ -368,9 +368,8 @@ int out_index_lookup_pack(const struct lu_env *env,
 	const void	*name = key;
 	__u16		size = strlen((char *)name) + 1;
 
-	/* XXX: this shouldn't be hardcoded */
 	return out_update_pack(env, update, max_update_size, OUT_INDEX_LOOKUP,
-			       fid, 1, &size, &name, 256);
+			       fid, 1, &size, &name, sizeof(struct lu_fid));
 }
 EXPORT_SYMBOL(out_index_lookup_pack);
 
@@ -416,8 +415,10 @@ int out_read_pack(const struct lu_env *env, struct object_update *update,
 	size = cpu_to_le64(size);
 	pos = cpu_to_le64(pos);
 
+	/* the data is sent by bulk, the reply holds only out_read_reply */
 	return out_update_pack(env, update, max_update_size, OUT_READ, fid,
-			       ARRAY_SIZE(sizes), sizes, bufs, size);
+			       ARRAY_SIZE(sizes), sizes, bufs,
+			       sizeof(struct out_read_reply));
 }
 EXPORT_SYMBOL(out_read_pack);
 

@@ -623,10 +623,8 @@ int osp_attr_get(const struct lu_env *env, struct dt_object *dt,
 
 	osp2lu_obj(obj)->lo_header->loh_attr |= LOHA_EXISTS;
 	obj->opo_non_exist = 0;
-	reply = req_capsule_server_sized_get(&req->rq_pill,
-					     &RMF_OUT_UPDATE_REPLY,
-					     OUT_UPDATE_REPLY_SIZE);
-	if (reply == NULL || reply->ourp_magic != UPDATE_REPLY_MAGIC)
+	reply = osp_update_reply_get(req);
+	if (!reply)
 		GOTO(out, rc = -EPROTO);
 
 	rc = osp_get_attr_from_reply(env, reply, req, attr,
@@ -1035,16 +1033,9 @@ unlock:
 				dt->do_lu.lo_header->loh_attr &= ~LOHA_EXISTS;
 			GOTO(out, rc);
 		}
-		reply = req_capsule_server_sized_get(&req->rq_pill,
-						     &RMF_OUT_UPDATE_REPLY,
-				OUT_UPDATE_REPLY_SIZE);
-		if (reply->ourp_magic != UPDATE_REPLY_MAGIC) {
-			CERROR("%s: Wrong version %x expected %x "DFID
-			       ": rc = %d\n", dname, reply->ourp_magic,
-			       UPDATE_REPLY_MAGIC,
-			       PFID(lu_object_fid(&dt->do_lu)), -EPROTO);
+		reply = osp_update_reply_get(req);
+		if (!reply)
 			GOTO(out, rc = -EPROTO);
-		}
 		rc = object_update_result_data_get(reply, rbuf, 0);
 		GOTO(out, rc);
 	}
@@ -1078,16 +1069,9 @@ unlock:
 		GOTO(out, rc);
 	}
 
-	reply = req_capsule_server_sized_get(&req->rq_pill,
-					     &RMF_OUT_UPDATE_REPLY,
-					     OUT_UPDATE_REPLY_SIZE);
-	if (reply->ourp_magic != UPDATE_REPLY_MAGIC) {
-		CERROR("%s: Wrong version %x expected %x "DFID": rc = %d\n",
-		       dname, reply->ourp_magic, UPDATE_REPLY_MAGIC,
-		       PFID(lu_object_fid(&dt->do_lu)), -EPROTO);
-
+	reply = osp_update_reply_get(req);
+	if (!reply)
 		GOTO(out, rc = -EPROTO);
-	}
 
 	rc = object_update_result_data_get(reply, rbuf, 0);
 	if (rc < 0 || rbuf->lb_len == 0) {

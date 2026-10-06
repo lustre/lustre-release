@@ -33066,6 +33066,43 @@ test_310c() {
 }
 run_test 310c "open-unlink remote file with multiple links"
 
+test_310d() {
+	(( MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code 2.17.59.2) )) ||
+		skip "need MDS >= 2.17.59.2 for OUT reply checks"
+
+	# MDT0001 reads the MDT0000 objects for link and rename, and MDT0000
+	# reads the MDT0001 directory for migrate
+	$LFS mkdir -i 0 -c 1 $DIR/$tdir || error "mkdir $tdir failed"
+	$LFS mkdir -i 1 -c 1 $DIR/$tdir/mdt1 || error "mkdir mdt1 failed"
+	$LFS mkdir -i 1 -c 1 $DIR/$tdir/migrate || error "mkdir migrate failed"
+	touch $DIR/$tdir/{link,rename} || error "touch link rename failed"
+
+	local mdts=$(mdts_nodes)
+
+	stack_trap "do_nodes $mdts $LCTL set_param fail_loc=0 fail_val=0"
+
+	# truncate one OUT_XATTR_GET(8), OUT_INDEX_LOOKUP(9) or
+	# OUT_XATTR_LIST(17) reply, the remote MDT must return -EPROTO
+	#define OBD_FAIL_OUT_REPLY_SHORT	0x170d
+	do_facet mds1 $LCTL set_param fail_loc=0x8000170d fail_val=8
+	ln $DIR/$tdir/link $DIR/$tdir/mdt1 2>&1 | grep "Protocol error" ||
+		error "ln: no EPROTO for short xattr_get reply"
+	do_facet mds1 $LCTL set_param fail_loc=0x8000170d fail_val=9
+	mv $DIR/$tdir/rename $DIR/$tdir/mdt1 2>&1 | grep "Protocol error" ||
+		error "mv: no EPROTO for short index_lookup reply"
+	do_facet mds2 $LCTL set_param fail_loc=0x8000170d fail_val=17
+	$LFS migrate -m 0 $DIR/$tdir/migrate 2>&1 | grep "Protocol error" ||
+		error "migrate: no EPROTO for short xattr_list reply"
+	do_nodes $mdts $LCTL set_param fail_loc=0 fail_val=0
+
+	# the same operations work with full replies
+	ln $DIR/$tdir/link $DIR/$tdir/mdt1 || error "ln failed"
+	mv $DIR/$tdir/rename $DIR/$tdir/mdt1 || error "mv failed"
+	$LFS migrate -m 0 $DIR/$tdir/migrate || error "migrate failed"
+}
+run_test 310d "remote MDT ops get EPROTO for a short OUT reply"
+
 #LU-4825
 test_311() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

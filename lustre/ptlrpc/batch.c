@@ -17,11 +17,12 @@
 #include <linux/module.h>
 #include <obd_class.h>
 #include <obd.h>
+
+#define OUT_UPDATE_REPLY_SIZE		4096
+
 #ifdef CONFIG_LUSTRE_FS_SERVER
 #include <lustre_update.h>
 #else
-
-#define OUT_UPDATE_REPLY_SIZE		4096
 
 static inline struct lustre_msg *
 batch_update_reqmsg_next(struct batch_update_request *bur,

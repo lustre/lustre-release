@@ -723,6 +723,7 @@ int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 int osp_remote_sync(const struct lu_env *env, struct osp_device *osp,
 		    struct osp_update_request *update,
 		    struct ptlrpc_request **reqp);
+struct object_update_reply *osp_update_reply_get(struct ptlrpc_request *req);
 
 struct thandle *osp_get_storage_thandle(const struct lu_env *env,
 					struct thandle *th,

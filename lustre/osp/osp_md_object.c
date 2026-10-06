@@ -492,15 +492,9 @@ static int osp_md_index_lookup(const struct lu_env *env, struct dt_object *dt,
 	if (rc < 0)
 		GOTO(out, rc);
 
-	reply = req_capsule_server_sized_get(&req->rq_pill,
-					     &RMF_OUT_UPDATE_REPLY,
-					     OUT_UPDATE_REPLY_SIZE);
-	if (reply->ourp_magic != UPDATE_REPLY_MAGIC) {
-		CERROR("%s: Wrong version %x expected %x: rc = %d\n",
-		       dt_dev->dd_lu_dev.ld_obd->obd_name,
-		       reply->ourp_magic, UPDATE_REPLY_MAGIC, -EPROTO);
+	reply = osp_update_reply_get(req);
+	if (!reply)
 		GOTO(out, rc = -EPROTO);
-	}
 
 	rc = object_update_result_data_get(reply, lbuf, 0);
 	if (rc < 0)
@@ -868,17 +862,9 @@ static int osp_md_xattr_list(const struct lu_env *env, struct dt_object *dt,
 		GOTO(out, rc);
 	}
 
-	reply = req_capsule_server_sized_get(&req->rq_pill,
-					     &RMF_OUT_UPDATE_REPLY,
-					     OUT_UPDATE_REPLY_SIZE);
-	if (reply->ourp_magic != UPDATE_REPLY_MAGIC) {
-		DEBUG_REQ(D_ERROR, req,
-			  "%s: Wrong version %x expected %x "DFID": rc = %d",
-			  dname, reply->ourp_magic, UPDATE_REPLY_MAGIC,
-			  PFID(lu_object_fid(&dt->do_lu)), -EPROTO);
-
+	reply = osp_update_reply_get(req);
+	if (!reply)
 		GOTO(out, rc = -EPROTO);
-	}
 
 	rc = object_update_result_data_get(reply, rbuf, 0);
 	if (rc < 0)
@@ -1342,16 +1328,9 @@ static ssize_t osp_md_read(const struct lu_env *env, struct dt_object *dt,
 	if (rc < 0)
 		GOTO(out, rc);
 
-	reply = req_capsule_server_sized_get(&req->rq_pill,
-					     &RMF_OUT_UPDATE_REPLY,
-					     OUT_UPDATE_REPLY_SIZE);
-
-	if (reply->ourp_magic != UPDATE_REPLY_MAGIC) {
-		CERROR("%s: invalid update reply magic %x expected %x: rc = %d\n",
-		       dt_dev->dd_lu_dev.ld_obd->obd_name,
-		       reply->ourp_magic, UPDATE_REPLY_MAGIC, -EPROTO);
+	reply = osp_update_reply_get(req);
+	if (!reply)
 		GOTO(out, rc = -EPROTO);
-	}
 
 	rc = object_update_result_data_get(reply, lbuf, 0);
 	if (rc < 0)

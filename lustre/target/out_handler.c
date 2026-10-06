@@ -730,7 +730,6 @@ static int out_read(struct tgt_session_info *tsi)
 	orr->orr_offset = pos;
 
 	orr_cpu_to_le(orr, orr);
-	update_result->our_datalen += orr->orr_size;
 out_free:
 	for (i = 0; i < nbufs; i++) {
 		if (rdbuf->rb_bufs[i].lb_buf != NULL) {
@@ -1093,7 +1092,7 @@ int out_handle(struct tgt_session_info *tsi)
 	struct dt_device *dt = tsi->tsi_tgt->lut_bottom;
 	struct out_update_header *ouh;
 	struct out_update_buffer *oub = NULL;
-	struct object_update *update;
+	struct object_update *update = NULL;
 	struct object_update_reply *reply;
 	struct ptlrpc_bulk_desc *desc = NULL;
 	struct tg_reply_data *trd = NULL;
@@ -1403,6 +1402,12 @@ out:
 		if (rc == 0)
 			rc = rc1;
 	}
+
+	/* truncate the reply to its header to test the peer's reply checks */
+	if (rc >= 0 && update &&
+	    CFS_FAIL_CHECK_VALUE(OBD_FAIL_OUT_REPLY_SHORT, update->ou_type))
+		req_capsule_shrink(pill, &RMF_OUT_UPDATE_REPLY, sizeof(*reply),
+				   RCL_SERVER);
 
 out_free:
 	if (update_bufs != NULL) {

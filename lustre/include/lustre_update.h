@@ -16,7 +16,6 @@
 #include <lustre_net.h>
 #include <obj_update.h>
 
-#define OUT_UPDATE_REPLY_SIZE		4096
 #define OUT_BULK_BUFFER_SIZE		4096
 
 struct dt_key;
@@ -258,7 +257,7 @@ object_update_result_data_get(const struct object_update_reply *reply,
 	LASSERT(lbuf != NULL);
 	update_result = object_update_result_get(reply, index, &size);
 	if (update_result == NULL ||
-	    size < round_up(sizeof(struct object_update_reply), 8) ||
+	    size < round_up(sizeof(struct object_update_result), 8) ||
 	    update_result->our_datalen > size)
 		RETURN(-EFAULT);
 

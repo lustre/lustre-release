@@ -325,9 +325,9 @@ int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 	struct out_update_header	*ouh;
 	struct out_update_buffer	*oub;
 	__u32				buf_count = 0;
+	unsigned int			updates = 0;
 	int				page_count = 0;
 	int				repsize = 0;
-	struct object_update_reply	*reply;
 	int				rc, i;
 	int				total = 0;
 
@@ -348,16 +348,17 @@ int osp_prep_update_req(const struct lu_env *env, struct obd_import *imp,
 			update = object_update_request_get(ourq, i, &size);
 			LASSERT(update != NULL);
 
-			repsize += sizeof(reply->ourp_lens[0]);
-			repsize += sizeof(struct object_update_result);
-			repsize += update->ou_result_size;
+			/* 8-byte aligned by object_update_result_insert() */
+			repsize +=
+				round_up(sizeof(struct object_update_result) +
+					 update->ou_result_size, 8);
+			updates++;
 		}
 
 		buf_count++;
 	}
-	repsize += sizeof(*reply);
-	if (repsize < OUT_UPDATE_REPLY_SIZE)
-		repsize = OUT_UPDATE_REPLY_SIZE;
+	repsize += round_up(offsetof(struct object_update_reply,
+				     ourp_lens[updates]), 8);
 	LASSERT(buf_count > 0);
 
 	req = ptlrpc_request_alloc(imp, &RQF_OUT_UPDATE);
@@ -474,6 +475,39 @@ int osp_remote_sync(const struct lu_env *env, struct osp_device *osp,
 		*reqp = req;
 
 	RETURN(rc);
+}
+
+/**
+ * osp_update_reply_get() - Get the update reply from a replied OUT request
+ * @req: the replied OUT_UPDATE request
+ *
+ * Check that the reply buffer is as large as @req asked for, since a malformed
+ * reply can have a short or missing buffer, and that its magic is valid.
+ *
+ * Context: Any context.
+ *
+ * Return:
+ * * pointer to the update reply on success
+ * * %NULL if the reply buffer is missing, too short or has a bad magic
+ */
+struct object_update_reply *osp_update_reply_get(struct ptlrpc_request *req)
+{
+	struct object_update_reply *reply;
+
+	/* __req_capsule_get() already printed an error if this fails */
+	reply = req_capsule_server_get(&req->rq_pill, &RMF_OUT_UPDATE_REPLY);
+	if (unlikely(!reply))
+		return NULL;
+
+	if (unlikely(reply->ourp_magic != UPDATE_REPLY_MAGIC)) {
+		DEBUG_REQ(D_ERROR, req,
+			  "%s: invalid update reply magic %x expected %x: rc = %d",
+			  req->rq_import->imp_obd->obd_name, reply->ourp_magic,
+			  UPDATE_REPLY_MAGIC, -EPROTO);
+		return NULL;
+	}
+
+	return reply;
 }
 
 /**
@@ -635,10 +669,8 @@ static int osp_update_interpret(const struct lu_env *env,
 
 	/* Unpack the results from the reply message. */
 	if (req->rq_repmsg != NULL && req->rq_replied) {
-		reply = req_capsule_server_sized_get(&req->rq_pill,
-						     &RMF_OUT_UPDATE_REPLY,
-						     OUT_UPDATE_REPLY_SIZE);
-		if (reply == NULL || reply->ourp_magic != UPDATE_REPLY_MAGIC) {
+		reply = osp_update_reply_get(req);
+		if (!reply) {
 			if (rc == 0)
 				rc = -EPROTO;
 		} else {
