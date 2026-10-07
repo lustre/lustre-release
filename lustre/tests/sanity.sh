@@ -2783,6 +2783,7 @@ test_27D() {
 	local ost_list=$(seq $first_ost $ost_step $last_ost)
 	local ost_range="$first_ost $last_ost $ost_step"
 	local flr_ec_ver=v2_17_52-42-gf1b7ae0cc6
+	local mirror_id_ver=v2_17_50-223-g5c24d60098
 
 	test_mkdir $DIR/$tdir
 	pool_add $POOL || error "pool_add failed"
@@ -2798,6 +2799,8 @@ test_27D() {
 		SKIP27D+=" -s 32,33"
 	(( $MDS1_VERSION >= $(version_code $SEL_VER) )) ||
 		SKIP27D+=" -s 34"
+	(( $MDS1_VERSION >= $(version_code $mirror_id_ver) )) ||
+		SKIP27D+=" -s 37"
 	(( $MDS1_VERSION >= $(version_code $flr_ec_ver) )) ||
 		SKIP27D+=" -s 52,53,54,56,57,58,63,64,65,67"
 
