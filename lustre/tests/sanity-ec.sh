@@ -8733,6 +8733,55 @@ test_55a() {
 }
 run_test 55a "test EC recovery with tiny files (1 byte, one page)"
 
+test_56a() {
+	(( OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs for 2+1"
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	# remount with a dummy key, which encrypts every new directory
+	stack_trap "umount_client $MOUNT; mount_client $MOUNT $MOUNT_OPTS"
+	umount_client $MOUNT || error "umount $MOUNT failed"
+	mount_client $MOUNT $MOUNT_OPTS,test_dummy_encryption ||
+		error "mount with test_dummy_encryption failed"
+	enable_ec
+
+	local tf=$DIR/$tdir/$tfile
+
+	mkdir $DIR/$tdir || error "mkdir $tdir failed"
+	stack_trap "rm -rf $DIR/$tdir"
+	$LFS setstripe -E eof -S 1M -c 2 --ec 2+1 $tf ||
+		error "setstripe --ec 2+1 failed"
+	lsattr $tf | grep -q "^[^ ]*E" || error "$tf is not encrypted"
+	# stripe 1 has a hole at the start, which the OST stores as zeroes
+	# but which encrypts to non-zero data
+	dd if=/dev/urandom of=$tf bs=1M count=1 || error "dd stripe 0 failed"
+	dd if=/dev/urandom of=$tf bs=4k count=1 seek=384 conv=notrunc ||
+		error "dd stripe 1 failed"
+	$LFS mirror resync $tf || error "mirror resync failed"
+	cancel_lru_locks osc
+
+	local sum=$(md5sum < $tf | awk '{print $1}')
+
+	ec_data_stripe_osts $tf 0
+	local victim=${EC_STRIPE_OSTS[0]}
+
+	ec_deactivate_ost $victim
+
+	# rebuild stripe 0 from stripe 1 and the parity read from the OSTs
+	cancel_lru_locks osc
+	local got=$(md5sum < $tf | awk '{print $1}')
+
+	[[ "$got" == "$sum" ]] || error "cold read $got != $sum"
+
+	# rebuild it again with stripe 1, including its hole, in the cache
+	cancel_lru_locks osc
+	dd if=$tf of=/dev/null bs=1M skip=1 || error "read stripe 1 failed"
+	got=$(md5sum < $tf | awk '{print $1}')
+
+	[[ "$got" == "$sum" ]] || error "cached read $got != $sum"
+}
+run_test 56a "test EC recovery of an encrypted file"
+
 test_58a() {
 	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
 	enable_ec

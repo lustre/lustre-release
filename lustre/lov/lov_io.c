@@ -19,6 +19,7 @@
 #define DEBUG_SUBSYSTEM S_LOV
 
 #include <linux/lustre/erasure_code.h>
+#include <lustre_crypto.h>
 #include "lov_cl_internal.h"
 
 /** \addtogroup lov
@@ -1997,6 +1998,50 @@ enum ec_data_pg_state {
 	EC_DPG_ERROR,		/* stripe dead or read failed */
 };
 
+/*
+ * The parity of an encrypted file is computed from the data as stored on the
+ * OSTs, so CIT_EC_RD rebuilds the ciphertext and decrypts it afterward.
+ */
+static inline bool lov_ec_decrypt_needed(struct inode *inode)
+{
+	return IS_ENCRYPTED(inode) && ll_has_encryption_key(inode);
+}
+
+/**
+ * lov_ec_decrypt_page() - decrypt a page that CIT_EC_RD read or rebuilt
+ * @clpage: owned page-cache page holding the data as stored on the OST
+ *
+ * Decrypt each encryption unit of the page as osc_brw_fini_request() does
+ * after a normal read, and leave a unit of zeroes (a hole) as it is.  A page
+ * larger than the unit can hold data after a hole.
+ *
+ * Return:
+ * * %0 on success
+ * * negative errno if decryption failed
+ */
+static int lov_ec_decrypt_page(struct cl_page *clpage)
+{
+	const unsigned int unit = LUSTRE_ENCRYPTION_UNIT_SIZE;
+	struct folio *folio = clpage->cp_folio;
+	bool empty = true;
+	unsigned int offs;
+	int rc;
+
+	for (offs = 0; offs < PAGE_SIZE; offs += unit) {
+		if (is_empty_folio(folio, clpage->cp_pgno, offs, unit))
+			continue;
+		empty = false;
+		rc = llcrypt_decrypt_pagecache_blocks(folio, clpage->cp_pgno,
+						      unit, offs);
+		if (rc)
+			return rc;
+	}
+	if (empty)
+		folio_clear_private_2(folio);
+
+	return 0;
+}
+
 /**
  * lov_ec_readable_sub() - get the sub-IO to read an EC data stripe with
  * @lio: LOV I/O structure
@@ -2040,6 +2085,8 @@ static struct lov_io_sub *lov_ec_readable_sub(struct lov_io *lio, int comp_i,
  * @eoff:       end offset of recovery group
  * @pg_start:   first page position in stripe
  * @nfolios:    number of PAGE_SIZE positions
+ * @need_deferred_decrypt: read the pages of an encrypted file as stored on
+ *		the OST, to decrypt them after recovery
  * @out_pages:  array[nfolios] of cl_page pointers (output)
  * @out_states: array[nfolios] of page states (output)
  * @dlist:	cl_page_list for pages that need reading (output)
@@ -2056,7 +2103,9 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 			 int comp_i, int stripe_i,
 			 struct lov_stripe_md_entry *lsme,
 			 unsigned long long soff, unsigned long long eoff,
-			 int pg_start, int nfolios, struct cl_page **out_pages,
+			 int pg_start, int nfolios,
+			 bool need_deferred_decrypt,
+			 struct cl_page **out_pages,
 			 enum ec_data_pg_state *out_states,
 			 struct cl_page_list *dlist)
 {
@@ -2162,8 +2211,17 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 					 out_pages[j], false);
 	}
 
+	/* decrypted by lov_ec_decrypt_pos() after recovery */
+	for (j = 0; j < nfolios; j++)
+		if (out_states[j] == EC_DPG_READ)
+			out_pages[j]->cp_ciphertext = need_deferred_decrypt;
+
 	rc = cl_io_submit_sync(sub->sub_env, &sub->sub_io,
 			       CRT_READ, queue, 0);
+	for (j = 0; j < nfolios; j++)
+		if (out_states[j] == EC_DPG_READ)
+			out_pages[j]->cp_ciphertext = 0;
+
 	if (rc) {
 		r0->lo_sub[stripe]->lso_status = LSS_READ_ERR;
 		sub->sub_ec_err = true;
@@ -2184,7 +2242,7 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 	 * out_pages
 	 */
 	for (j = 0; j < nfolios; j++) {
-		if (out_states[j] == EC_DPG_READ)
+		if (out_states[j] == EC_DPG_READ && !need_deferred_decrypt)
 			folio_mark_uptodate(out_pages[j]->cp_folio);
 	}
 	cl_page_list_splice(&queue->c2_qin, dlist);
@@ -2221,10 +2279,15 @@ out_err:
 }
 
 /**
- * lov_ec_read_parity_stripe() - read all parity pages for one parity stripe
- * across all page positions in a recovery group.
+ * lov_ec_read_raw_stripe() - read the pages of one stripe of a raid set
+ * across all page positions in a recovery group, as stored on the OST
  *
- * @parity_idx: which parity stripe (0..pcount-1)
+ * This reads a parity stripe, or a data stripe for the recovery of an
+ * encrypted file, without decryption.
+ *
+ * @comp_i:     composite layout component index of the stripe
+ * @stripe_i:   which stripe of the raid set in the component
+ * @rg_off:     file offset of the raid set in component @comp_i
  * @pg_start:   first page position
  * @nfolios:    number of PAGE_SIZE positions
  * @out_folios: array[nfolios] of folio pointers (output)
@@ -2232,41 +2295,41 @@ out_err:
  * @plist:      page list to track allocated pages for cleanup
  */
 static int
-lov_ec_read_parity_stripe(const struct lu_env *env, struct lov_io *lio,
-			  int pcomp_i, int parity_idx,
-			  struct lov_stripe_md_entry *lsme,
-			  unsigned long long parity_foff, int pg_start,
-			  int nfolios, struct folio **out_folios,
-			  struct cl_page **out_clpages,
-			  struct cl_page_list *plist)
+lov_ec_read_raw_stripe(const struct lu_env *env, struct lov_io *lio,
+		       int comp_i, int stripe_i,
+		       struct lov_stripe_md_entry *lsme,
+		       unsigned long long rg_off, int pg_start,
+		       int nfolios, struct folio **out_folios,
+		       struct cl_page **out_clpages,
+		       struct cl_page_list *plist)
 {
 	struct lov_object *lov = lio->lis_object;
 	struct cl_object *obj = lov2cl(lov);
-	struct lov_layout_raid0 *r0 = lov_r0(lov, pcomp_i);
+	struct lov_layout_raid0 *r0 = lov_r0(lov, comp_i);
 	int start_stripe;
 	int stripe;
 	struct lov_io_sub *sub;
 	struct cl_object *subobj;
 	struct cl_2queue *queue;
 	struct cl_sync_io anchor;
-	u64 p_foff;
+	u64 foff;
 	loff_t obdoff;
 	int j;
 	int rc = 0;
 
 	ENTRY;
 
-	p_foff = parity_foff;
+	foff = rg_off;
 	if (lsme_stripes_per_slot(lsme) == 1)
-		p_foff += (u64)parity_idx * lsme->lsme_stripe_size;
-	start_stripe = lov_stripe_number(lov->lo_lsm, pcomp_i, parity_foff);
-	stripe = (start_stripe + parity_idx) % r0->lo_nr;
-	lov_stripe_offset(lov->lo_lsm, pcomp_i, p_foff, stripe, &obdoff);
+		foff += (u64)stripe_i * lsme->lsme_stripe_size;
+	start_stripe = lov_stripe_number(lov->lo_lsm, comp_i, rg_off);
+	stripe = (start_stripe + stripe_i) % r0->lo_nr;
+	lov_stripe_offset(lov->lo_lsm, comp_i, foff, stripe, &obdoff);
 
 	if (unlikely(!r0->lo_sub[stripe]))
 		RETURN(-EIO);
 
-	sub = lov_sub_get(env, lio, lov_comp_index(pcomp_i, stripe));
+	sub = lov_sub_get(env, lio, lov_comp_index(comp_i, stripe));
 	if (IS_ERR(sub))
 		RETURN(-EIO);
 
@@ -2294,6 +2357,11 @@ lov_ec_read_parity_stripe(const struct lu_env *env, struct lov_io *lio,
 			out_folios[j] = NULL;
 			GOTO(out_err, rc);
 		}
+		/* keep the data as stored on the OST, and send the encryption
+		 * flag of the inode, as for the data reads
+		 */
+		out_clpages[j]->cp_ciphertext = 1;
+		out_clpages[j]->cp_inode = lov->lo_inode;
 	}
 
 	/* Phase 2: submit all pages in one batch.
@@ -2704,6 +2772,122 @@ out:
 	RETURN(rc);
 }
 
+/* is any data page at position @j of the recovery group unavailable? */
+static bool lov_ec_pos_has_error(enum ec_data_pg_state *all_states,
+				 int nfolios, int j, unsigned int dcount)
+{
+	int k;
+
+	for (k = 0; k < dcount; k++)
+		if (all_states[k * nfolios + j] == EC_DPG_ERROR)
+			return true;
+
+	return false;
+}
+
+/**
+ * lov_ec_read_raw_cached() - read cached data stripes as stored on the OST
+ * @env:	 lu_env context
+ * @lio:	 LOV I/O structure
+ * @comp_i:	 data component index
+ * @lsme:	 data stripe metadata entry
+ * @soff:	 start offset of the recovery group
+ * @pg_start:	 first page position in each stripe
+ * @nfolios:	 number of page positions
+ * @dcount:	 data stripe count
+ * @all_states:	 [nfolios * dcount] page states, indexed [stripe*nfolios + j]
+ * @raw_folios:	 [nfolios * dcount] folios read (output), same indexing
+ * @raw_clpages: [nfolios * dcount] cl_pages read (output), same indexing
+ * @plist:	 page list to track the cl_pages for cleanup
+ *
+ * The cached pages of an encrypted file hold decrypted data, while its parity
+ * is computed from the data as stored on the OSTs.  Read each data stripe with
+ * a cached page at a position being rebuilt again without decryption, like the
+ * parity.  A stripe that is down or cannot be read is left NULL in
+ * @raw_folios, which fails the read if a position being rebuilt needs it.
+ */
+static void lov_ec_read_raw_cached(const struct lu_env *env,
+				   struct lov_io *lio, int comp_i,
+				   struct lov_stripe_md_entry *lsme,
+				   unsigned long long soff, int pg_start,
+				   int nfolios, unsigned int dcount,
+				   enum ec_data_pg_state *all_states,
+				   struct folio **raw_folios,
+				   struct cl_page **raw_clpages,
+				   struct cl_page_list *plist)
+{
+	struct lov_object *lov = lio->lis_object;
+	struct lov_layout_raid0 *r0 = lov_r0(lov, comp_i);
+	int base_stripe = lov_stripe_number(lov->lo_lsm, comp_i, soff);
+	int rc;
+	int j;
+	int k;
+
+	for (k = 0; k < dcount; k++) {
+		if (!lov_ec_readable_sub(lio, comp_i,
+					 (base_stripe + k) % r0->lo_nr))
+			continue;
+
+		for (j = 0; j < nfolios; j++)
+			if (all_states[k * nfolios + j] == EC_DPG_UPTODATE &&
+			    lov_ec_pos_has_error(all_states, nfolios, j,
+						 dcount))
+				break;
+		if (j == nfolios)
+			continue;
+
+		rc = lov_ec_read_raw_stripe(env, lio, comp_i, k, lsme, soff,
+					    pg_start, nfolios,
+					    &raw_folios[k * nfolios],
+					    &raw_clpages[k * nfolios],
+					    plist);
+		if (rc)
+			CWARN("%s: "DFID": cannot reread stripe %d for recovery: rc = %d\n",
+			      lov2obd(lov_object_dev(lov)->ld_lov)->obd_name,
+			      PFID(lu_object_fid(lov2lu(lov))), k, rc);
+	}
+}
+
+/**
+ * lov_ec_decrypt_pos() - decrypt the pages of an encrypted file at a position
+ * @all_pages:	[nfolios * dcount] cl_pages, indexed [stripe*nfolios + j]
+ * @all_states:	[nfolios * dcount] page states, same indexing
+ * @nfolios:	number of page positions in this RG
+ * @j:		page position to decrypt
+ * @dcount:	data stripe count
+ *
+ * Decrypt the pages that CIT_EC_RD read or rebuilt at position @j, once they
+ * are no longer needed for recovery, and mark the read ones uptodate.  The
+ * rebuilt ones are marked uptodate once the whole recovery group is done.
+ *
+ * Return:
+ * * %0 on success
+ * * negative errno if decryption failed
+ */
+static int lov_ec_decrypt_pos(struct cl_page **all_pages,
+			      enum ec_data_pg_state *all_states,
+			      int nfolios, int j, unsigned int dcount)
+{
+	int rc;
+	int k;
+
+	for (k = 0; k < dcount; k++) {
+		int idx = k * nfolios + j;
+
+		if (!all_pages[idx] || (all_states[idx] != EC_DPG_READ &&
+					all_states[idx] != EC_DPG_ERROR))
+			continue;
+
+		rc = lov_ec_decrypt_page(all_pages[idx]);
+		if (rc)
+			return rc;
+		if (all_states[idx] == EC_DPG_READ)
+			folio_mark_uptodate(all_pages[idx]->cp_folio);
+	}
+
+	return 0;
+}
+
 /**
  * lov_ec_recover_page_pos() - reconstruct one page position in a recovery group
  * @env:	lu_env context
@@ -2714,6 +2898,11 @@ out:
  * @all_pages:	[nfolios * dcount] cl_page pointers, indexed [stripe*nfolios + j]
  * @all_states:	[nfolios * dcount] page states, same indexing
  * @par_folios: [err_nr * nfolios] parity vmpages, indexed [pstripe*nfolios + j]
+ * @raw_folios: [nfolios * dcount] data of the EC_DPG_UPTODATE pages of an
+ *		encrypted file as stored on the OST, indexed as @all_pages,
+ *		or NULL when the cached pages can be used
+ * @need_deferred_decrypt: the pages of an encrypted file were read as stored
+ *		on the OST, decrypt them after recovery
  * @nfolios:	number of page positions in this RG
  * @j:		page position to reconstruct
  * @err_nr:	number of error stripes for the shared ctx
@@ -2726,7 +2915,10 @@ out:
  * per-page error count (r_j) equals @err_nr (fast path), or builds a per-page
  * ctx for the r_j actual errors (slow path, mixed cached+ERROR at position j).
  *
- * Return: 0 on success, negative errno on per-page recover_init failure.
+ * The pages of an encrypted file are then decrypted.
+ *
+ * Return: 0 on success, negative errno on per-page recover_init failure,
+ * missing @raw_folios or decryption failure.
  * On failure, io->ci_ec.ec_recovery_failed is set so the caller can bail.
  */
 static int lov_ec_recover_page_pos(const struct lu_env *env,
@@ -2736,11 +2928,14 @@ static int lov_ec_recover_page_pos(const struct lu_env *env,
 				   struct cl_page **all_pages,
 				   enum ec_data_pg_state *all_states,
 				   struct folio **par_folios,
+				   struct folio **raw_folios,
+				   bool need_deferred_decrypt,
 				   int nfolios, int j, int err_nr,
 				   unsigned int dcount, unsigned int pcount)
 {
 	struct ec_recover_ctx per_page_ctx = { 0 };
 	struct ec_recover_ctx *use_ctx = NULL;
+	bool no_raw = false;
 	int p_j = 0, r_j = 0;
 	int rc = 0;
 	int k;
@@ -2751,6 +2946,14 @@ static int lov_ec_recover_page_pos(const struct lu_env *env,
 
 		if (all_pages[idx])
 			folio = all_pages[idx]->cp_folio;
+		/* decrypted cached page of an encrypted file: use the data
+		 * as stored on the OST, which the parity was computed from
+		 */
+		if (raw_folios && all_states[idx] == EC_DPG_UPTODATE) {
+			folio = raw_folios[idx];
+			if (!folio)
+				no_raw = true;
+		}
 
 		switch (all_states[idx]) {
 		case EC_DPG_ZERO:
@@ -2758,7 +2961,12 @@ static int lov_ec_recover_page_pos(const struct lu_env *env,
 			break;
 		case EC_DPG_UPTODATE:
 		case EC_DPG_READ:
-			if (folio)
+			if (!folio)
+				break;
+			if (raw_folios && all_states[idx] == EC_DPG_UPTODATE)
+				state->ecr_ptrs[p_j++] =
+					kmap_local_folio(folio, 0);
+			else
 				state->ecr_ptrs[p_j++] =
 					cl_kmap_local(all_pages[idx]);
 			break;
@@ -2780,6 +2988,10 @@ static int lov_ec_recover_page_pos(const struct lu_env *env,
 	 */
 	if (r_j == 0 || r_j > pcount || !par_folios)
 		goto skip_recovery;
+	if (no_raw) {
+		rc = -EIO;
+		goto skip_recovery;
+	}
 
 	/* Fill parity ptrs from batch */
 	for (k = 0; k < r_j; k++) {
@@ -2836,6 +3048,8 @@ skip_recovery:
 
 		if (all_pages[idx])
 			folio = all_pages[idx]->cp_folio;
+		if (raw_folios && all_states[idx] == EC_DPG_UPTODATE)
+			folio = raw_folios[idx];
 
 		switch (all_states[idx]) {
 		case EC_DPG_ZERO:
@@ -2858,6 +3072,10 @@ skip_recovery:
 			break;
 		}
 	}
+
+	if (!rc && need_deferred_decrypt)
+		rc = lov_ec_decrypt_pos(all_pages, all_states, nfolios, j,
+					dcount);
 
 	/* Per-page recover_init failed (-ENOMEM or -EIO from singular
 	 * matrix): ERROR pages at positions 0..j are already in ec_page_list
@@ -2906,6 +3124,10 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 	struct cl_page **par_clpages = NULL;
 	struct folio **par_folios = NULL;
 	unsigned int par_arr_cnt;
+
+	struct cl_page **raw_clpages = NULL;
+	struct folio **raw_folios = NULL;
+	bool need_deferred_decrypt = lov_ec_decrypt_needed(lov->lo_inode);
 
 	struct cl_page_list dlist;
 	struct cl_page_list plist;
@@ -3099,6 +3321,7 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 			rc = lov_ec_read_stripe_pages(env, lio, index, k,
 					lsme_d, soff, eoff,
 					pg_seq_start, nfolios,
+					need_deferred_decrypt,
 					&all_pages[k * nfolios],
 					&all_states[k * nfolios],
 					&dlist);
@@ -3153,6 +3376,24 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 			GOTO(rg_cleanup, rc = -EAGAIN);
 		}
 
+		/* The cached pages of an encrypted file hold decrypted data,
+		 * so read the stripes with a cached page at a position being
+		 * rebuilt again as stored on the OST, like the parity.  The
+		 * read fails if such a stripe cannot be read again.
+		 */
+		if (err_nr > 0 && need_deferred_decrypt) {
+			OBD_ALLOC_PTR_ARRAY_LARGE(raw_folios, array_count);
+			OBD_ALLOC_PTR_ARRAY_LARGE(raw_clpages, array_count);
+			if (!raw_folios || !raw_clpages) {
+				io->u.ci_ec.ec_recovery_failed = true;
+				GOTO(rg_cleanup, rc = -ENOMEM);
+			}
+			lov_ec_read_raw_cached(env, lio, index, lsme_d, soff,
+					       pg_seq_start, nfolios, dcount,
+					       all_states, raw_folios,
+					       raw_clpages, &plist);
+		}
+
 		/* Batch parity reads if needed. par_folios/par_clpages
 		 * indexed as [parity_stripe * nfolios + page_pos].
 		 */
@@ -3178,7 +3419,7 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 			for (pi = 0; pi < pcount && par_stripes_used < err_nr;
 			     pi++) {
 				ps = par_stripes_used;
-				rc = lov_ec_read_parity_stripe(env, lio, pindex,
+				rc = lov_ec_read_raw_stripe(env, lio, pindex,
 						pi, lsme_p, poff,
 						pg_seq_start, nfolios,
 						&par_folios[ps * nfolios],
@@ -3240,6 +3481,8 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 			rc = lov_ec_recover_page_pos(env, io, &state,
 						     &recover_ctx, all_pages,
 						     all_states, par_folios,
+						     raw_folios,
+						     need_deferred_decrypt,
 						     nfolios, j, err_nr,
 						     dcount, pcount);
 			if (rc)
@@ -3266,16 +3509,35 @@ rg_cleanup:
 				}
 			}
 		}
-		/* the owernership of cl_page in par_clpages[] has been
-		 * transferred to plist
+		if (raw_folios) {
+			for (k = 0; k < array_count; k++) {
+				if (raw_folios[k]) {
+					folio_unlock(raw_folios[k]);
+					folio_put(raw_folios[k]);
+				}
+			}
+		}
+		/* the ownership of cl_page in par_clpages[] and raw_clpages[]
+		 * has been transferred to plist
 		 */
 		cl_page_list_fini(env, &plist);
 		OBD_FREE_PTR_ARRAY_LARGE(par_clpages, par_arr_cnt);
 		par_clpages = NULL;
 		OBD_FREE_PTR_ARRAY_LARGE(par_folios, par_arr_cnt);
 		par_folios = NULL;
+		OBD_FREE_PTR_ARRAY_LARGE(raw_clpages, array_count);
+		raw_clpages = NULL;
+		OBD_FREE_PTR_ARRAY_LARGE(raw_folios, array_count);
+		raw_folios = NULL;
 
-		/* Release data pages */
+		/* Release data pages.  A page of an encrypted file that was
+		 * not decrypted holds the ciphertext, which a later read would
+		 * return as data if it was a readahead page, so delete it.
+		 */
+		if (need_deferred_decrypt)
+			cl_page_list_for_each(page, &dlist)
+				if (!folio_test_uptodate(page->cp_folio))
+					cl_page_delete(env, page);
 		cl_page_list_disown(env, &dlist);
 		cl_page_list_fini(env, &dlist);
 

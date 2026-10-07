@@ -791,7 +791,7 @@ struct cl_page {
 				cp_ra_updated:1,
 				cp_ra_used:1,
 				cp_in_kmem_array:1,
-	/** transfer encrypted file data as stored on OST, for O_CIPHERTEXT */
+	/** transfer data as stored on OST, for O_CIPHERTEXT and EC recovery */
 				cp_ciphertext:1;
 	/**
 	 * Page state. This field is const to avoid accidental update, it is

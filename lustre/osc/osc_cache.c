@@ -2971,6 +2971,7 @@ int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 	int page_count = 0;
 	int mppr = brw_flags & OBD_BRW_READ ? cli->cl_max_pages_per_rpc_read :
 					      cli->cl_max_pages_per_rpc_write;
+	bool ciphertext = false;
 	bool can_merge = true;
 	pgoff_t start = CL_PAGE_EOF;
 	pgoff_t end = 0;
@@ -2994,6 +2995,7 @@ int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 		if (unlikely(opg->ops_from > 0 ||
 			     opg->ops_to < PAGE_SIZE - 1))
 			can_merge = false;
+		ciphertext |= oap2cl_page(oap)->cp_ciphertext;
 	}
 
 	ext = osc_extent_alloc(obj);
@@ -3017,6 +3019,7 @@ int osc_queue_sync_pages(const struct lu_env *env, struct cl_io *io,
 	ext->oe_srvlock = !!(brw_flags & OBD_BRW_SRVLOCK);
 	ext->oe_ndelay = !!(brw_flags & OBD_BRW_NDELAY);
 	ext->oe_dio = !!(brw_flags & OBD_BRW_NOCACHE);
+	ext->oe_ciphertext = ciphertext;
 	ext->oe_is_rdma_only = !!(brw_flags & OBD_BRW_RDMA_ONLY);
 	ext->oe_nr_pages = page_count;
 	ext->oe_mppr = mppr;

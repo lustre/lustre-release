@@ -135,9 +135,10 @@ static void vvp_page_complete_read(const struct lu_env *env,
 		/**
 		 * cp_defer_uptodate is used for readahead page, and the
 		 * folio Uptodate bit is deferred to set in ll_readpage/
-		 * ll_io_read_page.
+		 * ll_io_read_page.  A page read as ciphertext for EC recovery
+		 * is set uptodate once decrypted, see lov_ec_decrypt_pos().
 		 */
-		if (!cp->cp_defer_uptodate)
+		if (!cp->cp_defer_uptodate && !cp->cp_ciphertext)
 			folio_mark_uptodate(folio);
 	} else if (cp->cp_defer_uptodate) {
 		cp->cp_defer_uptodate = 0;
