@@ -754,6 +754,7 @@ static int kiblnd_map_tx(struct lnet_ni *ni, struct kib_tx *tx,
 {
 	struct kib_net *net = ni->ni_data;
 	struct kib_hca_dev *hdev = net->ibn_dev->ibd_hdev;
+	u64 last_end = 0;
 	u32 nob;
 	int i;
 
@@ -777,10 +778,20 @@ static int kiblnd_map_tx(struct lnet_ni *ni, struct kib_tx *tx,
 	rd->rd_nfrags = i;
 
 	for (i = 0, nob = 0; i < rd->rd_nfrags; i++) {
+		u64 addr;
+
 		rd->rd_frags[i].rf_nob  = kiblnd_sg_dma_len(
 			hdev->ibh_ibdev, &tx->tx_frags[i]);
 		rd->rd_frags[i].rf_addr = kiblnd_sg_dma_address(
 			hdev->ibh_ibdev, &tx->tx_frags[i]);
+		addr = rd->rd_frags[i].rf_addr;
+		/* FastReg accepts fragments that meet inside a page, as
+		 * ib_sg_to_pages() does; FMR maps whole pages per fragment
+		 */
+		if (i && ((last_end | addr) & ~PAGE_MASK) &&
+		    (last_end != addr || !IS_FAST_REG_DEV(net->ibn_dev)))
+			tx->tx_gaps = true;
+		last_end = addr + rd->rd_frags[i].rf_nob;
 		nob += rd->rd_frags[i].rf_nob;
 	}
 
@@ -797,7 +808,6 @@ static int kiblnd_setup_rd_kiov(struct lnet_ni *ni, struct kib_tx *tx,
 	struct kib_net *net = ni->ni_data;
 	struct scatterlist *sg;
 	int fragnob;
-	int max_nkiov;
 	int sg_count = 0;
 
 	CDEBUG(D_NET, "niov %d offset %d nob %d p2p %d\n",
@@ -808,8 +818,6 @@ static int kiblnd_setup_rd_kiov(struct lnet_ni *ni, struct kib_tx *tx,
 	LASSERT(net != NULL);
 
 	kiblnd_kiov_skip(&kiov, &nkiov, &offset);
-
-	max_nkiov = nkiov;
 
 	sg = tx->tx_frags;
 	do {
@@ -823,24 +831,6 @@ static int kiblnd_setup_rd_kiov(struct lnet_ni *ni, struct kib_tx *tx,
 		sg_count++;
 
 		fragnob = min((int)(kiov->bv_len - offset), nob);
-
-		/*
-		 * We're allowed to start at a non-aligned page offset in the
-		 * first fragment and end at a non-aligned page offset in the
-		 * last fragment. Every interior fragment boundary, however,
-		 * must be page-aligned: otherwise ib_map_mr_sg() (see
-		 * ib_sg_to_pages()) detects a gap and short-maps the
-		 * scatterlist, which fails the FastReg with -EINVAL. A gap
-		 * therefore exists when a non-first fragment starts mid-page
-		 * or a non-last fragment ends mid-page.
-		 */
-		if ((nkiov < max_nkiov && (kiov->bv_offset & ~PAGE_MASK)) ||
-		    (nob > fragnob &&
-		     ((kiov->bv_offset + offset + fragnob) & ~PAGE_MASK))) {
-			CDEBUG(D_NET, "tx_gaps: nkiov %d/%d offset %d fragnob %d nob %d\n",
-			       nkiov, max_nkiov, offset, fragnob, nob);
-			tx->tx_gaps = true;
-		}
 
 		sg_set_page(sg, kiov->bv_page, fragnob,
 			    kiov->bv_offset + offset);
@@ -1221,13 +1211,12 @@ kiblnd_tx_complete(struct kib_tx *tx, int status)
 
 
 static void
-kiblnd_init_tx_sge(struct kib_tx *tx, u64 addr, unsigned int len)
+kiblnd_init_tx_sge(struct kib_tx *tx, u64 addr, unsigned int len, u32 lkey)
 {
 	struct ib_sge *sge = &tx->tx_sge[tx->tx_nsge];
-	struct kib_hca_dev *hdev = tx->tx_pool->tpo_hdev;
 
 	*sge = (struct ib_sge) {
-		.lkey   = hdev->ibh_pd->local_dma_lkey,
+		.lkey   = lkey,
 		.addr   = addr,
 		.length = len,
 	};
@@ -1260,7 +1249,8 @@ kiblnd_init_tx_msg_payload(struct lnet_ni *ni, struct kib_tx *tx, int type,
 		},
 	};
 
-	kiblnd_init_tx_sge(tx, tx->tx_msgaddr, nob);
+	kiblnd_init_tx_sge(tx, tx->tx_msgaddr, nob,
+			   tx->tx_pool->tpo_hdev->ibh_pd->local_dma_lkey);
 
 	tx->tx_nwrq++;
 	return wrq;
@@ -1956,7 +1946,8 @@ kiblnd_send(struct lnet_ni *ni, void *private, struct lnet_msg *lntmsg)
 		/* lets generate a SGE chain */
 		for (i = 0; i < rd->rd_nfrags; i++) {
 			kiblnd_init_tx_sge(tx, rd->rd_frags[i].rf_addr,
-					   rd->rd_frags[i].rf_nob);
+					   rd->rd_frags[i].rf_nob,
+					   kiblnd_rd_frag_key(rd, i));
 			wrq->wr.num_sge++;
 		}
 	} else {

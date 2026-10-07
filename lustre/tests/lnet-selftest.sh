@@ -11,7 +11,7 @@ if $FORCE_LARGE_NID; then
 	# lst add_group rejects IPv6 NIDs ("Invalid nid: fd33:...@tcp"), so no
 	# test that builds a session can run here.
 	always_except LU-19364 smoke teardown brw_offset teardown_race \
-		teardown_deadpeer
+		teardown_deadpeer short
 fi
 
 build_test_filter
@@ -22,6 +22,8 @@ build_test_filter
 lst_LOOP=${lst_LOOP:-100000}
 lst_CONCR=${lst_CONCR:-"1 2 4 8"}
 lst_SIZES=${lst_SIZES:-"4k 8k 256k 1M"}
+lst_OFF=${lst_OFF:-0}
+lst_STAT=${lst_STAT:-true}
 if [ "$SLOW" = no ]; then
 	lst_CONCR="1 8"
 	lst_SIZES="4k 1M"
@@ -109,6 +111,10 @@ test_smoke_sub () {
 
 	local nc=$(echo ${clients//,/ } | wc -w)
 	local ns=$(echo ${servers//,/ } | wc -w)
+	local off
+
+	(( lst_OFF == 0 )) || off="off=$lst_OFF"
+
 	echo '#!/usr/bin/bash'
 	echo 'set -e'
 
@@ -154,7 +160,7 @@ test_smoke_sub () {
 							" --distribute ${tests[i]} "
 						case $t in
 						read|write)
-							echo -n "brw $t " \
+							echo -n "brw $t $off" \
 								"$check size=$s"
 							;;
 						ping)
@@ -176,14 +182,16 @@ test_smoke_sub () {
 
 	echo $LST run b
 	echo sleep 1
-	echo "$LST stat --delay 10 --timeout 10 c s &"
-	echo 'pid=$!'
-	echo 'trap "cleanup $pid" INT TERM'
+	if $lst_STAT; then
+		echo "$LST stat --delay 10 --timeout 10 c s &"
+		echo 'pid=$!'
+		echo 'trap "cleanup $pid" INT TERM'
+	fi
 	echo "for ((t = 0; t < $smoke_DURATION; t += 10)); do"
 	echo "	sleep 10"
 	echo "	$LST query b | grep -q 'is stopped\$' && break"
 	echo "done"
-	echo 'cleanup $pid'
+	! $lst_STAT || echo 'cleanup $pid'
 }
 
 run_lst () {
@@ -722,6 +730,33 @@ test_teardown_deadpeer () {
 	lst_cleanup_all || echo "lst_cleanup_all failed (rc=$?), ignored"
 }
 run_test teardown_deadpeer "lst teardown with an unresponsive peer (LU-20104)"
+
+test_short () {
+	(( MDS1_VERSION >= $(version_code 2.17.60) &&
+	   OST1_VERSION >= $(version_code 2.17.60) &&
+	   CLIENT_VERSION >= $(version_code 2.17.60) )) ||
+		skip "need all nodes >= 2.17.60 for brw off= fixes"
+
+	local lst_LOOP=1000
+	local lst_CONCR="1 8"
+	local lst_SIZES=3968
+	local lst_TESTS=write
+	local lst_CHECK=full
+	local lst_STAT=false
+	local lst_FROM
+	local lst_OFF
+	local from
+	local pg
+
+	for lst_FROM in c s; do
+		[[ $lst_FROM == c ]] && from=$CLIENTS || from=$nodes
+		pg=$(do_nodes $(comma_list $from) getconf PAGE_SIZE |
+		     sort -n | head -1)
+		lst_OFF=$((pg - 2048))
+		test_smoke
+	done
+}
+run_test short "short bulk transfers across page boundaries"
 
 complete_test $SECONDS
 _restore_mount
