@@ -114,7 +114,7 @@ F:	lustre/obdclass/
 
 Lustre Client IO stack - CLIO
 R:	Bobijam Xu <bobijam@whamcloud.com>
-R:	Patrick Farrell <pfarrell@whamcloud.com>
+R:	Patrick Farrell <pfarrell@thelustrecollective.com>
 S:	Supported
 F:	Documentation/clio.txt
 F:	lustre/include/cl_object.h
@@ -151,7 +151,7 @@ Lustre Client VFS Interface
 R:	Oleg Drokin <green@whamcloud.com>
 R:	Lai Siyao <lai.siyao@whamcloud.com>
 R:	Vladimir Saveliev <vlaidimir.saveliev@hpe.com>
-R:	Patrick Farrell <pfarrell@whamcloud.com>
+R:	Patrick Farrell <pfarrell@thelustrecollective.com>
 S:	Supported
 F:	lustre/llite/dcache.c
 F:	lustre/llite/dir.c
@@ -192,7 +192,7 @@ K:	dom_
 
 Lustre Distributed Lock Manager - LDLM
 R:	Oleg Drokin <green@whamcloud.com>
-R:	Patrick Farrell <pfarrell@whamcloud.com>
+R:	Patrick Farrell <pfarrell@thelustrecollective.com>
 S:	Supported
 F:	lustre/include/lustre_dlm.h
 F:	lustre/include/lustre_dlm_flags.h
@@ -257,7 +257,7 @@ F:	lustre/tests/sanity-lfsck.sh
 F:	lustre/tests/sanity-scrub.sh
 
 Lustre Grant Space
-R:	Patrick Farrell <pfarrell@whamcloud.com>
+R:	Patrick Farrell <pfarrell@thelustrecollective.com>
 R:	Vladimir Saveliev <vlaidimir.saveliev@hpe.com>
 S:	Supported
 F:	lustre/ofd/ofd_dev.c
@@ -370,7 +370,7 @@ F:	lustre/include/lustre_nrs*.c
 F:	lustre/ptlrpc/nrs*.c
 
 Lustre Networking
-R:	Serguei Smirnov <ssmirnov@whamcloud.com>
+R:	Serguei Smirnov <ssmirnov@thelustrecollective.com>
 R:	Chris Horn <chris.horn@hpe.com>
 S:	Supported
 F:	Documentation/dlc.txt
@@ -395,13 +395,13 @@ S:	Supported
 F:	lnet/klnds/kfilnd/
 
 Lustre Networking O2IBLND
-R:	Serguei Smirnov <ssmirnov@whamcloud.com>
+R:	Serguei Smirnov <ssmirnov@thelustrecollective.com>
 R:	Chris Horn <chris.horn@hpe.com>
 S:	Supported
 F:	lnet/klnds/o2iblnd/
 
 Lustre Networking TCP Sockets LND
-R:	Serguei Smirnov <ssmirnov@whamcloud.com>
+R:	Serguei Smirnov <ssmirnov@thelustrecollective.com>
 R:	Chris Horn <chris.horn@hpe.com>
 S:	Supported
 F:	lnet/klnds/socklnd/
@@ -453,7 +453,7 @@ S:	Maintained
 F:	lustre/osd-zfs/
 
 Lustre OSD wbcfs
-R:	Timothy Day <timday@amazon.com>
+R:	Timothy Day <timday@thelustrecollective.com>
 R:	Yingjin Qian <qian@ddn.com>
 S:	Supported
 F:	Documentation/osd-api.txt
