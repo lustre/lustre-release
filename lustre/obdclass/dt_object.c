@@ -550,9 +550,14 @@ int dt_record_write(const struct lu_env *env, struct dt_object *dt,
 
 	LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
 	LASSERT(th != NULL);
-	LASSERT(dt->do_body_ops);
-	LASSERTF(dt->do_body_ops->dbo_write, DFID"\n",
-		 PFID(lu_object_fid(&dt->do_lu)));
+
+	/* return an error, not an assertion, for a non-writable target */
+	if (!dt->do_body_ops || !dt->do_body_ops->dbo_write) {
+		CERROR("%s: "DFID" is not a writable object: rc = %d\n",
+		       lu_dev_name(dt->do_lu.lo_dev),
+		       PFID(lu_object_fid(&dt->do_lu)), -EINVAL);
+		return -EINVAL;
+	}
 
 	size = dt->do_body_ops->dbo_write(env, dt, buf, pos, th);
 	if (size < 0)

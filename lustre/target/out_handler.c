@@ -73,6 +73,13 @@ static int out_create(struct tgt_session_info *tsi)
 	lustre_get_wire_obdo(NULL, lobdo, wobdo);
 	la_from_obdo(attr, lobdo, lobdo->o_valid);
 
+	/* reject an unknown file type */
+	if (!dt_mode_is_valid(attr->la_mode)) {
+		CERROR("%s: invalid file mode %o: rc = %d\n",
+		       tgt_name(tsi->tsi_tgt), attr->la_mode, -EPROTO);
+		RETURN(-EPROTO);
+	}
+
 	dof->dof_type = dt_mode_to_dft(attr->la_mode);
 	if (update->ou_params_count > 1) {
 		size = sizeof(*fid);
@@ -802,10 +809,9 @@ static struct tgt_handler *out_handler_find(__u32 opc)
 	h = NULL;
 	if (OUT_CREATE <= opc && opc < OUT_LAST) {
 		h = &out_update_ops[opc - OUT_CREATE];
-		LASSERTF(h->th_opc == opc, "opcode mismatch %d != %d\n",
-			 h->th_opc, opc);
-	} else {
-		h = NULL; /* unsupported opc */
+		/* the table is sparse, an in-range opc may have no handler */
+		if (h->th_opc != opc)
+			h = NULL;
 	}
 	return h;
 }
@@ -1066,6 +1072,74 @@ void tgt_update_bufs_put(struct tgt_update_bufs *tub)
 EXPORT_SYMBOL(tgt_update_bufs_put);
 
 /**
+ * out_update_request_check() - bound-check an object_update_request
+ * @our: update buffer received from a peer
+ * @len: bytes available in @our
+ * @swab: the request came from a peer of the other byte order
+ *
+ * Walk the updates and their parameters once, bounded by @len and
+ * swabbing each header in place, so the later walks stay within @our.
+ *
+ * Return: 0 if every update fits in @len, or %-EPROTO if one does not
+ */
+static int out_update_request_check(struct object_update_request *our,
+				    __u32 len, bool swab)
+{
+	__u32 off = offsetof(struct object_update_request, ourq_updates[0]);
+	__u16 count, i;
+
+	if (len < off)
+		return -EPROTO;
+
+	if (swab) {
+		__swab32s(&our->ourq_magic);
+		__swab16s(&our->ourq_count);
+		__swab16s(&our->ourq_padding);
+	}
+
+	count = our->ourq_count;
+	for (i = 0; i < count; i++) {
+		struct object_update *update = (void *)((char *)our + off);
+		__u32 hdr = offsetof(struct object_update, ou_params[0]);
+		__u16 pcount, j;
+
+		if (len - off < hdr)
+			return -EPROTO;
+		if (swab) {
+			__swab16s(&update->ou_type);
+			__swab16s(&update->ou_params_count);
+			__swab32s(&update->ou_result_size);
+			__swab32s(&update->ou_flags);
+			__swab32s(&update->ou_padding1);
+			__swab64s(&update->ou_batchid);
+			lustre_swab_lu_fid(&update->ou_fid);
+		}
+		off += hdr;
+
+		pcount = update->ou_params_count;
+		for (j = 0; j < pcount; j++) {
+			struct object_update_param *param =
+				(void *)((char *)our + off);
+			__u32 size;
+
+			if (len - off < sizeof(*param))
+				return -EPROTO;
+			if (swab) {
+				__swab16s(&param->oup_len);
+				__swab16s(&param->oup_padding);
+				__swab32s(&param->oup_padding2);
+			}
+			size = object_update_param_size(param);
+			if (size < sizeof(*param) || len - off < size)
+				return -EPROTO;
+			off += size;
+		}
+	}
+
+	return 0;
+}
+
+/**
  * out_handle() - Object updates between Targets.
  * @tsi: session related info
  *
@@ -1090,11 +1164,10 @@ int out_handle(struct tgt_session_info *tsi)
 	struct thandle_exec_args *ta = &tti->tti_tea;
 	struct req_capsule *pill = tsi->tsi_pill;
 	struct dt_device *dt = tsi->tsi_tgt->lut_bottom;
+	struct tgt_update_bufs tub = { NULL };
 	struct out_update_header *ouh;
-	struct out_update_buffer *oub = NULL;
 	struct object_update *update = NULL;
 	struct object_update_reply *reply;
-	struct ptlrpc_bulk_desc *desc = NULL;
 	struct tg_reply_data *trd = NULL;
 	void **update_bufs;
 	int current_batchid = -1;
@@ -1103,7 +1176,8 @@ int out_handle(struct tgt_session_info *tsi)
 	unsigned int reply_index = 0;
 	int rc = 0;
 	int rc1 = 0;
-	int ouh_size, reply_size;
+	__u32 ouh_size;
+	int reply_size;
 	int updates;
 	bool need_reconstruct;
 
@@ -1123,7 +1197,7 @@ int out_handle(struct tgt_session_info *tsi)
 	req_capsule_set(pill, &RQF_OUT_UPDATE);
 	ouh_size = req_capsule_get_size(pill, &RMF_OUT_UPDATE_HEADER,
 					RCL_CLIENT);
-	if (ouh_size <= 0)
+	if (ouh_size < sizeof(*ouh))
 		RETURN(err_serious(-EPROTO));
 
 	ouh = req_capsule_client_get(pill, &RMF_OUT_UPDATE_HEADER);
@@ -1137,59 +1211,18 @@ int out_handle(struct tgt_session_info *tsi)
 		RETURN(err_serious(-EPROTO));
 	}
 
-	update_buf_count = ouh->ouh_count;
-	if (update_buf_count == 0)
-		RETURN(err_serious(-EPROTO));
+	/* OSP never sends more than MD_MAX_BRW_SIZE of update buffers */
+	rc = tgt_update_bufs_get(pill->rc_req, &RMF_OUT_UPDATE_BUF,
+				 ouh->ouh_count, ouh->ouh_inline_data,
+				 ouh->ouh_inline_length,
+				 ouh_size - sizeof(*ouh),
+				 sizeof(struct object_update_request),
+				 MD_MAX_BRW_SIZE, &tub);
+	if (rc)
+		RETURN(err_serious(rc));
 
-	OBD_ALLOC_PTR_ARRAY(update_bufs, update_buf_count);
-	if (update_bufs == NULL)
-		RETURN(err_serious(-ENOMEM));
-
-	if (ouh->ouh_inline_length > 0) {
-		update_bufs[0] = ouh->ouh_inline_data;
-	} else {
-		struct out_update_buffer *tmp;
-		int page_count = 0;
-
-		oub = req_capsule_client_get(pill, &RMF_OUT_UPDATE_BUF);
-		if (oub == NULL)
-			GOTO(out_free, rc = err_serious(-EPROTO));
-
-		for (i = 0; i < update_buf_count; i++)
-			/* First *and* last might be partial pages, hence +1 */
-			page_count += DIV_ROUND_UP(oub[i].oub_size,
-						   PAGE_SIZE) + 1;
-
-		desc = ptlrpc_prep_bulk_exp(pill->rc_req, page_count,
-					    PTLRPC_BULK_OPS_COUNT,
-					    PTLRPC_BULK_GET_SINK,
-					    MDS_BULK_PORTAL,
-					    &ptlrpc_bulk_kiov_nopin_ops);
-		if (desc == NULL)
-			GOTO(out_free, rc = err_serious(-ENOMEM));
-
-		tmp = oub;
-		for (i = 0; i < update_buf_count; i++, tmp++) {
-			if (tmp->oub_size >= OUT_MAXREQSIZE)
-				GOTO(out_free, rc = err_serious(-EPROTO));
-
-			OBD_ALLOC_LARGE(update_bufs[i], tmp->oub_size);
-			if (update_bufs[i] == NULL)
-				GOTO(out_free, rc = err_serious(-ENOMEM));
-
-			desc->bd_frag_ops->add_iov_frag(desc, update_bufs[i],
-							tmp->oub_size);
-		}
-
-		pill->rc_req->rq_bulk_write = 1;
-		rc = sptlrpc_svc_prep_bulk(pill->rc_req, desc);
-		if (rc != 0)
-			GOTO(out_free, rc = err_serious(rc));
-
-		rc = target_bulk_io(pill->rc_req->rq_export, desc);
-		if (rc < 0)
-			GOTO(out_free, rc = err_serious(rc));
-	}
+	update_bufs = tub.tub_bufs;
+	update_buf_count = tub.tub_count;
 	/* validate the request and calculate the total update count and
 	 * set it to reply */
 	reply_size = 0;
@@ -1199,8 +1232,14 @@ int out_handle(struct tgt_session_info *tsi)
 		int				 j;
 
 		our = update_bufs[i];
-		if (req_capsule_req_need_swab(pill))
-			lustre_swab_object_update_request(our, 0);
+		rc = out_update_request_check(our, tub.tub_lens[i],
+					      req_capsule_req_need_swab(pill));
+		if (rc) {
+			DEBUG_REQ(D_ERROR, pill->rc_req,
+				  "bad OUT update buffer %u/%u: rc = %d",
+				  i, update_buf_count, rc);
+			GOTO(out_free, rc = err_serious(rc));
+		}
 
 		if (our->ourq_magic != UPDATE_REQUEST_MAGIC) {
 			CERROR("%s: invalid update buffer magic %x expect %x: rc = %d\n",
@@ -1410,22 +1449,8 @@ out:
 				   RCL_SERVER);
 
 out_free:
-	if (update_bufs != NULL) {
-		if (oub != NULL) {
-			for (i = 0; i < update_buf_count; i++, oub++) {
-				if (update_bufs[i] != NULL)
-					OBD_FREE_LARGE(update_bufs[i],
-						       oub->oub_size);
-			}
-		}
-
-		OBD_FREE_PTR_ARRAY(update_bufs, update_buf_count);
-	}
-
+	tgt_update_bufs_put(&tub);
 	OBD_FREE_PTR(trd);
-
-	if (desc != NULL)
-		ptlrpc_free_bulk(desc);
 
 	RETURN(rc);
 }

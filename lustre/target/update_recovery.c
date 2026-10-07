@@ -752,6 +752,13 @@ static int update_recovery_create(const struct lu_env *env,
 	lustre_get_wire_obdo(NULL, lobdo, wobdo);
 	la_from_obdo(attr, lobdo, lobdo->o_valid);
 
+	/* reject an unknown file type */
+	if (!dt_mode_is_valid(attr->la_mode)) {
+		CERROR("%s: invalid file mode %o in update record: rc = %d\n",
+		       dt_obd_name(th->th_dev), attr->la_mode, -EINVAL);
+		RETURN(-EINVAL);
+	}
+
 	dof.dof_type = dt_mode_to_dft(attr->la_mode);
 
 	rc = out_tx_create(env, dt_obj, attr, NULL, &dof,

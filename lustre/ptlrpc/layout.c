@@ -2975,10 +2975,6 @@ static const struct req_msg_field *mds_update_server[] = {
 	&RMF_OUT_UPDATE_REPLY,
 };
 
-struct req_msg_field RMF_OUT_UPDATE = DEFINE_MSGFL("object_update", 0, -1,
-				lustre_swab_object_update_request, NULL);
-EXPORT_SYMBOL(RMF_OUT_UPDATE);
-
 struct req_msg_field RMF_OUT_UPDATE_REPLY =
 			DEFINE_MSGFL("object_update_reply", 0, -1,
 				    lustre_swab_object_update_reply, NULL);
