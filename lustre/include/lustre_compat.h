@@ -46,33 +46,11 @@ static inline struct iovec iov_iter_iovec(const struct iov_iter *iter)
 }
 #endif
 
-/* from v4.1-rc2-56-g89e9b9e07a39, until v5.9-rc3-161-gf56753ac2a90 */
-#ifndef BDI_CAP_CGROUP_WRITEBACK
-#define BDI_CAP_CGROUP_WRITEBACK	0
-#endif
-
-/* from v5.9-rc3-161-gf56753ac2a90 */
-#ifndef BDI_CAP_WRITEBACK
-#define BDI_CAP_WRITEBACK		0
-#endif
-
-/* from v5.9-rc3-161-gf56753ac2a90 */
-#ifndef BDI_CAP_WRITEBACK_ACCT
-#define BDI_CAP_WRITEBACK_ACCT		0
-#endif
-
-#define LL_BDI_CAP_FLAGS	(BDI_CAP_CGROUP_WRITEBACK | \
-				 BDI_CAP_WRITEBACK | BDI_CAP_WRITEBACK_ACCT)
-
 #ifdef HAVE_AOPS_MIGRATE_FOLIO
 #define folio_migr	folio
 #else
 #define folio_migr	page
 #define migrate_folio	migratepage
-#endif
-
-#ifndef HAVE_WB_STAT_MOD
-#define wb_stat_mod(wb, item, amount)	__add_wb_stat(wb, item, amount)
 #endif
 
 #ifdef HAVE_IS_PCI_P2PDMA_PAGE

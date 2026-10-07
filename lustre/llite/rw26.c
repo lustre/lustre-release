@@ -903,7 +903,6 @@ static int ll_write_end(
 	LASSERT(cl_page_is_owned(cl_page, io));
 	if (copied > 0) {
 		struct cl_page_list *plist = &vio->u.readwrite.vui_queue;
-#ifdef SB_I_CGROUPWB
 		struct inode *inode = file_inode(file);
 		struct bdi_writeback *wb;
 
@@ -921,7 +920,6 @@ static int ll_write_end(
 			       wb->last_old_flush);
 		}
 		spin_unlock(&inode->i_lock);
-#endif
 
 		lcc->lcc_page = NULL; /* cl_page will be queued */
 

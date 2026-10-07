@@ -1570,7 +1570,7 @@ int ll_fill_super(struct super_block *sb)
 	/* disable kernel readahead */
 	sb->s_bdi->ra_pages = 0;
 	sb->s_bdi->io_pages = 0;
-	sb->s_bdi->capabilities |= LL_BDI_CAP_FLAGS;
+	sb->s_bdi->capabilities |= BDI_CAP_CGROUP_WRITEBACK;
 	sb->s_iflags |= SB_I_CGROUPWB;
 
 	/* Call ll_debugfs_register_super() before lustre_process_log()
@@ -1649,8 +1649,7 @@ out_free_cfg:
 
 static void ll_bdi_device_unregister(struct backing_dev_info *bdi)
 {
-#if !defined(HAVE_BDI_DEBUG_STATS) && defined(SB_I_CGROUPWB) && \
-    !defined(SB_I_PERSB_BDI)
+#if !defined(HAVE_BDI_DEBUG_STATS) && !defined(SB_I_PERSB_BDI)
 	if (bdi->dev == NULL)
 		return;
 

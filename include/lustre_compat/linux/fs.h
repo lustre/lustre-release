@@ -52,10 +52,6 @@ static inline void d_make_discardable(struct dentry *dentry)
 #define DTTOIF(dirtype)		((dirtype) << S_DT_SHIFT)
 #endif
 
-#ifndef SB_I_CGROUPWB
-#define SB_I_CGROUPWB   0
-#endif
-
 /* Really belongs in mnt_idmapping.h but it doesn't exist for
  * older kernels. mnt_idmapping.h is always included with fs.h.
  */

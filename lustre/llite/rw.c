@@ -1495,7 +1495,6 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 		mode = CL_FSYNC_LOCAL;
 
 	if (wbc->sync_mode == WB_SYNC_NONE) {
-#ifdef SB_I_CGROUPWB
 		struct bdi_writeback *wb;
 
 		/*
@@ -1517,17 +1516,6 @@ int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
 				prio = IO_PRIO_DIRTY_EXCEEDED;
 		}
 		spin_unlock(&inode->i_lock);
-#else
-		/*
-		 * We have no idea about writeback reason for memory reclaim
-		 * WB_REASON_TRY_TO_FREE_PAGES in the old kernel such as rhel7
-		 * (WB_REASON_VMSCAN in the newer kernel) ...
-		 * Here set mode with CL_FSYNC_RECLAIM forcely on the old
-		 * kernel.
-		 */
-		if (!wbc->for_kupdate)
-			mode = CL_FSYNC_RECLAIM;
-#endif
 	}
 
 	if (ll_i2info(inode)->lli_clob == NULL ||

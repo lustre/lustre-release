@@ -825,6 +825,30 @@ AC_DEFUN([LC_HAVE_KTHREAD_USE_MM], [
 ]) # LC_HAVE_KTHREAD_USE_MM
 
 #
+# LC_HAVE_BDI_CAP_CGROUP_WRITEBACK
+#
+# Kernel 5.10 ed7b6b4f6e915cb0bc52d0000bcc63168867b6ac
+# bdi: remove BDI_CAP_CGROUP_WRITEBACK
+#
+AC_DEFUN([LC_SRC_HAVE_BDI_CAP_CGROUP_WRITEBACK], [
+	LB2_LINUX_TEST_SRC([bdi_cap_cgroup_writeback], [
+		#include <linux/backing-dev.h>
+	],[
+		struct backing_dev_info bdi;
+
+		bdi.capabilities = BDI_CAP_CGROUP_WRITEBACK;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_BDI_CAP_CGROUP_WRITEBACK], [
+	LB2_MSG_LINUX_TEST_RESULT([if BDI_CAP_CGROUP_WRITEBACK exist],
+	[bdi_cap_cgroup_writeback], [
+	],[
+		AC_DEFINE([BDI_CAP_CGROUP_WRITEBACK], 0,
+			  [BDI_CAP_CGROUP_WRITEBACK is missing])
+	])
+]) # LC_HAVE_BDI_CAP_CGROUP_WRITEBACK
+
+#
 # LC_FSCRYPT_FNAME_ALLOC_BUFFER
 #
 # Kernel 5.9-rc4 8b10fe68985278de4926daa56ad6af701839e40a
@@ -1410,26 +1434,6 @@ LB_CHECK_EXPORT([delete_from_page_cache], [mm/filemap.c],
 	[AC_DEFINE(HAVE_DELETE_FROM_PAGE_CACHE, 1,
 			[delete_from_page_cache is exported])])
 ]) # LC_EXPORTS_DELETE_FROM_PAGE_CACHE
-
-#
-# LC_HAVE_WB_STAT_MOD
-#
-# Kernel 5.16-rc1 bd3488e7b4d61780eb3dfaca1cc6f4026bcffd48
-# mm/writeback: Rename __add_wb_stat() to wb_stat_mod()
-#
-AC_DEFUN([LC_SRC_HAVE_WB_STAT_MOD], [
-	LB2_LINUX_TEST_SRC([wb_stat_mode], [
-		#include <linux/backing-dev.h>
-	],[
-		wb_stat_mod(NULL, WB_WRITEBACK, 1);
-	],[-Werror])
-])
-AC_DEFUN([LC_HAVE_WB_STAT_MOD], [
-	LB2_MSG_LINUX_TEST_RESULT([if wb_stat_mod() exists], [wb_stat_mode], [
-		AC_DEFINE(HAVE_WB_STAT_MOD, 1,
-			[wb_stat_mod() exists])
-	])
-]) # LC_HAVE_WB_STAT_MOD
 
 #
 # LC_HAVE_FOLIO_BATCH
@@ -3921,6 +3925,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_HAVE_KTHREAD_USE_MM
 
 	# 5.9
+	LC_SRC_HAVE_BDI_CAP_CGROUP_WRITEBACK
 	LC_SRC_FSCRYPT_FNAME_ALLOC_BUFFER
 	LC_SRC_FSCRYPT_SET_CONTEXT
 	LC_SRC_FSCRYPT_NOKEY_NAME
@@ -4145,6 +4150,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_HAVE_ITER_FILE_SPLICE_WRITE
 
 	# 5.9
+	LC_HAVE_BDI_CAP_CGROUP_WRITEBACK
 	LC_FSCRYPT_FNAME_ALLOC_BUFFER
 	LC_FSCRYPT_SET_CONTEXT
 	LC_FSCRYPT_D_REVALIDATE
