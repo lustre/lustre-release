@@ -189,6 +189,28 @@ AC_DEFUN([LC_POSIX_ACL_CONFIG], [
 		[])
 ]) # LC_POSIX_ACL_CONFIG
 
+#
+# LC_XARRAY_SUPPORT
+#
+# 4.19-rc5 kernel commit 3159f943aafdbacb2f94c38fdaadabf2bbde2a14
+# replaced the radix tree implementation with XArrays. This change
+# introduced functionality needed for general XArray support, which is required
+# by some core Lustre components
+#
+AC_DEFUN([LC_SRC_XARRAY_SUPPORT], [
+	LB2_LINUX_TEST_SRC([xarray_support], [
+		#include <linux/xarray.h>
+	],[
+		xa_is_value(NULL);
+	],[-Werror])
+])
+AC_DEFUN([LC_XARRAY_SUPPORT], [
+	LB2_MSG_LINUX_TEST_RESULT([if Linux kernel supports XArray],
+	[xarray_support], [],
+		[AC_MSG_ERROR([Linux kernel doesn't support XArray])
+	])
+]) # LC_XARRAY_SUPPORT
+
 # CRYPTO_MD5 check and warn only if GSS is not disabled.
 
 #
@@ -327,21 +349,6 @@ AS_IF([test "x$enable_gss" != xno], [
 	enable_gss_keyring="no"
 ])
 ]) # LC_CONFIG_GSS
-
-#
-# LC_CONFIG_XARRAY_MULTI
-#
-# Xarray multi-tier support. The kernel must support CONFIG_XARRAY_MULTI.
-# Since device zone support depends on this the chances are very small
-# its disabled but just in case.
-#
-AC_DEFUN([LC_SRC_CONFIG_XARRAY_MULTI], [
-	LB2_SRC_CHECK_CONFIG_IM([XARRAY_MULTI])
-])
-AC_DEFUN([LC_CONFIG_XARRAY_MULTI], [
-	LB2_TEST_CHECK_CONFIG_IM([XARRAY_MULTI],[],[AC_MSG_ERROR(
-[Lustre quota requires that CONFIG_XARRAY_MULTI is enabled in your kernel.])])
-]) # LC_CONFIG_XARRAY_MULTI
 
 # LC_OPENSSL_HMAC
 #
@@ -3888,7 +3895,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	])
 	LC_SRC_CONFIG_FHANDLE
 	LC_SRC_POSIX_ACL_CONFIG
-	LC_SRC_CONFIG_XARRAY_MULTI
+	LC_SRC_XARRAY_SUPPORT
 
 	# 5.0
 	LC_SRC_GENL_FAMILY_HAS_RESV_START_OP
@@ -4108,7 +4115,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	])
 	LC_CONFIG_FHANDLE
 	LC_POSIX_ACL_CONFIG
-	LC_CONFIG_XARRAY_MULTI
+	LC_XARRAY_SUPPORT
 
 	# 5.0
 	LC_GENL_FAMILY_HAS_RESV_START_OP
