@@ -218,7 +218,8 @@ bool ll_iov_iter_is_unaligned(struct iov_iter *i)
 
 static int
 ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
-		   int rw, struct inode *inode, struct cl_sub_dio *sdio)
+		   int rw, struct inode *inode, bool ciphertext,
+		   struct cl_sub_dio *sdio)
 {
 	struct cl_dio_pages *cdp = &sdio->csd_dio_pages;
 	struct cl_sync_io *anchor = &sdio->csd_sync;
@@ -254,6 +255,7 @@ ll_direct_rw_pages(const struct lu_env *env, struct cl_io *io, size_t size,
 			 * to the thread doing the Direct IO.
 			 */
 			page->cp_inode = inode;
+			page->cp_ciphertext = ciphertext;
 		}
 		cdp->cdp_cl_pages[io_pages] = page;
 		/*
@@ -305,6 +307,13 @@ out:
 #define MAX_DIO_SIZE ((KMALLOC_MAX_SIZE / sizeof(struct brw_page) * PAGE_SIZE) & \
 		      ~((size_t)DT_MAX_BRW_SIZE - 1))
 
+static loff_t ll_dio_size(struct inode *inode, bool ciphertext)
+{
+	loff_t size = i_size_read(inode);
+
+	return ciphertext ? round_up(size, LUSTRE_ENCRYPTION_UNIT_SIZE) : size;
+}
+
 static ssize_t ll_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 {
 	struct ll_cl_context *lcc;
@@ -319,12 +328,24 @@ static ssize_t ll_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 	ssize_t bytes_at_drain = 0;
 	loff_t file_offset = iocb->ki_pos;
 	int rw = iov_iter_rw(iter);
+	bool ciphertext = ll_dio_ciphertext(file);
+	/* buffered I/O would encrypt or decrypt O_CIPHERTEXT data */
+	bool no_fallback = ciphertext && ll_has_encryption_key(inode);
 	bool sync_submit = false;
 	bool unaligned;
 	struct vvp_io *vio;
 	ssize_t rc2;
 
 	ENTRY;
+	/* transfer the ciphertext in whole encryption units, but let a read
+	 * end within the clear text, e.g. a reader that stops at st_size
+	 */
+	if (ciphertext && (file_offset & ~LUSTRE_ENCRYPTION_MASK ||
+			   ((file_offset + bytes) & ~LUSTRE_ENCRYPTION_MASK &&
+			    (rw == WRITE ||
+			     file_offset + bytes > i_size_read(inode)))))
+		RETURN(-EINVAL);
+
 	if (file_offset & ~PAGE_MASK)
 		unaligned = true;
 	else
@@ -357,10 +378,12 @@ static ssize_t ll_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 	 */
 	if (rw == READ) {
 		loff_t eof = io->ci_parity_io ? io->ci_parity_eof :
-						i_size_read(inode);
+						ll_dio_size(inode, ciphertext);
 		if (file_offset >= eof)
 			RETURN(0);
 	}
+	if (rw == WRITE && ciphertext)
+		set_bit(LLIF_CIPHERTEXT_WRITTEN, &ll_i2info(inode)->lli_flags);
 
 	/* if one part of an I/O is unaligned, just handle all of it that way -
 	 * otherwise we create significant complexities with managing the iovec
@@ -393,17 +416,17 @@ static ssize_t ll_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 	 * buffered I/O.
 	 */
 	if (iov_iter_is_pipe(iter))
-		RETURN(0);
+		RETURN(no_fallback ? -EINVAL : 0);
 
 	/* returning 0 here forces the remaining I/O through buffered I/O
-	 * while returning -EINVAL stops the I/O from continuing
+	 * while returning -EINVAL stops the I/O from continuing.
 	 */
 
 	/* Unpatched older servers which cannot safely support unaligned DIO
 	 * should abort here
 	 */
 	if (unaligned && !cl_io_top(io)->ci_allow_unaligned_dio)
-		RETURN(0);
+		RETURN(no_fallback ? -EINVAL : 0);
 
 	/* We cannot do parallel submission of sub-I/Os - for AIO or regular
 	 * DIO - unless lockless because it causes us to release the lock
@@ -430,8 +453,9 @@ static ssize_t ll_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 		 * RAID geometry in the LOV layer.
 		 */
 		if (rw == READ) {
-			loff_t eof = io->ci_parity_io ? io->ci_parity_eof :
-						       i_size_read(inode);
+			loff_t eof = io->ci_parity_io ?
+				     io->ci_parity_eof :
+				     ll_dio_size(inode, ciphertext);
 			if (file_offset >= eof)
 				break;
 
@@ -495,7 +519,8 @@ static ssize_t ll_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 		bytes = result;
 		sdio->csd_bytes = bytes;
 
-		result = ll_direct_rw_pages(env, io, bytes, rw, inode, sdio);
+		result = ll_direct_rw_pages(env, io, bytes, rw, inode,
+					    ciphertext, sdio);
 		/* if the i/o was unsuccessful, we zero the number of bytes to
 		 * copy back.  Note that partial I/O completion isn't possible
 		 * here - I/O either completes or fails.  So there's no need to
@@ -712,6 +737,11 @@ static int ll_write_begin(
 		 * page may belong to another mirror, which will result in
 		 * problem submitting the I/O. */
 		if (io->ci_designated_mirror > 0)
+			GOTO(out, result = -EBUSY);
+
+		/* buffered IO would encrypt O_CIPHERTEXT data again */
+		if (ll_dio_ciphertext(file) &&
+		    ll_has_encryption_key(inode))
 			GOTO(out, result = -EBUSY);
 
 		/**

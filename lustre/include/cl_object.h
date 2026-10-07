@@ -784,11 +784,13 @@ struct cl_page {
 	/** current slice index */
 	unsigned int		cp_layer_count:2,
 	/** folio page #, may be from a 1G hugetlb max: (1 << 18) */
-				cp_pgno:20,
+				cp_pgno:19,
 				cp_defer_uptodate:1,
 				cp_ra_updated:1,
 				cp_ra_used:1,
-				cp_in_kmem_array:1;
+				cp_in_kmem_array:1,
+	/** transfer encrypted file data as stored on OST, for O_CIPHERTEXT */
+				cp_ciphertext:1;
 	/**
 	 * Page state. This field is const to avoid accidental update, it is
 	 * modified only internally within cl_page.c. Protected by a VM lock.

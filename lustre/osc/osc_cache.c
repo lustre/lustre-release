@@ -2065,6 +2065,10 @@ can_merge(const struct osc_extent *ext, const struct osc_extent *in_rpc)
 	if (ext->oe_dio != in_rpc->oe_dio)
 		return false;
 
+	/* an RPC is encrypted or not as a whole, see osc_brw_prep_request() */
+	if (ext->oe_ciphertext != in_rpc->oe_ciphertext)
+		return false;
+
 	/* It's possible to have overlap on DIO */
 	if (in_rpc->oe_dio && overlapped(ext, in_rpc))
 		return false;
@@ -2847,6 +2851,7 @@ int osc_queue_dio_pages(const struct lu_env *env, struct cl_io *io,
 	ext->oe_srvlock = !!(brw_flags & OBD_BRW_SRVLOCK);
 	ext->oe_ndelay = !!(brw_flags & OBD_BRW_NDELAY);
 	ext->oe_dio = true;
+	ext->oe_ciphertext = cdp->cdp_cl_pages[from_page]->cp_ciphertext;
 	sdio = container_of(cdp, struct cl_sub_dio, csd_dio_pages);
 	ext->oe_csd = sdio;
 	oscl = oio->oi_write_osclock ? : oio->oi_read_osclock;

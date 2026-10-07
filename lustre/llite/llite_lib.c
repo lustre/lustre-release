@@ -2542,14 +2542,13 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 				 * truncating on PAGE_SIZE boundary, because
 				 * whole pages will be wiped.
 				 *
-				 * an exception is when working with the
-				 * raw ciphertext - in that case, we need to
-				 * encrypt those zeroes
+				 * Nor for O_CIPHERTEXT direct IO, whose data
+				 * the client does not encrypt.
 				 */
 				if (attr->ia_valid & ATTR_SIZE &&
 				    attr->ia_size & ~PAGE_MASK &&
 				    !(attr->ia_valid & ATTR_FILE &&
-				      attr->ia_file->f_flags & O_CIPHERTEXT)) {
+				      ll_dio_ciphertext(attr->ia_file))) {
 					pgoff_t offset =
 						attr->ia_size & (PAGE_SIZE - 1);
 
@@ -2560,15 +2559,17 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr,
 						GOTO(out, rc);
 				}
 				/* If encrypted volatile file without the key,
-				 * we need to fetch size from reference file,
-				 * and set it on OST objects. This happens when
-				 * migrating or extending an encrypted file
-				 * without the key.
+				 * or written as ciphertext, we need to fetch
+				 * size from reference file, and set it on OST
+				 * objects. This happens when migrating or
+				 * extending an encrypted file.
 				 */
 				if (filename_is_volatile(dentry->d_name.name,
 							 dentry->d_name.len,
 							 NULL) &&
-				    !ll_has_encryption_key(inode)) {
+				    (!ll_has_encryption_key(inode) ||
+				     test_bit(LLIF_CIPHERTEXT_WRITTEN,
+					      &lli->lli_flags))) {
 					struct file *ref_file;
 					struct inode *ref_inode;
 					struct ll_inode_info *ref_lli;

@@ -9305,6 +9305,164 @@ test_66a() {
 }
 run_test 66a "direct IO of encrypted file from huge page buffer"
 
+test_66b() {
+	local testfile=$DIR/$tdir/$tfile
+	local tmpfile=$TMP/$tfile
+	local raw=$TMP/$tfile.raw
+	local size
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap "cleanup_for_enc_tests $tmpfile $raw" EXIT
+	setup_for_enc_tests
+
+	# O_CIPHERTEXT direct read returns the ciphertext with the key loaded,
+	# up to the end of the last encryption unit
+	dd if=/dev/urandom of=$tmpfile bs=9000 count=1 conv=fsync ||
+		error "dd $tmpfile failed"
+	cp $tmpfile $testfile || error "cp $testfile failed"
+	cancel_lru_locks
+	dd if=$testfile of=$raw bs=1M iflag=direct,dsync,nonblock,noctty ||
+		error "ciphertext read of $testfile failed"
+	size=$(stat -c %s $raw)
+	(( size == 12288 )) || error "ciphertext size $size != 12288"
+	cmp -s -n 9000 $tmpfile $raw && error "ciphertext read got plaintext"
+	cmp -s -i 9000:0 -n 3288 $raw /dev/zero &&
+		error "ciphertext read got zeroes after 9000"
+
+	# a ciphertext read past the clear text not in whole units is refused
+	dd if=$testfile of=$raw bs=1000 skip=9 \
+		iflag=direct,dsync,nonblock,noctty &&
+		error "ciphertext read at 9000 of $testfile succeeded"
+	dd if=$testfile of=$raw bs=1000 count=1 skip=8192 \
+		iflag=skip_bytes,direct,dsync,nonblock,noctty &&
+		error "ciphertext read at 8192 of $testfile succeeded"
+
+	# truncate opens with O_NONBLOCK, which must not skip zeroing the end
+	# of the last page as for O_CIPHERTEXT
+	cancel_lru_locks
+	echo 3 > /proc/sys/vm/drop_caches
+	/usr/bin/truncate -s 5000 $testfile ||
+		error "truncate $testfile 5000 failed"
+	/usr/bin/truncate -s 9000 $testfile ||
+		error "truncate $testfile 9000 failed"
+	cancel_lru_locks
+	echo 3 > /proc/sys/vm/drop_caches
+	cmp -n 5000 $tmpfile $testfile || error "truncated $testfile corrupted"
+	cmp -i 5000:0 -n 4000 $testfile /dev/zero ||
+		error "truncated $testfile not zeroed after 5000"
+}
+run_test 66b "O_CIPHERTEXT direct read transfers ciphertext with the key"
+
+test_66c() {
+	local testfile=$DIR/$tdir/$tfile
+	local tmpfile=$TMP/$tfile
+	local size
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+	(( OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
+
+	stack_trap "cleanup_for_enc_tests $tmpfile $tmpfile.1 $tmpfile.2" EXIT
+	setup_for_enc_tests
+
+	# migrate and mirror extend copy the ciphertext of a multi-MiB file
+	# with the key loaded, and keep its clear text size
+	dd if=/dev/urandom of=$tmpfile bs=1M count=3 conv=fsync ||
+		error "dd $tmpfile failed"
+	echo -n tail >> $tmpfile
+	size=$(stat -c %s $tmpfile)
+	cp $tmpfile $testfile || error "cp $testfile failed"
+	$LFS migrate -c 2 $testfile || error "migrate $testfile failed"
+	cancel_lru_locks
+	echo 3 > /proc/sys/vm/drop_caches
+	(( $(stat -c %s $testfile) == size )) ||
+		error "migrated size $(stat -c %s $testfile) != $size"
+	cmp $tmpfile $testfile || error "migrated $testfile is corrupted"
+
+	$LFS mirror extend -N $testfile || error "mirror extend failed"
+	cancel_lru_locks
+	echo 3 > /proc/sys/vm/drop_caches
+	(( $(stat -c %s $testfile) == size )) ||
+		error "extended size $(stat -c %s $testfile) != $size"
+	$LFS mirror read -N 2 -o $tmpfile.2 $testfile ||
+		error "mirror read -N 2 failed"
+	cmp $tmpfile $tmpfile.2 || error "extended mirror is corrupted"
+
+	# resync copies the ciphertext of a write to the stale mirror
+	dd if=/dev/urandom of=$tmpfile bs=4k count=1 seek=10 conv=notrunc ||
+		error "dd $tmpfile seek=10 failed"
+	dd if=$tmpfile of=$testfile bs=4k count=1 skip=10 seek=10 \
+		conv=notrunc || error "dd $testfile seek=10 failed"
+	$LFS mirror resync $testfile || error "mirror resync failed"
+	$LFS mirror verify $testfile || error "mirror verify failed"
+	# verify reads whole encryption units, which are pages here, so it
+	# does not need unaligned DIO, which old servers do not support
+	if (( $(getconf PAGE_SIZE) == 4096 )); then
+		local unaligned=$($LCTL get_param -n llite.*.unaligned_dio |
+				  head -n1)
+
+		stack_trap "$LCTL set_param llite.*.unaligned_dio=$unaligned"
+		$LCTL set_param llite.*.unaligned_dio=0
+		$LFS mirror verify $testfile ||
+			error "verify without unaligned DIO failed"
+		$LCTL set_param llite.*.unaligned_dio=$unaligned
+	fi
+	cancel_lru_locks
+	echo 3 > /proc/sys/vm/drop_caches
+	(( $(stat -c %s $testfile) == size )) ||
+		error "resynced size $(stat -c %s $testfile) != $size"
+	for mirror in 1 2; do
+		rm -f $tmpfile.$mirror
+		$LFS mirror read -N $mirror -o $tmpfile.$mirror $testfile ||
+			error "mirror read -N $mirror failed"
+		cmp $tmpfile $tmpfile.$mirror ||
+			error "resynced mirror $mirror is corrupted"
+	done
+}
+run_test 66c "migrate and mirror copy ciphertext with the key"
+
+test_66d() {
+	local testfile=$DIR/$tdir/$tfile
+	local ec_enable
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+	(( OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs for EC 2+1"
+	(( MDS1_VERSION >= $(version_code v2_17_51-60-gafbcc0c005) )) ||
+		skip "need MDS >= 2.17.51.60 for EC"
+
+	stack_trap "cleanup_for_enc_tests" EXIT
+	setup_for_enc_tests
+	ec_enable=$($LCTL get_param -n llite.*.enable_erasure_coding | head -1)
+	$LCTL set_param llite.*.enable_erasure_coding=1
+	stack_trap "$LCTL set_param llite.*.enable_erasure_coding=$ec_enable"
+	export LFS_EC_OK=yes
+	stack_trap "unset LFS_EC_OK"
+
+	# EC parity resync with the key covers the ciphertext of the whole
+	# last encryption unit, as stored on the OSTs
+	$LFS setstripe -E eof -S 1M -c 2 --ec 2+1 $testfile ||
+		error "setstripe --ec 2+1 $testfile failed"
+	dd if=/dev/urandom of=$testfile bs=9000 count=1 ||
+		error "dd $testfile failed"
+	$LFS mirror resync $testfile || error "mirror resync failed"
+
+	# verify the parity against the data without the key
+	remount_client_normally
+	$LCTL set_param llite.*.enable_erasure_coding=1
+	testfile=$(find $DIR/$tdir -maxdepth 1 -type f)
+	$LFS mirror verify $testfile || error "mirror verify without key failed"
+}
+run_test 66d "EC parity resync covers the last encryption unit"
+
 cleanup_68() {
 	lctl set_param fail_loc=0 fail_val=0
 	mount_client $MOUNT ${MOUNT_OPTS} || error "re-mount $MOUNT failed"

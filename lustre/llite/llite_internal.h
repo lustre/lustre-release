@@ -471,6 +471,8 @@ enum ll_file_internal_flags {
 	LLIF_ACL_VALID		= 6,
 	/* Xattr cache is filled */
 	LLIF_XATTR_CACHE_FILLED	= 7,
+	/* ciphertext written with O_CIPHERTEXT, clear text size unknown */
+	LLIF_CIPHERTEXT_WRITTEN	= 8,
 	/* New flags added to this enum potentially need to be handled in
 	 * ll_inode2ext_flags/ll_set_inode_flags
 	 */
@@ -1135,7 +1137,9 @@ struct ll_file_data {
 	 */
 	bool				fd_write_failed;
 	unsigned int			lfd_lock_no_expand:1,
-					lfd_hsm_agent_registered:1;
+					lfd_hsm_agent_registered:1,
+					/* opened with O_CIPHERTEXT */
+					lfd_ciphertext:1;
 	enum ll_file_flags		lfd_file_flags;
 	enum mds_open_flags		fd_open_mode;
 	/* striped directory may read partially if some stripe inaccessible,
@@ -1155,6 +1159,20 @@ struct ll_file_data {
 	/* mdtest unique/shared dir stat mode: per process statahead struct. */
 	struct ll_statahead_info	*fd_sai;
 };
+
+/*
+ * Direct IO of a file opened with O_CIPHERTEXT transfers the data as stored on
+ * the OSTs, even when the key is loaded, so that tools such as migrate, mirror
+ * resync and backup copy the ciphertext rather than the plaintext.  A read
+ * may reach the end of the last encryption unit, as without the key.
+ */
+static inline bool ll_dio_ciphertext(struct file *file)
+{
+	struct ll_file_data *lfd = file->private_data;
+
+	return IS_ENCRYPTED(file_inode(file)) && file->f_flags & O_DIRECT &&
+	       lfd && lfd->lfd_ciphertext;
+}
 
 void llite_tunables_unregister(void);
 int llite_tunables_register(void);

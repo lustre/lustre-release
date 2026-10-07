@@ -4391,8 +4391,9 @@ out_free:
 			rc = llapi_mirror_punch(fd, comp->lrc_mirror_id, pos,
 						comp->lrc_end - pos);
 		} else {
-			rc = llapi_mirror_truncate(fd, comp->lrc_mirror_id,
-						   pos);
+			rc = llapi_mirror_truncate_copy(fd,
+							comp->lrc_mirror_id,
+							pos);
 		}
 
 		/* Ignore truncate error on encrypted file without the
@@ -5410,8 +5411,13 @@ llapi_ec_resync_or_verify_comp(int fd, struct llapi_layout *layout,
 	data_off = data_pos;
 	ec_pos = ec_comp->llc_extent.e_start;
 
-	/* We only use data until end of extent or eof */
+	/* We only use data until end of extent or eof.  The parity of an
+	 * encrypted file covers the whole last encryption unit as stored.
+	 */
 	end_pos = stbuf.st_size;
+	if (llapi_file_is_encrypted(fd) > 0)
+		end_pos = (end_pos + LUSTRE_ENCRYPTION_UNIT_SIZE - 1) &
+			  LUSTRE_ENCRYPTION_MASK;
 	if (end_pos > data_comp->llc_extent.e_end)
 		end_pos = data_comp->llc_extent.e_end;
 

@@ -72,6 +72,7 @@ int llapi_ioctl_pack(struct obd_ioctl_data *data, char **pbuf, int max_len);
 int llapi_ioctl_dev(int dev_id, unsigned int cmd, void *buf);
 int llapi_obdname2devno(const char *name);
 int llapi_ioctl_unpack(struct obd_ioctl_data *data, char *pbuf, int max_len);
+int llapi_mirror_truncate_copy(int fd, unsigned int id, off_t pos);
 int sattr_cache_get_defaults(const char *const fsname,
 			     const char *const pathname, unsigned int *scount,
 			     unsigned int *ssize, unsigned int *soffset);

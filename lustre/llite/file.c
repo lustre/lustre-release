@@ -1126,6 +1126,8 @@ int ll_file_open(struct inode *inode, struct file *file)
 		GOTO(out_nofiledata, rc = -ENOMEM);
 
 	lfd->fd_file = file;
+	/* the VFS clears O_NOCTTY of O_CIPHERTEXT from f_flags after open */
+	lfd->lfd_ciphertext = (file->f_flags & O_CIPHERTEXT) == O_CIPHERTEXT;
 	if (S_ISDIR(inode->i_mode))
 		ll_authorize_statahead(inode, lfd);
 
@@ -2246,9 +2248,13 @@ restart:
 		 * completion fires externally via cl_dio_aio_end after the
 		 * syscall returns, so we cannot restart the IO from that
 		 * context.  AIO EC recovery is not yet implemented.
+		 * Nor for O_CIPHERTEXT with the key, which buffered IO would
+		 * decrypt.
 		 */
 		if (rc && iot == CIT_READ && io->ci_cross_ec &&
-		    !io->ci_switch_ec_io) {
+		    !io->ci_switch_ec_io &&
+		    !(ll_dio_ciphertext(file) &&
+		      ll_has_encryption_key(inode))) {
 			CDEBUG(D_VFSTRACE,
 			       "DIO read failed rc=%d, switching to CIT_EC_RD\n",
 			       rc);
@@ -2312,6 +2318,13 @@ out:
 	CDEBUG(D_VFSTRACE,
 	       DNAME": %d io complete with rc: %d, result: %zd, restart: %d\n",
 	       encode_fn_file(file), acct_iot, rc, result, io->ci_need_restart);
+
+	/* LOV may also switch to CIT_EC_RD, see lov_io_mirror_init() */
+	if (io->ci_switch_ec_io && !switch_ec && ll_dio_ciphertext(file) &&
+	    ll_has_encryption_key(inode)) {
+		io->ci_need_restart = 0;
+		rc = -EIO;
+	}
 
 	if ((!rc || rc == -ENODATA || rc == -ENOLCK || rc == -EIOCBQUEUED) &&
 	    bytes > 0 && io->ci_need_restart && retries-- > 0) {
@@ -6580,6 +6593,11 @@ int ll_getattr_dentry(struct dentry *de, struct kstat *stat, u32 request_mask,
 		 * block up to the end of restore (getattr will block)
 		 */
 		if (!test_bit(LLIF_FILE_RESTORING, &lli->lli_flags)) {
+			/* a lookup without open does not set up the key, and
+			 * without it ll_merge_attr() rounds up the size
+			 */
+			if (IS_ENCRYPTED(inode))
+				(void)llcrypt_prepare_readdir(inode);
 			rc = ll_glimpse_size(inode);
 			if (rc < 0)
 				RETURN(rc);

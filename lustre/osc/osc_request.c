@@ -1549,11 +1549,14 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 	bool enable_checksum = true;
 	unsigned int unaligned = 0;
 	struct cl_page *clpage;
+	bool ciphertext = false;
 
 	ENTRY;
 	if (pga[0]->bp_folio) {
 		clpage = oap2cl_page(brw_page2oap(pga[0]));
 		inode = clpage->cp_inode;
+		/* transfer the data as stored, as without the key */
+		ciphertext = clpage->cp_ciphertext;
 		if (clpage->cp_type == CPT_TRANSIENT)
 			directio = true;
 	}
@@ -1575,7 +1578,7 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 		RETURN(-ENOMEM);
 
 	if (opc == OST_WRITE && inode && IS_ENCRYPTED(inode) &&
-	    llcrypt_has_encryption_key(inode)) {
+	    llcrypt_has_encryption_key(inode) && !ciphertext) {
 		struct folio **pa = NULL;
 
 #ifdef CONFIG_LL_ENCRYPTION
@@ -1704,7 +1707,7 @@ retry_encrypt:
 		if (attr.cat_size)
 			oa->o_size = attr.cat_size;
 	} else if (opc == OST_READ && inode && IS_ENCRYPTED(inode) &&
-		   ll_has_encryption_key(inode)) {
+		   ll_has_encryption_key(inode) && !ciphertext) {
 		for (i = 0; i < page_count; i++) {
 			struct brw_page *pg = pga[i];
 			u32 nunits = brw_page_offset(pg) + pg->bp_count;
@@ -1740,7 +1743,7 @@ retry_encrypt:
 			unaligned++;
 #endif
 		if (!inode || !IS_ENCRYPTED(inode) ||
-		    !ll_has_encryption_key(inode)) {
+		    !ll_has_encryption_key(inode) || ciphertext) {
 			pga[i]->bp_count_diff = 0;
 			pga[i]->bp_off_diff = 0;
 		}
@@ -2380,6 +2383,10 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 			struct brw_page *brwpg = aa->aa_ppga[idx];
 			unsigned int offs = 0;
 
+			clpage = oap2cl_page(brw_page2oap(brwpg));
+			if (clpage->cp_ciphertext)
+				continue;
+
 			while (offs < PAGE_SIZE) {
 				/* do not decrypt if page is all 0s */
 				if (is_empty_folio(brwpg->bp_folio,
@@ -2404,8 +2411,6 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 					u64 lblk_num;
 					unsigned int i;
 
-					clpage =
-					       oap2cl_page(brw_page2oap(brwpg));
 					lblk_num =
 						((u64)(clpage->cp_page_index) <<
 						(PAGE_SHIFT - blockbits)) +

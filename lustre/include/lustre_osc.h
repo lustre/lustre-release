@@ -915,6 +915,8 @@ struct osc_extent {
 				oe_ndelay:1,
 	/** direct IO pages */
 				oe_dio:1,
+	/** pages transferred as stored on the OST, without the key */
+				oe_ciphertext:1,
 	/** this extent consists of pages that are not directly accessible
 	 *  from the CPU
 	 */

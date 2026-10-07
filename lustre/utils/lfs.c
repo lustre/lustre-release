@@ -18109,6 +18109,13 @@ int lfs_mirror_verify_chunk(int fd, size_t file_size,
 	if (file_size == 0)
 		return 0;
 
+	/* read the ciphertext of an encrypted file in whole units, as the
+	 * clear text size with the key may end within the last one
+	 */
+	if (llapi_file_is_encrypted(fd) > 0)
+		file_size = (file_size + LUSTRE_ENCRYPTION_UNIT_SIZE - 1) &
+			    LUSTRE_ENCRYPTION_MASK;
+
 	page_size = sysconf(_SC_PAGESIZE);
 	if (page_size < 0) {
 		rc = -errno;
@@ -18141,7 +18148,9 @@ int lfs_mirror_verify_chunk(int fd, size_t file_size,
 		bytes_read = 0;
 		for (i = 0; i < chunk->mirror_count; i++) {
 			bytes_read = llapi_mirror_read(fd, chunk->mirror_id[i],
-						       buf, MIN(buflen, count),
+						       buf,
+						       MIN(buflen,
+							   count - bytes_done),
 						       pos);
 			if (bytes_read < 0) {
 				rc = bytes_read;
@@ -18155,7 +18164,9 @@ int lfs_mirror_verify_chunk(int fd, size_t file_size,
 			/* compute new CRC-32 checksum */
 			crc_array[i] = crc32(crc, buf, bytes_read);
 		}
-
+		/* end of file, e.g. truncated during verify */
+		if (bytes_read == 0)
+			break;
 
 		/* compare CRC-32 checksum values */
 		for (i = 1; i < chunk->mirror_count; i++) {

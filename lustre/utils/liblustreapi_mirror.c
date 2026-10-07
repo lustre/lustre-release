@@ -211,6 +211,49 @@ int llapi_mirror_truncate(int fd, unsigned int id, off_t length)
 	return rc;
 }
 
+/**
+ * llapi_mirror_truncate_copy() - truncate a mirror to the end of a copy
+ * @fd: file descriptor, opened with O_CIPHERTEXT for an encrypted file
+ * @id: mirror id
+ * @pos: end of the data copied to the mirror
+ *
+ * A copy of the ciphertext of an encrypted file ends at the end of the last
+ * encryption unit, while with the key the file size is the clear text size,
+ * so keep that.  Without the key, the file size is already rounded up to the
+ * encryption unit, so this truncates to @pos.
+ *
+ * Return:
+ * * %0 on success
+ * * %negative errno on failure
+ */
+int llapi_mirror_truncate_copy(int fd, unsigned int id, off_t pos)
+{
+	off_t length = pos;
+	struct stat st;
+	int rc;
+
+	if (llapi_file_is_encrypted(fd) > 0 && fstat(fd, &st) == 0 &&
+	    pos > st.st_size &&
+	    pos <= ((st.st_size + LUSTRE_ENCRYPTION_UNIT_SIZE - 1) &
+		    LUSTRE_ENCRYPTION_MASK))
+		length = st.st_size;
+
+	rc = llapi_mirror_set(fd, id);
+	if (rc < 0)
+		return rc;
+
+	rc = ftruncate(fd, length);
+	if (rc < 0) {
+		rc = -errno;
+		llapi_error(LLAPI_MSG_WARN, rc,
+			    "fail to ftruncate mirror %u to %ld", id, length);
+	}
+
+	(void) llapi_mirror_clear(fd);
+
+	return rc;
+}
+
 int llapi_mirror_punch(int fd, unsigned int id, off_t start, size_t length)
 {
 	int rc;
@@ -404,7 +447,7 @@ ssize_t llapi_mirror_copy_many(int fd, __u16 src, __u16 *dst, size_t count)
 
 	if (nr > 0) {
 		for (i = 0; i < nr; i++) {
-			rc = llapi_mirror_truncate(fd, dst[i], pos);
+			rc = llapi_mirror_truncate_copy(fd, dst[i], pos);
 			if (rc < 0) {
 				result = rc;
 
@@ -511,7 +554,7 @@ int llapi_mirror_copy(int fd, unsigned int src, unsigned int dst, off_t pos,
 	free(buf);
 
 	if (result > 0) {
-		rc = llapi_mirror_truncate(fd, dst, pos);
+		rc = llapi_mirror_truncate_copy(fd, dst, pos);
 		if (rc < 0) {
 			llapi_error(LLAPI_MSG_ERROR, result,
 				    "error truncating mirror %u to %ld",
