@@ -313,6 +313,41 @@ clear_failure_domain() {
 	sleep 10
 }
 
+# number of different failure domains of OSTs $2..., for domains from
+# "assign_failure_domain $1"
+fdom_count() {
+	local nfdom=$1
+	local ost
+
+	shift
+	for ost in "$@"; do
+		echo $((ost % nfdom))
+	done | sort -u | wc -l
+}
+
+# check the data and parity stripes of each raid set of file $1 are in
+# different failure domains, for domains from "assign_failure_domain $2"
+check_raidset_fdoms() {
+	local tf=$1
+	local nfdom=$2
+	local rs dcount dstart dend pstart pend osts
+
+	# each raid set: RS, data count, data stripes A-B, parity stripes C-D
+	while read rs dcount dstart dend pstart pend; do
+		osts="$(get_osts_by_comp $tf 65537 $dstart \
+				$((dend - dstart + 1)))
+		      $(get_osts_by_comp $tf 131074 $pstart \
+				$((pend - pstart + 1)))"
+		(( $(fdom_count $nfdom $osts) ==
+		   dend - dstart + pend - pstart + 2 )) || {
+			$LFS getstripe --ec-map $tf
+			$LFS getstripe $tf
+			error "$tf raid set $rs domain reused:" $osts
+		}
+	done < <($LFS getstripe --ec-map $tf |
+		 awk '/data_stripes/ { gsub(/[^0-9]+/, " "); print }')
+}
+
 #
 # Read from parity mirror and check for zeros.
 # Usage: check_parity_read <file> <mirror_id> <offset> <expect_zeros>
@@ -5709,6 +5744,126 @@ test_35a() {
 			error "Failure domain was re-used"
 		}
 	done
+
+	(( MDS1_VERSION >= $(version_code 2.17.59.3) )) || {
+		echo "need MDS >= 2.17.59.3 for per raid set domains"
+		return 0
+	}
+
+	# with -c only the stripes of each raid set need different domains,
+	# but the data stripes are still on different OSTs
+	local mdts=$(comma_list $(mdts_nodes))
+	local qos_old=$(do_facet mds1 \
+		"$LCTL get_param -n lod.$FSNAME-*.qos_threshold_rr" | head -n 1)
+	local rr i dosts
+
+	stack_trap "do_nodes $mdts \
+		'$LCTL set_param lod.$FSNAME-*.qos_threshold_rr=${qos_old%%%}'"
+	# both the RR (100) and QoS (0) allocators
+	for rr in 100 0; do
+		do_nodes $mdts \
+			"$LCTL set_param lod.$FSNAME-*.qos_threshold_rr=$rr"
+		for ((i = 0; i < 5; i++)); do
+			tf=$td/c$rr.$i
+			$LFS setstripe -E -1 -c 8 --ec 2+2 $tf ||
+				error "setstripe $tf failed"
+			# RR leaves out an OST that is still precreating
+			# objects, down to 3 of the 4 raid sets as in
+			# lod_stripe_count_min(), so check the stripes are
+			# unique and in different domains, not their count
+			count=$($LFS getstripe -I65537 -c $tf)
+			dosts=$(get_osts_by_comp $tf 65537 0 $count)
+			(( count >= 6 &&
+			   $(sort -u <<< "$dosts" | wc -l) == count )) || {
+				$LFS getstripe $tf
+				error "$tf $count data OSTs not unique:" $dosts
+			}
+			check_raidset_fdoms $tf 4
+		done
+	done
+
+	# with fewer than K+M domains, raid sets of fewer data stripes are
+	# used down to 3/4 of K, as for the stripe count of other layouts
+	local k
+
+	for rr in 100 0; do
+		do_nodes $mdts \
+			"$LCTL set_param lod.$FSNAME-*.qos_threshold_rr=$rr"
+		tf=$td/k$rr
+		$LFS setstripe -E -1 -c 8 --ec 4+1 $tf ||
+			error "setstripe $tf 4+1 failed"
+		k=$($LFS getstripe --ec-map $tf |
+		    awk '/lcme_ec:/ { print $2; exit }')
+		[[ "$k" == "3+1" ]] || {
+			$LFS getstripe --ec-map $tf
+			error "$tf has EC $k, not 3+1"
+		}
+		check_raidset_fdoms $tf 4
+		# a single raid set gets fewer data stripes instead
+		$LFS setstripe -E -1 -c 4 --ec 4+1 $tf.one ||
+			error "setstripe $tf.one 4+1 failed"
+		k=$($LFS getstripe --ec-map $tf.one |
+		    awk '/lcme_ec:/ { print $2; exit }')
+		[[ "$k" == "3+1" &&
+		   $($LFS getstripe -I65537 -c $tf.one) == 3 ]] || {
+			$LFS getstripe --ec-map $tf.one
+			error "$tf.one has EC $k, not 3+1"
+		}
+		check_raidset_fdoms $tf.one 4
+		# 3 data stripes are one raid set, 2 make the requested 2+2
+		$LFS setstripe -E -1 -c 3 --ec 2+2 $tf.two ||
+			error "setstripe $tf.two 2+2 failed"
+		k=$($LFS getstripe --ec-map $tf.two |
+		    awk '/lcme_ec:/ { print $2; exit }')
+		[[ "$k" == "2+2" &&
+		   $($LFS getstripe -I65537 -c $tf.two) == 2 ]] || {
+			$LFS getstripe --ec-map $tf.two
+			error "$tf.two has EC $k, not 2+2 with 2 stripes"
+		}
+		check_raidset_fdoms $tf.two 4
+		$LFS setstripe -E -1 -c 8 --ec 6+2 $tf.short &&
+			error "setstripe $tf.short 6+2 with 4 domains succeeded"
+	done
+
+	# a -c layout short of OSTs is split into raid sets again after the
+	# data stripes are placed, and the new raid sets need 4 domains too
+	local ostlast=$(ostname_from_index $((OSTCOUNT - 1)))
+
+	do_nodes $mdts "$LCTL set_param osp.$ostlast-osc-MDT*.active=0"
+	stack_trap "do_nodes $mdts \
+		'$LCTL set_param osp.$ostlast-osc-MDT*.active=1'"
+	for rr in 100 0; do
+		do_nodes $mdts \
+			"$LCTL set_param lod.$FSNAME-*.qos_threshold_rr=$rr"
+		for ((i = 0; i < 5; i++)); do
+			tf=$td/s$rr.$i
+			$LFS setstripe -E -1 -c $OSTCOUNT --ec 3+1 $tf ||
+				error "setstripe $tf failed"
+			dosts=$(get_osts_by_comp $tf 65537 0 $OSTCOUNT)
+			(( $(wc -w <<< $dosts) < OSTCOUNT &&
+			   $(sort -u <<< "$dosts" | wc -l) ==
+			   $(wc -w <<< $dosts) )) || {
+				$LFS getstripe $tf
+				error "$tf data stripes not shrunk:" $dosts
+			}
+			check_raidset_fdoms $tf 4
+		done
+	done
+	do_nodes $mdts "$LCTL set_param osp.$ostlast-osc-MDT*.active=1"
+	wait_osc_import_state mds ost$OSTCOUNT FULL
+
+	# with K=1 each raid set is one data stripe and its parity, so two
+	# domains are enough for any number of data stripes
+	assign_failure_domain 2
+	sleep 10
+	for rr in 100 0; do
+		do_nodes $mdts \
+			"$LCTL set_param lod.$FSNAME-*.qos_threshold_rr=$rr"
+		tf=$td/one$rr
+		$LFS setstripe -E -1 -c 4 --ec 1+1 $tf ||
+			error "setstripe $tf 1+1 with 2 domains failed"
+		check_raidset_fdoms $tf 2
+	done
 }
 run_test 35a "test raidset OSTs allocations using failure domains"
 
@@ -5754,6 +5909,34 @@ test_35b() {
 			$LFS getstripe $tf
 			error "Failure domain was re-used"
 		}
+	done
+
+	(( MDS1_VERSION >= $(version_code 2.17.59.3) )) || {
+		echo "need MDS >= 2.17.59.3 for per raid set domains"
+		return 0
+	}
+
+	# a plain mirror with the same geometry as an EC mirror must not
+	# share a domain with its data or parity, so use all 5 domains
+	assign_failure_domain 5
+	sleep 10 # MDS statfs cache, see clear_failure_domain()
+
+	local -a layouts=("-N -E -1 -c 2 --ec 2+1 -N -E -1 -c 2"
+			  "-N -E -1 -c 2 -N -E -1 -c 2 --ec 2+1")
+	local i j osts
+
+	for ((j = 0; j < ${#layouts[@]}; j++)); do
+		for ((i = 0; i < 10; i++)); do
+			tf=$td/m$j.$i
+			$LFS setstripe ${layouts[j]} $tf ||
+				error "setstripe ${layouts[j]} $tf failed"
+			osts=$($LFS getstripe $tf |
+			       sed -n 's/.*l_ost_idx: *\([0-9]*\),.*/\1/p')
+			(( $(fdom_count 5 $osts) == 5 )) || {
+				$LFS getstripe $tf
+				error "$tf domain reused:" $osts
+			}
+		done
 	done
 }
 run_test 35b "test FLR OSTs allocations using failure domains"

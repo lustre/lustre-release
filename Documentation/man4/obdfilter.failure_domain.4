@@ -1,4 +1,4 @@
-.TH OBDFILTER...FAILURE_DOMAIN 4 2026-09-07 Lustre "Lustre Kernel Interfaces"
+.TH OBDFILTER...FAILURE_DOMAIN 4 2026-10-07 Lustre "Lustre Kernel Interfaces"
 .SH NAME
 obdfilter.failure_domain \- control the failure_domain for OSTs
 .SH SYNOPSIS
@@ -55,19 +55,33 @@ other than whether they are the same or different.
 Except for the value 0. This value means no failure-domain is configured and
 failure-domains should be ignored for this OST.
 
-When allocating files using erasure-coding (--ec) the coverage for
-failure-domain uniqueness differs between normal allocations (-c) and
-allocations using overstriping (-C).
-When normal allocation (-c) is used all stripes in the data and its
-corresponding ec component must all be in different failure-domains.
-When overstriping (-C) is used it is sufficient that all data and ec stripes
-within each raid set are from different failure-domains but the same
-failure-domain can be used from different raid sets.
+For files using erasure coding
+.RB ( "lfs setstripe --ec" ),
+all data and parity stripes of each RAID set are allocated in different
+failure domains.
+Different RAID sets of the same component may use the same failure domain,
+since each RAID set is protected individually,
+so a layout needs only as many failure domains as its largest RAID set has
+data and parity stripes.
+If there are fewer failure domains than that, the RAID sets are made with
+fewer data stripes each, down to 3/4 of the requested number, or of the
+largest RAID set if that is smaller, and otherwise the file cannot be
+created.
+The data stripes of a component are on different OSTs unless overstriping
+.RB ( "lfs setstripe -C" )
+is used.
+
+For mirrored files
+.RB ( "lfs mirror create" " or " "lfs mirror extend" ),
+the stripes of a component are allocated in different failure domains
+unless overstriping is used,
+and components of different mirrors that overlap the same file extent
+are never allocated in the same failure domain,
+so that the copies of the data do not depend on the same resources.
+This does not apply between the data and parity components of an
+erasure coded file, which follow the RAID set rules above.
 
 When used it is recommended that failure-domain is configured for all OSTs.
-
-For EC protected files it is recommended to use overstriping (-C) as all
-raid sets are protected individually.
 
 Failure-domain constraints are applied only by the default round-robin
 and QoS allocators.
@@ -111,6 +125,8 @@ filesystem package since release 2.18.0.
 .\" Added in 2.17.51.xxx
 .SH SEE ALSO
 .BR lfs-df (1),
+.BR lfs-mirror-create (1),
+.BR lfs-mirror-extend (1),
 .BR lfs-setstripe (1),
 .BR lctl-get_param (8),
 .BR lctl-set_param (8)

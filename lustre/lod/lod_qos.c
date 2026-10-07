@@ -880,12 +880,6 @@ static int lod_ec_data_range_for_parity(struct ec_split_comp *sc,
  * @parity_comp: the current parity comp.
  * @stripe: striping created
  * @ost_indices: ost indices of striping created
- * @want_overstriping: the caller's original overstriping request for
- * this component, not @parity_comp->llc_pattern, since the latter's
- * LOV_PATTERN_OVERSTRIPING bit may already have been cleared by the
- * caller (e.g. lod_ost_alloc_rr()) once it found enough unique OSTs,
- * even though the raid-set-repeating FD layout that -C implies is
- * still in effect for this allocation.
  *
  * Fill remaining parity stripes by reusing OSTs from the linked data
  * component when short of unique targets (multi-raid-set EC only).
@@ -895,17 +889,15 @@ static int lod_ec_data_range_for_parity(struct ec_split_comp *sc,
  * A whole-component OST scan would reject the candidate at pos against
  * itself and never place parity.
  *
- * Failure domains (non-zero) follow failure-domain.txt 3.1 like
- * lod_ec_check_data_usable(): -C = current raid set; -c = full data
- * component and all parity already placed (skip index pos for data FD).
+ * Failure domains (non-zero) must differ from those of the data and
+ * parity stripes of the same raid set, see failure-domain.txt 3.1.
  */
 static __u32 lod_ec_add_parities(const struct lu_env *env,
 				 struct lod_object *lo, struct thandle *th,
 				 __u32 nfound, struct ec_split_comp *sc,
 				 struct lod_layout_component *data_comp,
 				 struct lod_layout_component *parity_comp,
-				 struct dt_object **stripe, __u32 *ost_indices,
-				 bool want_overstriping)
+				 struct dt_object **stripe, __u32 *ost_indices)
 {
 	int i, pos, tries;
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
@@ -955,18 +947,9 @@ static __u32 lod_ec_add_parities(const struct lu_env *env,
 		if (already_used)
 			continue;
 
-		/*
-		 * FD vs data: -C keeps the current raid set window above;
-		 * -c scans the full data component (skip self @pos).
-		 */
+		/* domain vs the data stripes of this raid set */
 		if (ost1->ltd_qos.ltq_failure_domain) {
-			if (!want_overstriping) {
-				start = 0;
-				num = data_comp->llc_stripe_count;
-			}
 			for (i = start; i < start + num; i++) {
-				if (i == pos)
-					continue;
 				ost2 = OST_TGT(lod,
 					       data_comp->llc_ost_indices[i]);
 				if (ost1->ltd_qos.ltq_failure_domain ==
@@ -991,16 +974,10 @@ static __u32 lod_ec_add_parities(const struct lu_env *env,
 		if (already_used)
 			continue;
 
-		/* FD vs parity already placed: -C = this raid set; -c = all */
+		/* domain vs the parity already placed in this raid set */
 		if (ost1->ltd_qos.ltq_failure_domain) {
-			if (want_overstriping) {
-				start = cur_rs * parity_comp->llc_cstripe_count;
-				num = nfound - start;
-			} else {
-				start = 0;
-				num = nfound;
-			}
-			for (i = start; i < start + num; i++) {
+			for (i = cur_rs * parity_comp->llc_cstripe_count;
+			     i < nfound; i++) {
 				ost2 = OST_TGT(lod, ost_indices[i]);
 				if (ost1->ltd_qos.ltq_failure_domain ==
 				    ost2->ltd_qos.ltq_failure_domain) {
@@ -1043,7 +1020,7 @@ static __u32 lod_ec_add_parities(const struct lu_env *env,
  * It verifies that the current candidate idx is not already used in the
  * corresponding data stripe set / raid set. Failure domain collisions
  * between @idx and the data component are already checked by
- * lod_fd_check_ec_allowed(), which is called before this function at
+ * lod_fdom_check_ec_allowed(), which is called before this function at
  * both call sites, so that check is not duplicated here.
  */
 static bool lod_ec_check_data_usable(struct lod_object *lo,
@@ -1141,7 +1118,7 @@ static int lod_ec_comp_raidset_range(struct lod_layout_component *lod_comp,
 }
 
 /**
- * lod_fd_check_ec_allowed() - Checks if an OST is allowed
+ * lod_fdom_check_ec_allowed() - Checks if an OST is allowed
  * @lo: LOD object
  * @ost: OST candidate to check if allowed
  * @nfound: current number of found/selected OSTs in lod_comp
@@ -1152,15 +1129,24 @@ static int lod_ec_comp_raidset_range(struct lod_layout_component *lod_comp,
  * @lod_comp: component currently being allocated (data or parity)
  *
  * Called while selecting stripes for an EC data or parity component.
- * It verifies that the failure domain for the current candidate has
- * not already been used by a different stripe in the same stripe set /
- * raid set of @lod_comp, and (when @data_comp is non-NULL) not by a
- * stripe of the linked data component under the -c/-C rules above.
+ * It verifies that the failure domain of the candidate is not used by
+ * another stripe of the same raid set, in @lod_comp and (when @data_comp
+ * is non-NULL) in the linked data component.  Different raid sets may
+ * share a domain, since each raid set is protected on its own.
+ *
+ * Without overstriping, a data component that is short of OSTs is split
+ * into raid sets again after its stripes are placed, see
+ * lod_ec_shrink_data_geometry().  The data stripes are then kept in
+ * different domains within a sliding window of consecutive stripes as
+ * long as the largest raid set ec_split_stripes() can make, which is a
+ * single raid set of up to EC_MIN_SPLIT_SIZE - 1 stripes for a small
+ * component unless K is 1, so that every raid set of the new split is in
+ * different domains too.
  *
  * Return: true if the failure domain of @ost may be used, false if it
  *	   would collide with an existing stripe.
  */
-static bool lod_fd_check_ec_allowed(struct lod_object *lo,
+static bool lod_fdom_check_ec_allowed(struct lod_object *lo,
 				      struct lod_tgt_desc *ost,
 				      __u32 nfound, __u32 *ost_indices,
 				      struct ec_split_comp *sc,
@@ -1179,16 +1165,19 @@ static bool lod_fd_check_ec_allowed(struct lod_object *lo,
 	if (!ost->ltd_qos.ltq_failure_domain)
 		return true;
 
-	if (!(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)) {
-		/* All stripes must be unique */
-		start = 0;
-		num = nfound;
+	if (!data_comp && lod_comp->llc_dstripe_count &&
+	    !(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)) {
+		if (lod_comp->llc_dstripe_count == 1)
+			num = 1;
+		else
+			num = max_t(int, lod_comp->llc_dstripe_count,
+				    min_t(int, lod_comp->llc_stripe_count,
+					  EC_MIN_SPLIT_SIZE - 1));
+		start = max_t(int, nfound - num + 1, 0);
+		num = nfound - start;
 	} else {
-		/* Only require stripes within the same raidset to be unique */
 		lod_ec_comp_raidset_range(lod_comp, sc, nfound, &start, &num);
 	}
-
-	/* Check for collisions in the current component */
 	for (i = start; i < start + num && i < nfound; i++) {
 		tmp_ost = OST_TGT(lod, ost_indices[i]);
 		if (ost->ltd_qos.ltq_failure_domain ==
@@ -1196,32 +1185,15 @@ static bool lod_fd_check_ec_allowed(struct lod_object *lo,
 			return false;
 	}
 
-	/* If we have a matching data component we must check it too.
-	 * Without overstriping (-c) every data stripe's domain is off
-	 * limits. With overstriping (-C) only the data stripes in the
-	 * same raid set as this parity stripe must differ - same rule as
-	 * lod_ec_check_data_usable() and Documentation/failure-domain.txt.
-	 *
+	/*
 	 * Use llc_stripe_count (stripes actually placed), not
 	 * llc_stripes_allocated (array capacity). The unused tail of
 	 * llc_ost_indices[] is zeroed and would otherwise look like OST 0.
 	 */
 	if (data_comp) {
-		int dstart, dnum;
-
-		if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING) {
-			/*
-			 * Find the current raid set for nfound and the indices
-			 * spanned by it.
-			 */
-			lod_ec_data_range_for_parity(sc, lod_comp,
-						     nfound, &dstart, &dnum);
-		} else {
-			dstart = 0;
-			dnum = data_comp->llc_stripe_count;
-		}
-
-		for (i = dstart; i < dstart + dnum &&
+		lod_ec_data_range_for_parity(sc, lod_comp, nfound, &start,
+					     &num);
+		for (i = start; i < start + num &&
 		     i < data_comp->llc_stripe_count; i++) {
 			tmp_ost = OST_TGT(lod, data_comp->llc_ost_indices[i]);
 			if (ost->ltd_qos.ltq_failure_domain ==
@@ -1326,6 +1298,11 @@ lod_comp_find_linked(struct lod_object *lo, struct lod_layout_component *comp)
 	bool is_parity = comp->llc_flags & LCME_FL_PARITY;
 	int j;
 
+	/* a plain (non-EC) component has no linked component */
+	if ((!is_parity && !comp->llc_dstripe_count) ||
+	    !comp->llc_mirror_link_id)
+		return NULL;
+
 	for (j = 0; j < lo->ldo_comp_cnt; j++) {
 		struct lod_layout_component *tmp = &lo->ldo_comp_entries[j];
 		bool tmp_is_parity = tmp->llc_flags & LCME_FL_PARITY;
@@ -1354,7 +1331,7 @@ lod_comp_find_linked(struct lod_object *lo, struct lod_layout_component *comp)
 }
 
 /**
- * lod_fd_check_flr_allowed() - Checks if an OST is allowed
+ * lod_fdom_check_flr_allowed() - Checks if an OST is allowed
  * @lo: LOD object
  * @ost: OST candidate to check if allowed
  * @nfound: current number of found/selected OSTs in lod_comp
@@ -1373,11 +1350,11 @@ lod_comp_find_linked(struct lod_object *lo, struct lod_layout_component *comp)
  *	   would collide with another stripe of @lod_comp or an
  *	   overlapping component in another mirror.
  */
-static bool lod_fd_check_flr_allowed(struct lod_object *lo,
-				     struct lod_tgt_desc *ost,
-				     __u32 nfound, __u32 *ost_indices,
-				     struct lod_layout_component *lod_comp,
-				     struct lod_layout_component *linked_comp)
+static bool lod_fdom_check_flr_allowed(struct lod_object *lo,
+				       struct lod_tgt_desc *ost,
+				       __u32 nfound, __u32 *ost_indices,
+				       struct lod_layout_component *lod_comp,
+				       struct lod_layout_component *linked_comp)
 {
 	int i, j;
 	struct lod_device *lod = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
@@ -1392,9 +1369,12 @@ static bool lod_fd_check_flr_allowed(struct lod_object *lo,
 	/*
 	 * When overstriping is allowed we allow the same failure domain
 	 * to be re-used within the same component but we do not allow
-	 * re-use across different components/mirrors.
+	 * re-use across different components/mirrors.  An EC component
+	 * needs different domains only per raid set, which
+	 * lod_fdom_check_ec_allowed() checks.
 	 */
-	if (!(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING))
+	if (!(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING) &&
+	    !lod_comp->llc_cstripe_count)
 		for (i = 0; i < nfound; i++) {
 			tmp_ost = OST_TGT(lod, ost_indices[i]);
 			if (tmp_ost->ltd_qos.ltq_failure_domain &&
@@ -1455,7 +1435,7 @@ static bool lod_fd_check_flr_allowed(struct lod_object *lo,
  *
  * Failure domains (non-zero) still may not repeat within the raid set
  * being filled - only across raid sets does -C allow a domain to repeat,
- * same as the checks in lod_fd_check_ec_allowed() and
+ * same as the checks in lod_fdom_check_ec_allowed() and
  * lod_ec_add_parities(). A reused OST whose failure domain collides with
  * one already placed in the target raid set is skipped.
  */
@@ -1698,12 +1678,12 @@ repeat_find:
 		ost = OST_TGT(m, ost_idx);
 		if (ost->ltd_qos.ltq_failure_domain) {
 			if (lod_comp->llc_cstripe_count &&
-			    !lod_fd_check_ec_allowed(lo, ost, stripe_idx,
+			    !lod_fdom_check_ec_allowed(lo, ost, stripe_idx,
 					ost_indices, sc,
 					data_comp, lod_comp))
 				continue;
 			if (lo->ldo_mirror_count > 1 &&
-			    !lod_fd_check_flr_allowed(lo, ost, stripe_idx,
+			    !lod_fdom_check_flr_allowed(lo, ost, stripe_idx,
 					ost_indices, lod_comp,
 					linked_comp))
 				continue;
@@ -1836,8 +1816,7 @@ repeat_find:
 			stripe_idx = lod_ec_add_parities(env, lo, th,
 							 stripe_idx, sc,
 							 data_comp, lod_comp,
-							 stripe, ost_indices,
-							 want_overstriping);
+							 stripe, ost_indices);
 		/*
 		 * EC-protected data component is short of unique OSTs.
 		 * With overstriping (-C) reuse OSTs from earlier raid
@@ -1880,7 +1859,11 @@ repeat_find:
 		}
 	}
 
-	if (lod_comp->llc_cstripe_count && stripe_idx < stripe_count_min)
+	/* every raid set needs all of its parity stripes, as for QoS */
+	if (lod_comp->llc_cstripe_count &&
+	    (stripe_idx < stripe_count_min ||
+	     (lod_comp->llc_flags & LCME_FL_PARITY &&
+	      stripe_idx < stripe_count)))
 		rc = -ENOSPC;
 
 out_pool:
@@ -2643,8 +2626,8 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	unsigned int i;
 	__u32 nfound, good_osts, stripe_count, stripe_count_min;
 	bool overstriped = false;
-	bool want_overstriping;
 	int stripes_per_ost = 1;
+	__u32 ost_avail;
 	bool slow = false;
 	int rc = 0;
 	struct lod_layout_component *linked_comp = NULL;
@@ -2658,9 +2641,9 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	lod_comp = &lo->ldo_comp_entries[comp_idx];
 	stripe_count_min = lod_stripe_count_min(lod_comp, flags, sc, true);
 	stripe_count = lod_comp->llc_stripe_count;
-	want_overstriping = lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING;
 	if (lo->ldo_mirror_count > 1)
 		linked_comp = lod_comp_find_linked(lo, lod_comp);
+	ost_avail = lag->lag_ost_avail;
 
 	/* Orphaned parity component? */
 	if ((lod_comp->llc_flags & LCME_FL_PARITY) && data_comp == NULL)
@@ -2783,10 +2766,13 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	 * good >= 0.75 * stripe_count + cstripe_count
 	 * =>
 	 * 4 x good >= 3 * stripe_count + 4 * cstripe_count
+	 * Only a single raid set needs separate OSTs for its parity, with
+	 * several the parity can use the data OSTs of the other raid sets.
 	 */
 	if (lod_comp->llc_cstripe_count &&
 	    !(lod_comp->llc_flags & LCME_FL_PARITY) &&
 	    !(lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING) &&
+	    ec_raidset_count(sc) == 1 &&
 	    good_osts < (lod_comp->llc_stripe_count +
 			 lod_comp->llc_cstripe_count) &&
 	    4 * good_osts >= (3 * lod_comp->llc_stripe_count +
@@ -2879,12 +2865,12 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			 */
 			if (ost->ltd_qos.ltq_failure_domain) {
 				if (lod_comp->llc_cstripe_count &&
-				    !lod_fd_check_ec_allowed(lo, ost, nfound,
+				    !lod_fdom_check_ec_allowed(lo, ost, nfound,
 						ost_indices, sc,
 						data_comp, lod_comp))
 					continue;
 				if (lo->ldo_mirror_count > 1 &&
-				    !lod_fd_check_flr_allowed(lo, ost, nfound,
+				    !lod_fdom_check_flr_allowed(lo, ost, nfound,
 						ost_indices, lod_comp,
 						linked_comp))
 					continue;
@@ -2940,8 +2926,7 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			 */
 			nfound = lod_ec_add_parities(env, lo, th, nfound, sc,
 						     data_comp, lod_comp,
-						     stripe, ost_indices,
-						     want_overstriping);
+						     stripe, ost_indices);
 		} else if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING) {
 			/* Overstriping (-C): reuse OSTs from earlier raid
 			 * sets until the requested stripe count is met.
@@ -2985,6 +2970,8 @@ static int lod_ost_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			dt_object_put(env, stripe[i]);
 			stripe[i] = NULL;
 		}
+		/* the RR fallback may use the OSTs these stripes were on */
+		lag->lag_ost_avail = ost_avail;
 
 		/* makes sense to rebalance next time */
 		set_bit(LQ_DIRTY, &lod->lod_ost_descs.ltd_qos.lq_flags);
@@ -4003,6 +3990,138 @@ static void lod_collect_avoidance(struct lod_object *lo,
 }
 
 /**
+ * lod_ec_fdom_count() - Count the failure domains available to a layout
+ * @lod: LOD device
+ * @pool_name: pool of the layout component, or NULL for all OSTs
+ * @limit: stop counting at this many domains
+ *
+ * Count the different failure domains of the active OSTs in the pool, up
+ * to @limit.  An OST without a failure domain counts as a domain of its
+ * own.
+ *
+ * Return: number of domains, at most @limit, or 0 if no OST has one
+ */
+static unsigned int lod_ec_fdom_count(struct lod_device *lod,
+				      const char *pool_name,
+				      unsigned int limit)
+{
+	struct lod_pool_desc *pool = NULL;
+	unsigned int count = 0, i, j;
+	struct lu_tgt_pool *osts;
+	bool fdom_set = false;
+	__u32 *fdoms;
+
+	OBD_ALLOC_PTR_ARRAY(fdoms, limit);
+	if (!fdoms)
+		return 0;
+
+	if (pool_name)
+		pool = lod_find_pool(lod, pool_name);
+	osts = pool ? &pool->pool_obds : &lod->lod_ost_descs.ltd_tgt_pool;
+	lod_getref(&lod->lod_ost_descs);
+	down_read(&osts->op_rw_sem);
+	for (i = 0; i < osts->op_count && count < limit; i++) {
+		struct lod_tgt_desc *ost;
+		__u32 fdom;
+
+		if (!test_bit(osts->op_array[i], lod->lod_ost_bitmap))
+			continue;
+		ost = OST_TGT(lod, osts->op_array[i]);
+		if (!ost->ltd_active)
+			continue;
+		fdom = ost->ltd_qos.ltq_failure_domain;
+		if (!fdom) {
+			fdoms[count++] = 0;
+			continue;
+		}
+		fdom_set = true;
+		for (j = 0; j < count && fdoms[j] != fdom; j++)
+			;
+		if (j == count)
+			fdoms[count++] = fdom;
+	}
+	up_read(&osts->op_rw_sem);
+	lod_putref(lod, &lod->lod_ost_descs);
+	if (pool)
+		lod_pool_putref(pool);
+	OBD_FREE_PTR_ARRAY(fdoms, limit);
+
+	return fdom_set ? count : 0;
+}
+
+/**
+ * lod_ec_fit_fdoms() - Fit the raid sets of an EC layout into its domains
+ * @lod: LOD device
+ * @data: EC-protected data component
+ * @parity: parity component of @data
+ *
+ * Each raid set needs its data and M parity stripes in different failure
+ * domains.  If there are fewer domains than the largest raid set of the
+ * data stripes needs, use raid sets of only as many data stripes as fit,
+ * down to K - K/4 as in lod_stripe_count_min(), for the requested K or
+ * the largest raid set if that is smaller.  A single raid set gets fewer
+ * data stripes, several are split again into smaller raid sets.
+ *
+ * Return:
+ * * %0 if the raid sets fit, possibly with fewer data stripes each
+ * * %-ENOSPC if there are too few failure domains
+ */
+static int lod_ec_fit_fdoms(struct lod_device *lod,
+			    struct lod_layout_component *data,
+			    struct lod_layout_component *parity)
+{
+	unsigned int p = parity->llc_cstripe_count;
+	struct ec_split_comp sc = { 0 };
+	unsigned int nfdom, k, kmin, k2;
+	bool single;
+
+	/* the largest raid set, which can differ from the requested K */
+	ec_split_stripes(data->llc_stripe_count, parity->llc_dstripe_count,
+			 &sc);
+	k = sc.esc_k0;
+	single = ec_raidset_count(&sc) == 1;
+	nfdom = lod_ec_fdom_count(lod, data->llc_pool,
+				  max_t(unsigned int, k,
+					 parity->llc_dstripe_count) + p);
+	if (!nfdom)
+		return 0;
+	if (nfdom >= k + p) {
+		/*
+		 * the data stripes of a -c layout need different domains in
+		 * runs of K, and a later re-split can make raid sets of K
+		 * again, so use the smaller raid sets of the same split
+		 */
+		if (k < parity->llc_dstripe_count &&
+		    nfdom < parity->llc_dstripe_count + p) {
+			parity->llc_dstripe_count = k;
+			data->llc_dstripe_count = k;
+		}
+		return 0;
+	}
+
+	kmin = min_t(unsigned int, k, parity->llc_dstripe_count);
+	kmin -= kmin / 4;
+	k2 = nfdom > p ? nfdom - p : 0;
+	if (k2 && !single) {
+		ec_split_stripes(data->llc_stripe_count, k2, &sc);
+		k2 = sc.esc_k0;
+	}
+	if (!k2 || k2 + p > nfdom || k2 < kmin) {
+		CDEBUG(D_LAYOUT, "%s: EC %u+%u needs %u failure domains, has %u\n",
+		       lod2obd(lod)->obd_name, k, p, k + p, nfdom);
+		return -ENOSPC;
+	}
+	CDEBUG(D_LAYOUT, "%s: EC %u+%u reduced to %u+%u for %u failure domains\n",
+	       lod2obd(lod)->obd_name, k, p, k2, p, nfdom);
+	if (single)
+		data->llc_stripe_count = k2;
+	parity->llc_dstripe_count = k2;
+	data->llc_dstripe_count = k2;
+
+	return 0;
+}
+
+/**
  * lod_comp_prep_create() - Create a striping for an object.
  * @env: execution environment for this thread
  * @lo: LOD object
@@ -4091,6 +4210,18 @@ int lod_comp_prep_create(const struct lu_env *env, struct lod_object *lo,
 		if (linked) {
 			data = is_parity ? linked : lod_comp;
 			parity = is_parity ? lod_comp : linked;
+
+			/* before RR or QoS place new data stripes */
+			if (!is_parity && !lod_comp->llc_stripe &&
+			    !lod_comp->llc_ostlist.op_count &&
+			    lod_comp->llc_stripe_offset == LOV_OFFSET_DEFAULT) {
+				/* with the current failure domains */
+				lod_qos_statfs_update(env, d,
+						      &d->lod_ost_descs);
+				rc = lod_ec_fit_fdoms(d, data, parity);
+				if (rc)
+					GOTO(out, rc);
+			}
 
 			/*
 			 * Raid-set split from the data stripe count and the

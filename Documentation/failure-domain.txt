@@ -138,22 +138,25 @@ by Lustre itself.
 
 3.1 Erasure coding
 ------------------
-For files created with lfs setstripe --ec the coverage of failure-domain
-uniqueness differs between normal allocation (-c) and overstriping (-C).
+For files created with lfs setstripe --ec, all data and parity stripes
+within each raid set must be placed on different failure domains.  Each
+raid set is protected individually, so the same failure domain may be
+reused by different raid sets (data vs data, and parity vs data of another
+raid set).  A layout therefore needs as many failure domains as the data
+plus parity stripes of its largest raid set, not of the whole component.
+A -c layout that is short of OSTs may be split into raid sets again, of up
+to K data stripes (or up to 3 for a small component, unless K is 1), so
+its data stripes are kept in different domains within any run of
+consecutive stripes that long.  With fewer failure domains than the
+largest raid set needs, raid sets of fewer data stripes are used, down to
+K - K/4 (or the largest raid set less a quarter, if that is smaller than
+K), and otherwise the create fails with ENOSPC.
 
-When normal allocation (-c) is used, all stripes in the data component and
-its corresponding EC (parity) component must be placed on different failure
-domains.
-
-When overstriping (-C) is used, it is enough that all data and EC stripes
-within each raid set come from different failure domains. The same failure
-domain may be reused across different raid sets (data vs data, and parity
-vs data of another raid set).
-
-For EC protected files it is recommended to use overstriping (-C), since
-each raid set is protected individually and overstriping makes it easier to
-satisfy the per-raid-set domain constraint when the number of distinct
-domains is smaller than the full stripe count.
+Normal allocation (-c) and overstriping (-C) differ only in OST reuse.
+With -c the data stripes are on different OSTs, so a file can use the full
+bandwidth of every OST, e.g. -c 40 --ec 8+2 on 40 OSTs in 10 domains.  The
+parity stripes then share OSTs with the data of other raid sets.  With -C
+the data stripes may also reuse OSTs when there are fewer OSTs than stripes.
 
 On short allocation, plain (non-EC) components may accept fewer stripes
 than requested. EC layouts keep the full requested stripe count so the
@@ -200,8 +203,9 @@ parity stripe is forced onto a different domain:
 
 EC layout with overstriping
 ---------------------------
-Create a wider data component using overstriping. Domain uniqueness is
-only required inside each raid set:
+Create a wider data component using overstriping.  As with -c, domain
+uniqueness is only required inside each raid set, but data stripes may
+also share OSTs:
 
   $ lfs setstripe -E -1 -C 8 --ec 2+2 /mnt/lustre/ec_over
   $ lfs getstripe /mnt/lustre/ec_over

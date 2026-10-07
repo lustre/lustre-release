@@ -1,4 +1,4 @@
-.TH LFS-MIRROR-CREATE 1 2024-08-20 Lustre "Lustre User Utilities"
+.TH LFS-MIRROR-CREATE 1 2026-10-07 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-mirror-create \- create a mirrored file or directory
 .SH SYNOPSIS
@@ -44,6 +44,11 @@ options inherited from filesystem-wide default values will be used, and OST
 inherited from parent directory will be used.
 .P
 If no option is specified, then the command will return an error.
+.P
+When OST failure domains are configured, the components of different mirrors
+that overlap the same file extent are allocated in different failure domains,
+see
+.BR obdfilter.failure_domain (4).
 .SH OPTIONS
 .TP
 .BR -N ", " --mirror-count [\fIMIRROR_COUNT ]
@@ -174,4 +179,5 @@ filesystem package since release 2.11.0
 .BR lfs-mirror-resync (1),
 .BR lfs-mirror-split (1),
 .BR lfs-mirror-verify (1),
-.BR lfs-setstripe (1)
+.BR lfs-setstripe (1),
+.BR obdfilter.failure_domain (4)

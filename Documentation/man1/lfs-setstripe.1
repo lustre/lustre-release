@@ -1,4 +1,4 @@
-.TH LFS-SETSTRIPE 1 2017-08-23 "Lustre" "Lustre Utilities"
+.TH LFS-SETSTRIPE 1 2026-10-07 "Lustre" "Lustre Utilities"
 .SH NAME
 lfs-setstripe \- set striping pattern of a file or directory default
 .SH SYNOPSIS
@@ -412,6 +412,9 @@ a 16-stripe RAID0 data component with \fB--ec 8+2\fR is divided into 2 RAID
 Sets of 8+2 (requiring 4 total parity stripes in two independent domains).
 A 15-stripe data component with \fB--ec 8+2\fR is divided into one 8+2 RAID
 set and one 7+2 RAID Set.
+When OST failure domains are configured, the data and parity stripes of each
+RAID Set are allocated in different failure domains, see
+.BR obdfilter.failure_domain (4).
 .PP
 The
 .I DATA_STRIPES
@@ -763,5 +766,6 @@ so that new files created in this directory will automatically use an
 .BR lfs-migrate (1),
 .BR lfs-mirror-create (1),
 .BR lfs-mirror-split (1),
+.BR obdfilter.failure_domain (4),
 .BR lustre (7)
 .BR setcap (8)
