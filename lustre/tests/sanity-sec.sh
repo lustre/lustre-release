@@ -9200,6 +9200,84 @@ test_65() {
 }
 run_test 65 "lfs find -printf %La and --attrs support"
 
+test_66a() {
+	local testfile=$DIR/$tdir/$tfile
+	local tmpfile=$TMP/$tfile
+	local thp=/sys/kernel/mm/transparent_hugepage/enabled
+	local writers=4
+	local loops=300
+	local max_dirty
+	local start
+	local mode
+	local pids
+	local pid
+	local rc
+	local i
+	local w
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	# a large direct IO buffer is then backed by huge pages, whose pages
+	# have a non-zero offset within their folio
+	if [[ -w $thp ]]; then
+		mode=$(sed -e 's/.*\[\(.*\)\].*/\1/' $thp)
+		stack_trap "echo $mode > $thp"
+		echo always > $thp
+	fi
+
+	stack_trap "cleanup_for_enc_tests $tmpfile" EXIT
+	setup_for_enc_tests
+
+	dd if=/dev/urandom of=$tmpfile bs=1M count=8 ||
+		error "dd $tmpfile failed"
+	dd if=$tmpfile of=$testfile bs=4M oflag=direct ||
+		error "direct write of $testfile failed"
+	cancel_lru_locks
+	cmp $tmpfile $testfile || error "direct write corrupted $testfile"
+	cancel_lru_locks
+	stack_trap "rm -f $tmpfile.2"
+	dd if=$testfile of=$tmpfile.2 bs=4M iflag=direct ||
+		error "direct read of $testfile failed"
+	cmp $tmpfile $tmpfile.2 || error "direct read of $testfile corrupted"
+
+	dd if=/dev/urandom of=$tmpfile.3 bs=1M count=32 ||
+		error "dd $tmpfile.3 failed"
+	stack_trap "rm -f $tmpfile.3"
+	for ((w = 0; w < writers; w++)); do
+		$LFS setstripe -C $((OSTCOUNT * 2)) -S 64K $testfile.$w ||
+			error "setstripe $testfile.$w failed"
+	done
+	max_dirty=$($LCTL get_param -n osc.*.max_dirty_mb | head -n1)
+	stack_trap "$LCTL set_param osc.*.max_dirty_mb=$max_dirty"
+	$LCTL set_param osc.*.max_dirty_mb=1
+
+	start=$SECONDS
+	for ((i = 0; i < loops && SECONDS - start < 180; i++)); do
+		pids=()
+		for ((w = 0; w < writers; w++)); do
+			dd if=$tmpfile.3 of=$testfile.$w bs=32M oflag=direct \
+				conv=notrunc status=none &
+			pids+=($!)
+		done
+		rc=0
+		for pid in ${pids[@]}; do
+			wait $pid || rc=$?
+		done
+		(( rc == 0 )) || error "parallel direct write failed on loop $i"
+	done
+	echo "$i loops of $writers direct writes in $((SECONDS - start))s"
+
+	cancel_lru_locks
+	for ((w = 0; w < writers; w++)); do
+		cmp $tmpfile.3 $testfile.$w ||
+			error "parallel direct write corrupted $testfile.$w"
+	done
+}
+run_test 66a "direct IO of encrypted file from huge page buffer"
+
 cleanup_68() {
 	lctl set_param fail_loc=0 fail_val=0
 	mount_client $MOUNT ${MOUNT_OPTS} || error "re-mount $MOUNT failed"

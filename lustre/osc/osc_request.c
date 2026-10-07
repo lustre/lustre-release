@@ -1389,7 +1389,10 @@ static int osc_checksum_bulk_rw(const char *obd_name,
 #ifdef CONFIG_LL_ENCRYPTION
 /**
  * osc_encrypt_pagecache_blocks() - overlay to llcrypt_encrypt_pagecache_blocks
- * @src:       The locked system cache folio containing the block(s) to encrypt
+ * @inode:     The inode of the file
+ * @index:     The index of the page to encrypt within the file
+ * @directio:  The page is a direct IO page from the user buffer
+ * @src:       The folio containing the block(s) to encrypt
  * @srcpg:     The locked page offset
  * @dst:       The folio to put encryption result
  * @dstpg:     The folio offset to put encryption result
@@ -1400,9 +1403,14 @@ static int osc_checksum_bulk_rw(const char *obd_name,
  * @gfp_flags: Memory allocation flags
  *
  * This overlay function is necessary to be able to provide our own bounce
- * folio.
+ * folio, and to encrypt a direct IO page, which is not in the page cache.
+ * A direct IO folio is part of the user buffer, and is only read here, at
+ * the given @inode and @index, so it does not need to be locked.
  */
-static struct folio *osc_encrypt_pagecache_blocks(struct folio *src,
+static struct folio *osc_encrypt_pagecache_blocks(const struct inode *inode,
+						  pgoff_t index,
+						  bool directio,
+						  struct folio *src,
 						  s32 srcpg,
 						  struct folio *dst,
 						  s32 dstpg,
@@ -1410,10 +1418,8 @@ static struct folio *osc_encrypt_pagecache_blocks(struct folio *src,
 						  unsigned int offs,
 						  gfp_t gfp_flags)
 {
-	const struct inode *inode = src->mapping->host;
 	const unsigned int blockbits = inode->i_blkbits;
 	const unsigned int blocksize = 1 << blockbits;
-	pgoff_t index = src->index + (srcpg > 0 ? srcpg : 0);
 	u64 lblk_num = ((u64)index << (PAGE_SHIFT - blockbits)) +
 		(offs >> blockbits);
 	unsigned int i;
@@ -1423,7 +1429,7 @@ static struct folio *osc_encrypt_pagecache_blocks(struct folio *src,
 		return llcrypt_encrypt_pagecache_blocks(src, srcpg, len, offs,
 							gfp_flags);
 
-	if (WARN_ON_ONCE(!folio_test_locked(src)))
+	if (WARN_ON_ONCE(!directio && !folio_test_locked(src)))
 		return ERR_PTR(-EINVAL);
 
 	if (WARN_ON_ONCE(len <= 0 || !IS_ALIGNED(len | offs, blocksize)))
@@ -1474,7 +1480,8 @@ static inline void osc_finalize_bounce_page(struct folio **foliop, s32 *pgno)
 	}
 }
 #else /* !CONFIG_LL_ENCRYPTION */
-#define osc_encrypt_pagecache_blocks(src, p1, dst, p2, len, offs, gfp_flags) \
+#define osc_encrypt_pagecache_blocks(inode, index, directio, src, p1, dst, p2,\
+				     len, offs, gfp_flags)		\
 	llcrypt_encrypt_pagecache_blocks(src, p1, len, offs, gfp_flags)
 #define osc_finalize_bounce_page(folio, pgno)	\
 	llcrypt_finalize_bounce_page(folio, pgno)
@@ -1594,8 +1601,7 @@ osc_brw_prep_request(int cmd, struct client_obd *cli, struct obdo *oa,
 			bool lockedbymyself;
 			u32 nunits =
 				(brwpg->bp_off & ~PAGE_MASK) + brwpg->bp_count;
-			struct address_space *map_orig = NULL;
-			pgoff_t index_orig = 0;
+			pgoff_t index;
 
 retry_encrypt:
 			nunits = round_up(nunits, LUSTRE_ENCRYPTION_UNIT_SIZE);
@@ -1607,25 +1613,26 @@ retry_encrypt:
 			 * processing, because writeback against that folio will
 			 * end in vvp_page_completion_write/cl_page_completion,
 			 * which means only once the folio is fully processed.
+			 * Note locking is useless for DIO folios as they are
+			 * part of the user buffer, not the page cache.
 			 */
-			lockedbymyself = folio_trylock(brwpg->bp_folio);
+			lockedbymyself = !directio &&
+					 folio_trylock(brwpg->bp_folio);
 			if (directio) {
-				map_orig = brwpg->bp_folio->mapping;
-				brwpg->bp_folio->mapping = inode->i_mapping;
-				index_orig = brwpg->bp_folio->index;
 				clpage = oap2cl_page(brw_page2oap(brwpg));
-				brwpg->bp_folio->index = clpage->cp_page_index;
+				index = clpage->cp_page_index;
+			} else {
+				index = brwpg->bp_folio->index +
+					max(brwpg->bp_pgno, 0);
 			}
-			folio = osc_encrypt_pagecache_blocks(brwpg->bp_folio,
+			folio = osc_encrypt_pagecache_blocks(inode, index,
+							     directio,
+							     brwpg->bp_folio,
 							     brwpg->bp_pgno,
 							     pa ? pa[i] : NULL,
 							     0,
 							     nunits, 0,
 							     GFP_NOFS);
-			if (directio) {
-				brwpg->bp_folio->mapping = map_orig;
-				brwpg->bp_folio->index = index_orig;
-			}
 			if (lockedbymyself)
 				folio_unlock(brwpg->bp_folio);
 			if (IS_ERR(folio)) {
