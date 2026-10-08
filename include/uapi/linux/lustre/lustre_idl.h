@@ -866,6 +866,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_FLR_EC_WR        0x80000000000ULL /* write EC support */
 #define OBD_CONNECT2_PERFSTATS	     0x100000000000ULL /* perf stats in statfs*/
 #define OBD_CONNECT2_POOL_SLV_PACKED 0x200000000000ULL /* packed pool SLV */
+#define OBD_CONNECT2_MIGRATE_SRC     0x400000000000ULL /* migrate src FID */
 /* XXX README XXX README XXX README XXX README XXX README XXX README XXX
  * Please DO NOT add OBD_CONNECT flags before first ensuring that this value
  * is not in use by some other branch/patch.
