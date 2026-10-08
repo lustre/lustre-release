@@ -138,7 +138,9 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 	nr = 0;
 	lov_foreach_io_layout(index, lio, &ext) {
 		struct lov_layout_raid0 *r0 = lov_r0(lov, index);
+		struct lov_stripe_md_entry *lsme;
 
+		lsme = lov->lo_lsm->lsm_entries[index];
 		for (i = 0; i < r0->lo_nr; i++) {
 			if (unlikely(!r0->lo_sub[i]))
 				continue;
@@ -147,7 +149,7 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 			if (lov_stripe_intersects(lov->lo_lsm, index, i, &ext,
 						  &start, &end) ||
 			    (is_trunc &&
-			     i == lio->lis_trunc_stripe_index[index]))
+			     lov_io_is_trunc_prev_stripe(lio, lsme, index, i)))
 				nr++;
 		}
 	}
@@ -165,7 +167,9 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 	nr = 0;
 	lov_foreach_io_layout(index, lov_env_io(env), &ext) {
 		struct lov_layout_raid0 *r0 = lov_r0(lov, index);
+		struct lov_stripe_md_entry *lsme;
 
+		lsme = lov->lo_lsm->lsm_entries[index];
 		for (i = 0; i < r0->lo_nr; ++i) {
 			struct lov_lock_sub *lls;
 			struct cl_lock_descr *descr;
@@ -176,7 +180,7 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 			if (lov_stripe_intersects(lov->lo_lsm, index, i, &ext,
 						  &start, &end) ||
 			    (is_trunc &&
-			     i == lio->lis_trunc_stripe_index[index]))
+			     lov_io_is_trunc_prev_stripe(lio, lsme, index, i)))
 				goto init_sublock;
 
 			continue;

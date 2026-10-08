@@ -448,7 +448,7 @@ static loff_t lov_io_parity_size_comp(struct lov_stripe_md_entry *data_lsme,
 			  stripe_set_size;
 
 	return num_stripe_sets * num_raid_sets *
-	       parity_lsme->lsme_cstripe_count *
+	       lsme_parity_slots_per_raidset(parity_lsme) *
 	       parity_lsme->lsme_stripe_size;
 }
 
@@ -1218,6 +1218,7 @@ static int lov_io_iter_init(const struct lu_env *env,
 	lov_foreach_io_layout(index, lio, &ext) {
 		struct lov_layout_entry *le = lov_entry(lio->lis_object, index);
 		struct lov_layout_raid0 *r0 = &le->lle_raid0;
+		struct lov_stripe_md_entry *lsme;
 		u64 start;
 		u64 end;
 		int stripe;
@@ -1245,6 +1246,7 @@ static int lov_io_iter_init(const struct lu_env *env,
 			RETURN(-EIO);
 		}
 
+		lsme = lsm->lsm_entries[index];
 		for (stripe = 0; stripe < r0->lo_nr; stripe++) {
 			if (!lov_stripe_intersects(lsm, index, stripe,
 						   &ext, &start, &end))
@@ -1260,34 +1262,47 @@ static int lov_io_iter_init(const struct lu_env *env,
 			}
 
 			if (is_trunc && !tested_trunc_stripe) {
-				int prev;
+				unsigned int per_slot;
+				unsigned int slot;
 				u64 tr_start;
+				int prev;
+				bool need_prev;
 
-				prev = (stripe == 0) ? r0->lo_nr - 1 :
-							stripe - 1;
-				/**
-				 * Only involving previous stripe if the
-				 * truncate in this component is at the
-				 * beginning of this stripe.
+				/* last stripe of the previous slot */
+				per_slot = lsme_stripes_per_slot(lsme);
+				slot = lsme_stripe_slot(lsme, stripe);
+				if (slot == 0)
+					prev = r0->lo_nr - 1;
+				else
+					prev = slot * per_slot - 1;
+				/*
+				 * need_prev iff the truncate point is this
+				 * stripe's start: prev is then outside
+				 * [size, EOF) but its object size must change.
+				 * Before this component: clamp to e_start
+				 * (stripe-size aligned) so it is a start.
 				 */
 				tested_trunc_stripe = true;
-				if (ext.e_start < lsm->lsm_entries[index]->
-							lsme_extent.e_start) {
-					/* need previous stripe involvement */
-					lio->lis_trunc_stripe_index[index] = prev;
+				if (ext.e_start < lsme->lsme_extent.e_start) {
+					need_prev = true;
 				} else {
-					div64_u64_rem(ext.e_start,
+					div64_u64_rem(ext.e_start -
+						      lsme_stripe_origin(lsme),
 						      stripe_width(lsm, index),
 						      &tr_start);
-					/* tr_start %= stripe_swidth */
-					if (tr_start == stripe * lsm->
-							lsm_entries[index]->
-							lsme_stripe_size)
-						lio->lis_trunc_stripe_index[index] = prev;
+					need_prev = (tr_start == (u64)slot *
+						lsme->lsme_stripe_size);
 				}
+				if (need_prev)
+					lio->lis_trunc_stripe_index[index] =
+						prev;
 			}
 
-			/* if the last stripe is the trunc stripeno */
+			/* The trunc stripe intersects and gets a sub-io here
+			 * (wrap case). For lsme_parity_raid10() the stored
+			 * stripe is the last of its raidset; all p share one
+			 * offset, so the whole raidset is handled by now.
+			 */
 			if (is_trunc &&
 			    lio->lis_trunc_stripe_index[index] == stripe)
 				lio->lis_trunc_stripe_index[index] = -1;
@@ -1304,33 +1319,47 @@ static int lov_io_iter_init(const struct lu_env *env,
 		if (rc != 0)
 			break;
 
+		/* The prev stripe did not intersect [size, EOF) but its OST
+		 * object size must still be set (LU-14128). Same predicate as
+		 * lov_lock_sub_init(): lsme_parity_raid10() covers the whole
+		 * previous raidset; RAID0|PARITY is that stripe alone.
+		 */
 		if (is_trunc && lio->lis_trunc_stripe_index[index] != -1) {
-			stripe = lio->lis_trunc_stripe_index[index];
-			if (unlikely(!r0->lo_sub[stripe])) {
-				lio->lis_trunc_stripe_index[index] = -1;
-				continue;
-			}
-			sub = lov_sub_get(env, lio,
-					  lov_comp_index(index, stripe));
-			if (IS_ERR(sub))
-				return PTR_ERR(sub);
+			bool added = false;
 
-			/**
-			 * the prev sub could be used by another truncate, we'd
-			 * skip it. LU-14128 happends when expand truncate +
-			 * read get wrong kms.
-			 */
-			if (!list_empty(&sub->sub_linkage)) {
-				lio->lis_trunc_stripe_index[index] = -1;
-				continue;
-			}
+			for (stripe = 0; stripe < r0->lo_nr; stripe++) {
+				int sub_index = lov_comp_index(index, stripe);
 
-			(void)lov_stripe_intersects(lsm, index, stripe, &ext,
-						    &start, &end);
-			rc = lov_io_add_sub(env, lio, sub, start, end);
+				if (unlikely(!r0->lo_sub[stripe]) ||
+				    !lov_io_is_trunc_prev_stripe(lio, lsme,
+								 index, stripe))
+					continue;
+
+				sub = lov_sub_get(env, lio, sub_index);
+				if (IS_ERR(sub))
+					return PTR_ERR(sub);
+
+				/**
+				 * the prev sub could be used by another
+				 * truncate, we'd skip it. LU-14128 happends
+				 * when expand truncate + read get wrong kms.
+				 */
+				if (!list_empty(&sub->sub_linkage))
+					continue;
+
+				(void)lov_stripe_intersects(lsm, index, stripe,
+							    &ext, &start,
+							    &end);
+				rc = lov_io_add_sub(env, lio, sub, start, end);
+				if (rc != 0)
+					break;
+				added = true;
+			}
 			if (rc != 0)
 				break;
-
+			/* Nothing new: the lock must not treat it as prev. */
+			if (!added)
+				lio->lis_trunc_stripe_index[index] = -1;
 		}
 	}
 	RETURN(rc);
@@ -1352,11 +1381,14 @@ static loff_t lov_stripe_chunk_end(struct lov_stripe_md_entry *lse, loff_t pos)
 
 	if (lse->lsme_stripe_count > 1) {
 		unsigned long ssize = lse->lsme_stripe_size;
-		loff_t stripe = div64_u64(pos, ssize);
+		u64 origin = lsme_stripe_origin(lse);
+		loff_t stripe = div64_u64(pos - origin, ssize);
 
 		next = (stripe + 1) * ssize;
 		if (next <= stripe * ssize)
 			next = MAX_LFS_FILESIZE;
+		else
+			next += origin;
 	}
 
 	return min_t(__u64, next, lse->lsme_extent.e_end);
@@ -1645,13 +1677,13 @@ static int lov_ecio_add_parity_sub(const struct lu_env *env, struct lov_io *lio,
 		/*
 		 * Parity sub-objects use lov_stripe_offset() addressing:
 		 * file offset e_start maps to sub-object offset
-		 * (e_start / parity_swidth) * stripe_size.
-		 * Compute this base for PFL components that don't start at
-		 * file offset 0.
+		 * ((e_start - origin) / stripe_width) * stripe_size, where
+		 * origin is lsme_stripe_origin().  The base is 0 when the
+		 * slots count from e_start.
 		 */
-		base_poff = div64_u64(lle->lle_extent->e_start,
-				      (u64)lsme->lsme_stripe_count *
-				      lsme->lsme_stripe_size) *
+		base_poff = div64_u64(lle->lle_extent->e_start -
+				      lsme_stripe_origin(lsme),
+				      stripe_width(lsm, index)) *
 			    lsme->lsme_stripe_size;
 
 		/*
@@ -2224,7 +2256,9 @@ lov_ec_read_parity_stripe(const struct lu_env *env, struct lov_io *lio,
 
 	ENTRY;
 
-	p_foff = parity_foff + (u64)parity_idx * lsme->lsme_stripe_size;
+	p_foff = parity_foff;
+	if (lsme_stripes_per_slot(lsme) == 1)
+		p_foff += (u64)parity_idx * lsme->lsme_stripe_size;
 	start_stripe = lov_stripe_number(lov->lo_lsm, pcomp_i, parity_foff);
 	stripe = (start_stripe + parity_idx) % r0->lo_nr;
 	lov_stripe_offset(lov->lo_lsm, pcomp_i, p_foff, stripe, &obdoff);
@@ -3127,8 +3161,8 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 			unsigned long long poff;
 			int pi, ps;
 
-			poff = lsme_p->lsme_extent.e_start +
-				raid_set * (u64)pcount *
+			poff = lsme_p->lsme_extent.e_start + raid_set *
+				(u64)lsme_parity_slots_per_raidset(lsme_p) *
 				lsme_p->lsme_stripe_size;
 
 			OBD_ALLOC_PTR_ARRAY_LARGE(par_folios, par_arr_cnt);
@@ -3819,16 +3853,89 @@ static void lov_io_fsync_end(const struct lu_env *env,
 	RETURN_EXIT;
 }
 
+/* lseek results of the stripes in one slot */
+struct lov_lseek_slot {
+	/* component; -1 if no slot is open */
+	int		lsl_entry;
+	/* slot in that component: one RAID0 stripe, or one parity raidset */
+	unsigned int	lsl_slot;
+	/* smallest file offset (not stripe object offset) in the slot;
+	 * SEEK_DATA result
+	 */
+	loff_t		lsl_min_lov_off;
+	/* largest file offset in the slot; SEEK_HOLE result, exact only
+	 * when equal to lsl_min_lov_off
+	 */
+	loff_t		lsl_max_lov_off;
+};
+
+/**
+ * lov_io_lseek_slot_end() - Fold one slot's lseek results into @offset
+ * @lsm: stripe metadata
+ * @sl: slot results, ignored when lsl_entry < 0
+ * @seek_hole: true for SEEK_HOLE
+ * @offset: closest file offset so far
+ * @unconfirmed: adopted SEEK_HOLE may still have parity data
+ * @hole_off: component end kept when the hole lies past it
+ *
+ * Stripes of one slot (one RAID0 stripe, or one parity raidset) share file
+ * offsets. SEEK_DATA is the minimum. SEEK_HOLE is the maximum: exact when
+ * every stripe agrees, otherwise a lower bound that ll_lseek() confirms
+ * with SEEK_DATA.
+ *
+ * Example, p = 2 (parity objects P0, P1), SEEK_HOLE from 0, A < B < C:
+ *
+ * - P0 and P1 both have data [0, A), then a hole: both report A,
+ *   min == max, A is the hole.
+ * - P0 has data [0, A) and [B, C), P1 has data [0, B): P0 reports A,
+ *   P1 reports B. P1 has data in [A, B), so the hole is at or past B,
+ *   but P0 has data at B: B is unconfirmed. SEEK_DATA from B returns B,
+ *   so SEEK_HOLE runs again from B: P0 reports C, P1 reports B. SEEK_DATA
+ *   from C finds no data at C, so C is the hole.
+ */
+static void lov_io_lseek_slot_end(struct lov_stripe_md *lsm,
+				  struct lov_lseek_slot *sl, bool seek_hole,
+				  loff_t *offset, bool *unconfirmed,
+				  __u64 *hole_off)
+{
+	__u64 comp_end;
+	loff_t off;
+
+	if (sl->lsl_entry < 0)
+		return;
+
+	comp_end = lsm->lsm_entries[sl->lsl_entry]->lsme_extent.e_end;
+	off = seek_hole ? sl->lsl_max_lov_off : sl->lsl_min_lov_off;
+	/* A SEEK_HOLE result at or past comp_end is a virtual hole, not a
+	 * real hole in this component: the stripe object is full, so the
+	 * OST returned its size as the hole start, which maps to comp_end.
+	 * Skip it and let a later component report the real hole, but save
+	 * comp_end as a fallback in case no later component has one.
+	 * hole_off takes the maximum so a fully-written tail reports EOF.
+	 * Otherwise fold this slot into offset, which takes the minimum to
+	 * keep the hole/data closest to ls_start.
+	 */
+	if (off >= comp_end) {
+		*hole_off = max_t(__u64, comp_end, *hole_off);
+	} else if ((__u64)off < (__u64)*offset) {
+		*offset = off;
+		*unconfirmed = seek_hole &&
+			       sl->lsl_min_lov_off != sl->lsl_max_lov_off;
+	}
+}
+
 static void lov_io_lseek_end(const struct lu_env *env,
 			     const struct cl_io_slice *ios)
 {
 	struct lov_io *lio = cl2lov_io(env, ios);
 	struct cl_io *io = lio->lis_cl.cis_io;
 	struct lov_stripe_md *lsm = lio->lis_object->lo_lsm;
+	struct lov_lseek_slot sl = { .lsl_entry = -1 };
 	struct lov_io_sub *sub;
 	loff_t offset = -ENXIO;
 	__u64 hole_off = 0;
 	bool seek_hole = io->u.ci_lseek.ls_whence == SEEK_HOLE;
+	bool unconfirmed = false;
 
 	ENTRY;
 
@@ -3837,6 +3944,7 @@ static void lov_io_lseek_end(const struct lu_env *env,
 		int index = lov_comp_entry(sub->sub_subio_index);
 		int stripe = lov_comp_stripe(sub->sub_subio_index);
 		loff_t sub_off, lov_off;
+		unsigned int slot;
 		__u64 comp_end = lsm->lsm_entries[index]->lsme_extent.e_end;
 
 		lov_io_end_wrapper(sub->sub_env, subio);
@@ -3880,23 +3988,11 @@ static void lov_io_lseek_end(const struct lu_env *env,
 			       sub_off, io->u.ci_lseek.ls_start, io->ci_result);
 			continue;
 		}
-		/* resulting offset can be out of component range if stripe
-		 * object is full and its file size was returned as virtual
-		 * hole start. Skip this result, the next component will give
-		 * us correct lseek result but keep possible hole offset in
-		 * case there is no more components ahead
-		 */
-		if (lov_off >= comp_end) {
-			/* must be SEEK_HOLE case */
-			if (likely(seek_hole)) {
-				/* save comp end as potential hole offset */
-				hole_off = max_t(__u64, comp_end, hole_off);
-			} else {
-				io->ci_result = -EINVAL;
-				CDEBUG(D_INFO,
-				       "off %lld >= comp_end %llu: rc = %d\n",
-				       lov_off, comp_end, io->ci_result);
-			}
+		/* only SEEK_HOLE can return a virtual hole past comp_end */
+		if (unlikely(lov_off >= comp_end && !seek_hole)) {
+			io->ci_result = -EINVAL;
+			CDEBUG(D_INFO, "off %lld >= comp_end %llu: rc = %d\n",
+			       lov_off, comp_end, io->ci_result);
 			continue;
 		}
 
@@ -3904,13 +4000,29 @@ static void lov_io_lseek_end(const struct lu_env *env,
 		       seek_hole ? "HOLE" : "DATA",
 		       subio->u.ci_lseek.ls_start, sub_off, lov_off,
 		       sub->sub_io.ci_result);
-		offset = min_t(__u64, offset, lov_off);
+
+		/* sub-ios of one slot are consecutive in lis_active */
+		slot = lsme_stripe_slot(lsm->lsm_entries[index], stripe);
+		if (sl.lsl_entry != index || sl.lsl_slot != slot) {
+			lov_io_lseek_slot_end(lsm, &sl, seek_hole, &offset,
+					      &unconfirmed, &hole_off);
+			sl.lsl_entry = index;
+			sl.lsl_slot = slot;
+			sl.lsl_min_lov_off = lov_off;
+			sl.lsl_max_lov_off = lov_off;
+		} else {
+			sl.lsl_min_lov_off = min(sl.lsl_min_lov_off, lov_off);
+			sl.lsl_max_lov_off = max(sl.lsl_max_lov_off, lov_off);
+		}
 	}
+	lov_io_lseek_slot_end(lsm, &sl, seek_hole, &offset, &unconfirmed,
+			      &hole_off);
 	/* no result but some component returns hole as component end */
 	if (seek_hole && offset == -ENXIO && hole_off > 0)
 		offset = hole_off;
 
 	io->u.ci_lseek.ls_result = offset;
+	io->u.ci_lseek.ls_unconfirmed = unconfirmed;
 	RETURN_EXIT;
 }
 

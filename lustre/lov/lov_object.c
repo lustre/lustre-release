@@ -651,6 +651,8 @@ static int lov_init_composite(const struct lu_env *env, struct lov_device *dev,
 		case LOV_PATTERN_RAID0:
 			fallthrough;
 		case LOV_PATTERN_RAID0 | LOV_PATTERN_PARITY:
+			fallthrough;
+		case LOV_PATTERN_PARITY:
 			lle->lle_comp_ops = &raid0_ops;
 			break;
 		case LOV_PATTERN_MDT:
@@ -2168,14 +2170,11 @@ static int lov_object_fiemap(const struct lu_env *env, struct cl_object *obj,
 		lsme = lsm->lsm_entries[entry];
 		stripes = lsme_is_dom(lsme) ? 1 : lsme->lsme_stripe_count;
 
-		/* FLR could contain component holes between entries */
-		if (!lsme_inited(lsme)) {
-			stripe_last += stripes;
-			resume = false;
-			continue;
-		}
-
-		if (!lu_extent_is_overlapped(&range, &lsme->lsme_extent)) {
+		/* FLR could contain component holes between entries, and
+		 * parity is not in the file logical map
+		 */
+		if (!lsme_inited(lsme) || lsme_is_parity(lsme) ||
+		    !lu_extent_is_overlapped(&range, &lsme->lsme_extent)) {
 			stripe_last += stripes;
 			resume = false;
 			continue;

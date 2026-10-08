@@ -26,14 +26,26 @@ u64 stripe_width(struct lov_stripe_md *lsm, unsigned int index)
 	if (lsme_is_dom(entry))
 		return entry->lsme_stripe_size;
 
-	return (u64)entry->lsme_stripe_size * entry->lsme_stripe_count;
+	return (u64)entry->lsme_stripe_size * lsme_slot_count(entry);
 }
 
-/* compute object size given "stripeno" and the ost size */
+/**
+ * lov_stripe_size() - Map one OST object's size to a LOV file size
+ * @lsm: striping info
+ * @index: layout component index
+ * @ost_size: size of the OST object for @stripeno
+ * @stripeno: stripe index of that object
+ *
+ * Inverse of lov_size_to_stripe().
+ *
+ * Return: LOV file size implied by @ost_size on @stripeno.
+ */
 u64 lov_stripe_size(struct lov_stripe_md *lsm, int index, u64 ost_size,
 		    int stripeno)
 {
-	u64 ssize = lsm->lsm_entries[index]->lsme_stripe_size;
+	struct lov_stripe_md_entry *entry = lsm->lsm_entries[index];
+	u64 ssize = entry->lsme_stripe_size;
+	unsigned int slot = lsme_stripe_slot(entry, stripeno);
 	u32 stripe_size;
 	u64 swidth;
 	u64 lov_size;
@@ -47,11 +59,11 @@ u64 lov_stripe_size(struct lov_stripe_md *lsm, int index, u64 ost_size,
 
 	ost_size = div_u64_rem(ost_size, ssize, &stripe_size);
 	if (stripe_size)
-		lov_size = ost_size * swidth + stripeno * ssize + stripe_size;
+		lov_size = ost_size * swidth + slot * ssize + stripe_size;
 	else
-		lov_size = (ost_size - 1) * swidth + (stripeno + 1) * ssize;
+		lov_size = (ost_size - 1) * swidth + (slot + 1) * ssize;
 
-	RETURN(lov_size);
+	RETURN(lsme_stripe_origin(entry) + lov_size);
 }
 
 /**
@@ -74,7 +86,14 @@ pgoff_t lov_stripe_pgoff(struct lov_stripe_md *lsm, int index,
 	return offset >> PAGE_SHIFT;
 }
 
-/*
+/**
+ * lov_stripe_offset() - Map a LOV file offset onto one stripe object
+ * @lsm: striping info
+ * @index: layout component index
+ * @lov_off: LOV file offset
+ * @stripeno: stripe index of the object
+ * @obdoff: resulting offset on that object
+ *
  * we have an offset in file backed by an lov and want to find out where
  * that offset lands in our given stripe of the file.  for the easy
  * case where the offset is within the stripe, we just have to scale the
@@ -127,7 +146,9 @@ pgoff_t lov_stripe_pgoff(struct lov_stripe_md *lsm, int index,
 int lov_stripe_offset(struct lov_stripe_md *lsm, int index, loff_t lov_off,
 		      int stripeno, loff_t *obdoff)
 {
-	unsigned long ssize  = lsm->lsm_entries[index]->lsme_stripe_size;
+	struct lov_stripe_md_entry *entry = lsm->lsm_entries[index];
+	unsigned long ssize = entry->lsme_stripe_size;
+	u64 origin = lsme_stripe_origin(entry);
 	u64 stripe_off, this_stripe, swidth;
 	int ret = 0;
 
@@ -136,11 +157,24 @@ int lov_stripe_offset(struct lov_stripe_md *lsm, int index, loff_t lov_off,
 		return 0;
 	}
 
+	if ((u64)lov_off < origin) {
+		*obdoff = 0;
+		return -1;
+	}
+	/* parity stops at e_end, clamp back like lov_size_to_stripe() */
+	if (lsme_parity_raid10(entry) &&
+	    (u64)lov_off >= entry->lsme_extent.e_end) {
+		*obdoff = lov_size_to_stripe(lsm, index,
+					     entry->lsme_extent.e_end,
+					     stripeno);
+		return 1;
+	}
+
 	swidth = stripe_width(lsm, index);
 
-	lov_off = div64_u64_rem(lov_off, swidth, &stripe_off);
+	lov_off = div64_u64_rem(lov_off - origin, swidth, &stripe_off);
 
-	this_stripe = (u64)stripeno * ssize;
+	this_stripe = (u64)lsme_stripe_slot(entry, stripeno) * ssize;
 	if (stripe_off < this_stripe) {
 		stripe_off = 0;
 		ret = -1;
@@ -157,11 +191,17 @@ int lov_stripe_offset(struct lov_stripe_md *lsm, int index, loff_t lov_off,
 	return ret;
 }
 
-/*
+/**
+ * lov_size_to_stripe() - Map a LOV file size onto one stripe object
+ * @lsm: striping info
+ * @index: layout component index
+ * @file_size: LOV file size
+ * @stripeno: stripe index of the object
+ *
  * Given a whole-file size and a stripe number, give the file size which
  * corresponds to the individual object of that stripe.
  *
- * This behaves basically in the same was as lov_stripe_offset, except that
+ * This behaves basically in the same way as lov_stripe_offset(), except that
  * file sizes falling before the beginning of a stripe are clamped to the end
  * of the previous stripe, not the beginning of the next:
  *
@@ -176,6 +216,8 @@ int lov_stripe_offset(struct lov_stripe_md *lsm, int index, loff_t lov_off,
  * ---------------------------------------------------------------------
  * |    0    |     1     |     2     |    0    |     1     |     2     |
  * ---------------------------------------------------------------------
+ *
+ * Return: object size implied by @file_size on @stripeno.
  */
 loff_t lov_size_to_stripe(struct lov_stripe_md *lsm, int index, u64 file_size,
 			  int stripeno)
@@ -193,11 +235,16 @@ loff_t lov_size_to_stripe(struct lov_stripe_md *lsm, int index, u64 file_size,
 	if (file_size < comp_start)
 		return 0;
 
+	/* parity stops at e_end */
+	if (lsme_parity_raid10(lse) && file_size > lse->lsme_extent.e_end)
+		file_size = lse->lsme_extent.e_end;
+
 	swidth = stripe_width(lsm, index);
 
-	file_size = div64_u64_rem(file_size, swidth, &stripe_off);
+	file_size = div64_u64_rem(file_size - lsme_stripe_origin(lse), swidth,
+				  &stripe_off);
 
-	this_stripe = (u64)stripeno * ssize;
+	this_stripe = (u64)lsme_stripe_slot(lse, stripeno) * ssize;
 	if (stripe_off < this_stripe) {
 		/* Move to end of previous stripe, or zero */
 		if (file_size > 0) {
@@ -276,19 +323,36 @@ int lov_stripe_intersects(struct lov_stripe_md *lsm, int index, int stripeno,
 	return 1;
 }
 
-/* compute which stripe number "lov_off" will be written into */
+/**
+ * lov_stripe_number() - Stripe index that @lov_off maps to
+ * @lsm: striping info
+ * @index: layout component index
+ * @lov_off: LOV file offset
+ *
+ * RAID0 and RAID0|PARITY: the unique stripe covering @lov_off.
+ * Bare-PARITY EC (lsme_parity_raid10()): first stripe of that raidset
+ * (0, p, 2p, ...).
+ *
+ * Return: stripe index
+ */
 int lov_stripe_number(struct lov_stripe_md *lsm, int index, u64 lov_off)
 {
-	unsigned long ssize = lsm->lsm_entries[index]->lsme_stripe_size;
+	struct lov_stripe_md_entry *entry = lsm->lsm_entries[index];
+	unsigned long ssize = entry->lsme_stripe_size;
+	u64 origin = lsme_stripe_origin(entry);
 	u64 stripe_off;
 	u64 swidth;
 
+	if (lov_off < origin)
+		return 0;
+
 	swidth = stripe_width(lsm, index);
 
-	lov_off = div64_u64_rem(lov_off, swidth, &stripe_off);
+	lov_off = div64_u64_rem(lov_off - origin, swidth, &stripe_off);
 
 	/* Puts stripe_off/ssize result into stripe_off */
 	stripe_off = div_u64(stripe_off, ssize);
 
-	return (int) stripe_off;
+	/* first stripe of that slot */
+	return (int)stripe_off * lsme_stripes_per_slot(entry);
 }

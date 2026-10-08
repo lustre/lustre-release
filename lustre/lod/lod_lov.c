@@ -2207,6 +2207,17 @@ static int lod_dom_stripesize_choose(const struct lu_env *env,
 	return rc;
 }
 
+/* k + p <= 256: the Cauchy matrix needs k + p distinct GF(2^8) elements */
+static inline bool lod_ec_parity_valid(__u8 k, __u8 p, __u16 stripe_count,
+				       bool inited)
+{
+	if (k == 0 || p == 0 || p > LOV_EC_MAX_CODING_STRIPES)
+		return false;
+	if (inited && (stripe_count == 0 || stripe_count % p != 0))
+		return false;
+	return k + p <= LOV_EC_MAX_TOTAL_STRIPES;
+}
+
 /**
  * lod_verify_striping() - Verify LOV striping.
  * @env: execution environment for this thread
@@ -2343,33 +2354,6 @@ recheck:
 			RETURN(-EINVAL);
 		}
 
-		/*
-		 * EC k+m bound: Cauchy-matrix-over-GF(2^8) theoretical limit.
-		 * The construction needs k+m distinct field elements and
-		 * GF(2^8) has 256.  Cannot trust userspace; enforce here too,
-		 * along with k and m being non-zero: the allocator divides by
-		 * k and sizes the parity component by m.
-		 */
-		if (le32_to_cpu(ent->lcme_flags) & LCME_FL_PARITY) {
-			__u8 dstripe = ent->lcme_dstripe_count;
-			__u8 cstripe = ent->lcme_cstripe_count;
-
-			if (dstripe == 0 || cstripe == 0) {
-				CDEBUG(D_LAYOUT, "invalid EC k+m (%u+%u)\n",
-				       dstripe, cstripe);
-				RETURN(-EINVAL);
-			}
-
-			if (dstripe + cstripe > LOV_EC_MAX_TOTAL_STRIPES) {
-				CDEBUG(D_LAYOUT,
-				       "EC k+m (%u+%u=%u) exceeds %u\n",
-				       dstripe, cstripe,
-				       dstripe + cstripe,
-				       LOV_EC_MAX_TOTAL_STRIPES);
-				RETURN(-EINVAL);
-			}
-		}
-
 		if (is_from_disk) {
 			/* lcme_id contains valid value */
 			if (le32_to_cpu(ent->lcme_id) == 0 ||
@@ -2469,6 +2453,25 @@ recheck:
 				RETURN(-EINVAL);
 			}
 			continue;
+		}
+
+		if (le32_to_cpu(ent->lcme_flags) & LCME_FL_PARITY) {
+			__u8 data_stripe = ent->lcme_dstripe_count;
+			__u8 parity_stripe = ent->lcme_cstripe_count;
+			__u16 stripe_count;
+			bool inited;
+
+			stripe_count = le16_to_cpu(lum->lmm_stripe_count);
+			inited = le32_to_cpu(ent->lcme_flags) & LCME_FL_INIT;
+			if (!lod_ec_parity_valid(data_stripe, parity_stripe,
+						 stripe_count, inited)) {
+				rc = -EINVAL;
+				CDEBUG(D_LAYOUT,
+				       "invalid EC k+p %u+%u, stripe_count %u: rc = %d\n",
+				       data_stripe, parity_stripe,
+				       stripe_count, rc);
+				RETURN(rc);
+			}
 		}
 
 		/* Check DoM entry is always the first one */

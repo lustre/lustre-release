@@ -12137,6 +12137,39 @@ test_75f() {
 }
 run_test 75f "EC stripe rotation across files"
 
+test_310() {
+	(( OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs"
+	[[ -z "$(filefrag -l 2>&1 | grep "invalid option")" ]] ||
+		skip_env "filefrag missing logical ordering"
+	[[ "$ost1_FSTYPE" != "zfs" ]] ||
+		skip "LU-1941: FIEMAP unimplemented on ZFS"
+
+	enable_ec
+
+	local tf=$DIR/$tfile
+
+	stack_trap "rm -f $tf"
+	$LFS setstripe -E -1 -S 1M -c 2 --ec 2+1 $tf ||
+		error "setstripe --ec 2+1 failed"
+	dd if=/dev/zero of=$tf bs=1M count=2 conv=fsync ||
+		error "write 2M failed"
+	# parity objects only get data from resync
+	$LFS mirror resync $tf || error "mirror resync failed"
+
+	local data_osts=$($LFS getstripe $tf | awk '
+		/lcme_flags:/ { p = /parity/ }
+		/l_ost_idx:/ && !p { sub(",", "", $5); print $5 }' | sort -nu)
+	# 5th ':'-separated field of 'filefrag -ve' is the OST index in hex
+	local luns=$(filefrag -ve $tf | awk -F: '
+		/^ *[0-9]+:/ { gsub(/[ \t]/, "", $5); print $5 }' |
+		while read -r l; do echo $((16#$l)); done | sort -nu)
+
+	[[ "$luns" == "$data_osts" ]] ||
+		error "filefrag LUNs '$(echo $luns)' !=" \
+			"data '$(echo $data_osts)'"
+}
+run_test 310 "FIEMAP skips EC parity components"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

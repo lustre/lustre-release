@@ -123,6 +123,7 @@ static inline char *llt2str(enum lov_layout_type llt)
 static inline __u32 lov_entry_type(struct lov_stripe_md_entry *lsme)
 {
 	if ((lov_pattern(lsme->lsme_pattern) & LOV_PATTERN_RAID0) ||
+	    (lov_pattern(lsme->lsme_pattern) & LOV_PATTERN_PARITY) ||
 	    (lov_pattern(lsme->lsme_pattern) & LOV_PATTERN_MDT) ||
 	    (lov_pattern(lsme->lsme_pattern) == LOV_PATTERN_FOREIGN))
 		return lov_pattern(lsme->lsme_pattern &
@@ -535,7 +536,9 @@ struct lov_io {
 
 	/* Record stripe index before the truncate size, used for setting OST
 	 * obj size for truncate. LU-14128. lis_trunc_stripe_index[i] refers to
-	 * lov_object.u.composite.lo_entries[i].
+	 * lov_object.u.composite.lo_entries[i]. For lsme_parity_raid10() the
+	 * stored stripe names the previous raidset (all p share that offset).
+	 * RAID0|PARITY stores the unique stripe.
 	 */
 	int *lis_trunc_stripe_index;
 
@@ -566,6 +569,25 @@ struct lov_io {
 	loff_t			lis_cached_suboff;
 	struct lov_io_sub	*lis_cached_sub;
 };
+
+/*
+ * Is @stripe the LU-14128 "prev" stripe of a truncate? For bare-PARITY EC
+ * (lsme_parity_raid10()) the p objects of a raidset share one offset, so
+ * every stripe of that raidset is.
+ */
+static inline bool
+lov_io_is_trunc_prev_stripe(const struct lov_io *lio,
+			    const struct lov_stripe_md_entry *lsme,
+			    int entry, int stripe)
+{
+	int prev = lio->lis_trunc_stripe_index[entry];
+
+	if (prev < 0)
+		return false;
+	if (lsme_stripes_per_slot(lsme) == 1)
+		return stripe == prev;
+	return lsme_stripe_slot(lsme, stripe) == lsme_stripe_slot(lsme, prev);
+}
 
 struct lov_session {
 	struct lov_io          ls_io;

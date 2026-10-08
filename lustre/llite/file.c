@@ -5486,6 +5486,35 @@ again:
 	if (unlikely(io->ci_need_restart))
 		goto again;
 
+	/*
+	 * Confirm a parity SEEK_HOLE result that LOV left unconfirmed.
+	 * Stripes in one slot share file offsets but may disagree, so LOV
+	 * reports the largest hole as a lower bound. Confirm the candidate
+	 * with SEEK_DATA; ls_start only moves forward, so retries terminate.
+	 */
+	if (lsio->ls_whence != whence) {
+		/* SEEK_DATA from the candidate hole is done. DATA at ls_start
+		 * means real data, retry SEEK_HOLE from there.
+		 */
+		if (retval == lsio->ls_start) {
+			lsio->ls_whence = SEEK_HOLE;
+			lsio->ls_result = -ENXIO;
+			goto again;
+		}
+		/* DATA past ls_start or -ENXIO (no more data) means ls_start
+		 * is a real hole.
+		 */
+		if (retval > lsio->ls_start || retval == -ENXIO)
+			retval = lsio->ls_start;
+	} else if (whence == SEEK_HOLE && retval >= 0 &&
+		   lsio->ls_unconfirmed) {
+		/* SEEK_HOLE gave a lower bound, verify it with SEEK_DATA. */
+		lsio->ls_start = retval;
+		lsio->ls_whence = SEEK_DATA;
+		lsio->ls_result = -ENXIO;
+		goto again;
+	}
+
 	cl_env_put(env, &refcheck);
 
 	/* Without the key, SEEK_HOLE return value has to be
