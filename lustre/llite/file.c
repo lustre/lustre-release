@@ -1856,8 +1856,9 @@ int ll_merge_attr_try(const struct lu_env *env, struct inode *inode)
  * ll_io_scope_validate() - Check @scope before it is stored
  * @scope: I/O scope from the ioctl
  *
- * FILE and MIRROR are accepted. A mirror id must be in [1, MIRROR_ID_MAX].
- * STRIPE and OBJECT are reserved.
+ * FILE, MIRROR, and STRIPE are accepted. A mirror id must be in
+ * [1, MIRROR_ID_MAX]. STRIPE ios_stripe_idx must be less than
+ * LOV_EC_MAX_CODING_STRIPES. OBJECT is reserved.
  *
  * Return: 0 on success, -EOPNOTSUPP if reserved, otherwise -EINVAL
  */
@@ -1875,28 +1876,32 @@ static int ll_io_scope_validate(const struct ll_ioc_io_scope *scope)
 
 	switch (scope->ios_scope) {
 	case LL_IO_SCOPE_FILE:
-	case LL_IO_SCOPE_MIRROR:
+		if (scope->ios_mirror_id != 0 ||
+		    scope->ios_layout_version != 0 ||
+		    scope->ios_stripe_idx != 0)
+			return -EINVAL;
 		break;
+	case LL_IO_SCOPE_MIRROR:
+		if (scope->ios_stripe_idx != 0)
+			return -EINVAL;
+		fallthrough;
 	case LL_IO_SCOPE_STRIPE:
+		if (scope->ios_mirror_id == 0 ||
+		    scope->ios_mirror_id > MIRROR_ID_MAX ||
+		    scope->ios_stripe_idx >= LOV_EC_MAX_CODING_STRIPES)
+			return -EINVAL;
+		break;
 	case LL_IO_SCOPE_OBJECT:
 		return -EOPNOTSUPP;
 	default:
 		return -EINVAL;
 	}
 
-	if (scope->ios_comp_id != 0 || scope->ios_stripe_idx != 0 ||
+	/* OBJECT-only identity fields are unused by the scopes above */
+	if (scope->ios_comp_id != 0 ||
 	    !fid_is_zero(&scope->ios_obj_fid) ||
 	    scope->ios_obj_fid.f_ver != 0)
 		return -EINVAL;
-
-	if (scope->ios_scope == LL_IO_SCOPE_FILE) {
-		if (scope->ios_mirror_id != 0 ||
-		    scope->ios_layout_version != 0)
-			return -EINVAL;
-	} else if (scope->ios_mirror_id == 0 ||
-		   scope->ios_mirror_id > MIRROR_ID_MAX) {
-		return -EINVAL;
-	}
 
 	return 0;
 }
@@ -1952,6 +1957,7 @@ void ll_io_scope_init(struct cl_io *io, const struct file *file)
 
 	switch (ios->ios_scope) {
 	case LL_IO_SCOPE_MIRROR:
+	case LL_IO_SCOPE_STRIPE:
 		/* designated I/O has only one source; do not retry other
 		 * mirrors
 		 */
@@ -1961,6 +1967,10 @@ void ll_io_scope_init(struct cl_io *io, const struct file *file)
 			io->ci_layout_version = ios->ios_layout_version;
 		else
 			io->ci_layout_version = lfd->fd_layout_version;
+		/* ios_stripe_idx is 0 for MIRROR */
+		io->ci_designated_stripe = ios->ios_stripe_idx;
+		io->ci_designated_stripe_set =
+			ios->ios_scope == LL_IO_SCOPE_STRIPE;
 		break;
 	default:
 		break;

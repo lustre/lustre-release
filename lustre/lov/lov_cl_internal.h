@@ -131,6 +131,95 @@ static inline __u32 lov_entry_type(struct lov_stripe_md_entry *lsme)
 	return 0;
 }
 
+/* Index 0 is valid, so check the flag instead of the index. */
+static inline bool lov_io_has_designated_stripe(const struct cl_io *io)
+{
+	return io->ci_designated_mirror && io->ci_designated_stripe_set;
+}
+
+/*
+ * true: do not filter by ci_designated_stripe (one stripe per slot, or
+ * punch/truncate/fallocate/lseek). false: read/write must pick one of
+ * the p stripes that share a slot.
+ */
+static inline bool
+lov_io_visits_all_parity_stripes(const struct cl_io *io,
+				 const struct lov_stripe_md_entry *lsme)
+{
+	return lsme_stripes_per_slot(lsme) == 1 ||
+	       (io->ci_type != CIT_READ && io->ci_type != CIT_WRITE);
+}
+
+/**
+ * lov_io_designated_stripe_valid() - Whether @io may visit @lsme
+ * @io: I/O carrying the designated stripe
+ * @lsme: component the I/O visits
+ *
+ * Read/write on a multi-stripe parity slot need a designated stripe
+ * below p. Callers check this before lov_foreach_io_stripe().
+ *
+ * Return: true if @io may visit @lsme
+ */
+static inline bool
+lov_io_designated_stripe_valid(const struct cl_io *io,
+			       const struct lov_stripe_md_entry *lsme)
+{
+	if (lov_io_visits_all_parity_stripes(io, lsme))
+		return true;
+	return lov_io_has_designated_stripe(io) &&
+	       io->ci_designated_stripe < lsme->lsme_cstripe_count;
+}
+
+/*
+ * lov_stripe_number() gives the first stripe of a parity raidset; the
+ * designated stripe picks one of its p. Returns -1 when read/write needs
+ * a designated index and it is missing, not less than p, or first +
+ * index is past lsme_stripe_count (short / non-multiple-of-p layout).
+ */
+static inline int
+lov_io_stripe_number(const struct cl_io *io, struct lov_stripe_md *lsm,
+		     int entry, u64 offset)
+{
+	struct lov_stripe_md_entry *lsme = lsm->lsm_entries[entry];
+	unsigned int stripe;
+	int first = lov_stripe_number(lsm, entry, offset);
+
+	if (lov_io_visits_all_parity_stripes(io, lsme))
+		return first;
+	if (!lov_io_has_designated_stripe(io) ||
+	    io->ci_designated_stripe >= lsme->lsme_cstripe_count)
+		return -1;
+	stripe = first + io->ci_designated_stripe;
+	if (stripe >= lsme->lsme_stripe_count)
+		return -1;
+	return stripe;
+}
+
+/*
+ * Next stripe after @stripe. Call after lov_io_designated_stripe_valid().
+ * foreach passes -1 to start at 0 (all) or idx (designated); then += step.
+ */
+static inline int
+lov_io_next_stripe(const struct cl_io *io,
+		   const struct lov_stripe_md_entry *lsme, int stripe)
+{
+	int step = 1;
+
+	if (!lov_io_visits_all_parity_stripes(io, lsme))
+		step = lsme_stripes_per_slot(lsme);
+	/* -1: first stripe; else advance by 1 or p */
+	if (stripe < 0)
+		stripe = step > 1 ? io->ci_designated_stripe : 0;
+	else
+		stripe += step;
+	return stripe;
+}
+
+/* walk stripes [0, @nr) of @lsme that @io touches */
+#define lov_foreach_io_stripe(io, lsme, stripe, nr)			\
+	for (stripe = lov_io_next_stripe(io, lsme, -1); stripe < (nr);	\
+	     stripe = lov_io_next_stripe(io, lsme, stripe))
+
 struct lov_layout_entry;
 struct lov_object;
 struct lov_lock_sub;

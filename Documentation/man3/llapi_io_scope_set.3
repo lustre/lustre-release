@@ -1,4 +1,4 @@
-.TH LLAPI_IO_SCOPE_SET 3 2026-09-30 "Lustre User API" "Lustre Library Functions"
+.TH LLAPI_IO_SCOPE_SET 3 2026-10-22 "Lustre User API" "Lustre Library Functions"
 .SH NAME
 llapi_io_scope_set, llapi_io_scope_clear \- restrict I/O on a file descriptor to a layout subset
 .SH SYNOPSIS
@@ -84,16 +84,40 @@ set to
 On a non-FLR file
 .I ios_mirror_id
 is ignored and later I/O addresses the whole file.
+Read and write of an EC parity component whose parity objects share
+each file offset need
+.B LL_IO_SCOPE_STRIPE
+and fail with
+.B EINVAL
+here.
 .TP
 .B LL_IO_SCOPE_STRIPE
-Reserved.
-One object, addressed by file offset.
+Like
+.BR LL_IO_SCOPE_MIRROR ,
+addressed by file offset, but narrowed to one parity object of each
+raidset.
 .I ios_mirror_id
 selects the mirror, and the component is the one in that mirror covering
 the offset.
 .I ios_stripe_idx
-selects among the objects of that component backing the offset
-(for example data or which parity); 0 is the first one.
+must be less than
+.BR LOV_EC_MAX_CODING_STRIPES ,
+otherwise it is rejected with
+.BR -EINVAL .
+On an EC parity component whose p parity objects share each file
+offset,
+.I ios_stripe_idx
+selects which of the p to use; 0 is the first one.
+Read and write of such a component fail with
+.I errno
+set to
+.B EINVAL
+if
+.I ios_stripe_idx
+is not less than p.
+On any other component
+.I ios_stripe_idx
+is ignored.
 .I ios_comp_id
 must be 0.
 .TP
@@ -115,11 +139,14 @@ must then be 0.
 must be 0.
 .PP
 For
-.BR LL_IO_SCOPE_MIRROR ,
+.B LL_IO_SCOPE_MIRROR
+and
+.BR LL_IO_SCOPE_STRIPE ,
 .I ios_layout_version
 0 uses the layout version recorded on
 .I fd
-by the last resync lease; if there is none, no check is made.
+by its last lease release or resync lease; if there is none, no check
+is made.
 A non-zero value replaces that version.
 Currently only
 .BR write (2),
@@ -160,6 +187,12 @@ and
 .IR f_oid ,
 and
 .IR f_ver ).
+For
+.B LL_IO_SCOPE_STRIPE
+this means
+.I ios_comp_id
+and
+.IR ios_obj_fid .
 .I ios_flags
 and
 .I ios_padding
@@ -194,10 +227,17 @@ is NULL,
 is not a known value,
 a field that must be zero is not,
 .B LL_IO_SCOPE_MIRROR
+or
+.B LL_IO_SCOPE_STRIPE
 was requested with
 .I ios_mirror_id
 0 or greater than
 .BR MIRROR_ID_MAX ,
+.B LL_IO_SCOPE_STRIPE
+was requested with
+.I ios_stripe_idx
+not less than
+.BR LOV_EC_MAX_CODING_STRIPES ,
 or a scope other than
 .B LL_IO_SCOPE_FILE
 was set on a descriptor that is not
@@ -210,8 +250,6 @@ does not refer to a Lustre file.
 .B -EOPNOTSUPP
 .I ios_scope
 is
-.B LL_IO_SCOPE_STRIPE
-or
 .BR LL_IO_SCOPE_OBJECT .
 .SH EXAMPLES
 Read from mirror 1. The descriptor must be opened with
@@ -252,5 +290,13 @@ are part of the
 user application interface library since release 2.18.0.
 .\" Added in commit v2_17_59-4-g6dac0dd45f
 .SH SEE ALSO
+.BR fallocate (2),
+.BR ftruncate (2),
+.BR lseek (2),
 .BR open (2),
+.BR read (2),
+.BR write (2),
+.BR llapi_mirror_set (3),
+.BR posix_memalign (3),
+.BR lustre (7),
 .BR lustreapi (7)

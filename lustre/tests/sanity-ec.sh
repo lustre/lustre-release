@@ -10768,6 +10768,82 @@ test_310() {
 }
 run_test 310 "FIEMAP skips EC parity components"
 
+test_311() {
+	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
+
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local parity_mirror_id
+	# osd-zfs has no dbo_fallocate; keep lseek/truncate coverage there
+	local ops=("-l" "-t 3145728")
+	local op
+	local idx
+
+	stack_trap "rm -f $tf"
+
+	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf ||
+		error "create EC file failed"
+	dd if=/dev/urandom of=$tf bs=1M count=4 oflag=direct 2>/dev/null ||
+		error "write EC file failed"
+	$LFS mirror resync $tf || error "resync EC file failed"
+
+	parity_mirror_id=$($LFS getstripe $tf |
+		grep -B1 "lcme_flags.*parity" |
+		awk '/lcme_mirror_id/ {print $2}')
+	[[ -n "$parity_mirror_id" ]] || error "no parity mirror"
+
+	check_fallocate_supported >/dev/null && ops+=("-f")
+
+	# Only read and write use the STRIPE scope index. lseek, truncate
+	# and fallocate visit every stripe, so they must succeed for any
+	# index, below p (2 here) or not.
+	for op in "${ops[@]}"; do
+		for idx in 0 1 2 14; do
+			io_scope -s STRIPE -i $parity_mirror_id -x $idx \
+				$op $tf ||
+				error "'$op' idx $idx failed: $?"
+		done
+	done
+}
+run_test 311 "STRIPE scope index is ignored by lseek, truncate, fallocate"
+
+test_312() {
+	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
+
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local EINVAL=22
+	local parity_mirror_id
+	local rc
+
+	stack_trap "rm -f $tf"
+
+	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf ||
+		error "create EC file failed"
+	dd if=/dev/urandom of=$tf bs=1M count=4 oflag=direct 2>/dev/null ||
+		error "write EC file failed"
+	$LFS mirror resync $tf || error "resync EC file failed"
+
+	parity_mirror_id=$($LFS getstripe $tf |
+		awk '/lcme_mirror_id:/ {id=$2}
+		     /lcme_flags:.*parity/ {print id; exit}')
+	[[ -n "$parity_mirror_id" ]] || error "no parity mirror"
+
+	# Drop cache so the read goes through lov_page_init_composite(),
+	# not fast read. Clear O_DIRECT after the MIRROR scope is set.
+	cancel_lru_locks osc
+	io_scope -s MIRROR -i $parity_mirror_id -b -r $tf
+	rc=$?
+	(( rc == EINVAL )) ||
+		error "buffered parity read: expected $EINVAL, got $rc"
+
+	io_scope -s MIRROR -i $parity_mirror_id -r $tf ||
+		error "direct parity read failed"
+}
+run_test 312 "buffered designated parity read is refused"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

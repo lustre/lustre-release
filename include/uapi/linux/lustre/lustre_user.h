@@ -641,16 +641,17 @@ struct ll_ioc_lease_id {
  * ios_padding, and identity fields not used by the scope must be 0.
  * A reserved scope returns -EOPNOTSUPP.
  *
- * FILE uses the file offset; ios_mirror_id and ios_layout_version
- * must be 0.
+ * FILE uses the file offset; ios_mirror_id, ios_layout_version, and
+ * ios_stripe_idx must be 0.
  *
- * MIRROR uses the file offset; ios_mirror_id is in [1, MIRROR_ID_MAX].
+ * MIRROR uses the file offset; ios_mirror_id is in [1, MIRROR_ID_MAX]
+ * and ios_stripe_idx must be 0. Read and write of a parity component whose
+ * parity objects share each offset need STRIPE.
  *
- * STRIPE is reserved. One object by file offset: ios_mirror_id selects
- * the mirror, and the component is the one in that mirror covering the
- * offset. ios_stripe_idx selects among the objects of that component
- * backing the offset (e.g. data vs. which parity); 0 is the first one.
- * ios_comp_id must be 0.
+ * STRIPE uses the file offset; ios_mirror_id is in [1, MIRROR_ID_MAX].
+ * On an EC parity component the p parity objects share each offset and
+ * ios_stripe_idx selects one of them; it must be less than
+ * LOV_EC_MAX_CODING_STRIPES. ios_comp_id must be 0.
  *
  * OBJECT is reserved. One object by object offset, located by
  * (ios_comp_id, ios_stripe_idx), by ios_obj_fid, or by both (must name
@@ -658,17 +659,18 @@ struct ll_ioc_lease_id {
  * ios_comp_id 0 means the pair is absent, then ios_stripe_idx must be 0.
  * ios_mirror_id must be 0.
  *
- * For MIRROR, ios_layout_version 0 uses the layout version recorded on
- * the fd by the last resync lease; if there is none, no check is made.
- * A non-zero value replaces that version. Currently only write,
- * truncate, and fallocate on an FLR file fail with ESTALE if it does
- * not match the current layout generation. Read and lseek do not
- * check it. On a non-FLR file it is ignored and not sent to the OSTs.
+ * For MIRROR and STRIPE, ios_layout_version 0 uses the layout version
+ * recorded on the fd by its last lease release or resync lease; if there
+ * is none, no check is made. A non-zero value replaces that version.
+ * Currently only write, truncate, and fallocate on an FLR file fail with
+ * ESTALE if it does not match the current layout generation. Read and
+ * lseek do not check it. On a non-FLR file it is ignored and not sent to
+ * the OSTs.
  */
 enum ll_io_scope {
 	LL_IO_SCOPE_FILE	= 0,	/* whole file, file offset */
 	LL_IO_SCOPE_MIRROR	= 1,	/* one FLR mirror, file offset */
-	LL_IO_SCOPE_STRIPE	= 2,	/* one object, file offset */
+	LL_IO_SCOPE_STRIPE	= 2,	/* mirror, one parity of each raidset */
 	LL_IO_SCOPE_OBJECT	= 3,	/* one object, object offset */
 };
 
@@ -717,8 +719,9 @@ struct ll_ioc_io_scope {
 #define LL_IOC_GET_MDTIDX		_IOR('f', 175, int)
 #define LL_IOC_FUTIMES_3		_IOWR('f', 176, struct ll_futimes_3)
 #define LL_IOC_FLR_SET_MIRROR		_IOW('f', 177, long)
+#define LL_IOC_SET_IO_SCOPE		_IOW('f', 177, struct ll_ioc_io_scope)
 /*	lustre_ioctl.h			178-179 */
-#define LL_IOC_SET_IO_SCOPE		_IOW('f', 180, struct ll_ioc_io_scope)
+/*	180 free */
 /*	lustre_ioctl.h			181-210 */
 #define LL_IOC_HSM_STATE_GET		_IOR('f', 211, struct hsm_user_state)
 #define LL_IOC_HSM_STATE_SET		_IOW('f', 212, struct hsm_state_set)

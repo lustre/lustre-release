@@ -173,7 +173,9 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 		struct lov_stripe_md_entry *lsme;
 
 		lsme = lov->lo_lsm->lsm_entries[index];
-		for (i = 0; i < r0->lo_nr; i++) {
+		if (!lov_io_designated_stripe_valid(io, lsme))
+			RETURN(ERR_PTR(-EINVAL));
+		lov_foreach_io_stripe(io, lsme, i, r0->lo_nr) {
 			if (unlikely(!r0->lo_sub[i]))
 				continue;
 
@@ -202,7 +204,7 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 		struct lov_stripe_md_entry *lsme;
 
 		lsme = lov->lo_lsm->lsm_entries[index];
-		for (i = 0; i < r0->lo_nr; ++i) {
+		lov_foreach_io_stripe(io, lsme, i, r0->lo_nr) {
 			struct lov_lock_sub *lls;
 			struct cl_lock_descr *descr;
 

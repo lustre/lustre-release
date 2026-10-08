@@ -25,6 +25,32 @@
  */
 
 /**
+ * lov_page_stripe_offset() - Stripe index and sub-object offset
+ * @lio: current LOV IO (designated stripe)
+ * @lsm: layout
+ * @entry: component index; caller has checked lsm_entry_inited()
+ * @offset: file offset
+ * @suboff: sub-object offset (out)
+ *
+ * Shared by lov_dio_pages_init_composite() and lov_page_init_composite().
+ *
+ * Return: stripe index, or negative on error
+ */
+static int lov_page_stripe_offset(struct lov_io *lio, struct lov_stripe_md *lsm,
+				  int entry, loff_t offset, loff_t *suboff)
+{
+	int stripe;
+	int rc;
+
+	stripe = lov_io_stripe_number(lio->lis_cl.cis_io, lsm, entry, offset);
+	if (stripe < 0)
+		return stripe;
+	rc = lov_stripe_offset(lsm, entry, offset, stripe, suboff);
+	LASSERT(rc == 0);
+	return stripe;
+}
+
+/**
  * Lov page operations.
  */
 int lov_dio_pages_init_composite(const struct lu_env *env,
@@ -56,17 +82,15 @@ int lov_dio_pages_init_composite(const struct lu_env *env,
 	entry = lov_io_layout_at(lio, offset);
 	if (entry < 0)
 		RETURN(-ENODATA);
-
-	stripe = lov_stripe_number(loo->lo_lsm, entry, offset);
-	rc = lov_stripe_offset(loo->lo_lsm, entry, offset, stripe,
-				       &suboff);
-	LASSERT(rc == 0);
-
-	if (entry < 0 || !lsm_entry_inited(loo->lo_lsm, entry)) {
-		/* non-existing layout component */
+	if (!lsm_entry_inited(loo->lo_lsm, entry)) {
 		lov_dio_pages_init_empty(env, obj, cdp, index);
 		RETURN(0);
 	}
+
+	stripe = lov_page_stripe_offset(lio, loo->lo_lsm, entry, offset,
+					&suboff);
+	if (stripe < 0)
+		RETURN(-EINVAL);
 
 	CDEBUG(D_PAGE, "offset %llu, entry %d, stripe %d, suboff %llu\n",
 	       offset, entry, stripe, suboff);
@@ -129,19 +153,31 @@ int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 		 * this offset
 		 */
 		if (!lov_io_layout_at_confirm(lio, entry, offset))
-			return -ENODATA;
+			RETURN(-ENODATA);
 		stripe = lio->lis_cached_stripe;
 		/* Offset can never go backwards in an i/o, so this is valid */
 		suboff = lio->lis_cached_suboff + offset - lio->lis_cached_off;
 	} else {
 		entry = lov_io_layout_at(lio, offset);
 		if (entry < 0)
-			return -ENODATA;
+			RETURN(-ENODATA);
+		if (!lsm_entry_inited(loo->lo_lsm, entry)) {
+			lov_page_init_empty(env, obj, page, index);
+			RETURN(0);
+		}
+		/* Designated parity (MIRROR/STRIPE scope, or
+		 * LL_IOC_FLR_SET_MIRROR) must stay DIO: the page cache is
+		 * shared, including RAID0|PARITY components.
+		 */
+		if (page->cp_type != CPT_TRANSIENT &&
+		    lio->lis_cl.cis_io->ci_designated_mirror &&
+		    lsm_entry_is_parity(loo->lo_lsm, entry))
+			RETURN(-EINVAL);
 
-		stripe = lov_stripe_number(loo->lo_lsm, entry, offset);
-		rc = lov_stripe_offset(loo->lo_lsm, entry, offset, stripe,
-				       &suboff);
-		LASSERT(rc == 0);
+		stripe = lov_page_stripe_offset(lio, loo->lo_lsm, entry, offset,
+						&suboff);
+		if (stripe < 0)
+			RETURN(-EINVAL);
 		lio->lis_cached_entry = entry;
 		lio->lis_cached_stripe = stripe;
 		lio->lis_cached_off = offset;
@@ -150,12 +186,6 @@ int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 
 	CDEBUG(D_PAGE, "offset %llu, entry %d, stripe %d, suboff %llu\n",
 	       offset, entry, stripe, suboff);
-
-	if (entry < 0 || !lsm_entry_inited(loo->lo_lsm, entry)) {
-		/* non-existing layout component */
-		lov_page_init_empty(env, obj, page, index);
-		RETURN(0);
-	}
 
 	page->cp_lov_index = lov_comp_index(entry, stripe);
 	LASSERT(page->cp_lov_index != CP_LOV_INDEX_EMPTY);

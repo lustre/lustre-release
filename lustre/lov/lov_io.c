@@ -1248,7 +1248,10 @@ static int lov_io_iter_init(const struct lu_env *env,
 		}
 
 		lsme = lsm->lsm_entries[index];
-		for (stripe = 0; stripe < r0->lo_nr; stripe++) {
+		if (!lov_io_designated_stripe_valid(ios->cis_io, lsme))
+			RETURN(-EINVAL);
+
+		lov_foreach_io_stripe(ios->cis_io, lsme, stripe, r0->lo_nr) {
 			if (!lov_stripe_intersects(lsm, index, stripe,
 						   &ext, &start, &end))
 				continue;
@@ -1326,9 +1329,10 @@ static int lov_io_iter_init(const struct lu_env *env,
 		 * previous raidset; RAID0|PARITY is that stripe alone.
 		 */
 		if (is_trunc && lio->lis_trunc_stripe_index[index] != -1) {
+			struct cl_io *io = ios->cis_io;
 			bool added = false;
 
-			for (stripe = 0; stripe < r0->lo_nr; stripe++) {
+			lov_foreach_io_stripe(io, lsme, stripe, r0->lo_nr) {
 				int sub_index = lov_comp_index(index, stripe);
 
 				if (unlikely(!r0->lo_sub[stripe]) ||
@@ -3696,10 +3700,11 @@ static int lov_io_read_ahead_prep(const struct lu_env *env,
 	if (!lov_entry(loo, index)->lle_valid)
 		RETURN(-EIO);
 
-	stripe = lov_stripe_number(loo->lo_lsm, index, offset);
+	stripe = lov_io_stripe_number(ios->cis_io, loo->lo_lsm, index, offset);
 
 	r0 = lov_r0(loo, index);
-	if (unlikely(!r0->lo_sub[stripe]))
+	if (stripe < 0 || stripe >= r0->lo_nr ||
+	    unlikely(!r0->lo_sub[stripe]))
 		RETURN(-EIO);
 
 	sub = lov_sub_get(env, lio, lov_comp_index(index, stripe));
@@ -3767,6 +3772,7 @@ static int lov_io_lru_reserve(const struct lu_env *env,
 	lov_foreach_io_layout(index, lio, &ext) {
 		struct lov_layout_entry *le = lov_entry(lio->lis_object, index);
 		struct lov_layout_raid0 *r0 = &le->lle_raid0;
+		struct lov_stripe_md_entry *lsme;
 		u64 start;
 		u64 end;
 		int stripe;
@@ -3781,7 +3787,11 @@ static int lov_io_lru_reserve(const struct lu_env *env,
 			RETURN(-EIO);
 		}
 
-		for (stripe = 0; stripe < r0->lo_nr; stripe++) {
+		lsme = lsm->lsm_entries[index];
+		if (!lov_io_designated_stripe_valid(ios->cis_io, lsme))
+			RETURN(-EINVAL);
+
+		lov_foreach_io_stripe(ios->cis_io, lsme, stripe, r0->lo_nr) {
 			if (!lov_stripe_intersects(lsm, index, stripe,
 						   &ext, &start, &end))
 				continue;

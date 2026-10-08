@@ -5134,45 +5134,68 @@ test_212b() {
 }
 run_test 212b "Testing lfs mirror verify --stale option"
 
+# io_scope exits with the errno from llapi_io_scope_set().
+# io_scope_errno <errno> <io_scope args>: io_scope must exit with <errno>
+io_scope_errno() {
+	local want=$1
+	local rc
+
+	shift
+	io_scope "$@"
+	rc=$?
+	(( rc == want )) || error "io_scope $*: expected $want, got $rc"
+}
+
 test_213a() {
 	local tf=$DIR/$tfile
-	local rc
 	# io_scope exits with the errno from llapi_io_scope_set()
 	local EOPNOTSUPP=95
 	local EINVAL=22
+	local scope
 	local mid
+	local idx
 
+	stack_trap "rm -f $tf"
 	$LFS mirror create -N2 -c1 $tf || error "mirror create failed"
 
-	# STRIPE is reserved
-	io_scope -s STRIPE $tf
-	rc=$?
-	[[ $rc -eq $EOPNOTSUPP ]] ||
-		error "STRIPE should return EOPNOTSUPP, got $rc"
-
-	# OBJECT is reserved
-	io_scope -s OBJECT $tf
-	rc=$?
-	[[ $rc -eq $EOPNOTSUPP ]] ||
-		error "OBJECT should return EOPNOTSUPP, got $rc"
-
 	io_scope -s FILE $tf || error "FILE set_scope failed"
+	# FILE takes no stripe index
+	io_scope_errno $EINVAL -s FILE -x 1 $tf
 
-	# MIRROR needs a mirror ID in [1, 0x7FFF]
-	io_scope -s MIRROR -i 1 $tf || error "MIRROR id 1 set_scope failed"
-	io_scope -s MIRROR -i 32767 $tf ||
-		error "MIRROR id 0x7FFF set_scope failed"
-	for mid in 0 32768 4294967295; do
-		io_scope -s MIRROR -i $mid $tf
-		rc=$?
-		[[ $rc -eq $EINVAL ]] ||
-			error "MIRROR id $mid should return EINVAL, got $rc"
+	# MIRROR and STRIPE need a mirror ID in [1, 0x7FFF]
+	for scope in MIRROR STRIPE; do
+		io_scope -s $scope -i 1 $tf || error "$scope id 1 failed"
+		io_scope -s $scope -i 32767 $tf ||
+			error "$scope id 0x7FFF failed"
+		for mid in 0 32768 4294967295; do
+			io_scope_errno $EINVAL -s $scope -i $mid $tf
+		done
 	done
 
-	# SET_MIRROR remains the {MIRROR, id} alias
+	# Only STRIPE takes a stripe index, less than
+	# LOV_EC_MAX_CODING_STRIPES (15). It is not checked against p
+	# until a read or write needs it.
+	io_scope_errno $EINVAL -s MIRROR -i 1 -x 1 $tf
+	io_scope -s STRIPE -i 1 -x 14 $tf || error "STRIPE idx 14 failed"
+	for idx in 15 16 4294967295; do
+		io_scope_errno $EINVAL -s STRIPE -i 1 -x $idx $tf
+	done
+
+	# OBJECT is reserved
+	io_scope_errno $EOPNOTSUPP -s OBJECT $tf
+
+	# resync writes the stale mirror through SET_MIRROR, which stays
+	# an alias for {MIRROR, id}
 	dd if=/dev/zero of=$tf bs=64k count=1 conv=notrunc oflag=direct \
 		2>/dev/null || error "dd failed"
 	$LFS mirror resync $tf || error "mirror resync failed"
+	$LFS mirror verify $tf || error "mirrors differ after resync"
+
+	# a non-parity component ignores the stripe index
+	for mid in 1 2; do
+		io_scope -s STRIPE -i $mid -x 14 -r $tf ||
+			error "STRIPE read of mirror $mid failed"
+	done
 }
 run_test 213a "I/O scope SET ioctl"
 

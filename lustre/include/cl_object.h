@@ -2106,7 +2106,9 @@ struct cl_io {
 	 * which have matching parity codes, so it's possible to recover the
 	 * missing data with ec read.
 	 */
-			     ci_cross_ec:1;
+			     ci_cross_ec:1,
+	/* ci_designated_stripe is valid (0 is a valid index) */
+			     ci_designated_stripe_set:1;
 	/**
 	 * EOF for parity components, calculated based on RAID geometry.
 	 * Valid only when ci_parity_io is set.
@@ -2122,6 +2124,13 @@ struct cl_io {
 	 * Designated mirror index for this I/O.
 	 */
 	unsigned int	     ci_designated_mirror;
+	/**
+	 * Which stripe of a raidset to use (0-based). The p stripes
+	 * share one file offset but hold different data, so read/write on
+	 * a parity component must name one. Valid only when
+	 * ci_designated_stripe_set is set, which needs ci_designated_mirror.
+	 */
+	unsigned int	     ci_designated_stripe;
 	/**
 	 * Number of pages owned by this IO. For invariant checking.
 	 */
