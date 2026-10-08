@@ -895,7 +895,11 @@ struct lfsck_thread_info {
 	union ldlm_policy_data	lti_policy;
 	struct ldlm_enqueue_info lti_einfo;
 	struct ldlm_res_id	lti_resid;
-	struct filter_fid	lti_ff;
+	union {
+		struct filter_fid	lti_ff;
+		char			lti_ff_buf[sizeof(struct filter_fid) +
+						   FILTER_FID_EXTRA_SIZE];
+	};
 	struct dt_allocation_hint lti_hint;
 	struct lu_orphan_rec_v3	lti_rec;
 	struct lov_user_md	lti_lum;

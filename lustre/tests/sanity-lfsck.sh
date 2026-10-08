@@ -6727,6 +6727,87 @@ test_46() {
 }
 run_test 46 "run long OBD_IDX_READ"
 
+# add 8 bytes to the trusted.fid of OST object $2 (from $LFS getstripe) on $1
+lfsck_grow_ff() {
+	local facet=$1
+	local objpath=$(ost_fid2_objpath $facet $2)
+	local path=$(facet_mntpt $facet)/$objpath
+	local ff=$(do_facet $facet "getfattr -n trusted.fid -e hex $path" |
+		   awk -F= '/^trusted.fid=/ { print $2 }')
+
+	[[ -n "$ff" ]] || error "no trusted.fid on $objpath"
+	do_facet $facet \
+		"setfattr -n trusted.fid -v ${ff}0000000000000000 $path" ||
+		error "setfattr on $objpath failed"
+}
+
+test_48() {
+	[[ "$ost1_FSTYPE" == "ldiskfs" ]] || skip "ldiskfs only"
+	(( MDS1_VERSION >= $(version_code 2.17.59.1) &&
+	   OST1_VERSION >= $(version_code 2.17.59.1) )) ||
+		skip "Need MDS and OST >= 2.17.59.1 to read a longer filter_fid"
+
+	echo "#####"
+	echo "LFSCK reads a filter_fid longer than its own, as a newer"
+	echo "version writes, both scanning and rebuilding an orphan"
+	echo "#####"
+
+	check_mount_and_prep
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir || error "(1) setstripe failed"
+	echo foo > $DIR/$tdir/f0 || error "(2) write f0 failed"
+	echo bar > $DIR/$tdir/f1 || error "(3) write f1 failed"
+
+	local fids0=($($LFS getstripe $DIR/$tdir/f0 | grep 0x))
+	local fids1=($($LFS getstripe $DIR/$tdir/f1 | grep 0x))
+	local fid1=$($LFS path2fid $DIR/$tdir/f1)
+
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+
+	echo "Remove the MDT-object of f1 to leave an orphan OST-object"
+	#define OBD_FAIL_LFSCK_LOST_MDTOBJ 0x1616
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1616
+	rm -f $DIR/$tdir/f1 || error "(4) unlink f1 failed"
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	sync; sync_all_data || true
+
+	stop ost1 || error "(5) failed to stop ost1"
+	# so that the wait for FULL below waits for a real reconnection
+	wait_osc_import_state mds ost1 "\(DISCONN\|CONNECTING\)"
+	mount_fstype ost1 || error "(6) failed to mount ost1 as $ost1_FSTYPE"
+	lfsck_grow_ff ost1 "${fids0[3]}:${fids0[2]}:0"
+	lfsck_grow_ff ost1 "${fids1[3]}:${fids1[2]}:0"
+	unmount_fstype ost1
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS ||
+		error "(7) failed to start ost1"
+	# the MDT imports stay in REPLAY_WAIT until ost1 recovery ends
+	wait_recovery_complete ost1 || error "(7.1) ost1 recovery not done"
+	wait_osc_import_state mds ost1 FULL
+
+	$START_LAYOUT -r -o -A || error "(8) Fail to start LFSCK for layout"
+	wait_all_targets_blocked layout completed 9
+
+	local failed=$($SHOW_LAYOUT | awk '/^failed_phase1/ { print $2 }')
+	local orphan=$MOUNT/.lustre/lost+found/MDT0000/$fid1-R-0
+
+	(( failed == 0 )) || error "(10) LFSCK failed on $failed objects"
+	[[ -f $orphan ]] || error "(11) No orphan found for $fid1"
+	[[ $(cat $orphan) == "bar" ]] || error "(12) Wrong orphan data"
+	[[ $(cat $DIR/$tdir/f0) == "foo" ]] || error "(13) Wrong f0 data"
+
+	if (( MDSCOUNT >= 2 )); then
+		$LFS migrate -m 1 $DIR/$tdir ||
+			error "(14) migrate directory failed"
+		[[ $($LFS getstripe -m $DIR/$tdir/f0) == 1 ]] ||
+			error "(15) f0 not on MDT0001"
+		[[ $(cat $DIR/$tdir/f0) == "foo" ]] ||
+			error "(16) Wrong f0 data after migration"
+	fi
+
+	rm -f $orphan || error "(17) Fail to remove orphan"
+}
+run_test 48 "LFSCK reads a filter_fid longer than its own"
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}

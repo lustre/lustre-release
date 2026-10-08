@@ -2605,8 +2605,8 @@ lod_obj_stripe_replace_parent_fid_cb(const struct lu_env *env,
 	struct lu_buf *buf = &info->lti_buf;
 	int rc;
 
-	buf->lb_buf = ff;
-	buf->lb_len = sizeof(*ff);
+	buf->lb_buf = info->lti_ff_buf;
+	buf->lb_len = sizeof(info->lti_ff_buf);
 	rc = dt_xattr_get(env, dt, buf, XATTR_NAME_FID);
 	if (rc < 0) {
 		if (rc == -ENODATA)
@@ -2640,6 +2640,7 @@ lod_obj_stripe_replace_parent_fid_cb(const struct lu_env *env,
 	ff->ff_layout.ol_comp_start = comp->llc_extent.e_start;
 	ff->ff_layout.ol_comp_end = comp->llc_extent.e_end;
 	ff->ff_layout_version = lo->ldo_layout_gen;
+	buf->lb_len = sizeof(*ff);
 	filter_fid_cpu_to_le(ff, ff, sizeof(*ff));
 
 	if (data->locd_declare)

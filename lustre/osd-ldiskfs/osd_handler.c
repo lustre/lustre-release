@@ -5033,7 +5033,8 @@ static int osd_xattr_set_pfid(const struct lu_env *env, struct osd_object *obj,
 
 	ENTRY;
 
-	if (buf->lb_len != sizeof(*ff) && buf->lb_len != sizeof(struct lu_fid))
+	/* a newer filter_fid is longer, and only its start is kept in LMA */
+	if (buf->lb_len < sizeof(*ff) && buf->lb_len != sizeof(struct lu_fid))
 		RETURN(-EINVAL);
 
 	rc = osd_get_lma(info, inode, dentry, loa);

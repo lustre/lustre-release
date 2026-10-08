@@ -310,6 +310,11 @@ static inline void ost_layout_le_to_cpu(struct ost_layout *dst,
 	dst->ol_comp_id = __le32_to_cpu(src->ol_comp_id);
 }
 
+/* room for a larger filter_fid written by a newer version, to be read without
+ * -ERANGE after a downgrade or with servers at different versions
+ */
+#define FILTER_FID_EXTRA_SIZE	32
+
 static inline void filter_fid_cpu_to_le(struct filter_fid *dst,
 					const struct filter_fid *src, int size)
 {

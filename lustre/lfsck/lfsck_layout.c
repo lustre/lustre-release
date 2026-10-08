@@ -4521,7 +4521,8 @@ static int lfsck_layout_assistant_handler_p1(const struct lu_env *env,
 	struct lfsck_layout *lo = com->lc_file_ram;
 	struct lfsck_thread_info *info = lfsck_env_info(env);
 	struct filter_fid *ff = &info->lti_ff;
-	struct lu_buf buf = { .lb_buf = ff, .lb_len = sizeof(*ff) };
+	struct lu_buf buf = { .lb_buf = info->lti_ff_buf,
+			      .lb_len = sizeof(info->lti_ff_buf) };
 	struct dt_object *parent = NULL;
 	struct dt_object *child  = llr->llr_child;
 	struct lu_attr *pla = &lso->lso_attr;
@@ -4576,7 +4577,7 @@ static int lfsck_layout_assistant_handler_p1(const struct lu_env *env,
 	}
 
 check_fid:
-	lfsck_buf_init(&buf, ff, sizeof(*ff));
+	lfsck_buf_init(&buf, info->lti_ff_buf, sizeof(info->lti_ff_buf));
 	rc = dt_xattr_get(env, child, &buf, XATTR_NAME_FID);
 	if (unlikely(rc > 0 && rc < sizeof(struct lu_fid))) {
 		CDEBUG(D_LFSCK,
@@ -5664,7 +5665,7 @@ static int lfsck_layout_scan_stripes(const struct lu_env *env,
 	__u16 count;
 
 	ENTRY;
-	lfsck_buf_init(&buf, &info->lti_ff, sizeof(struct filter_fid));
+	lfsck_buf_init(&buf, info->lti_ff_buf, sizeof(info->lti_ff_buf));
 	magic = le32_to_cpu(lmm->lmm_magic);
 	if (magic == LOV_MAGIC_V1) {
 		objs = &lmm->lmm_objects[0];
@@ -7597,7 +7598,8 @@ again1:
 	if (rc != 0)
 		GOTO(out, rc);
 
-	rc = dt_xattr_get(env, obj, lfsck_buf_get(env, ff, sizeof(*ff)),
+	rc = dt_xattr_get(env, obj, lfsck_buf_get(env, info->lti_ff_buf,
+						  sizeof(info->lti_ff_buf)),
 			  XATTR_NAME_FID);
 	if (rc == -ENODATA) {
 		/* For the pre-created OST-object, update the bitmap to avoid
@@ -7638,7 +7640,7 @@ again1:
 		goto again1;
 	}
 
-	if (rc < sizeof(struct lu_fid))
+	if (rc < (int)sizeof(struct lu_fid))
 		GOTO(out, rc = (rc < 0 ? rc : -EINVAL));
 
 	fid_le_to_cpu(&rec->lor_rec.lor_fid, &ff->ff_parent);

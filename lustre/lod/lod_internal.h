@@ -428,7 +428,11 @@ struct lod_thread_info {
 	struct lustre_cfg		lti_lustre_cfg;
 	/* used to store parent default striping in create */
 	struct lod_default_striping	lti_def_striping;
-	struct filter_fid		lti_ff;
+	union {
+		struct filter_fid	lti_ff;
+		char			lti_ff_buf[sizeof(struct filter_fid) +
+						   FILTER_FID_EXTRA_SIZE];
+	};
 	__u32				*lti_comp_idx;
 	size_t				lti_comp_size;
 	size_t				lti_count;
