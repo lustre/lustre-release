@@ -859,6 +859,7 @@ static const char *const obd_connect_names[] = {
 	"layout_replace",	    /* 0x8000000000000 */
 	"unknown",		   /* 0x10000000000000 */
 	"dne_lock_intent",	   /* 0x20000000000000 */
+	"mgs_type",		   /* 0x40000000000000 */
 	NULL
 };
 
