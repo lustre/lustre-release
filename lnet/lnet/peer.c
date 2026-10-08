@@ -1918,6 +1918,7 @@ out:
  * Error codes:
  *  -EPERM:    Non-DLC addition to a DLC-configured peer.
  *  -EEXIST:   The NID was configured by DLC for a different peer.
+ *  -EALREADY: The NID belongs to another peer with a locked primary.
  *  -ENOMEM:   Out of memory.
  *  -ENOTUNIQ: Adding a second peer NID on a single network on a
  *             non-multi-rail peer.
@@ -2000,6 +2001,7 @@ __must_hold(&the_lnet.ln_api_mutex)
 					libcfs_nidstr(&lp->lp_primary_nid),
 					libcfs_nidstr(nid),
 					libcfs_nidstr(&lp2->lp_primary_nid));
+				rc = -EALREADY;
 				goto out_free_lpni;
 			}
 			peer2_state = lp2->lp_state;
@@ -3602,13 +3604,26 @@ __must_hold(&the_lnet.ln_api_mutex)
 		goto out;
 	}
 
+	/* Readers traverse these lists under lnet_net_lock. */
+	lnet_net_lock(LNET_LOCK_EX);
 	lpn = lpni->lpni_peer_net;
-	if (lpn->lpn_peer_nets.prev != &lp->lp_peer_nets)
-		list_move(&lpn->lpn_peer_nets, &lp->lp_peer_nets);
+	/* A rejected NID merge may leave the advertised primary on another
+	 * peer. Never link its peer net into this peer without transferring
+	 * ownership and the corresponding peer reference.
+	 */
+	if (lpn->lpn_peer != lp) {
+		CDEBUG(D_NET, "Primary NID %s belongs to peer %s, not peer %s\n",
+		       libcfs_nidstr(&nid),
+		       libcfs_nidstr(&lpn->lpn_peer->lp_primary_nid),
+		       libcfs_nidstr(&lp->lp_primary_nid));
+	} else {
+		if (lpn->lpn_peer_nets.prev != &lp->lp_peer_nets)
+			list_move(&lpn->lpn_peer_nets, &lp->lp_peer_nets);
 
-	if (lpni->lpni_peer_nis.prev != &lpni->lpni_peer_net->lpn_peer_nis)
-		list_move(&lpni->lpni_peer_nis,
-			  &lpni->lpni_peer_net->lpn_peer_nis);
+		if (lpni->lpni_peer_nis.prev != &lpn->lpn_peer_nis)
+			list_move(&lpni->lpni_peer_nis, &lpn->lpn_peer_nis);
+	}
+	lnet_net_unlock(LNET_LOCK_EX);
 
 	lnet_peer_ni_decref_locked(lpni);
 	/*

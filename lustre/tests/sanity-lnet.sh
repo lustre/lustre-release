@@ -1262,6 +1262,98 @@ test_40() {
 }
 run_test 40 "LNetAddPeer merges a pre-existing non-primary peer NID"
 
+test_41() {
+	reinit_dlc || return $?
+
+	do_lnetctl peer add --prim_nid 1.1.1.1@tcp --nid 1.1.1.2@tcp ||
+		error "Peer 1.1.1.1@tcp add failed $?"
+	do_lnetctl peer add --prim_nid 2.2.2.2@tcp ||
+		error "Peer 2.2.2.2@tcp add failed $?"
+
+	# 2.2.2.2@tcp is configured as the primary of another peer, so adding
+	# it as a secondary of 1.1.1.1@tcp must fail. The existing peer must
+	# survive the failure with its configured NIDs.
+	local out
+	out=$(do_lnetctl peer add --prim_nid 1.1.1.1@tcp \
+	      --nid 2.2.2.2@tcp 2>&1) &&
+		error "Adding a NID of another configured peer should fail"
+	echo "$out"
+
+	$LNETCTL peer show --nid 1.1.1.1@tcp | grep -qFw 1.1.1.1@tcp ||
+		error "Existing peer 1.1.1.1@tcp was deleted"
+	$LNETCTL peer show --nid 1.1.1.1@tcp | grep -qFw 1.1.1.2@tcp ||
+		error "Configured NID 1.1.1.2@tcp was removed from peer"
+	$LNETCTL peer show --nid 2.2.2.2@tcp | grep -qFw 2.2.2.2@tcp ||
+		error "Peer 2.2.2.2@tcp was modified"
+
+	# A peer created by the failing command is still rolled back.
+	do_lnetctl peer add --prim_nid 3.3.3.3@tcp --nid 2.2.2.2@tcp &&
+		error "Adding a NID of another configured peer should fail"
+	# peer show exits 0 even when no peer is found, so check the output
+	$LNETCTL peer show --nid 3.3.3.3@tcp | grep -qFw 3.3.3.3@tcp &&
+		error "Peer 3.3.3.3@tcp created by the failed command remains"
+
+	return 0
+}
+run_test 41 "Failed peer add must not delete a pre-existing peer"
+
+test_42() {
+	reinit_dlc || return $?
+
+	local lock_prim
+	lock_prim=$(cat /sys/module/lnet/parameters/lock_prim_nid 2>/dev/null)
+	[[ "$lock_prim" == "1" ]] || skip "Need lock_prim_nid=1"
+
+	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
+	add_net "${NETTYPE}1" "${INTERFACES[0]}" || return $?
+
+	local primary=$($LCTL list_nids | grep "@${NETTYPE}$")
+	local uuid="lnet_add_peer_uuid"
+	local show="$LNETCTL peer show --nid ${primary}"
+
+	# Need Lustre modules for add_uuid
+	load_modules_local ||
+		error "Failed to load modules rc=$?"
+
+	# Lustre locks the primary NID. Discovery adds the second NID.
+	$LCTL add_uuid ${uuid} ${primary} ||
+		error "add_uuid $primary failed $?"
+	local nids="$show | grep -cE -- '-[[:space:]]+nid:'"
+	wait_update $HOSTNAME "$nids" "2" "20" ||
+		error "Peer $primary did not get its second NID"
+
+	# Fail the discovery push, so that the locked peer does not learn
+	# the NID of a new interface before Lustre does.
+	$LCTL net_drop_add -s "*" -d "*" -m PUT -r 1 -e local_error ||
+		error "Failed to add drop rule"
+	add_net "${NETTYPE}2" "${INTERFACES[0]}" || return $?
+
+	local secondary=$($LCTL list_nids | grep "@${NETTYPE}2$")
+
+	# LNetAddPeer() creates a peer for the new NID and merges it into
+	# the locked peer. That peer has more than one NID, so it keeps its
+	# primary NID.
+	$LCTL add_uuid ${uuid} ${secondary} ||
+		error "add_uuid $secondary failed $?"
+	wait_update $HOSTNAME "$show | grep -cFw ${secondary}" "1" "20"
+	local rc=$?
+
+	$LCTL net_drop_del -a
+	$LNETCTL peer show
+	$LCTL del_uuid ${uuid} || error "del_uuid failed $?"
+
+	((rc == 0)) || error "$secondary was not merged into peer $primary"
+
+	local peers=$($LNETCTL peer show |
+		      grep -cFw "primary nid: ${primary}")
+
+	((peers == 1)) || error "Expected 1 peer for $primary, found $peers"
+
+	# Peer teardown fails an assertion if the peer lists are corrupt.
+	unload_modules_local || error "Failed to unload modules rc=$?"
+}
+run_test 42 "LNetAddPeer merges a new NID into a locked multi-NID peer"
+
 test_50() {
 	# The default pool is LNET_NRB_LARGE 1 MiB buffers, about 1 GiB,
 	# which a small test node cannot spare. The *_router_buffers

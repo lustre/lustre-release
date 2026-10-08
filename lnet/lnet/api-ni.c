@@ -7216,6 +7216,30 @@ report_err:
 	return rc;
 }
 
+/* Check whether a DLC-configured peer already has @nid as its primary NID.
+ * Call with ln_api_mutex held.
+ */
+static bool lnet_cfg_prim_exists(struct lnet_nid *nid)
+__must_hold(&the_lnet.ln_api_mutex)
+{
+	struct lnet_peer_ni *lpni;
+	struct lnet_peer *lp;
+	bool found;
+
+	lpni = lnet_peer_ni_find_locked(nid);
+	if (!lpni)
+		return false;
+
+	lp = lpni->lpni_peer_net->lpn_peer;
+	spin_lock(&lp->lp_lock);
+	found = nid_same(&lp->lp_primary_nid, nid) &&
+		(lp->lp_state & LNET_PEER_CONFIGURED);
+	spin_unlock(&lp->lp_lock);
+	lnet_peer_ni_decref_locked(lpni);
+
+	return found;
+}
+
 static int lnet_peer_ni_cmd(struct sk_buff *skb, struct genl_info *info)
 {
 	struct nlmsghdr *nlh = nlmsg_hdr(skb);
@@ -7223,6 +7247,7 @@ static int lnet_peer_ni_cmd(struct sk_buff *skb, struct genl_info *info)
 	struct nlattr *params = genlmsg_data(gnlh);
 	int msg_len, rem, rc = 0;
 	struct lnet_nid pnid;
+	bool pnid_created = false;
 	struct nlattr *attr;
 
 	mutex_lock(&the_lnet.ln_api_mutex);
@@ -7254,6 +7279,7 @@ static int lnet_peer_ni_cmd(struct sk_buff *skb, struct genl_info *info)
 			continue;
 
 		pnid = LNET_ANY_NID;
+		pnid_created = false;
 		nla_for_each_nested(pnid_prop, attr, rem2) {
 			bool mr = true;
 
@@ -7291,8 +7317,15 @@ static int lnet_peer_ni_cmd(struct sk_buff *skb, struct genl_info *info)
 				 */
 				if (info->nlhdr->nlmsg_flags & NLM_F_CREATE) {
 					bool lock_prim;
+					bool existed;
 
 					lock_prim = info->nlhdr->nlmsg_flags & NLM_F_EXCL;
+					/* Success does not mean this command
+					 * created the peer: an existing
+					 * compatible configured peer is
+					 * accepted as is.
+					 */
+					existed = lnet_cfg_prim_exists(&pnid);
 					rc = lnet_user_add_peer_ni(&pnid,
 								   &LNET_ANY_NID,
 								   true, lock_prim);
@@ -7301,6 +7334,7 @@ static int lnet_peer_ni_cmd(struct sk_buff *skb, struct genl_info *info)
 								 "failed to add primary peer");
 						GOTO(report_err, rc);
 					}
+					pnid_created = !existed;
 				}
 			} else if (nla_strcmp(pnid_prop, "Multi-Rail") == 0) {
 				pnid_prop = nla_next(pnid_prop, &rem2);
@@ -7389,11 +7423,11 @@ static int lnet_peer_ni_cmd(struct sk_buff *skb, struct genl_info *info)
 		}
 	}
 report_err:
-	/* If we failed on creation and encounter a latter error then
-	 * delete the primary nid.
+	/* If we created the primary peer and encounter a later error then
+	 * delete it. A peer that existed before this command must be left
+	 * alone: deleting it would also drop its previously configured NIDs.
 	 */
-	if (rc < 0 && info->nlhdr->nlmsg_flags & NLM_F_CREATE &&
-	    !LNET_NID_IS_ANY(&pnid))
+	if (rc < 0 && pnid_created)
 		lnet_del_peer_ni(&pnid, &LNET_ANY_NID,
 				 info->nlhdr->nlmsg_flags & NLM_F_EXCL);
 	mutex_unlock(&the_lnet.ln_api_mutex);
