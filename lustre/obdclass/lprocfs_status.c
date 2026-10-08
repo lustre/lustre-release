@@ -854,6 +854,7 @@ static const char *const obd_connect_names[] = {
 	"migrate_src",		     /* 0x400000000000 */
 	"renameat2",		     /* 0x800000000000 */
 	"maintenance",		    /* 0x1000000000000 */
+	"single_stripe_swap",	    /* 0x2000000000000 */
 	NULL
 };
 

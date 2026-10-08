@@ -871,6 +871,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_MIGRATE_SRC     0x400000000000ULL /* migrate src FID */
 #define OBD_CONNECT2_RENAMEAT2	     0x800000000000ULL /* renameat2() flags */
 #define OBD_CONNECT2_MAINTENANCE    0x1000000000000ULL /* fast client recovery*/
+#define OBD_CONNECT2_ONE_OBJ_SWAP   0x2000000000000ULL /* single stripe swap */
 /* XXX README XXX README XXX README XXX README XXX README XXX README XXX
  * Please DO NOT add OBD_CONNECT flags before first ensuring that this value
  * is not in use by some other branch/patch.
