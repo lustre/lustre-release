@@ -860,6 +860,7 @@ static const char *const obd_connect_names[] = {
 	"unknown",		   /* 0x10000000000000 */
 	"dne_lock_intent",	   /* 0x20000000000000 */
 	"mgs_type",		   /* 0x40000000000000 */
+	"batch_destroy",	   /* 0x80000000000000 */
 	NULL
 };
 
