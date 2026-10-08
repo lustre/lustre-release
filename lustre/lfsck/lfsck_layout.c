@@ -2234,9 +2234,7 @@ static int lfsck_layout_update_lovea(const struct lu_env *env,
 static int __lfsck_layout_update_pfid(const struct lu_env *env,
 				      struct lfsck_component *com,
 				      struct dt_object *child,
-				      const struct lu_fid *pfid,
-				      const struct ost_layout *ol, __u32 offset,
-				      __u32 version, __u32 range)
+				      const struct filter_fid *pff)
 {
 	struct dt_device *dev = lfsck_obj2dev(child);
 	struct filter_fid *ff = &lfsck_env_info(env)->lti_ff;
@@ -2247,16 +2245,7 @@ static int __lfsck_layout_update_pfid(const struct lu_env *env,
 	if (com->lc_lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
 		RETURN(0);
 
-	ff->ff_parent.f_seq = cpu_to_le64(pfid->f_seq);
-	ff->ff_parent.f_oid = cpu_to_le32(pfid->f_oid);
-	/* Currently, the filter_fid::ff_parent::f_ver is not the real parent
-	 * MDT-object's FID::f_ver, instead it is the OST-object index in its
-	 * parent MDT-object's layout EA.
-	 */
-	ff->ff_parent.f_stripe_idx = cpu_to_le32(offset);
-	ost_layout_cpu_to_le(&ff->ff_layout, ol);
-	ff->ff_layout_version = cpu_to_le32(version);
-	ff->ff_range = cpu_to_le32(range);
+	filter_fid_cpu_to_le(ff, pff, sizeof(*ff));
 	lfsck_buf_init(&buf, ff, sizeof(*ff));
 
 	if (!dt_object_exists(child) || lfsck_is_dead_obj(child))
@@ -2310,6 +2299,17 @@ static int lfsck_layout_update_pfid(const struct lu_env *env,
 				    struct dt_device *cdev,
 				    struct lu_orphan_rec_v3 *rec, __u32 ea_off)
 {
+	const struct lu_fid *pfid = lu_object_fid(&parent->do_lu);
+	struct filter_fid ff = {
+		.ff_parent = {
+			.f_seq = pfid->f_seq,
+			.f_oid = pfid->f_oid,
+			.f_stripe_idx = ea_off,
+		},
+		.ff_layout = rec->lor_layout,
+		.ff_layout_version = rec->lor_layout_version,
+		.ff_range = rec->lor_range,
+	};
 	struct dt_object *child;
 	int rc = 0;
 
@@ -2318,11 +2318,7 @@ static int lfsck_layout_update_pfid(const struct lu_env *env,
 	if (IS_ERR(child))
 		RETURN(PTR_ERR(child));
 
-	rc = __lfsck_layout_update_pfid(env, com, child,
-					lu_object_fid(&parent->do_lu),
-					&rec->lor_layout, ea_off,
-					rec->lor_layout_version,
-					rec->lor_range);
+	rc = __lfsck_layout_update_pfid(env, com, child, &ff);
 	lfsck_object_put(env, child);
 
 	RETURN(rc == 0 ? 1 : rc);
@@ -2563,14 +2559,22 @@ again:
 
 	rc = dt_xattr_set(env, pobj, &linkea_buf, XATTR_NAME_LINK, 0, th);
 	if (rc == 0 && cobj != NULL) {
+		struct filter_fid ff = {
+			.ff_parent = {
+				.f_seq = pfid->f_seq,
+				.f_oid = pfid->f_oid,
+				.f_stripe_idx = ea_off,
+			},
+			.ff_layout = rec->lor_layout,
+			.ff_layout_version = rec->lor_layout_version,
+			.ff_range = rec->lor_range,
+		};
+
 		dt_trans_stop(env, dev, th);
 		th = NULL;
 
 		/* The 2nd transaction. */
-		rc = __lfsck_layout_update_pfid(env, com, cobj, pfid,
-						&rec->lor_layout, ea_off,
-						rec->lor_layout_version,
-						rec->lor_range);
+		rc = __lfsck_layout_update_pfid(env, com, cobj, &ff);
 	}
 
 	GOTO(stop, rc);
@@ -5350,12 +5354,7 @@ static int lfsck_layout_slave_repair_pfid(const struct lu_env *env,
 	if (IS_ERR(obj))
 		GOTO(log, rc = PTR_ERR(obj));
 
-	rc = __lfsck_layout_update_pfid(env, com, obj,
-					&lrl->lrl_ff_client.ff_parent,
-					&lrl->lrl_ff_client.ff_layout,
-					lrl->lrl_ff_client.ff_layout_version,
-					lrl->lrl_ff_client.ff_range,
-					lrl->lrl_ff_client.ff_parent.f_ver);
+	rc = __lfsck_layout_update_pfid(env, com, obj, &lrl->lrl_ff_client);
 
 	lfsck_object_put(env, obj);
 

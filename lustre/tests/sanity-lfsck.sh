@@ -3132,6 +3132,12 @@ test_19b() {
 	echo "Inject failure stub to make the OST-object to back point to"
 	echo "non-exist MDT-object"
 	local osts=$(osts_nodes)
+	local expected=2
+	local check_idx=false
+
+	# LU-20897: the stripe index is kept by OST PFID repair
+	(( OSTCOUNT >= 2 && OST1_VERSION >= $(version_code 2.17.59) )) &&
+		check_idx=true
 
 	do_nodes $osts $LCTL set_param -n \
 		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid=0
@@ -3142,8 +3148,26 @@ test_19b() {
 	$LFS setstripe -E 1M -S 1M -o 0 -E 4M -S 256K $DIR/$tdir/f1 ||
 		error "(0) Fail to create PFL $DIR/$tdir/f1"
 	echo "foo2" > $DIR/$tdir/f1
+	if $check_idx; then
+		dd if=/dev/urandom of=$TMP/$tfile bs=1M count=2 ||
+			error "(0.1) Fail to create $TMP/$tfile"
+		stack_trap "rm -f $TMP/$tfile"
+		# stripe 1 is on OST0000 and gets the bad parent FID
+		$LFS setstripe -c 2 -S 1M -o 1,0 $DIR/$tdir/f2 ||
+			error "(0.2) Fail to create $DIR/$tdir/f2"
+		dd if=$TMP/$tfile of=$DIR/$tdir/f2 bs=1M skip=1 seek=1 \
+			count=1 conv=notrunc ||
+			error "(0.3) Fail to write $DIR/$tdir/f2"
+		expected=3
+	fi
 	cancel_lru_locks osc
 	do_nodes $osts "$LCTL set_param fail_loc=0"
+	if $check_idx; then
+		dd if=$TMP/$tfile of=$DIR/$tdir/f2 bs=1M count=1 \
+			conv=notrunc,fsync ||
+			error "(0.4) Fail to write $DIR/$tdir/f2"
+		cancel_lru_locks osc
+	fi
 
 	do_facet ost1 $LCTL set_param -n \
 		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid=0
@@ -3162,12 +3186,36 @@ test_19b() {
 
 	cat $DIR/$tdir/f0 || error "(2.1) Read f0 should not be denied!"
 	cat $DIR/$tdir/f1 || error "(2.2) Read f1 should not be denied!"
+	if $check_idx; then
+		cmp $TMP/$tfile $DIR/$tdir/f2 ||
+			error "(2.3) Read f2 should return the data written"
+	fi
 
 	repaired=$(do_facet ost1 $LCTL get_param -n \
 		obdfilter.${FSNAME}-OST0000.lfsck_verify_pfid |
 		awk '/^repaired/ { print $2 }')
-	(( $repaired == 2 )) ||
-		error "(3) Expected 1 repaired, but got $repaired"
+	(( $repaired == $expected )) ||
+		error "(3) Expected $expected repaired, but got $repaired"
+
+	$check_idx || return 0
+
+	local query="$LCTL lfsck_query -t layout -M $FSNAME-MDT0000"
+
+	echo "The repaired parent FID should keep the stripe index"
+	$START_LAYOUT -r -A || error "(4) Fail to start LFSCK for layout"
+	wait_all_targets_blocked layout completed 5
+	wait_update_facet --quiet mds1 \
+		"$query | awk '/^layout_osts_completed/ { print \\\$2 }'" \
+		"$OSTCOUNT" 32 || error "(5.1) LFSCK not completed on all OSTs"
+
+	repaired=$($SHOW_LAYOUT |
+		   awk '/^repaired_unmatched_pair/ { print $2 }')
+	(( $repaired == 0 )) ||
+		error "(6) Expected 0 unmatched pairs, but got $repaired"
+
+	check_seq_oid $DIR/$tdir/f2 || error "(7) Bad parent FID for f2"
+	cancel_lru_locks osc
+	cmp $TMP/$tfile $DIR/$tdir/f2 || error "(8) f2 data changed"
 }
 run_test 19b "OST-object inconsistency self repair"
 
