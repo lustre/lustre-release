@@ -605,6 +605,18 @@ static inline struct timespec timespec_sub(struct timespec *before,
 	return ret;
 }
 
+/*
+ * EC parity-stripe I/O via LL_IO_SCOPE_STRIPE. @parity_idx is the index
+ * among the p parity stripes that share one file offset, not a data
+ * stripe of the file. Keep out of lustreapi.h until the parity layout
+ * and STRIPE scope settle (LU-20690).
+ */
+ssize_t llapi_mirror_read_parity(int fd, unsigned int id,
+				 unsigned int parity_idx, void *buf,
+				 size_t count, off_t pos);
+ssize_t llapi_mirror_write_parity(int fd, unsigned int id,
+				  unsigned int parity_idx, const void *buf,
+				  size_t count, off_t pos);
 /* not ready to expose as official APIs yet, but want to share code */
 void llapi_bandwidth_throttle(struct timespec *now, struct timespec *start_time,
 			      uint64_t bandwidth_bytes_sec,

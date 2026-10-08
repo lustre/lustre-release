@@ -2979,6 +2979,37 @@ int llapi_layout_ec_dstripe_count_get(const struct llapi_layout *layout,
 }
 
 /**
+ * llapi_layout_is_parity_mirror() - Whether @mirror_id is an EC parity mirror
+ * @layout: layout to look up; the component cursor is not changed
+ * @mirror_id: mirror id to look up
+ *
+ * Parity is per-mirror: either every component of @mirror_id is
+ * LCME_FL_PARITY or none are. The first component of @mirror_id is enough.
+ *
+ * Return: 1 if @mirror_id is a parity mirror, 0 if not, -1 on error with
+ * errno set to ENOENT if @mirror_id is not in @layout, or EINVAL if
+ * @layout is NULL.
+ */
+int llapi_layout_is_parity_mirror(const struct llapi_layout *layout,
+				  uint32_t mirror_id)
+{
+	struct llapi_layout_comp *comp;
+
+	if (!layout) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	list_for_each_entry(comp, &layout->llot_comp_list, llc_list) {
+		if (comp->llc_mirror_id == mirror_id)
+			return !!(comp->llc_flags & LCME_FL_PARITY);
+	}
+
+	errno = ENOENT;
+	return -1;
+}
+
+/**
  * Adds a first component of a mirror to \a layout.
  * The \a layout will change it's current component pointer to
  * the newly added component, and it'll be turned into a composite
@@ -4816,14 +4847,18 @@ llapi_ec_verify_hole_by_seek_or_zero_content(int fd, uint32_t mirror_id,
 }
 
 static int
-llapi_ec_write_parities(int fd, uint64_t stripe_size, int k, int p,
-			uint64_t ec_pos, int ec_id, uint8_t *stripe_ptrs[],
+llapi_ec_write_parities(int fd, int k, int p, uint64_t ec_pos,
+			struct llapi_layout_comp *ec_comp,
+			uint8_t *stripe_ptrs[],
 			struct ec_parity_coverage *cov,
 			struct llapi_resync_progress *progress)
 {
+	uint64_t stripe_size = ec_comp->llc_stripe_size;
+	unsigned int mirror = mirror_id_of(ec_comp->llc_id);
 	int rc, i;
 	int m = k + p;
 	struct ec_parity_coverage *c;
+
 	/*
 	 * Clear the whole parity raidset range first so any bytes not covered
 	 * by @cov remain holes instead of stale parity from previous writes.
@@ -4838,14 +4873,13 @@ llapi_ec_write_parities(int fd, uint64_t stripe_size, int k, int p,
 		 * reuse them as a larger zero buffer on punch fallback.
 		 */
 		zero_len = min_t(size_t, zero_len, DEFAULT_IO_BUFLEN);
-		rc = llapi_mirror_punch_or_clear(fd, mirror_id_of(ec_id),
-						 ec_pos, punch_len,
+		rc = llapi_mirror_punch_or_clear(fd, mirror, ec_pos, punch_len,
 						 stripe_ptrs[0], zero_len,
 						 progress);
 		if (rc < 0) {
 			llapi_error(LLAPI_MSG_ERROR, rc,
 				"could not clear parity raidset mirror=%u range [%llu, %llu)",
-				mirror_id_of(ec_id), (unsigned long long)ec_pos,
+				mirror, (unsigned long long)ec_pos,
 				(unsigned long long)(ec_pos + punch_len));
 			goto out;
 		}
@@ -4860,10 +4894,10 @@ llapi_ec_write_parities(int fd, uint64_t stripe_size, int k, int p,
 			off_t write_off = stripe_base + c->pos;
 			ssize_t bytes_written;
 
-			bytes_written = llapi_mirror_write(fd,
-							   mirror_id_of(ec_id),
-							   write_buf + c->pos,
-							   c->len, write_off);
+			bytes_written =
+				llapi_mirror_write_parity(fd, mirror, i - k,
+							  write_buf + c->pos,
+							  c->len, write_off);
 			if (bytes_written < 0) {
 				llapi_error(LLAPI_MSG_ERROR, bytes_written,
 					    "could not write ec parities");
@@ -4884,19 +4918,18 @@ llapi_ec_write_parities(int fd, uint64_t stripe_size, int k, int p,
  * llapi_ec_verify_parities() - Verify on-disk EC parities match the in-memory
  * parities computed from the data stripes.
  * @fd: file descriptor of the file to verify
- * @stripe_size: size of a single stripe in bytes
  * @k: number of data stripes in the RAID set
  * @p: number of parity stripes in the RAID set
  * @ec_pos: byte offset within the EC mirror to start reading parities from
- * @ec_id: mirror id of the EC parity component
+ * @ec_comp: EC parity component
  * @stripe_ptrs: array of stripe buffers; stripe_ptrs[k..k+p-1] hold the
  *	expected (in-memory) parities to compare against
  * @progress: optional resync progress; may be NULL
  *
- * For each of the @p parity stripes, reads @stripe_size bytes from the parity
- * mirror and compares them byte-for-byte against stripe_ptrs[k + i] (the
- * parity just computed by llapi_ec_compute_parities(), not modified here).
- * Punched holes read as zero; any tail not returned by llapi_mirror_read() is
+ * For each of the @p parity stripes, reads one stripe_size from the parity
+ * mirror via llapi_mirror_read_parity() and compares it byte-for-byte against
+ * stripe_ptrs[k + i] (the parity just computed by llapi_ec_compute_parities(),
+ * not modified here). Punched holes read as zero; any tail not returned is
  * zero-filled in the read buffer only.
  *
  * Note, stripe_ptrs[0] is reused as the read buffer and its contents
@@ -4906,13 +4939,15 @@ llapi_ec_write_parities(int fd, uint64_t stripe_size, int k, int p,
  * Return:
  * * %0 on success (all parities match)
  * * %-EINVAL on parity mismatch
- * * %negative error code from llapi_mirror_read() on read failure
+ * * %negative error code from llapi_mirror_read_parity() on read failure
  */
-static int llapi_ec_verify_parities(int fd, uint64_t stripe_size, int k, int p,
-				    uint64_t ec_pos, int ec_id,
+static int llapi_ec_verify_parities(int fd, int k, int p, uint64_t ec_pos,
+				    struct llapi_layout_comp *ec_comp,
 				    uint8_t *stripe_ptrs[],
 				    struct llapi_resync_progress *progress)
 {
+	uint64_t stripe_size = ec_comp->llc_stripe_size;
+	unsigned int mirror = mirror_id_of(ec_comp->llc_id);
 	int rc;
 	int i;
 
@@ -4922,9 +4957,8 @@ static int llapi_ec_verify_parities(int fd, uint64_t stripe_size, int k, int p,
 		uint64_t stripe_base = ec_pos + i * stripe_size;
 		ssize_t bytes_read;
 
-		bytes_read = llapi_mirror_read(fd, mirror_id_of(ec_id),
-					       read_buf, stripe_size,
-					       stripe_base);
+		bytes_read = llapi_mirror_read_parity(fd, mirror, i, read_buf,
+						      stripe_size, stripe_base);
 		if (bytes_read < 0) {
 			llapi_error(LLAPI_MSG_ERROR, bytes_read,
 				    "could not read ec parities");
@@ -5360,8 +5394,7 @@ raidset_with_data:
 		goto out_free;
 
 	if (is_verify) {
-		rc = llapi_ec_verify_parities(fd, data_comp->llc_stripe_size, k,
-					      p, ec_pos, ec_comp->llc_id,
+		rc = llapi_ec_verify_parities(fd, k, p, ec_pos, ec_comp,
 					      stripe_ptrs, progress);
 	} else {
 		rc = ec_compute_parity_coverage_raidset(fd, data_comp->llc_mirror_id,
@@ -5369,8 +5402,7 @@ raidset_with_data:
 		if (rc < 0)
 			goto out_free;
 
-		rc = llapi_ec_write_parities(fd, data_comp->llc_stripe_size, k,
-					     p, ec_pos, ec_comp->llc_id,
+		rc = llapi_ec_write_parities(fd, k, p, ec_pos, ec_comp,
 					     stripe_ptrs, cov, progress);
 	}
 

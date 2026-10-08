@@ -3165,32 +3165,6 @@ static int check_parity_mirror(struct llapi_layout *layout, void *cbdata)
 }
 
 /**
- * is_parity_mirror() - Check if a mirror is a parity mirror.
- * @layout:    Layout to check.
- * @mirror_id: Mirror ID to check.
- *
- * A parity mirror has the LCME_FL_PARITY flag set on all its components.
- * We only need to check the first component since either all components
- * in a mirror are parity or none are (mixed parity mirrors are invalid).
- *
- * Return: true if mirror is a parity mirror, false otherwise.
- */
-static bool is_parity_mirror(struct llapi_layout *layout, uint32_t mirror_id)
-{
-	struct parity_check_cbdata d = {
-		.mirror_id = mirror_id,
-		.is_parity = false,
-	};
-	int rc;
-
-	rc = llapi_layout_comp_iterate(layout, check_parity_mirror, &d);
-	if (rc < 0)
-		return false;
-
-	return d.is_parity;
-}
-
-/**
  * parity_mirror_link() - Find the data mirror a parity mirror protects.
  * @layout:    Layout to check.
  * @mirror_id: Mirror ID to check.
@@ -3289,7 +3263,7 @@ bool last_non_stale_mirror(__u16 mirror_id, struct llapi_layout *layout)
 		struct llapi_resync_comp comp_array[1024] = { { 0 } };
 		int comp_size = 0;
 
-		if (is_parity_mirror(layout, mirror_ids[i]))
+		if (llapi_layout_is_parity_mirror(layout, mirror_ids[i]) > 0)
 			continue;
 
 		comp_size = llapi_mirror_find_stale(layout, comp_array,
@@ -3325,7 +3299,7 @@ static bool data_mirror_remains(struct llapi_layout *layout, __u16 mirror_id)
 		return false;
 
 	for (i = 0; i < cid.cid_count; i++)
-		if (!is_parity_mirror(layout, mirror_ids[i]))
+		if (llapi_layout_is_parity_mirror(layout, mirror_ids[i]) <= 0)
 			return true;
 
 	return false;
@@ -3366,7 +3340,7 @@ static bool file_stays_redundant(struct llapi_layout *layout, __u16 mirror_id)
 
 	/* A data mirror co-splits its parity mirror, so both are removed. */
 	if (mirror_id != LLAPI_MIRROR_LINK_NONE &&
-	    !is_parity_mirror(layout, mirror_id)) {
+	    llapi_layout_is_parity_mirror(layout, mirror_id) <= 0) {
 		for (i = 0; i < cid.cid_count; i++) {
 			if (parity_mirror_link(layout, mirror_ids[i]) ==
 			    mirror_id) {
@@ -3378,7 +3352,7 @@ static bool file_stays_redundant(struct llapi_layout *layout, __u16 mirror_id)
 
 	for (i = 0; i < cid.cid_count; i++) {
 		if (mirror_ids[i] == cosplit ||
-		    is_parity_mirror(layout, mirror_ids[i]))
+		    llapi_layout_is_parity_mirror(layout, mirror_ids[i]) > 0)
 			continue;
 		data_count++;
 		lone_data = mirror_ids[i];
@@ -3508,7 +3482,7 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 	 * split one into a file of its own: 'lfs mirror read -N ID' extracts
 	 * its contents, and 'lfs mirror delete' removes it.
 	 */
-	if (!purge && is_parity_mirror(layout, mirror_id)) {
+	if (!purge && llapi_layout_is_parity_mirror(layout, mirror_id) > 0) {
 		fprintf(stderr,
 			"error %s: cannot split parity mirror %u from '%s': a file containing only a parity mirror cannot be read, use 'lfs mirror delete' to remove it\n",
 			progname, mirror_id, fname);
@@ -3527,7 +3501,7 @@ static int mirror_split(const char *fname, __u32 id, const char *pool,
 	 * the parity mirrors left behind cannot serve reads. Fail early here
 	 * so no victim file is created that the split can never populate.
 	 */
-	if (!is_parity_mirror(layout, mirror_id) &&
+	if (llapi_layout_is_parity_mirror(layout, mirror_id) <= 0 &&
 	    !data_mirror_remains(layout, mirror_id)) {
 		fprintf(stderr,
 			"error %s: cannot split mirror %u from '%s': it is the only data mirror, and a file left with parity mirrors alone cannot be read\n",
@@ -15083,7 +15057,13 @@ error:
 	return rc;
 }
 
-static inline int verify_mirror_id_by_fd(int fd, __u16 mirror_id)
+/*
+ * Confirm @mirror_id exists in the layout of @fd, and if @is_parity is not
+ * NULL, set it to whether that mirror is an EC parity mirror.
+ * Return 0 or -errno.
+ */
+static inline int verify_mirror_id_by_fd(int fd, __u16 mirror_id,
+					 bool *is_parity)
 {
 	struct llapi_layout *layout;
 	int rc;
@@ -15091,22 +15071,17 @@ static inline int verify_mirror_id_by_fd(int fd, __u16 mirror_id)
 	layout = llapi_layout_get_by_fd(fd, 0);
 	if (!layout) {
 		fprintf(stderr, "could not get layout.\n");
-		return  -EINVAL;
-	}
-
-	rc = llapi_layout_comp_iterate(layout, find_mirror_id, &mirror_id);
-	if (rc < 0) {
-		fprintf(stderr, "failed to iterate layout\n");
-		llapi_layout_free(layout);
-
-		return rc;
-	} else if (rc == LLAPI_LAYOUT_ITER_CONT) {
-		fprintf(stderr, "does not find mirror with ID %u\n", mirror_id);
-		llapi_layout_free(layout);
-
 		return -EINVAL;
 	}
+
+	rc = llapi_layout_is_parity_mirror(layout, mirror_id);
 	llapi_layout_free(layout);
+	if (rc < 0) {
+		fprintf(stderr, "does not find mirror with ID %u\n", mirror_id);
+		return -EINVAL;
+	}
+	if (is_parity)
+		*is_parity = rc > 0;
 
 	return 0;
 }
@@ -15378,7 +15353,7 @@ static inline int lfs_mirror_read(int argc, char **argv)
 	}
 
 	/* verify mirror id */
-	rc = verify_mirror_id_by_fd(fd, mirror_id);
+	rc = verify_mirror_id_by_fd(fd, mirror_id, NULL);
 	if (rc) {
 		fprintf(stderr,
 			"%s %s: cannot find mirror with ID %u in '%s'\n",
@@ -15488,6 +15463,7 @@ static inline int lfs_mirror_write(int argc, char **argv)
 	off_t pos;
 	ssize_t page_size = sysconf(_SC_PAGESIZE);
 	struct ll_ioc_lease_id ioc;
+	bool is_parity;
 	struct option long_opts[] = {
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
 	{ .val = 'i',	.name = "inputfile",	.has_arg = required_argument },
@@ -15550,12 +15526,19 @@ static inline int lfs_mirror_write(int argc, char **argv)
 		return rc;
 	}
 
-	/* verify mirror id */
-	rc = verify_mirror_id_by_fd(fd, mirror_id);
+	/* Verify mirror id and reject an EC parity mirror */
+	rc = verify_mirror_id_by_fd(fd, mirror_id, &is_parity);
 	if (rc) {
 		fprintf(stderr,
 			"%s %s: cannot find mirror with ID %u in '%s'\n",
 			progname, argv[0], mirror_id, fname);
+		goto close_fd;
+	}
+	if (is_parity) {
+		fprintf(stderr,
+			"%s %s: cannot write parity mirror %u of '%s', use 'lfs mirror resync'\n",
+			progname, argv[0], mirror_id, fname);
+		rc = -EINVAL;
 		goto close_fd;
 	}
 
@@ -15840,7 +15823,7 @@ static inline int lfs_mirror_copy(int argc, char **argv)
 	}
 
 	/* verify mirror id */
-	rc = verify_mirror_id_by_fd(fd, read_mirror_id);
+	rc = verify_mirror_id_by_fd(fd, read_mirror_id, NULL);
 	if (rc) {
 		fprintf(stderr,
 			"%s %s: cannot find mirror with ID %u in '%s'\n",
@@ -15849,7 +15832,7 @@ static inline int lfs_mirror_copy(int argc, char **argv)
 	}
 
 	for (i = 0; i < count; i++) {
-		rc = verify_mirror_id_by_fd(fd, ids[i]);
+		rc = verify_mirror_id_by_fd(fd, ids[i], NULL);
 		if (rc) {
 			fprintf(stderr,
 			"%s %s: cannot find mirror with ID %u in '%s'\n",

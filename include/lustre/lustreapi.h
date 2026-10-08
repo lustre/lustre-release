@@ -1932,6 +1932,11 @@ int llapi_layout_ec_cstripe_count_get(const struct llapi_layout *layout,
 int llapi_layout_ec_dstripe_count_get(const struct llapi_layout *layout,
 				      uint8_t *dstripe_count);
 /**
+ * Check whether a mirror of the layout is an EC parity mirror.
+ */
+int llapi_layout_is_parity_mirror(const struct llapi_layout *layout,
+				  uint32_t mirror_id);
+/**
  * Adds a first component of a mirror to the existing composite layout.
  */
 int llapi_layout_add_first_comp(struct llapi_layout *layout);

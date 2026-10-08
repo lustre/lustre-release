@@ -1,4 +1,4 @@
-.TH LFS-MIRROR-WRITE 1 2024-08-20 Lustre "Lustre User Utilities"
+.TH LFS-MIRROR-WRITE 1 2026-10-29 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-mirror-write \- write a mirror's content of a mirrored file
 .SH SYNOPSIS
@@ -15,6 +15,9 @@ path name
 .IR MIRRORED_FILE ,
 the mirror is specified by its mirror ID
 .IR MIRROR_ID .
+This command cannot write an erasure-coded parity mirror; use
+.B lfs mirror resync
+to rebuild parities from data.
 .SH OPTIONS
 .TP
 .BR -N ", " --mirror-id " \fIMIRROR_ID"
@@ -63,6 +66,7 @@ filesystem package since release 2.12.0
 .BR lfs-mirror-create (1),
 .BR lfs-mirror-extend (1),
 .BR lfs-mirror-read (1),
+.BR lfs-mirror-resync (1),
 .BR lfs-mirror-split (1),
 .BR lfs-mirror-verify (1),
 .BR lfs-setstripe (1)

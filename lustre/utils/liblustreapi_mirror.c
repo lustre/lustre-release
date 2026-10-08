@@ -84,38 +84,18 @@ int llapi_mirror_clear(int fd)
 	return llapi_mirror_set(fd, 0);
 }
 
-/**
- * llapi_mirror_read() - Read data from a specified mirror with @id.
- * @fd: file descriptor, should be opened with O_DIRECT
- * @id: mirror id to be read from
- * @buf: read buffer
- * @count: number of bytes to be read
- * @pos: file postion where the read starts
- *
- * Read data from a specified mirror with @id. This function won't read
- * partial read result; either file end is reached, or number of @count bytes
- * is read, or an error will be returned.
- *
- * Return:
- * * %>=0 Number of bytes has been read
- * * %negative on failure(last seen error)
- */
-ssize_t llapi_mirror_read(int fd, unsigned int id, void *buf, size_t count,
-			  off_t pos)
+/* pread() loop of the mirror reads; the caller has set the I/O scope */
+static ssize_t mirror_read_loop(int fd, unsigned int id, void *buf,
+				size_t count, off_t pos)
 {
 	ssize_t result = 0;
 	ssize_t page_size;
-	int rc;
 
 	page_size = sysconf(_SC_PAGESIZE);
 	if (page_size < 0) {
-		rc = -errno;
-		return rc;
+		result = -errno;
+		goto out;
 	}
-
-	rc = llapi_mirror_set(fd, id);
-	if (rc < 0)
-		return rc;
 
 	while (count > 0) {
 		ssize_t bytes_read;
@@ -140,29 +120,91 @@ ssize_t llapi_mirror_read(int fd, unsigned int id, void *buf, size_t count,
 		if (bytes_read & (page_size - 1)) /* end of file */
 			break;
 	}
-
+out:
 	(void) llapi_mirror_clear(fd);
 
 	return result;
 }
 
-ssize_t llapi_mirror_write(int fd, unsigned int id, const void *buf,
-			   size_t count, off_t pos)
+/**
+ * llapi_mirror_read() - Read data from a specified mirror with @id.
+ * @fd: file descriptor, should be opened with O_DIRECT
+ * @id: mirror id to be read from
+ * @buf: read buffer
+ * @count: number of bytes to be read
+ * @pos: file postion where the read starts
+ *
+ * Read data from a specified mirror with @id. This function won't read
+ * partial read result; either file end is reached, or number of @count bytes
+ * is read, or an error will be returned.
+ *
+ * Return:
+ * * %>=0 Number of bytes has been read
+ * * %negative on failure(last seen error)
+ */
+ssize_t llapi_mirror_read(int fd, unsigned int id, void *buf, size_t count,
+			  off_t pos)
 {
-	ssize_t result = 0;
-	ssize_t page_size;
 	int rc;
-
-	page_size = sysconf(_SC_PAGESIZE);
-	if (page_size < 0)
-		return -EINVAL;
-
-	if (((unsigned long)buf & (page_size - 1)) || pos & (page_size - 1))
-		return -EINVAL;
 
 	rc = llapi_mirror_set(fd, id);
 	if (rc < 0)
 		return rc;
+
+	return mirror_read_loop(fd, id, buf, count, pos);
+}
+
+/**
+ * llapi_mirror_read_parity() - Read one EC parity stripe of mirror @id
+ * @fd: file descriptor, should be opened with O_DIRECT
+ * @id: mirror id of the parity mirror to be read from
+ * @parity_idx: 0-based index among the p parity stripes sharing one
+ *	file offset
+ * @buf: read buffer
+ * @count: number of bytes to be read
+ * @pos: file position where the read starts
+ *
+ * Same as llapi_mirror_read(), but pins the I/O to parity stripe
+ * @parity_idx of mirror @id with LL_IO_SCOPE_STRIPE, and clears the
+ * scope again before returning.
+ *
+ * Internal helper (lustreapi_internal.h), not part of the public ABI.
+ *
+ * Return:
+ * * %>=0 Number of bytes has been read
+ * * %negative on failure(last seen error)
+ */
+ssize_t llapi_mirror_read_parity(int fd, unsigned int id,
+				 unsigned int parity_idx, void *buf,
+				 size_t count, off_t pos)
+{
+	struct ll_ioc_io_scope ios = {
+		.ios_scope = LL_IO_SCOPE_STRIPE,
+		.ios_mirror_id = id,
+		.ios_stripe_idx = parity_idx,
+	};
+	int rc;
+
+	rc = llapi_io_scope_set(fd, &ios);
+	if (rc < 0)
+		return rc;
+
+	return mirror_read_loop(fd, id, buf, count, pos);
+}
+
+/* pwrite() loop of the mirror writes; the caller has set the I/O scope */
+static ssize_t mirror_write_loop(int fd, unsigned int id, const void *buf,
+				 size_t count, off_t pos)
+{
+	ssize_t result = 0;
+	ssize_t page_size;
+
+	page_size = sysconf(_SC_PAGESIZE);
+	if (page_size < 0 ||
+	    ((unsigned long)buf & (page_size - 1)) || pos & (page_size - 1)) {
+		result = -EINVAL;
+		goto out;
+	}
 
 	while (count > 0) {
 		ssize_t bytes_written;
@@ -186,10 +228,61 @@ ssize_t llapi_mirror_write(int fd, unsigned int id, const void *buf,
 		buf += bytes_written;
 		count -= bytes_written;
 	}
-
+out:
 	(void) llapi_mirror_clear(fd);
 
 	return result;
+}
+
+ssize_t llapi_mirror_write(int fd, unsigned int id, const void *buf,
+			   size_t count, off_t pos)
+{
+	int rc;
+
+	rc = llapi_mirror_set(fd, id);
+	if (rc < 0)
+		return rc;
+
+	return mirror_write_loop(fd, id, buf, count, pos);
+}
+
+/**
+ * llapi_mirror_write_parity() - Write one EC parity stripe of mirror @id
+ * @fd: file descriptor, should be opened with O_DIRECT
+ * @id: mirror id of the parity mirror to be written to
+ * @parity_idx: 0-based index among the p parity stripes sharing one
+ *	file offset
+ * @buf: write buffer, must be page aligned
+ * @count: number of bytes to be written
+ * @pos: file position where the write starts, must be page aligned
+ *
+ * Same as llapi_mirror_write(), but pins the I/O to parity stripe
+ * @parity_idx of mirror @id with LL_IO_SCOPE_STRIPE, and clears the
+ * scope again before returning.
+ *
+ * Internal helper (lustreapi_internal.h), not part of the public ABI.
+ *
+ * Return:
+ * * %>=0 Number of bytes has been written
+ * * %-EINVAL if @buf or @pos is not page aligned
+ * * %negative on failure(last seen error)
+ */
+ssize_t llapi_mirror_write_parity(int fd, unsigned int id,
+				  unsigned int parity_idx, const void *buf,
+				  size_t count, off_t pos)
+{
+	struct ll_ioc_io_scope ios = {
+		.ios_scope = LL_IO_SCOPE_STRIPE,
+		.ios_mirror_id = id,
+		.ios_stripe_idx = parity_idx,
+	};
+	int rc;
+
+	rc = llapi_io_scope_set(fd, &ios);
+	if (rc < 0)
+		return rc;
+
+	return mirror_write_loop(fd, id, buf, count, pos);
 }
 
 int llapi_mirror_truncate(int fd, unsigned int id, off_t length)
