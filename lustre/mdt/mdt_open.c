@@ -1614,11 +1614,9 @@ again_pw:
 		}
 
 		*child_fid = *info->mti_rr.rr_fid2;
-		LASSERTF(fid_is_sane(child_fid), "fid="DFID"\n",
-			 PFID(child_fid));
 		/* In the function below, .hs_keycmp resolves to
 		 * lu_obj_hop_keycmp() */
-		child = mdt_object_new(info->mti_env, mdt, child_fid);
+		child = mdt_object_new(info, child_fid, &rr->rr_name);
 	} else {
 		/*
 		 * Check for O_EXCL is moved to the mdt_finish_open(),
@@ -1864,7 +1862,7 @@ static struct mdt_object *mdt_orphan_open(struct mdt_thread_info *info,
 	if (IS_ERR(local_root))
 		RETURN(local_root);
 
-	obj = mdt_object_new(env, mdt, fid);
+	obj = mdt_object_new(info, fid, &lname);
 	if (IS_ERR(obj))
 		GOTO(out, rc = PTR_ERR(obj));
 

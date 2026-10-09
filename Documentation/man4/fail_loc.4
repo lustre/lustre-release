@@ -1,0 +1,156 @@
+.TH FAIL_LOC 4 2026-10-09 "Lustre" "Lustre Kernel Interfaces"
+.SH NAME
+fail_loc, fail_val, fail_err \- inject failures for debugging and testing
+.SH SYNOPSIS
+.SY
+.B lctl set_param fail_loc=
+.RI [ FLAGS | ] LOCATION
+.SY
+.B lctl set_param fail_val=
+.I VALUE
+.SY
+.B lctl set_param fail_err=
+.I ERROR
+.SY
+.B lctl get_param fail_loc fail_val
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.br
+.BR 644 " | " -rw-r--r--
+.TP
+.B Scope
+.br
+Global
+.TP
+.B Config
+.br
+Always present
+.TP
+.B Default
+.br
+.RB fail_loc= 0
+.br
+.RB fail_val= 0
+.SH DESCRIPTION
+The
+.B fail_loc
+and
+.B fail_val
+parameters inject failures, delays and races into the Lustre and LNet
+code on the node where they are set, so that tests can exercise error
+handling and recovery paths that are otherwise hard to reach.
+An injected failure can return errors to applications, evict clients,
+crash the node or corrupt the filesystem, so
+.B fail_loc
+must never be set on a production system.
+.PP
+The low 16 bits of
+.B fail_loc
+select one failure location, compiled into the code as an
+.B OBD_FAIL_*
+or
+.B CFS_FAIL_*
+constant.
+Locations 0x0100 to 0x3fff are in Lustre, 0xe000 to 0xefff in LNet, and
+0xf000 to 0xffff in the LNDs.
+The list of locations and their meaning is in
+.I lustre/include/obd_support.h
+and the other headers of the Lustre source, and each test script
+names the location it uses in a
+.B #define
+comment next to the
+.B lctl set_param
+command that matches the constant being used.
+Setting
+.B fail_loc
+to 0 disables failure injection.
+.PP
+The high bits of
+.B fail_loc
+are flags that control when the location fails:
+.TP
+.BR 0x80000000 " (ONCE)"
+Fail only the first time the location is reached.
+.TP
+.BR 0x20000000 " (SKIP)"
+Skip the first
+.B fail_val
+times the location is reached, then fail.
+.TP
+.BR 0x10000000 " (SOME)"
+Fail only the first
+.B fail_val
+times the location is reached.
+.TP
+.BR 0x08000000 " (RAND)"
+Fail on average once every
+.B fail_val
+times the location is reached, where
+.B fail_val
+is at least 2.
+.TP
+.BR 0x02000000 " (FAULT)"
+Also fail at every location that is checked with
+.BR CFS_FAULT_CHECK() .
+.PP
+At most one of the SKIP, SOME and RAND flags can be set, and ONCE can be
+combined with SKIP or RAND.
+The kernel sets the FAILED bit 0x40000000 in
+.B fail_loc
+when the location fails, so
+.B lctl get_param fail_loc
+shows whether it was reached.
+.PP
+The
+.B fail_val
+parameter is the argument of the failure location.
+Its meaning depends on the location, for example a delay in seconds,
+a target index, or a value to substitute, and it is the count used by
+the SKIP, SOME and RAND flags.
+The
+.B fail_err
+parameter is the error returned at some specific
+.B fail_loc
+locations.
+Its meaning depends on the location.
+.SH EXAMPLES
+Drop the reply to the next metadata update on the MDS
+.RB ( OBD_FAIL_MDS_REINT_NET_REP = 0x119 ),
+so that the client has to resend it:
+.EX
+.RB mds# " lctl set_param fail_loc=0x80000119"
+.EE
+.PP
+Delay the next read or write RPC from the client by 10 seconds
+.RB ( OBD_FAIL_OSC_DELAY_IO = 0x414 ):
+.EX
+.RB client# " lctl set_param fail_loc=0x80000414 fail_val=10"
+.EE
+.PP
+Drop about one in ten RPCs sent by the client, so that they time out
+and are resent
+.RB ( OBD_FAIL_PTLRPC_DROP_RPC = 0x505 ):
+.EX
+.RB client# " lctl set_param fail_loc=0x08000505 fail_val=10"
+.EE
+.PP
+Stop injecting failures:
+.EX
+.RB client# " lctl set_param fail_loc=0 fail_val=0"
+.EE
+.SH AVAILABILITY
+The
+.B fail_loc
+parameter is part of the
+.BR lustre (7)
+filesystem package since release 1.0.0,
+.\" Added in commit 0.0.0-332-gaba91aec60
+and the
+.B fail_val
+parameter since release 1.6.2.
+.\" Added in commit 1.6.0.1-181-gceca3d533a
+.SH SEE ALSO
+.BR lctl-get_param (8),
+.BR lctl-set_param (8)

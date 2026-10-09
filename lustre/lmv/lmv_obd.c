@@ -1232,6 +1232,12 @@ int lmv_fid_alloc(const struct lu_env *env, struct obd_export *exp,
 		rc = 0;
 	}
 
+	/* fail_val is high 32 bits of a bad sequence for the MDT to reject */
+	if (!rc && CFS_FAIL_CHECK(OBD_FAIL_LMV_FID_SEQ)) {
+		fid->f_seq = (u64)cfs_fail_val << 32;
+		fid->f_oid = get_random_u32_below(65536);
+	}
+
 	RETURN(rc);
 }
 

@@ -3823,18 +3823,69 @@ static int mdt_quota_dqacq(struct tgt_session_info *tsi)
 	RETURN(rc);
 }
 
-struct mdt_object *mdt_object_new(const struct lu_env *env,
-				  struct mdt_device *d,
-				  const struct lu_fid *f)
+/**
+ * mdt_new_fid_check() - check the client-allocated FID of a new object
+ * @info: thread info of the create request
+ * @fid: FID of the new object
+ * @lname: name of the new object, for the error message
+ *
+ * A client allocates the FID of a new object from an MDT-supplied sequence to
+ * ensure they do not depend on MDS-side state that may be lost on a restart.
+ * Ensure that the provided FID matches a valid MDT sequence number.
+ *
+ * Return:
+ * * %0 - @fid is a normal FID in an MDT sequence
+ * * %-EINVAL - @fid is not
+ * * negative errno - the FLD lookup failed for another reason
+ */
+int mdt_new_fid_check(struct mdt_thread_info *info, const struct lu_fid *fid,
+		      const struct lu_name *lname)
+{
+	struct seq_server_site *ss = mdt_seq_site(info->mti_mdt);
+	struct lu_seq_range range = { .lsr_flags = LU_SEQ_RANGE_ANY };
+	struct ptlrpc_request *req = mdt_info_req(info);
+	const char *nid;
+	int rc;
+
+	if (fid_is_sane(fid) && fid_is_norm(fid)) {
+		rc = fld_server_lookup(info->mti_env, ss->ss_server_fld,
+				       fid_seq(fid), &range);
+		if (rc != -ENOENT && (rc || fld_range_is_mdt(&range)))
+			return rc;
+	}
+
+	rc = -EINVAL;
+	nid = req ? libcfs_nidstr(&req->rq_peer.nid) : "local";
+	if (fld_range_is_ost(&range))
+		CERROR("%s: cannot create '"DNAME"' with OST%04x FID "DFID" from %s: rc = %d\n",
+		       mdt_obd_name(info->mti_mdt), encode_fn_luname(lname),
+		       range.lsr_index, PFID(fid), nid, rc);
+	else
+		CERROR("%s: cannot create '"DNAME"' with invalid FID "DFID" from %s: rc = %d\n",
+		       mdt_obd_name(info->mti_mdt), encode_fn_luname(lname),
+		       PFID(fid), nid, rc);
+
+	return rc;
+}
+
+struct mdt_object *mdt_object_new(struct mdt_thread_info *info,
+				  const struct lu_fid *f,
+				  const struct lu_name *lname)
 {
 	struct lu_object_conf conf = { .loc_flags = LOC_F_NEW };
+	struct mdt_device *d = info->mti_mdt;
 	struct lu_object *o;
 	struct mdt_object *m;
+	int rc;
 
 	ENTRY;
 
+	rc = mdt_new_fid_check(info, f, lname);
+	if (rc)
+		RETURN(ERR_PTR(rc));
+
 	CDEBUG(D_INFO, "Allocate object for "DFID"\n", PFID(f));
-	o = lu_object_find(env, &d->mdt_lu_dev, f, &conf);
+	o = lu_object_find(info->mti_env, &d->mdt_lu_dev, f, &conf);
 	if (unlikely(IS_ERR(o)))
 		m = (struct mdt_object *)o;
 	else

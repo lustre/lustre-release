@@ -21145,6 +21145,49 @@ test_154db() {
 }
 run_test 154db "fid is stored in dir entries"
 
+test_154dc() {
+	(( MDS1_VERSION >= $(version_code 2.17.59.2) )) ||
+		skip "need MDS >= 2.17.59.2 for new object FID checks"
+
+	local ost_idx=$($LFS osts $MOUNT | awk -F: '/OST/ { print $1; exit }')
+	local start=$(do_facet mds1 $LCTL get_param -n seq.ctl*.space |
+		      awk -F'[[ ]' '{ print $2 }')
+	local hi=$(((start >> 32) + 1))
+	local first=$((hi << 32))
+	local seq
+	local err
+
+	# map a sequence range above the free space to an OST in the FLDB
+	do_facet mds1 $LCTL set_param \
+		seq.ctl*.fldb="[$first-$((first + 65536))\):$ost_idx:ost" ||
+		error "reserve OST$ost_idx sequence $first failed"
+
+	test_mkdir $DIR/$tdir
+	stack_trap "$LCTL set_param fail_loc=0 fail_val=0"
+	# fail_val is the high 32 bits of the new FID sequence: 1 is IDIF,
+	# 2 is reserved below FID_SEQ_NORMAL, $hi is the OST range above,
+	# and $((hi + 1)) is not allocated at all
+	for seq in 1 2 $hi $((hi + 1)); do
+		#define OBD_FAIL_LMV_FID_SEQ		0x1902
+		$LCTL set_param fail_loc=0x80001902 fail_val=$seq
+		err=$(mkdir $DIR/$tdir/d$seq 2>&1) &&
+			error "mkdir with seq $seq succeeded"
+		[[ $err =~ "Invalid argument" ]] ||
+			error "mkdir with seq $seq: $err"
+
+		$LCTL set_param fail_loc=0x80001902 fail_val=$seq
+		err=$($MULTIOP $DIR/$tdir/f$seq Oc 2>&1) &&
+			error "create with seq $seq succeeded"
+		[[ $err =~ "Invalid argument" ]] ||
+			error "create with seq $seq: $err"
+	done
+	$LCTL set_param fail_loc=0 fail_val=0
+
+	mkdir $DIR/$tdir/dir || error "mkdir after bad FIDs failed"
+	touch $DIR/$tdir/dir/file || error "create after bad FIDs failed"
+}
+run_test 154dc "MDS refuses new objects with non-MDT FIDs"
+
 test_154e()
 {
 	[[ $MDS1_VERSION -lt $(version_code 2.6.50) ]] &&

@@ -740,6 +740,7 @@ extern bool obd_enable_fname_encoding;
 
 /* LMV */
 #define OBD_FAIL_LMV_UNKNOWN_STRIPE		0x1901
+#define OBD_FAIL_LMV_FID_SEQ			0x1902
 
 /* FLR */
 #define OBD_FAIL_FLR_LV_DELAY			0x1A01

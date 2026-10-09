@@ -877,9 +877,11 @@ void mdt_object_stripes_unlock(struct mdt_thread_info *info,
 			       struct mdt_object *o, struct mdt_lock_handle *lh,
 			       struct ldlm_enqueue_info *einfo, int decref);
 
-struct mdt_object *mdt_object_new(const struct lu_env *env,
-				  struct mdt_device *mdt,
-				  const struct lu_fid *fid);
+int mdt_new_fid_check(struct mdt_thread_info *info, const struct lu_fid *fid,
+		      const struct lu_name *lname);
+struct mdt_object *mdt_object_new(struct mdt_thread_info *info,
+				  const struct lu_fid *fid,
+				  const struct lu_name *lname);
 struct mdt_object *mdt_object_find(const struct lu_env *env,
 				   struct mdt_device *mdt,
 				   const struct lu_fid *fid);

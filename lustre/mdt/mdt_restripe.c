@@ -128,7 +128,6 @@ int mdt_restripe_internal(struct mdt_thread_info *info,
 			  struct md_attr *ma)
 {
 	const struct lu_env *env = info->mti_env;
-	struct mdt_device *mdt = info->mti_mdt;
 	struct lmv_user_md *lum = spec->u.sp_ea.eadata;
 	struct lmv_mds_md_v1 *lmv;
 	u32 lmv_stripe_count = 0;
@@ -183,7 +182,7 @@ int mdt_restripe_internal(struct mdt_thread_info *info,
 			 * master object, and make child the first stripe of
 			 * @tobj.
 			 */
-			tobj = mdt_object_new(env, mdt, tfid);
+			tobj = mdt_object_new(info, tfid, lname);
 			if (unlikely(IS_ERR(tobj)))
 				RETURN(PTR_ERR(tobj));
 		}

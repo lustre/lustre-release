@@ -733,7 +733,7 @@ static int mdt_create(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 	if (info->mti_intent_lock)
 		mdt_set_disposition(info, dlmrep, DISP_OPEN_CREATE);
 
-	child = mdt_object_new(info->mti_env, mdt, rr->rr_fid2);
+	child = mdt_object_new(info, rr->rr_fid2, &rr->rr_name);
 	if (unlikely(IS_ERR(child)))
 		GOTO(unlock_parent, rc = PTR_ERR(child));
 
@@ -2352,6 +2352,10 @@ int mdt_reint_migrate(struct mdt_thread_info *info,
 		   mdt_enable_gid_deny(uc, CAP_SYS_ADMIN,
 				       mdt->mdt_enable_remote_dir_gid)))
 		RETURN(-EPERM);
+
+	rc = mdt_new_fid_check(info, rr->rr_fid2, &rr->rr_name);
+	if (rc)
+		RETURN(rc);
 
 	/*
 	 * Note: do not enqueue rename lock for replay request, because
