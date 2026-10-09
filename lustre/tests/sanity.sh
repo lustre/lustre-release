@@ -6507,7 +6507,8 @@ test_42e() { # bug22074
 
 	local TDIR=$DIR/${tdir}e
 	local pages=16 # hardcoded 16 pages, don't change it.
-	local files=$((OSTCOUNT * 500)) # hopefully 500 files on each OST
+	# about 31MiB of 16-page writes to OST0000, for any PAGE_SIZE
+	local files=$((OSTCOUNT * 500 * 4096 / PAGE_SIZE))
 	local proc_osc0="osc.${FSNAME}-OST0000-osc-[^MDT]*"
 	local max_dirty_mb
 	local warmup_files
@@ -6517,6 +6518,18 @@ test_42e() { # bug22074
 	createmany -o $TDIR/f $files
 
 	max_dirty_mb=$($LCTL get_param -n $proc_osc0/max_dirty_mb)
+	# the warmup writes 2 * max_dirty_mb to OST0000, so keep it well
+	# within the free space of a small test OST, or grant runs out
+	local avail_kb=$($LFS df $DIR | awk '/OST0000/ { print $4 }')
+	local avail_mb=$((avail_kb / 1024))
+
+	if (( max_dirty_mb > avail_mb / 4 )); then
+		stack_trap \
+			"$LCTL set_param $proc_osc0/max_dirty_mb=$max_dirty_mb"
+		max_dirty_mb=$((avail_mb / 4))
+		$LCTL set_param $proc_osc0/max_dirty_mb=$max_dirty_mb ||
+			error "set max_dirty_mb=$max_dirty_mb failed"
+	fi
 
 	# we assume that with $OSTCOUNT files, at least one of them will
 	# be allocated on OST0.
@@ -6531,7 +6544,7 @@ test_42e() { # bug22074
 		dd if=/dev/zero of=$TDIR/w$i bs="$max_dirty_mb"M count=1
 		break
 	done
-	[[ $i -gt $warmup_files ]] && error "OST0 is still cold"
+	(( i < warmup_files )) || error "no w* files on OST0000"
 	sync
 	$LCTL get_param $proc_osc0/cur_dirty_bytes
 	$LCTL get_param $proc_osc0/cur_grant_bytes
@@ -6549,10 +6562,14 @@ test_42e() { # bug22074
 
 	# perform the real test
 	$LCTL set_param $proc_osc0/rpc_stats 0
-	for ((;i<$files; i++)); do
+	local written=0
+	for ((i=0; i<$files; i++)); do
 		[ $($LFS getstripe -i $TDIR/f$i) -eq 0 ] || continue
 		dd if=/dev/zero of=$TDIR/f$i bs=$PAGE_SIZE count=$pages 2>/dev/null
+		written=$((written + 1))
 	done
+	(( written > 0 )) || error "no f* files on OST0000 of $files"
+	echo "wrote $written x $((pages * PAGE_SIZE)) bytes to OST0000"
 	sync
 	$LCTL get_param $proc_osc0/rpc_stats
 
