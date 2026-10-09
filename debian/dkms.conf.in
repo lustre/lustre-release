@@ -149,10 +149,19 @@ can_o2ib_mofed=no
 can_o2ib_in_kernel=no
 ext_mofed=no
 int_mofed=no
-[[ -f ${kernel_source_dir}/include/rdma/rdma_cm.h ]] &&
-[[ -f ${kernel_source_dir}/include/rdma/ib_cm.h ]] &&
-[[ -f ${kernel_source_dir}/include/rdma/ib_verbs.h ]] &&
-   can_o2ib_in_kernel=yes
+# Debian ships arch-independent headers (incl. include/rdma/*) in
+# linux-headers-<ver>-common, not in the per-flavor build dir.
+# Look there for the RDMA headers so in-kernel o2ib is detected.
+kernel_common_dir=$(realpath "${kernel_source_dir}")
+kernel_common_dir="${kernel_common_dir%-*}-common"
+for d in "${kernel_source_dir}" "${kernel_common_dir}"; do
+    if [[ -f $d/include/rdma/rdma_cm.h ]] &&
+       [[ -f $d/include/rdma/ib_cm.h ]] &&
+       [[ -f $d/include/rdma/ib_verbs.h ]]; then
+        can_o2ib_in_kernel=yes
+        break
+    fi
+done
 # The rdma headers are in every kernel tree, so check that IB is enabled
 kconf=${kernel_source_dir}/include/generated/autoconf.h
 [[ -f $kconf ]] && ! grep -qw CONFIG_INFINIBAND_ADDR_TRANS $kconf &&
