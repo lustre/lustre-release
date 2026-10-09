@@ -160,7 +160,11 @@
     %endif
 %endif
 
+%if 0%{?suse_version} >= 1600
+%global modules_fs_path /usr/lib/modules/%{_kver}/%{kmoddir}
+%else
 %global modules_fs_path /lib/modules/%{_kver}/%{kmoddir}
+%endif
 # requires want to set a version including epoch
 %global krequires %(echo %{kver} | sed -e 's/\.x86_64$//' -e 's/\.i[3456]86$//' -e 's/-smp$//' -e 's/-bigsmp$//' -e 's/[-.]ppc64$//' -e 's/\.aarch64$//' -e 's/\.riscv64$//' -e 's/-default$//' -e 's/-%{_flavor}//')
 
@@ -831,6 +835,14 @@ make %{?_smp_mflags} -s %{?make_args}
 %endif
 
 make install DESTDIR=$RPM_BUILD_ROOT
+%if 0%{?suse_version} >= 1600
+# usr-merged: weak-modules2 only looks under /usr/lib/modules
+if [ -d $RPM_BUILD_ROOT/lib/modules ]; then
+    mkdir -p $RPM_BUILD_ROOT/usr/lib
+    mv $RPM_BUILD_ROOT/lib/modules $RPM_BUILD_ROOT/usr/lib/
+    rmdir $RPM_BUILD_ROOT/lib 2>/dev/null || true
+fi
+%endif
 
 %if %{with lustre_modules}
 # RHEL's kernel_module_path macro expects that all the modules
@@ -963,7 +975,7 @@ fi
 echo '%{_prefix}/lib/firewalld/services/*.xml' >>lustre.files
 %if %{with lustre_modules}
 # mark modules executable for find-debuginfo.sh
-find $RPM_BUILD_ROOT/lib/modules -name \*.ko -type f -exec chmod u+x {} \;
+find $RPM_BUILD_ROOT%{modules_fs_path} -name \*.ko -type f -exec chmod u+x {} \;
 %endif
 
 rm -f $RPM_BUILD_ROOT%{_libdir}/liblustreapi.la
