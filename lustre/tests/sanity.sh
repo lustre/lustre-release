@@ -37607,6 +37607,89 @@ test_435() {
 }
 run_test 435 "OUT updates are only handled from an MDS"
 
+# hashed objects (busy/total) of each lu_site on a facet, "name count"
+lu_site_objects() {
+	do_facet $1 "$LCTL get_param '*.*.site_stats'" |
+		awk -F'[= /]+' '{ print $1, $3 }' | sort
+}
+
+# objects removed from each site between two lu_site_objects snapshots
+lu_site_freed() {
+	join <(echo "$1") <(echo "$2") | awk '{ print $1, $2 - $3 }'
+}
+
+test_436() {
+	local shrinker=/sys/kernel/debug/lustre/lu_site
+	local budget=128
+	local scans=4
+	local host mdt name start before after freed i
+	local -a mdts
+
+	(( MDS1_VERSION >= $(version_code 2.17.60.73) )) ||
+		skip "need MDS >= 2.17.60.73 for lu_site shrinker budget fix"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	(( MDSCOUNT >= 2 )) || skip_env "needs >= 2 MDTs"
+
+	# the shrinker scans all sites of a node, so use two MDTs on one MDS
+	host=$(facet_active_host mds1)
+	for ((i = 2; i <= MDSCOUNT; i++)); do
+		[[ $(facet_active_host mds$i) == $host ]] || continue
+		mdts=(0 $((i - 1)))
+		break
+	done
+	(( ${#mdts[@]} == 2 )) || skip_env "needs two MDTs on the MDS of mds1"
+	do_facet mds1 "test -w $shrinker/scan" ||
+		skip_env "no lu_site shrinker in debugfs on mds1"
+
+	# Drop the cached objects first. An object with a layout releases its
+	# OSP objects when it is freed, and they would count as purged by the
+	# scans below. Repeat once the delayed frees have released them.
+	do_facet mds1 "echo '0 0 1000000000' > $shrinker/scan"
+	sleep 2
+	do_facet mds1 "echo '0 0 1000000000' > $shrinker/scan"
+
+	# mknod files have no OST objects, and each MDT gets more of them than
+	# all scans together may purge
+	stack_trap "rm -rf $DIR/$tdir"
+	for mdt in ${mdts[@]}; do
+		test_mkdir -p -i $mdt -c 1 $DIR/$tdir/mdt$mdt ||
+			error "mkdir on MDT$mdt failed"
+		createmany -m $DIR/$tdir/mdt$mdt/f $((2 * scans * budget)) ||
+			error "createmany on MDT$mdt failed"
+	done
+	cancel_lru_locks mdc
+
+	# Each scan must free at most its budget over all sites. A used up
+	# budget was passed on to the next site as 0, which still purged one
+	# object per hash bucket and returned -1, which purged all objects of
+	# the sites after it.
+	start=$(lu_site_objects mds1)
+	after=$start
+	for ((i = 1; i <= scans; i++)); do
+		before=$after
+		do_facet mds1 "echo '0 0 $budget' > $shrinker/scan" ||
+			error "shrinker scan failed"
+		after=$(lu_site_objects mds1)
+		freed=$(lu_site_freed "$before" "$after" |
+			awk '{ n += $2 } END { print n + 0 }')
+		echo "scan $i of $budget freed $freed objects"
+		(( freed <= budget )) ||
+			error "scan $i of $budget freed $freed objects"
+	done
+
+	# The scans must rotate over the sites instead of always charging the
+	# budget to the same one.
+	for mdt in ${mdts[@]}; do
+		name=$(printf "mdt.%s-MDT%04x.site_stats" $FSNAME $mdt)
+		freed=$(lu_site_freed "$start" "$after" |
+			awk -v name=$name '$1 == name { print $2 }')
+		echo "MDT$mdt: $scans scans freed ${freed:-0} objects"
+		(( ${freed:-0} > 0 )) ||
+			error "$scans scans freed no objects on MDT$mdt"
+	done
+}
+run_test 436 "lu_site shrinker keeps to its budget and rotates sites"
+
 test_440() {
 	if [[ -f $LUSTRE/scripts/bash-completion/lustre ]]; then
 		source $LUSTRE/scripts/bash-completion/lustre

@@ -417,11 +417,12 @@ static void lu_object_free(const struct lu_env *env, struct lu_object *o)
  * lu_site_purge_objects() - Free @nr objects from cold end of the site LRU list
  * @env: current lustre environment
  * @s: pointer to lu_site struct (lustre mount)
- * @nr: number of objects to purge (-1 to purge all objects)
+ * @nr: number of objects to purge (-1 to purge all objects, 0 purges nothing)
  * @canblock: if canblock is 0, then don't block awaiting for another instance
  * of lu_site_purge() to complete
  *
- * Return number of objects purged
+ * Return the part of @nr that was not purged (0 when @nr objects were purged,
+ * -1 unchanged for a purge of all objects)
  */
 int lu_site_purge_objects(const struct lu_env *env, struct lu_site *s,
 			  int nr, int canblock)
@@ -438,6 +439,14 @@ int lu_site_purge_objects(const struct lu_env *env, struct lu_site *s,
 
 	if (CFS_FAIL_CHECK(OBD_FAIL_OBD_NO_LRU))
 		RETURN(0);
+
+	/*
+	 * A zero budget must not purge anything: the bucket loop below would
+	 * still take one object per bucket and then decrement nr to -1, which
+	 * is the purge-all value, and return it as the remaining budget.
+	 */
+	if (nr == 0)
+		return 0;
 
 	/*
 	 * Under LRU list lock, scan LRU list and move unreferenced objects to
@@ -2230,6 +2239,13 @@ static unsigned long lu_cache_shrink_scan(struct shrinker *sk,
 		 * assure shrinking fairness.
 		 */
 		list_move_tail(&s->ls_linkage, &splice);
+		/*
+		 * Stop once the budget is used up, so the sites that were not
+		 * visited stay at the head of the list and are shrunk first
+		 * next time.
+		 */
+		if (remain == 0)
+			break;
 	}
 	list_splice(&splice, lu_sites.prev);
 	up_write(&lu_sites_guard);
