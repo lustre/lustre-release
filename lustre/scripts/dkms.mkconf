@@ -203,7 +203,7 @@ module obdclass  lustre/obdclass              lustre
 module obdecho   lustre/obdecho               lustre
 module osc       lustre/osc                   lustre
 module ptlrpc    lustre/ptlrpc                lustre
-if grep -E -q -- '--enable-gss[^-]' <<< \${OPTS}; then
+if grep -E -q -- '--enable-gss($|[^-])' <<< \${OPTS}; then
     module ptlrpc_gss lustre/ptlrpc/gss fs/lustre
 fi
 # Lustre client kunit modules, --enable-tests
