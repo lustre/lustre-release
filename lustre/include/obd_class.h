@@ -1225,7 +1225,7 @@ static inline int obd_iocontrol(unsigned int cmd, struct obd_export *exp,
 	if (!exp->exp_obd->obd_type->typ_dt_ops->o_iocontrol) {
 		CERROR("%s: no %s operation\n",
 		       (exp)->exp_obd->obd_name, __func__);
-		RETURN(-ENOTSUPP);
+		RETURN(-ENOTTY);
 	}
 
 	rc = exp->exp_obd->obd_type->typ_dt_ops->o_iocontrol(cmd, exp,
