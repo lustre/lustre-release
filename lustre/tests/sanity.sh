@@ -29939,7 +29939,13 @@ facet_meminfo() {
 	do_facet $facet "cat /proc/meminfo | grep ^${info}:" | awk '{print $2}'
 }
 
+ost1_cache_stat() {
+	get_osd_param $(facet_active_host ost1) $FSNAME-OST0000 stats |
+		awk -v name=$1 '$1 == name { sum = $7 } END { print sum + 0 }'
+}
+
 test_255b() {
+	[[ $PARALLEL == "yes" ]] && skip "skip parallel run"
 	[ $OST1_VERSION -lt $(version_code 2.8.54) ] &&
 		skip "lustre < 2.8.54 does not support ladvise "
 	remote_ost_nodsh && skip "remote OST with nodsh"
@@ -29958,48 +29964,34 @@ test_255b() {
 		skip "zfs-osd does not support 'ladvise dontneed'"
 
 	local size_mb=100
-	local size=$((size_mb * 1048576))
-	# In order to prevent disturbance of other processes, only check 3/4
-	# of the memory usage
-	local kibibytes=$((size_mb * 1024 * 3 / 4))
+	local pages=$((size_mb * 1048576 / $(get_page_size ost1)))
+	# only check 3/4 of the pages, in case of memory pressure on the OSS
+	local min_pages=$((pages * 3 / 4))
+	local hit
+	local miss
 
 	dd if=/dev/zero of=$DIR/$tfile bs=1048576 count=$size_mb ||
 		error "dd to $DIR/$tfile failed"
-
-	#force write to complete before dropping OST cache & checking memory
 	sync
 
-	local total=$(facet_meminfo ost1 MemTotal)
-	echo "Total memory: $total KiB"
+	# These counters cover all reads on OST0000.
+	$LFS ladvise -a willread $DIR/$tfile || error "Ladvise willread failed"
+	hit=$(ost1_cache_stat cache_hit)
+	$LFS ladvise -a willread $DIR/$tfile ||
+		error "Ladvise willread again failed"
+	hit=$(($(ost1_cache_stat cache_hit) - hit))
+	echo "Cache hits after willread: $hit/$pages pages"
+	(( hit >= min_pages )) ||
+		error "Ladvise willread should cache at least $min_pages pages"
 
-	do_facet ost1 "sync && echo 3 > /proc/sys/vm/drop_caches"
-	local before_read=$(facet_meminfo ost1 Cached)
-	echo "Cache used before read: $before_read KiB"
-
-	lfs ladvise -a willread $DIR/$tfile ||
-		error "Ladvise willread failed"
-	local after_read=$(facet_meminfo ost1 Cached)
-	echo "Cache used after read: $after_read KiB"
-
-	lfs ladvise -a dontneed $DIR/$tfile ||
-		error "Ladvise dontneed again failed"
-	local no_read=$(facet_meminfo ost1 Cached)
-	echo "Cache used after dontneed ladvise: $no_read KiB"
-
-	if [ $total -lt $((before_read + kibibytes)) ]; then
-		echo "Memory is too small, abort checking"
-		return 0
-	fi
-
-	if [ $((before_read + kibibytes)) -gt $after_read ]; then
-		error "Ladvise willread should use more memory" \
-			"than $kibibytes KiB"
-	fi
-
-	if [ $((no_read + kibibytes)) -gt $after_read ]; then
-		error "Ladvise dontneed should release more memory" \
-			"than $kibibytes KiB"
-	fi
+	$LFS ladvise -a dontneed $DIR/$tfile || error "Ladvise dontneed failed"
+	miss=$(ost1_cache_stat cache_miss)
+	$LFS ladvise -a willread $DIR/$tfile ||
+		error "Ladvise willread after dontneed failed"
+	miss=$(($(ost1_cache_stat cache_miss) - miss))
+	echo "Cache misses after dontneed: $miss/$pages pages"
+	(( miss >= min_pages )) ||
+		error "Ladvise dontneed should drop at least $min_pages pages"
 }
 run_test 255b "check 'lfs ladvise -a dontneed'"
 
