@@ -2049,8 +2049,13 @@ void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot,
 
 	if (iot == CIT_WRITE) {
 		io->u.ci_wr.wr_append = !!(flags & IOCB_APPEND);
-		io->u.ci_wr.wr_sync = flags & IOCB_SYNC ||
-				      !!(flags & IOCB_DSYNC) ||
+		/*
+		 * Treat DIO as a sync write: if it falls back to buffered
+		 * IO, that data is flushed before the write returns, which
+		 * hangs unless the write is sync.
+		 */
+		io->u.ci_wr.wr_sync = (flags & (IOCB_SYNC | IOCB_DSYNC |
+						IOCB_DIRECT)) ||
 				      IS_SYNC(inode);
 	}
 

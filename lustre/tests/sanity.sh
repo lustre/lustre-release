@@ -17249,6 +17249,31 @@ test_119t() {
 }
 run_test 119t "DIO through a direct-io loop device (ITER_BVEC)"
 
+test_119u()
+{
+	(( $CLIENT_VERSION >= $(version_code 2.17.60) )) ||
+		skip "Need client >= 2.17.60 for DIO write fallback fix"
+
+	stack_trap "rm -f $DIR/$tfile"
+	$LFS setstripe -c 1 $DIR/$tfile || error "setstripe $DIR/$tfile failed"
+
+	# without the fix, a forced DIO write fallback over 64MiB hangs
+	#define OBD_FAIL_LLITE_DIO_FALLBACK	0x143a
+	$LCTL set_param fail_loc=0x143a
+	dd if=/dev/zero of=$DIR/$tfile bs=128M count=1 oflag=direct ||
+		error "DIO write with forced fallback failed"
+	$LCTL set_param fail_loc=0
+
+	# without the fix, an unaligned DIO write also hangs on OSTs without
+	# unaligned DIO support
+	if ! unaligned_dio; then
+		dd if=/dev/zero of=$DIR/$tfile bs=128M count=1 seek=47008 \
+			oflag=direct,seek_bytes ||
+			error "unaligned DIO write failed"
+	fi
+}
+run_test 119u "DIO write fallback over 64MiB"
+
 test_120a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"

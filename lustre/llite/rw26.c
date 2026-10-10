@@ -447,6 +447,8 @@ static ssize_t ll_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
 	/* returning 0 here forces the remaining I/O through buffered I/O
 	 * while returning -EINVAL stops the I/O from continuing.
 	 */
+	if (CFS_FAIL_CHECK(OBD_FAIL_LLITE_DIO_FALLBACK))
+		RETURN(0);
 
 	/* Unpatched older servers which cannot safely support unaligned DIO
 	 * should abort here
