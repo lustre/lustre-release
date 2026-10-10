@@ -22593,6 +22593,14 @@ test_160g() {
 		user_rec1=$(changelog_user_rec mds$i ${cl_user1[mds$i]})
 		[ -n "$user_rec1" ] ||
 			error "mds$i: user1 ${cl_user1[mds$i]} not found"
+		user_rec2=$(changelog_user_rec mds$i ${cl_user2[mds$i]})
+		[ -n "$user_rec2" ] ||
+			error "mds$i: user2 ${cl_user2[mds$i]} not found"
+		# a record written between the registrations puts user2 ahead
+		if (( user_rec2 > user_rec1 )); then
+			__changelog_clear mds$i ${cl_user1[mds$i]} $user_rec2
+			user_rec1=$user_rec2
+		fi
 		__changelog_clear mds$i ${cl_user1[mds$i]} +2
 		user_rec2=$(changelog_user_rec mds$i ${cl_user1[mds$i]})
 		[ -n "$user_rec2" ] ||
@@ -22602,12 +22610,6 @@ test_160g() {
 		[ $((user_rec1 + 2)) == $user_rec2 ] ||
 			error "mds$i: user1 ${cl_user1[mds$i]} index " \
 			      "expected $user_rec1 + 2, but is $user_rec2"
-		user_rec2=$(changelog_user_rec mds$i ${cl_user2[mds$i]})
-		[ -n "$user_rec2" ] ||
-			error "mds$i: user2 ${cl_user2[mds$i]} not found"
-		[ $user_rec1 == $user_rec2 ] ||
-			error "mds$i: user2 ${cl_user2[mds$i]} index " \
-			      "expected $user_rec1, but is $user_rec2"
 	done
 
 	# ensure we are past the previous changelog_min_gc_interval set above
@@ -22649,16 +22651,42 @@ test_160g() {
 }
 run_test 160g "changelog garbage collect on idle records"
 
+restart_160h_mdts() {
+	local i
+
+	for ((i=1; i <= MDSCOUNT; i++)); do
+		facet_up mds$i && continue
+		start mds$i $(mdsdevname $i) $MDS_MOUNT_OPTS || return
+	done
+}
+
 test_160h() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	(( $MDS1_VERSION >= $(version_code 2.10.56) )) ||
-		skip "Need MDS version at least 2.10.56"
+	(( $MDS1_VERSION >= $(version_code 2.14.55) )) ||
+		skip "need MDS >= 2.14.55 for fail_val changelog user aging"
 
 	local mdts=$(mdts_nodes)
+	local idle_time=86400
 
-	# Create a user
+	for param in "changelog_gc=0" \
+		     "changelog_max_idle_time=$idle_time" \
+		     "changelog_min_gc_interval=1"; do
+		local MDT0=$(facet_svc $SINGLEMDS)
+		local var="${param%=*}"
+		local old=$(do_facet mds1 "$LCTL get_param -n mdd.$MDT0.$var")
+
+		stack_trap "do_nodes $mdts $LCTL set_param mdd.*.$var=$old" EXIT
+		do_nodes $mdts $LCTL set_param mdd.*.$param ||
+			error "unable to set mdd.*.$param"
+	done
+
 	changelog_register || error "first changelog_register failed"
+	stack_trap "do_nodes $mdts $LCTL set_param fail_loc=0 fail_val=0" EXIT
+	#define OBD_FAIL_TIME_IN_CHLOG_USER 0x1314
+	do_nodes $mdts $LCTL set_param fail_loc=0x1314 \
+				       fail_val=$((idle_time + 1))
 	changelog_register || error "second changelog_register failed"
+	do_nodes $mdts $LCTL set_param fail_loc=0 fail_val=0
 	local cl_users
 	declare -A cl_user1
 	declare -A cl_user2
@@ -22678,20 +22706,6 @@ test_160h() {
 	# check changelogs have been generated
 	local nbcl=$(changelog_dump | wc -l)
 	[[ $nbcl -eq 0 ]] && error "no changelogs found"
-
-	for param in "changelog_max_idle_time=10" \
-		     "changelog_gc=1" \
-		     "changelog_min_gc_interval=2"; do
-		local MDT0=$(facet_svc $SINGLEMDS)
-		local var="${param%=*}"
-		local old=$(do_facet mds1 "$LCTL get_param -n mdd.$MDT0.$var")
-
-		stack_trap "do_nodes $mdts $LCTL set_param mdd.*.$var=$old" EXIT
-		do_nodes $mdts $LCTL set_param mdd.*.$param
-	done
-
-	# force cl_user2 to be idle (1st part)
-	sleep 9
 
 	for ((i=1; i <= $MDSCOUNT; i++)); do
 		cl_users=(${CL_USERS[mds$i]})
@@ -22718,23 +22732,21 @@ test_160h() {
 		user_rec2=$(changelog_user_rec mds$i ${cl_user2[mds$i]})
 		[ -n "$user_rec2" ] ||
 			error "mds$i: User ${cl_user2[mds$i]} not registered"
-		[ $user_rec1 == $user_rec2 ] ||
-			error "mds$i: user ${cl_user2[mds$i]} index expected " \
-			      "$user_rec1, but is $user_rec2"
 	done
 
-	# force cl_user2 to be idle (2nd part) and to reach
-	# changelog_max_idle_time
+	# get past min_gc_interval since an earlier test's last GC check
 	sleep 2
 
-	# force each GC-thread start and block then
-	# one per MDT/MDD, set fail_val accordingly
+	# Block each GC thread while its MDT unmounts.
 	#define OBD_FAIL_FORCE_GC_THREAD 0x1316
 	do_nodes $mdts $LCTL set_param fail_loc=0x1316
+	do_nodes $mdts $LCTL set_param mdd.*.changelog_gc=1
 
 	# generate more changelogs to trigger fail_loc
-	createmany -m $DIR/$tdir/${tfile}bis $((MDSCOUNT * 2)) ||
-		error "create $DIR/$tdir/${tfile}bis failed"
+	for ((i=0; i < MDSCOUNT; i++)); do
+		touch $DIR/$tdir/d$i.1/$tfile ||
+			error "create $DIR/$tdir/d$i.1/$tfile failed"
+	done
 
 	# stop MDT to stop GC-thread, should be done in back-ground as it will
 	# block waiting for the thread to be released and exit
@@ -22744,10 +22756,14 @@ test_160h() {
 		stop_pids[mds$i]=$!
 	done
 
+	stack_trap "do_nodes $mdts $LCTL set_param fail_loc=0;
+		wait ${stop_pids[*]};
+		restart_160h_mdts" EXIT
+
 	for mds in ${mdts//,/ }; do
 		local facet
 		local nb=0
-		local facets=$(facets_up_on_host $mds)
+		local facets=$(facets_on_host $mds)
 
 		for facet in ${facets//,/ }; do
 			if [[ $facet == mds* ]]; then
@@ -22756,14 +22772,14 @@ test_160h() {
 		done
 		# ensure each MDS's gc threads are still present and all in "R"
 		# state (OBD_FAIL_FORCE_GC_THREAD effect!)
-		[[ $(do_node $mds pgrep chlg_gc_thread | wc -l) -eq $nb ]] ||
+		wait_update $mds "pgrep chlg_gc_thread | wc -l" "$nb" 20 ||
 			error "$mds: expected $nb GC-thread"
 		wait_update $mds \
 			"ps -C chlg_gc_thread -o state --no-headers | uniq" \
 			"R" 20 ||
 			error "$mds: GC-thread not found in R-state"
 		# check umounts of each MDT on MDS have reached kthread_stop()
-		[[ $(do_node $mds pgrep umount | wc -l) -eq $nb ]] ||
+		wait_update $mds "pgrep umount | wc -l" "$nb" 20 ||
 			error "$mds: expected $nb umount"
 		wait_update $mds \
 			"ps -C umount -o state --no-headers | uniq" "D" 20 ||
@@ -22783,10 +22799,7 @@ test_160h() {
 	# via ldiskfs/zfs and llog_reader...
 
 	# re-start/mount MDTs
-	for ((i=1; i <= $MDSCOUNT; i++)); do
-		start mds$i $(mdsdevname $i) $MDS_MOUNT_OPTS ||
-			error "Fail to start mds$i"
-	done
+	restart_160h_mdts || error "Fail to restart MDTs"
 
 	local first_rec
 	for ((i=1; i <= $MDSCOUNT; i++)); do
