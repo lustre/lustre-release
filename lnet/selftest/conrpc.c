@@ -455,8 +455,10 @@ lstcon_rpc_trans_interpreter(struct lstcon_rpc_trans *trans,
 	struct lstcon_rpc *crpc;
 	struct srpc_msg *msg;
 	struct lstcon_node *nd;
+	struct lnet_process_id id4;
 	struct timespec64 ts;
 	int error;
+	int rc;
 	s64 dur;
 
 	LASSERT(head_up != NULL);
@@ -485,8 +487,11 @@ lstcon_rpc_trans_interpreter(struct lstcon_rpc_trans *trans,
 		      console_session.ses_id.ses_stamp * NSEC_PER_MSEC;
 		ts = ns_to_timespec64(dur);
 
-		if (copy_to_user(&ent->rpe_peer,
-				 &nd->nd_id, sizeof(struct lnet_process_id)) ||
+		rc = lstcon_id2id4(&nd->nd_id, &id4);
+		if (rc)
+			return rc;
+
+		if (copy_to_user(&ent->rpe_peer, &id4, sizeof(id4)) ||
 		    copy_to_user(&ent->rpe_stamp, &ts, sizeof(ts)) ||
 		    copy_to_user(&ent->rpe_state,
 				 &nd->nd_state, sizeof(nd->nd_state)) ||

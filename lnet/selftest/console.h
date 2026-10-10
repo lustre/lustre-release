@@ -25,6 +25,26 @@
 #include "selftest.h"
 #include "conrpc.h"
 
+/* Convert a node id to the legacy struct for an ioctl reply. Rejects a
+ * large NID that does not fit instead of truncating the address, and
+ * zeroes id4 first so struct lnet_process_id's padding stays zeroed.
+ */
+static inline int
+lstcon_id2id4(struct lnet_processid *id, struct lnet_process_id *id4)
+{
+	if (!nid_is_nid4(&id->nid)) {
+		CNETERR("Cannot return legacy node ID for %s: rc = %d\n",
+			libcfs_idstr(id), -EOVERFLOW);
+		return -EOVERFLOW;
+	}
+
+	memset(id4, 0, sizeof(*id4));
+	id4->nid = lnet_nid_to_nid4(&id->nid);
+	id4->pid = id->pid;
+
+	return 0;
+}
+
 /* node descriptor */
 struct lstcon_node {
 	struct lnet_processid		nd_id;    /* id of the node */

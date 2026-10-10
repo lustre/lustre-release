@@ -708,8 +708,10 @@ lstcon_nodes_getent(struct list_head *head, int *index_p,
 {
 	struct lstcon_ndlink *ndl;
 	struct lstcon_node *nd;
+	struct lnet_process_id id4;
 	int count = 0;
 	int index = 0;
+	int rc;
 
 	LASSERT(index_p != NULL && count_p != NULL);
 	LASSERT(dents_up != NULL);
@@ -724,8 +726,11 @@ lstcon_nodes_getent(struct list_head *head, int *index_p,
 			break;
 
 		nd = ndl->ndl_node;
-		if (copy_to_user(&dents_up[count].nde_id,
-				 &nd->nd_id, sizeof(nd->nd_id)) ||
+		rc = lstcon_id2id4(&nd->nd_id, &id4);
+		if (rc)
+			return rc;
+
+		if (copy_to_user(&dents_up[count].nde_id, &id4, sizeof(id4)) ||
 		    copy_to_user(&dents_up[count].nde_state,
 				 &nd->nd_state, sizeof(nd->nd_state)))
 			return -EFAULT;
