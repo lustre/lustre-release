@@ -423,6 +423,7 @@ static int qsd_reint_main(void *_args)
 	struct qsd_thread_info	*qti;
 	struct qsd_qtype_info	*qqi = args->qra_qqi;
 	struct qsd_instance	*qsd = qqi->qqi_qsd;
+	bool			 slv_uptodate;
 	int			 rc;
 
 	ENTRY;
@@ -502,7 +503,16 @@ static int qsd_reint_main(void *_args)
 	if (kthread_should_stop())
 		GOTO(out_lock, rc = 0);
 
-	if (qqi->qqi_slv_ver != qti->qti_slv_ver) {
+	/*
+	 * A valid slave index copy is kept current by DQACQ replies, which
+	 * resume once the global index is up to date: transferring the slave
+	 * index then could roll lqe_granted back to an older value.
+	 */
+	read_lock(&qsd->qsd_lock);
+	slv_uptodate = qqi->qqi_slv_uptodate;
+	read_unlock(&qsd->qsd_lock);
+
+	if (!slv_uptodate && qqi->qqi_slv_ver != qti->qti_slv_ver) {
 		rc = qsd_reint_index(env, qqi, false);
 		if (rc) {
 			CWARN("%s: reintegration for "DFID" failed with %d\n",
