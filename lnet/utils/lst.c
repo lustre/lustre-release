@@ -2935,6 +2935,7 @@ jt_lst_stop_batch(int argc, char **argv)
 	int force = 0;
 	int optidx;
 	int count;
+	int loops = 0;
 	int rc, c;
 
 	static const struct option stop_batch_opts[] = {
@@ -2988,7 +2989,9 @@ jt_lst_stop_batch(int argc, char **argv)
 	}
 
 	rc = lst_stop_batch_ioctl(batch, force, &head);
-	if (rc != 0)
+	if (rc == -2)
+		lst_print_transerr(&head, "stop batch");
+	else if (rc != 0)
 		goto out;
 
 	while (1) {
@@ -3005,6 +3008,17 @@ jt_lst_stop_batch(int argc, char **argv)
 		fprintf(stdout, "%d batch in stopping\n",
 			lstcon_tsbqry_stat_run(&trans_stat, 0));
 		sleep(1);
+
+		/* the stop skips nodes marked down by an RPC timeout */
+		if (++loops % 10 != 0)
+			continue;
+
+		lst_reset_rpcent(&head);
+		rc = lst_stop_batch_ioctl(batch, force, &head);
+		if (rc == -2)
+			lst_print_transerr(&head, "stop batch");
+		else if (rc != 0)
+			goto out;
 	}
 
 	fprintf(stdout, "Batch is stopped\n");
