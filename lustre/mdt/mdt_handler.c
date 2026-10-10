@@ -4057,6 +4057,28 @@ static void mdt_remote_object_lock_created_cb(struct ldlm_lock *lock)
 	mdt_object_get(NULL, lock->l_ast_data);
 }
 
+/*
+ * A remote object's FID normally maps to another MDT, but a stale client or
+ * corrupt FID may map to an OST whose OSP object has no metadata operations.
+ * Confirm the FID maps to an MDT before using the object as one (LU-20923).
+ */
+static int mdt_remote_fid_check_mdt(struct mdt_thread_info *mti,
+				    const struct lu_fid *fid)
+{
+	struct seq_server_site *ss = mdt_seq_site(mti->mti_mdt);
+	struct lu_seq_range range = { .lsr_flags = LU_SEQ_RANGE_ANY };
+	int rc;
+
+	rc = fld_server_lookup(mti->mti_env, ss->ss_server_fld, fid_seq(fid),
+			       &range);
+	if (rc == 0 && fld_range_is_mdt(&range))
+		return 0;
+
+	CERROR("%s: remote object "DFID" is not on an MDT: rc = %d\n",
+	       mdt_obd_name(mti->mti_mdt), PFID(fid), rc ? rc : -EINVAL);
+	return rc ? rc : -EINVAL;
+}
+
 static int mdt_remote_object_lock_try(struct mdt_thread_info *mti,
 				      struct mdt_object *obj,
 				      struct lustre_handle *lh,
@@ -4069,6 +4091,10 @@ static int mdt_remote_object_lock_try(struct mdt_thread_info *mti,
 	int rc;
 
 	LASSERT(mdt_object_remote(obj));
+
+	rc = mdt_remote_fid_check_mdt(mti, mdt_object_fid(obj));
+	if (rc)
+		return rc;
 
 	memset(einfo, 0, sizeof(*einfo));
 	einfo->ei_type = LDLM_IBITS;
