@@ -179,7 +179,10 @@ test_smoke_sub () {
 	echo "$LST stat --delay 10 --timeout 10 c s &"
 	echo 'pid=$!'
 	echo 'trap "cleanup $pid" INT TERM'
-	echo sleep $smoke_DURATION
+	echo "for ((t = 0; t < $smoke_DURATION; t += 10)); do"
+	echo "	sleep 10"
+	echo "	$LST query b | grep -q 'is stopped\$' && break"
+	echo "done"
 	echo 'cleanup $pid'
 }
 
