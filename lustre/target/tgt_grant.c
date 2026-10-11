@@ -1054,8 +1054,16 @@ void tgt_grant_dealloc(struct obd_export *exp, struct obdo *oa)
 	disconnected = exp->exp_disconnected;
 	spin_unlock(&exp->exp_lock);
 	if (!disconnected) {
-		tgd->tgd_tot_granted -= oa->o_grant;
-		ted->ted_grant -= oa->o_grant;
+		u64 grant = oa->o_grant;
+
+		if (!exp_grant_param_supp(exp))
+			grant = tgt_grant_inflate(tgd, grant);
+		/* concurrent writes claiming more grant than the export holds
+		 * (e.g. after reconnect) may have consumed it already
+		 */
+		grant = min_t(u64, grant, ted->ted_grant);
+		tgd->tgd_tot_granted -= grant;
+		ted->ted_grant -= grant;
 		oa->o_grant = 0;
 	}
 	spin_unlock(&tgd->tgd_grant_lock);
