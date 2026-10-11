@@ -1733,6 +1733,8 @@ static struct lu_tgt_desc *lmv_locate_tgt_qos(struct lmv_obd *lmv,
 		total_weight += tgt->ltd_qos.ltq_weight;
 		total_usable++;
 	}
+	if (!total_usable)
+		GOTO(unlock, tgt = ERR_PTR(-EAGAIN));
 
 	/* If current MDT has above-average space and dir is not already using
 	 * round-robin to spread across more MDTs, stay on the parent MDT

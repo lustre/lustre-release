@@ -35213,6 +35213,39 @@ test_413A() {
 }
 run_test 413A "get and set qos_rr_index on all clients"
 
+test_413Aa() {
+	(( MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	(( MDS1_VERSION >= $(version_code v2_15_59-4-g1dbcd0bab8) )) ||
+		skip "need MDS >= 2.15.59.4 for mdt.*.no_create"
+
+	local threshold=$($LCTL get_param -n lmv.*.qos_threshold_rr | head -1)
+
+	# use QoS mkdir even if the MDT space is balanced
+	set_maxage 1
+	$LCTL set_param lmv.*.qos_threshold_rr=0 || error "set threshold"
+	stack_trap "$LCTL set_param lmv.*.qos_threshold_rr=$threshold"
+
+	# mark every MDT NOCREATE, so no MDT is usable for QoS mkdir
+	do_nodes $(mdts_nodes) $LCTL set_param mdt.*.no_create=1 ||
+		error "set no_create"
+	stack_trap "do_nodes $(mdts_nodes) $LCTL set_param mdt.*.no_create=0"
+	sleep 2
+	$LFS df $MOUNT > /dev/null || error "lfs df"
+
+	# QoS without round-robin, or LMV skips the check of the parent MDT
+	mkdir $DIR/$tdir || error "mkdir $tdir"
+	$LFS setdirstripe -D -i -1 -c 1 --max-inherit-rr 0 $DIR/$tdir ||
+		error "setdirstripe -D $tdir"
+	mkdir $DIR/$tdir/sub || error "mkdir sub"
+
+	# no MDT is usable, so the directory stays on the parent MDT
+	local mdt=$($LFS getdirstripe -m $DIR/$tdir)
+	local sub=$($LFS getdirstripe -m $DIR/$tdir/sub)
+
+	(( sub == mdt )) || error "sub on MDT$sub, parent on MDT$mdt"
+}
+run_test 413Aa "QoS mkdir with all MDTs marked NOCREATE"
+
 test_413a() {
 	[ $MDSCOUNT -lt 2 ] &&
 		skip "We need at least 2 MDTs for this test"
