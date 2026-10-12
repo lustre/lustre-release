@@ -15,6 +15,7 @@
 
 #include <linux/delay.h>
 #include <linux/rhashtable.h>
+#include <linux/lnet/lib-lnet.h>
 #include <obd_support.h>
 #include <obd_class.h>
 #include <lustre_net.h>

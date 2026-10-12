@@ -23,6 +23,7 @@
 #define CFS_FAIL_SOCK_CONN		0xe020
 
 #include <linux/hash.h>
+#include <linux/jhash.h>
 #include <linux/netdevice.h>
 #include <linux/libcfs/libcfs_debug.h>
 #include <linux/libcfs/libcfs_fail.h>
@@ -478,15 +479,17 @@ lnet_ni_alloc_w_cpt_array(struct lnet_net *net, struct lnet_nid *nid,
 int lnet_ni_set_default_cpts(struct lnet_ni *ni);
 int lnet_ni_add_interface(struct lnet_ni *ni, char *iface);
 
+/* hash of all of the bits of a NID, for hash tables and to spread nodes */
+static inline u32 nidhash(const struct lnet_nid *nid)
+{
+	return jhash(nid->nid_addr, sizeof(nid->nid_addr), LNET_NID_NET(nid));
+}
+
 static inline int
 lnet_nid2peerhash(struct lnet_nid *nid)
 {
-	u32 h = 0;
-	int i;
-
-	for (i = 0; i < 4; i++)
-		h = hash_32(nid->nid_addr[i]^h, 32);
-	return hash_32(LNET_NID_NET(nid) ^ h, LNET_PEER_HASH_BITS);
+	/* lnet_nid_cpt_hash() uses the high bits for large NIDs */
+	return nidhash(nid) & (LNET_PEER_HASH_SIZE - 1);
 }
 
 static inline struct list_head *

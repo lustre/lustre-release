@@ -26,6 +26,7 @@
 #include <linux/namei.h>
 #include <linux/glob.h>
 #include <linux/stringhash.h>
+#include <linux/lnet/lib-lnet.h>
 
 #include <obd_support.h>
 #include <lustre_lib.h>
@@ -1286,7 +1287,7 @@ static struct lu_device *lmv_device_alloc(const struct lu_env *env,
 	INIT_LIST_HEAD(&lmv->lmv_qos_exclude_list);
 
 	/*
-	 * initialize rr_index to lower 32bit of netid, so that client
+	 * initialize rr_index to a hash of the NID, so that clients
 	 * can distribute new subdir creation in round-robin directories
 	 * relatively evenly across MDTs from the beginning.
 	 */
@@ -1425,9 +1426,6 @@ static int lmv_select_statfs_mdt(struct obd_export *exp, struct lmv_obd *lmv,
 			break;
 
 		if (!nid_is_lo0(&lnet_id.nid)) {
-			/* We dont need a full 64-bit modulus, just enough
-			 * to distribute the requests across MDTs evenly.
-			 */
 			lmv->lmv_statfs_start = nidhash(&lnet_id.nid) %
 						lmv->lmv_mdt_count;
 			break;

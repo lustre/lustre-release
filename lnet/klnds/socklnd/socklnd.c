@@ -196,7 +196,7 @@ struct ksock_peer_ni *
 ksocknal_find_peer_locked(struct lnet_ni *ni, struct lnet_processid *id)
 {
 	struct ksock_peer_ni *peer_ni;
-	unsigned long hash = nidhash(&id->nid);
+	u32 hash = nidhash(&id->nid);
 
 	hash_for_each_possible(ksocknal_data.ksnd_peers, peer_ni,
 			       ksnp_list, hash) {

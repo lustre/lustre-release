@@ -2697,6 +2697,21 @@ kiblnd_reject(struct rdma_cm_id *cmid, struct kib_rej *rej)
 		CWARN("Error sending reject: rc = %d\n", rc);
 }
 
+/*
+ * This orders the NIDs for the tie-break of a connection race, which is
+ * part of the o2iblnd connection negotiation, so both peers must agree on
+ * it across mixed versions.  Do not change it to nidhash().
+ */
+static u32 kiblnd_nid_race_key(const struct lnet_nid *nid)
+{
+	u32 hash = LNET_NID_NET(nid);
+	int i;
+
+	for (i = 0; i < 4; i++)
+		hash ^= nid->nid_addr[i];
+	return hash;
+}
+
 static int
 kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
 {
@@ -2941,7 +2956,8 @@ kiblnd_passive_connect(struct rdma_cm_id *cmid, void *priv, int priv_nob)
 		 * the lower NID connection win so we can move forward.
 		 */
 		if (peer2->ibp_connecting != 0 &&
-		    nidhash(&srcnid) < nidhash(&ni->ni_nid) &&
+		    kiblnd_nid_race_key(&srcnid) <
+		    kiblnd_nid_race_key(&ni->ni_nid) &&
 		    peer2->ibp_races < MAX_CONN_RACES_BEFORE_ABORT) {
 			peer2->ibp_races++;
 			write_unlock_irqrestore(g_lock, flags);

@@ -366,7 +366,7 @@ kiblnd_find_peer_locked(struct lnet_ni *ni, struct lnet_nid *nid)
 	/* the caller is responsible for accounting the additional reference
 	 * that this creates
 	 */
-	unsigned long hash = nidhash(nid);
+	u32 hash = nidhash(nid);
 	struct kib_peer_ni *peer_ni;
 
 	hash_for_each_possible(kiblnd_data.kib_peers, peer_ni,
@@ -646,7 +646,7 @@ kiblnd_setup_mtu_locked(struct rdma_cm_id *cmid)
 static int
 kiblnd_get_completion_vector(struct kib_conn *conn, int cpt)
 {
-	unsigned long hash = nidhash(&conn->ibc_peer->ibp_nid);
+	u32 hash = nidhash(&conn->ibc_peer->ibp_nid);
 	cpumask_var_t *mask;
 	int vectors;
 	int off;
@@ -663,7 +663,7 @@ kiblnd_get_completion_vector(struct kib_conn *conn, int cpt)
 	 * peer, use ibp_nconns to salt the value the comp_vector value
 	 */
 	hash += atomic_read(&conn->ibc_peer->ibp_nconns);
-	off = do_div(hash, cpumask_weight(*mask));
+	off = hash % cpumask_weight(*mask);
 	for_each_cpu(i, *mask) {
 		if (off-- == 0)
 			return i % vectors;

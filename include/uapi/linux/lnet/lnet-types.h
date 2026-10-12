@@ -186,18 +186,6 @@ static inline int nid_same(const struct lnet_nid *n1,
 		n1->nid_addr[3] == n2->nid_addr[3];
 }
 
-/* This can be used when we need to hash a nid */
-static inline unsigned long nidhash(const struct lnet_nid *nid)
-{
-	int i;
-	unsigned long hash = 0;
-
-	hash ^= LNET_NID_NET(nid);
-	for (i = 0; i < 4; i++)
-		hash ^= nid->nid_addr[i];
-	return hash;
-}
-
 struct lnet_counters_health {
 	__u32	lch_rst_alloc;
 	__u32	lch_resend_count;

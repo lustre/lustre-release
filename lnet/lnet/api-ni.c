@@ -1627,8 +1627,7 @@ unsigned int
 lnet_nid_cpt_hash(struct lnet_nid *nid, unsigned int number)
 {
 	unsigned int val;
-	u32 h = 0;
-	int i;
+	u32 h;
 
 	LASSERT(number >= 1 && number <= LNET_CPT_NUMBER);
 
@@ -1638,9 +1637,8 @@ lnet_nid_cpt_hash(struct lnet_nid *nid, unsigned int number)
 	if (nid_is_nid4(nid))
 		return lnet_nid4_cpt_hash(lnet_nid_to_nid4(nid), number);
 
-	for (i = 0; i < 4; i++)
-		h = hash_32(nid->nid_addr[i]^h, 32);
-	val = hash_32(LNET_NID_NET(nid) ^ h, LNET_CPT_BITS);
+	h = nidhash(nid);
+	val = h >> (32 - LNET_CPT_BITS);
 	if (val < number)
 		return val;
 	return (unsigned int)(h + val + (val >> 1)) % number;
