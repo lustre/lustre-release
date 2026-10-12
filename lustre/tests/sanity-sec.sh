@@ -5989,6 +5989,59 @@ test_48b() {
 }
 run_test 48b "encrypted file: concurrent truncate"
 
+test_48c() {
+	local testfile=$DIR/$tdir/$tfile
+	local tmpfile=$TMP/$tfile.tmp
+	local reffile=$TMP/$tfile.ref
+	local unit=$((1 << 12)) # LUSTRE_ENCRYPTION_UNIT_SIZE
+	local pagesz=$(getconf PAGESIZE)
+	local prt
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	check_set_fallocate_or_skip
+
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	# create a file spanning several encryption units
+	$LFS setstripe -c1 -i0 $testfile
+	dd if=/dev/urandom of=$tmpfile bs=$pagesz count=4 conv=fsync ||
+		error "dd $tmpfile failed"
+	cp $tmpfile $testfile || error "cp $testfile failed"
+
+	# a punch that is not aligned on the encryption unit must be refused
+	# with EOPNOTSUPP, rather than silently corrupting the ciphertext unit
+	prt=$(fallocate -p -o 100 -l 50 $testfile 2>&1)
+	[ $? -ne 0 ] || error "unaligned punch on encrypted file should fail"
+	[[ $prt =~ "not supported" || $prt =~ "unsupported" ]] ||
+		error "unaligned punch failed with unexpected error: $prt"
+
+	# the refused punch must not have modified the file
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile was corrupted by a refused punch"
+
+	# an encryption-unit-aligned punch is supported: it must zero exactly
+	# the requested range and leave the rest of the file unchanged
+	cp $tmpfile $reffile || error "cp $reffile failed"
+	fallocate -p -o $unit -l $unit $testfile ||
+		error "aligned punch on encrypted file failed"
+	dd if=/dev/zero of=$reffile bs=$unit seek=1 count=1 conv=notrunc ||
+		error "zeroing $reffile failed"
+
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $reffile $testfile ||
+		error "aligned punch corrupted file $testfile"
+
+	rm -f $tmpfile $reffile
+}
+run_test 48c "fallocate punch hole on encrypted file"
+
 trace_cmd() {
 	local cmd="$@"
 

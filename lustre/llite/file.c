@@ -6942,6 +6942,21 @@ static long ll_fallocate(struct file *filp, int mode, loff_t offset, loff_t len)
 		RETURN(-EOPNOTSUPP);
 
 	/*
+	 * An encrypted file is stored on the OST as ciphertext, one whole
+	 * LUSTRE_ENCRYPTION_UNIT_SIZE (4KB) unit at a time. A punch that is
+	 * not aligned to the encryption unit would only clear part of a unit
+	 * on the server; the rest of the unit would keep its old ciphertext,
+	 * so a subsequent read of the whole unit would decrypt to garbage,
+	 * silently corrupting both the punched range and the surrounding
+	 * bytes. Refuse such a partial-unit punch instead of corrupting the
+	 * file.
+	 */
+	if (IS_ENCRYPTED(inode) && (mode & FALLOC_FL_PUNCH_HOLE) &&
+	    (!IS_ALIGNED(offset, LUSTRE_ENCRYPTION_UNIT_SIZE) ||
+	     !IS_ALIGNED(len, LUSTRE_ENCRYPTION_UNIT_SIZE)))
+		RETURN(-EOPNOTSUPP);
+
+	/*
 	 * mode == 0 (which is standard prealloc) and PUNCH/ZERO are supported
 	 * Rest of mode options are not supported yet.
 	 */
