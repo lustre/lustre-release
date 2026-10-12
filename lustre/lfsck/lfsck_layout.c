@@ -7244,6 +7244,7 @@ struct lfsck_orphan_it {
 	struct lu_orphan_rec_v3		  loi_rec;
 	__u64				  loi_hash;
 	unsigned int			  loi_over:1;
+	time64_t			  loi_deadline;
 };
 
 static int lfsck_fid_match_idx(const struct lu_env *env,
@@ -7335,6 +7336,7 @@ static struct dt_it *lfsck_orphan_it_init(const struct lu_env *env,
 					  __u32 attr)
 {
 	struct dt_device *dev = lu2dt_dev(dt->do_lu.lo_dev);
+	struct tgt_session_info *tsi = tgt_ses_info(env);
 	struct lfsck_instance *lfsck;
 	struct lfsck_component *com = NULL;
 	struct lfsck_layout_slave_data *llsd;
@@ -7367,6 +7369,7 @@ static struct dt_it *lfsck_orphan_it_init(const struct lu_env *env,
 	if (it->loi_llst == NULL)
 		GOTO(out, rc = -ENXIO);
 
+	it->loi_deadline = tgt_ses_req(tsi)->rq_deadline;
 	if (dev->dd_record_fid_accessed) {
 		/* The first iteration against the rbtree, scan the whole rbtree
 		 * to remove the nodes which do NOT need to be handled.
@@ -7454,6 +7457,7 @@ static void lfsck_orphan_it_fini(const struct lu_env *env,
  * Return:
  * * %+1 the iteration finished
  * * %0 on success, not finished
+ * * %-EAGAIN the request deadline is close, not finished
  * * %negative on error
  */
 static int lfsck_orphan_it_next(const struct lu_env *env,
@@ -7538,6 +7542,20 @@ again0:
 	pos = key->f_oid - lrn->lrn_first_oid;
 
 again1:
+	if (unlikely(ktime_get_real_seconds() + at_early_margin >=
+		     it->loi_deadline)) {
+		/*
+		 * rpc processing close to deadline, save key to
+		 * continue with and break
+		 */
+		key->f_seq = lrn->lrn_seq;
+		key->f_oid = lrn->lrn_first_oid + pos;
+		key->f_ver = 0;
+		CDEBUG(D_LFSCK, "%s: long rpc processing broken at "DFID"\n",
+		       lfsck_lfsck2name(lfsck), PFID(key));
+
+		RETURN(-EAGAIN);
+	}
 	pos = find_next_bit(lrn->lrn_known_bitmap,
 			    LFSCK_RBTREE_BITMAP_WIDTH, pos);
 	if (pos >= LFSCK_RBTREE_BITMAP_WIDTH) {
@@ -7640,6 +7658,7 @@ again1:
 		dt_read_unlock(env, obj);
 		lfsck_object_put(env, obj);
 		pos++;
+		CFS_FAIL_TIMEOUT(OBD_FAIL_LFSCK_ORPHAN_IT_DELAY, cfs_fail_val);
 		goto again1;
 	}
 
@@ -7767,7 +7786,7 @@ static int lfsck_orphan_it_load(const struct lu_env *env,
 		       lfsck_lfsck2name(it->loi_com->lc_lfsck), hash,
 		       llst->llst_hash);
 		fid_zero(&llst->llst_fid);
-		llst->llst_hash = 0;
+		llst->llst_hash = hash;
 	}
 
 	it->loi_key = llst->llst_fid;

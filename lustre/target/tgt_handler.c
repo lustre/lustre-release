@@ -1309,6 +1309,11 @@ static int tgt_obd_idx_read(struct tgt_session_info *tsi)
 	if (rep_ii == NULL)
 		RETURN(err_serious(-EFAULT));
 	rep_ii->ii_magic = IDX_INFO_MAGIC;
+	/*
+	 * this is to keep progress even if nothing will be saved into
+	 * containers for reply
+	 */
+	rep_ii->ii_hash_end = req_ii->ii_hash_start;
 
 	/* extract hash to start with */
 	rdpg->rp_hash = req_ii->ii_hash_start;
@@ -1346,14 +1351,15 @@ static int tgt_obd_idx_read(struct tgt_session_info *tsi)
 
 	/* populate pages with key/record pairs */
 	rc = dt_index_read(tsi->tsi_env, tsi->tsi_tgt->lut_bottom, rep_ii, rdpg);
-	if (rc < 0)
+	if (rc < 0 && rc != -EAGAIN)
 		GOTO(out, rc);
 
-	LASSERTF(rc <= rdpg->rp_count, "dt_index_read() returned more than asked %d > %d\n",
+	LASSERTF(rc == -EAGAIN || rc <= rdpg->rp_count,
+		 "dt_index_read() returned more than asked %d > %d\n",
 		 rc, rdpg->rp_count);
 
 	/* send pages to client */
-	rc = tgt_sendpage(tsi, rdpg, rc);
+	rc = tgt_sendpage(tsi, rdpg, rc == -EAGAIN ? 0 : rc);
 	if (rc)
 		GOTO(out, rc);
 	EXIT;

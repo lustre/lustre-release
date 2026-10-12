@@ -6640,13 +6640,7 @@ test_45() {
 	echo "fix the UID/GID/PROJID by LFSCK"
 	$START_LAYOUT -r -A || error "failed to start LFSCK"
 
-	wait_update_facet $facet \
-		"$LCTL get_param -n obdfilter.$ost_name.lfsck_layout |
-		 awk '/^status/ { print \\\$2 }'" "completed" 32 || {
-		do_facet $facet \
-			$LCTL get_param -n obdfilter.$ost_name.lfsck_layout
-		error "unexpected status of LFSCK on $ost_name"
-	}
+	wait_all_targets_blocked layout completed 2
 
 	echo "the quota usage should be fixed"
 	usage=$(getquota -u $RUNAS_ID global curspace)
@@ -6664,6 +6658,72 @@ test_45() {
 	}
 }
 run_test 45 "LFSCK should fix UID/GID/PROJID of OST object"
+
+test_46() {
+	(( $OST1_VERSION >= $(version_code 2.17.57) )) ||
+		skip "need OST >= 2.17.57 for OBD_IDX_READ deadline handling"
+	(( $MDSCOUNT >= 2 )) && (($OSTCOUNT >=2 )) ||
+		skip "needs >= 2 MDTs and >= 2 OSTs"
+
+	# this is to reset AT estimated
+	remount_facet mds1
+
+	local at_max_saved_mds1=$(at_max_get mds1)
+	local at_max_saved_ost2=$(at_max_get ost2)
+	local new_at_max=20
+	at_max_set $new_at_max mds1
+	at_max_set $new_at_max ost2
+	stack_trap "at_max_set $at_max_saved_mds1 mds1" EXIT
+	stack_trap "at_max_set $at_max_saved_ost2 ost2" EXIT
+
+	$LFS mkdir -i 1 -c 1 $DIR/$tdir || error "(1) Fail to mkdir on MDT1"
+	$LFS setstripe -c 1 -i 1 $DIR/$tdir ||
+		error "(2) Fail to setstripe $DIR/$tdir"
+
+	local cnt=$((new_at_max + 5))
+	for ((i = 0; i < $cnt; i++)); do
+		dd if=/dev/zero of=$DIR/$tdir/f$i bs=4k count=1 conv=fsync ||
+			error "(3) Fail to write $DIR/$tdir/f$i"
+	done
+
+	echo "Inject failure, to make each MDT-object lose its layout EA"
+	#define OBD_FAIL_LFSCK_LOST_STRIPE      0x1615
+	do_facet mds2 $LCTL set_param fail_loc=0x1615
+	for ((i = 0; i < $cnt; i++)); do
+		chown 1.1 $DIR/$tdir/f$i
+	done
+	do_facet mds2 $LCTL set_param fail_loc=0
+
+	local stripe_info=$($LFS getstripe $DIR/$tdir/f* |
+		grep "has no stripe info" | wc -l)
+	[[ $stripe_info -eq $cnt ]] ||
+		error "(4) $stripe_info files w/o stripe info"
+
+	#define OBD_FAIL_LFSCK_ORPHAN_IT_DELAY  0x1633
+	do_facet ost2 $LCTL set_param fail_val=1 fail_loc=0x1633
+
+	echo "Trigger layout LFSCK on all devices to find out orphan OST-objects"
+	$START_LAYOUT -r -o || error "(5) Fail to start LFSCK for layout!"
+
+	for k in $(seq $MDSCOUNT); do
+		wait_update_facet mds${k} "$LCTL get_param -n \
+			mdd.$(facet_svc mds${k}).lfsck_layout |
+			awk '/^status/ { print \\\$2 }'" "completed" $LTIME ||
+			error "(6) MDS${k} is not the expected 'completed'"
+	done
+
+	local testid=${TESTNAME//_/ }
+	do_facet mds1 dmesg | tac | sed "/$testid/,$ d" |
+		grep "Request sent has timed" &&
+		error "(7) OBD_IDX_READ has timed out" || true
+
+	# check that all file layouts are restored
+	stripe_info=$($LFS getstripe $DIR/$tdir/f* |
+		grep "has no stripe info" | wc -l)
+	[[ $stripe_info -eq 0 ]] ||
+		error "(8) $stripe_info files w/o stripe info"
+}
+run_test 46 "run long OBD_IDX_READ"
 
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
