@@ -475,6 +475,8 @@ struct osd_object {
 
 	/* the i_flags in LMA */
 	__u32			 oo_lma_flags;
+	/* the i_flags in LMA on disk, as oo_lma_flags is set at declare */
+	__u32			 oo_lma_disk_flags;
 	__u32			 oo_next_blocksize;
 	union {
 		int		oo_ea_in_bonus; /* EA bytes we expect */

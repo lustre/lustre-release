@@ -3567,7 +3567,7 @@ static int osd_attr_set(const struct lu_env *env,
 			      osd_name(osd), PFID(lu_object_fid(&dt->do_lu)),
 			      lma->lma_incompat, rc);
 		else
-			obj->oo_lma_flags =
+			obj->oo_lma_flags |=
 				attr->la_flags & LUSTRE_LMA_FL_MASKS;
 		osd_trans_exec_check(env, handle, OSD_OT_XATTR_SET);
 	}

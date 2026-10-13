@@ -237,6 +237,7 @@ static int __osd_object_attr_get(const struct lu_env *env, struct osd_device *o,
 		lma->lma_incompat = le32_to_cpu(lma->lma_incompat);
 		obj->oo_lma_flags =
 			lma_to_lustre_flags(lma->lma_incompat);
+		obj->oo_lma_disk_flags = obj->oo_lma_flags;
 	} else if (rc == -ENODATA ||
 		   !(S_ISDIR(la->la_mode) &&
 		     dt_object_exists(&obj->oo_dt))) {
@@ -1232,11 +1233,22 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 	struct osd_thandle	*oh;
 	struct osa_attr		*osa = &info->oti_osa;
 	__u64			 valid = la->la_valid;
+	__u32			 lma_flags;
+	bool			 lma_update;
 	int			 cnt;
 	int			 rc = 0;
 
 	ENTRY;
-	down_read(&obj->oo_guard);
+	/* concurrent reads and writes may all add the same LMA flags, so
+	 * serialize the xattr update, which is not atomic in the SA
+	 */
+	lma_flags = la->la_flags & LUSTRE_LMA_FL_MASKS;
+	lma_update = valid & LA_FLAGS &&
+		     (obj->oo_lma_disk_flags & lma_flags) != lma_flags;
+	if (lma_update)
+		down_write(&obj->oo_guard);
+	else
+		down_read(&obj->oo_guard);
 	if (unlikely(!dt_object_exists(dt) || obj->oo_destroyed))
 		GOTO(out, rc = -ENOENT);
 
@@ -1284,56 +1296,50 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 	if (valid == 0)
 		GOTO(out, rc = 0);
 
-	if (valid & LA_FLAGS) {
+	if (lma_update) {
 		struct lustre_mdt_attrs *lma;
 		struct lu_buf buf;
 		int size = 0;
 
-		if (la->la_flags & LUSTRE_LMA_FL_MASKS) {
-			LASSERT(!obj->oo_pfid_in_lma);
-			BUILD_BUG_ON(sizeof(info->oti_buf) < sizeof(*lma));
-			lma = (struct lustre_mdt_attrs *)&info->oti_buf;
+		LASSERT(!obj->oo_pfid_in_lma);
+		BUILD_BUG_ON(sizeof(info->oti_buf) < sizeof(*lma));
+		lma = (struct lustre_mdt_attrs *)&info->oti_buf;
+		buf.lb_buf = lma;
+		buf.lb_len = sizeof(info->oti_buf);
+
+		/* Please do NOT call osd_xattr_get() directly, that
+		 * will cause recursive down_read() on oo_guard.
+		 */
+		rc = osd_xattr_get_internal(env, obj, &buf, XATTR_NAME_LMA,
+					    &size);
+		if (!rc && unlikely(size < sizeof(*lma))) {
+			rc = -EINVAL;
+		} else if (!rc) {
+			lma->lma_incompat = le32_to_cpu(lma->lma_incompat);
+
+			if ((lma->lma_incompat &
+			     lustre_to_lma_flags(la->la_flags)) ==
+			    lustre_to_lma_flags(la->la_flags)) {
+				/* skip xattr set if lma incompat has flags */
+				obj->oo_lma_disk_flags |= lma_flags;
+				GOTO(lock, rc = 0);
+			}
+
+			lma->lma_incompat |= lustre_to_lma_flags(la->la_flags);
+			lma->lma_incompat = cpu_to_le32(lma->lma_incompat);
 			buf.lb_buf = lma;
-			buf.lb_len = sizeof(info->oti_buf);
-
-			/* Please do NOT call osd_xattr_get() directly, that
-			 * will cause recursive down_read() on oo_guard.
-			 */
-			rc = osd_xattr_get_internal(env, obj, &buf,
-						    XATTR_NAME_LMA, &size);
-			if (!rc && unlikely(size < sizeof(*lma))) {
-				rc = -EINVAL;
-			} else if (!rc) {
-				lma->lma_incompat =
-					le32_to_cpu(lma->lma_incompat);
-
-				if ((lma->lma_incompat &
-				     lustre_to_lma_flags(la->la_flags)) ==
-				    lustre_to_lma_flags(la->la_flags))
-					/* save a useless xattr set if lma
-					 * incompat already has the flags
-					 */
-					GOTO(lock, rc = 0);
-
-				lma->lma_incompat |=
-					lustre_to_lma_flags(la->la_flags);
-				lma->lma_incompat =
-					cpu_to_le32(lma->lma_incompat);
-				buf.lb_buf = lma;
-				buf.lb_len = sizeof(*lma);
-				rc = osd_xattr_set_internal(env, obj, &buf,
-							    XATTR_NAME_LMA,
-							    LU_XATTR_REPLACE,
-							    oh);
-			}
-			if (rc < 0) {
-				CWARN("%s: failed to set LMA flags: rc = %d\n",
-				       osd->od_svname, rc);
-				GOTO(out, rc);
-			} else {
-				obj->oo_lma_flags =
-					la->la_flags & LUSTRE_LMA_FL_MASKS;
-			}
+			buf.lb_len = sizeof(*lma);
+			rc = osd_xattr_set_internal(env, obj, &buf,
+						    XATTR_NAME_LMA,
+						    LU_XATTR_REPLACE, oh);
+		}
+		if (rc < 0) {
+			CWARN("%s: failed to set LMA flags: rc = %d\n",
+			      osd->od_svname, rc);
+			GOTO(out, rc);
+		} else {
+			obj->oo_lma_flags |= lma_flags;
+			obj->oo_lma_disk_flags |= lma_flags;
 		}
 	}
 
@@ -1431,7 +1437,10 @@ lock:
 	rc = osd_object_sa_bulk_update(obj, bulk, cnt, oh);
 
 out:
-	up_read(&obj->oo_guard);
+	if (lma_update)
+		up_write(&obj->oo_guard);
+	else
+		up_read(&obj->oo_guard);
 	RETURN(rc);
 }
 
