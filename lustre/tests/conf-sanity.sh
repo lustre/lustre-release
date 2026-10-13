@@ -6755,6 +6755,9 @@ test_73e() {
 		error "Mount fails on $mgs_nid"
 	umount $MOUNT
 
+	(( $MDS1_VERSION >= $(version_code v2_17_50-34-g089f438ba9) )) ||
+		skip "need MDS >= 2.17.50.34 to rebuild NIDs after MGS remount"
+
 	# reload modules locally to clear all client states
 	unload_modules_local
 	local zkeeper=${KEEP_ZPOOL}
@@ -7991,6 +7994,8 @@ test_87() { #LU-6544
 run_test 87 "check if MDT inode can hold EAs with N stripes properly"
 
 test_88a() { # LU-20360
+	(( $MDS1_VERSION >= $(version_code v2_17_54-97-g23b31c5db5) )) ||
+		skip "need MDS >= 2.17.54.97 for --mountfsoptions-only tunefs"
 	[[ "$mds1_FSTYPE" == zfs ]] &&
 		skip "LU-6662: no implementation for ZFS"
 
@@ -13674,8 +13679,8 @@ test_200f() {
 run_test 200f "IO service threads honour the CPU exclusion"
 
 test_250() {
-	(( $MGS_VERSION >= $(version_code 2.16.54.86) )) ||
-		skip "need MGS >= 2.16.54.86 to erase FSNAME params"
+	(( $MGS_VERSION >= $(version_code v2_17_51-23-gf5e198dc68) )) ||
+		skip "need MGS >= 2.17.51.23 to erase FSNAME params"
 
 	stack_trap "stopall; export FSNAME=$FSNAME; formatall"
 	export FSNAME=tst250fs
