@@ -39,18 +39,12 @@ static inline void lustre_debug_strcpy(char *dst, const char *s, int max)
 	dst[len] = '\0';
 }
 
-/* bytes needed to format @vaf, including the NUL, capped at @max */
-static inline int lustre_debug_vlen(struct va_format *vaf, int max)
-{
-	va_list args;
-	int len;
-
-	va_copy(args, *vaf->va);
-	len = vsnprintf(NULL, 0, vaf->fmt, args);
-	va_end(args);
-
-	return min(len + 1, max);
-}
+/*
+ * Out of line in tracefile.c: older kernels built without
+ * CONFIG_OPTIMIZE_INLINING make "inline" always_inline, and gcc
+ * refuses that for a function that uses a va_list.
+ */
+int lustre_debug_vlen(struct va_format *vaf, int max);
 
 #endif /* __LUSTRE_DEBUG_EVENTS_HELPERS */
 

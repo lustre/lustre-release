@@ -29,6 +29,19 @@
 #define CREATE_TRACE_POINTS
 #include <trace/events/lustre_debug.h>
 
+/* bytes needed to format @vaf, including the NUL, capped at @max */
+int lustre_debug_vlen(struct va_format *vaf, int max)
+{
+	va_list args;
+	int len;
+
+	va_copy(args, *vaf->va);
+	len = vsnprintf(NULL, 0, vaf->fmt, args);
+	va_end(args);
+
+	return min(len + 1, max);
+}
+
 enum cfs_trace_buf_type {
 	CFS_TCD_TYPE_PROC = 0,
 	CFS_TCD_TYPE_SOFTIRQ,
