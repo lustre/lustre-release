@@ -9789,7 +9789,8 @@ static int lnet_debug_recovery_show_dump(struct sk_buff *msg,
 		int i;
 
 		count += drlist->lgdrl_count - 1;
-		len += sizeof(struct ln_key_props) * count;
+		/* lkl_list is indexed from 0 to lkl_maxattr inclusive */
+		len += sizeof(struct ln_key_props) * (count + 1);
 		LIBCFS_ALLOC(keys, len);
 		if (!keys) {
 			NL_SET_ERR_MSG(extack,
