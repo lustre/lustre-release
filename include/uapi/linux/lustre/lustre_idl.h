@@ -877,6 +877,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_DNE_INTENT    0x20000000000000ULL /* MDT-MDT lock intent */
 #define OBD_CONNECT2_MGS_TYPE	   0x40000000000000ULL /* mne_type MGS bit */
 #define OBD_CONNECT2_BATCH_DESTROY 0x80000000000000ULL /* ENOENT-ok OUT update*/
+#define OBD_CONNECT2_TMPFILE	  0x100000000000000ULL /* tmpfile support */
 /* XXX README XXX README XXX README XXX README XXX README XXX README XXX
  * Please DO NOT add OBD_CONNECT flags before first ensuring that this value
  * is not in use by some other branch/patch.
