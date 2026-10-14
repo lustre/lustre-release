@@ -42,12 +42,13 @@ AC_ARG_ENABLE([multiple-lnds],
 
 AC_MSG_CHECKING([if external o2iblnd needs to use Compat RDMA])
 AC_ARG_WITH([o2ib],
-	AS_HELP_STRING([--with-o2ib=[yes|no|<path>]],
-		[build o2iblnd against path]),
-	[], [with_o2ib="yes"])
+	AS_HELP_STRING([--with-o2ib=[auto|yes|no|<path>]],
+		[build o2iblnd against path (default: auto)]),
+	[], [with_o2ib="auto"])
 
 case $with_o2ib in
-	yes)	INT_O2IBPATHS="$LINUX $LINUX/drivers/infiniband"
+	auto|yes)
+		INT_O2IBPATHS="$LINUX $LINUX/drivers/infiniband"
 		BUILT_IN_KO2IBLND="yes"
 		# Use ofed_info to find external driver
 		AS_IF([command -v ofed_info >/dev/null], [
@@ -123,7 +124,7 @@ case $with_o2ib in
 				fi
 			fi
 		])
-		ENABLEO2IB="yes"
+		ENABLEO2IB="$with_o2ib"
 		;;
 	no)	ENABLEO2IB="no"
 		EXTERNAL_KO2IBLND="no"
@@ -155,6 +156,11 @@ AS_IF([test $ENABLEO2IB = "no"], [
 			break
 		])
 	done
+	# The rdma headers are in every kernel tree, so check that IB is enabled
+	AS_IF([$int_o2ib_found], [
+		LB_CHECK_CONFIG([INFINIBAND_ADDR_TRANS], [],
+				[int_o2ib_found=false])
+	])
 	if ! $int_o2ib_found; then
 		AC_MSG_WARN([kernel does not support in-kernel o2ib, it will not be built])
 		BUILT_IN_KO2IBLND="no"
@@ -266,6 +272,13 @@ Auto detection of external O2IB failed. Build of external o2ib disabled.])
 			case $ENABLEO2IB in
 			"yes") AC_MSG_ERROR([cannot compile with OpenIB gen2 headers]) ;;
 			"withpath") AC_MSG_ERROR([cannot compile with OpenIB gen2 headers under $EXT_O2IBPATH]) ;;
+			"auto") AS_IF([test "x$EXTERNAL_KO2IBLND" = "xno" -a \
+					    "x$BUILT_IN_KO2IBLND" = "xno"], [
+					AC_MSG_WARN([cannot compile with OpenIB gen2 headers, o2iblnd will not be built])
+					ENABLEO2IB="no"
+				], [
+					AC_MSG_ERROR([cannot compile with OpenIB gen2 headers])
+				]) ;;
 			*) AC_MSG_ERROR([internal error]) ;;
 			esac
 		])
@@ -313,7 +326,9 @@ Auto detection of external O2IB failed. Build of external o2ib disabled.])
 	fi
 
 	if test "x$EXTERNAL_KO2IBLND" = "xno" -a "x$BUILT_IN_KO2IBLND" = "xno" ; then
-		AC_MSG_WARN([No o2iblnd can be built])
+		AS_IF([test $ENABLEO2IB = "yes"],
+		      [AC_MSG_ERROR([--with-o2ib=yes but no o2iblnd can be built])],
+		      [AC_MSG_WARN([No o2iblnd can be built])])
 	elif test "x$ENABLE_MULTIPLE_LNDS" = "xno" -a \
 		  "x$EXTERNAL_KO2IBLND" != "xno" -a "x$BUILT_IN_KO2IBLND" != "xno"; then
 		AC_MSG_WARN([

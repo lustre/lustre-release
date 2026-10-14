@@ -153,6 +153,10 @@ int_mofed=no
 [[ -f ${kernel_source_dir}/include/rdma/ib_cm.h ]] &&
 [[ -f ${kernel_source_dir}/include/rdma/ib_verbs.h ]] &&
    can_o2ib_in_kernel=yes
+# The rdma headers are in every kernel tree, so check that IB is enabled
+kconf=${kernel_source_dir}/include/generated/autoconf.h
+[[ -f $kconf ]] && ! grep -qw CONFIG_INFINIBAND_ADDR_TRANS $kconf &&
+   can_o2ib_in_kernel=no
 # Now check if ext_o2ib is explicit, or will be auto-detected:
 o2ib=$(echo ${OPTS} | tr ' ' '\n' | grep -- '--with-o2ib=' | cut -c 13-)
 if [[ "x$o2ib" = "xno" ]] ; then

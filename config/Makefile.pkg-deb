@@ -174,15 +174,10 @@ debs: debs_common
 	echo "Enabled Build Profiles: $${DEB_BUILD_PROFILES}"
 	echo "Kernel Source: $${KERNEL_SRC}"
 	echo "Kernel Object: $${KERNEL_OBJ}"
-	if test "x$(ENABLEO2IB)" = "xno"; then
-		export IB_OPTIONS="--with-o2ib=no"
+	if test "x$(ENABLEO2IB)" = "xwithpath"; then
+		export IB_OPTIONS="--with-o2ib=$(EXT_O2IBPATH)"
 	else
-		if test "x$(ENABLEO2IB)" != "xyes" && \
-		   test -n "$(EXT_O2IBPATH)"; then
-			export IB_OPTIONS="--with-o2ib=$(EXT_O2IBPATH)"
-		else
-			export IB_OPTIONS="--with-o2ib=yes"
-		fi
+		export IB_OPTIONS="--with-o2ib=$(ENABLEO2IB)"
 	fi
 	cp -v debian/control.main debian/control
 	sed "s/_KVERS_/$(LINUXRELEASE)/g" debian/lustre-tests.install.in \
