@@ -7994,6 +7994,27 @@ test_122() {
 }
 run_test 122 "directory size is consistent across mounts"
 
+test_123() {
+	local idx
+	local rc
+
+	(( MDS1_VERSION >= $(version_code 2.17.60) )) ||
+		skip "need MDS >= 2.17.60 to check the parent of an open"
+
+	for ((idx = 0; idx < (MDSCOUNT > 1 ? 2 : 1); idx++)); do
+		$LFS mkdir -i 0 $DIR/$tdir || error "(0) mkdir $tdir failed"
+		cd $DIR/$tdir || error "(1) cd $tdir failed"
+		rmdir $DIR2/$tdir || error "(2) rmdir $tdir failed"
+		# the volatile open skips the name lookup on its parent
+		$MULTIOP . V${idx}c
+		rc=$?
+		cd $TMP
+		(( rc != 0 )) ||
+			error "(3) volatile on MDT$idx in removed dir succeeded"
+	done
+}
+run_test 123 "volatile open in a removed directory"
+
 test_200() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 

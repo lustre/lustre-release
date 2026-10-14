@@ -8288,7 +8288,9 @@ static int lod_layout_check(const struct lu_env *env,
 	if (S_ISDIR(dt->do_lu.lo_header->loh_attr))
 		return lod_dir_layout_check(env, dt, mlc);
 
-	LASSERT(S_ISREG(dt->do_lu.lo_header->loh_attr));
+	if (!S_ISREG(dt->do_lu.lo_header->loh_attr))
+		return -ENOTDIR;
+
 	return lod_layout_pccro_check(env, dt, mlc);
 }
 
