@@ -285,8 +285,6 @@ int cfs_mask2str(char *str, int size, u64 mask, const char *(*bit2str)(int bit),
 
 	/* terminate 'str' */
 	if (len < size)
-		str[len++] = '\n';
-	if (len < size)
 		str[len] = '\0';
 	else if (size)
 		str[size - 1] = '\0';

@@ -541,8 +541,13 @@ static ssize_t dump_on_eviction_show(struct kobject *kobj,
 				     struct attribute *attr,
 				     char *buf)
 {
-	return cfs_mask2str(buf, PAGE_SIZE, obd_dump_on_eviction,
-			    eviction_type2str, ' ');
+	size_t len;
+
+	cfs_mask2str(buf, PAGE_SIZE, obd_dump_on_eviction, eviction_type2str,
+		     ' ');
+	len = strlen(buf);
+
+	return len + scnprintf(buf + len, PAGE_SIZE - len, "\n");
 }
 
 static ssize_t both_on_eviction_store(struct kobject *kobj,
@@ -582,8 +587,13 @@ static ssize_t lbug_on_eviction_show(struct kobject *kobj,
 				     struct attribute *attr,
 				     char *buf)
 {
-	return cfs_mask2str(buf, PAGE_SIZE, obd_lbug_on_eviction,
-			    eviction_type2str, ' ');
+	size_t len;
+
+	cfs_mask2str(buf, PAGE_SIZE, obd_lbug_on_eviction, eviction_type2str,
+		     ' ');
+	len = strlen(buf);
+
+	return len + scnprintf(buf + len, PAGE_SIZE - len, "\n");
 }
 
 static ssize_t lbug_on_eviction_store(struct kobject *kobj,

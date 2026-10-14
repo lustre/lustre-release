@@ -645,8 +645,12 @@ static ssize_t enable_cap_mask_show(struct kobject *kobj,
 					      obd_kset.kobj);
 	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 	u64 mask = libcfs_cap2num(mdt->mdt_enable_cap_mask);
+	size_t len;
 
-	return cfs_mask2str(buf, PAGE_SIZE, mask, libcfs_cap2str, ',');
+	cfs_mask2str(buf, PAGE_SIZE, mask, libcfs_cap2str, ',');
+	len = strlen(buf);
+
+	return len + scnprintf(buf + len, PAGE_SIZE - len, "\n");
 }
 
 static ssize_t enable_cap_mask_store(struct kobject *kobj,

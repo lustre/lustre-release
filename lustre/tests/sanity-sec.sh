@@ -2438,6 +2438,8 @@ cleanup_25c() {
 test_25c() {
 	local nm="c0"
 	local fileset="/$tdir"
+	local caps
+	local val
 	verify_yaml_available || skip_env "YAML verification not installed"
 	(( $MGS_VERSION >= $(version_code 2.16.59) )) ||
 		skip "Need MGS >= 2.16.59 for get_param yaml output"
@@ -2457,6 +2459,18 @@ test_25c() {
 	do_facet mgs $LCTL nodemap_add_offset --name $nm \
 		--offset 1000000 --limit 100000 || error "cannot set offset $nm"
 	wait_nm_sync $nm offset
+	# a cap type other than "off" prints a mapping of type and caps
+	if (( $MDS1_VERSION >= $(version_code 2.17.59) )); then
+		do_facet mgs $LCTL nodemap_set_cap --name $nm --type mask \
+			--caps cap_chown,cap_fowner ||
+			error "cannot set caps on $nm"
+		wait_nm_sync $nm enable_cap_mask
+		caps='{ type: mask, caps: "cap_chown,cap_fowner" }'
+		val=$(do_facet mds1 $LCTL get_param -n \
+		      nodemap.$nm.enable_cap_mask)
+		[[ "$val" == "$caps" ]] ||
+			error "enable_cap_mask is '$val', not '$caps'"
+	fi
 
 	# remount client to populate nodemap exports
 	zconf_umount_clients ${clients_arr[0]} $MOUNT ||

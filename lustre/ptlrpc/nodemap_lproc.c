@@ -192,15 +192,14 @@ static int nodemap_capabilities_seq_show(struct seq_file *m, void *unused)
 
 	val = libcfs_cap2num(nodemap->nm_capabilities);
 	i = cfs_mask2str(NULL, 0, val, libcfs_cap2str, ',');
-	OBD_ALLOC(caps, i + 2);
+	OBD_ALLOC(caps, i + 1);
 	if (!caps)
 		GOTO(out, rc = -ENOMEM);
-	cfs_mask2str(caps, i + 2, val, libcfs_cap2str, ',');
+	cfs_mask2str(caps, i + 1, val, libcfs_cap2str, ',');
 
-	seq_printf(m, "type: %s\n", type);
-	seq_printf(m, "caps: %s", caps);
+	seq_printf(m, "{ type: %s, caps: \"%s\" }\n", type, caps);
 
-	OBD_FREE(caps, i + 2);
+	OBD_FREE(caps, i + 1);
 
 out:
 	nodemap_putref(nodemap);

@@ -65,6 +65,7 @@ static int proc_dobitmasks(const struct lnet_debugfs_table *table,
 			return -ENOMEM;
 		libcfs_debug_mask2str(tmpstr, tmpstrlen, *mask, is_subsys);
 		rc = strlen(tmpstr);
+		rc += scnprintf(tmpstr + rc, tmpstrlen - rc, "\n");
 
 		if (pos >= rc) {
 			rc = 0;
