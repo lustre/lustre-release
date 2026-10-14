@@ -999,6 +999,9 @@ int osd_obj_map_update(struct osd_thread_info *info, struct osd_device *osd,
 int osd_obj_map_recover(struct osd_thread_info *info, struct osd_device *osd,
 			struct inode *src_parent, struct dentry *src_child,
 			const struct lu_fid *fid);
+int osd_obj_recover_local(struct osd_thread_info *info, struct osd_device *osd,
+			  struct inode *src_parent, struct dentry *src_child,
+			  const char *name);
 int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid, struct osd_inode_id *id,
 			enum oi_check_flags flags);

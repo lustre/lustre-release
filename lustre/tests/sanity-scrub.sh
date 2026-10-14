@@ -1535,6 +1535,103 @@ test_22() {
 }
 run_test 22 "LFSCK can recreate or fix the LASTID on MDT/OST"
 
+check_failure_domain_name() {
+	local facet=$1
+	local dev=$2
+	local host=$(facet_active_host $facet)
+
+	# the file must be linked into the device root with its name so that
+	# e2fsck does not report it as an unattached inode (LU-20967)
+	do_facet $facet "$DEBUGFS -c -R 'ls -l /' $dev" |
+		grep -w failure_domain ||
+		error "$facet: no failure_domain name in root"
+	FSCK_MAX_ERR=0 run_e2fsck $host $dev -n ||
+		error "$facet e2fsck returned $?"
+}
+
+# drop the failure_domain directory entry but keep the inode and its OI
+# mapping, to mimic a target formatted before the file was named, or a
+# name lost to directory corruption before e2fsck has run
+drop_failure_domain_name() {
+	local facet=$1
+	local dev=$2
+
+	do_facet $facet "$DEBUGFS -w -R 'unlink failure_domain' $dev" ||
+		error "$facet: cannot unlink failure_domain"
+	do_facet $facet "$DEBUGFS -c -R 'ls -l /' $dev" |
+		grep -qw failure_domain &&
+		error "$facet: failure_domain name still present"
+	return 0
+}
+
+# run e2fsck to reconnect the now-unattached inode into /lost+found, the
+# usual result of a name lost to directory corruption that e2fsck repaired
+reconnect_failure_domain_name() {
+	local facet=$1
+	local dev=$2
+	local host=$(facet_active_host $facet)
+
+	# e2fsck -fy reconnects the unattached inode and returns 1 (corrected)
+	FSCK_MAX_ERR=1 run_e2fsck $host $dev -y ||
+		error "$facet: e2fsck did not reconnect failure_domain"
+	# the name is now under /lost+found, not back in the root
+	do_facet $facet "$DEBUGFS -c -R 'ls -l /' $dev" |
+		grep -qw failure_domain &&
+		error "$facet: failure_domain unexpectedly present in root"
+	do_facet $facet "$DEBUGFS -c -R 'ls /lost+found' $dev" |
+		grep -q '#' ||
+		error "$facet: nothing reconnected into /lost+found"
+	return 0
+}
+
+test_23() {
+	local num
+
+	[[ "$ost1_FSTYPE" == ldiskfs ]] || skip "ldiskfs only test"
+
+	(( OST1_VERSION >= $(version_code 2.17.58.64) )) ||
+		skip "need OST >= 2.17.58.64 for failure_domain name link"
+
+	# the failure_domain file is created on first mount, so start with
+	# freshly formatted targets built by the version under test
+	formatall > /dev/null
+	setupall > /dev/null
+	stopall
+
+	# the OST creates a named failure_domain local file
+	for ((num = 1; num <= OSTCOUNT; num++)); do
+		check_failure_domain_name ost$num $(ostdevname $num)
+	done
+
+	# Case 1: the name is lost but the inode is not reconnected (a crash,
+	# or a target formatted before the file was named).  The initial OI
+	# scrub relinks it into the root on the next mount.
+	for ((num = 1; num <= OSTCOUNT; num++)); do
+		drop_failure_domain_name ost$num $(ostdevname $num)
+	done
+	setupall > /dev/null
+	stopall
+	for ((num = 1; num <= OSTCOUNT; num++)); do
+		check_failure_domain_name ost$num $(ostdevname $num)
+	done
+
+	# Case 2: e2fsck reconnected the nameless inode into /lost+found.
+	# The initial OI scrub renames it back out of /lost+found to its
+	# proper name on the next mount, rather than adding a second name.
+	for ((num = 1; num <= OSTCOUNT; num++)); do
+		drop_failure_domain_name ost$num $(ostdevname $num)
+		reconnect_failure_domain_name ost$num $(ostdevname $num)
+	done
+	setupall > /dev/null
+	stopall
+	for ((num = 1; num <= OSTCOUNT; num++)); do
+		check_failure_domain_name ost$num $(ostdevname $num)
+	done
+
+	setupall > /dev/null
+}
+run_test 23 "failure_domain file is named and relinked by OI scrub"
+
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}
 OSTSIZE=${SAVED_OSTSIZE}

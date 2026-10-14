@@ -40,6 +40,7 @@
 #define LOV_OBJID		"lov_objid"
 #define LOV_OBJSEQ		"lov_objseq"
 #define HEALTH_CHECK		"health_check"
+#define FAILURE_DOMAIN		"failure_domain"
 #define CAPA_KEYS		"capa_keys"
 #define CHANGELOG_USERS		"changelog_users"
 #define MGS_NIDTBL_DIR		"NIDTBL_VERSIONS"

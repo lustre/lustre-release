@@ -1330,6 +1330,91 @@ unlock:
 	return rc;
 }
 
+/**
+ * osd_obj_recover_local() - move a named local file from /lost+found back
+ *                           into the device root
+ * @info: per-thread working state
+ * @osd: OSD device
+ * @src_parent: the /lost+found (or sub-) directory inode holding the file
+ * @src_child: the dentry for the file under @src_parent
+ * @name: the proper name the file should have in the device root
+ *
+ * When directory corruption loses a local file's name, e2fsck reconnects
+ * the inode into /lost+found under a numeric name.  Rename it back to its
+ * proper name in the device root so it is reachable again.  This moves the
+ * single directory entry rather than adding a second one, so the inode's
+ * link count is unchanged and no duplicate name is left behind.
+ *
+ * The caller must only pass a regular file.  A directory also has a ".."
+ * entry and contributes to its parent's link count, so moving one would
+ * need those fixed up as well; a plain entry move would corrupt it.
+ *
+ * Context: called from the initial OI scrub, so no running transaction may
+ * be held.
+ *
+ * Return:
+ * * %0 on success
+ * * %-EEXIST if the proper name already exists in the root (leave the
+ *   /lost+found entry for a following e2fsck rather than create a duplicate)
+ * * negative errno on failure
+ */
+int osd_obj_recover_local(struct osd_thread_info *info, struct osd_device *osd,
+			  struct inode *src_parent, struct dentry *src_child,
+			  const char *name)
+{
+	struct dentry *root = osd_sb(osd)->s_root;
+	struct dentry *tgt_child = &info->oti_child_dentry;
+	struct inode *dir = root->d_inode;
+	struct inode *inode = src_child->d_inode;
+	struct ldiskfs_dir_entry_2 *de;
+	struct buffer_head *bh;
+	handle_t *jh;
+	int rc;
+
+	ENTRY;
+
+	tgt_child->__d_name.hash = 0;
+	tgt_child->__d_name.name = name;
+	tgt_child->__d_name.len = strlen(name);
+	tgt_child->d_parent = root;
+	tgt_child->d_inode = inode;
+
+	jh = osd_journal_start_sb(osd_sb(osd), LDISKFS_HT_MISC,
+				  osd_dto_credits_noquota[DTO_INDEX_DELETE] +
+				  osd_dto_credits_noquota[DTO_INDEX_INSERT]);
+	if (IS_ERR(jh))
+		RETURN(PTR_ERR(jh));
+
+	dquot_initialize(src_parent);
+	dquot_initialize(dir);
+
+	inode_lock(dir);
+	/* Don't create a duplicate if the proper name is somehow present. */
+	bh = osd_ldiskfs_find_entry(dir, &tgt_child->d_name, &de, NULL, NULL);
+	if (!IS_ERR(bh)) {
+		brelse(bh);
+		GOTO(unlock_root, rc = -EEXIST);
+	}
+
+	bh = osd_ldiskfs_find_entry(src_parent, &src_child->d_name, &de,
+				    NULL, NULL);
+	if (IS_ERR(bh))
+		GOTO(unlock_root, rc = PTR_ERR(bh));
+
+	rc = ldiskfs_delete_entry(jh, src_parent, de, bh);
+	brelse(bh);
+	if (rc != 0)
+		GOTO(unlock_root, rc);
+
+	rc = osd_ldiskfs_add_entry(info, osd, jh, tgt_child, inode, NULL);
+
+	GOTO(unlock_root, rc);
+unlock_root:
+	inode_unlock(dir);
+	ldiskfs_journal_stop(jh);
+	return rc;
+}
+
 static struct dentry *
 osd_object_spec_find(struct osd_thread_info *info, struct osd_device *osd,
 		     const struct lu_fid *fid, char **name)

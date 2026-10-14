@@ -1562,6 +1562,17 @@ static const struct osd_lf_map osd_lf_maps[] = {
 		.olm_namelen	= sizeof(HEALTH_CHECK) - 1,
 	},
 
+	/* failure_domain */
+	{
+		.olm_name	= FAILURE_DOMAIN,
+		.olm_fid	= {
+			.f_seq	= FID_SEQ_LOCAL_FILE,
+			.f_oid	= OFD_FAILURE_DOMAIN_OID,
+		},
+		.olm_flags	= OLF_SHOW_NAME,
+		.olm_namelen	= sizeof(FAILURE_DOMAIN) - 1,
+	},
+
 	/* LFSCK */
 	{
 		.olm_name	= LFSCK_DIR,
@@ -2080,6 +2091,28 @@ static FILLDIR_TYPE do_osd_ios_lf_fill(struct dir_context *buf,
 			       DFID": rc = %d\n",
 			       osd_name(dev), namelen, name, PFID(fid), rc);
 		}
+	} else if (rc == 0) {
+		char *lfname = osd_lf_fid2name(fid);
+
+		/* A named local file (e.g. last_rcvd, failure_domain) that
+		 * e2fsck reconnected into /lost+found after its root name was
+		 * lost to directory corruption: rename it back to its proper
+		 * name in the root so it is reachable again (LU-20967).
+		 */
+		if (lfname != NULL && lfname[0] != '\0') {
+			rc = osd_obj_recover_local(info, dev, dir, child,
+						   lfname);
+			if (rc == 0) {
+				CDEBUG(D_LFSCK,
+				       "recovered '%s' "DFID" from /lost+found.\n",
+				       lfname, PFID(fid));
+				scrub->os_lf_repaired++;
+			} else if (rc != -EEXIST) {
+				CDEBUG(D_LFSCK, "%s: cannot recover '%s' "
+				       DFID": rc = %d\n",
+				       osd_name(dev), lfname, PFID(fid), rc);
+			}
+		}
 	}
 
 	/* XXX: For MDT-objects, we can move them from /lost+found to namespace
@@ -2441,6 +2474,78 @@ out:
 	RETURN(rc == -ENOENT ? 0 : rc);
 }
 
+/**
+ * osd_lf_relink() - re-link a nameless local file into the device root
+ * @info: per-thread working state
+ * @dev: OSD device
+ * @fid: FID of the local file, from osd_lf_maps[]
+ *
+ * A named regular-file local file (e.g. last_rcvd, failure_domain) that has
+ * a valid OI mapping and inode but no name in the device root is recreated
+ * under its proper name so the inode is reachable again and e2fsck no longer
+ * reports it as unattached, rather than dropping the OI mapping and orphaning
+ * the inode.  This covers a crash or corruption that lost the name without
+ * e2fsck having run; a file that e2fsck has already reconnected into
+ * /lost+found is renamed back by osd_ios_lf_fill() during the earlier scan,
+ * so by the time this runs it has no name at all.
+ *
+ * The caller restricts this to plain regular-file entries (OLF_SHOW_NAME and
+ * neither OLF_SCAN_SUBITEMS nor OLF_IDX_IN_FID); osd_obj_spec_insert() records
+ * an S_IFREG directory entry, so the inode mode is confirmed to match.
+ *
+ * Context: called from the initial OI scrub, so a running transaction must
+ * not be held.
+ *
+ * Return:
+ * * %0 - the object exists and either was relinked or needs no relink; its
+ *   OI mapping must be kept
+ * * %-ENOENT or %-ESTALE - no such object, so the caller should drop the
+ *   stale OI mapping
+ * * other negative errno - a transient failure; the mapping is kept so a
+ *   later scrub can retry rather than orphaning an inode that still exists
+ */
+static int osd_lf_relink(struct osd_thread_info *info, struct osd_device *dev,
+			 const struct lu_fid *fid)
+{
+	struct osd_inode_id id;
+	struct inode *inode;
+	handle_t *jh;
+	int rc;
+
+	rc = osd_oi_lookup(info, dev, fid, &id, 0);
+	if (rc)
+		return rc;
+
+	/* confirm the mapping still resolves to a valid inode */
+	inode = osd_iget(info, dev, &id, 0);
+	if (IS_ERR(inode))
+		return PTR_ERR(inode);
+
+	/* Only a regular file can be relinked by adding a root directory
+	 * entry (osd_obj_add_entry() records an S_IFREG type).  These entries
+	 * are all regular files, so anything else means the inode no longer
+	 * matches the mapping: leave it and keep the mapping.
+	 */
+	if (!S_ISREG(inode->i_mode)) {
+		iput(inode);
+		return 0;
+	}
+	iput(inode);
+
+	jh = osd_journal_start_sb(osd_sb(dev), LDISKFS_HT_MISC,
+				  osd_dto_credits_noquota[DTO_INDEX_INSERT]);
+	if (IS_ERR(jh))
+		return PTR_ERR(jh);
+
+	rc = osd_obj_spec_insert(info, dev, fid, &id, jh, false);
+	ldiskfs_journal_stop(jh);
+	if (rc)
+		CDEBUG(D_LFSCK, "%s: cannot relink "DFID": rc = %d\n",
+		       osd_name(dev), PFID(fid), rc);
+
+	return rc;
+}
+
 static void osd_initial_OI_scrub(struct osd_thread_info *info,
 				 struct osd_device *dev)
 {
@@ -2483,7 +2588,10 @@ static void osd_initial_OI_scrub(struct osd_thread_info *info,
 
 	/* There maybe the case that the object has been removed, but its OI
 	 * mapping is still in the OI file, such as the "CATALOGS" after MDT
-	 * file-level backup/restore. So here cleanup the stale OI mappings. */
+	 * file-level backup/restore. So here cleanup the stale OI mappings.
+	 * If instead the object still exists but has lost its name in the
+	 * root, relink it rather than dropping the mapping (LU-20967).
+	 */
 	while (map->olm_name != NULL) {
 		struct dentry *child;
 
@@ -2496,10 +2604,31 @@ static void osd_initial_OI_scrub(struct osd_thread_info *info,
 						   map->olm_namelen),
 						   osd_sb(dev)->s_root);
 		if (PTR_ERR(child) == -ENOENT ||
-		    (!IS_ERR(child) && !child->d_inode))
-			osd_scrub_refresh_mapping(info, dev, &map->olm_fid,
-						  NULL, DTO_INDEX_DELETE,
-						  true, 0, NULL);
+		    (!IS_ERR(child) && !child->d_inode)) {
+			int rc = -ENOENT;
+
+			/* A plain named regular-file local file that lost its
+			 * root name can be relinked instead of dropping its OI
+			 * mapping (LU-20967).  Directories and index-in-FID
+			 * entries (update_log{,_dir}) cannot be relinked by
+			 * adding a root entry, so keep the old behaviour for
+			 * them and just drop the stale mapping.
+			 */
+			if ((map->olm_flags & OLF_SHOW_NAME) &&
+			    !(map->olm_flags & (OLF_SCAN_SUBITEMS |
+						OLF_IDX_IN_FID)))
+				rc = osd_lf_relink(info, dev, &map->olm_fid);
+
+			/* Only drop the mapping when the object is really gone;
+			 * a transient relink failure keeps it for a later scrub
+			 * rather than orphaning an inode that still exists.
+			 */
+			if (rc == -ENOENT || rc == -ESTALE)
+				osd_scrub_refresh_mapping(info, dev,
+							  &map->olm_fid, NULL,
+							  DTO_INDEX_DELETE,
+							  true, 0, NULL);
+		}
 		if (!IS_ERR(child))
 			dput(child);
 		map++;
