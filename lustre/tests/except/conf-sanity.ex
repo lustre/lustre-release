@@ -8,3 +8,4 @@ client  >= v2_15_63-53-g1a6ef725c2  LU-16938 81
 client  >= v2_17_57-14-g2924d62f60  LU-20214 104a
 client  >= v2_17_52-94-g86904ef943  LU-19740 115
 client  >= v2_16_55-19-gf69f27cc35  LU-17920 123ae 123ag
+client  >= v2_16_50-172-g52dcb6d72e LU-20857 125
