@@ -6064,6 +6064,59 @@ test_48c() {
 }
 run_test 48c "fallocate punch hole on encrypted file"
 
+test_48d() {
+	local testfile=$DIR/$tdir/$tfile
+	local tmpfile=$TMP/$tfile.ref
+	local datafile=$TMP/$tfile.data
+	local pagesz=$(getconf PAGESIZE)
+	local trunc_idx=128
+	local rapages
+	local sz
+
+	$LCTL get_param mdc.*.import | grep -q client_encryption ||
+		skip "client encryption not supported"
+
+	mount.lustre --help |& grep -q "test_dummy_encryption:" ||
+		skip "need dummy encryption support"
+
+	stack_trap "rm -f $tmpfile $datafile" EXIT
+	stack_trap cleanup_for_enc_tests EXIT
+	setup_for_enc_tests
+
+	$LFS setstripe -c1 -i0 $testfile || error "setstripe $testfile failed"
+	cancel_lru_locks osc
+
+	# sparse file with only its last page written, so that the client
+	# keeps a PW lock and the truncate below does not cancel the pages
+	# read ahead
+	dd if=/dev/urandom of=$datafile bs=$pagesz count=1 status=none
+	dd if=$datafile of=$tmpfile bs=$pagesz seek=2047 status=none
+	dd if=$datafile of=$testfile bs=$pagesz seek=2047 conv=fsync \
+		status=none || error "write to $testfile failed"
+
+	# sequential read of the first pages makes readahead put the next
+	# ones in page cache, not uptodate until read by userspace
+	$LCTL set_param -n llite.*.read_ahead_stats=clear
+	dd if=$testfile of=/dev/null bs=$pagesz count=16 status=none ||
+		error "read from $testfile failed"
+	# let readahead RPCs complete, so the pages are not locked anymore
+	sleep 1
+	rapages=$($LCTL get_param -n llite.*.read_ahead_stats |
+		  awk '/^readahead_pages/ { sum += $NF } END { print sum + 0 }')
+	(( rapages > trunc_idx - 16 )) ||
+		skip "readahead did not reach page $trunc_idx ($rapages pages)"
+
+	# truncate in the middle of a page read ahead but not used yet,
+	# ll_io_zero_page() has to zero and write it
+	sz=$((trunc_idx * pagesz + pagesz / 4 + 7))
+	$TRUNCATE $tmpfile $sz
+	$TRUNCATE $testfile $sz || error "truncate $testfile to $sz failed"
+	cancel_lru_locks osc ; cancel_lru_locks mdc
+	cmp -bl $tmpfile $testfile ||
+		error "file $testfile is corrupted after truncate to $sz"
+}
+run_test 48d "encrypted file: truncate into page read ahead"
+
 trace_cmd() {
 	local cmd="$@"
 

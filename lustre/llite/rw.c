@@ -1627,7 +1627,9 @@ int ll_io_read_page(const struct lu_env *env, struct cl_io *io,
 	if (uptodate) {
 		page->cp_ra_used = 1;
 		folio_mark_uptodate(page->cp_folio);
-		cl_page_disown(env, io, page);
+		/* ll_io_zero_page() needs to keep the page owned and locked */
+		if (unlockpage)
+			cl_page_disown(env, io, page);
 	} else {
 		anchor = &vvp_env_info(env)->vti_anchor;
 		cl_sync_io_init(anchor, 1);
