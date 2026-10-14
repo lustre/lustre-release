@@ -2589,10 +2589,16 @@ ssize_t pcc_file_read_iter(struct kiocb *iocb,
 				       (offs >> blockbits);
 			unsigned int i;
 
-			/* do not decrypt if page is all 0s */
+			/* A zero unit is a hole: leave it as 0s and skip
+			 * it, but keep decrypting the rest of the page.
+			 * The hole can be smaller than a page when
+			 * PAGE_SIZE is larger than LUSTRE_ENCRYPTION_UNIT_SIZE.
+			 */
 			if (is_empty_folio(folio, 0, offs,
-					   LUSTRE_ENCRYPTION_UNIT_SIZE))
-				break;
+					   LUSTRE_ENCRYPTION_UNIT_SIZE)) {
+				offs += LUSTRE_ENCRYPTION_UNIT_SIZE;
+				continue;
+			}
 
 			for (i = offs;
 			     i < offs + LUSTRE_ENCRYPTION_UNIT_SIZE;

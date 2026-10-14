@@ -6006,6 +6006,7 @@ test_48c() {
 	check_set_fallocate_or_skip
 
 	stack_trap cleanup_for_enc_tests EXIT
+	stack_trap "rm -f $tmpfile $reffile"
 	setup_for_enc_tests
 
 	# create a file spanning several encryption units
@@ -6027,18 +6028,21 @@ test_48c() {
 		error "file $testfile was corrupted by a refused punch"
 
 	# an encryption-unit-aligned punch is supported: it must zero exactly
-	# the requested range and leave the rest of the file unchanged
+	# the requested range and leave the rest of the file unchanged.
+	# Punch the first unit of the page: when PAGE_SIZE is larger than the
+	# unit the rest of the page still holds valid ciphertext, which
+	# reading must decrypt rather than return still encrypted.  A client
+	# whose page size equals the unit (4KB) can only punch whole pages,
+	# so it cannot exercise that path.
 	cp $tmpfile $reffile || error "cp $reffile failed"
-	fallocate -p -o $unit -l $unit $testfile ||
+	fallocate -p -o 0 -l $unit $testfile ||
 		error "aligned punch on encrypted file failed"
-	dd if=/dev/zero of=$reffile bs=$unit seek=1 count=1 conv=notrunc ||
+	dd if=/dev/zero of=$reffile bs=$unit seek=0 count=1 conv=notrunc ||
 		error "zeroing $reffile failed"
 
 	cancel_lru_locks osc ; cancel_lru_locks mdc
 	cmp -bl $reffile $testfile ||
 		error "aligned punch corrupted file $testfile"
-
-	rm -f $tmpfile $reffile
 }
 run_test 48c "fallocate punch hole on encrypted file"
 

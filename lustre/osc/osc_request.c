@@ -2382,25 +2382,26 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 		for (idx = 0; idx < aa->aa_page_count; idx++) {
 			struct brw_page *brwpg = aa->aa_ppga[idx];
 			unsigned int offs = 0;
+			bool empty = true;
 
 			clpage = oap2cl_page(brw_page2oap(brwpg));
 			if (clpage->cp_ciphertext)
 				continue;
 
 			while (offs < PAGE_SIZE) {
-				/* do not decrypt if page is all 0s */
+				/* A zero unit is a hole: leave it as 0s and
+				 * skip it, but keep decrypting the rest of
+				 * the page.  The hole can be smaller than a
+				 * page when PAGE_SIZE is larger than
+				 * LUSTRE_ENCRYPTION_UNIT_SIZE.
+				 */
 				if (is_empty_folio(brwpg->bp_folio,
 						   brw_pgno(brwpg), offs,
 				    LUSTRE_ENCRYPTION_UNIT_SIZE)) {
-					/* if page is empty forward info to
-					 * upper layers (ll_io_zero_page) by
-					 * clearing PagePrivate2
-					 */
-					if (!offs)
-						folio_clear_private_2(
-							brwpg->bp_folio);
-					break;
+					offs += LUSTRE_ENCRYPTION_UNIT_SIZE;
+					continue;
 				}
+				empty = false;
 
 				if (blockbits) {
 					/* This is direct IO case. Directly call
@@ -2438,6 +2439,13 @@ static int osc_brw_fini_request(struct ptlrpc_request *req, int rc)
 
 				offs += LUSTRE_ENCRYPTION_UNIT_SIZE;
 			}
+
+			/* If the whole page is empty, forward that info to
+			 * upper layers (ll_io_zero_page) by clearing
+			 * PagePrivate2.
+			 */
+			if (empty)
+				folio_clear_private_2(brwpg->bp_folio);
 		}
 	}
 

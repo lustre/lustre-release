@@ -563,10 +563,17 @@ static inline int do_dom_read_folio(void *data, struct folio *folio)
 			unsigned int offs = 0;
 
 			while (offs < PAGE_SIZE) {
-				/* decrypt only if page is not empty */
+				/* A zero unit is a hole: leave it as 0s and
+				 * skip it, but keep decrypting the rest of
+				 * the page.  The hole can be smaller than a
+				 * page when PAGE_SIZE is larger than
+				 * LUSTRE_ENCRYPTION_UNIT_SIZE.
+				 */
 				if (is_empty_folio(folio, pgno, offs,
-						   LUSTRE_ENCRYPTION_UNIT_SIZE))
-					break;
+						   LUSTRE_ENCRYPTION_UNIT_SIZE)) {
+					offs += LUSTRE_ENCRYPTION_UNIT_SIZE;
+					continue;
+				}
 
 				rc = llcrypt_decrypt_pagecache_blocks(folio,
 								      pgno,
