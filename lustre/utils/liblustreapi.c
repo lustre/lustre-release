@@ -3448,6 +3448,7 @@ static int cb_migrate_mdt_fini(char *path, int p, int *dp,
 {
 	struct lmv_user_md *lmu = param->fp_lmv_md;
 	int lmulen = lmv_user_md_size(lmu->lum_stripe_count, lmu->lum_magic);
+	__u32 hash_type = lmu->lum_hash_type;
 	int ret = 0;
 
 	if (de && de->d_type != DT_DIR)
@@ -3464,7 +3465,9 @@ static int cb_migrate_mdt_fini(char *path, int p, int *dp,
 			goto out;
 	}
 
+	lmu->lum_hash_type &= LMV_HASH_TYPE_MASK;
 	ret = setxattr(path, XATTR_NAME_LMV, lmu, lmulen, 0);
+	lmu->lum_hash_type = hash_type;
 	if (ret == -1) {
 		if (errno == EALREADY) {
 			ret = 0;
