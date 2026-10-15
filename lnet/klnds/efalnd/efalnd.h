@@ -31,7 +31,7 @@
 
 #define EFALND_MAJOR_VER        1
 #define EFALND_MINOR_VER        2
-#define EFALND_SUBMINOR_VER     5
+#define EFALND_SUBMINOR_VER     6
 #define EFALND_MAJOR_SHIFT	8
 
 #define KEFA_IFNAME_SIZE		256
