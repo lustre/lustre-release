@@ -65,6 +65,8 @@ static inline int lod_statfs_check(struct lu_tgt_descs *ltd,
  *
  * Return:
  * * %0 if the target is good
+ * * %-EAGAIN if the target is reconnecting, but still usable if the other
+ *   targets can't provide enough objects
  * * %negative negated errno on error
  */
 static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
@@ -73,6 +75,7 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 {
 	struct obd_statfs_info info = { 0 };
 	struct lov_desc *desc = &ltd->ltd_lov_desc;
+	bool connecting = false;
 	int rc;
 	ENTRY;
 
@@ -81,8 +84,13 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 
 	info.os_enable_pre = 1;
 	rc = dt_statfs_info(env, tgt->ltd_tgt, &tgt->ltd_statfs, &info);
-	if (rc && rc != -ENOTCONN)
+	if (rc && rc != -ENOTCONN && rc != -EAGAIN)
 		CERROR("%s: statfs error: rc = %d\n", lod2obd(d)->obd_name, rc);
+	/* check the cached data of a reconnecting OST */
+	if (rc == -EAGAIN) {
+		connecting = true;
+		rc = 0;
+	}
 	if (!rc) {
 		tgt->ltd_qos.ltq_failure_domain = tgt->ltd_statfs.os_failure_domain;
 		rc = lod_statfs_check(ltd, tgt);
@@ -93,6 +101,10 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 	    (reserve + (info.os_reserved_mb_low << 20) >
 	     tgt->ltd_statfs.os_bavail * tgt->ltd_statfs.os_bsize))
 		return -ENOSPC;
+
+	/* a reconnecting OST stays active, but is only used when needed */
+	if (connecting && !rc)
+		RETURN(-EAGAIN);
 
 	/* check whether device has changed state (active, inactive) */
 	if (rc && tgt->ltd_active) {
@@ -109,6 +121,12 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 			CDEBUG(D_CONFIG, "%s: turns inactive\n",
 			       tgt->ltd_exp->exp_obd->obd_name);
 		}
+		spin_unlock(&d->lod_lock);
+	} else if (rc && tgt->ltd_discon != (rc == -ENOTCONN)) {
+		/* already inactive (e.g. ENOSPC), connection state changed */
+		spin_lock(&d->lod_lock);
+		if (!tgt->ltd_active)
+			tgt->ltd_discon = rc == -ENOTCONN;
 		spin_unlock(&d->lod_lock);
 	} else if (rc == 0 && !tgt->ltd_active) {
 		/* turned active? */
@@ -154,6 +172,7 @@ void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
 	struct lu_tgt_desc *tgt;
 	time64_t max_age;
 	u64 avail;
+	int rc;
 	ENTRY;
 
 	max_age = ktime_get_seconds() - 2 * ltd->ltd_lov_desc.ld_qos_maxage;
@@ -173,7 +192,9 @@ void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
 	lod_getref(ltd);
 	ltd_foreach_tgt(ltd, tgt) {
 		avail = tgt->ltd_statfs.os_bavail;
-		if (lod_statfs_and_check(env, lod, ltd, tgt, 0))
+		rc = lod_statfs_and_check(env, lod, ltd, tgt, 0);
+		/* a reconnecting target still has its cached data */
+		if (rc && rc != -EAGAIN)
 			continue;
 
 		if (tgt->ltd_statfs.os_bavail != avail)
@@ -651,6 +672,9 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 	ENTRY;
 
 	rc = lod_statfs_and_check(env, lod, &lod->lod_ost_descs, ost, reserve);
+	/* the last, blocking pass may wait for a reconnecting OST */
+	if (rc == -EAGAIN && speed == 2)
+		rc = 0;
 	if (rc)
 		RETURN(rc);
 
@@ -2024,6 +2048,9 @@ static int lod_alloc_ost_list(const struct lu_env *env, struct lod_object *lo,
 		rc = lod_statfs_and_check(env, m, &m->lod_ost_descs,
 					  LTD_TGT(&m->lod_ost_descs, ost_idx),
 					  reserve);
+		/* wait for a listed OST that is only reconnecting */
+		if (rc == -EAGAIN)
+			rc = 0;
 		if (rc < 0) /* this OSP doesn't feel well */
 			break;
 
@@ -2093,6 +2120,8 @@ static int lod_ost_alloc_specific(const struct lu_env *env,
 	struct lu_tgt_pool *osts;
 	int stripes_per_ost = 1;
 	bool overstriped = false;
+	bool connecting = false;
+	bool timedout = false;
 	ENTRY;
 
 	LASSERT(lo->ldo_comp_cnt > comp_idx && lo->ldo_comp_entries != NULL);
@@ -2192,6 +2221,13 @@ repeat_find:
 
 		rc = lod_statfs_and_check(env, m, &m->lod_ost_descs,
 					  tgt, reserve);
+		/* wait once for the requested OST, or in the last pass,
+		 * for a reconnecting OST
+		 */
+		connecting = rc == -EAGAIN;
+		if (connecting && !timedout &&
+		    ((i == 0 && speed == 0) || speed == 2))
+			rc = 0;
 		if (rc) {
 			/* this OSP doesn't feel well */
 			continue;
@@ -2209,6 +2245,8 @@ repeat_find:
 		if (IS_ERR(o)) {
 			CDEBUG(D_OTHER, "can't declare new object on #%u: %d\n",
 			       ost_idx, (int) PTR_ERR(o));
+			if (connecting && PTR_ERR(o) == -ETIMEDOUT)
+				timedout = true;
 			continue;
 		}
 

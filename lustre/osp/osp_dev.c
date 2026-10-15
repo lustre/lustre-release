@@ -792,6 +792,8 @@ const struct lu_device_operations osp_lu_ops = {
  *
  * Return:
  * * %0 if statfs data retrieved successfully or retrieval was not needed
+ * * %-EAGAIN if the OST is reconnecting, @sfs has the cached statfs data
+ * * %-ENOTCONN if the OSP is inactive
  * * %negative if get statfs failed.
  */
 static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
@@ -800,6 +802,7 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 	enum lustre_imp_state state = LUSTRE_IMP_CLOSED;
 	struct osp_device *d = dt2osp_dev(dev);
 	struct obd_import *imp;
+	int status = 0;
 	int rc;
 
 	ENTRY;
@@ -819,6 +822,14 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 		info->os_reserved_mb_high = d->opd_reserved_mb_high;
 	}
 
+	/* DISCON keeps opd_imp_active set, so return -EAGAIN while the OST
+	 * is reconnecting, but leave the cached data in @sfs for summed
+	 * statfs (lod_statfs()).  opd_pre_status stays -ENODEV after
+	 * reconnect until orphan cleanup is done, so it can't be used here.
+	 */
+	if (d->opd_pre && unlikely(!READ_ONCE(d->opd_imp_connected)))
+		status = -EAGAIN;
+
 	CDEBUG(D_OTHER,
 	       "%s: blocks=%llu, bfree=%llu, bavail=%llu, bsize=%u, reserved_mb_low=%u, reserved_mb_high=%u, files=%llu, ffree=%llu, state=%x\n",
 	       d->opd_obd->obd_name,
@@ -827,7 +838,7 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 	       sfs->os_files, sfs->os_ffree, sfs->os_state);
 
 	if (d->opd_pre == NULL || (info && !info->os_enable_pre))
-		RETURN(0);
+		RETURN(status);
 
 	/*
 	 * The layer above osp (usually lod) can use f_precreated to
@@ -842,7 +853,7 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 		 PFID(&d->opd_pre_last_created_fid), PFID(&d->opd_pre_used_fid),
 		 d->opd_pre_reserved);
 	spin_unlock(&d->opd_pre_lock);
-	RETURN(0);
+	RETURN(status);
 }
 
 /**
@@ -1606,7 +1617,7 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 	switch (event) {
 	case IMP_EVENT_DISCON:
 		d->opd_got_disconnected = 1;
-		d->opd_imp_connected = 0;
+		WRITE_ONCE(d->opd_imp_connected, false);
 		if (d->opd_connect_mdt)
 			break;
 
@@ -1619,7 +1630,7 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 		break;
 	case IMP_EVENT_INACTIVE:
 		d->opd_imp_active = 0;
-		d->opd_imp_connected = 0;
+		WRITE_ONCE(d->opd_imp_connected, false);
 		set_bit(OBDF_INACTIVE, d->opd_obd->obd_flags);
 		if (d->opd_connect_mdt)
 			break;
@@ -1637,7 +1648,7 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 		d->opd_imp_active = 1;
 
 		d->opd_new_connection = 1;
-		d->opd_imp_connected = 1;
+		WRITE_ONCE(d->opd_imp_connected, true);
 		d->opd_imp_seen_connected = 1;
 		clear_bit(OBDF_INACTIVE, d->opd_obd->obd_flags);
 		wake_up(&d->opd_pre_waitq);

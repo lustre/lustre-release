@@ -966,7 +966,7 @@ static int lod_tgts_seq_show(struct seq_file *p, void *v)
 	/* XXX: should be non-NULL env, but it's very expensive */
 	active = 1;
 	rc = dt_statfs(NULL, next, &tgt->ltd_statfs);
-	if (rc == -ENOTCONN) {
+	if (rc == -ENOTCONN || rc == -EAGAIN) {
 		active = 0;
 		rc = 0;
 	} else if (rc)

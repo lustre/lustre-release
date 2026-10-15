@@ -2525,6 +2525,75 @@ test_27y() {
 }
 run_test 27y "create files while OST0 is degraded and the rest inactive"
 
+test_27ya() {
+	(( MDS1_VERSION >= $(version_code 2.17.59) )) ||
+		skip "need MDS >= 2.17.59 for OST disconnect detection"
+	(( OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+
+	local dir=$DIR/$tdir
+	local param="lod.$FSNAME-MDT0000*.target_obd"
+	local uuid=$(ostuuid_from_index 0)
+	# \\\$NF: survive do_node -> bash -c "..." so awk sees $NF (status)
+	local cmd="$LCTL get_param -n $param | awk '/$uuid/ { print \\\$NF }'"
+
+	# only MDT0000 is checked for the disconnect below
+	mkdir_on_mdt0 $dir || error "mkdir $dir failed"
+	stop ost1
+	stack_trap "start ost1 $(ostdevname 1) $OST_MOUNT_OPTS || true" EXIT
+
+	# umount only raises IMP_EVENT_DISCON, LOD must still see it as down
+	wait_osc_import_state mds1 ost1 DISCONN
+	wait_update_facet mds1 "$cmd" "INACTIVE" 5 ||
+		error "OST0000 not INACTIVE after disconnect"
+
+	# precreated objects must not be used on disconnected OST0000 while
+	# the other OSTs can provide all of the stripes
+	$LFS setstripe -c $((OSTCOUNT - 1)) $dir/f1 ||
+		error "setstripe with OST0000 down"
+	$LFS getstripe $dir/f1
+	! $LFS getstripe $dir/f1 | awk '$1 ~ /^[0-9]+$/ { print $1 }' |
+		grep -qx 0 || error "allocated on disconnected OST0000"
+
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS || error "start ost1 failed"
+	wait_recovery_complete ost1
+	wait_osc_import_ready mds1 ost1
+	wait_update_facet mds1 "$cmd" "ACTIVE" 10 ||
+		error "OST0000 not ACTIVE after restart"
+}
+run_test 27ya "LOD marks OST inactive after OST umount (LU-20963)"
+
+test_27yb() {
+	(( MDS1_VERSION >= $(version_code 2.17.60.1) )) ||
+		skip "need MDS >= 2.17.60.1 to use reconnecting OSTs"
+	(( OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+
+	local dir=$DIR/$tdir
+
+	# only OST0000 and OST0001, so the allocator has no other OSTs
+	pool_add $TESTNAME || error "pool_add failed"
+	pool_add_targets $TESTNAME 0 1 || error "pool_add_targets failed"
+	mkdir_on_mdt0 $dir || error "mkdir $dir failed"
+	$LFS setstripe -c 2 -p $TESTNAME $dir || error "setstripe $dir failed"
+
+	stop ost1
+	stack_trap "start ost1 $(ostdevname 1) $OST_MOUNT_OPTS || true" EXIT
+	wait_osc_import_state mds1 ost1 DISCONN
+
+	# a create that needs OST0000 uses it instead of getting fewer stripes
+	$MULTIOP $dir/$tfile Oc ||
+		error "create with OST0000 disconnected failed"
+	$LFS getstripe $dir/$tfile
+	(( $($LFS getstripe -c $dir/$tfile) == 2 )) ||
+		error "stripe count $($LFS getstripe -c $dir/$tfile) != 2"
+}
+run_test 27yb "create uses a reconnecting OST if it is needed (LU-20963)"
+
 test_27z() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_ost_nodsh && skip "remote OST with nodsh"

@@ -161,11 +161,12 @@ struct osp_device {
 	/* connection status. */
 	unsigned int			 opd_new_connection:1,
 					 opd_got_disconnected:1,
-					 opd_imp_connected:1,
 					 opd_imp_active:1,
 					 opd_imp_seen_connected:1,
 					 opd_connect_mdt:1,
 					 opd_disconnecting:1;
+	/* not in the bitfield, osp_import_event() writes it without a lock */
+	bool				 opd_imp_connected;
 
 	/* whether local recovery is completed:
 	 * reported via ->ldo_recovery_complete() */

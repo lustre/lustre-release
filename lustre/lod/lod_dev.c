@@ -1626,8 +1626,8 @@ static int lod_statfs(const struct lu_env *env, struct dt_device *dev,
 	lod_getref(&lod->lod_ost_descs);
 	lod_foreach_ost(lod, tgt) {
 		rc = dt_statfs(env, tgt->ltd_tgt, &ost_sfs);
-		/* ignore errors */
-		if (rc || ost_sfs.os_bsize == 0)
+		/* ignore errors, but count a reconnecting OST's cached space */
+		if ((rc && rc != -EAGAIN) || ost_sfs.os_bsize == 0)
 			continue;
 		if (!ost_files) {
 			/*
@@ -1722,7 +1722,8 @@ static int lod_trans_space_check(const struct lu_env *env,
 
 		sub_dt = st->st_sub_th->th_dev;
 		rc = dt_statfs(env, sub_dt, sfs);
-		if (rc) {
+		/* a reconnecting target returns its cached state */
+		if (rc && rc != -EAGAIN) {
 			CDEBUG(D_INFO, "%s: fail - statfs error: rc = %d\n",
 			       sub_dt->dd_lu_dev.ld_obd->obd_name, rc);
 			/* statfs may fail during recovery, skip check */
