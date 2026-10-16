@@ -874,6 +874,7 @@ struct ptlrpc_body_v2 {
 #define OBD_CONNECT2_ONE_OBJ_SWAP   0x2000000000000ULL /* single stripe swap */
 #define OBD_CONNECT2_FIND_UTILITY   0x4000000000000ULL /* server-side scanner */
 #define OBD_CONNECT2_LAYOUT_REPLACE 0x8000000000000ULL /* MDS layout replace */
+#define OBD_CONNECT2_IRNID_REPLACE 0x10000000000000ULL /* servicenode discov */
 #define OBD_CONNECT2_DNE_INTENT    0x20000000000000ULL /* MDT-MDT lock intent */
 #define OBD_CONNECT2_MGS_TYPE	   0x40000000000000ULL /* mne_type MGS bit */
 #define OBD_CONNECT2_BATCH_DESTROY 0x80000000000000ULL /* ENOENT-ok OUT update*/

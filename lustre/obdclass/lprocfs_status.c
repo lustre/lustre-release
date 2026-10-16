@@ -857,7 +857,7 @@ static const char *const obd_connect_names[] = {
 	"single_stripe_swap",	    /* 0x2000000000000 */
 	"find_utility",		    /* 0x4000000000000 */
 	"layout_replace",	    /* 0x8000000000000 */
-	"unknown",		   /* 0x10000000000000 */
+	"irnid_replace",	   /* 0x10000000000000 */
 	"dne_lock_intent",	   /* 0x20000000000000 */
 	"mgs_type",		   /* 0x40000000000000 */
 	"batch_destroy",	   /* 0x80000000000000 */
