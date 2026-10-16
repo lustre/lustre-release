@@ -551,6 +551,8 @@ struct find_work_queue {
 	/* Callbacks for worker threads */
 	llapi_find_cb_t fwq_cb_init;	 /* Callback for processing entries */
 	llapi_find_cb_t fwq_cb_fini;	 /* Callback for finalization */
+	int fwq_max_units; /* threads traverse subdirs inline above that */
+	int fwq_inline_depth_max; /* subdir levels a thread traverses itself */
 };
 
 int llapi_ostlist(char *path, struct find_param *param);

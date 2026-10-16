@@ -10931,6 +10931,67 @@ test_56El() {
 }
 run_test 56El "lfs find -printf over a subtree that is not on Lustre"
 
+test_56Em() {
+	local dir=$DIR/$tdir
+	local nr_dirs=10000
+	local nr_chains=20
+	local depth=80
+	local chain=$(printf 'l/%.0s' $(seq $depth))
+	local out=$TMP/$tfile.out
+	local expected=$((nr_dirs + nr_chains * (depth + 1) + 1))
+	local free_inodes
+	local stripes
+	local found
+	local rc
+	local i
+
+	test_mkdir $dir || error "mkdir $dir failed"
+	stack_trap "rm -rf $dir"
+	stripes=$($LFS getdirstripe -c $dir)
+	free_inodes=$(($(mdt_free_inodes 0) * ${stripes/#0/1}))
+	(( free_inodes > expected )) ||
+		skip_env "need $expected free inodes, have $free_inodes"
+	createmany -d $dir/d $nr_dirs || error "createmany -d $dir/d failed"
+	for ((i = 0; i < nr_chains; i++)); do
+		mkdir -p $dir/c$i/$chain || error "mkdir -p $dir/c$i/... failed"
+	done
+	stack_trap "rm -f $out.*"
+
+	$LFS find --threads 1 $dir > $out.1 ||
+		error "lfs find --threads 1 failed"
+	found=$(wc -l < $out.1)
+	(( found == expected )) ||
+		error "lfs find found $found entries, expected $expected"
+
+	(
+		ulimit -s 8192 2> /dev/null
+		ulimit -d $((128 * 1024)) || exit 222
+		$LFS find --threads 4 $dir > $out.4 2> $out.4.err
+	)
+	rc=$?
+	(( rc != 222 )) || skip_env "cannot limit the data segment size"
+	if (( rc != 0 )) || [[ -s $out.4.err ]]; then
+		cat $out.4.err
+		error "lfs find --threads 4 with a 128 MB data limit: rc=$rc"
+	fi
+	diff <(sort $out.1) <(sort $out.4) ||
+		error "lfs find --threads 4 did not find what --threads 1 found"
+
+	(
+		ulimit -n 64
+		LLAPI_FAIL_LOC=LLAPI_FAIL_PFIND_QUEUE_FULL \
+			$LFS find --threads 4 $dir > $out.n 2> $out.n.err
+	)
+	rc=$?
+	if (( rc != 0 )) || [[ -s $out.n.err ]]; then
+		cat $out.n.err
+		error "lfs find --threads 4 with 64 open files: rc=$rc"
+	fi
+	diff <(sort $out.1) <(sort $out.n) ||
+		error "lfs find --threads 4 with 64 open files missed entries"
+}
+run_test 56Em "lfs find --threads resource use on a wide directory"
+
 test_57a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	# note test will not do anything if MDS is not local

@@ -16,6 +16,7 @@
 #include <pthread.h>
 #include <pwd.h>
 #include <sys/ioctl.h>
+#include <sys/resource.h>
 #include <sys/sysmacros.h>
 #include <sys/types.h>
 #include <sys/xattr.h>
@@ -30,6 +31,17 @@
 
 /* Buf size used by llapi_semantic_traverse to build path of dir entries */
 #define FIND_PATH_BUFLEN	(2 * PATH_MAX)
+
+/* Maximum number of work units queued or being processed by parallel find */
+#define FIND_QUEUE_MAX_UNITS	4096
+
+/* file descriptors used per pfind thread */
+#define FIND_FDS_PER_THREAD	4
+/* file descriptors for pfind internal use */
+#define FIND_FDS_RESERVED	16
+
+/* levels of subdirectories the current thread is traversing itself */
+static __thread int find_inline_depth;
 
 #ifndef DEFAULT_PROJID
 #define DEFAULT_PROJID	0
@@ -3327,13 +3339,19 @@ int llapi_semantic_traverse(char *path, int size, int parent,
 			break;
 		case DT_DIR:
 			/* recursion down into a new subdirectory here */
-			if (param->fp_thread_count > 1) {
+			if (param->fp_thread_count > 1 &&
+			    (ll_atomic_fetch_add(&queue->fwq_active_units, 0) <
+			     queue->fwq_max_units ||
+			     find_inline_depth >=
+			     queue->fwq_inline_depth_max)) {
 				rc = work_unit_create_and_add(path, param,
 							      dent);
 			} else {
+				find_inline_depth++;
 				rc = llapi_semantic_traverse(path, size, d,
 							     sem_init, sem_fini,
 							     data, dent);
+				find_inline_depth--;
 			}
 			if (rc != 0 && ret == 0)
 				ret = rc;
@@ -3413,11 +3431,102 @@ out:
 
 static void work_unit_free(struct find_work_unit *unit);
 
+/* Scratch buffers of a worker thread */
+struct find_scratch {
+	struct lov_user_mds_data	*fs_lmd;
+	size_t				 fs_lum_size;
+	struct lmv_user_md		*fs_lmv_md;
+	__u32				 fs_lmv_stripe_count;
+	char				*fs_xattr_name_buf;
+	char				*fs_xattr_value_buf;
+};
+
+static int find_scratch_lend(struct find_scratch *fs, struct find_param *param)
+{
+	struct xattr_match_info *xmi = param->fp_xattr_match_info;
+
+	if (!fs->fs_lmd) {
+		fs->fs_lum_size = param->fp_lum_size;
+		fs->fs_lmd = calloc(1, offsetof(typeof(*fs->fs_lmd), lmd_lmm) +
+				    fs->fs_lum_size);
+		if (!fs->fs_lmd)
+			return -ENOMEM;
+	}
+
+	if (!fs->fs_lmv_md) {
+		size_t lmv_size;
+
+		fs->fs_lmv_stripe_count = param->fp_lmv_stripe_count;
+		lmv_size = lmv_user_md_size(fs->fs_lmv_stripe_count,
+					    LMV_USER_MAGIC_SPECIFIC);
+		fs->fs_lmv_md = calloc(1, lmv_size);
+		if (!fs->fs_lmv_md)
+			return -ENOMEM;
+	}
+
+	if (xmi && !fs->fs_xattr_name_buf) {
+		fs->fs_xattr_name_buf = malloc(XATTR_LIST_MAX);
+		if (!fs->fs_xattr_name_buf)
+			return -ENOMEM;
+	}
+
+	if (xmi && !fs->fs_xattr_value_buf) {
+		/* room for a NUL after the value, as in lfs.c */
+		fs->fs_xattr_value_buf = malloc(XATTR_SIZE_MAX + 1);
+		if (!fs->fs_xattr_value_buf)
+			return -ENOMEM;
+	}
+
+	param->fp_lmd = fs->fs_lmd;
+	param->fp_lum_size = fs->fs_lum_size;
+	param->fp_lmv_md = fs->fs_lmv_md;
+	param->fp_lmv_stripe_count = fs->fs_lmv_stripe_count;
+	if (xmi) {
+		xmi->xattr_name_buf = fs->fs_xattr_name_buf;
+		xmi->xattr_value_buf = fs->fs_xattr_value_buf;
+	}
+
+	return 0;
+}
+
+/*
+ * Take the lent buffers back. The traversal may have reallocated fp_lmv_md,
+ * or freed it and failed to allocate a new one: then fs_lmv_md is NULL, and
+ * find_scratch_lend() allocates a new one for the next work unit.
+ */
+static void find_scratch_take_back(struct find_scratch *fs,
+				   struct find_param *param)
+{
+	struct xattr_match_info *xmi = param->fp_xattr_match_info;
+
+	fs->fs_lmd = param->fp_lmd;
+	fs->fs_lum_size = param->fp_lum_size;
+	param->fp_lmd = NULL;
+
+	fs->fs_lmv_md = param->fp_lmv_md;
+	fs->fs_lmv_stripe_count = param->fp_lmv_stripe_count;
+	param->fp_lmv_md = NULL;
+
+	if (xmi) {
+		xmi->xattr_name_buf = NULL;
+		xmi->xattr_value_buf = NULL;
+	}
+}
+
+static void find_scratch_fini(struct find_scratch *fs)
+{
+	free(fs->fs_lmd);
+	free(fs->fs_lmv_md);
+	free(fs->fs_xattr_name_buf);
+	free(fs->fs_xattr_value_buf);
+}
+
 /* Placeholder worker function - just for testing thread creation */
 static void *find_worker(void *arg)
 {
 	struct find_work_queue *queue = (struct find_work_queue *) arg;
 	struct find_work_unit *unit = NULL;
+	struct find_scratch scratch = { NULL };
 	char *fail_loc = getenv("LLAPI_FAIL_LOC");
 	char *path;
 	int rc = 0;
@@ -3458,10 +3567,14 @@ static void *find_worker(void *arg)
 		if (rc < 0 || rc >= FIND_PATH_BUFLEN)
 			rc = -ENAMETOOLONG;
 		else
+			rc = find_scratch_lend(&scratch, unit->fwu_param);
+		if (rc == 0) {
 			rc = llapi_semantic_traverse(path, FIND_PATH_BUFLEN, -1,
 						     queue->fwq_cb_init,
 						     queue->fwq_cb_fini,
 						     unit->fwu_param, NULL);
+			find_scratch_take_back(&scratch, unit->fwu_param);
+		}
 		if (rc && queue->fwq_error == 0)
 			queue->fwq_error = rc;
 		if ((rc < 0 && rc != -EALREADY &&
@@ -3478,6 +3591,7 @@ static void *find_worker(void *arg)
 		ll_atomic_fetch_sub(&queue->fwq_active_units, 1);
 	}
 
+	find_scratch_fini(&scratch);
 	free(path);
 	return NULL;
 }
@@ -3487,6 +3601,8 @@ static void find_work_queue_init(struct find_work_queue *queue,
 				 llapi_find_cb_t cb_init,
 				 llapi_find_cb_t cb_fini)
 {
+	char *fail_loc;
+
 	queue->fwq_head = NULL;
 	queue->fwq_tail = NULL;
 	queue->fwq_active_units = 0;
@@ -3496,6 +3612,42 @@ static void find_work_queue_init(struct find_work_queue *queue,
 	queue->fwq_error = 0;
 	queue->fwq_cb_init = cb_init;
 	queue->fwq_cb_fini = cb_fini;
+	queue->fwq_max_units = FIND_QUEUE_MAX_UNITS;
+	/* for tests, have the threads find the queue always full */
+	fail_loc = getenv("LLAPI_FAIL_LOC");
+	if (fail_loc && !strcmp(fail_loc, "LLAPI_FAIL_PFIND_QUEUE_FULL"))
+		queue->fwq_max_units = 0;
+}
+
+/*
+ * Number of levels of subdirectories that each of @numthreads threads may
+ * traverse itself, for the walk to stay within the soft limit of open files.
+ */
+static int find_inline_depth_max(int numthreads)
+{
+	struct rlimit rlim;
+	struct dirent *de;
+	long nr_open = 0;
+	long avail;
+	DIR *dir;
+
+	if (getrlimit(RLIMIT_NOFILE, &rlim) < 0 ||
+	    rlim.rlim_cur == RLIM_INFINITY || rlim.rlim_cur > INT_MAX)
+		return INT_MAX;
+
+	/* the descriptors that are already open */
+	dir = opendir("/proc/self/fd");
+	if (dir) {
+		while ((de = readdir(dir)) != NULL)
+			if (de->d_name[0] != '.')
+				nr_open++;
+		closedir(dir);
+	}
+
+	avail = (long)rlim.rlim_cur - nr_open - FIND_FDS_RESERVED;
+	avail = avail / numthreads - FIND_FDS_PER_THREAD;
+
+	return avail > 0 ? avail : 0;
 }
 
 static int find_threads_init(pthread_t *threads, struct find_work_queue *queue,
@@ -3629,26 +3781,6 @@ struct find_param *copy_find_param(const struct find_param *src)
 		       src->fp_num_mdts * sizeof(int));
 	}
 
-	/* LMD and LMV data */
-	if (src->fp_lmd && src->fp_lum_size > 0) {
-		size_t lmd_size = offsetof(typeof(*src->fp_lmd), lmd_lmm) +
-				  src->fp_lum_size;
-
-		dst->fp_lmd = malloc(lmd_size);
-		if (!dst->fp_lmd)
-			goto error;
-		memcpy(dst->fp_lmd, src->fp_lmd, lmd_size);
-	}
-
-	if (src->fp_lmv_md) {
-		size_t lmv_size = lmv_user_md_size(src->fp_lmv_stripe_count,
-						   LMV_USER_MAGIC_SPECIFIC);
-		dst->fp_lmv_md = malloc(lmv_size);
-		if (!dst->fp_lmv_md)
-			goto error;
-		memcpy(dst->fp_lmv_md, src->fp_lmv_md, lmv_size);
-	}
-
 	/* xattr match info - deep copy all pointer fields */
 	if (src->fp_xattr_match_info) {
 		struct xattr_match_info *src_xmi = src->fp_xattr_match_info;
@@ -3738,24 +3870,6 @@ struct find_param *copy_find_param(const struct find_param *src)
 					       sizeof(regex_t));
 				}
 			}
-		}
-
-		/* Copy name buffer */
-		if (src_xmi->xattr_name_buf) {
-			dst_xmi->xattr_name_buf = malloc(XATTR_LIST_MAX);
-			if (!dst_xmi->xattr_name_buf)
-				goto error;
-			memcpy(dst_xmi->xattr_name_buf,
-			       src_xmi->xattr_name_buf, XATTR_LIST_MAX);
-		}
-
-		/* Copy value buffer */
-		if (src_xmi->xattr_value_buf) {
-			dst_xmi->xattr_value_buf = malloc(XATTR_SIZE_MAX);
-			if (!dst_xmi->xattr_value_buf)
-				goto error;
-			memcpy(dst_xmi->xattr_value_buf,
-			       src_xmi->xattr_value_buf, XATTR_SIZE_MAX);
 		}
 	}
 
@@ -3936,6 +4050,7 @@ int parallel_find(char *path, llapi_find_cb_t cb_init, llapi_find_cb_t cb_fini,
 		return -EINVAL;
 
 	find_work_queue_init(&queue, cb_init, cb_fini);
+	queue.fwq_inline_depth_max = find_inline_depth_max(numthreads);
 
 	threads = malloc(numthreads * sizeof(pthread_t));
 	if (!threads)
