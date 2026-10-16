@@ -2723,12 +2723,20 @@ lnet_peer_queue_message(struct lnet_peer *lp, struct lnet_msg *msg)
 
 /*
  * Queue a peer for the attention of the discovery thread.  Call with
- * lnet_net_lock/EX held. Returns 0 if the peer was queued, and
- * -EALREADY if the peer was already queued.
+ * lnet_net_lock/EX held. Returns 0 if the peer was queued or if
+ * discovery has stopped (nothing to do), and -EALREADY if the peer
+ * was already queued.
  */
 static int lnet_peer_queue_for_discovery(struct lnet_peer *lp)
 {
 	int rc;
+
+	if (list_empty(&lp->lp_dc_list) &&
+	    the_lnet.ln_dc_state != LNET_DC_STATE_RUNNING) {
+		CDEBUG(D_NET, "Discovery stopped, not queueing peer %s\n",
+		       libcfs_nidstr(&lp->lp_primary_nid));
+		return 0;
+	}
 
 	spin_lock(&lp->lp_lock);
 	if (!(lp->lp_state & LNET_PEER_DISCOVERING))
