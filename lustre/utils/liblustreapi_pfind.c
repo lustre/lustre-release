@@ -28,6 +28,9 @@
 
 #define FORMATTED_BUF_LEN	1024
 
+/* Buf size used by llapi_semantic_traverse to build path of dir entries */
+#define FIND_PATH_BUFLEN	(2 * PATH_MAX)
+
 #ifndef DEFAULT_PROJID
 #define DEFAULT_PROJID	0
 #endif
@@ -3385,7 +3388,7 @@ int param_callback(char *path, llapi_find_cb_t cb_init,
 		return ret;
 	}
 
-	buf = (char *)malloc(2 * PATH_MAX);
+	buf = (char *)malloc(FIND_PATH_BUFLEN);
 	if (!buf)
 		return -ENOMEM;
 
@@ -3400,7 +3403,7 @@ int param_callback(char *path, llapi_find_cb_t cb_init,
 
 	param->fp_depth = 0;
 
-	ret = llapi_semantic_traverse(buf, 2 * PATH_MAX + 1, -1, cb_init,
+	ret = llapi_semantic_traverse(buf, FIND_PATH_BUFLEN, -1, cb_init,
 				      cb_fini, param, NULL);
 out:
 	find_param_fini(param);
@@ -3416,7 +3419,19 @@ static void *find_worker(void *arg)
 	struct find_work_queue *queue = (struct find_work_queue *) arg;
 	struct find_work_unit *unit = NULL;
 	char *fail_loc = getenv("LLAPI_FAIL_LOC");
+	char *path;
 	int rc = 0;
+
+	path = malloc(FIND_PATH_BUFLEN);
+	if (!path) {
+		pthread_mutex_lock(&queue->fwq_lock);
+		if (queue->fwq_error == 0)
+			queue->fwq_error = -ENOMEM;
+		queue->fwq_shutdown = true;
+		pthread_cond_broadcast(&queue->fwq_sleep_cond);
+		pthread_mutex_unlock(&queue->fwq_lock);
+		return NULL;
+	}
 
 	while (!queue->fwq_shutdown) {
 		/* Get work unit from queue */
@@ -3439,10 +3454,14 @@ static void *find_worker(void *arg)
 			queue->fwq_tail = NULL;
 		pthread_mutex_unlock(&queue->fwq_lock);
 
-		rc = llapi_semantic_traverse(unit->fwu_path, 2 * PATH_MAX, -1,
-					     queue->fwq_cb_init,
-					     queue->fwq_cb_fini,
-					     unit->fwu_param, NULL);
+		rc = snprintf(path, FIND_PATH_BUFLEN, "%s", unit->fwu_path);
+		if (rc < 0 || rc >= FIND_PATH_BUFLEN)
+			rc = -ENAMETOOLONG;
+		else
+			rc = llapi_semantic_traverse(path, FIND_PATH_BUFLEN, -1,
+						     queue->fwq_cb_init,
+						     queue->fwq_cb_fini,
+						     unit->fwu_param, NULL);
 		if (rc && queue->fwq_error == 0)
 			queue->fwq_error = rc;
 		if ((rc < 0 && rc != -EALREADY &&
@@ -3459,6 +3478,7 @@ static void *find_worker(void *arg)
 		ll_atomic_fetch_sub(&queue->fwq_active_units, 1);
 	}
 
+	free(path);
 	return NULL;
 }
 
@@ -3782,10 +3802,9 @@ static struct find_work_unit *work_unit_create(const char *path,
 	memset(unit, 0, sizeof(*unit));
 
 	/* Copy the path */
-	unit->fwu_path = (char *)malloc(PATH_MAX + 1);
+	unit->fwu_path = strdup(path);
 	if (!unit->fwu_path)
 		goto error;
-	snprintf(unit->fwu_path, PATH_MAX + 1, "%s", path);
 
 	/* Copy the directory entry if provided */
 	if (de) {

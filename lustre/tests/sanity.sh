@@ -10248,6 +10248,30 @@ test_56Da() { # was test_56da, LU-14179
 	$LFS find $DIR/$tdir --type d |& grep "lfs find: error" &&
 		error "lfs find reported an error"
 
+	# compare parallel and serial walk output in case of long path
+	local out=$TMP/$tfile.out
+	local threads
+	local found
+
+	stack_trap "rm -f $out.*"
+	for threads in 1 4; do
+		$LFS find --threads $threads $DIR/$tdir > $out.$threads \
+			2> $out.$threads.err || {
+			cat $out.$threads.err
+			error "lfs find --threads $threads failed"
+		}
+		if [[ -s $out.$threads.err ]]; then
+			cat $out.$threads.err
+			error "lfs find --threads $threads reported an error"
+		fi
+	done
+	# $tdir, the 16 directories below it, and the file
+	found=$(wc -l < $out.1)
+	(( found == 18 )) ||
+		error "lfs find --threads 1 found $found entries, expected 18"
+	diff <(sort $out.1) <(sort $out.4) ||
+		error "lfs find --threads 4 did not find what --threads 1 found"
+
 	rm -rf $DIR/$tdir
 }
 run_test 56Da "test lfs find with long paths"
