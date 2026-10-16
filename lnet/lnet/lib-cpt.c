@@ -743,6 +743,68 @@ int cfs_cpt_spread_node(struct cfs_cpt_table *cptab, int cpt)
 }
 EXPORT_SYMBOL(cfs_cpt_spread_node);
 
+static bool cfs_cpt_node_usable(int node, const struct cpumask *cpus)
+{
+	int cpu;
+
+	for_each_cpu_and(cpu, cpumask_of_node(node), cpus)
+		if (cpu_online(cpu))
+			return true;
+
+	return false;
+}
+
+/**
+ * cfs_cpt_table_alloc_by_node() - Create a CPT with one partition per NUMA
+ *                                 node of @src, holding only the CPUs in @src
+ * @src: CPU Partitioning Table to mirror
+ *
+ * Unlike cfs_cpt_set_node(), CPUs that @src excludes (cpu_pattern X/C) stay
+ * excluded. Nodes of @src without an online CPU get no partition.
+ *
+ * Return: the new table, or ERR_PTR(): -%ENOMEM if the allocation failed,
+ * -%ENODEV if no node of @src has an online CPU
+ */
+struct cfs_cpt_table *cfs_cpt_table_alloc_by_node(struct cfs_cpt_table *src)
+{
+	nodemask_t *nodes = cfs_cpt_nodemask(src, CFS_CPT_ANY);
+	cpumask_var_t *cpus = cfs_cpt_cpumask(src, CFS_CPT_ANY);
+	struct cfs_cpt_table *cptab;
+	nodemask_t usable;
+	int cpt = 0;
+	int node;
+	int cpu;
+
+	/* fix the usable nodes once so the count and the fill agree */
+	cpus_read_lock();
+	nodes_clear(usable);
+	for_each_node_mask(node, *nodes)
+		if (cfs_cpt_node_usable(node, *cpus))
+			node_set(node, usable);
+
+	if (nodes_empty(usable)) {
+		cptab = ERR_PTR(-ENODEV);
+		goto out;
+	}
+
+	cptab = cfs_cpt_table_alloc(nodes_weight(usable));
+	if (!cptab) {
+		cptab = ERR_PTR(-ENOMEM);
+		goto out;
+	}
+
+	for_each_node_mask(node, usable) {
+		for_each_cpu_and(cpu, cpumask_of_node(node), *cpus)
+			cfs_cpt_set_cpu(cptab, cpt, cpu);
+		cpt++;
+	}
+out:
+	cpus_read_unlock();
+
+	return cptab;
+}
+EXPORT_SYMBOL(cfs_cpt_table_alloc_by_node);
+
 int cfs_cpt_current(struct cfs_cpt_table *cptab, int remap)
 {
 	int cpu;

@@ -13203,15 +13203,15 @@ cleanup_200() {
 	local modopts=$1
 	stopall
 	$LUSTRE_RMMOD
-	[[ -z $modopts ]] || MODOPTS_LIBCFS=$modopts
+	MODOPTS_LIBCFS=$modopts
 }
 
 test_200a() {
-	cleanup_200
+	cleanup_200 "$MODOPTS_LIBCFS"
 
 	local cpus=$(lscpu | awk '/^CPU.s.:/ {print $NF}')
 	local old_modopts=$MODOPTS_LIBCFS
-	stack_trap "cleanup_200 $old_modopts"
+	stack_trap "cleanup_200 $(printf %q "$old_modopts")"
 
 	MODOPTS_LIBCFS="cpu_npartitions=$cpus"
 
@@ -13227,12 +13227,12 @@ test_200a() {
 run_test 200a "check CPU partitions"
 
 test_200b() {
-	cleanup_200
+	cleanup_200 "$MODOPTS_LIBCFS"
 
 	local cpus=$(lscpu | awk '/^CPU.s.:/ {print $NF}')
 	local nodes=$(lscpu | awk '/NUMA node.s.:/ {print $NF}')
 	local old_modopts=$MODOPTS_LIBCFS
-	stack_trap "cleanup_200 $old_modopts"
+	stack_trap "cleanup_200 $(printf %q "$old_modopts")"
 
 	local pattern="0[$(lscpu | awk '/CPU.s. list:/ {print $NF}')]"
 	MODOPTS_LIBCFS="cpu_pattern=\"$pattern\""
@@ -13272,13 +13272,13 @@ test_200b() {
 run_test 200b "set CPU pattern using core selection"
 
 test_200c() {
-	cleanup_200
+	cleanup_200 "$MODOPTS_LIBCFS"
 
 	local cpus=$(lscpu | awk '/^CPU.s.:/ {print $NF}')
 	local nodes=$(lscpu | awk '/NUMA node.s.:/ {print $NF}')
 
 	local old_modopts=$MODOPTS_LIBCFS
-	stack_trap "cleanup_200 $old_modopts"
+	stack_trap "cleanup_200 $(printf %q "$old_modopts")"
 
 	local pattern="N"
 	MODOPTS_LIBCFS="cpu_pattern=\"$pattern\""
@@ -13330,14 +13330,14 @@ test_200c() {
 run_test 200c "set CPU pattern using NUMA node layout"
 
 test_200d() {
-	cleanup_200
+	cleanup_200 "$MODOPTS_LIBCFS"
 
 	local cpus=$(lscpu | awk '/^CPU.s.:/ {print $NF}')
 	local nodes=$(lscpu | awk '/NUMA node.s.:/ {print $NF}')
 	local parts=$((cpus / 2))
 
 	local old_modopts=$MODOPTS_LIBCFS
-	stack_trap "cleanup_200 $old_modopts"
+	stack_trap "cleanup_200 $(printf %q "$old_modopts")"
 
 	local full_cpu_count=0
 	local excluded_count=0
@@ -13458,7 +13458,7 @@ test_200d() {
 run_test 200d "set CPU pattern to exclude only CPU 1"
 
 test_200e() {
-	cleanup_200
+	cleanup_200 "$MODOPTS_LIBCFS"
 
 	local cpus=$(lscpu | awk '/^CPU.s.:/ {print $NF}')
 	local nodes=$(lscpu | awk '/NUMA node.s.:/ {print $NF}')
@@ -13469,7 +13469,7 @@ test_200e() {
 	local partition
 
 	local old_modopts=$MODOPTS_LIBCFS
-	stack_trap "cleanup_200 $old_modopts"
+	stack_trap "cleanup_200 $(printf %q "$old_modopts")"
 
 	# N C[0]
 	pattern="N"
@@ -13567,6 +13567,111 @@ test_200e() {
 	done
 }
 run_test 200e "set CPU pattern using relative core exclusion"
+
+# CPU numbers of the Cpus_allowed_list of every thread of $facet named $thr*
+thread_cpus_allowed() {
+	local facet=$1
+	local thr=$2
+
+	do_facet $facet "for t in /proc/[0-9]*/task/*; do
+		[[ \\\$(< \\\$t/comm) == $thr* ]] || continue
+		awk '/^Cpus_allowed_list/ {print \\\$2}' \\\$t/status
+	done"
+}
+
+# 0 if CPU $1 is in the cpulist $2 (e.g. 0-3,5)
+cpu_in_list() {
+	awk -v c=$1 -v l=$2 'BEGIN {
+		n = split(l, r, ",")
+		for (i = 1; i <= n; i++) {
+			split(r[i], b, "-")
+			hi = b[2] ? b[2] : b[1]
+			if (c >= b[1] && c <= hi)
+				exit 0
+		}
+		exit 1
+	}'
+}
+
+cleanup_200f() {
+	stopall
+	unload_modules
+	MODOPTS_LIBCFS=$1
+}
+
+test_200f() {
+	(( $OST1_VERSION >= $(version_code 2.17.59.69) &&
+	   $MDS1_VERSION >= $(version_code 2.17.59.69) )) ||
+		skip "need server >= 2.17.59.69 with IO CPT honoring cpu_pattern"
+
+	# remote servers must load libcfs with the cpu_pattern too
+	stack_trap "LOAD_MODULES_REMOTE=$LOAD_MODULES_REMOTE"
+	stack_trap "cleanup_200f $(printf %q "$MODOPTS_LIBCFS")"
+	LOAD_MODULES_REMOTE=true
+	cleanup_200f "$MODOPTS_LIBCFS"
+
+	local facet=ost1
+	local topo=$(do_facet $facet lscpu -p=CPU,NODE | grep -v '^#')
+	local nodes=$(awk -F, '{print $2}' <<< "$topo" | sort -u | wc -l)
+	local last_node=$(awk -F, '{print $2}' <<< "$topo" | sort -n | tail -1)
+	local node
+	local node_topo
+
+	(( nodes >= 2 )) || skip "need at least 2 NUMA nodes"
+	# every node loads libcfs with the same cpu_pattern
+	for node in $(all_nodes | tr , ' '); do
+		node_topo=$(do_node $node lscpu -p=CPU,NODE | grep -v '^#')
+		[[ $node_topo == $topo ]] ||
+			skip "$node and $facet need the same CPUs"
+	done
+
+	local node_cpus=$(awk -F, -v n=$last_node '$2 == n' <<< "$topo" | wc -l)
+
+	(( node_cpus > 1 )) ||
+		skip "need at least 2 CPUs in node $last_node"
+
+	# exclude one CPU of the last node, keep the rest in a single CPT
+	local excluded=$(awk -F, -v n=$last_node '$2 == n {print $1}' \
+			 <<< "$topo" | sort -n | tail -1)
+	# ranges, so the option stays short on large hosts
+	local allowed=$(awk -F, -v x=$excluded '$1 != x {print $1}' \
+			<<< "$topo" | sort -n | awk '
+		NR == 1 { lo = hi = $1; next }
+		$1 == hi + 1 { hi = $1; next }
+		{ out = out (out ? "," : "") (lo == hi ? lo : lo "-" hi)
+		  lo = hi = $1 }
+		END { print out (out ? "," : "") (lo == hi ? lo : lo "-" hi) }')
+
+	MODOPTS_LIBCFS="cpu_pattern=\"0[$allowed]\""
+	start_mgsmds || error "MDS start failed"
+	start_ost || error "OST start failed"
+
+	do_facet $facet "$LCTL get_param -n cpu_partition_table"
+	do_facet $facet "$LCTL get_param -n cpu_partition_table" |
+		grep -qw $excluded &&
+		error "CPU $excluded not excluded on $facet by libcfs"
+
+	local svc
+	local thr
+	local masks
+	local mask
+	for svc in $facet:ll_ost_io mds1:mdt_io; do
+		thr=${svc##*:}
+		masks=$(thread_cpus_allowed ${svc%%:*} $thr)
+		[[ -n $masks ]] || error "no $thr threads on ${svc%%:*}"
+
+		# one mask per node when the per-node table is in use, the
+		# one shared mask when it failed and the service fell back
+		(( $(sort -u <<< "$masks" | wc -l) >= 2 )) ||
+			error "$thr threads share one CPU mask: $masks"
+
+		for mask in $(sort -u <<< "$masks"); do
+			! cpu_in_list $excluded $mask ||
+				error "$thr allowed on CPU $excluded: $mask"
+		done
+	done
+}
+run_test 200f "IO service threads honour the CPU exclusion"
 
 test_250() {
 	(( $MGS_VERSION >= $(version_code 2.16.54.86) )) ||

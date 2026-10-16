@@ -207,6 +207,11 @@ void cfs_cpt_unset_nodemask(struct cfs_cpt_table *cptab, int cpt,
  * nodes in this partition, it might return a different node id each time.
  */
 int cfs_cpt_spread_node(struct cfs_cpt_table *cptab, int cpt);
+/**
+ * create a table with one partition per NUMA node of \a src, restricted to
+ * the CPUs of \a src
+ */
+struct cfs_cpt_table *cfs_cpt_table_alloc_by_node(struct cfs_cpt_table *src);
 
 int cfs_cpu_init(void);
 void cfs_cpu_fini(void);
@@ -222,6 +227,12 @@ static inline void cfs_cpt_table_free(struct cfs_cpt_table *cptab)
 static inline struct cfs_cpt_table *cfs_cpt_table_alloc(int ncpt)
 {
 	return NULL;
+}
+
+static inline struct cfs_cpt_table *
+cfs_cpt_table_alloc_by_node(struct cfs_cpt_table *src)
+{
+	return ERR_PTR(-ENODEV);
 }
 
 static inline int cfs_cpt_table_print(struct cfs_cpt_table *cptab,

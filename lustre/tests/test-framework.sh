@@ -1117,9 +1117,13 @@ load_lnet() {
 	fi
 
 	load_module ../libcfs/libcfs/libcfs
-	# Prevent local MODOPTS_LIBCFS being passed as part of environment
-	# variable to remote nodes
-	unset MODOPTS_LIBCFS
+	# Pass the caller's MODOPTS_LIBCFS to remote nodes, but not the
+	# partition count forced above for this node's CPU count
+	if [[ -n "$saved_opts" ]]; then
+		MODOPTS_LIBCFS="$saved_opts"
+	else
+		unset MODOPTS_LIBCFS
+	fi
 
 	set_default_debug
 	if [[ $1 == config_on_load=1 ]]; then

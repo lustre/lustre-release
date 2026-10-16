@@ -65,7 +65,6 @@ static int oss_device_init(const struct lu_env *env, struct lu_device *lu,
 	static struct ptlrpc_service_conf svc_conf;
 	struct obd_device *obd = lu->ld_obd;
 	struct ost_obd *ost = obd2ost(obd);
-	nodemask_t *mask;
 	int rc;
 
 	ENTRY;
@@ -157,31 +156,15 @@ static int oss_device_init(const struct lu_env *env, struct lu_device *lu,
 		GOTO(out_service, rc);
 	}
 
-	mask = cfs_cpt_nodemask(cfs_cpt_tab, CFS_CPT_ANY);
-	/* event CPT feature is disabled in libcfs level by set partition
-	 * number to 1, we still want to set node affinity for io service
-	 */
-	if (cfs_cpt_number(cfs_cpt_tab) == 1 && nodes_weight(*mask) > 1) {
-		int	cpt = 0;
-		int	i;
-
-		ost_io_cptable = cfs_cpt_table_alloc(nodes_weight(*mask));
-		for_each_node_mask(i, *mask) {
-			if (!ost_io_cptable) {
-				CWARN("oss: failed to create CPT table\n");
-				break;
-			}
-
-			rc = cfs_cpt_set_node(ost_io_cptable, cpt++, i);
-			if (!rc) {
-				CWARN("oss: Failed to set node %d for IO CPT table\n",
-				      i);
-				cfs_cpt_table_free(ost_io_cptable);
-				ost_io_cptable = NULL;
-				break;
-			}
+	/* one CPT disables CPT in libcfs; io still wants node affinity */
+	if (cfs_cpt_number(cfs_cpt_tab) == 1 &&
+	    nodes_weight(*cfs_cpt_nodemask(cfs_cpt_tab, CFS_CPT_ANY)) > 1) {
+		ost_io_cptable = cfs_cpt_table_alloc_by_node(cfs_cpt_tab);
+		if (IS_ERR(ost_io_cptable)) {
+			CWARN("%s: failed to create IO CPT table: rc = %ld\n",
+			      obd->obd_name, PTR_ERR(ost_io_cptable));
+			ost_io_cptable = NULL;
 		}
-		rc = 0;
 	}
 
 	memset(&svc_conf, 0, sizeof(svc_conf));
