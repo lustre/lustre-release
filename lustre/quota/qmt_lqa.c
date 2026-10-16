@@ -634,6 +634,8 @@ int qmt_lqa_add(struct qmt_device *qmt, char *name, __u32 start, __u32 end)
 	}
 
 	for (res = LQUOTA_FIRST_RES; res < LQUOTA_LAST_RES; res++) {
+		int save_rc;
+
 		qpi = qmt_pool_lookup_name_lqa(&env, qmt, res, name, true);
 		if (IS_ERR(qpi)) {
 			rc = PTR_ERR(qpi);
@@ -648,19 +650,18 @@ int qmt_lqa_add(struct qmt_device *qmt, char *name, __u32 start, __u32 end)
 
 		CDEBUG(D_QUOTA, "Insert a new range: %u:%u for %s\n",
 		       start, end, name);
-		qmt_start_pool_recalc(&env, qpi);
-		qpi_putref(&env, qpi);
-	}
 
-	/* Save range to disk */
-	if (rc == 0) {
-		int save_rc = qmt_lqa_save_range_to_disk(&env, qpi, start, end);
-
+		/* Each pool (lqa-md and lqa-dt) has its own range file */
+		save_rc = qmt_lqa_save_range_to_disk(&env, qpi, start, end);
 		if (save_rc && save_rc != -EEXIST) {
-			CWARN("%s: Failed to save LQA range [%u-%u] to disk: rc = %d\n",
-			      qmt->qmt_svname, start, end, save_rc);
+			CWARN("%s: lqa-%s-%s failed to save range [%u-%u] to disk: rc = %d\n",
+			      qmt->qmt_svname, RES_NAME(res), name, start, end,
+			      save_rc);
 			/* Don't fail the operation for disk save errors */
 		}
+
+		qmt_start_pool_recalc(&env, qpi);
+		qpi_putref(&env, qpi);
 	}
 
 	lu_env_fini(&env);
@@ -791,9 +792,9 @@ int qmt_lqa_remove(struct qmt_device *qmt, char *name, __u32 start, __u32 end)
 	for (res = LQUOTA_FIRST_RES; res < LQUOTA_LAST_RES; res++) {
 		qpi = qmt_pool_lookup_name_lqa(&env, qmt, res, name, true);
 		if (IS_ERR(qpi)) {
+			rc = PTR_ERR(qpi);
 			CERROR("%s: cannot find lqa-%s-%s to remove range %u:%u: rc = %d\n",
 			       qmt_name, RES_NAME(res), name, start, end, rc);
-			rc = PTR_ERR(qpi);
 			break;
 		}
 
@@ -818,26 +819,23 @@ int qmt_lqa_remove(struct qmt_device *qmt, char *name, __u32 start, __u32 end)
 		write_unlock(&qpi->qpi_lqa_lock);
 
 		if (found) {
+			int remove_rc;
+
 			OBD_FREE_PTR(range);
+			remove_rc = qmt_lqa_remove_range_from_disk(&env, qpi,
+								   start, end);
+			if (remove_rc && remove_rc != -ENOENT) {
+				CWARN("%s: lqa-%s-%s failed to remove range [%u-%u] from disk: rc = %d\n",
+				      qmt_name, RES_NAME(res), name, start, end,
+				      remove_rc);
+				/* Don't fail the operation for disk errors */
+			}
 		} else {
 			rc = -ENOENT;
 			CERROR("%s: lqa-%s-%s cannot remove range %u:%u: rc = %d\n",
 			       qmt_name, RES_NAME(res), name, start, end, rc);
 		}
 		qpi_putref(&env, qpi);
-	}
-
-	if (found) {
-		int remove_rc;
-
-		/* Remove range from disk */
-		remove_rc = qmt_lqa_remove_range_from_disk(&env, qpi, start,
-							   end);
-		if (remove_rc && remove_rc != -ENOENT) {
-			CWARN("%s: Failed to remove LQA range [%u-%u] from disk: rc = %d\n",
-			      qmt->qmt_svname, start, end, remove_rc);
-			/* Don't fail the operation for disk remove errors */
-		}
 	}
 
 	lu_env_fini(&env);

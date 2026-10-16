@@ -761,12 +761,6 @@ test_1b() {
 		"user quota isn't released after deletion"
 	resetquota -u $TSTUSR
 
-	sync
-	sync
-
-	debugfs -R "ls /quota_master/dt-0x0" /tmp/lustre-mdt1
-	debugfs -R "ls /quota_master/dt-qpool1" /tmp/lustre-mdt1
-
 	# test for group
 	log "--------------------------------------"
 	log "Group quota (block hardlimit:$global_limit MB)"
@@ -7542,6 +7536,7 @@ test_91()
 	(( $MDS1_VERSION >= $(version_code 2.16.50.52) )) ||
 		skip "need MDS >= 2.16.50.52 to handle the absence OST in qmt_map_lge_idx"
 	(( OSTCOUNT >= 2 )) || skip_env "needs >= 2 OSTs"
+	[[ "$mds1_FSTYPE" == ldiskfs ]] || skip_env "ldiskfs only test"
 	local mds_dev=$(mdsdevname 1)
 	local ost1_dev=$(ostdevname 1)
 	local ost2_dev=$(ostdevname 2)
@@ -8217,7 +8212,6 @@ test_97d() {
 		skip "need MDS >= 2.17.50 to support lctl lqa commands"
 
 	setup_quota_test || error "setup quota failed with $?"
-	stack_trap cleanup_quota_test EXIT
 
 	# Create LQA tenants using standard commands
 	echo "Creating LQA tenants"
@@ -8337,6 +8331,29 @@ test_97g() {
 	return 0
 }
 run_test 97g "new LQA limits should affect all lqes in the system"
+
+test_97i()
+{
+	local mds_dev=$(mdsdevname 1)
+	local lqa="lqa1"
+	local res
+
+	(( $MDS1_VERSION >= $(version_code 2.17.59) )) ||
+		skip "need MDS >= 2.17.59 to save lqa-md ranges"
+	[[ "$mds1_FSTYPE" == ldiskfs ]] || skip_env "ldiskfs only test"
+
+	$LQA_NEW --name $lqa || error "cannot create $lqa"
+	stack_trap "$LQA_DESTROY --name $lqa"
+	$LQA_ADD --name $lqa --range $TSTID ||
+		error "lqa:$lqa failed to add range $TSTID"
+
+	for res in dt md; do
+		do_facet mds1 "sync; $DEBUGFS -c -R \
+			'ls -l quota_master/lqa-$res-$lqa' $mds_dev" |
+			grep -w ranges || error "no ranges in lqa-$res-$lqa"
+	done
+}
+run_test 97i "LQA ranges are saved for both lqa-dt and lqa-md pools"
 
 test_98() {
 	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
