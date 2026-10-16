@@ -6059,7 +6059,7 @@ static inline ssize_t lnet_net_size_skb(u32 net_id)
 		if (net_id == LNET_NET_ANY) {
 			/* We send a new key table for every new type of net */
 			if (LNET_NETTYP(net->net_id) != prev_type) {
-				prev_type = LNET_NETTYP(net_id);
+				prev_type = LNET_NETTYP(net->net_id);
 				len += NI_MSG_MIN_SIZE;
 			}
 		} else if (net_id != net->net_id) {
@@ -6083,7 +6083,7 @@ static int lnet_net_show_start(struct netlink_callback *cb)
 	int msg_len = genlmsg_len(gnlh);
 	struct nlattr *params, *top;
 	int rem, rc = 0;
-	ssize_t len;
+	ssize_t len, total = 0;
 
 	if (the_lnet.ln_refcount == 0) {
 		NL_SET_ERR_MSG(extack, "LNet stack down");
@@ -6100,17 +6100,15 @@ static int lnet_net_show_start(struct netlink_callback *cb)
 
 	if (!msg_len) {
 		/* 0@lo always exist so we will get something */
-		cb->min_dump_alloc = lnet_net_size_skb(nlist->lngl_net_id);
+		total = lnet_net_size_skb(nlist->lngl_net_id);
 		GOTO(report_err, rc);
 	}
 
 	params = genlmsg_data(gnlh);
 	if (!(nla_type(params) & LN_SCALAR_ATTR_LIST)) {
 		NL_SET_ERR_MSG(extack, "invalid configuration");
-		return -EINVAL;
+		GOTO(report_err, rc = -EINVAL);
 	}
-
-	cb->min_dump_alloc = 0;
 
 	nla_for_each_nested(top, params, rem) {
 		u32 prev_type = LNET_NETTYP(LNET_NET_ANY);
@@ -6148,21 +6146,28 @@ static int lnet_net_show_start(struct netlink_callback *cb)
 				NL_SET_ERR_MSG(extack, "No interfaces");
 				GOTO(report_err, rc = -ESRCH);
 			} else {
-				cb->min_dump_alloc += len;
+				total += len;
 			}
 
 			/* we send new key table if net_type changes */
 			if (LNET_NETTYP(nlist->lngl_net_id) != prev_type) {
 				prev_type = LNET_NETTYP(nlist->lngl_net_id);
-				cb->min_dump_alloc += NI_MSG_MIN_SIZE;
+				total += NI_MSG_MIN_SIZE;
 			}
 		}
 	}
 report_err:
-	if (rc < 0)
+	if (rc < 0) {
 		lnet_net_show_done(cb);
+		return rc;
+	}
 
-	return rc;
+	/* min_dump_alloc is u16 on older kernels */
+	if (total > (typeof(cb->min_dump_alloc))~0UL)
+		total = (typeof(cb->min_dump_alloc))~0UL;
+	cb->min_dump_alloc = total;
+
+	return 0;
 }
 
 static const struct ln_key_list net_update_props_list = {
