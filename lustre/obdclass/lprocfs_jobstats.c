@@ -198,7 +198,7 @@ static void lprocfs_job_cleanup(struct obd_job_stats *stats, bool clear)
 		job_purge_locked(stats, sched);
 		up_write(&stats->ojs_rwsem);
 	}
-	clear_bit(OJS_CLEANING, &stats->ojs_flags);
+	clear_and_wake_up_bit(OJS_CLEANING, &stats->ojs_flags);
 }
 
 static struct job_stat *job_alloc(char *jobid, struct obd_job_stats *jobs)
