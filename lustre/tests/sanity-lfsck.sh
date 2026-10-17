@@ -544,6 +544,50 @@ test_2e()
 }
 run_test 2e "namespace LFSCK can verify remote object linkEA"
 
+test_2h()
+{
+	(( $MDS1_VERSION >= $(version_code 2.17.59) )) ||
+		skip "MDS older than 2.17.59, LU-20984"
+	[[ "$mds1_FSTYPE" == ldiskfs ]] || skip "ldiskfs only test"
+
+	check_mount_and_prep
+	touch $DIR/$tdir/f0 || error "(1) Fail to touch $DIR/$tdir/f0"
+	local fid=$($LFS path2fid $DIR/$tdir/f0)
+
+	stop $SINGLEMDS > /dev/null || error "(2) Fail to stop $SINGLEMDS!"
+	mount_fstype $SINGLEMDS || error "(3) Fail to mount $SINGLEMDS"
+	do_facet $SINGLEMDS setfattr -n trusted.link -v 0xdeadbeefdeadbeef \
+		$(facet_mntpt $SINGLEMDS)/ROOT/$tdir/f0
+	local rc=$?
+	unmount_fstype $SINGLEMDS
+	(( rc == 0 )) || error "(4) Fail to corrupt linkEA header"
+	start_facet $SINGLEMDS "$MOUNT_OPTS_SCRUB" 5
+
+	$START_NAMESPACE -r -n on ||
+		error "(5) Fail to start LFSCK dryrun for namespace!"
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(6) unexpected dryrun status"
+	}
+	$LFS fid2path $DIR $fid &&
+		error "(7) dryrun repaired crashed linkEA of $fid"
+
+	$START_NAMESPACE -r || error "(8) Fail to start LFSCK for namespace!"
+	wait_update_facet $SINGLEMDS "$LCTL get_param -n \
+		mdd.${MDT_DEV}.lfsck_namespace |
+		awk '/^status/ { print \\\$2 }'" "completed" 32 || {
+		$SHOW_NAMESPACE
+		error "(9) unexpected status"
+	}
+
+	local name=$($LFS fid2path $DIR $fid)
+	[[ "$name" == "$DIR/$tdir/f0" ]] ||
+		error "(10) Fail to repair linkEA: $fid $name"
+}
+run_test 2h "namespace LFSCK dryrun handles crashed linkEA header"
+
 test_3()
 {
 	(( $MDS1_VERSION > $(version_code 2.6.50) )) ||

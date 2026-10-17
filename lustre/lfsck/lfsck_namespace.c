@@ -688,7 +688,7 @@ static int lfsck_namespace_links_remove(const struct lu_env *env,
 	LASSERT(dt_object_remote(obj) == 0);
 
 	if (lfsck->li_bookmark_ram.lb_param & LPF_DRYRUN)
-		GOTO(unlock, rc = 0);
+		GOTO(log, rc = 0);
 
 	th = lfsck_trans_create(env, dev, lfsck);
 	if (IS_ERR(th))
