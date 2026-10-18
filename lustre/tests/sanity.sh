@@ -3476,6 +3476,39 @@ test_27Ke() {
 }
 run_test 27Ke "test enable_foreign_dir and enable_foreign_dir_gid"
 
+test_27Kf() {
+	(( $MDS1_VERSION >= $(version_code v2_12_53-15-gfdad38781c) )) ||
+		skip "Need MDS >= 2.12.53.15 for foreign LMV directory"
+
+	local uuid=$(cat /proc/sys/kernel/random/uuid)
+	local found
+	local want
+
+	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
+	$LFS mkdir --foreign=none --xattr=$uuid --flags=0xda05 \
+		$DIR/$tdir/fdir || error "create foreign dir failed"
+	$LFS setstripe --foreign=none --xattr=$uuid --flags=0xda05 \
+		$DIR/$tdir/ffile || error "create foreign file failed"
+	mkdir $DIR/$tdir/dir || error "mkdir dir failed"
+	touch $DIR/$tdir/file || error "touch file failed"
+	want="$DIR/$tdir $DIR/$tdir/dir $DIR/$tdir/file"
+	# a striped directory has an LMV that is not foreign
+	if (( MDSCOUNT >= 2 )); then
+		$LFS mkdir -c 2 $DIR/$tdir/sdir || error "mkdir sdir failed"
+		want+=" $DIR/$tdir/sdir"
+	fi
+
+	found=$($LFS find $DIR/$tdir --foreign | sort | xargs)
+	[[ "$found" == "$DIR/$tdir/fdir $DIR/$tdir/ffile" ]] ||
+		error "--foreign found '$found'"
+	found=$($LFS find $DIR/$tdir --foreign=none -type d | xargs)
+	[[ "$found" == "$DIR/$tdir/fdir" ]] ||
+		error "--foreign=none -type d found '$found'"
+	found=$($LFS find $DIR/$tdir ! --foreign | sort | xargs)
+	[[ "$found" == "$want" ]] || error "! --foreign found '$found'"
+}
+run_test 27Kf "lfs find --foreign on directories"
+
 test_27L() {
 	remote_mds_nodsh && skip "remote MDS with nodsh"
 

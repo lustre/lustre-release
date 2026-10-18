@@ -986,7 +986,7 @@ static int find_check_foreign(struct find_param *param)
 		struct lmv_foreign_md *lfm;
 
 		lfm = (void *)param->fp_lmv_md;
-		if (lmv_is_foreign(lfm->lfm_magic)) {
+		if (!lmv_is_foreign(lfm->lfm_magic)) {
 			if (param->fp_foreign_type == LU_FOREIGN_TYPE_UNKNOWN)
 				return param->fp_exclude_foreign ? 1 : -1;
 			return -1;
