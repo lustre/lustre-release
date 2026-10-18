@@ -55,7 +55,7 @@ export fs_STRIPEPARAMS=${fs_STRIPEPARAMS:-""}
 }
 
 # function used by scripts run on remote nodes
-LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
+LUSTRE=${LUSTRE:-$(cd $(dirname ${BASH_SOURCE[0]})/..; echo $PWD)}
 . $LUSTRE/tests/functions.sh
 . $LUSTRE/tests/yaml.sh
 
