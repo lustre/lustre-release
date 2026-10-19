@@ -3456,7 +3456,7 @@ test_19() {
 	set_ost_qtype $QTYPE || error "enable ost quota failed"
 
 	# bind file to a single OST
-	$LFS setstripe -c 1 $TESTFILE || error "setstripe $TESTFILE failed"
+	$LFS setstripe -i 0 -c 1 $TESTFILE || error "setstripe $TESTFILE failed"
 	chown $TSTUSR.$TSTUSR $TESTFILE || error "chown $TESTFILE failed"
 
 	echo "Set user quota (limit: ${blimit}M)"
@@ -3467,6 +3467,8 @@ test_19() {
 	$LFS setquota -u $TSTUSR -b 0 -B ${blimit}M -i 0 -I 0 $MOUNT ||
 		error "set group quota failed"
 	quota_show_check b u $TSTUSR
+
+	wait_quota_synced "ost1" "OST0000" "usr" $TSTID "hardlimit" "5120"
 
 	# first wirte might be cached
 	$RUNAS $DD of=$TESTFILE count=$((blimit + 1))
