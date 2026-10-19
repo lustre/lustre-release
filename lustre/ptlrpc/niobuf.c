@@ -862,11 +862,19 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
 	spin_lock(&imp->imp_lock);
 	if (imp->imp_conn_current && imp->imp_conn_current->oic_uptodate <= 0 &&
 	    imp->imp_state == LUSTRE_IMP_CONNECTING) {
-		spin_unlock(&imp->imp_lock);
-		request->rq_sent = ktime_get_real_seconds();
-		request->rq_timeout = 1;
-		request->rq_deadline = request->rq_sent + 1;
-		RETURN(0);
+		struct obd_import_conn *conn = imp->imp_conn_current;
+
+		if (request->rq_ctx_init)
+			conn->oic_uptodate =
+				LNetPeerDiscovered(&conn->oic_conn->c_peer.nid,
+						   false);
+		if (conn->oic_uptodate <= 0) {
+			spin_unlock(&imp->imp_lock);
+			request->rq_sent = ktime_get_real_seconds();
+			request->rq_timeout = 1;
+			request->rq_deadline = request->rq_sent + 1;
+			RETURN(0);
+		}
 	}
 	spin_unlock(&imp->imp_lock);
 

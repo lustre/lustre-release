@@ -342,6 +342,9 @@ int gssiam_ctx_sign(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 	if (!req->rq_gss_framed)
 		return null_ctx_sign_common(ctx, req, SPTLRPC_FLVR_GSSIAM);
 
+	if (!test_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags))
+		return -ETIMEDOUT;
+
 	if (req->rq_pack_bulk)
 		flags |= LUSTRE_GSS_PACK_BULK;
 	if (req->rq_pack_udesc)
@@ -712,7 +715,8 @@ out:
 	return rc;
 }
 
-static int gssiam_send_init_rpc(struct gssiam_cli_ctx *gssiam_ctx)
+static int gssiam_send_init_rpc(struct gssiam_cli_ctx *gssiam_ctx,
+				bool *rpc_timedout)
 {
 	struct ptlrpc_cli_ctx *ctx = &gssiam_ctx->gicc_base;
 	struct obd_import *imp = gssiam_ctx->gicc_base.cc_sec->ps_import;
@@ -721,6 +725,7 @@ static int gssiam_send_init_rpc(struct gssiam_cli_ctx *gssiam_ctx)
 	int rc;
 
 retry:
+	*rpc_timedout = false;
 	rc = gssiam_refresh_token(gssiam_ctx);
 	if (rc)
 		GOTO(out, rc);
@@ -748,6 +753,7 @@ retry:
 	ptlrpc_request_set_replen(req);
 	DEBUG_REQ(D_SEC, req, "send init GSSIAM req");
 	rc = ptlrpc_queue_wait(req);
+	*rpc_timedout = (rc == -ETIMEDOUT);
 	ptlrpc_req_put(req);
 	if (rc) {
 		if ((rc == -EAGAIN || rc == -EKEYEXPIRED ||
@@ -822,6 +828,7 @@ static struct ptlrpc_cli_ctx *gssiam_lookup_ctx(struct ptlrpc_sec *sec,
 	struct obd_import *imp = sec->ps_import;
 	struct gssiam_sec *gssiam = gss_sec2gssiam(sec);
 	struct gssiam_cli_ctx *ctx;
+	bool rpc_timedout = false;
 	int rc;
 
 	/* Check existing contexts locklessly via RCU */
@@ -896,7 +903,16 @@ static struct ptlrpc_cli_ctx *gssiam_lookup_ctx(struct ptlrpc_sec *sec,
 	}
 
 	/* Send SEC_CTX_INIT RPC */
-	rc = gssiam_send_init_rpc(ctx);
+	rc = gssiam_send_init_rpc(ctx, &rpc_timedout);
+	if (rpc_timedout && imp->imp_state == LUSTRE_IMP_CONNECTING) {
+		/* Return uncached, non-uptodate ctx so CONNECT is queued and
+		 * fails into ptlrpc_connect_interpret(), allowing the pinger
+		 * to retry connection and LNet peer discovery.
+		 */
+		atomic_inc(&sec->ps_nctx);
+		mutex_unlock(&gssiam->gis_mutex);
+		return &ctx->gicc_base;
+	}
 	if (rc)
 		GOTO(out_err, rc);
 
