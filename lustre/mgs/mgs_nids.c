@@ -1121,7 +1121,19 @@ ssize_t ir_timeout_show(struct kobject *kobj, struct attribute *attr,
 ssize_t ir_timeout_store(struct kobject *kobj, struct attribute *attr,
 			 const char *buffer, size_t count)
 {
-	return kstrtou64(buffer, 10, &ir_timeout);
+	time64_t val;
+	int rc;
+
+	rc = kstrtos64(buffer, 10, &val);
+	if (rc)
+		return rc;
+
+	if (val < 0)
+		return -EINVAL;
+
+	ir_timeout = val;
+
+	return count;
 }
 
 /* --------------- Handle non IR support clients --------------- */
