@@ -736,6 +736,7 @@ struct obd_device {
 	time64_t		obd_osfs_age;
 	__u64			obd_last_committed;
 	struct mutex		obd_dev_mutex;
+	struct mutex		obd_statfs_nodelay_mutex;
 	struct lvfs_run_ctxt	obd_lvfs_ctxt;
 	struct obd_llog_group	obd_olg;	/* default llog group */
 	struct obd_device	*obd_observer;

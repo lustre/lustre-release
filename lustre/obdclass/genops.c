@@ -384,6 +384,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name,
 	spin_lock_init(&newdev->obd_nid_lock);
 	spin_lock_init(&newdev->obd_dev_lock);
 	mutex_init(&newdev->obd_dev_mutex);
+	mutex_init(&newdev->obd_statfs_nodelay_mutex);
 	spin_lock_init(&newdev->obd_osfs_lock);
 	/* newdev->obd_osfs_age must be set to a value in the distant
 	 * past to guarantee a fresh statfs is fetched on mount.

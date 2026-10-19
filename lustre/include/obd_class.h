@@ -46,7 +46,7 @@
 					 * information from MDT0. */
 #define OBD_STATFS_SUM		0x0008	/* get aggregated statfs from MDT */
 #define OBD_STATFS_NESTED	0x0010	/* Call while already holding
-					 * obd_dev_mutex of a difference
+					 * the statfs mutex of a different
 					 * device.
 					 */
 
@@ -1088,6 +1088,7 @@ static inline int obd_statfs(const struct lu_env *env, struct obd_export *exp,
 			     __u32 flags)
 {
 	struct obd_device *obd;
+	struct mutex *statfs_mutex;
 	int rc = 0;
 
 	ENTRY;
@@ -1111,8 +1112,14 @@ static inline int obd_statfs(const struct lu_env *env, struct obd_export *exp,
 	if (obd->obd_osfs_age < max_age ||
 	    ((obd->obd_osfs.os_state & OS_STATFS_SUM) &&
 	     !(flags & OBD_STATFS_SUM))) {
-		/* the RPC will block anyway, so avoid sending many at once */
-		rc = mutex_lock_interruptible_nested(&obd->obd_dev_mutex,
+		/* The RPC will block anyway, so avoid sending many at once.
+		 * A blocking RPC waits for recovery while the target is down,
+		 * so no-delay callers must not wait behind one.
+		 */
+		statfs_mutex = flags & OBD_STATFS_NODELAY ?
+			       &obd->obd_statfs_nodelay_mutex :
+			       &obd->obd_dev_mutex;
+		rc = mutex_lock_interruptible_nested(statfs_mutex,
 						     (flags & OBD_STATFS_NESTED)
 						     ? SINGLE_DEPTH_NESTING : 0);
 		if (rc)
@@ -1124,7 +1131,7 @@ static inline int obd_statfs(const struct lu_env *env, struct obd_export *exp,
 								 max_age,
 								 flags);
 		} else {
-			mutex_unlock(&obd->obd_dev_mutex);
+			mutex_unlock(statfs_mutex);
 			GOTO(cached, rc = 0);
 		}
 		if (rc == 0) {
@@ -1139,7 +1146,7 @@ static inline int obd_statfs(const struct lu_env *env, struct obd_export *exp,
 			obd->obd_osfs_age = ktime_get_seconds();
 			spin_unlock(&obd->obd_osfs_lock);
 		}
-		mutex_unlock(&obd->obd_dev_mutex);
+		mutex_unlock(statfs_mutex);
 	} else {
 cached:
 		CDEBUG(D_SUPER,

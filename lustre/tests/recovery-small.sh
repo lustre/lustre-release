@@ -2541,6 +2541,38 @@ test_115g() {
 }
 run_test 115g "read: late REQ MDunlink and Reply MDunlink"
 
+test_116() {
+	local tgt=$(ostname_from_index 0)
+	local start pid
+
+	stop ost1 || error "stop ost1 failed"
+	stack_trap "facet_up ost1 || start ost1 $(ostdevname 1) $OST_MOUNT_OPTS;
+		    wait_osc_import_ready client ost1"
+	# the statfs cache is valid for 1s and would hide the blocked RPC
+	sleep 2
+
+	# a plain "lfs df" waits for OST0000 to recover
+	$LFS df $MOUNT > /dev/null &
+	pid=$!
+	stack_trap "kill -9 $pid 2> /dev/null || true"
+	wait_osc_import_state client ost1 "\(DISCONN\|CONNECTING\)"
+	kill -0 $pid || error "'lfs df' did not wait for $tgt"
+
+	start=$SECONDS
+	timeout 60 $LFS df -l $MOUNT
+	(( SECONDS - start < 10 )) ||
+		error "'lfs df -l' waited $((SECONDS - start))s for 'lfs df'"
+
+	start=$SECONDS
+	timeout 60 $LCTL get_param osc.$tgt-osc-[-0-9a-f]*.kbytesfree
+	(( SECONDS - start < 10 )) ||
+		error "kbytesfree waited $((SECONDS - start))s for 'lfs df'"
+
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS || error "start ost1 failed"
+	wait $pid || error "'lfs df' failed after $tgt recovered"
+}
+run_test 116 "no-delay statfs does not wait for a blocked statfs"
+
 # parameters: fail_loc CMD RC
 test_120_reply() {
 	local PID
