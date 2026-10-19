@@ -44,8 +44,12 @@ NFS_SUITE   = "parallel-scale-nfs"
 NFS_TARGETS = [ "parallel-scale-nfsv3", "parallel-scale-nfsv4" ]
 
 ALWAYS_TEST_PREFIXES  = [ "contrib/lbuild/" ]
-NON_TESTABLE_PREFIXES = [ "Documentation/", "LICENSES/", "contrib/" ]
-NON_TESTABLE_EXACT    = [ "lustre/ChangeLog" ]
+NON_TESTABLE_PREFIXES = [ "Documentation/", "LICENSES/", "contrib/", ".agents/", ".claude/",
+                          "rustreapi/" ]
+NON_TESTABLE_SUFFIXES = [ ".md" ]
+NON_TESTABLE_NAMES    = [ "ChangeLog", "README", ".gitignore" ]
+NON_TESTABLE_EXACT    = [ ".editorconfig", ".gitreview", ".mailmap", "COPYING", "MAINTAINERS",
+                          "Vagrantfile", "requirements.txt" ]
 
 
 def run(argv):
@@ -192,6 +196,8 @@ def only_non_testable_paths(affected):
         if any(path.startswith(p) for p in ALWAYS_TEST_PREFIXES):
             return False
         if path not in NON_TESTABLE_EXACT and \
+                os.path.basename(path) not in NON_TESTABLE_NAMES and \
+                not path.endswith(tuple(NON_TESTABLE_SUFFIXES)) and \
                 not any(path.startswith(p) for p in NON_TESTABLE_PREFIXES):
             return False
     return True
