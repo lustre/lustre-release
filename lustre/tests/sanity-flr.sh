@@ -2562,6 +2562,34 @@ test_44f() {
 }
 run_test 44f "lfs mirror split does not leak the victim file descriptor"
 
+test_44i() {
+	local tf=$DIR/$tdir/$tfile
+	local blocks
+
+	(( $MDS1_VERSION >= $(version_code v2_15_50-155-ga3f1c4622a) )) ||
+		skip "Need MDS version >= 2.15.50.155 for SOM tunable"
+
+	test_mkdir $DIR/$tdir
+	$LFS mirror create -N2 $tf || error "create mirrored file $tf failed"
+	stack_trap "rm -f $tf"
+	dd if=/dev/urandom of=$tf bs=1M count=1 conv=fsync ||
+		error "dd write $tf failed"
+	$LFS mirror resync $tf || error "mirror resync $tf failed"
+
+	# cache the strict SOM size and blocks with the MDS UPDATE lock
+	stat $tf > /dev/null || error "stat $tf failed"
+
+	# the write revokes the UPDATE lock, so the strict SOM blocks must
+	# not be trusted at fdatasync(), and close() sends the new blocks
+	dd if=/dev/urandom of=$tf bs=1M count=3 seek=1 conv=notrunc,fdatasync ||
+		error "dd extend $tf failed"
+	$LFS getsom $tf
+	blocks=$($LFS getsom -b $tf)
+	(( blocks >= 4 * 1024 * 1024 / 512 )) ||
+		error "SOM blocks $blocks after writing 4MiB, stale strict SOM?"
+}
+run_test 44i "strict SOM is not trusted after the file is written"
+
 test_45() {
 	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
 

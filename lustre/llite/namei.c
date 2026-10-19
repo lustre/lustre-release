@@ -311,8 +311,14 @@ static void ll_lock_cancel_bits(struct ldlm_lock *lock,
 
 	lli = ll_i2info(inode);
 
-	if (bits & MDS_INODELOCK_UPDATE)
+	if (bits & MDS_INODELOCK_UPDATE) {
 		set_bit(LLIF_UPDATE_ATIME, &lli->lli_flags);
+		/* a strict SOM size and blocks from the MDS are only valid
+		 * under this lock, which a writer revokes before it changes
+		 * the file, so do not trust them after it is cancelled
+		 */
+		lli->lli_attr_valid &= ~(OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
+	}
 
 	if ((bits & MDS_INODELOCK_UPDATE) && S_ISDIR(inode->i_mode)) {
 		CDEBUG(D_INODE, "invalidating inode "DFID" lli = %p, pfid  = "
