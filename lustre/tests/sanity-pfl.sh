@@ -2662,7 +2662,9 @@ test_27() {
 run_test 27 "overstriping with -C -1 in mdt_dump_lmm"
 
 test_28() { # LU-19519
-	[ $OSTCOUNT -lt 2 ] && skip "needs >= 2 OSTs"
+	(( OSTCOUNT >= 2 )) || skip "needs >= 2 OSTs"
+	(( $MDS1_VERSION >= $(version_code v2_17_53-25-gd2aaf9d4c4) )) ||
+		skip "need MDS >= 2.17.53.25 for uninit comp migration"
 
 	local file=$DIR/$tdir/$tfile
 	local pool="testpool"
@@ -2698,7 +2700,7 @@ test_28() { # LU-19519
 	# Get the stripe offset of the uninitialized component
 	local comp2_ost=$($LFS getstripe -I2 -i $file)
 	echo "Uninitialized component 2 has stripe offset: $comp2_ost"
-	[[ $comp2_ost -eq 1 ]] ||
+	(( comp2_ost == 1 )) ||
 		error "expected comp2 on OST1, got OST$comp2_ost"
 
 	# Now remove OST1 from the pool, making the uninitialized
@@ -2720,12 +2722,12 @@ test_28() { # LU-19519
 
 	# Verify the file is now a plain layout (component count should be 0)
 	local comp_count=$($LFS getstripe --component-count $file)
-	[[ $comp_count -eq 0 ]] ||
+	(( comp_count == 0 )) ||
 		error "expected plain layout, got $comp_count components"
 
 	# Verify data integrity
 	local size=$(stat -c%s $file)
-	[[ $size -eq 524288 ]] ||
+	(( size == 524288 )) ||
 		error "file size changed: expected 524288, got $size"
 }
 run_test 28 "migrate PFL file with uninitialized component on invalid OST"
