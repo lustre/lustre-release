@@ -798,9 +798,15 @@ static int lod_check_and_reserve_ost(const struct lu_env *env,
 		RETURN(rc);
 	}
 
-	/* do not put >1 objects on a single OST, except for overstriping */
+	/*
+	 * do not put >1 objects on a single OST, except for overstriping.
+	 * EC components reuse OSTs only in lod_ec_add_data() and
+	 * lod_ec_add_parities(), which keep each raid set on distinct OSTs
+	 * as long as the stripes placed here are.
+	 */
 	if (lod_qos_is_tgt_used(env, ost_idx, stripe_idx)) {
-		if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING)
+		if (lod_comp->llc_pattern & LOV_PATTERN_OVERSTRIPING &&
+		    !lod_comp->llc_cstripe_count)
 			*overstriped = true;
 		else
 			RETURN(rc);
