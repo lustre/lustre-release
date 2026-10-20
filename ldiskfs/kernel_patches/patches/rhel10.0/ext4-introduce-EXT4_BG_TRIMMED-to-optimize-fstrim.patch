@@ -212,7 +212,7 @@ Index: linux-6.12.0-55.27.1.el10_0/fs/ext4/mballoc.c
  	last = ext4_last_grp_cluster(sb, e4b->bd_group);
  	bitmap = e4b->bd_bitmap;
  	if (start == 0 && max >= last)
-@@ -7110,8 +7129,50 @@ __releases(ext4_group_lock_ptr(sb, e4b->
+@@ -7110,8 +7129,52 @@ __releases(ext4_group_lock_ptr(sb, e4b->
  			break;
  	}
  
@@ -240,8 +240,10 @@ Index: linux-6.12.0-55.27.1.el10_0/fs/ext4/mballoc.c
 +
 +		ext4_lock_group(sb, e4b->bd_group);
 +		/* someone freed more blocks after we unlocked the group */
-+		if (freed_last_trimmed_orig != e4b->bd_info->bb_freed_since_trim)
++		if (freed_last_trimmed_orig != e4b->bd_info->bb_freed_since_trim) {
++			ext4_unlock_group(sb, e4b->bd_group);
 +			goto out_journal;
++		}
 +		e4b->bd_info->bb_freed_since_trim = 0;
 +		gdp->bg_flags |= cpu_to_le16(EXT4_BG_TRIMMED);
 +		ext4_group_desc_csum_set(sb, e4b->bd_group, gdp);
@@ -265,7 +267,7 @@ Index: linux-6.12.0-55.27.1.el10_0/fs/ext4/mballoc.c
  
  	return count;
  }
-@@ -7135,10 +7196,15 @@ ext4_trim_all_free(struct super_block *s
+@@ -7135,10 +7198,15 @@ ext4_trim_all_free(struct super_block *s
  		   ext4_grpblk_t minblocks)
  {
  	struct ext4_buddy e4b;
@@ -281,7 +283,7 @@ Index: linux-6.12.0-55.27.1.el10_0/fs/ext4/mballoc.c
  	ret = ext4_mb_load_buddy(sb, group, &e4b);
  	if (ret) {
  		return ret;
-@@ -7146,7 +7212,7 @@ ext4_trim_all_free(struct super_block *s
+@@ -7146,7 +7214,7 @@ ext4_trim_all_free(struct super_block *s
  
  	ext4_lock_group(sb, group);
  
