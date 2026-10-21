@@ -1159,6 +1159,11 @@ test_1h() {
 	[ $used -eq 0 ] || quota_error u $TSTUSR \
 		"user quota isn't released after deletion"
 
+	(( $OST1_VERSION >= $(version_code 2.16.61.1) )) || {
+		echo "Skip fallocate quota check, need OST 2.16.61.1 (LU-19018)"
+		return 0
+	}
+
 	$LFS setstripe -i 0 -c 1 $testdir || error "setstripe $testdir failed"
 
 	$RUNAS fallocate -l$((count + 2))MiB $testfile &&
@@ -1571,6 +1576,8 @@ test_1l() {
 	local tfile1=$DIR/$tdir/$tfile.1
 	local qdisk=30 # MB
 
+	(( $MDS1_VERSION >= $(version_code 2.17.50.132) )) ||
+		skip "need MDS 2.17.50.132 for LU-19791"
 	is_project_quota_supported ||
 		skip "skip project quota unsupported"
 
