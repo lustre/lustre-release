@@ -756,11 +756,11 @@ not_first:
 				((char *)data->buffer)[len++] = '\n';
 			}
 			data->buffer += len;
-			*size += len;
+			*size -= len;
 		} else if (len < 0) {
 unwind:
 			data->buffer -= data->indent + 2;
-			*size -= data->indent + 2;
+			*size += data->indent + 2;
 		}
 	}
 }
