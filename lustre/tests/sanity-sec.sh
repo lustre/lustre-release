@@ -9392,6 +9392,12 @@ test_66c() {
 	echo -n tail >> $tmpfile
 	size=$(stat -c %s $tmpfile)
 	cp $tmpfile $testfile || error "cp $testfile failed"
+	# migrate and mirror extend do not need unaligned DIO, which old
+	# servers do not support, also with pages larger than an encryption unit
+	local unaligned=$($LCTL get_param -n llite.*.unaligned_dio | head -n1)
+
+	stack_trap "$LCTL set_param llite.*.unaligned_dio=$unaligned"
+	$LCTL set_param llite.*.unaligned_dio=0
 	$LFS migrate -c 2 $testfile || error "migrate $testfile failed"
 	cancel_lru_locks
 	echo 3 > /proc/sys/vm/drop_caches
@@ -9400,6 +9406,7 @@ test_66c() {
 	cmp $tmpfile $testfile || error "migrated $testfile is corrupted"
 
 	$LFS mirror extend -N $testfile || error "mirror extend failed"
+	$LCTL set_param llite.*.unaligned_dio=$unaligned
 	cancel_lru_locks
 	echo 3 > /proc/sys/vm/drop_caches
 	(( $(stat -c %s $testfile) == size )) ||
@@ -9415,18 +9422,11 @@ test_66c() {
 		conv=notrunc || error "dd $testfile seek=10 failed"
 	$LFS mirror resync $testfile || error "mirror resync failed"
 	$LFS mirror verify $testfile || error "mirror verify failed"
-	# verify reads whole encryption units, which are pages here, so it
-	# does not need unaligned DIO, which old servers do not support
-	if (( $(getconf PAGE_SIZE) == 4096 )); then
-		local unaligned=$($LCTL get_param -n llite.*.unaligned_dio |
-				  head -n1)
-
-		stack_trap "$LCTL set_param llite.*.unaligned_dio=$unaligned"
-		$LCTL set_param llite.*.unaligned_dio=0
-		$LFS mirror verify $testfile ||
-			error "verify without unaligned DIO failed"
-		$LCTL set_param llite.*.unaligned_dio=$unaligned
-	fi
+	# verify reads whole pages, so it does not need unaligned DIO either
+	$LCTL set_param llite.*.unaligned_dio=0
+	$LFS mirror verify $testfile ||
+		error "verify without unaligned DIO failed"
+	$LCTL set_param llite.*.unaligned_dio=$unaligned
 	cancel_lru_locks
 	echo 3 > /proc/sys/vm/drop_caches
 	(( $(stat -c %s $testfile) == size )) ||

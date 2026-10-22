@@ -898,6 +898,7 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 	off_t pos = 0;
 	off_t data_end = 0;
 	ssize_t page_size;
+	bool pad_tail;
 	bool sparse;
 	int rc;
 	size_t write_bytes = 0;
@@ -937,6 +938,14 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 	if (rc != 0)
 		return -rc;
 	(void)mlock(buf, buf_size);
+
+	/* the ciphertext of an encrypted file ends at the end of an
+	 * encryption unit, which may not end a page, so round up the last
+	 * direct write, as llapi_mirror_copy() does.  The size of the
+	 * volatile file is set from the file afterward.
+	 */
+	pad_tail = fcntl(fd_dst, F_GETFL) & O_DIRECT &&
+		   llapi_file_is_encrypted(fd_src) > 0;
 
 	sparse = llapi_file_is_sparse(fd_src);
 	if (sparse) {
@@ -1007,6 +1016,10 @@ static int migrate_copy_data(int fd_src, int fd_dst, int (*check_file)(int),
 			break;
 
 		to_write = rsize;
+		if (pad_tail && !IS_ALIGNED(rsize, page_size)) {
+			to_write = round_up(rsize, page_size);
+			memset(buf + rsize, 0, to_write - rsize);
+		}
 		while (to_write > 0) {
 			ssize_t written;
 
@@ -16202,7 +16215,7 @@ int lfs_mirror_verify_chunk(int fd, size_t file_size,
 {
 	const size_t buflen = DEFAULT_IO_BUFLEN;
 	void *buf;
-	size_t page_size;
+	ssize_t page_size;
 	ssize_t bytes_read;
 	ssize_t bytes_done;
 	size_t count;
@@ -16215,18 +16228,19 @@ int lfs_mirror_verify_chunk(int fd, size_t file_size,
 	if (file_size == 0)
 		return 0;
 
-	/* read the ciphertext of an encrypted file in whole units, as the
-	 * clear text size with the key may end within the last one
-	 */
-	if (llapi_file_is_encrypted(fd) > 0)
-		file_size = (file_size + LUSTRE_ENCRYPTION_UNIT_SIZE - 1) &
-			    LUSTRE_ENCRYPTION_MASK;
-
 	page_size = sysconf(_SC_PAGESIZE);
 	if (page_size < 0) {
 		rc = -errno;
 		return rc;
 	}
+
+	/* read the ciphertext of an encrypted file in whole pages, as the
+	 * clear text size with the key may end within the last encryption
+	 * unit, so it does not need unaligned DIO.  The read stops at the
+	 * end of that unit.
+	 */
+	if (llapi_file_is_encrypted(fd) > 0)
+		file_size = round_up(file_size, page_size);
 
 	rc = posix_memalign(&buf, page_size, buflen);
 	if (rc) /* error code is returned directly */
