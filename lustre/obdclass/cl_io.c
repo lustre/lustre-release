@@ -896,12 +896,15 @@ int cl_io_loop(const struct lu_env *env, struct cl_io *io)
 	if (rc && !result)
 		result = rc;
 
-	if (result == -EAGAIN && io->ci_ndelay && !io->ci_iocb_nowait) {
-		if (!io->ci_tried_all_mirrors) {
+	/* ci_ndelay is cleared once all mirrors were tried, so check that
+	 * first, or an -EAGAIN of that round would reach the caller
+	 */
+	if (result == -EAGAIN && !io->ci_iocb_nowait) {
+		if (io->ci_tried_all_mirrors) {
+			result = -EIO;
+		} else if (io->ci_ndelay) {
 			io->ci_need_restart = 1;
 			result = 0;
-		} else {
-			result = -EIO;
 		}
 	}
 

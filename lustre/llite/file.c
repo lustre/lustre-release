@@ -2449,9 +2449,10 @@ out:
 		       acct_iot == CIT_READ ? "read" : "write",
 		       *ppos, bytes, retries, result, rc);
 		/* preserve the tried count for FLR and the decision to
-		 * restart as an EC recovery read
+		 * restart as an EC recovery read. A restart that moved data
+		 * is no mirror failure, so FLR counts from zero again
 		 */
-		retried = io->ci_ndelay_tried;
+		retried = io->ci_bytes ? 0 : io->ci_ndelay_tried;
 		switch_ec = io->ci_switch_ec_io;
 		dio_lock = io->ci_dio_lock;
 		goto restart;

@@ -865,6 +865,13 @@ ndelay_retry:
 		 */
 		io->ci_tried_all_mirrors = io->ci_ndelay_tried %
 					   (comp->lo_mirror_count * 4) == 0;
+		/* wait for the OSTs in this round, as for one mirror. EC
+		 * decides on its own when to wait, a non-delay stripe that
+		 * fails is rebuilt from parity
+		 */
+		if (io->ci_tried_all_mirrors && io->ci_type != CIT_EC_RD &&
+		    !io->ci_cross_ec)
+			io->ci_ndelay = 0;
 
 		/* if the read crosses possible erasure code, we'd change
 		 * to CIT_EC_RD trying to recover data from parity objects.

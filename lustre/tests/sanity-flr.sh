@@ -1545,6 +1545,54 @@ test_33c() {
 }
 run_test 33c "keep reading among unhealthy mirrors"
 
+test_33f() {
+	(( $OSTCOUNT >= 2 )) || skip "need >= 2 OSTs"
+
+	local tf=$DIR/$tfile
+	local p="$TMP/$TESTSUITE-$TESTNAME.parameters"
+	local sum
+	local pid
+	local i
+
+	stack_trap "rm -f $tf $TMP/$tfile.md5"
+	# an idle import would not notice that the OSTs are away
+	save_lustre_params client "osc.$FSNAME-*.idle_timeout" > $p
+	stack_trap "restore_lustre_params < $p; rm -f $p"
+	$LCTL set_param osc.$FSNAME-*.idle_timeout=0
+
+	# mirror 1 on OST0000, mirror 2 on OST0001, both in sync
+	$LFS setstripe -N -Eeof -o0 -N -Eeof -o1 $tf ||
+		error "setstripe $tf failed"
+	dd if=/dev/urandom of=$tf bs=1M count=4 || error "write $tf failed"
+	$LFS mirror resync $tf || error "resync $tf failed"
+	verify_flr_state $tf "ro"
+	sync
+	sum=$(md5sum < $tf)
+	cancel_lru_locks osc
+	drop_client_cache
+
+	# no mirror can serve the read: it waits as for a file with one mirror.
+	# Not stop_osts: with both OSTs away the imports stay in CONNECTING.
+	# The read starts once the client knows the OSTs are away, when its
+	# non-delay RPCs fail at once
+	stack_trap "facet_up ost1 || start ost1 $(ostdevname 1) $OST_MOUNT_OPTS"
+	stack_trap "facet_up ost2 || start ost2 $(ostdevname 2) $OST_MOUNT_OPTS"
+	stop ost1 || error "stop ost1 failed"
+	stop ost2 || error "stop ost2 failed"
+	for i in 1 2; do
+		wait_osc_import_state client ost$i "\(CONNECTING\|DISCONN\)"
+	done
+	md5sum < $tf > $TMP/$tfile.md5 &
+	pid=$!
+	# without the fix the read fails within a second
+	sleep 3
+	kill -0 $pid || { wait $pid; error "read did not wait for the OSTs"; }
+	start_osts 1 2
+	wait $pid || error "read of $tf failed"
+	[[ "$(cat $TMP/$tfile.md5)" == "$sum" ]] || error "$tf content differs"
+}
+run_test 33f "read waits when no mirror is available"
+
 test_34a() {
 	(( $OSTCOUNT >= 4 )) || skip "need >= 4 OSTs"
 
