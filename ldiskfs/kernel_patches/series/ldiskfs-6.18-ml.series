@@ -11,7 +11,7 @@ linux-6.5/ext4-mballoc-pa-free-mismatch.patch
 linux-6.18/ext4-dir-entry-len.patch
 linux-6.18/ext4-dirdata-core.patch
 linux-6.18/ext4-dirdata-lustre-compat.patch
-linux-6.6/ext4-nocmtime.patch
+linux-6.7/ext4-nocmtime.patch
 base/ext4-htree-lock.patch
 linux-6.15/ext4-pdirop.patch
 linux-6.10/ext4-max-dir-size.patch

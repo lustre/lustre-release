@@ -1,0 +1,65 @@
+commit d2c828a32a3b019194051ee24607eafee517cc43
+Author:     Niu Yawei <yawei.niu@intel.com>
+AuthorDate: Mon Feb 9 22:21:00 2015 -0500
+LU-6137 ldiskfs: simplify nocmtime patch
+
+Simplify the nocmtime patch by patching only ext4_current_time(),
+this fixed the defect that original patch doesn't handle setacl
+code path, it can also avoid the risk of future changes adding
+new places that needs to be fixed.
+
+Remove the obsolete xattr-no-update-ctime patch.
+
+Signed-off-by: Niu Yawei <yawei.niu@intel.com>
+Change-Id: I02928c4f867e9476f0bc1815dd3256e3d79dadf7
+Reviewed-on: http://review.whamcloud.com/13705
+Reviewed-by: Bobi Jam <bobijam@hotmail.com>
+Reviewed-by: Bob Glossman <bob.glossman@intel.com>
+Reviewed-by: Fan Yong <fan.yong@intel.com>
+Signed-off-by: Anreas Dilger <andreas.dilger@intel.com>
+
+LU-21019 ldiskfs: don't change mtime in truncate if NOCMTIME
+
+ext4_truncate() sets mtime and ctime together from current_time(),
+which returns the ctime of a NOCMTIME inode, so it copies the ctime
+into the mtime. Lustre sets the times of its inodes itself: skip the
+update in ext4_truncate() for NOCMTIME inodes.
+---
+ fs/ext4/ext4.h  | 9 +++++++++
+ fs/ext4/inode.c | 3 ++-
+ 2 files changed, 11 insertions(+), 1 deletion(-)
+
+diff --git a/fs/ext4/ext4.h b/fs/ext4/ext4.h
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -985,6 +985,15 @@ enum {
+ 	I_DATA_SEM_EA
+ };
+ 
++static inline struct timespec64 ext4_current_time(struct inode *inode)
++{
++	if (IS_NOCMTIME(inode))
++		return inode_get_ctime(inode);
++	return current_time(inode);
++}
++#define current_time(a) ext4_current_time(a)
++#define inode_set_ctime_current(i) \
++	 inode_set_ctime_to_ts((i), current_time((i)))
+ 
+ /*
+  * fourth extended file system inode data in memory
+diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -4188,7 +4188,8 @@ int ext4_truncate(struct inode *inode)
+ 	if (inode->i_nlink)
+ 		ext4_orphan_del(handle, inode);
+ 
+-	inode_set_mtime_to_ts(inode, inode_set_ctime_current(inode));
++	if (!IS_NOCMTIME(inode))
++		inode_set_mtime_to_ts(inode, inode_set_ctime_current(inode));
+ 	err2 = ext4_mark_inode_dirty(handle, inode);
+ 	if (unlikely(err2 && !err))
+ 		err = err2;
+-- 
+

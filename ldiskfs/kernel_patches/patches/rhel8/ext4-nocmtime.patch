@@ -18,6 +18,13 @@ Reviewed-by: Bob Glossman <bob.glossman@intel.com>
 Reviewed-by: Fan Yong <fan.yong@intel.com>
 Signed-off-by: Andreas Dilger <andreas.dilger@intel.com>
 
+LU-21019 ldiskfs: don't change mtime in truncate if NOCMTIME
+
+ext4_truncate() sets mtime and ctime together from current_time(),
+which returns the ctime of a NOCMTIME inode, so it copies the ctime
+into the mtime. Lustre sets the times of its inodes itself: skip the
+update in ext4_truncate() for NOCMTIME inodes.
+
 Index: linux-4.18.0-32.el8.x86_64/fs/ext4/ext4.h
 ===================================================================
 --- linux-4.18.0-32.el8.x86_64.orig/fs/ext4/ext4.h
@@ -36,3 +43,17 @@ Index: linux-4.18.0-32.el8.x86_64/fs/ext4/ext4.h
  
  #if defined(__KERNEL__) && defined(CONFIG_COMPAT)
  /*
+Index: linux-4.18.0-32.el8.x86_64/fs/ext4/inode.c
+===================================================================
+--- linux-4.18.0-32.el8.x86_64.orig/fs/ext4/inode.c
++++ linux-4.18.0-32.el8.x86_64/fs/ext4/inode.c
+@@ -4581,7 +4581,8 @@ int ext4_truncate(struct inode *inode)
+ 	if (inode->i_nlink)
+ 		ext4_orphan_del(handle, inode);
+ 
+-	inode->i_mtime = inode->i_ctime = current_time(inode);
++	if (!IS_NOCMTIME(inode))
++		inode->i_mtime = inode->i_ctime = current_time(inode);
+ 	ext4_mark_inode_dirty(handle, inode);
+ 	ext4_journal_stop(handle);
+ 

@@ -3398,6 +3398,50 @@ test_61c() { # LU-14508
 }
 run_test 61c "mirror resync preserves timestamps"
 
+test_61d() {
+	local file=$DIR/$tdir/$tfile
+	local -a tim
+	local f
+
+	(( $MDS1_VERSION >= $(version_code 2.17.60.1) )) ||
+		skip "need MDS >= 2.17.60.1 to keep times across DoM punch"
+
+	mkdir -p $DIR/$tdir
+	stack_trap "rm -f $file $file-2"
+	for f in $file $file-2; do
+		$LFS setstripe -E 64K -L mdt -E eof -c 1 $f ||
+			error "setstripe $f failed"
+		dd if=/dev/urandom of=$f bs=128K count=1 ||
+			error "write $f failed"
+		touch -d "2020-01-01 12:00" $f || error "touch $f failed"
+	done
+	tim=( $(get_times_61 $file) )
+
+	echo "mirror extend $tfile without DoM and test timestamps"
+	$LFS mirror extend -N -c 1 $file || error "cannot extend mirror $file"
+	check_times_61 $file "${tim[@]}"
+
+	# the split punches the DoM data of mirror 1 on the MDT
+	echo "mirror split the DoM mirror off $tfile and test timestamps"
+	$LFS mirror split -d --mirror-id=1 $file ||
+		error "cannot split mirror 1 off $file"
+	! $LFS getstripe $file | grep -q "lmm_pattern:.*mdt" ||
+		error "$file still has a DoM component after the split"
+	cancel_lru_locks mdc
+	check_times_61 $file "${tim[@]}"
+
+	# the layout swap of a migrate off DoM punches the DoM data too
+	file=$DIR/$tdir/$tfile-2
+	tim=( $(get_times_61 $file) )
+	echo "migrate $tfile-2 off DoM and test timestamps"
+	$LFS migrate -c 1 $file || error "cannot migrate $file"
+	! $LFS getstripe $file | grep -q "lmm_pattern:.*mdt" ||
+		error "$file still has a DoM component after the migrate"
+	cancel_lru_locks mdc
+	check_times_61 $file "${tim[@]}"
+}
+run_test 61d "DoM mirror split and migrate off DoM preserve timestamps"
+
 test_62() {
 	local file=$DIR/$tdir/$tfile
 
