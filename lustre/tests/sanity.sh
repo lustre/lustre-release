@@ -34371,12 +34371,14 @@ test_401dc() {
 	local old_at_max=$($LCTL get_param -n at_max)
 	local new_at_max=$((old_at_max + 10))
 
-	stack_trap "do_facet mgs $LCTL set_param -P -d time=10 || true" EXIT
-	stack_trap "do_facet mgs $LCTL set_param -P -d at_hist=10 || true" EXIT
-	stack_trap "do_facet mgs $LCTL set_param -P -d =10 || true" EXIT
-	stack_trap "do_facet mgs $LCTL conf_param -d $FSNAME.sys.= || true" EXIT
-	stack_trap "do_facet mgs $LCTL set_param -P at_max=$old_at_max ||
-		true" EXIT
+	stack_trap "do_facet mgs $LCTL set_param -P -d time=10 || true"
+	stack_trap "do_facet mgs $LCTL set_param -P -d at_hist=10 || true"
+	stack_trap "do_facet mgs $LCTL set_param -P -d =10 || true"
+	stack_trap "do_facet mgs $LCTL conf_param -d $FSNAME.sys.= || true"
+	# delete at_max record first then restore, so later tests do not see it
+	stack_trap "do_nodes $(all_nodes) $LCTL set_param at_max=$old_at_max ||
+		true"
+	stack_trap "do_facet mgs $LCTL set_param -P -d at_max || true"
 
 	# "time" is a prefix of "timeout" and "at_hist" of "at_history", so
 	# these names must not match (and overwrite) the longer attribute.
