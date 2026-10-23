@@ -1157,6 +1157,7 @@ static int llog_osd_next_block(const struct lu_env *env,
 	while (*cur_offset < lgi->lgi_attr.la_size) {
 		struct llog_rec_hdr	*rec, *last_rec;
 		struct llog_rec_tail	*tail;
+		int rbuf_len;
 
 		llog_skip_over(loghandle, cur_offset, *cur_idx,
 			       next_idx, chunk_size, force_mini_rec);
@@ -1165,6 +1166,7 @@ static int llog_osd_next_block(const struct lu_env *env,
 		lgi->lgi_buf.lb_len = chunk_size -
 				      (*cur_offset & (chunk_size - 1));
 		lgi->lgi_buf.lb_buf = buf;
+		rbuf_len = lgi->lgi_buf.lb_len;
 
 		rc = dt_read(env, o, &lgi->lgi_buf, cur_offset);
 		if (rc < 0) {
@@ -1273,6 +1275,12 @@ static int llog_osd_next_block(const struct lu_env *env,
 			GOTO(out, rc = -EINVAL);
 		}
 		if (tail->lrt_index < next_idx) {
+			/* a short read hit the real end of the llog, which can
+			 * be before the cached size of a remote llog, and
+			 * llog_skip_over() would return to this same block
+			 */
+			if (rc < rbuf_len)
+				GOTO(out, rc = -EBADR);
 			last_idx = *cur_idx;
 			last_offset = *cur_offset;
 			continue;
