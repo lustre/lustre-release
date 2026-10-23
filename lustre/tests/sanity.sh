@@ -16961,6 +16961,44 @@ test_119s() {
 }
 run_test 119s "full-size unaligned DIO packs matching bulk MDs"
 
+test_119t() {
+	[ $PARALLEL == "yes" ] && skip "skip parallel run"
+	losetup --help 2>&1 | grep -q direct-io ||
+		skip_env "losetup does not support --direct-io"
+
+	local tmp=$TMP/$tfile
+	local loopdev
+
+	stack_trap "rm -f $tmp $tmp.read $tmp.new"
+	$LFS setstripe -c $OSTCOUNT -S 1M $DIR/$tfile ||
+		error "setstripe $DIR/$tfile failed"
+	dd if=/dev/urandom of=$tmp bs=1M count=8 status=none ||
+		error "dd to $tmp failed"
+	dd if=$tmp of=$DIR/$tfile bs=1M oflag=direct status=none ||
+		error "dd to $DIR/$tfile failed"
+	$CHECKSTAT -s $((8 << 20)) $DIR/$tfile ||
+		error "$DIR/$tfile size is not 8 MiB"
+
+	loopdev=$(losetup -f --show --direct-io=on $DIR/$tfile) ||
+		skip_env "cannot set up a loop device on $DIR/$tfile"
+	stack_trap "losetup -d $loopdev"
+	[[ $(cat /sys/block/${loopdev#/dev/}/loop/dio) == 1 ]] ||
+		skip_env "direct I/O not enabled on $loopdev"
+
+	dd if=$loopdev of=$tmp.read bs=1M count=8 iflag=direct status=none ||
+		error "dd read from $loopdev failed"
+	cmp $tmp $tmp.read || error "data read through $loopdev differs"
+
+	dd if=/dev/urandom of=$tmp.new bs=1M count=8 status=none ||
+		error "dd to $tmp.new failed"
+	dd if=$tmp.new of=$loopdev bs=1M count=8 oflag=direct status=none ||
+		error "dd write to $loopdev failed"
+	cancel_lru_locks osc
+	cmp $tmp.new $DIR/$tfile ||
+		error "data written through $loopdev differs"
+}
+run_test 119t "DIO through a direct-io loop device (ITER_BVEC)"
+
 test_120a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"
 	remote_mds_nodsh && skip "remote MDS with nodsh"

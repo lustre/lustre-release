@@ -139,6 +139,7 @@ static ssize_t ll_get_iov_memory(struct cl_io *io, int rw,
 				 size_t maxsize)
 {
 	struct page **pages = NULL;
+	size_t count = iov_iter_count(iter);
 	ssize_t bytes;
 	size_t start;
 	unsigned int maxpages = DIV_ROUND_UP(maxsize, PAGE_SIZE) + 1;
@@ -177,8 +178,7 @@ static ssize_t ll_get_iov_memory(struct cl_io *io, int rw,
 		}
 		cdp->cdp_folios = folios;
 
-		if (user_backed_iter(iter))
-			iov_iter_revert(iter, bytes);
+		iov_iter_revert(iter, count - iov_iter_count(iter));
 	} else {
 		kvfree(pages);
 		kvfree(cdp->cdp_pgno);
