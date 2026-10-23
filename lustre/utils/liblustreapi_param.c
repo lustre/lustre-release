@@ -25,6 +25,8 @@
 #include <lustre/lustreapi.h>
 #include "lustreapi_internal.h"
 
+#define PARAM_READ_CHUNK 65536
+
 /**
  * return the parameter's path for a specific device type or mountpoint
  *
@@ -211,20 +213,11 @@ int llapi_param_get_paths(const char *pattern, glob_t *paths)
 static int bytes_remaining(int fd, size_t *file_size)
 {
 	size_t bytes_read = 0;
-	long page_size;
-	char *temp_buf;
+	char temp_buf[PARAM_READ_CHUNK];
 	int rc = 0;
 
-	page_size = sysconf(_SC_PAGESIZE);
-	if (page_size < 0)
-		return -EINVAL;
-
-	temp_buf = malloc(page_size);
-	if (temp_buf == NULL)
-		return -ENOMEM;
-
 	while (1) {
-		ssize_t count = read(fd, temp_buf, page_size);
+		ssize_t count = read(fd, temp_buf, sizeof(temp_buf));
 
 		if (count == 0) {
 			*file_size = bytes_read;
@@ -238,7 +231,6 @@ static int bytes_remaining(int fd, size_t *file_size)
 		bytes_read += count;
 	}
 
-	free(temp_buf);
 	return rc;
 }
 
@@ -264,17 +256,10 @@ static int required_size(const char *path, size_t *file_size)
 static
 int copy_file_expandable(const char *path, char **buf, size_t *file_size)
 {
-	long page_size;
-	char *temp_buf;
+	char temp_buf[PARAM_READ_CHUNK];
 	FILE *fp;
 	int fd;
 	int rc = 0;
-
-	page_size = sysconf(_SC_PAGESIZE);
-	if (page_size < 0) {
-		rc = -errno;
-		goto out;
-	}
 
 	fp = open_memstream(buf, file_size);
 	if (!fp) {
@@ -288,14 +273,8 @@ int copy_file_expandable(const char *path, char **buf, size_t *file_size)
 		goto close_stream;
 	}
 
-	temp_buf = calloc(1, page_size);
-	if (!temp_buf) {
-		rc = -ENOMEM;
-		goto close_file;
-	}
-
 	while (1) {
-		ssize_t count = read(fd, temp_buf, page_size);
+		ssize_t count = read(fd, temp_buf, sizeof(temp_buf));
 
 		if (count == 0)
 			break;
@@ -310,8 +289,6 @@ int copy_file_expandable(const char *path, char **buf, size_t *file_size)
 		}
 	}
 
-	free(temp_buf);
-close_file:
 	close(fd);
 close_stream:
 	fclose(fp);
@@ -1301,16 +1278,13 @@ int llapi_param_get_value(const char *path, char **buf, size_t *buflen)
 	if (path == NULL || buflen == NULL)
 		rc = -EINVAL;
 	else if (buf == NULL)
+		/* no handle for buffer, just return required size */
 		rc = required_size(path, buflen);
-	/* handle for buffer, but no buffer
-	 * create a buffer of the required size
-	 */
 	else if (*buf == NULL)
+		/* handle for buffer but no buffer, alloc one of right size */
 		rc = copy_file_expandable(path, buf, buflen);
-	/* preallocated buffer given, attempt to copy
-	 * file to it, return file size if buffer too small
-	 */
 	else
+		/* try to copy into supplied buffer, return size if too small */
 		rc = copy_file_fixed(path, *buf, buflen);
 
 	errno = -rc;
