@@ -2511,7 +2511,7 @@ int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink)
 		debug_mask = D_WARNING;
 	if (req->rq_real_sent_ns)
 		real_sent = ktime_divns(req->rq_real_sent_ns, NSEC_PER_SEC);
-	/* this message is used in replay-single test_200, DO NOT MODIFY */
+	/* this message is used in recovery-small test_200, DO NOT MODIFY */
 	DEBUG_REQ(debug_mask, req, "Request sent has %s: [sent %lld/real %lld]",
 		  req->rq_net_err ? "failed due to network error" :
 		     ((real_sent == 0 ||

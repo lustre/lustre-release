@@ -1340,6 +1340,69 @@ test_33() { # LU-15935
 }
 run_test 33 "Check for OBD_INCOMPAT_MULTI_RPCS in last_rcvd after abort_recovery"
 
+test_200() {
+	(( CLIENTCOUNT >= 2 )) ||
+		skip "Need two or more clients, have $CLIENTCOUNT"
+
+	local clients=${CLIENTS//,/ }
+	local prev_client=${clients##* }
+	local client
+
+	echo "mount clients $CLIENTS ..."
+	zconf_mount_clients $CLIENTS $MOUNT
+	stack_trap "rm -f $DIR/${tfile}_*"
+
+	echo "Write/read files on $DIR ; clients $CLIENTS ... "
+	for client in $clients; do
+		do_node $client dd bs=1M count=10 if=/dev/zero \
+			of=$DIR/${tfile}_$client 2>/dev/null ||
+			error "dd failed on $client"
+	done
+
+	for client in $clients; do
+		do_node $prev_client dd if=$DIR/${tfile}_$client \
+			of=/dev/null 2>/dev/null ||
+			error "read ${tfile}_$client failed on $prev_client"
+		prev_client=$client
+	done
+}
+run_test 200 "check multi client t-f"
+
+test_201() {
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	(( CLIENTCOUNT >= 2 )) || skip "need >= 2 clients"
+	[[ $CLIENT1 != $CLIENT2 ]] || skip "clients must be on different nodes"
+	(( $MDS1_VERSION >= $(version_code 2.17.51.34) )) ||
+		skip "need MDS >= v2_17_51-34-gd78d9e52abe for ctime clamp"
+
+	local target_mtime
+	local mtime_after
+	local saved_date
+
+	test_mkdir $DIR/$tdir || error "failed to mkdir $DIR/$tdir"
+	touch $DIR/$tdir/$tfile
+
+	# Advance CLIENT2 clock so its touch sets ctime ahead
+	saved_date=$(do_node $CLIENT2 date +%s)
+	do_node $CLIENT2 date -s @$((saved_date + 5))
+	stack_trap "do_node $CLIENT2 date -s @\$(date +%s)" EXIT
+
+	do_node $CLIENT2 touch $MOUNT/$tdir/$tfile
+	do_node $CLIENT2 date -s @$(date +%s)
+
+	target_mtime=$(date -d "2020-01-01" +%s)
+
+	# Local client sets mtime; ctime < file's ctime from CLIENT2
+	touch -m -d @$target_mtime $DIR/$tdir/$tfile
+
+	cancel_lru_locks mdc
+	mtime_after=$(stat -c %Y $DIR/$tdir/$tfile)
+	[[ "$mtime_after" == "$target_mtime" ]] ||
+		error "mtime not updated: expected $target_mtime," \
+		      "got $mtime_after"
+}
+run_test 201 "setattr preserves mtime update despite inter-client clock skew"
+
 complete_test $SECONDS
 SLEEP=$((SECONDS - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP

@@ -1517,62 +1517,55 @@ run_test 33a "commit on sharing, cross crete/delete, 2 clients, benchmark"
 
 # commit on sharing tests
 test_33b() {
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-
-	[ $CLIENTCOUNT -ge 2 ] ||
-		{ skip "Need two or more clients, have $CLIENTCOUNT" &&
-								return 0; }
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh"
+	(( MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
 
 	local nfiles=${TEST33_NFILES:-10000}
 	local param_file=$TMP/$tfile-params
+	local mdtidx=1
+	local -a jbd_avg time_avg
+	local cos i jbd jbdold jbdnew elapsed avgjbd avgtime
 
 	save_lustre_params $(get_facets MDS) \
 		"mdt.*.commit_on_sharing" > $param_file
+	stack_trap "restore_lustre_params < $param_file; rm -f $param_file" EXIT
 
-	local COS
-	local jbdold
-	local jbdnew
-	local jbd
-	local MDTIDX=1
-
-	for COS in 0 1; do
-		do_facet $SINGLEMDS lctl set_param mdt.*.commit_on_sharing=$COS
+	for cos in 0 1; do
+		do_facet $SINGLEMDS $LCTL set_param mdt.*.commit_on_sharing=$cos
 		avgjbd=0
 		avgtime=0
 		for i in 1 2 3; do
-			do_node $CLIENT1 "$LFS mkdir -i $MDTIDX \
-					  $DIR1/$tdir-\\\$(hostname)-$i"
+			$LFS mkdir -i $mdtidx $DIR1/$tdir-$i
 
 			jbdold=$(print_jbd_stat)
 			echo "=== START createmany old: $jbdold transaction"
-			local elapsed=$(do_and_time "do_nodes $CLIENT1,$CLIENT2\
-				createmany -o $DIR1/$tdir-\\\$(hostname)-$i/f- \
-				-r$DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles > \
-								/dev/null 2>&1")
+			elapsed=$(do_and_time "do_node $CLIENT1 \
+				createmany -o $DIR1/$tdir-$i/f- \
+				-r$DIR2/$tdir-$i/f- $nfiles > /dev/null 2>&1")
 			jbdnew=$(print_jbd_stat)
-			jbd=$(( jbdnew - jbdold ))
-			echo "=== END   createmany new: $jbdnew transaction : \
-			$jbd transactions nfiles $nfiles time $elapsed COS=$COS"
-			avgjbd=$(( avgjbd + jbd ))
-			avgtime=$(( avgtime + elapsed ))
+			jbd=$((jbdnew - jbdold))
+			echo "=== END   createmany new: $jbdnew transaction :" \
+			     "$jbd transactions nfiles $nfiles time $elapsed" \
+			     "COS=$cos"
+			avgjbd=$((avgjbd + jbd))
+			avgtime=$((avgtime + elapsed))
 		done
-		eval cos${COS}_jbd=$((avgjbd / 3))
-		eval cos${COS}_time=$((avgtime / 3))
+		jbd_avg[cos]=$((avgjbd / 3))
+		time_avg[cos]=$((avgtime / 3))
 	done
 
-	echo "COS=0 transactions (avg): $cos0_jbd  time (avg): $cos0_time"
-	echo "COS=1 transactions (avg): $cos1_jbd  time (avg): $cos1_time"
-	[ "$cos0_jbd" != 0 ] &&
-	    echo "COS=1 vs COS=0 jbd: $(((cos1_jbd/cos0_jbd - 1) * 100)) %"
-	[ "$cos0_time" != 0 ] &&
-	    echo "COS=1 vs COS=0 time: $(((cos1_time/cos0_time - 1) * 100)) %"
-
-	restore_lustre_params < $param_file
-	rm -f $param_file
-	return 0
+	echo "COS=0 transactions (avg): ${jbd_avg[0]}" \
+	     " time (avg): ${time_avg[0]}"
+	echo "COS=1 transactions (avg): ${jbd_avg[1]}" \
+	     " time (avg): ${time_avg[1]}"
+	(( jbd_avg[0] == 0 )) ||
+		echo "COS=1 vs COS=0 jbd:" \
+		     "$(((jbd_avg[1] / jbd_avg[0] - 1) * 100)) %"
+	(( time_avg[0] == 0 )) ||
+		echo "COS=1 vs COS=0 time:" \
+		     "$(((time_avg[1] / time_avg[0] - 1) * 100)) %"
 }
-run_test 33b "COS: cross create/delete, 2 clients, benchmark under remote dir"
+run_test 33b "COS: cross create/delete, 2 mounts, benchmark under remote dir"
 
 # arg1 is description, arg2 is operations before Sync-on-Lock-Cancel, arg3 is
 # the operation that triggers SoLC

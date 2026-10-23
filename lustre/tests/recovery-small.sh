@@ -4041,6 +4041,146 @@ test_190() {
 }
 run_test 190 "lfs df -l reports disconnected targets without blocking"
 
+test_200() {
+	[[ -n $RCLIENTS ]] || skip "Need remote client"
+
+	local rcli old
+
+	rcli=$(echo $RCLIENTS | cut -d ' ' -f 1)
+
+	echo "Selected \"$rcli\" from \"$RCLIENTS\""
+
+	# We want idle disconnect enabled on all targets except OST0000. Test
+	# assumes all nodes are configured the same.
+	old=$(do_node $rcli "$LCTL get_param -n *.*.idle_timeout 2>/dev/null |
+	      head -n 1")
+	[[ -n $old ]] || error "Cannot determine current idle_timeout"
+
+	if ((old == 0)); then
+		do_node "$rcli" "$LCTL set_param *.*.idle_timeout=10"
+		do_node "$rcli" "$LCTL set_param osc.*OST0000*.idle_timeout=0"
+		stack_trap "do_node $rcli $LCTL set_param *.*.idle_timeout=$old"
+	else
+		do_node "$rcli" "$LCTL set_param osc.*OST0000*.idle_timeout=0"
+		stack_trap "do_node $rcli $LCTL set_param \
+			    osc.*OST0000*.idle_timeout=$old"
+	fi
+
+	# Ensure OST0 import is idle
+	wait_update "$rcli" \
+		"$LCTL get_param osc.*OST0000*.import | \
+		 awk 'BEGIN{ count=0 } /idle: 0/ { count+=1 } \
+		      END { print count }'" \
+		"0" "30" || error "OST0000 not idle after 30s"
+
+	# Send ping to ensure import is FULL
+	do_node "$rcli" "$LCTL set_param osc.*OST0000*.ping=1" ||
+		error "OBD ping failed"
+
+	local -a conns
+
+	conns=( $(do_node "$rcli" "$LCTL get_param *.*.import" |
+		  awk '/connection_attempts:/{print $NF}' | xargs echo) )
+
+	local saved_debug
+
+	saved_debug=$(do_node "$rcli" \
+		      "cat /sys/module/libcfs/parameters/libcfs_debug" \
+		      2>/dev/null)
+	[[ -n $saved_debug ]] || error "Failed to get existing debug"
+	stack_trap "do_node $rcli $LCTL set_param debug=$saved_debug"
+	do_node "$rcli" "$LCTL set_param debug=+info+rpctrace"
+
+	# From lustre/obdclass/class_obd.c
+	# unsigned int ping_interval = (OBD_TIMEOUT_DEFAULT > 4) ?
+	#			       (OBD_TIMEOUT_DEFAULT / 4) : 1;
+	# Delay a ping for 3 intervals
+	local timeout delay
+
+	timeout=$(do_node "$rcli" "$LCTL get_param -n timeout")
+	(( timeout > 4 )) && delay=$((3 * timeout / 4)) || delay=3
+
+	do_node "$rcli" "$LCTL clear"
+	log "delay ping ${delay}s"
+
+	#define OBD_FAIL_PTLRPC_DELAY_SEND_FAIL    0x535
+	do_node "$rcli" "$LCTL set_param fail_loc=0x80000535 fail_val=${delay}"
+	# Send ping that will be delayed for ${delay} seconds
+	# This races with the pinger, but it is okay if a ping sent by pinger
+	# thread is delayed instead
+	do_node "$rcli" "$LCTL set_param osc.*OST0000*.ping=1"
+
+	local logfile="$TMP/lustre-log-${TESTNAME}.log"
+
+	stack_trap "rm -f $logfile"
+
+	local nsent expired
+	local waited=0
+	local begin=$SECONDS
+	local max_wait=$((delay + 1))
+	local reason=""
+	local sleep=""
+	while (( waited <= max_wait )); do
+		[[ -z $sleep ]] || sleep $sleep
+		sleep=1
+		waited=$((SECONDS - begin))
+		do_node "$rcli" "$LCTL dk" >> ${logfile}
+
+		if ! grep -q 'fail_timeout id 535 sleeping for' $logfile; then
+			reason="Did not hit fail_loc"
+			continue
+		fi
+
+		if ! grep -q 'cfs_fail_timeout id 535 awake' $logfile; then
+			reason="Delayed send did not wake"
+			continue
+		fi
+
+		nsent=$(grep -c "ptl_send_rpc.*o400->.*OST0000" $logfile)
+		if (( nsent <= 1 )); then
+			reason="Did not send more than 1 obd ping"
+			continue
+		fi
+
+		expired=$(grep "Request sent has timed out .* o400->" $logfile)
+		if [[ -z $expired ]]; then
+			reason="RPC did not time out"
+			continue
+		fi
+		reason=""
+		break
+	done
+
+	if [[ -n $reason ]]; then
+		cat $logfile
+		error "$reason"
+	fi
+	echo "$expired"
+
+	local -a conns2
+
+	conns2=( $(do_node "$rcli" "$LCTL get_param *.*.import" |
+		   awk '/connection_attempts:/{print $NF}' | xargs echo) )
+
+	echo "conns: ${conns[*]}"
+
+	echo "conns2: ${conns2[*]}"
+
+	(( ${#conns[@]} == ${#conns2[@]} )) ||
+		error "Expected ${#conns[@]} imports found ${#conns2[@]}"
+
+	local i
+
+	for ((i = 0; i < ${#conns[@]}; i++)); do
+		(( conns[i] == conns2[i] )) ||
+			error "New connection attempt" \
+			      "${conns[i]} -> ${conns2[i]}"
+	done
+
+	return 0
+}
+run_test 200 "Dropping one OBD_PING should not cause disconnect"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

@@ -1006,26 +1006,23 @@ test_8c() {
 run_test 8c "create | unlink, create shouldn't fail"
 
 #
-# This test uses three Lustre clients on two hosts.
+# This test uses three Lustre clients, on one or two hosts.
 #
 #   Lustre Client 1:    $CLIENT1:$MOUNT     ($DIR)
 #   Lustre Client 2:    $CLIENT2:$MOUNT2    ($DIR2)
-#   Lustre Client 3:    $CLIENT2:$MOUNT1    ($DIR1)
+#   Lustre Client 3:    $CLIENT2:$MOUNT3    ($DIR3)
 #
 test_10b() { # former test_2b
 	local pre
 	local post
 	local var=${SINGLEMDS}_svc
 
-	[ $CLIENTCOUNT -ge 2 ] || \
-		{ skip "Need two or more clients, have $CLIENTCOUNT" && \
-			exit 0; }
-
 	do_facet $SINGLEMDS "$LCTL set_param mdd.${!var}.sync_permission=0"
 	do_facet $SINGLEMDS "$LCTL set_param mdt.${!var}.commit_on_sharing=0"
 
 	zconf_mount $CLIENT1 $MOUNT
-	zconf_mount $CLIENT2 $MOUNT1
+	zconf_mount $CLIENT2 $MOUNT3
+	stack_trap "zconf_umount $CLIENT2 $MOUNT3"
 	zconf_mount $CLIENT2 $MOUNT2
 	do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $DIR/$tfile-a
 	do_node $CLIENT1 openfile -f O_RDWR:O_CREAT -m 0644 $DIR/$tfile-b
@@ -1046,41 +1043,37 @@ test_10b() { # former test_2b
 	#
 	replay_barrier $SINGLEMDS
 	do_node $CLIENT1 chmod 666 $DIR/$tfile-a            # R
-	do_node $CLIENT2 chmod 666 $DIR1/$tfile-b           # R
+	do_node $CLIENT2 chmod 666 $DIR3/$tfile-b           # R
 	do_node $CLIENT2 chgrp $RUNAS_GID $DIR2/$tfile-a    # U
 	do_node $CLIENT1 chown $RUNAS_ID:$RUNAS_GID $DIR/$tfile-a      # J
 	do_node $CLIENT2 $TRUNCATE $DIR2/$tfile-b 1          # U
-	do_node $CLIENT2 chgrp $RUNAS_GID $DIR1/$tfile-b    # R
+	do_node $CLIENT2 chgrp $RUNAS_GID $DIR3/$tfile-b    # R
 	do_node $CLIENT1 chown $RUNAS_ID:$RUNAS_GID $DIR/$tfile-b      # R
 	zconf_umount $CLIENT2 $MOUNT2
 	facet_failover $SINGLEMDS
 
 	client_evicted $CLIENT1 || error "$CLIENT1:$MOUNT not evicted"
-	client_up $CLIENT2 || error "$CLIENT2:$MOUNT1 evicted"
+	do_node $CLIENT2 $LFS df $MOUNT3 > /dev/null ||
+		error "$CLIENT2:$MOUNT3 evicted"
 
 	#
 	# Check the MDT epoch.  $post must be the first transaction
 	# number assigned after recovery.
 	#
-	do_node $CLIENT2 chmod 666 $DIR1/$tfile
-	post=$(chk_get_version $CLIENT2 $DIR1/$tfile)
-	if (($(($pre >> 32)) == $((post >> 32)))); then
+	do_node $CLIENT2 chmod 666 $DIR3/$tfile
+	post=$(chk_get_version $CLIENT2 $DIR3/$tfile)
+	(( (pre >> 32) != (post >> 32) )) ||
 		error "epoch not changed: pre $pre, post $post"
-	fi
-
-	if (($(($post & 0x00000000ffffffff)) != 1)); then
+	(( (post & 0xffffffff) == 1 )) ||
 		error "transno should restart from one: got $post"
-	fi
 
-	do_node $CLIENT2 stat $DIR1/$tfile-a
-	do_node $CLIENT2 stat $DIR1/$tfile-b
+	do_node $CLIENT2 stat $DIR3/$tfile-a
+	do_node $CLIENT2 stat $DIR3/$tfile-b
 
 	do_node $CLIENT2 $CHECKSTAT -p 0666 -u \\\#$UID -g \\\#$UID \
-		$DIR1/$tfile-a || error "$DIR/$tfile-a: unexpected state"
+		$DIR3/$tfile-a || error "$DIR3/$tfile-a: unexpected state"
 	do_node $CLIENT2 $CHECKSTAT -p 0666 -u \\\#$RUNAS_ID -g \\\#$RUNAS_GID \
-		$DIR1/$tfile-b || error "$DIR/$tfile-b: unexpected state"
-
-	zconf_umount $CLIENT2 $MOUNT1
+		$DIR3/$tfile-b || error "$DIR3/$tfile-b: unexpected state"
 }
 run_test 10b "3 clients: some, none, and all reqs replayed"
 
