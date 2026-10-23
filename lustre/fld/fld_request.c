@@ -229,7 +229,6 @@ static inline int hash_is_sane(int hash)
 int fld_client_init(struct lu_client_fld *fld,
 		    const char *prefix, int hash)
 {
-	int cache_size, cache_threshold;
 	int rc = 0;
 
 	ENTRY;
@@ -247,14 +246,7 @@ int fld_client_init(struct lu_client_fld *fld,
 	fld->lcf_hash = &fld_hash[hash];
 	INIT_LIST_HEAD(&fld->lcf_targets);
 
-	cache_size = FLD_CLIENT_CACHE_SIZE /
-		sizeof(struct fld_cache_entry);
-
-	cache_threshold = cache_size *
-		FLD_CLIENT_CACHE_THRESHOLD / 100;
-
-	fld->lcf_cache = fld_cache_init(fld->lcf_name,
-					cache_size, cache_threshold);
+	fld->lcf_cache = fld_cache_init(fld->lcf_name);
 	if (IS_ERR(fld->lcf_cache)) {
 		rc = PTR_ERR(fld->lcf_cache);
 		fld->lcf_cache = NULL;

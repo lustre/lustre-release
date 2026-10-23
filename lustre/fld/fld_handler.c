@@ -434,20 +434,14 @@ static void fld_server_debugfs_init(struct lu_server_fld *fld)
 int fld_server_init(const struct lu_env *env, struct lu_server_fld *fld,
 		    struct dt_device *dt, const char *prefix, int type)
 {
-	int cache_size, cache_threshold;
 	int rc;
 
 	ENTRY;
 
 	snprintf(fld->lsf_name, sizeof(fld->lsf_name), "srv-%s", prefix);
 
-	cache_size = FLD_SERVER_CACHE_SIZE / sizeof(struct fld_cache_entry);
-
-	cache_threshold = cache_size * FLD_SERVER_CACHE_THRESHOLD / 100;
-
 	mutex_init(&fld->lsf_lock);
-	fld->lsf_cache = fld_cache_init(fld->lsf_name, cache_size,
-					cache_threshold);
+	fld->lsf_cache = fld_cache_init(fld->lsf_name);
 	if (IS_ERR(fld->lsf_cache)) {
 		rc = PTR_ERR(fld->lsf_cache);
 		fld->lsf_cache = NULL;
