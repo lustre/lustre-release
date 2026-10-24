@@ -24,18 +24,39 @@
 
 #include <linux/libcfs/libcfs.h>
 
-static unsigned long (*__cfs_kallsyms_lookup_name)(const char *name);
+#if defined(CONFIG_X86) && defined(CONFIG_HAVE_STATIC_CALL)
+#include <linux/static_call.h>
+
+/*
+ * Call the functions looked up here through a static_call(): its call sites
+ * are patched into direct calls, which avoid indirect branch mitigations and
+ * need no ENDBR. With CONFIG_X86_KERNEL_IBT this is required, since the kernel
+ * seals the ENDBR of functions whose address it never takes, so they cannot
+ * be called through a pointer (LU-20995). Limited to x86, where the static
+ * call trampoline in this module can always reach kernel text directly.
+ */
+#define CFS_DEFINE_SYMBOL(sym, func)	DEFINE_STATIC_CALL_NULL(sym, func)
+#define cfs_symbol_call(sym)		static_call(sym)
+#define cfs_symbol_set(sym, addr)					\
+	static_call_update(sym, (typeof(&STATIC_CALL_TRAMP(sym)))(addr))
+#else
+#define CFS_DEFINE_SYMBOL(sym, func)	static struct { typeof(func) *fn; } sym
+#define cfs_symbol_call(sym)		((sym).fn)
+#define cfs_symbol_set(sym, addr)	((sym).fn = (addr))
+#endif
+
+CFS_DEFINE_SYMBOL(__cfs_kallsyms_lookup_name, kallsyms_lookup_name);
 
 void *cfs_kallsyms_lookup_name(const char *name)
 {
-	return (void *)__cfs_kallsyms_lookup_name(name);
+	return (void *)cfs_symbol_call(__cfs_kallsyms_lookup_name)(name);
 }
 EXPORT_SYMBOL_GPL(cfs_kallsyms_lookup_name);
 
 #ifdef HAVE_KALLSYMS_LOOKUP_NAME
 static int find_kallsyms_lookup_name(void)
 {
-	__cfs_kallsyms_lookup_name = kallsyms_lookup_name;
+	cfs_symbol_set(__cfs_kallsyms_lookup_name, kallsyms_lookup_name);
 
 	return 0;
 }
@@ -45,45 +66,63 @@ static int find_kallsyms_lookup_name(void)
 	struct kprobe kp = {
 		.symbol_name = "kallsyms_lookup_name",
 	};
+	char buf[KSYM_SYMBOL_LEN];
+	unsigned long addr;
+	unsigned long off;
+	char *p;
 	int rc;
 
 	rc = register_kprobe(&kp);
 	if (rc < 0)
 		return rc;
 
-	__cfs_kallsyms_lookup_name = (void *)kp.addr;
-	if (!__cfs_kallsyms_lookup_name)
+	addr = (unsigned long)kp.addr;
+	unregister_kprobe(&kp);
+	if (!addr)
 		return -EINVAL;
 
-	unregister_kprobe(&kp);
+	/*
+	 * kp.addr is not necessarily the function entry: with
+	 * CONFIG_X86_KERNEL_IBT the probe is placed after the ENDBR64
+	 * (kallsyms_lookup_name+0x4), and on ppc64le (ELFv2) at the local entry
+	 * point or the ftrace call site. Rewind to the start of the symbol.
+	 * With IBT, kallsyms_lookup_name() has a sealed ENDBR and is called
+	 * through a static_call(), i.e. with a direct call.
+	 */
+	sprint_symbol(buf, addr);
+	p = strchr(buf, '+');
+	if (!p || sscanf(p, "+%lx/", &off) != 1)
+		return -EINVAL;
+	addr -= off;
+
+	cfs_symbol_set(__cfs_kallsyms_lookup_name, (void *)addr);
 
 	return 0;
 }
 #endif
 
-static struct workqueue_attrs *(*__alloc_workqueue_attrs)(void);
+CFS_DEFINE_SYMBOL(__alloc_workqueue_attrs, compat_alloc_workqueue_attrs);
 
 struct workqueue_attrs *compat_alloc_workqueue_attrs(void)
 {
-	return __alloc_workqueue_attrs();
+	return cfs_symbol_call(__alloc_workqueue_attrs)();
 }
 EXPORT_SYMBOL(compat_alloc_workqueue_attrs);
 
-static void (*__free_workqueue_attrs)(struct workqueue_attrs *attrs);
+CFS_DEFINE_SYMBOL(__free_workqueue_attrs, compat_free_workqueue_attrs);
 
 void compat_free_workqueue_attrs(struct workqueue_attrs *attrs)
 {
-	return __free_workqueue_attrs(attrs);
+	cfs_symbol_call(__free_workqueue_attrs)(attrs);
 }
 EXPORT_SYMBOL(compat_free_workqueue_attrs);
 
-static int (*__apply_workqueue_attrs)(struct workqueue_struct *wq,
-				      const struct workqueue_attrs *attrs);
+CFS_DEFINE_SYMBOL(__apply_workqueue_attrs, compat_apply_workqueue_attrs);
 
 int compat_apply_workqueue_attrs(struct workqueue_struct *wq,
 				  const struct workqueue_attrs *attrs)
 {
-	return __apply_workqueue_attrs(wq, attrs);
+	return cfs_symbol_call(__apply_workqueue_attrs)(wq, attrs);
 }
 EXPORT_SYMBOL(compat_apply_workqueue_attrs);
 
@@ -95,51 +134,60 @@ EXPORT_SYMBOL(compat_apply_workqueue_attrs);
 
 #if defined(CONFIG_MEMCG) && !defined(HAVE_FOLIO_MEMCG_LOCK_STATIC) \
  && defined(HAVE_FOLIO_MEMCG_LOCK) && !defined(FOLIO_MEMCG_LOCK_EXPORTED)
-static void (*__folio_memcg_lock)(struct folio *folio);
+CFS_DEFINE_SYMBOL(__folio_memcg_lock, folio_memcg_lock);
 
 void folio_memcg_lock(struct folio *folio)
 {
-	__folio_memcg_lock(folio);
+	cfs_symbol_call(__folio_memcg_lock)(folio);
 }
 EXPORT_SYMBOL_GPL(folio_memcg_lock);
 
-static void (*__folio_memcg_unlock)(struct folio *folio);
+CFS_DEFINE_SYMBOL(__folio_memcg_unlock, folio_memcg_unlock);
 
 void folio_memcg_unlock(struct folio *folio)
 {
-	__folio_memcg_unlock(folio);
+	cfs_symbol_call(__folio_memcg_unlock)(folio);
 }
 EXPORT_SYMBOL_GPL(folio_memcg_unlock);
 #endif
 
 #ifdef CONFIG_SECURITY
-static int (*__security_file_alloc)(struct file *file);
-static void (*__security_file_free)(struct file *file);
+CFS_DEFINE_SYMBOL(__security_file_alloc, compat_security_file_alloc);
+CFS_DEFINE_SYMBOL(__security_file_free, compat_security_file_free);
 
 int compat_security_file_alloc(struct file *file)
 {
-	return __security_file_alloc(file);
+	return cfs_symbol_call(__security_file_alloc)(file);
 }
 EXPORT_SYMBOL(compat_security_file_alloc);
 
 void compat_security_file_free(struct file *file)
 {
-	return __security_file_free(file);
+	cfs_symbol_call(__security_file_free)(file);
 }
 EXPORT_SYMBOL(compat_security_file_free);
 #endif
 
 #if !defined(HAVE_ACCOUNT_PAGE_DIRTIED_EXPORT) && defined(HAVE_ACCOUNT_PAGE_DIRTIED)
-static unsigned int (*__account_page_dirtied)(struct page *page,
-					       struct address_space *mapping);
+CFS_DEFINE_SYMBOL(__account_page_dirtied, compat_account_page_dirtied);
 
 unsigned int compat_account_page_dirtied(struct page *page,
 					 struct address_space *mapping)
 {
-	return __account_page_dirtied(page, mapping);
+	return cfs_symbol_call(__account_page_dirtied)(page, mapping);
 }
 EXPORT_SYMBOL(compat_account_page_dirtied);
 #endif
+
+/* Look up @func and point the static call or pointer @sym at it. */
+#define cfs_symbol_init(sym, func)					\
+({									\
+	void *__addr = cfs_kallsyms_lookup_name(func);			\
+									\
+	if (__addr)							\
+		cfs_symbol_set(sym, __addr);				\
+	__addr ? 0 : -EINVAL;						\
+})
 
 int __init lustre_symbols_init(void)
 {
@@ -152,41 +200,41 @@ int __init lustre_symbols_init(void)
 	if (!cfs_kallsyms_lookup_name("kallsyms_lookup_name"))
 		return -EINVAL;
 
-	__alloc_workqueue_attrs = cfs_kallsyms_lookup_name(ALLOC_WQ_ATTRS_FUNC);
-	if (!__alloc_workqueue_attrs)
-		return -EINVAL;
+	rc = cfs_symbol_init(__alloc_workqueue_attrs, ALLOC_WQ_ATTRS_FUNC);
+	if (rc)
+		return rc;
 
-	__free_workqueue_attrs = cfs_kallsyms_lookup_name("free_workqueue_attrs");
-	if (!__free_workqueue_attrs)
-		return -EINVAL;
+	rc = cfs_symbol_init(__free_workqueue_attrs, "free_workqueue_attrs");
+	if (rc)
+		return rc;
 
-	__apply_workqueue_attrs = cfs_kallsyms_lookup_name("apply_workqueue_attrs");
-	if (!__apply_workqueue_attrs)
-		return -EINVAL;
+	rc = cfs_symbol_init(__apply_workqueue_attrs, "apply_workqueue_attrs");
+	if (rc)
+		return rc;
 
 #if defined(CONFIG_MEMCG) && !defined(HAVE_FOLIO_MEMCG_LOCK_STATIC) \
  && defined(HAVE_FOLIO_MEMCG_LOCK) && !defined(FOLIO_MEMCG_LOCK_EXPORTED)
-	__folio_memcg_lock = cfs_kallsyms_lookup_name("folio_memcg_lock");
-	if (!__folio_memcg_lock)
-		return -EINVAL;
+	rc = cfs_symbol_init(__folio_memcg_lock, "folio_memcg_lock");
+	if (rc)
+		return rc;
 
-	__folio_memcg_unlock = cfs_kallsyms_lookup_name("folio_memcg_unlock");
-	if (!__folio_memcg_unlock)
-		return -EINVAL;
+	rc = cfs_symbol_init(__folio_memcg_unlock, "folio_memcg_unlock");
+	if (rc)
+		return rc;
 #endif
 #if !defined(HAVE_ACCOUNT_PAGE_DIRTIED_EXPORT) && defined(HAVE_ACCOUNT_PAGE_DIRTIED)
-	__account_page_dirtied = cfs_kallsyms_lookup_name("account_page_dirtied");
-	if (!__account_page_dirtied)
-		return -EINVAL;
+	rc = cfs_symbol_init(__account_page_dirtied, "account_page_dirtied");
+	if (rc)
+		return rc;
 #endif
 #ifdef CONFIG_SECURITY
-	__security_file_alloc = cfs_kallsyms_lookup_name("security_file_alloc");
-	if (!__security_file_alloc)
-		return -EINVAL;
+	rc = cfs_symbol_init(__security_file_alloc, "security_file_alloc");
+	if (rc)
+		return rc;
 
-	__security_file_free = cfs_kallsyms_lookup_name("security_file_free");
-	if (!__security_file_free)
-		return -EINVAL;
+	rc = cfs_symbol_init(__security_file_free, "security_file_free");
+	if (rc)
+		return rc;
 #endif
 
 	return 0;

@@ -653,16 +653,19 @@ static int __init osd_init(void)
 	if (rc)
 		GOTO(out_kmem, rc);
 
+#ifndef HAVE_FLUSH_DELAYED_FPUT
+	if (unlikely(cfs_flush_delayed_fput == NULL)) {
+		cfs_flush_delayed_fput =
+			cfs_kallsyms_lookup_name("flush_delayed_fput");
+		if (!cfs_flush_delayed_fput)
+			GOTO(out_memfs, rc = -EINVAL);
+	}
+#endif
+
 	rc = class_register_type(&osd_obd_device_ops, NULL, true,
 				 LUSTRE_OSD_WBCFS_NAME, &osd_device_type);
 	if (rc)
 		GOTO(out_memfs, rc);
-
-#ifndef HAVE_FLUSH_DELAYED_FPUT
-	if (unlikely(cfs_flush_delayed_fput == NULL))
-		cfs_flush_delayed_fput =
-			cfs_kallsyms_lookup_name("flush_delayed_fput");
-#endif
 
 	INIT_WORK(&flush_fput, osd_flush_fput);
 
