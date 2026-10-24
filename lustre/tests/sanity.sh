@@ -6829,6 +6829,24 @@ test_44g() {
 }
 run_test 44g "test overflow in lov_stripe_size"
 
+test_44h() {
+	(( MDS1_VERSION >= $(version_code 2.17.60.1) )) ||
+		skip "need MDS >= 2.17.60.1 for large MDT i_size"
+	[[ "$mds1_FSTYPE" == "ldiskfs" ]] || skip "ldiskfs only test"
+
+	local size=$((20 << 40))
+
+	$MCREATE $DIR/$tfile || error "mcreate failed"
+	stack_trap "rm -f $DIR/$tfile"
+	$TRUNCATE $DIR/$tfile $size || error "truncate failed"
+	# drop the MDT inode from cache so the next access reads it from disk
+	cancel_lru_locks mdc
+	do_facet mds1 sysctl -w vm.drop_caches=3
+	$CHECKSTAT -s $size $DIR/$tfile || error "wrong size"
+	rm $DIR/$tfile || error "rm failed"
+}
+run_test 44h "MDT file size above ldiskfs maxbytes"
+
 dirty_osc_total() {
 	tot=0
 	for d in `lctl get_param -n ${OSC}.*.cur_dirty_bytes`; do

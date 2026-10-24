@@ -1,0 +1,30 @@
+From: Patrick Farrell <patrick@thelustrecollective.com>
+Date: Sat, 24 Oct 2026 18:44:51 -0500
+Subject: [PATCH] LU-21030 ldiskfs: allow MDT file size above maxbytes
+
+Allow a regular file inode to have i_size beyond maxbytes.
+
+Linux 6.16 commit 1a77a028a392 ("ext4: ensure i_size is smaller
+than maxbytes") rejects such an inode as corrupt. A Lustre MDT
+inode records the size of file data held on OSTs or in an HSM
+archive, which can exceed the MDT's maxbytes, and the MDT is
+remounted read-only on the first lookup of such a file.
+
+---
+ fs/ext4/inode.c | 4 +++-
+ 1 file changed, 3 insertions(+), 1 deletion(-)
+
+diff --git a/fs/ext4/inode.c b/fs/ext4/inode.c
+--- a/fs/ext4/inode.c
++++ b/fs/ext4/inode.c
+@@ -5304,7 +5304,9 @@ struct inode *__ext4_iget(struct super_block *sb, unsigned long ino,
+ 			((__u64)le16_to_cpu(raw_inode->i_file_acl_high)) << 32;
+ 	inode->i_size = ext4_isize(sb, raw_inode);
+ 	size = i_size_read(inode);
+-	if (size < 0 || size > ext4_get_maxbytes(inode)) {
++	/* a Lustre MDT inode can record the size of data held elsewhere */
++	if (size < 0 ||
++	    (!S_ISREG(inode->i_mode) && size > ext4_get_maxbytes(inode))) {
+ 		ext4_error_inode(inode, function, line, 0,
+ 				 "iget: bad i_size value: %lld", size);
+ 		ret = -EFSCORRUPTED;

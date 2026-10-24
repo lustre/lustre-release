@@ -44,3 +44,4 @@ rhel9.8/ext4-add-IGET_NO_CHECKS-flag.patch
 linux-6.12/ext4-mballoc-for-hybrid.patch
 linux-6.12/ext4-add-fstrim-mount-option.patch
 base/ext4-adjust-mmp-wait-time.patch
+linux-6.16/ext4-iget-large-reg-size.patch

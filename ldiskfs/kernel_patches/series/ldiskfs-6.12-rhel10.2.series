@@ -45,3 +45,4 @@ rhel10.2/ext4-mballoc-for-hybrid.patch
 rhel10.2/ext4-add-fstrim-mount-option.patch
 base/ext4-adjust-mmp-wait-time.patch
 linux-6.15/ext4-journal-commit-transaction-callback.patch
+linux-6.16/ext4-iget-large-reg-size.patch
