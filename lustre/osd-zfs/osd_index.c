@@ -1002,6 +1002,10 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(th != NULL);
 	oh = container_of(th, struct osd_thandle, ot_super);
 
+	/* ZAP accepts longer names, but readdir cannot return them */
+	if (unlikely(strlen(name) > NAME_MAX))
+		RETURN(-ENAMETOOLONG);
+
 	idc = osd_idc_find(env, osd, fid);
 	if (unlikely(idc == NULL)) {
 		/* this dt_insert() wasn't declared properly, so
