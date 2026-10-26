@@ -871,10 +871,9 @@ err_commit:
 	/* dealloc grants, client won't receive them */
 	tgt_grant_dealloc(exp, oa);
 out:
-	/* let's still process incoming grant information packed in the oa,
-	 * but without enforcing grant since we won't proceed with the write.
-	 * Just like a read request actually. */
-	tgt_grant_prepare_read(env, exp, oa);
+	/* tgt_brw_write() processes the grant of a write that fails before
+	 * tgt_grant_prepare_write()
+	 */
 	return rc;
 }
 

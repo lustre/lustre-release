@@ -12462,6 +12462,65 @@ test_64j() {
 }
 run_test 64j "check grants on re-done rpc"
 
+# grant of the OST0000 export of this client, less what the client counts
+grant_gap_64k() {
+	local osc=$1
+	local uuid=$2
+	local client
+	local server
+
+	client=$($LCTL get_param -n $osc.cur_grant_bytes \
+		 $osc.cur_dirty_grant_bytes $osc.cur_lost_grant_bytes |
+		 calc_sum) || return 1
+	server=$(do_facet ost1 $LCTL get_param -n \
+		 obdfilter.$FSNAME-OST0000.exports.*.export |
+		 awk -v uuid="$uuid:" '/^[^ ]/ { cur = ($1 == uuid) }
+			cur && $1 == "granted:" { print $2; exit }')
+	[[ -n "$server" ]] || return 1
+
+	echo $((server - client))
+}
+
+test_64k() {
+	(( OST1_VERSION >= $(version_code 2.17.59.2) )) ||
+		skip "need OST >= 2.17.59.2 for grant of refused writes"
+	remote_ost_nodsh && skip "remote OST with nodsh"
+
+	local instance=$($LFS getname -i $DIR)
+	local osc=osc.$FSNAME-OST0000-osc-$instance
+	local uuid=$($LCTL get_param -n $osc.uuid)
+	local shrink=$($LCTL get_param -n $osc.grant_shrink)
+	local before
+	local after
+
+	$LCTL set_param $osc.grant_shrink=0
+	stack_trap "$LCTL set_param $osc.grant_shrink=$shrink"
+	for i in 0 1 2; do
+		$LFS setstripe -c 1 -i 0 $DIR/$tfile.$i ||
+			error "setstripe $tfile.$i failed"
+	done
+	stack_trap "rm -f $DIR/$tfile.*"
+	$MULTIOP $DIR/$tfile.0 oO_RDWR:O_SYNC:w4096c || error "write failed"
+	before=$(grant_gap_64k $osc $uuid) || error "cannot read grant"
+
+	# the OST refuses these writes before it looks at their grant
+	#define OBD_FAIL_OST_BRW_WRITE_BULK2	0x220
+	do_facet ost1 $LCTL set_param fail_loc=0x80000220
+	$MULTIOP $DIR/$tfile.1 oO_RDWR:O_SYNC:w4096c &&
+		error "write did not fail with EFAULT"
+	#define OBD_FAIL_OST_BRW_WRITE_BULK	0x20e
+	do_facet ost1 $LCTL set_param fail_loc=0x8000020e
+	$MULTIOP $DIR/$tfile.2 oO_RDWR:O_SYNC:w4096c ||
+		error "write was not resent after EIO"
+	do_facet ost1 $LCTL set_param fail_loc=0
+
+	after=$(grant_gap_64k $osc $uuid) || error "cannot read grant"
+	echo "OST grant less client grant: before $before after $after"
+	(( after == before )) ||
+		error "OST has $((after - before)) bytes more grant than client"
+}
+run_test 64k "grant of writes the OST refuses before preparing them"
+
 # bug 1414 - set/get directories' stripe info
 test_65a() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run"

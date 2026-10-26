@@ -328,6 +328,8 @@ struct tgt_session_info {
 	/* RPC transaction handling */
 	bool			tsi_mult_trans;
 	int			tsi_has_trans;
+	/* tgt_grant_prepare_write() processed the grant of the write */
+	bool			tsi_grant_prepared;
 
 	/* Batched RPC replay */
 	bool			 tsi_batch_env;
@@ -595,6 +597,8 @@ void tgt_grant_prepare_read(const struct lu_env *env, struct obd_export *exp,
 void tgt_grant_prepare_write(const struct lu_env *env, struct obd_export *exp,
 			     struct obdo *oa, struct niobuf_remote *rnb,
 			     int niocount);
+void tgt_grant_refuse_write(const struct lu_env *env, struct obd_export *exp,
+			    struct obdo *oa);
 void tgt_grant_commit(struct obd_export *exp, unsigned long grant_used, int rc);
 int tgt_grant_commit_cb_add(struct thandle *th, struct obd_export *exp,
 			    unsigned long grant);

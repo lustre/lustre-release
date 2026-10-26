@@ -2809,7 +2809,7 @@ static void tgt_warn_on_cksum(struct ptlrpc_request *req,
 		       client_cksum, server_cksum);
 }
 
-int tgt_brw_write(struct tgt_session_info *tsi)
+static int __tgt_brw_write(struct tgt_session_info *tsi)
 {
 	struct ptlrpc_request	*req = tgt_ses_req(tsi);
 	struct ptlrpc_bulk_desc	*desc = NULL;
@@ -3142,6 +3142,34 @@ out:
 		memalloc_noreclaim_restore(mpflags);
 
 	RETURN(rc);
+}
+
+/**
+ * tgt_brw_write() - Common request handler for OST_WRITE RPC
+ * @tsi: target session environment for this request
+ *
+ * A client that gets an error for a write counts the grant of the write as
+ * used, so account it also for a write refused before its grant is prepared.
+ *
+ * Return: 0 on success, negative errno on failure
+ */
+int tgt_brw_write(struct tgt_session_info *tsi)
+{
+	struct ptlrpc_request *req = tgt_ses_req(tsi);
+	struct ost_body *body = tsi->tsi_ost_body;
+	int rc;
+
+	tsi->tsi_grant_prepared = false;
+	rc = __tgt_brw_write(tsi);
+	if (rc < 0 && !tsi->tsi_grant_prepared && !req->rq_no_reply && body) {
+		/* as __tgt_brw_write() does before obd_preprw() */
+		if (lustre_msg_get_flags(req->rq_reqmsg) &
+		    (MSG_RESENT | MSG_REPLAY))
+			body->oa.o_valid &= ~OBD_MD_FLGRANT;
+		tgt_grant_refuse_write(tsi->tsi_env, req->rq_export, &body->oa);
+	}
+
+	return rc;
 }
 EXPORT_SYMBOL(tgt_brw_write);
 

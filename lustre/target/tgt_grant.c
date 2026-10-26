@@ -1327,6 +1327,8 @@ void tgt_grant_prepare_write(const struct lu_env *env,
 
 	ENTRY;
 
+	/* tgt_brw_write() must not process the grant again on error */
+	tgt_ses_info(env)->tsi_grant_prepared = true;
 refresh:
 	/* get statfs information from OSD layer */
 	tgt_grant_statfs(env, exp, force, &from_cache);
@@ -1399,6 +1401,51 @@ refresh:
 	EXIT;
 }
 EXPORT_SYMBOL(tgt_grant_prepare_write);
+
+/**
+ * tgt_grant_refuse_write() - Account grant of a write refused before prepare
+ * @env: LU environment provided by the caller
+ * @exp: export of the client which sent the request
+ * @oa: incoming obdo sent by the client
+ *
+ * A client counts the grant used by a write RPC as consumed once the RPC is
+ * sent, like the lost grant and grant shrink packed in it, and takes no grant
+ * back from a failed write.  Its resend after a recoverable error is marked
+ * OBD_FL_RECOV_RESEND, so tgt_grant_check() does not consume that grant
+ * again.  For a write that fails before tgt_grant_prepare_write(), consume
+ * the grant here as tgt_grant_check() does, and process the rest of the grant
+ * information as for a read, or the server counts more grant for the client
+ * than it has until the client reconnects.
+ */
+void tgt_grant_refuse_write(const struct lu_env *env, struct obd_export *exp,
+			    struct obdo *oa)
+{
+	struct obd_device *obd = exp->exp_obd;
+	struct tg_grants_data *tgd = &obd2obt(obd)->obt_lut->lut_tgd;
+	struct tg_export_data *ted = &exp->exp_target_data;
+	u64 grant;
+
+	/* the echo server has no grant accounting */
+	if (!oa || !(exp_connect_flags(exp) & OBD_CONNECT_GRANT))
+		return;
+
+	tgt_grant_prepare_read(env, exp, oa);
+
+	if (exp_grant_param_supp(exp) &&
+	    !test_bit(OBDF_RECOVERING, obd->obd_flags) &&
+	    !((oa->o_valid & OBD_MD_FLFLAGS) &&
+	      (oa->o_flags & OBD_FL_RECOV_RESEND))) {
+		spin_lock(&tgd->tgd_grant_lock);
+		grant = min_t(u64, oa->o_grant_used, ted->ted_grant);
+		ted->ted_grant -= grant;
+		tgd->tgd_tot_granted -= grant;
+		spin_unlock(&tgd->tgd_grant_lock);
+	}
+
+	/* nor does the client get back a shrink that was turned down */
+	tgt_grant_dealloc(exp, oa);
+}
+EXPORT_SYMBOL(tgt_grant_refuse_write);
 
 /**
  * Consume grant space reserved for object creation.

@@ -471,10 +471,6 @@ unlock:
 	tgt_grant_commit(exp, oa->o_grant_used, rc);
 	/* dealloc grants, client won't receive them */
 	tgt_grant_dealloc(exp, oa);
-	/* let's still process incoming grant information packed in the oa,
-	 * but without enforcing grant since we won't proceed with the write.
-	 * Just like a read request actually. */
-	tgt_grant_prepare_read(env, exp, oa);
 	return rc;
 }
 
