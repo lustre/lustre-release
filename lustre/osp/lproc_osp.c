@@ -80,9 +80,12 @@ static ssize_t active_store(struct kobject *kobj, struct attribute *attr,
 		imp = class_import_get(imp0);
 	if (rc)
 		return rc;
-	/* opposite senses */
+	/* Opposite senses.  Do not wait for the reconnect, since this is
+	 * also called for conf_param records by the single ll_cfg_requeue
+	 * thread that reprocesses all config logs on the node (LU-21040).
+	 */
 	if (test_bit(IMPF_DEACTIVE, imp->imp_flags) == val)
-		rc = ptlrpc_set_import_active(imp, val);
+		rc = ptlrpc_set_import_active(imp, val, true);
 	else
 		CDEBUG(D_CONFIG, "activate %u: ignoring repeat request\n",
 		       (unsigned int)val);

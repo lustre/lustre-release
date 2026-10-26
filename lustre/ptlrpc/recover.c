@@ -224,18 +224,20 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
 /**
  * ptlrpc_set_import_active() - Administratively active/deactive a client.
  * @imp: import object
- * @active: flag to activate(1) or de-activate(0)
+ * @active: true to activate, false to de-activate
+ * @async: when activating, only start the reconnect and do not wait for it
  *
- * This should only be called by the ioctl interface, currently
- *  - the lctl deactivate and activate commands
- *  - echo 0/1 >> /proc/osc/XXX/active
+ * This is called by administrative interfaces, currently
+ *  - the lctl deactivate and activate commands (waits for reconnect)
+ *  - lctl set_param {mdc,osc,osp}.*.active and conf_param records (async)
+ *  - OSP when reading LAST_FID from the OST fails
  *  - client umount -f (ll_umount_begin)
  *
  * Returns:
  * * %0 on successful activation/deactivation
  * * %negative on failure
  */
-int ptlrpc_set_import_active(struct obd_import *imp, int active)
+int ptlrpc_set_import_active(struct obd_import *imp, bool active, bool async)
 {
 	struct obd_device *obd = imp->imp_obd;
 	int rc = 0;
@@ -256,17 +258,18 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
 		obd_import_event(imp->imp_obd, imp, IMP_EVENT_DEACTIVATE);
 
 		ptlrpc_invalidate_import(imp);
-	}
-
-	/* When activating, mark import valid, and attempt recovery */
-	if (active) {
+	} else {
+		/* When activating, mark import valid, and attempt recovery */
 		CDEBUG(D_HA, "setting import %s VALID\n",
 		       obd2cli_tgt(imp->imp_obd));
 
 		clear_bit(IMPF_DEACTIVE, imp->imp_flags);
 		obd_import_event(imp->imp_obd, imp, IMP_EVENT_ACTIVATE);
 
-		rc = ptlrpc_recover_import(imp, NULL, 0);
+		rc = ptlrpc_recover_import(imp, NULL, async);
+		/* a reconnect already in progress is fine if not waiting */
+		if (async && rc == -EALREADY)
+			rc = 0;
 	}
 
 	RETURN(rc);

@@ -3651,7 +3651,7 @@ static int osc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		}
 		data = karg;
 		rc = ptlrpc_set_import_active(obd->u.cli.cl_import,
-					      data->ioc_offset);
+					      data->ioc_offset, false);
 		break;
 	default:
 		rc = OBD_IOC_DEBUG(D_IOCTL, obd->obd_name, cmd, "unrecognized",

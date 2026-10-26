@@ -2371,7 +2371,7 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	case_OBD_IOC_DEPRECATED_FT(IOC_OSC_SET_ACTIVE, obd->obd_name, 2, 17);
 #endif
 	case OBD_IOC_SET_ACTIVE:
-		rc = ptlrpc_set_import_active(imp, data->ioc_offset);
+		rc = ptlrpc_set_import_active(imp, data->ioc_offset, false);
 		GOTO(out, rc);
 	/*
 	 * Normally IOC_OBD_STATFS, OBD_IOC_QUOTACTL iocontrol are handled by

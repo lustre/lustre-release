@@ -1743,7 +1743,7 @@ static int osp_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 #endif
 	case OBD_IOC_SET_ACTIVE:
 		rc = ptlrpc_set_import_active(obd->u.cli.cl_import,
-					      data->ioc_offset);
+					      data->ioc_offset, false);
 		break;
 	default:
 		rc = OBD_IOC_ERROR(obd->obd_name, cmd, "unrecognized", -ENOTTY);

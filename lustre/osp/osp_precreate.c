@@ -779,7 +779,7 @@ static int osp_get_lastfid_from_ost(const struct lu_env *env,
 		 * let sysadm sort this * out.
 		 */
 		if (rc == -EFAULT)
-			ptlrpc_set_import_active(imp, 0);
+			ptlrpc_set_import_active(imp, false, false);
 		GOTO(out, rc);
 	}
 
