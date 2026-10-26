@@ -2566,13 +2566,14 @@ t32_test() {
 		   [[ -s $pool_list ]]; then
 			local pool_name=$(head -1 $pool_list | awk '{print $2}')
 
-			FSNAME=$fsname pool_add ${pool_name##$fsname.} 2 || {
+			# all $fsname targets are on the mds1 facet
+			FSNAME=$fsname pool_add ${pool_name##$fsname.} 1 || {
 				error_noexit "create $pool_name failed"
 				return 1
 			}
 
 			FSNAME=$fsname pool_add_targets ${pool_name##$fsname.} \
-				0 1 1 2 || {
+				0 1 1 1 || {
 				error_noexit "add $pool_name failed"
 				return 1
 			}

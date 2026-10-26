@@ -440,6 +440,8 @@ get_lustre_env() {
 	# Prefer using "mds1" directly instead of SINGLEMDS.
 	# Keep this for compat until it is removed from scripts.
 	export SINGLEMDS=${SINGLEMDS:-mds1}
+
+	get_mdt_devices
 }
 
 init_test_env() {
@@ -6753,19 +6755,19 @@ is_mounted () {
 }
 
 create_pools () {
-	local pool=$1
+	local poolname=$1
 	local ostsn=${2:-$OSTCOUNT}
 	local npools=${FS_NPOOLS:-$((OSTCOUNT / ostsn))}
 	local n
 
 	echo ostsn=$ostsn npools=$npools
-	if [[ $ostsn -gt $OSTCOUNT ]];  then
-		echo "request to use $ostsn OSTs in the pool, \
-			using max available OSTCOUNT=$OSTCOUNT"
+	if (( $ostsn > $OSTCOUNT ));  then
+		echo "request $ostsn OSTs in pool, using max OSTCOUNT=$OSTCOUNT"
 		ostsn=$OSTCOUNT
 	fi
 	for (( n=0; n < $npools; n++ )); do
-		p=${pool}$n
+		local p=${poolname}$n
+
 		if ! $DELETE_OLD_POOLS; then
 			log "request to not delete old pools: $FSNAME.$p exist?"
 			if ! check_pool_not_exist $FSNAME.$p; then
@@ -7094,16 +7096,19 @@ run_lfsck() {
 	do_nodes $(tgts_nodes) "$LCTL set_param printk=+lfsck"
 	do_facet $SINGLEMDS "$LCTL lfsck_start -M $FSNAME-MDT0000 -r -A -t all"
 
-	for k in $(seq $MDSCOUNT); do
+	for ((mdsno = 1; mdsno <= $MDSCOUNT; mdsno++)); do
+		local facet=mds$mdsno
+		local mdtname=${MDT[$((mdsno - 1))]}
+
 		# wait up to 10+1 minutes for LFSCK to complete
-		wait_update_facet --verbose mds${k} "$LCTL get_param -n \
-			mdd.$(facet_svc mds${k}).lfsck_layout |
-			awk '/^status/ { print \\\$2 }'" "completed" 600 ||
-			error "MDS${k} layout isn't the expected 'completed'"
-		wait_update_facet --verbose mds${k} "$LCTL get_param -n \
-			mdd.$(facet_svc mds${k}).lfsck_namespace |
-			awk '/^status/ { print \\\$2 }'" "completed" 60 ||
-			error "MDS${k} namespace isn't the expected 'completed'"
+		wait_update_facet --verbose $facet \
+			"$LCTL get_param -n mdd.$mdtname.lfsck_layout |
+			 awk '/^status/ { print \\\$2 }'" "completed" 600 ||
+			error "$mdtname layout isn't the expected 'completed'"
+		wait_update_facet --verbose $facet \
+			"$LCTL get_param -n mdd.$mdtname.lfsck_namespace |
+			 awk '/^status/ { print \\\$2 }'" "completed" 60 ||
+			error "$mdtname namespace isn't expected 'completed'"
 	done
 	local repaired=$(do_nodes $(tgts_nodes) \
 			 "$LCTL get_param -n *.$FSNAME-*.lfsck_*" |
@@ -8466,30 +8471,51 @@ osc_to_ost() {
 	echo ${osc/-osc*/}
 }
 
+# usage: ostuuid_from_index OSTIDX DIRECTORY
 ostuuid_from_index() {
+	local ostidx=$1
+	local dir=$2
 	# only print the first UUID, if 'lfs osts' shows multiple mountpoints
-	local uuid=($($LFS osts $2 | sed -ne "/^$1: /s/.* \(.*\) .*$/\1/p"))
+	local uuid=($($LFS osts $dir | awk "/^$ostidx: / { print \$2 }"))
 
-	echo ${uuid}
+	echo ${uuid[0]}
 }
 
+# usage: ostname_from_index OSTIDX [DIRECTORY|FSNAME]
 ostname_from_index() {
-	local uuid=$(ostuuid_from_index $1 $2)
+	local ostidx=$1
+	local arg=$2
+	local fsname=$arg
 
-	echo ${uuid/_UUID/}
+	if [[ "$arg" == */* && -d "$arg" ]]; then
+		fsname=$($LFS getname -n $arg) ||
+			error "$arg: cannot get filesystem name"
+	fi
+	printf "%s-OST%04x" "${fsname:-$FSNAME}" "$ostidx"
 }
 
-mdtuuid_from_index() {
-	# only print the first UUID, if 'lfs osts' shows multiple mountpoints
-	local uuid=($($LFS mdts $2 | sed -ne "/^$1: /s/.* \(.*\) .*$/\1/p"))
+# usage: mdtuuid_from_index MDTIDX DIRECTORY
+mdtuuid_from_index()
+{
+	local mdtidx=$1
+	local dir=$2
+	# only print the first UUID, if 'lfs mdts' shows multiple mountpoints
+	local uuid=($($LFS mdts $dir | awk "/^$mdtidx: / { print \$2 }"))
 
-	echo ${uuid}
+	echo ${uuid[0]}
 }
 
+# usage: mdtname_from_index MDTIDX [DIRECTORY|FSNAME]
 mdtname_from_index() {
-	local uuid=$(mdtuuid_from_index $1 $2)
+	local mdt_idx=$1
+	local arg=$2
+	local fsname=$arg
 
-	echo ${uuid/_UUID/}
+	if [[ "$arg" == */* && -d "$arg" ]]; then
+		fsname=$($LFS getname -n $arg) ||
+			error "$arg: cannot get filesystem name"
+	fi
+	printf "%s-MDT%04x" "${fsname:-$FSNAME}" "$mdt_idx"
 }
 
 mdssize_from_index() {
@@ -9864,26 +9890,29 @@ create_pool() {
 	local mdscount=${3:-$MDSCOUNT}
 	# can't pass an empty argument to destroy_test_pools
 	local dtp_fsname=${fsname:-$FSNAME}
+	local lovname="lov.$dtp_fsname-*.pools.$poolname"
 
-	stack_trap "destroy_test_pools $dtp_fsname $mdscount" EXIT
+	stack_trap "destroy_test_pools $dtp_fsname $mdscount"
 	do_facet mgs lctl pool_new $1
-	local RC=$?
+	local rc=$?
 	# get param should return err unless pool is created
-	[[ $RC -ne 0 ]] && return $RC
+	(( $rc == 0 )) || return $rc
 
-	for ((mds_id = 1; mds_id < $mdscount; mds_id++)); do
-		local mdt_id=$((mds_id-1))
-		local lodname=$fsname-MDT$(printf "%04x" $mdt_id)-mdtlov
-		wait_update_facet mds$mds_id \
-			"lctl get_param -n lod.$lodname.pools.$poolname \
-				2>/dev/null || echo foo" "" ||
-			error "mds$mds_id: pool_new failed $1"
+	for ((mdt_idx = 0; mdt_idx < $mdscount; mdt_idx++)); do
+		local mdt=$(mdtname_from_index $mdt_idx $dtp_fsname)
+		local lodname=lod.$mdt-mdtlov.pools.$poolname
+		local facet=mds$((mdt_idx + 1))
+
+		wait_update_facet $facet "$LCTL get_param -n $lodname \
+			2>/dev/null || echo foo" "" ||
+			error "$facet: pool_new failed $1"
 	done
-	wait_update $HOSTNAME "lctl get_param -n lov.$fsname-*.pools.$poolname \
-		2>/dev/null || echo foo" "" || error "pool_new failed $1"
+	wait_update $HOSTNAME \
+		"$LCTL get_param -n $lovname 2>/dev/null || echo foo" "" ||
+		error "pool_new failed $1"
 
 	$keep_pools || add_pool_to_list $1
-	return $RC
+	return 0
 }
 
 add_pool_to_list () {
@@ -9927,29 +9956,30 @@ destroy_pool() {
 	local poolname=${1##$fsname.}
 	local mdscount=${2:-$MDSCOUNT}
 
-	[[ x$fsname = x$poolname ]] && fsname=$FSNAME
-
-	local RC
+	[[ "$fsname" == "$poolname" ]] && fsname=$FSNAME
 
 	check_pool_not_exist $fsname.$poolname && return 0 || true
 
 	destroy_pool_int $fsname.$poolname
-	RC=$?
-	[[ $RC -ne 0 ]] && return $RC
-	for ((mds_id = 1; mds_id < $mdscount; mds_id++)); do
-		local mdt_id=$((mds_id-1))
-		local lodname=$fsname-MDT$(printf "%04x" $mdt_id)-mdtlov
-		wait_update_facet mds$mds_id \
-			"lctl get_param -n lod.$lodname.pools.$poolname \
-				2>/dev/null || echo foo" "foo" ||
-			error "mds$mds_id: destroy pool failed $1"
+	local rc=$?
+
+	(( $rc == 0 )) || return $rc
+
+	for ((mdt_idx = 0; mdt_idx < $mdscount; mdt_idx++)); do
+		local mdt=$(mdtname_from_index $mdt_idx $fsname)
+		local lodname=lod.$mdt-mdtlov.pools.$poolname
+		local facet=mds$((mdt_idx + 1))
+
+		wait_update_facet $facet "$LCTL get_param -n $lodname \
+					  2>/dev/null || echo foo" "foo" ||
+			error "$facet: destroy pool failed $1"
 	done
 	wait_update $HOSTNAME "lctl get_param -n lov.$fsname-*.pools.$poolname \
 		2>/dev/null || echo foo" "foo" || error "destroy pool failed $1"
 
 	remove_pool_from_list $fsname.$poolname
 
-	return $RC
+	return 0
 }
 
 destroy_pools () {
@@ -11084,16 +11114,15 @@ precreated_ost_obj_count()
 {
 	local mdt_idx=$1
 	local ost_idx=$2
-	local mdt_name="MDT$(printf '%04x' $mdt_idx)"
-	local ost_name="OST$(printf '%04x' $ost_idx)"
-	local proc_path="${FSNAME}-${ost_name}-osc-${mdt_name}"
-	local last_id=$(do_facet mds$((mdt_idx + 1)) lctl get_param -n \
-			osp.$proc_path.prealloc_last_id)
-	local next_id=$(do_facet mds$((mdt_idx + 1)) lctl get_param -n \
-			osp.$proc_path.prealloc_next_id)
+	local mdt_name="${MDT[$mdt_idx]}"
+	local osp_name="$(ostname_from_index $ost_idx)-osc-${mdt_name#$FSNAME-}"
+	local param="osp.$osp_name.prealloc_{next,last}_id"
+	local ids=($(do_facet mds$((mdt_idx + 1)) $LCTL get_param -n $param))
+	local next_id=${ids[0]}
+	local last_id=${ids[1]}
 	local ost_obj_count=$((last_id - next_id + 1))
 
-	echo " - precreated_ost_obj_count $proc_path" \
+	echo " - precreated_ost_obj_count $param" \
 	     "prealloc_last_id: $last_id" \
 	     "prealloc_next_id: $next_id" \
 	     "count: $ost_obj_count" 1>&2
@@ -11122,34 +11151,36 @@ check_file_in_pool()
 }
 
 pool_add() {
-	local pool=$1
+	local poolname=$1
 	local mdscount=${2:-$MDSCOUNT}
 
-	echo "Creating new pool $pool"
-	create_pool $FSNAME.$pool false $mdscount ||
+	echo "Creating new pool $poolname"
+	create_pool $FSNAME.$poolname false $mdscount ||
 		{ error_noexit "No pool created, result code $?"; return 1; }
-	[ $($LFS pool_list $FSNAME | grep -c "$FSNAME.${pool}\$") -eq 1 ] ||
-		{ error_noexit "$pool not in lfs pool_list"; return 2; }
+	[ $($LFS pool_list $FSNAME | grep -c "$FSNAME.${poolname}\$") -eq 1 ] ||
+		{ error_noexit "$poolname not in 'lfs pool_list'"; return 2; }
 }
 
 pool_add_targets() {
 	echo "Adding targets to pool"
-	local pool=$1
+	local poolname=$1
 	local first=$2
 	local last=${3:-$first}
 	local step=${4:-1}
 	local mdscount=${5:-$MDSCOUNT}
+	local lovname="lov.$FSNAME-*.pools.$poolname"
 
 	local list=$(seq $first $step $last)
 
 	local t=$(for i in $list; do printf "$FSNAME-OST%04x_UUID " $i; done)
 	local tg=$(for i in $list;
 		do printf -- "-e $FSNAME-OST%04x_UUID " $i; done)
+	local filter="grep $tg | sort -u | tr '\n' ' '"
 	local firstx=$(printf "%04x" $first)
 	local lastx=$(printf "%04x" $last)
 
 	do_facet mgs $LCTL pool_add \
-		$FSNAME.$pool $FSNAME-OST[$firstx-$lastx/$step]
+		$FSNAME.$poolname $FSNAME-OST[$firstx-$lastx/$step]
 	# ignore EEXIST(17)
 	if (( $? != 0 && $? != 17 )); then
 		error_noexit "pool_add $FSNAME-OST[$firstx-$lastx/$step] failed"
@@ -11157,31 +11188,33 @@ pool_add_targets() {
 	fi
 
 	# wait for OSTs to be added to the pool
-	for ((mds_id = 1; mds_id < $mdscount; mds_id++)); do
-		local mdt_id=$((mds_id-1))
-		local lodname=$FSNAME-MDT$(printf "%04x" $mdt_id)-mdtlov
-		wait_update_facet mds$mds_id \
-			"lctl get_param -n lod.$lodname.pools.$pool |
-				grep $tg | sort -u | tr '\n' ' '" "$t" || {
-			error_noexit "mds$mds_id: Add to pool failed"
+	for ((mdt_idx = 0; mdt_idx < $mdscount; mdt_idx++)); do
+		local mdt=$(mdtname_from_index $mdt_idx $FSNAME)
+		local lodname=lod.$mdt-mdtlov.pools.$poolname
+		local facet=mds$((mdt_idx + 1))
+
+		wait_update_facet $facet \
+			"$LCTL get_param -n $lodname | $filter" "$t" || {
+			do_facet $facet $LCTL get_param $lodname
+			error_noexit "$facet: Add '$t' to pool failed"
 			return 2
 		}
 	done
-	wait_update $HOSTNAME "lctl get_param -n lov.$FSNAME-*.pools.$pool |
-			grep $tg | sort -u | tr '\n' ' ' " "$t" || {
-		error_noexit "Add to pool failed"
+	wait_update $HOSTNAME "$LCTL get_param -n $lovname | $filter" "$t" || {
+		$LCTL get_param $lovname
+		error_noexit "client: Add '$t' to pool failed"
 		return 1
 	}
 }
 
 pool_set_dir() {
-	local pool=$1
+	local poolname=$1
 	local tdir=$2
 	echo "Setting pool on directory $tdir"
 
-	$LFS setstripe -c 2 -p $pool $tdir && return 0
+	$LFS setstripe -c 2 -p $poolname $tdir && return 0
 
-	error_noexit "Cannot set pool $pool to $tdir"
+	error_noexit "Cannot set pool $poolname to $tdir"
 	return 1
 }
 
@@ -11191,7 +11224,7 @@ pool_check_dir() {
 	echo "Checking pool on directory $tdir"
 
 	local res=$($LFS getstripe --pool $tdir | sed "s/\s*$//")
-	[ "$res" = "$pool" ] && return 0
+	[[ "$res" != "$pool" ]] || return 0
 
 	error_noexit "Pool on '$tdir' is '$res', not '$pool'"
 	return 1
@@ -11224,7 +11257,7 @@ pool_alloc_files() {
 	do
 		local file=$tdir/file-$i
 		touch $file
-		check_file_in_pool $file $pool "$tlist" || \
+		check_file_in_pool $file $pool "$tlist" ||
 			failed=$((failed + 1))
 	done
 	[ "$failed" = 0 ] && return 0
@@ -11295,55 +11328,58 @@ pool_remove_first_target() {
 }
 
 pool_remove_target() {
-	local pool=$1
+	local poolname=$1
 	local index=$2
+	local mdscount=${3:-$MDSCOUNT}
+	local lovname="lov.$FSNAME-*.pools.$poolname"
 
-	local pname="lov.$FSNAME-*.pools.$pool"
-	if [ $index -eq -1 ]; then
-		local t=$($LCTL get_param -n $pname | head -1)
+	if (( $index == -1 )); then
+		local t=$($LCTL get_param -n $lovname | head -1)
 	else
 		local t=$(printf "$FSNAME-OST%04x_UUID" $index)
 	fi
 
-	echo "Removing $t from $pool"
-	do_facet mgs $LCTL pool_remove $FSNAME.$pool $t
-	for mds_id in $(seq $MDSCOUNT); do
-		local mdt_id=$((mds_id-1))
-		local lodname=$FSNAME-MDT$(printf "%04x" $mdt_id)-mdtlov
-		wait_update_facet mds$mds_id \
-			"lctl get_param -n lod.$lodname.pools.$pool |
-				grep $t" "" || {
-			error_noexit "mds$mds_id: $t not removed from" \
-			"$FSNAME.$pool"
+	echo "Removing $t from $poolname"
+	do_facet mgs $LCTL pool_remove $FSNAME.$poolname $t
+	for ((mdt_idx = 0; mdt_idx < $mdscount; mdt_idx++)); do
+		local mdt=$(mdtname_from_index $mdt_idx $FSNAME)
+		local lodname=lod.$mdt-mdtlov.pools.$poolname
+		local facet=mds$((mdt_idx + 1))
+
+		wait_update_facet $facet \
+			"$LCTL get_param -n $lodname | grep $t" "" || {
+			error_noexit "$facet: $t still in $FSNAME.$poolname"
 			return 2
 		}
 	done
-	wait_update $HOSTNAME "lctl get_param -n $pname | grep $t" "" || {
-		error_noexit "$t not removed from $FSNAME.$pool"
+	wait_update $HOSTNAME "lctl get_param -n $lovname | grep $t" "" || {
+		error_noexit "$t not removed from $FSNAME.$poolname"
 		return 1
 	}
 }
 
 pool_remove_all_targets() {
 	echo "Removing all targets from pool"
-	local pool=$1
+	local poolname=$1
 	local file=$2
-	local pname="lov.$FSNAME-*.pools.$pool"
-	for t in $($LCTL get_param -n $pname | sort -u)
-	do
-		do_facet mgs $LCTL pool_remove $FSNAME.$pool $t
+	local mdscount=${3:-$MDSCOUNT}
+	local lovname="lov.$FSNAME-*.pools.$poolname"
+
+	for t in $($LCTL get_param -n $lovname | sort -u); do
+		do_facet mgs $LCTL pool_remove $FSNAME.$poolname $t
 	done
-	for mds_id in $(seq $MDSCOUNT); do
-		local mdt_id=$((mds_id-1))
-		local lodname=$FSNAME-MDT$(printf "%04x" $mdt_id)-mdtlov
-		wait_update_facet mds$mds_id "lctl get_param -n \
-			lod.$lodname.pools.$pool" "" || {
-			error_noexit "mds$mds_id: Pool $pool not drained"
+	for ((mdt_idx = 0; mdt_idx < $mdscount; mdt_idx++)); do
+		local mdt=$(mdtname_from_index $mdt_idx $FSNAME)
+		local lodname=lod.$mdt-mdtlov.pools.$poolname
+		local facet=mds$((mdt_idx + 1))
+
+		wait_update_facet $facet "lctl get_param -n $lodname" "" || {
+			error_noexit "$facet: Pool $poolname not drained"
 			return 4
 		}
 	done
-	wait_update $HOSTNAME "lctl get_param -n $pname" "" || {
-		error_noexit "Pool $FSNAME.$pool cannot be drained"
+	wait_update $HOSTNAME "lctl get_param -n $lovname" "" || {
+		error_noexit "Pool $FSNAME.$poolname cannot be drained"
 		return 1
 	}
 	# striping on an empty/nonexistant pool should fall back
@@ -11353,9 +11389,8 @@ pool_remove_all_targets() {
 		return 2
 	}
 	# setstripe on an empty pool should fail
-	$LFS setstripe -p $pool $file 2>/dev/null && {
-		error_noexit "expected failure when creating file" \
-							"with empty pool"
+	$LFS setstripe -p $poolname $file 2>/dev/null && {
+		error_noexit "expected failure creating file with empty pool"
 		return 3
 	}
 	return 0
@@ -11528,14 +11563,12 @@ lss_cleanup()
 lss_gen_conf_one()
 {
 	local facet=$1
-	local role=$2
-	local idx=$3
+	local label=$2
 
 	local host=$(facet_active_host $facet)
 	local dir=$(dirname $(facet_vdevice $facet))
 	local pool=$(zpool_name $facet)
 	local lfsname=$(zfs_local_fsname $facet)
-	local label=${FSNAME}-${role}$(printf '%04x' $idx)
 
 	do_facet mgs \
 		"echo '$host - $label zfs:${dir}/${pool}/${lfsname} - -' >> \
@@ -11548,7 +11581,7 @@ lss_gen_conf()
 	echo "Generating $LSNAPSHOT_CONF on MGS ..."
 
 	if ! combined_mgs_mds ; then
-		[ $(facet_fstype mgs) != zfs ] &&
+		[[ $(facet_fstype mgs) == zfs ]] ||
 			skip "Lustre snapshot 1 only works for ZFS backend"
 
 		local host=$(facet_active_host mgs)
@@ -11561,20 +11594,24 @@ lss_gen_conf()
 			>> $LSNAPSHOT_CONF" || lss_err "generate lss conf (mgs)"
 	fi
 
-	for num in `seq $MDSCOUNT`; do
-		[ $(facet_fstype mds$num) != zfs ] &&
+	for ((mdsno=1; mdsno <= $MDSCOUNT; mdsno++)); do
+		local facet=mds$mdsno
+
+		[[ $(facet_fstype $facet) == zfs ]] ||
 			skip "Lustre snapshot 1 only works for ZFS backend"
 
-		lss_gen_conf_one mds$num MDT $((num - 1)) ||
-			lss_err "generate lss conf (mds$num)"
+		lss_gen_conf_one $facet ${MDT[$((mdsno - 1))]} ||
+			lss_err "generate lss conf ($facet)"
 	done
 
-	for num in `seq $OSTCOUNT`; do
-		[ $(facet_fstype ost$num) != zfs ] &&
+	for ((ossno=1; ossno <= $OSTCOUNT; ossno++)); do
+		facet=ost$ossno
+
+		[[ $(facet_fstype $facet) == zfs ]] ||
 			skip "Lustre snapshot 1 only works for ZFS backend"
 
-		lss_gen_conf_one ost$num OST $((num - 1)) ||
-			lss_err "generate lss conf (ost$num)"
+		lss_gen_conf_one $facet $(ostname_from_index $((ossno - 1))) ||
+			lss_err "generate lss conf ($facet)"
 	done
 
 	do_facet mgs "cat $LSNAPSHOT_CONF"
@@ -11798,25 +11835,24 @@ changelog_register() {
 	else
 		changelog_register="changelog_register"
 	fi
-	for M in $(seq $MDSCOUNT); do
-		local facet=mds$M
-		local mdt="$(facet_svc $facet)"
-		local cl_mask
+	local cl_mask=$(do_facet mds1 \
+			$LCTL get_param -n mdd.${MDT[0]}.changelog_mask)
 
-		cl_mask=$(do_facet $facet $LCTL get_param \
-			     mdd.${mdt}.changelog_mask -n)
-		stack_trap "do_facet $facet $LCTL \
-			set_param mdd.$mdt.changelog_mask=\'$cl_mask\' -n" EXIT
-		do_facet $facet $LCTL set_param mdd.$mdt.changelog_mask=+hsm ||
-			error "$mdt: changelog_mask=+hsm failed: $?"
+	stack_trap "changelog_chmask '$cl_mask'"
+	changelog_chmask +hsm ||
+		error "setting changelog_mask=+hsm failed: $?"
+
+	for ((mdt_idx = 0; mdt_idx < $MDSCOUNT; mdt_idx++)); do
+		local facet=mds$((mdt_idx + 1))
+		local mdt="${MDT[mdt_idx]}"
 
 		local cl_user
 		cl_user=$(do_facet $facet $LCTL --device $mdt \
-			$changelog_register -n "$@") ||
+			  $changelog_register -n "$@") ||
 			error "$mdt: register changelog user failed: $?"
-		stack_trap "__changelog_deregister $facet $cl_user" EXIT
+		stack_trap "__changelog_deregister $facet $cl_user"
 
-		stack_trap "CL_USERS[$facet]='${CL_USERS[$facet]}'" EXIT
+		stack_trap "CL_USERS[$facet]='${CL_USERS[$facet]}'"
 		# Bash does not support nested arrays, but the format of a
 		# cl_user is constrained enough to use whitespaces as separators
 		CL_USERS[$facet]+="$cl_user "
@@ -11857,7 +11893,8 @@ changelog_user_rec() {
 changelog_chmask() {
 	local mask=$1
 
-	do_nodes $(mdts_nodes) $LCTL set_param mdd.*.changelog_mask="$mask"
+	# quote for the remote shell, the mask may be several words
+	do_nodes $(mdts_nodes) "$LCTL set_param mdd.*.changelog_mask='$mask'"
 }
 
 # usage: __changelog_clear FACET CL_USER [+]INDEX
@@ -12437,7 +12474,7 @@ init_agt_vars() {
 
 	# The test only support up to 10 MDTs
 	MDT_PREFIX="mdt.$FSNAME-MDT000"
-	HSM_PARAM="${MDT_PREFIX}0.hsm"
+	HSM_PARAM="mdt.$(mdtname_from_index 0).hsm"
 
 	# archive is purged at copytool setup
 	HSM_ARCHIVE_PURGE=true
@@ -12455,13 +12492,11 @@ copytool_device() {
 }
 
 get_mdt_devices() {
-	local mdtno
-	# get MDT device for each mdc
-	for mdtno in $(seq 1 $MDSCOUNT); do
-		local idx=$(($mdtno - 1))
-		MDT[$idx]=$($LCTL get_param -n \
-			mdc.$FSNAME-MDT000${idx}-mdc-*.mds_server_uuid |
-			awk '{gsub(/_UUID/,""); print $1}' | head -n1)
+	local mdt_idx
+
+	# generate the MDT name for each MDT index
+	for ((mdt_idx = 0; mdt_idx < $MDSCOUNT; mdt_idx++)); do
+		MDT[$mdt_idx]=$(mdtname_from_index $mdt_idx)
 	done
 }
 
@@ -12723,14 +12758,15 @@ mdts_check_param() {
 	local key="$1"
 	local target="$2"
 	local timeout="$3"
-	local mdtno
+	local mdt_idx
 
-	for mdtno in $(seq 1 $MDSCOUNT); do
-		local idx=$(($mdtno - 1))
-		wait_update_facet --verbose mds${mdtno} \
-			"$LCTL get_param -n $MDT_PREFIX${idx}.$key" "$target" \
-			$timeout ||
-			error "$key state is not '$target' on mds${mdtno}"
+	for ((mdt_idx = 0; mdt_idx < $MDSCOUNT; mdt_idx++)); do
+		local facet=mds$((mdt_idx + 1))
+
+		wait_update_facet --verbose $facet \
+			"$LCTL get_param -n mdt.${MDT[$mdt_idx]}.$key" \
+			"$target" $timeout ||
+			error "$key state is not '$target' on $facet"
 	done
 }
 
@@ -12772,10 +12808,10 @@ wait_request_state() {
 	local request=$2
 	local state=$3
 	# 4th arg (mdt index) is optional
-	local mdtidx=${4:-0}
-	local mds=mds$(($mdtidx + 1))
+	local mdt_idx=${4:-0}
+	local mds=mds$(($mdt_idx + 1))
 
-	local cmd="$LCTL get_param -n ${MDT_PREFIX}${mdtidx}.hsm.actions"
+	local cmd="$LCTL get_param -n mdt.${MDT[$mdt_idx]}.hsm.actions"
 	cmd+=" | awk '/'$fid'.*action='$request'/ {print \\\$13}' | cut -f2 -d="
 
 	wait_update_facet --verbose $mds "$cmd" "$state" 200 ||
@@ -13241,9 +13277,9 @@ __exhaust_precreations() {
 	local ofacet=ost$((OSTIDX + 1))
 
 	mkdir_on_mdt0 $DIR/$tdir
-	local mdtidx=$($LFS getstripe -m $DIR/$tdir)
-	local mfacet=mds$((mdtidx + 1))
-	echo OSTIDX=$OSTIDX MDTIDX=$mdtidx
+	local mdt_idx=$($LFS getstripe -m $DIR/$tdir)
+	local mfacet=mds$((mdt_idx + 1))
+	echo OSTIDX=$OSTIDX MDTIDX=$mdt_idx
 
 	local mdtosc_proc=$(get_mdtosc_proc_path $mfacet)
 	do_facet $mfacet $LCTL get_param osp.$mdtosc_proc.prealloc*
@@ -13301,16 +13337,16 @@ force_new_seq_ost() {
 
 force_new_seq() {
 	local mfacet=$1
-	local MDTIDX=$(facet_index $mfacet)
-	local MDT=$(mdtname_from_index $MDTIDX $DIR)
+	local mdt_idx=$(facet_index $mfacet)
+	local mdtname=${MDT[$mdt_idx]}
 	local i
 
-	mkdir_on_mdt -i $MDTIDX $DIR/${MDT}
+	mkdir_on_mdt -i $mdt_idx $DIR/$mdtname
 	for (( i=0; i < OSTCOUNT; i++ )) ; do
-		force_new_seq_ost $DIR/${MDT} $mfacet $i &
+		force_new_seq_ost $DIR/$mdtname $mfacet $i &
 	done
 	wait
-	rm -rf $DIR/${MDT}
+	rm -rf $DIR/$mdtname
 }
 
 force_new_seq_all() {
@@ -13347,24 +13383,17 @@ verify_compare_yaml() {
 
 zfs_or_rotational() {
 	local ost_idx=0
-	local ost_name=$(ostname_from_index $ost_idx $MOUNT)
-	local param="get_param -n osd-*.${ost_name}.nonrotational"
-	local nonrotat=$(do_facet ost1 $LCTL $param)
+	local facet=ost$((ost_idx + 1))
+	local param="osd-*.$(ostname_from_index $ost_idx).nonrotational"
+	local nonrot=$(do_facet $facet "$LCTL get_param -n $param")
 
-	if [[ -z "$nonrotat" ]]; then
+	if [[ -z "$nonrot" ]]; then
 		# At this point there is no point moving ahead.
 		# Will stop here and dump all the info
-		set -x
-		local ost_name=$(ostname_from_index $ost_idx)
-		set +x
-		error "$LCTL $input_str"
+		error "'$LCTL get_param -n $param' empty"
 	fi
 
-	if [[ "$ost1_FSTYPE" == "zfs" ]] || (( "$nonrotat" == 0 )); then
-		return 0
-	else
-		return 1
-	fi
+	[[ "$ost1_FSTYPE" == "zfs" ]] || (( "$nonrot" == 0 ))
 }
 
 ost_fid2_objpath() {

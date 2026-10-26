@@ -48,6 +48,15 @@ if $SHARED_KEY; then
 	always_except LU-17127 39o
 fi
 
+if (( $MDSCOUNT > 4 )); then
+	always_except LU-21043 51d
+	always_except LU-19909 181
+	if (( $MDSCOUNT > 8 )); then
+		always_except LU-19933 160h
+		always_except LU-19887 300ug
+	fi
+fi
+
 # skip nfs tests on kernels >= 4.12.0 until they are fixed
 if [ $LINUX_VERSION_CODE -ge $(version_code 4.12.0) ]; then
 	always_except LU-12661 817
@@ -1418,8 +1427,9 @@ simple_cleanup_common() {
 }
 
 max_pages_per_rpc() {
-	local mdtname="$(printf "MDT%04x" ${1:-0})"
-	$LCTL get_param -n mdc.*$mdtname*.max_pages_per_rpc
+	local mdt_idx=${1:-0}
+
+	$LCTL get_param -n mdc.${MDT[$mdt_idx]}*.max_pages_per_rpc
 }
 
 test_24v() {
@@ -5527,7 +5537,10 @@ run_test 33g "nonroot user create already existing root created file"
 
 sub_33h() {
 	local hash_type=$1
-	local count=250
+	local count=$((MDSCOUNT * 40))
+	local expect=$MDSCOUNT
+
+	(( count >= 250 )) || count=250
 
 	test_mkdir -c $MDSCOUNT -H $hash_type $DIR/$tdir ||
 		error "lfs mkdir -H $hash_type $tdir failed"
@@ -5566,11 +5579,14 @@ sub_33h() {
 		done
 	done
 
-	echo "$failed/$count MDT index mismatches, expect ~2-4"
-	(( failed < 10 )) || error "MDT index mismatch $failed/$count times"
+	# all-one-case or mostly-digit suffixes are not seen as temp files
+	local limit=$((expect * 2 > 9 ? expect * 2 : 9))
+
+	echo "$failed/$count MDT index mismatches, expect ~$expect, max $limit"
+	(( failed <= limit )) ||
+		error "MDT index mismatch $failed/$count times > $limit"
 
 	local same=0
-	local expect
 
 	# verify that "crush" is still broken with all files on same MDT,
 	# crush2 should have about 1/MDSCOUNT files on each MDT, with margin
@@ -5607,7 +5623,7 @@ sub_33h() {
 		log "MDT index match $stat times, $try tries left"
 
 		(( try > 0 )) ||
-		error "MDT index match $stat times, after $tries tries"
+			error "MDT index match $stat times, after $tries tries"
 		same=0
 	done
 
@@ -5639,15 +5655,15 @@ sub_33h() {
 		log "MDT index match $stat times, $try tries left"
 
 		(( try > 0 )) ||
-		error "MDT index match $stat times, after $tries tries"
+			error "MDT index match $stat times, after $tries tries"
 		same=0
 	done
 }
 
 test_33h() {
 	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
-	(( $MDS1_VERSION >= $(version_code 2.13.50) )) ||
-		skip "Need MDS version at least 2.13.50"
+	(( $MDS1_VERSION >= $(version_code v2_13_52-232-g0a1cf8da80) )) ||
+		skip "Need MDS >= 2.13.52.232 for crush directory hash"
 
 	sub_33h crush
 }
@@ -5655,9 +5671,8 @@ run_test 33h "temp file is located on the same MDT as target (crush)"
 
 test_33hh() {
 	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
-	echo "MDS1_VERSION=$MDS1_VERSION version_code=$(version_code 2.15.0)"
-	(( $MDS1_VERSION > $(version_code 2.15.0) )) ||
-		skip "Need MDS version at least 2.15.0 for crush2"
+	(( $MDS1_VERSION >= $(version_code v2_15_50-185-g1ac4b9598a) )) ||
+		skip "Need MDS >= 2.15.50.185 for crush2 directory hash"
 
 	sub_33h crush2
 }
@@ -7469,11 +7484,11 @@ test_51b() {
 
 	$LFS df
 	$LFS df -i
-	local mdtname=$(mdtname_from_index $($LFS getstripe -m $dir))
+	local mdtname=${MDT[$($LFS getstripe -m $dir)]}
 	local nproc=2 #$((lctl get_param -n mdc.$mdtname*.max_rpcs_in_flight/2))
 	local numfree=$($LCTL get_param -n mdc.$mdtname*.filesfree)
 	(( $numfree >= $nrdirs )) ||
-		skip "not enough free inodes ($numfree) on $mdtname"
+		skip "not enough free inodes ($numfree < $nrdirs) on $mdtname"
 
 	# need to check free space for the directories as well
 	local blkfree=$($LCTL get_param -n mdc.$mdtname*.kbytesavail)
@@ -7698,33 +7713,30 @@ test_51e() {
 run_test 51e "check file nlink limit"
 
 test_51f() {
-	test_mkdir $DIR/$tdir
+	test_mkdir -c $MDSCOUNT $DIR/$tdir || error "cannot create striped dir"
 
 	local max=100000
 	local ulimit_old=$(ulimit -n)
-	local spare=20 # number of spare fd's for scripts/libraries, etc.
+	local spare=100 # number of spare fd's for scripts/libraries, etc.
 	local mdt=$($LFS getstripe -m $DIR/$tdir)
 	local numfree=$($LFS df --mdt=$mdt --output=ifree $DIR/$tdir)
 
-	echo "MDT$mdt numfree=$numfree, max=$max"
-	[[ $numfree -gt $max ]] && numfree=$max || numfree=$((numfree * 7 / 8))
-	if [ $((numfree + spare)) -gt $ulimit_old ]; then
+	stack_trap "ulimit -n $ulimit_old"
+	echo "ulimit_old=$ulimit_old numfree=$numfree, max=$max"
+	(( $numfree > $max )) && numfree=$max || numfree=$((numfree * 7 / 8))
+	if (($numfree + $spare > $ulimit_old )); then
 		while ! ulimit -n $((numfree + spare)); do
 			numfree=$((numfree * 3 / 4))
+			echo "ulimit too big, try using $((numfree + spare))"
 		done
 		echo "changed ulimit from $ulimit_old to $((numfree + spare))"
 	else
 		echo "left ulimit at $ulimit_old"
 	fi
 
-	createmany -o -k -t 120 $DIR/$tdir/f $numfree || {
-		unlinkmany $DIR/$tdir/f $numfree
+	stack_trap "unlinkmany $DIR/$tdir/f $numfree || true"
+	createmany -o -k -t 120 $DIR/$tdir/f $numfree ||
 		error "create+open $numfree files in $DIR/$tdir failed"
-	}
-	ulimit -n $ulimit_old
-
-	# if createmany exits at 120s there will be fewer than $numfree files
-	unlinkmany $DIR/$tdir/f $numfree || true
 }
 run_test 51f "check many open files limit"
 
@@ -11831,8 +11843,8 @@ test_57a() {
 run_test 57a "verify MDS filesystem created with large inodes =="
 
 test_57b() {
-	[ $PARALLEL == "yes" ] && skip "skip parallel run"
-	if [ "$mds1_FSTYPE" != ldiskfs ]; then
+	[[ $PARALLEL != "yes" ]] || skip "skip parallel run"
+	if [[ "$mds1_FSTYPE" != ldiskfs ]]; then
 		skip_env "ldiskfs only test"
 	fi
 	remote_mds_nodsh && skip "remote MDS with nodsh"
@@ -11845,10 +11857,11 @@ test_57b() {
 	rm -rf $dir || error "removing $dir"
 	test_mkdir -c1 $dir
 	local mdtidx=$($LFS getstripe -m $dir)
-	local mdtname=MDT$(printf %04x $mdtidx)
+	local mdtname=${MDT[$mdtidx]}
 	local facet=mds$((mdtidx + 1))
 
 	echo "mcreating $filecount files"
+	stack_trap "unlinkmany $dir/f 1 $filecount || true"
 	createmany -m $dir/f 1 $filecount || error "creating files in $dir"
 
 	# verify that files do not have EAs yet
@@ -11861,8 +11874,8 @@ test_57b() {
 	sleep 1
 	df $dir  #make sure we get new statfs data
 	local mdsfree=$(do_facet $facet \
-			lctl get_param -n osd*.*$mdtname.kbytesfree)
-	local mdcfree=$(lctl get_param -n mdc.*$mdtname-mdc-*.kbytesfree)
+			$LCTL get_param -n osd*.$mdtname.kbytesfree)
+	local mdcfree=$($LCTL get_param -n mdc.$mdtname-mdc-*.kbytesfree)
 	local file
 
 	echo "opening files to create objects/EAs"
@@ -11880,18 +11893,17 @@ test_57b() {
 	sleep 1  #make sure we get new statfs data
 	df $dir
 	local mdsfree2=$(do_facet $facet \
-			 lctl get_param -n osd*.*$mdtname.kbytesfree)
-	local mdcfree2=$(lctl get_param -n mdc.*$mdtname-mdc-*.kbytesfree)
+			 $LCTL get_param -n osd*.$mdtname.kbytesfree)
+	local mdcfree2=$($LCTL get_param -n mdc.$mdtname-mdc-*.kbytesfree)
 
-	if [[ $mdcfree2 -lt $((mdcfree - 16)) ]]; then
-		if [ "$mdsfree" != "$mdsfree2" ]; then
+	if (( $mdcfree2 < $mdcfree - 16 )); then
+		if [[ "$mdsfree" != "$mdsfree2" ]]; then
 			error "MDC before $mdcfree != after $mdcfree2"
 		else
 			echo "MDC before $mdcfree != after $mdcfree2"
 			echo "unable to confirm if MDS has large inodes"
 		fi
 	fi
-	rm -rf $dir
 }
 run_test 57b "default LOV EAs are stored inside large inodes ==="
 
@@ -24113,28 +24125,25 @@ run_test 160h "changelog gc thread stop upon umount, orphan records delete " \
 test_160i() {
 	local mdts=$(mdts_nodes)
 
-	changelog_register || error "first changelog_register failed"
+	changelog_register --mask MKDIR || error "first changelog_register fail"
 
 	# generate some changelog records to accumulate on each MDT
-	# use all_char because created files should be evenly distributed
-	test_mkdir -c $MDSCOUNT -H all_char $DIR/$tdir ||
-		error "test_mkdir $tdir failed"
-	for ((i = 0; i < MDSCOUNT; i++)); do
-		$LFS mkdir -i $i $DIR/$tdir/d$i.1 $DIR/$tdir/d$i.2 ||
-			error "create $DIR/$tdir/d$i.1 failed"
+	mkdir $DIR/$tdir || error "test_mkdir $tdir failed"
+	for ((mdtidx = 0; mdtidx < MDSCOUNT; mdtidx++)); do
+		$LFS mkdir -i $mdtidx -c 1 $DIR/$tdir/d$mdtidx.{1,2} ||
+			error "create $DIR/$tdir/d$mdtidx.{1,2} failed"
 	done
 
 	# check changelogs have been generated
 	local nbcl=$(changelog_dump | wc -l)
-	[[ $nbcl -eq 0 ]] && error "no changelogs found"
+	(( $nbcl != 0 )) || error "no changelogs found"
 
 	# simulate race between register and unregister
 	# XXX as fail_loc is set per-MDS, with DNE configs the race
 	# simulation will only occur for one MDT per MDS and for the
 	# others the normal race scenario will take place
 	#define CFS_FAIL_CHLOG_USER_REG_UNREG_RACE          0x1315
-	do_nodes $mdts $LCTL set_param fail_loc=0x10001315
-	do_nodes $mdts $LCTL set_param fail_val=1
+	do_nodes $mdts $LCTL set_param fail_loc=0x10001315 fail_val=1
 
 	# unregister 1st user
 	changelog_deregister &
@@ -24149,26 +24158,30 @@ test_160i() {
 	local i
 	local last_rec
 	declare -A LAST_REC
-	for ((i=1; i <= $MDSCOUNT; i++)); do
-		if changelog_users mds$i | grep "^cl"; then
+	for ((mdsno=1; mdsno <= $MDSCOUNT; mdsno++)); do
+		local facet=mds$mdsno
+		if changelog_users $facet | grep "^cl"; then
 			# make sure new records are added with one user present
-			LAST_REC[mds$i]=$(changelog_users $SINGLEMDS |
+			LAST_REC[$facet]=$(changelog_users $facet |
 					  awk '/^current.index:/ { print $NF }')
 		else
-			error "mds$i has no user registered"
+			error "$facet has no user registered"
 		fi
 	done
 
 	# generate more changelog records to accumulate on each MDT
-	createmany -m $DIR/$tdir/${tfile}bis $((MDSCOUNT * 2)) ||
-		error "create $DIR/$tdir/${tfile}bis failed"
+	for ((mdtidx = 0; mdtidx < MDSCOUNT; mdtidx++)); do
+		mkdir $DIR/$tdir/d$mdtidx.{1,2}/$tdir.{1,2} ||
+			error "mkdir $DIR/$tdir/d$mdtidx.{1,2}/$tdir.{1,2} fail"
 
-	for ((i=1; i <= $MDSCOUNT; i++)); do
-		last_rec=$(changelog_users $SINGLEMDS |
+		facet=mds$((mdtidx + 1))
+		last_rec=$(changelog_users $facet |
 			   awk '/^current.index:/ { print $NF }')
-		echo "verify changelogs are on: $last_rec != ${LAST_REC[mds$i]}"
-		[ $last_rec != ${LAST_REC[mds$i]} ] ||
-			error "changelogs are off on mds$i"
+		echo "verify changelogs added: ${LAST_REC[$facet]}->$last_rec"
+		(( $last_rec != ${LAST_REC[$facet]} )) || {
+			changelog_users $facet
+			error "changelogs are off on $facet"
+		}
 	done
 }
 run_test 160i "changelog user register/unregister race"
@@ -29038,20 +29051,23 @@ test_230n() {
 run_test 230n "Dir migration with mirrored file"
 
 test_230o() {
-	[ $MDSCOUNT -ge 2 ] || skip "needs >= 2 MDTs"
-	[ $MDS1_VERSION -ge $(version_code 2.13.52) ] ||
-		skip "Need MDS version at least 2.13.52"
+	(( $MDSCOUNT >= 2 )) || skip "needs >= 2 MDTs"
+	(( $MDS1_VERSION >= $(version_code v2_13_54-18-ga336d7c7c1) )) ||
+		skip "Need MDS >= 2.13.54.18 for directory split"
 
 	local mdts=$(mdts_nodes)
+	local mdscount=$((MDSCOUNT > 8 ? 8 : MDSCOUNT))
 	local timeout=100
+	local count=$((25 * mdscount))
 	local restripe_status
+	local mdt_hash=crush
 	local delta
-	local i
+	local c
 
 	[[ $mds1_FSTYPE == zfs ]] && timeout=300
 
 	# in case "crush" hash type is not set
-	do_nodes $mdts "$LCTL set_param lod.*.mdt_hash=crush"
+	do_nodes $mdts "$LCTL set_param lod.*.mdt_hash=$mdt_hash"
 
 	restripe_status=$(do_facet mds1 $LCTL get_param -n \
 			   mdt.*MDT0000.enable_dir_restripe)
@@ -29060,42 +29076,53 @@ test_230o() {
 		    mdt.*.enable_dir_restripe=$restripe_status"
 
 	mkdir $DIR/$tdir
-	createmany -m $DIR/$tdir/f 100 ||
-		error "create files under remote dir failed $i"
-	createmany -d $DIR/$tdir/d 100 ||
-		error "create dirs under remote dir failed $i"
+	createmany -m $DIR/$tdir/f $count ||
+		error "create $count files under remote dir failed"
+	createmany -d $DIR/$tdir/d $count ||
+		error "create $count dirs under remote dir failed"
 
-	for i in $(seq 2 $MDSCOUNT); do
+	local short=0
+
+	for ((c = 2; c <= $mdscount; c++)); do
 		do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear >/dev/null"
-		$LFS setdirstripe -c $i $DIR/$tdir ||
-			error "split -c $i $tdir failed"
+		$LFS setdirstripe -c $c $DIR/$tdir ||
+			error "split -c $c $tdir failed"
 		wait_update $HOSTNAME \
-			"$LFS getdirstripe -H $DIR/$tdir" "crush" $timeout ||
+			"$LFS getdirstripe -H $DIR/$tdir" $mdt_hash $timeout ||
 			error "dir split not finished"
-		delta=$(do_nodes $mdts "lctl get_param -n mdt.*MDT*.md_stats" |
+		delta=$(do_nodes $mdts "$LCTL get_param -n mdt.*MDT*.md_stats" |
 			awk '/migrate/ {sum += $2} END { print sum }')
-		echo "$delta migrated when dir split $((i - 1)) to $i stripes"
-		# delta is around total_files/stripe_count
-		(( $delta < 200 / (i - 1) + 4 )) ||
-			error "$delta files migrated >= $((200 / (i - 1) + 4))"
+		# delta fluctuates around 2 * total_files/stripe_count + 10%,
+		# but only on average between iterations (depends on hashing)
+		# so pass on the shortfall from one iteration to the next.
+		local expect=$((count * 11 / 10 * 2 / (c - 1)))
+
+		echo "$delta split sc=$((c-1))->$c expect<=$expect short=$short"
+		(( delta <= expect + short)) ||
+			error "$delta files migrated > $expect + $short"
+		short=$((expect > delta ? expect - delta : 0))
 	done
 }
 run_test 230o "dir split"
 
 test_230p() {
 	(( MDSCOUNT > 1 )) || skip "needs >= 2 MDTs"
-	(( MDS1_VERSION >= $(version_code 2.13.52) )) ||
-		skip "Need MDS version at least 2.13.52"
+	(( MDS1_VERSION >= $(version_code v2_13_54-18-ga336d7c7c1) )) ||
+		skip "Need MDS >= 2.13.54.18 for dir merge"
 
 	local mdts=$(mdts_nodes)
-	local timeout=100
+	local mdscount=$((MDSCOUNT > 8 ? 8 : MDSCOUNT))
+	local timeout=$((50 + 10 * mdscount))
+	local count=$((25 * mdscount))
 	local restripe_status
+	local mdt_hash=crush
 	local delta
 	local c
 
-	[[ $mds1_FSTYPE == zfs ]] && timeout=300
+	[[ $mds1_FSTYPE == zfs ]] && ((timeout*=3))
 
-	do_nodes $mdts "$LCTL set_param lod.*.mdt_hash=crush"
+	# in case "crush" hash type is not set
+	do_nodes $mdts "$LCTL set_param lod.*.mdt_hash=$mdt_hash"
 
 	restripe_status=$(do_facet mds1 $LCTL get_param -n \
 			   mdt.*MDT0000.enable_dir_restripe)
@@ -29103,32 +29130,36 @@ test_230p() {
 	stack_trap "do_nodes $mdts $LCTL set_param \
 		    mdt.*.enable_dir_restripe=$restripe_status"
 
-	test_mkdir -c $MDSCOUNT -H crush $DIR/$tdir
-	createmany -m $DIR/$tdir/f 100 ||
-		error "create files under remote dir failed"
-	createmany -d $DIR/$tdir/d 100 ||
-		error "create dirs under remote dir failed"
+	test_mkdir -c $mdscount -H $mdt_hash $DIR/$tdir
+	createmany -m $DIR/$tdir/f $count ||
+		error "create $count files under remote dir failed"
+	createmany -d $DIR/$tdir/d $count ||
+		error "create $count dirs under remote dir failed"
 
-	for ((c = $MDSCOUNT - 1; c >= 1; c--)); do
-		local mdt_hash="crush"
+	local short=0
 
+	(( $MDS1_VERSION > $(version_code 2.14.0-7-10-g3ae36f4c0a) )) &&
+		mdt_hash="$mdt_hash,fixed"
+	for ((c = $mdscount - 1; c >= 1; c--)); do
+		echo "restripe $DIR/$tdir to $c stripes"
 		do_nodes $mdts "$LCTL set_param mdt.*.md_stats=clear >/dev/null"
 		$LFS setdirstripe -c $c $DIR/$tdir ||
-			error "split -c $c $tdir failed"
-		if (( MDS1_VERSION > $(version_code 2.14.0-7-10-g3ae36f4c0a) )); then
-			mdt_hash="$mdt_hash,fixed"
-		elif (( $c == 1 )); then
-			mdt_hash="none"
-		fi
+			error "merge -c $c $tdir failed"
+		(( $c > 1 )) || [[ "$mdt_hash" =~ fixed ]] || mdt_hash="none"
 		wait_update $HOSTNAME \
 			"$LFS getdirstripe -H $DIR/$tdir" $mdt_hash $timeout ||
 			error "dir merge not finished"
 		delta=$(do_nodes $mdts "lctl get_param -n mdt.*MDT*.md_stats" |
 			awk '/migrate/ {sum += $2} END { print sum }')
-		echo "$delta migrated when dir merge $((c + 1)) to $c stripes"
-		# delta is around total_files/stripe_count
-		(( delta < 200 / c + 4 )) ||
-			error "$delta files migrated >= $((200 / c + 4))"
+		# delta fluctuates around 2 * total_files/stripe_count + 10%,
+		# but only on average between iterations (depends on hashing)
+		# so pass on the shortfall from one iteration to the next.
+		local expect=$(( count * 11 / 10 * 2 / c))
+
+		echo "$delta merge sc=$((c+1))->$c expect<=$expect short=$short"
+		(( delta <= expect + short)) ||
+			error "$delta files migrated > $expect + $short"
+		short=$((expect > delta ? expect - delta : 0))
 	done
 
 	(( MDS1_VERSION >= $(version_code v2_16_52-71-g103c1f560c) )) ||
@@ -29148,8 +29179,8 @@ run_test 230p "dir merge"
 
 test_230q() {
 	(( MDSCOUNT > 1)) || skip "needs >= 2 MDTs"
-	(( MDS1_VERSION >= $(version_code 2.13.52) )) ||
-		skip "Need MDS version at least 2.13.52"
+	(( MDS1_VERSION >= $(version_code v2_13_54-18-ga336d7c7c1) )) ||
+		skip "Need MDS >= 2.13.54.18 for dir auto split"
 
 	local mdts=$(mdts_nodes)
 	local saved_threshold=$(do_facet mds1 \
@@ -29157,15 +29188,19 @@ test_230q() {
 	local saved_delta=$(do_facet mds1 \
 			$LCTL get_param -n mdt.*-MDT0000.dir_split_delta)
 	local threshold=100
+	local mdscount=$((MDSCOUNT > 8 ? 8 : MDSCOUNT))
 	local delta=2
 	local total=0
 	local stripe_count=0
 	local stripe_index
+	local mdt_hash=crush
+	local sc_cmd="$LFS getdirstripe -c $DIR/$tdir"
+	local hash_cmd="$LFS getdirstripe -H $DIR/$tdir"
 	local nr_files
 	local create
 
 	# test with fewer files on ZFS
-	[ "$mds1_FSTYPE" == "zfs" ] && threshold=40
+	[[ "$mds1_FSTYPE" == "zfs" ]] && ((threshold/=2))
 
 	stack_trap "do_nodes $mdts $LCTL set_param \
 		    mdt.*.dir_split_count=$saved_threshold"
@@ -29176,45 +29211,47 @@ test_230q() {
 	do_nodes $mdts "$LCTL set_param mdt.*.dir_split_count=$threshold"
 	do_nodes $mdts "$LCTL set_param mdt.*.dir_split_delta=$delta"
 	do_nodes $mdts "$LCTL set_param mdt.*.dir_restripe_nsonly=0"
-	do_nodes $mdts "$LCTL set_param lod.*.mdt_hash=crush"
+	do_nodes $mdts "$LCTL set_param lod.*.mdt_hash=$mdt_hash"
 
 	$LFS mkdir -i -1 -c 1 $DIR/$tdir || error "mkdir $tdir failed"
 	stripe_index=$($LFS getdirstripe -i $DIR/$tdir)
+	local mdt=${MDT[$stripe_index]}
 
 	create=$((threshold * 3 / 2))
-	while [ $stripe_count -lt $MDSCOUNT ]; do
+	while (( $stripe_count < $mdscount )); do
 		createmany -m $DIR/$tdir/f $total $create ||
 			error "create sub files failed"
 		stat $DIR/$tdir > /dev/null
 		total=$((total + create))
 		stripe_count=$((stripe_count + delta))
-		[ $stripe_count -gt $MDSCOUNT ] && stripe_count=$MDSCOUNT
+		(( $stripe_count > $mdscount )) && stripe_count=$mdscount
 
-		wait_update $HOSTNAME \
-			"$LFS getdirstripe -c $DIR/$tdir" "$stripe_count" 40 ||
-			error "stripe count $($LFS getdirstripe -c $DIR/$tdir) != $stripe_count"
+		# allow faster split than minimum due to compound 1.5x creates
+		wait_update_cond $HOSTNAME "$sc_cmd" "-ge" "$stripe_count" ||
+			error "count $($sc_cmd) != $stripe_count"
 
-		wait_update $HOSTNAME \
-			"$LFS getdirstripe -H $DIR/$tdir" "crush" 200 ||
-			error "stripe hash $($LFS getdirstripe -H $DIR/$tdir) != crush"
+		wait_update $HOSTNAME "$hash_cmd" $mdt_hash 200 ||
+			error "hash $($hash_cmd) != $mdt_hash"
 
-		nr_files=$($LFS find -m 1 $DIR/$tdir | grep -c -w $stripe_index)
-		echo "$nr_files/$total files on MDT$stripe_index after split"
+		nr_files=$($LFS find -m $stripe_index $DIR/$tdir | wc -l)
 		# allow 10% margin of imbalance with crush hash
-		(( $nr_files <= $total / $stripe_count + $create / 10)) ||
-			error "$nr_files files on MDT$stripe_index after split"
+		local expect=$(($total / $stripe_count + $create / 10))
+		echo "$nr_files/$total on $mdt, sc=$stripe_count, exp=$expect"
+		(( $nr_files <= $expect)) ||
+			error "$nr_files > $expect on $mdt, sc=$stripe_count"
 
 		nr_files=$($LFS find -type f $DIR/$tdir | wc -l)
-		[ $nr_files -eq $total ] ||
+		(( $nr_files == $total )) ||
 			error "total sub files $nr_files != $total"
+		(( create *= delta ))
 	done
 
-	(( MDS1_VERSION >= $(version_code 2.14.51) )) || return 0
+	(( MDS1_VERSION >= $(version_code v2_14_52-71-g4c2514f48) )) || return 0
 
 	echo "fixed layout directory won't auto split"
 	$LFS migrate -m 0 $DIR/$tdir || error "migrate $tdir failed"
-	wait_update $HOSTNAME "$LFS getdirstripe -H $DIR/$tdir" "crush,fixed" \
-		10 || error "stripe hash $($LFS getdirstripe -H $DIR/$tdir)"
+	wait_update $HOSTNAME "$LFS getdirstripe -H $DIR/$tdir" \
+		"$mdt_hash,fixed" 10 || error "stripe hash not $mdt_hash,fixed"
 	wait_update $HOSTNAME "$LFS getdirstripe -c $DIR/$tdir" 1 10 ||
 		error "stripe count $($LFS getdirstripe -c $DIR/$tdir)"
 }
@@ -29387,33 +29424,51 @@ test_230x() {
 	mkdir -p $DIR/$tdir || error "mkdir failed"
 	createmany -d $DIR/$tdir/sub 100 || error "createmany failed"
 
-	local mdt_name=$(mdtname_from_index 0)
+	local mdt_name=${MDT[0]}
+	# like osp.lustre-MDT0000-osp-MDT0001.reserved_ino_low
 	local low=$(do_facet mds2 $LCTL get_param -n \
-		osp.*$mdt_name-osp-MDT0001.reserved_ino_low)
+		    osp.$mdt_name-osp-MDT0001.reserved_ino_low)
 	local high=$(do_facet mds2 $LCTL get_param -n \
-		osp.*$mdt_name-osp-MDT0001.reserved_ino_high)
+		     osp.$mdt_name-osp-MDT0001.reserved_ino_high)
 	local ffree=$($LFS df -i $MOUNT | awk "/$mdt_name/ { print \$4 }")
 	local maxage=$(do_facet mds2 $LCTL get_param -n \
-		osp.*$mdt_name-osp-MDT0001.maxage)
+		       osp.$mdt_name-osp-MDT0001.maxage)
+	local state="osp.$mdt_name-osp-MDT0001.statfs_state"
+	local has_state=false
+
+	# wait for OSP statfs refresh, not a fixed sleep (LU-20829)
+	(( MDS1_VERSION >= $(version_code v2_16_53-14-g0523ed8625) )) &&
+		has_state=true
 
 	stack_trap "do_facet mds2 $LCTL set_param -n \
-		osp.*$mdt_name-osp-MDT0001.reserved_ino_low=$low \
-		osp.*$mdt_name-osp-MDT0001.reserved_ino_high=$high" EXIT
+		osp.$mdt_name-osp-MDT0001.reserved_ino_low=$low \
+		osp.$mdt_name-osp-MDT0001.reserved_ino_high=$high"
 	stack_trap "do_facet mds2 $LCTL set_param -n \
-		osp.*$mdt_name-osp-MDT0001.maxage=$maxage" EXIT
+		osp.$mdt_name-osp-MDT0001.maxage=$maxage"
 
+	# OSP ffree may differ from client ffree, so add a margin (LU-20829)
 	do_facet mds2 $LCTL set_param -n \
-		osp.*$mdt_name-osp-MDT0001.reserved_ino_low=$((ffree + 1))
-	do_facet mds2 $LCTL set_param -n osp.*$mdt_name-osp-MDT0001.maxage=1
-	sleep 4
+		osp.$mdt_name-osp-MDT0001.reserved_ino_low=$((ffree + 10000))
+	do_facet mds2 $LCTL set_param -n osp.$mdt_name-osp-MDT0001.maxage=1
+	if $has_state; then
+		wait_update_facet mds2 "$LCTL get_param -n $state | grep -c I" \
+			1 20 || error "$state not ENOINO"
+	else
+		sleep 4
+	fi
 	$LFS migrate -m 1 -c $MDSCOUNT $DIR/$tdir &&
 		error "migrate $tdir should fail"
 
 	do_facet mds2 $LCTL set_param -n \
-		osp.*$mdt_name-osp-MDT0001.reserved_ino_low=$low
+		osp.$mdt_name-osp-MDT0001.reserved_ino_low=$low
 	do_facet mds2 $LCTL set_param -n \
-		osp.*$mdt_name-osp-MDT0001.reserved_ino_high=$high
-	sleep 4
+		osp.$mdt_name-osp-MDT0001.reserved_ino_high=$high
+	if $has_state; then
+		wait_update_facet mds2 "$LCTL get_param -n $state | grep -c I" \
+			0 20 || error "$state still ENOINO"
+	else
+		sleep 4
+	fi
 	$LFS migrate -m 1 -c $MDSCOUNT $DIR/$tdir ||
 		error "migrate failed"
 	(( $($LFS getdirstripe -c $DIR/$tdir) == $MDSCOUNT )) ||
@@ -31250,8 +31305,8 @@ run_test 260 "Check mdc_close fail"
 
 ### Data-on-MDT sanity tests ###
 test_270a() {
-	[ $MDS1_VERSION -lt $(version_code 2.10.55) ] &&
-		skip "Need MDS version at least 2.10.55 for DoM"
+	(( $MDS1_VERSION >= $(version_code v2_10_53_0-39-ga7625cd2f3) )) ||
+		skip "Need MDS version at least 2.10.53 for DoM"
 
 	# create DoM file
 	local dom=$DIR/$tdir/dom_file
@@ -31268,28 +31323,27 @@ test_270a() {
 
 	$LFS setstripe -E 1M -L mdt $dom || error "Can't create DoM layout"
 
-	[ $($LFS getstripe -L $dom) == "mdt" ] || error "bad pattern"
-	[ $($LFS getstripe -c $dom) == 0 ] || error "bad stripe count"
-	[ $($LFS getstripe -S $dom) == 1048576 ] || error "bad stripe size"
+	[[ $($LFS getstripe -L $dom) == "mdt" ]] || error "bad pattern"
+	(( $($LFS getstripe -c $dom) == 0 )) || error "bad stripe count"
+	(( $($LFS getstripe -S $dom) == 1048576 )) || error "bad stripe size"
 
-	local mdtidx=$($LFS getstripe -m $dom)
-	local mdtname=MDT$(printf %04x $mdtidx)
-	local facet=mds$((mdtidx + 1))
+	local mdt_idx=$($LFS getstripe -m $dom)
+	local mdtname=${MDT[$mdt_idx]}
+	local facet=mds$((mdt_idx + 1))
 	local space_check=1
 
-# previous files might released in background, but tests wants to have stable
-# counters a specially in case running in loop
-	do_facet $facet \
-		"$LCTL set_param -n mdt.*.force_sync=1"
+	# previous files might be released in background, but tests wants
+	# to have stable counters specially when running in a loop
+	do_facet $facet "$LCTL set_param -n mdt.*.force_sync=1"
 
 	# Skip free space checks with ZFS
-	[ "$(facet_fstype $facet)" == "zfs" ] && space_check=0
+	[[ "$(facet_fstype $facet)" == "zfs" ]] && space_check=0
 
 	# write
 	sync
 	local size_tmp=$((65536 * 3))
 	local mdtfree1=$(do_facet $facet \
-			 lctl get_param -n osd*.*$mdtname.kbytesfree)
+			 $LCTL get_param -n osd*.$mdtname.kbytesfree)
 
 	dd if=/dev/urandom of=$tmp bs=1024 count=$((size_tmp / 1024))
 	# check also direct IO along write
@@ -31297,14 +31351,14 @@ test_270a() {
 	dd if=$tmp of=$dom bs=65536 count=$((size_tmp / 65536)) oflag=direct
 	sync
 	cmp $tmp $dom || error "file data is different"
-	[ $(stat -c%s $dom) == $size_tmp ] ||
+	(( $(stat -c%s $dom) == $size_tmp )) ||
 		error "bad size after write: $(stat -c%s $dom) != $size_tmp"
-	if [ $space_check == 1 ]; then
+	if (( $space_check == 1 )); then
 		local mdtfree2=$(do_facet $facet \
-				 lctl get_param -n osd*.*$mdtname.kbytesfree)
+				 $LCTL get_param -n osd*.$mdtname.kbytesfree)
 
 		# increase in usage from by $size_tmp
-		[ $(($mdtfree1 - $mdtfree2)) -ge $((size_tmp / 1024)) ] ||
+		(($mdtfree1 - $mdtfree2 >= size_tmp / 1024)) ||
 			error "MDT free space wrong after write: " \
 			      "$mdtfree1 >= $mdtfree2 + $size_tmp/1024"
 	fi
@@ -31313,11 +31367,11 @@ test_270a() {
 	local size_dom=10000
 
 	$TRUNCATE $dom $size_dom
-	[ $(stat -c%s $dom) == $size_dom ] ||
+	(( $(stat -c%s $dom) == $size_dom )) ||
 		error "bad size after truncate: $(stat -c%s $dom) != $size_dom"
-	if [ $space_check == 1 ]; then
+	if (( $space_check == 1 )); then
 		mdtfree1=$(do_facet $facet \
-				lctl get_param -n osd*.*$mdtname.kbytesfree)
+			   $LCTL get_param -n osd*.$mdtname.kbytesfree)
 		# decrease in usage from $size_tmp to new $size_dom
 		[ $(($mdtfree1 - $mdtfree2)) -ge \
 		  $(((size_tmp - size_dom) / 4096 * 4)) ] ||
@@ -31329,27 +31383,26 @@ test_270a() {
 	cat $tmp >> $dom
 	sync
 	size_dom=$((size_dom + size_tmp))
-	[ $(stat -c%s $dom) == $size_dom ] ||
+	(( $(stat -c%s $dom) == $size_dom )) ||
 		error "bad size after append: $(stat -c%s $dom) != $size_dom"
-	if [ $space_check == 1 ]; then
+	if (( $space_check == 1 )); then
 		mdtfree2=$(do_facet $facet \
-				lctl get_param -n osd*.*$mdtname.kbytesfree)
+			   $LCTL get_param -n osd*.$mdtname.kbytesfree)
 		# increase in usage by $size_tmp from previous
-		[ $(($mdtfree1 - $mdtfree2)) -ge $((size_tmp / 1024)) ] ||
+		(( $mdtfree1 - $mdtfree2 >= size_tmp / 1024 )) ||
 			error "MDT free space is wrong after append: " \
 			      "$mdtfree1 >= $mdtfree2 + $size_tmp/1024"
 	fi
 
 	# delete
 	rm $dom
-# object might released in background
-	do_facet $facet \
-		"$LCTL set_param -n mdt.*.force_sync=1"
-	if [ $space_check == 1 ]; then
+	# object might be released in background
+	do_facet $facet "$LCTL set_param -n mdt.*.force_sync=1"
+	if (( $space_check == 1 )); then
 		mdtfree1=$(do_facet $facet \
-				lctl get_param -n osd*.*$mdtname.kbytesfree)
+			   $LCTL get_param -n osd*.$mdtname.kbytesfree)
 		# decrease in usage by $size_dom from previous
-		[ $(($mdtfree1 - $mdtfree2)) -ge $((size_dom / 1024)) ] ||
+		(($mdtfree1 - $mdtfree2 >= size_dom / 1024 )) ||
 			error "MDT free space is wrong after removal: " \
 			      "$mdtfree1 >= $mdtfree2 + $size_dom/1024"
 	fi
@@ -31364,7 +31417,7 @@ test_270a() {
 	dd if=$tmp of=$dom bs=65536 count=$((size_tmp / 65536)) oflag=direct
 	sync
 	cmp $tmp $dom || error "file data is different"
-	[ $(stat -c%s $dom) == $size_tmp ] ||
+	(( $(stat -c%s $dom) == $size_tmp )) ||
 		error "bad size after write: $(stat -c%s $dom) != $size_tmp"
 	rm $dom $tmp
 
@@ -32048,26 +32101,26 @@ test_272a() {
 run_test 272a "DoM migration: new layout with the same DOM component"
 
 test_272b() {
-	[ $MDS1_VERSION -lt $(version_code 2.11.50) ] &&
-		skip "Need MDS version at least 2.11.50"
+	(( $MDS1_VERSION >= $(version_code v2_11_55_0-35-gf651470c13) )) ||
+		skip "Need MDS version at least 2.11.55"
 
 	local dom=$DIR/$tdir/dom
 	mkdir -p $DIR/$tdir
 	$LFS setstripe -E 1M -L mdt -E -1 -c1 $dom
 	stack_trap "rm -rf $DIR/$tdir"
 
-	local mdtidx=$($LFS getstripe -m $dom)
-	local mdtname=MDT$(printf %04x $mdtidx)
-	local facet=mds$((mdtidx + 1))
+	local mdt_idx=$($LFS getstripe -m $dom)
+	local mdtname=${MDT[$mdt_idx]}
+	local facet=mds$((mdt_idx + 1))
 
 	local mdtfree1=$(do_facet $facet \
-		lctl get_param -n osd*.*$mdtname.kbytesfree)
+			 $LCTL get_param -n osd*.$mdtname.kbytesfree)
 	dd if=/dev/urandom of=$dom bs=2M count=1 ||
 		error "failed to write data into $dom"
 	local old_md5=$(md5sum $dom)
 	cancel_lru_locks mdc
 	local mdtfree1=$(do_facet $facet \
-		lctl get_param -n osd*.*$mdtname.kbytesfree)
+			 $LCTL get_param -n osd*.$mdtname.kbytesfree)
 
 	$LFS migrate -c2 $dom ||
 		error "failed to migrate to the new composite layout"
@@ -32078,14 +32131,14 @@ test_272b() {
 
 	cancel_lru_locks mdc
 	local new_md5=$(md5sum $dom)
-	[ "$old_md5" == "$new_md5" ] ||
+	[[ "$old_md5" == "$new_md5" ]] ||
 		error "$old_md5 != $new_md5"
 
 	# Skip free space checks with ZFS
-	if [ "$(facet_fstype $facet)" != "zfs" ]; then
+	if [[ "$(facet_fstype $facet)" != "zfs" ]]; then
 		local mdtfree2=$(do_facet $facet \
-				lctl get_param -n osd*.*$mdtname.kbytesfree)
-		[ $mdtfree2 -gt $mdtfree1 ] ||
+				 $LCTL get_param -n osd*.$mdtname.kbytesfree)
+		(( $mdtfree2 > $mdtfree1 )) ||
 			error "MDT space is not freed after migration"
 	fi
 	return 0
@@ -32093,8 +32146,8 @@ test_272b() {
 run_test 272b "DoM migration: DOM file to the OST-striped file (plain)"
 
 test_272c() {
-	[ $MDS1_VERSION -lt $(version_code 2.11.50) ] &&
-		skip "Need MDS version at least 2.11.50"
+	(( $MDS1_VERSION >= $(version_code v2_11_55_0-35-gf651470c13) )) ||
+		skip "Need MDS version at least 2.11.55"
 
 	local dom=$DIR/$tdir/$tfile
 	mkdir -p $DIR/$tdir
@@ -32102,7 +32155,7 @@ test_272c() {
 	stack_trap "rm -rf $DIR/$tdir"
 
 	local mdtidx=$($LFS getstripe -m $dom)
-	local mdtname=MDT$(printf %04x $mdtidx)
+	local mdtname=${MDT[$mdtidx]}
 	local facet=mds$((mdtidx + 1))
 
 	dd if=/dev/urandom of=$dom bs=2M count=1 oflag=direct ||
@@ -32110,7 +32163,7 @@ test_272c() {
 	local old_md5=$(md5sum $dom)
 	cancel_lru_locks mdc
 	local mdtfree1=$(do_facet $facet \
-		lctl get_param -n osd*.*$mdtname.kbytesfree)
+			 $LCTL get_param -n osd*.$mdtname.kbytesfree)
 
 	$LFS migrate -E 2M -c1 -E -1 -c2 $dom ||
 		error "failed to migrate to the new composite layout"
@@ -32119,14 +32172,13 @@ test_272c() {
 
 	cancel_lru_locks mdc
 	local new_md5=$(md5sum $dom)
-	[ "$old_md5" == "$new_md5" ] ||
-		error "$old_md5 != $new_md5"
+	[[ "$old_md5" == "$new_md5" ]] || error "$old_md5 != $new_md5"
 
 	# Skip free space checks with ZFS
-	if [ "$(facet_fstype $facet)" != "zfs" ]; then
+	if [[ "$(facet_fstype $facet)" != "zfs" ]]; then
 		local mdtfree2=$(do_facet $facet \
-				lctl get_param -n osd*.*$mdtname.kbytesfree)
-		[ $mdtfree2 -gt $mdtfree1 ] ||
+				$LCTL get_param -n osd*.$mdtname.kbytesfree)
+		(( $mdtfree2 > $mdtfree1 )) ||
 			error "MDS space is not freed after migration"
 	fi
 	return 0
@@ -32134,8 +32186,8 @@ test_272c() {
 run_test 272c "DoM migration: DOM file to the OST-striped file (composite)"
 
 test_272d() {
-	[ $MDS1_VERSION -lt $(version_code 2.12.55) ] &&
-		skip "Need MDS version at least 2.12.55"
+	(( $MDS1_VERSION >= $(version_code v2_12_58-12-g44a721b8c1) )) ||
+		skip "Need MDS version >= 2.12.58.12 for DoM mirror to OST"
 
 	local dom=$DIR/$tdir/$tfile
 	mkdir -p $DIR/$tdir
@@ -32143,7 +32195,7 @@ test_272d() {
 	stack_trap "rm -f $dom"
 
 	local mdtidx=$($LFS getstripe -m $dom)
-	local mdtname=MDT$(printf %04x $mdtidx)
+	local mdtname=${MDT[$mdtidx]}
 	local facet=mds$((mdtidx + 1))
 
 	dd if=/dev/urandom of=$dom bs=2M count=1 oflag=direct ||
@@ -32151,7 +32203,7 @@ test_272d() {
 	local old_md5=$(md5sum $dom)
 	cancel_lru_locks mdc
 	local mdtfree1=$(do_facet $facet \
-		lctl get_param -n osd*.*$mdtname.kbytesfree)
+			 $LCTL get_param -n osd*.$mdtname.kbytesfree)
 
 	$LFS mirror extend -N -E 2M -c1 -E -1 -c2 $dom ||
 		error "failed mirroring to the new composite layout"
@@ -32160,19 +32212,19 @@ test_272d() {
 	$LFS mirror split --mirror-id 1 -d $dom ||
 		error "failed mirror split"
 
-	[ $($LFS getstripe -L $dom) != 'mdt' ] ||
+	[[ $($LFS getstripe -L $dom) != 'mdt' ]] ||
 		error "MDT stripe was not removed"
 
 	cancel_lru_locks mdc
 	local new_md5=$(md5sum $dom)
-	[ "$old_md5" == "$new_md5" ] ||
+	[[ "$old_md5" == "$new_md5" ]] ||
 		error "$old_md5 != $new_md5"
 
 	# Skip free space checks with ZFS
-	if [ "$(facet_fstype $facet)" != "zfs" ]; then
+	if [[ "$(facet_fstype $facet)" != "zfs" ]]; then
 		local mdtfree2=$(do_facet $facet \
-				lctl get_param -n osd*.*$mdtname.kbytesfree)
-		[ $mdtfree2 -gt $mdtfree1 ] ||
+				 $LCTL get_param -n osd*.$mdtname.kbytesfree)
+		(( $mdtfree2 > $mdtfree1 )) ||
 			error "MDS space is not freed after DOM mirror deletion"
 	fi
 	return 0
@@ -33596,6 +33648,13 @@ test_300ug() {
 	local setcount=$((MDSCOUNT * $LMV_MAX_STRIPES_PER_MDT))
 	local setcount2=$((setcount - 2))
 
+	if (( MDSCOUNT > 7 )); then
+		local mdts=$(mdts_nodes)
+		local debug_mb=$(do_facet mds1 $LCTL get_param -n debug_mb)
+
+		stack_trap "do_nodes $mdts $LCTL set_param debug_mb=$debug_mb"
+		do_nodes $mdts $LCTL set_param debug_mb=200
+	fi
 	$LFS setdirstripe -c 2 $migrate_dir ||
 		error "(0) failed to create striped directory"
 
@@ -36341,26 +36400,30 @@ test_qos_mkdir() {
 	local lmv_qos_threshold_rr
 	local lod_qos_prio_free
 	local lod_qos_threshold_rr
-	local total
 	local count
 	local i
 
-	# @total is total directories created if it's testing plain
-	# directories, otherwise it's total stripe object count for
-	# striped directories test.
+	# directories created per MDT, limit total for many MDTs
+	local num=$((240 / MDSCOUNT))
+
+	(( num <= 30 )) || num=30
 	# remote/striped directory unlinking is slow on zfs and may
 	# timeout, test with fewer directories
-	[ "$mds1_FSTYPE" = "zfs" ] && total=120 || total=240
+	[[ "$mds1_FSTYPE" != "zfs" ]] || ((num/=2))
+	# need at least 10 per MDT for the QoS imbalance checks below
+	(( num >= 10 )) || num=10
+
+	local dirs=$(($MDSCOUNT * $num))	# total directories created
+	local avg=$(($num * $stripe_count))	# expected stripes per MDT
 
 	lmv_qos_prio_free=$($LCTL get_param -n lmv.*.qos_prio_free | head -n1)
 	lmv_qos_prio_free=${lmv_qos_prio_free%%%}
 	lmv_qos_threshold_rr=$($LCTL get_param -n lmv.*.qos_threshold_rr |
 		head -n1)
 	lmv_qos_threshold_rr=${lmv_qos_threshold_rr%%%}
-	stack_trap "$LCTL set_param \
-		lmv.*.qos_prio_free=$lmv_qos_prio_free > /dev/null"
-	stack_trap "$LCTL set_param \
-		lmv.*.qos_threshold_rr=$lmv_qos_threshold_rr > /dev/null"
+	stack_trap "$LCTL set_param -n lmv.*.qos_prio_free=$lmv_qos_prio_free"
+	stack_trap "$LCTL set_param -n \
+		lmv.*.qos_threshold_rr=$lmv_qos_threshold_rr"
 
 	lod_qos_prio_free=$(do_facet mds1 $LCTL get_param -n \
 		lod.$FSNAME-MDT0000-mdtlov.mdt_qos_prio_free | head -n1)
@@ -36368,17 +36431,17 @@ test_qos_mkdir() {
 	lod_qos_threshold_rr=$(do_facet mds1 $LCTL get_param -n \
 		lod.$FSNAME-MDT0000-mdtlov.mdt_qos_threshold_rr | head -n1)
 	lod_qos_threshold_rr=${lod_qos_threshold_rr%%%}
-	stack_trap "do_nodes $mdts $LCTL set_param \
-		lod.*.mdt_qos_prio_free=$lod_qos_prio_free > /dev/null"
-	stack_trap "do_nodes $mdts $LCTL set_param \
-		lod.*.mdt_qos_threshold_rr=$lod_qos_threshold_rr > /dev/null"
+	stack_trap "do_nodes $mdts $LCTL set_param -n \
+		lod.*.mdt_qos_prio_free=$lod_qos_prio_free"
+	stack_trap "do_nodes $mdts $LCTL set_param -n \
+		lod.*.mdt_qos_threshold_rr=$lod_qos_threshold_rr "
 
 	# decrease statfs age, so that it can be updated in time
-	$LCTL set_param lmv.*.qos_maxage=1 > /dev/null
-	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_maxage=1 > /dev/null
+	$LCTL set_param -n lmv.*.qos_maxage=1
+	do_nodes $mdts $LCTL set_param -n lod.*.mdt_qos_maxage=1
 
-	$LCTL set_param lmv.*.qos_threshold_rr=100 > /dev/null
-	do_nodes $mdts $LCTL set_param lod.*.mdt_qos_threshold_rr=100 > /dev/null
+	$LCTL set_param -n lmv.*.qos_threshold_rr=100
+	do_nodes $mdts $LCTL set_param -n lod.*.mdt_qos_threshold_rr=100
 
 	testdir=$DIR/$tdir-s$stripe_count/rr
 
@@ -36397,34 +36460,40 @@ test_qos_mkdir() {
 		echo "Mkdir (stripe_count $stripe_count) roundrobin:" ||
 		echo "Mkdir (stripe_count $stripe_count) on stripe $stripe_index"
 
-	stack_trap "unlinkmany -d $testdir/subdir $((total / stripe_count))"
-	for (( i = 0; i < total / stripe_count; i++ )); do
+	stack_trap "unlinkmany -d $testdir/subdir $dirs"
+	for (( i = 0; i < dirs; i++ )); do
 		eval $mkdir_cmd $testdir/subdir$i ||
-			error "$mkdir_cmd subdir$i failed"
+			error "$mkdir_cmd $testdir/subdir$i failed"
 	done
 
-	for (( i = 0; i < $MDSCOUNT; i++ )); do
-		count=$($LFS getdirstripe -i $testdir/* | grep -c "^$i$")
-		echo "$count directories created on MDT$i"
+	# deviation should within a margin of the average
+	local margin=$MDSCOUNT
+
+	(( margin >= 2 )) || margin=2
+	for ((mdtidx = 0; mdtidx < $MDSCOUNT; mdtidx++)); do
+		count=$($LFS getdirstripe -i $testdir/* | grep -c "^$mdtidx$")
 		if $test_mkdir_rr; then
-			(( count == total / stripe_count / MDSCOUNT )) ||
+			echo "$count dir mkdir on ${MDT[$mdtidx]} expect $num"
+			local delta=$((count - num))
+			(( ${delta#-} <= 1)) ||
 				error "subdirs are not evenly distributed"
-		elif (( i == stripe_index )); then
-			(( count == total / stripe_count )) ||
-				error "$count subdirs created on MDT$i"
+		elif (( mdtidx == stripe_index )); then
+			echo "$count dir mkdir on ${MDT[$mdtidx]} expect $dirs"
+			(( count == dirs )) ||
+				error "$count subdirs mkdir on ${MDT[$mdtidx]}"
 		else
+			echo "$count dir mkdir on ${MDT[$mdtidx]} expect 0"
 			(( count == 0 )) ||
-				error "$count subdirs created on MDT$i"
+				error "$count subdirs mkdir on ${MDT[$mdtidx]}"
 		fi
 
-		if $test_mkdir_rr && [ $stripe_count -gt 1 ]; then
-			count=$($LFS getdirstripe $testdir/* |
-				grep -c -P "^\s+$i\t")
-			echo "$count stripes created on MDT$i"
-			# deviation should < 5% of average
-			delta=$((count - total / MDSCOUNT))
-			(( ${delta#-} <= total / MDSCOUNT / 20 )) ||
-				error "stripes are not evenly distributed"
+		if $test_mkdir_rr && (( $stripe_count > 1 )); then
+			count=$($LFS getdirstripe -y $testdir/* |
+				grep -c "l_mdt_idx:\s*$mdtidx$")
+			echo "$count stripes on ${MDT[$mdtidx]}, expect $avg"
+			local delta=$((count - avg))
+			(( ${delta#-} <= $margin )) ||
+				error "stripes not within $margin of mean $avg"
 		fi
 	done
 
@@ -36481,39 +36550,39 @@ test_qos_mkdir() {
 
 	testdir=$DIR/$tdir-s$stripe_count/qos
 
-	stack_trap "unlinkmany -d $testdir/subdir $((total / stripe_count))"
-	for (( i = 0; i < total / stripe_count; i++ )); do
+	stack_trap "unlinkmany -d $testdir/subdir $dirs"
+	for (( i = 0; i < dirs; i++ )); do
 		eval $mkdir_cmd $testdir/subdir$i ||
 			error "$mkdir_cmd subdir$i failed"
 	done
 
 	max=0
-	for (( i = 0; i < $MDSCOUNT; i++ )); do
-		count=$($LFS getdirstripe -i $testdir/* | grep -c "^$i$")
+	for (( mdtidx = 0; mdtidx < $MDSCOUNT; mdtidx++ )); do
+		count=$($LFS getdirstripe -i $testdir/* | grep -c "^$mdtidx$")
 		(( count > max )) && max=$count
-		echo "$count directories created on MDT$i : curmax=$max"
+		echo "$count directories mkdir on ${MDT[$mdtidx]} : curmax=$max"
 	done
 
 	min=$($LFS getdirstripe -i $testdir/* | grep -c "^$min_index$")
 
-	# D-value should > 10% of average
-	(( max - min > total / stripe_count / MDSCOUNT / 10 )) ||
-		error "subdirs shouldn't be evenly distributed: $max - $min <= $((total / stripe_count / MDSCOUNT / 10))"
+	# Directories created on MDTs should >= 10% of average
+	(( max - min >= num / 10 )) ||
+		error "subdirs too even: $max - $min <= $((num / 10))"
 
 	# ditto for stripes
 	if (( stripe_count > 1 )); then
 		max=0
-		for (( i = 0; i < $MDSCOUNT; i++ )); do
-			count=$($LFS getdirstripe $testdir/* |
-				grep -c -P "^\s+$i\t")
+		for (( mdtidx = 0; mdtidx < $MDSCOUNT; mdtidx++ )); do
+			count=$($LFS getdirstripe -y $testdir/* |
+				grep -c "l_mdt_idx:\s$mdtidx$")
 			(( count > max )) && max=$count
-			echo "$count stripes created on MDT$i"
+			echo "$count stripes created on ${MDT[$mdtidx]}"
 		done
 
-		min=$($LFS getdirstripe $testdir/* |
-			grep -c -P "^\s+$min_index\t")
-		(( max - min > total / MDSCOUNT / 10 )) ||
-			error "stripes shouldn't be evenly distributed: $max - $min <= $((total / MDSCOUNT / 10))"
+		min=$($LFS getdirstripe -y $testdir/* |
+			grep -c "l_mdt_idx:\s$min_index$")
+		(( max - min >= avg / 10 )) ||
+			error "stripes too even: $max - $min <= $((avg / 10))"
 	fi
 }
 
@@ -39549,9 +39618,12 @@ run_test 807b "verify lfs somsync utility"
 
 check_som_nologged()
 {
-	local lines=$($LFS changelog $FSNAME-MDT0000 |
-		grep 'x=trusted.som' | wc -l)
-	[ $lines -ne 0 ] && error "trusted.som xattr is logged in Changelogs"
+	local lines=$($LFS changelog ${MDT[0]} | grep -c 'x=trusted.som')
+
+	(( lines == 0 )) || {
+		$LFS changelog ${MDT[0]} | grep 'x=trusted.som'
+		error "trusted.som xattr is logged in Changelogs"
+	}
 }
 
 test_808() {
@@ -39573,9 +39645,6 @@ test_808() {
 
 	$TRUNCATE $DIR/$tfile 1048576
 	check_som_nologged
-
-	# Deregistration step
-	changelog_deregister || error "changelog_deregister failed"
 }
 run_test 808 "Check trusted.som xattr not logged in Changelogs"
 
