@@ -2464,7 +2464,8 @@ struct ec_recover_ctx {
  * @ecr_ptrs:		kmapped data page pointers (available + parity) [dcount]
  * @ecr_recov_ptrs:	kmapped recovery destination pointers [pcount]
  * @ecr_zerobuf:	PAGE_SIZE zero buffer for EC_DPG_ZERO slots
- * @ecr_encode_matrix:	Cauchy matrix [dcount * (dcount + pcount)]
+ * @ecr_encode_matrix:	Cauchy matrix [dcount * (dcount + pcount)], allocated
+ *			only for dcount > 1 (parities are copies when k == 1)
  * @ecr_dcount:		data stripe count for this raid set
  * @ecr_pcount:		parity stripe count for this raid set
  * @ecr_temp_matrix:	scratch temp matrix for EC recovery
@@ -2531,6 +2532,21 @@ lov_ec_recover_init(struct ec_recover_ctx *ctx, struct lov_ec_rd_state *state,
 
 	ENTRY;
 
+	ctx->erc_dcount = dcount;
+	ctx->erc_pcount = pcount;
+	ctx->erc_unavail_nr = unavail_nr;
+	ctx->erc_tbls_size = 0;
+	ctx->erc_tbls = NULL;
+
+	/* A raidset with a single data stripe has copies of that stripe as its
+	 * parities (--ec 1+N), not RS codewords: lov_ec_recover_page() copies
+	 * one of them, so there is no matrix to invert and no GF tables to
+	 * precompute.  The per-page path never comes here with one data
+	 * stripe either, since r_j always equals err_nr in that case.
+	 */
+	if (dcount == 1)
+		RETURN(0);
+
 	/* temp_matrix/invert_matrix/decode_matrix are pure scratch space
 	 * used only within this call to derive the GF tables, so both the
 	 * RG-wide and per-page contexts can share one set, allocated into
@@ -2579,9 +2595,6 @@ lov_ec_recover_init(struct ec_recover_ctx *ctx, struct lov_ec_rd_state *state,
 	else
 		tbls = state->ecr_pp_gf_tbls;
 
-	ctx->erc_dcount = dcount;
-	ctx->erc_pcount = pcount;
-	ctx->erc_unavail_nr = unavail_nr;
 	ctx->erc_tbls_size = dcount * pcount * 32;
 	ctx->erc_tbls = tbls;
 
@@ -2653,10 +2666,30 @@ out:
 	RETURN(rc);
 }
 
+/**
+ * lov_ec_recover_page() - reconstruct the error data pages of one page position
+ * @ctx:	recovery context, from lov_ec_recover_init()
+ * @ptrs:	kmapped data pages still available, then the parity pages used;
+ *		the data part is empty when the only data stripe is in error
+ * @recov_ptrs:	kmapped data pages to reconstruct
+ *
+ * A raidset with a single data stripe stores p copies of that stripe as its
+ * parities rather than RS codewords (--ec 1+N, see
+ * llapi_ec_compute_parities() and Documentation/ec.txt), so a lost data page
+ * is restored by copying the first parity page that could be read.  Decoding
+ * with the Cauchy matrix is only right for parity stripe 0, whose coefficient
+ * is 1; for parity stripe i it expects data * gf_inv(i + 1), not the copy
+ * that is on disk.
+ */
 static void
 lov_ec_recover_page(struct ec_recover_ctx *ctx, unsigned char **ptrs,
 		    unsigned char **recov_ptrs)
 {
+	if (ctx->erc_dcount == 1) {
+		memcpy(recov_ptrs[0], ptrs[0], PAGE_SIZE);
+		return;
+	}
+
 	ec_encode_data(PAGE_SIZE, ctx->erc_dcount, ctx->erc_unavail_nr,
 		       ctx->erc_tbls, ptrs, recov_ptrs);
 }
@@ -2709,9 +2742,10 @@ static void lov_ec_bufs_free(struct lov_ec_rd_state *state)
  * @pcount:		parity stripe count (0 if non-EC component)
  *
  * Allocates err_array/parity_used (sized to LOV_EC_MAX_CODING_STRIPES),
- * ptrs (dcount), and -- only when pcount > 0 -- recov_ptrs (pcount),
- * zerobuf (PAGE_SIZE), and encode_matrix (dcount*(dcount+pcount)).
- * Also generates the Cauchy encode matrix when pcount > 0.
+ * ptrs (dcount), and -- only when pcount > 0 -- recov_ptrs (pcount) and
+ * zerobuf (PAGE_SIZE).  The encode matrix (dcount*(dcount+pcount)) is
+ * allocated and filled in only for dcount > 1: with one data stripe the
+ * parities are copies and nothing is ever decoded.
  *
  * Return: 0 on success, -ENOMEM on failure (all partial allocations freed)
  */
@@ -2760,14 +2794,16 @@ static int lov_ec_bufs_alloc(struct lov_ec_rd_state *state,
 		if (!state->ecr_zerobuf)
 			GOTO(out, rc);
 
-		OBD_ALLOC(state->ecr_encode_matrix,
-			  sizeof(*state->ecr_encode_matrix) * dcount *
-			  (dcount + pcount));
-		if (!state->ecr_encode_matrix)
-			GOTO(out, rc);
+		if (dcount > 1) {
+			OBD_ALLOC(state->ecr_encode_matrix,
+				  sizeof(*state->ecr_encode_matrix) * dcount *
+				  (dcount + pcount));
+			if (!state->ecr_encode_matrix)
+				GOTO(out, rc);
 
-		gf_gen_cauchy1_matrix(state->ecr_encode_matrix,
-				      dcount + pcount, dcount);
+			gf_gen_cauchy1_matrix(state->ecr_encode_matrix,
+					      dcount + pcount, dcount);
+		}
 
 		/* Recovery context buffers (temp_matrix, invert_matrix,
 		 * decode_matrix, gf_tbls) are allocated on-demand in

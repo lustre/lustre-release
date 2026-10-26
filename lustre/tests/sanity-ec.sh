@@ -6328,6 +6328,43 @@ test_40d() {
 }
 run_test 40d "test recovery read with 4+1 EC"
 
+test_40e() {
+	(( OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs for 1+2"
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local data_ost par_ost
+
+	stack_trap "rm -f $tf"
+
+	$LFS setstripe -E eof -S 1M -c 1 --ec 1+2 $tf ||
+		error "setstripe --ec 1+2 failed"
+
+	dd if=/dev/urandom of=$tf bs=1M count=2 || error "dd failed"
+	$LFS mirror resync $tf || error "mirror resync failed"
+
+	local sum1=$(md5sum $tf | awk '{print $1}')
+
+	# A k == 1 raidset stores a copy of the data stripe as each parity,
+	# not an RS codeword.  Fail the data stripe and parity stripe 0 so the
+	# read has to be copied back from parity stripe 1: any surviving
+	# parity has to be as good as the first one.
+	ec_classify_osts $tf
+	(( ${#parity_osts[@]} == 2 )) ||
+		skip_env "expected 2 parity stripes, got ${#parity_osts[@]}"
+	ec_pick_data_ost $tf || skip_env "no data OST free of parity duty"
+	data_ost=$EC_PICKED_OST
+	par_ost=${parity_osts[0]}
+
+	ec_start_read_fault $tf $data_ost $par_ost
+	stack_trap "ec_stop_read_fault"
+
+	local sum2=$(md5sum $tf | awk '{print $1}')
+	[[ "$sum1" == "$sum2" ]] ||
+		error "data changed after read fault: $sum1 vs $sum2"
+}
+run_test 40e "test recovery read with 1+2 EC from the second parity"
+
 test_41a() {
 	enable_ec
 
