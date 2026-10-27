@@ -659,6 +659,9 @@ init_test_env() {
 		SEC=$SK_FLAVOR
 	fi
 
+	# perms set on SSK keys: all for user (root), none for anyone else
+	export SK_KEY_PERM=0x003f0000
+
 	case "x$SEC" in
 		xkrb5*)
 		$RPC_MODE || echo "Using GSS/krb5 ptlrpc security flavor"
@@ -1646,7 +1649,7 @@ init_gss() {
 			"$LGSS_SK -t server -l $SK_PATH/$FSNAME.key || true"
 		do_nodes $servers "keyctl show | grep lustre | cut -c1-11 |
 				   sed -e 's/ //g;' |
-				   xargs -IX keyctl setperm X 0x3f3f3f3f"
+				   xargs -IX keyctl setperm X $SK_KEY_PERM"
 	fi
 
 	if $GSS_SK && $SK_NO_KEY; then
@@ -1806,7 +1809,7 @@ generate_load_ssk() {
 	do_nodes $(all_nodes) \
 		"keyctl show | grep lustre | cut -c1-11 |
 		sed -e 's/ //g;' |
-		xargs -IX keyctl setperm X 0x3f3f3f3f"
+		xargs -IX keyctl setperm X $SK_KEY_PERM"
 }
 
 cleanup_unload_ssk() {
@@ -3367,7 +3370,7 @@ zconf_mount_clients() {
 			do_nodes $all_servers \
 				"keyctl show | grep lustre | cut -c1-11 |
 				sed -e 's/ //g;' |
-				xargs -IX keyctl setperm X 0x3f3f3f3f"
+				xargs -IX keyctl setperm X $SK_KEY_PERM"
 			do_nodes $all_servers "keyctl show"
 
 			local mountkey=$SK_PATH/$FSNAME-nmclient.key
@@ -4716,7 +4719,7 @@ facet_failover() {
 			do_nodes $(all_nodes) \
 				"keyctl show | grep lustre | cut -c1-11 |
 				sed -e 's/ //g;' |
-				xargs -IX keyctl setperm X 0x3f3f3f3f"
+				xargs -IX keyctl setperm X $SK_KEY_PERM"
 		fi
 	done
 	echo "$(date +'%H:%M:%S (%s)') targets are mounted"
@@ -6455,7 +6458,7 @@ setupall() {
 			do_nodes $(all_nodes) \
 				"keyctl show | grep lustre | cut -c1-11 |
 				sed -e 's/ //g;' |
-				xargs -IX keyctl setperm X 0x3f3f3f3f"
+				xargs -IX keyctl setperm X $SK_KEY_PERM"
 
 			if $SK_S2S; then
 				# Need to start one nodemap for servers,

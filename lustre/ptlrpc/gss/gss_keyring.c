@@ -927,9 +927,7 @@ int gss_rename_sk_key(key_serial_t skid, const char *fsname, const char *uuid)
 	snprintf(desc, sizeof(desc), "lustre:%s:%s", fsname, uuid);
 	new_key_ref = key_create_or_update(user_keyring_ref, "user", desc,
 					   buf, (size_t)plen,
-					   KEY_POS_ALL | KEY_USR_ALL |
-					   KEY_GRP_ALL | KEY_OTH_ALL,
-					   0);
+					   KEY_USR_ALL, 0);
 
 	if (IS_ERR(new_key_ref)) {
 		rc = PTR_ERR(new_key_ref);

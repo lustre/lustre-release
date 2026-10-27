@@ -597,7 +597,7 @@ test_21a() {
 		# set perms for per-nodemap keys else permission denied
 		do_nodes $servers \
 		    "keyctl show | grep lustre | cut -c1-11 | sed -e 's/ //g;' |
-		     xargs -IX keyctl setperm X 0x3f3f3f3f"
+		     xargs -IX keyctl setperm X $SK_KEY_PERM"
 
 	fi
 
@@ -714,7 +714,7 @@ test_21b() {
 		# set perms for per-nodemap keys else permission denied
 		do_nodes $servers \
 		    "keyctl show | grep lustre | cut -c1-11 | sed -e 's/ //g;' |
-				xargs -IX keyctl setperm X 0x3f3f3f3f"
+				xargs -IX keyctl setperm X $SK_KEY_PERM"
 
 		# Load nodemap key on client
 		$LGSS_SK -t client -l $SK_PATH/nodemap/c0.key

@@ -558,8 +558,7 @@ static key_serial_t sk_load_key(const struct sk_keyfile_config *skc,
 	key = add_key("user", description, &payload, sizeof(payload),
 		      KEY_SPEC_USER_KEYRING);
 	if (key != -1) {
-		key_perm_t perm = KEY_POS_ALL | KEY_USR_ALL |
-			KEY_GRP_ALL | KEY_OTH_ALL;
+		key_perm_t perm = KEY_USR_ALL;
 
 		if (keyctl_setperm(key, perm) < 0)
 			printerr(0,

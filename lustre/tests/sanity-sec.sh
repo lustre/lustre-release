@@ -4614,7 +4614,7 @@ test_32() {
 	# set perms for per-nodemap keys else permission denied
 	do_nodes $(all_nodes) \
 		"keyctl show | grep lustre | cut -c1-11 |
-		sed -e 's/ //g;' | xargs -IX keyctl setperm X 0x3f3f3f3f"
+		sed -e 's/ //g;' | xargs -IX keyctl setperm X $SK_KEY_PERM"
 
 	# re-mount client with mgssec=skn
 	save_opts=$MOUNT_OPTS
@@ -4757,7 +4757,7 @@ test_33() {
 	# set perms for per-nodemap keys else permission denied
 	do_nodes $(all_nodes) \
 		"keyctl show | grep lustre | cut -c1-11 |
-		sed -e 's/ //g;' | xargs -IX keyctl setperm X 0x3f3f3f3f"
+		sed -e 's/ //g;' | xargs -IX keyctl setperm X $SK_KEY_PERM"
 
 	# re-mount client with mgssec=skn
 	save_opts=$MOUNT_OPTS
@@ -13957,7 +13957,7 @@ test_200() {
 	# Regression for sk_load_key()'s keyctl_setperm() silently failing when
 	# the caller does not possess @u (the sudo / systemd / cron case - no
 	# pam_keyinit). Load a key in a fresh session with no @u link and assert
-	# its perms end up broadened to 0x3f3f3f3f, not the default 0x3f010000.
+	# its perms end up set to $SK_KEY_PERM, not the default 0x3f010000.
 
 	stack_trap "cleanup_200 $test_key" EXIT
 
@@ -13983,10 +13983,10 @@ test_200() {
 
 	[[ -n "$perm" ]] ||
 		error "key lustre:sktest:default not found in /proc/keys"
-	[[ "$perm" == "3f3f3f3f" ]] || error \
-		"key perm=$perm, expected 3f3f3f3f - sk_load_key did not broaden perms"
+	[[ "$perm" == "${SK_KEY_PERM#0x}" ]] || error \
+		"key perm=$perm, expected ${SK_KEY_PERM#0x} - sk_load_key did not set perms"
 }
-run_test 200 "sk_load_key broadens SSK key perms without @u linked"
+run_test 200 "sk_load_key sets SSK key perms without @u linked"
 
 test_201() {
 	local nid=$($LCTL get_param -n mdc.*-MDT0000-mdc-*.import 2>/dev/null |
