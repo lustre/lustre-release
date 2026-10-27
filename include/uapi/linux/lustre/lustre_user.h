@@ -636,6 +636,54 @@ struct ll_ioc_lease_id {
 };
 
 /*
+ * I/O scope: restrict this fd to a layout subset. SET_MIRROR is an
+ * alias for {MIRROR, id}. Non-FILE scopes require O_DIRECT. ios_flags,
+ * ios_padding, and identity fields not used by the scope must be 0.
+ * A reserved scope returns -EOPNOTSUPP.
+ *
+ * FILE uses the file offset; ios_mirror_id and ios_layout_version
+ * must be 0.
+ *
+ * MIRROR uses the file offset; ios_mirror_id is in [1, MIRROR_ID_MAX].
+ *
+ * STRIPE is reserved. One object by file offset: ios_mirror_id selects
+ * the mirror, and the component is the one in that mirror covering the
+ * offset. ios_stripe_idx selects among the objects of that component
+ * backing the offset (e.g. data vs. which parity); 0 is the first one.
+ * ios_comp_id must be 0.
+ *
+ * OBJECT is reserved. One object by object offset, located by
+ * (ios_comp_id, ios_stripe_idx), by ios_obj_fid, or by both (must name
+ * the same object). ios_stripe_idx is the absolute index in ios_comp_id.
+ * ios_comp_id 0 means the pair is absent, then ios_stripe_idx must be 0.
+ * ios_mirror_id must be 0.
+ *
+ * For MIRROR, ios_layout_version 0 uses the layout version recorded on
+ * the fd by the last resync lease; if there is none, no check is made.
+ * A non-zero value replaces that version. Currently only write,
+ * truncate, and fallocate on an FLR file fail with ESTALE if it does
+ * not match the current layout generation. Read and lseek do not
+ * check it. On a non-FLR file it is ignored and not sent to the OSTs.
+ */
+enum ll_io_scope {
+	LL_IO_SCOPE_FILE	= 0,	/* whole file, file offset */
+	LL_IO_SCOPE_MIRROR	= 1,	/* one FLR mirror, file offset */
+	LL_IO_SCOPE_STRIPE	= 2,	/* one object, file offset */
+	LL_IO_SCOPE_OBJECT	= 3,	/* one object, object offset */
+};
+
+struct ll_ioc_io_scope {
+	__u32		ios_scope;		/* enum ll_io_scope */
+	__u32		ios_flags;		/* reserved; must be 0 */
+	__u32		ios_mirror_id;		/* MIRROR; STRIPE */
+	__u32		ios_comp_id;		/* OBJECT: comp; else 0 */
+	__u32		ios_stripe_idx;		/* STRIPE: rel; OBJECT: abs */
+	__u32		ios_layout_version;	/* 0 = use fd layout version */
+	struct lu_fid	ios_obj_fid;		/* OBJECT: object FID; else 0 */
+	__u64		ios_padding[2];		/* must be 0 */
+};
+
+/*
  * The ioctl naming rules:
  * LL_*     - works on the currently opened filehandle instead of parent dir
  * *_OBD_*  - gets data for both OSC or MDC (LOV, LMV indirectly)
@@ -669,7 +717,9 @@ struct ll_ioc_lease_id {
 #define LL_IOC_GET_MDTIDX		_IOR('f', 175, int)
 #define LL_IOC_FUTIMES_3		_IOWR('f', 176, struct ll_futimes_3)
 #define LL_IOC_FLR_SET_MIRROR		_IOW('f', 177, long)
-/*	lustre_ioctl.h			177-210 */
+/*	lustre_ioctl.h			178-179 */
+#define LL_IOC_SET_IO_SCOPE		_IOW('f', 180, struct ll_ioc_io_scope)
+/*	lustre_ioctl.h			181-210 */
 #define LL_IOC_HSM_STATE_GET		_IOR('f', 211, struct hsm_user_state)
 #define LL_IOC_HSM_STATE_SET		_IOW('f', 212, struct hsm_state_set)
 #define LL_IOC_HSM_CT_START		_IOW('f', 213, struct lustre_kernelcomm)
@@ -1173,6 +1223,8 @@ struct lov_comp_md_entry_v1 {
 #define MIRROR_ID_MASK		0x7FFF0000
 #define MIRROR_ID_NEG		0x8000
 #define MIRROR_ID_SHIFT		16
+/* largest mirror ID that fits in MIRROR_ID_MASK */
+#define MIRROR_ID_MAX		(MIRROR_ID_MASK >> MIRROR_ID_SHIFT)
 
 static inline __u32 pflr_id(__u16 mirror_id, __u16 seqid)
 {

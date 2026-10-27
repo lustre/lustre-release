@@ -595,6 +595,11 @@ static int lov_io_mirror_init(const struct lu_env *env, struct lov_io *lio,
 			lio->lis_mirror_index = comp->lo_preferred_mirror;
 		}
 		io->ci_ndelay = 0;
+		/* the OST stores the first layout version it sees, so a
+		 * version not checked against lsm_layout_gen must not be
+		 * sent to the OSTs.
+		 */
+		io->ci_layout_version = 0;
 		RETURN(0);
 	}
 

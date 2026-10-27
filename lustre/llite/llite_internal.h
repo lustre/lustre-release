@@ -1146,10 +1146,8 @@ struct ll_file_data {
 	 * -errno is saved here, and will return to user in close().
 	 */
 	int				fd_partial_readdir_rc;
-	/* Used by mirrored file to lead IOs to a specific mirror, usually
-	 * for mirror resync. 0 means default.
-	 */
-	__u32				fd_designated_mirror;
+	/* I/O scope; FILE / zeroed = whole file */
+	struct ll_ioc_io_scope		fd_io_scope;
 	/* The layout version when resync starts. Resync I/O should carry this
 	 * layout version for verification to OST objects
 	 */
@@ -1483,7 +1481,7 @@ int __ll_fid2path(struct inode *inode, struct getinfo_fid2path *gfout,
 int ll_data_version(struct inode *inode, __u64 *data_version, int flags);
 int ll_hsm_release(struct inode *inode);
 int ll_hsm_state_set(struct inode *inode, struct hsm_state_set *hss);
-void ll_io_set_mirror(struct cl_io *io, const struct file *file);
+void ll_io_scope_init(struct cl_io *io, const struct file *file);
 
 /* llite/dcache.c */
 

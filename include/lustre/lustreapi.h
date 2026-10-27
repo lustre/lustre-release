@@ -2008,6 +2008,10 @@ int llapi_layout_comp_iterate(struct llapi_layout *layout,
 
 int llapi_verify_pool_name(struct llapi_layout *layout, void *arg);
 
+/* I/O scope */
+int llapi_io_scope_set(int fd, const struct ll_ioc_io_scope *scope);
+int llapi_io_scope_clear(int fd);
+
 /**
  * FLR: mirror operation APIs
  */

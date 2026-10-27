@@ -83,7 +83,7 @@ int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
 	}
 again:
 	if (attr->ia_valid & ATTR_FILE)
-		ll_io_set_mirror(io, attr->ia_file);
+		ll_io_scope_init(io, attr->ia_file);
 
 	if (cl_io_init(env, io, CIT_SETATTR, io->ci_obj) == 0) {
 		struct vvp_io *vio = vvp_env_io(env);

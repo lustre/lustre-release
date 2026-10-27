@@ -4,6 +4,7 @@ lustre/utils/liblustreapi_chlg.c
 lustre/utils/liblustreapi_fid.c
 lustre/utils/liblustreapi_heat.c
 lustre/utils/liblustreapi_hsm.c
+lustre/utils/liblustreapi_io_scope.c
 lustre/utils/liblustreapi_ioctl.c
 lustre/utils/liblustreapi_json.c
 lustre/utils/liblustreapi_kernelconn.c

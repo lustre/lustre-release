@@ -116,6 +116,7 @@ liblustreapi_la_SOURCES = libhsm_scanner.c \
 			  liblustreapi_fid.c \
 			  liblustreapi_heat.c \
 			  liblustreapi_hsm.c \
+			  liblustreapi_io_scope.c \
 			  liblustreapi_ioctl.c \
 			  liblustreapi_json.c \
 			  liblustreapi_kernelconn.c \

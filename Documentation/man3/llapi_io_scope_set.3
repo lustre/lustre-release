@@ -1,0 +1,256 @@
+.TH LLAPI_IO_SCOPE_SET 3 2026-09-30 "Lustre User API" "Lustre Library Functions"
+.SH NAME
+llapi_io_scope_set, llapi_io_scope_clear \- restrict I/O on a file descriptor to a layout subset
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.PP
+.BI "int llapi_io_scope_set(int " fd ", const struct ll_ioc_io_scope *" scope );
+.PP
+.BI "int llapi_io_scope_clear(int " fd );
+.fi
+.SH DESCRIPTION
+.BR llapi_io_scope_set()
+stores
+.I scope
+on the open file descriptor
+.IR fd .
+Later
+.BR read (2),
+.BR write (2),
+.BR lseek (2),
+.BR ftruncate (2),
+and
+.BR fallocate (2)
+calls on
+.I fd
+are limited to that subset of the file layout.
+.PP
+.BR llapi_io_scope_clear()
+restores whole-file I/O by setting a zeroed
+.B LL_IO_SCOPE_FILE
+scope.
+.PP
+.I scope
+is an
+.B ll_ioc_io_scope
+structure:
+.PP
+.nf
+struct ll_ioc_io_scope {
+        __u32           ios_scope;           /* enum ll_io_scope */
+        __u32           ios_flags;           /* reserved; must be 0 */
+        __u32           ios_mirror_id;       /* MIRROR; STRIPE */
+        __u32           ios_comp_id;         /* OBJECT: comp; else 0 */
+        __u32           ios_stripe_idx;      /* STRIPE: rel; OBJECT: abs */
+        __u32           ios_layout_version;  /* 0 = use fd layout version */
+        struct lu_fid   ios_obj_fid;         /* OBJECT: object FID; else 0 */
+        __u64           ios_padding[2];      /* must be 0 */
+};
+.fi
+.PP
+.I ios_scope
+selects the subset:
+.TP
+.B LL_IO_SCOPE_FILE
+The whole file, addressed by file offset.
+.I O_DIRECT
+is not required.
+.I ios_mirror_id
+and
+.I ios_layout_version
+must be 0.
+.TP
+.B LL_IO_SCOPE_MIRROR
+The single FLR mirror
+.IR ios_mirror_id ,
+addressed by file offset.
+.I ios_mirror_id
+must be in the range 1 to
+.BR MIRROR_ID_MAX .
+The scope is intended for
+.B O_DIRECT
+I/O, and is only accepted on a descriptor opened with
+.BR O_DIRECT .
+The mirror is not looked up when the scope is set.
+If an FLR file has no mirror
+.IR ios_mirror_id ,
+later I/O on
+.I fd
+fails with
+.I errno
+set to
+.BR EINVAL .
+On a non-FLR file
+.I ios_mirror_id
+is ignored and later I/O addresses the whole file.
+.TP
+.B LL_IO_SCOPE_STRIPE
+Reserved.
+One object, addressed by file offset.
+.I ios_mirror_id
+selects the mirror, and the component is the one in that mirror covering
+the offset.
+.I ios_stripe_idx
+selects among the objects of that component backing the offset
+(for example data or which parity); 0 is the first one.
+.I ios_comp_id
+must be 0.
+.TP
+.B LL_IO_SCOPE_OBJECT
+Reserved.
+One object, addressed by object offset, located by
+.RI ( ios_comp_id ", " ios_stripe_idx ),
+by
+.IR ios_obj_fid ,
+or by both, which must then name the same object.
+.I ios_stripe_idx
+is the absolute stripe index within
+.IR ios_comp_id .
+.I ios_comp_id
+0 means the pair is absent, and
+.I ios_stripe_idx
+must then be 0.
+.I ios_mirror_id
+must be 0.
+.PP
+For
+.BR LL_IO_SCOPE_MIRROR ,
+.I ios_layout_version
+0 uses the layout version recorded on
+.I fd
+by the last resync lease; if there is none, no check is made.
+A non-zero value replaces that version.
+Currently only
+.BR write (2),
+.BR ftruncate (2),
+and
+.BR fallocate (2)
+on an FLR file compare it with the current layout generation and fail with
+.I errno
+set to
+.B ESTALE
+on a mismatch.
+.BR read (2)
+and
+.BR lseek (2)
+do not check it.
+On a non-FLR file it is ignored and not sent to the OSTs.
+.PP
+The reserved scopes are rejected with
+.BR -EOPNOTSUPP .
+Any other value of
+.I ios_scope
+is rejected with
+.BR -EINVAL .
+.PP
+Fields that are not used by the selected scope must be zero, so that they
+stay available for the reserved scopes.
+For
+.B LL_IO_SCOPE_FILE
+and
+.BR LL_IO_SCOPE_MIRROR
+this means
+.IR ios_comp_id ,
+.IR ios_stripe_idx ,
+and
+.IR ios_obj_fid
+(including
+.IR f_seq ,
+.IR f_oid ,
+and
+.IR f_ver ).
+.I ios_flags
+and
+.I ios_padding
+must be 0 for every scope.
+.PP
+The scope is stored per open file description and is shared with the
+.B LL_IOC_FLR_SET_MIRROR
+ioctl:
+setting a mirror ID with that ioctl is equivalent to setting a
+.B LL_IO_SCOPE_MIRROR
+scope, and setting mirror ID 0 is equivalent to
+.BR llapi_io_scope_clear() .
+.SH RETURN VALUES
+.B llapi_io_scope_set()
+and
+.B llapi_io_scope_clear()
+return 0 on success or a negative errno value on failure.
+.SH ERRORS
+.TP 15
+.B -EBADF
+.I fd
+is not a valid file descriptor.
+.TP
+.B -EFAULT
+.I scope
+points to memory that could not be read.
+.TP
+.B -EINVAL
+.I scope
+is NULL,
+.I ios_scope
+is not a known value,
+a field that must be zero is not,
+.B LL_IO_SCOPE_MIRROR
+was requested with
+.I ios_mirror_id
+0 or greater than
+.BR MIRROR_ID_MAX ,
+or a scope other than
+.B LL_IO_SCOPE_FILE
+was set on a descriptor that is not
+.BR O_DIRECT .
+.TP
+.B -ENOTTY
+.I fd
+does not refer to a Lustre file.
+.TP
+.B -EOPNOTSUPP
+.I ios_scope
+is
+.B LL_IO_SCOPE_STRIPE
+or
+.BR LL_IO_SCOPE_OBJECT .
+.SH EXAMPLES
+Read from mirror 1. The descriptor must be opened with
+.BR O_DIRECT :
+.EX
+        struct ll_ioc_io_scope scope = { 0 };
+        void *buf = NULL;
+        int fd, rc;
+\&
+        fd = open(path, O_RDONLY | O_DIRECT);
+        if (fd < 0)
+                return -errno;
+\&
+        scope.ios_scope = LL_IO_SCOPE_MIRROR;
+        scope.ios_mirror_id = 1;
+        rc = llapi_io_scope_set(fd, &scope);
+        if (rc < 0)
+                goto out;
+\&
+        /* O_DIRECT requires an aligned buffer. */
+        rc = -posix_memalign(&buf, 4096, 4096);
+        if (rc < 0)
+                goto out;
+        if (read(fd, buf, 4096) < 0)
+                rc = -errno;
+\&
+        llapi_io_scope_clear(fd);
+out:
+        free(buf);
+        close(fd);
+.EE
+.SH AVAILABILITY
+.B llapi_io_scope_set()
+and
+.B llapi_io_scope_clear()
+are part of the
+.BR lustre (7)
+user application interface library since release 2.18.0.
+.\" Added in commit v2_17_59-4-g6dac0dd45f
+.SH SEE ALSO
+.BR open (2),
+.BR lustreapi (7)

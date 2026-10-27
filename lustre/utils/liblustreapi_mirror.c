@@ -34,7 +34,7 @@
 
 /**
  * llapi_mirror_set() - Set the mirror id for the opening file pointed by @fd
- * @fd: file descriptor, must be opened with O_DIRECT
+ * @fd: file descriptor, must be opened with O_DIRECT unless @id is 0
  * @id: mirror id (If @id is zero, it will clear the mirror id setting)
  *
  * Set the mirror id for the opening file pointed by @fd, once the mirror
@@ -60,9 +60,10 @@ int llapi_mirror_set(int fd, unsigned int id)
 	if (!id)
 		return 0;
 
-	/* in the current implementation, llite doesn't verify if the mirror
-	 * id is valid, it has to be verified in an I/O context so the fstat()
-	 * call is to verify that the mirror id is correct. */
+	/* llite only checks that the mirror id is in range, not that the
+	 * mirror exists. That has to be verified in an I/O context, so the
+	 * fstat() call is to verify that the mirror id is correct.
+	 */
 	rc = fstat(fd, &stbuf);
 	if (rc < 0) {
 		rc = -errno;

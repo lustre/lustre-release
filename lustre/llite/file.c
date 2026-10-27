@@ -1846,31 +1846,124 @@ int ll_merge_attr_try(const struct lu_env *env, struct inode *inode)
 }
 
 /*
- * Set designated mirror for I/O.
+ * ll_io_scope_validate() - Check @scope before it is stored
+ * @scope: I/O scope from the ioctl
  *
- * So far only read, write, and truncated can support to issue I/O to
- * designated mirror.
+ * FILE and MIRROR are accepted. A mirror id must be in [1, MIRROR_ID_MAX].
+ * STRIPE and OBJECT are reserved.
+ *
+ * Return: 0 on success, -EOPNOTSUPP if reserved, otherwise -EINVAL
  */
-void ll_io_set_mirror(struct cl_io *io, const struct file *file)
+static int ll_io_scope_validate(const struct ll_ioc_io_scope *scope)
+{
+	int i;
+
+	if (scope->ios_flags != 0)
+		return -EINVAL;
+
+	for (i = 0; i < ARRAY_SIZE(scope->ios_padding); i++) {
+		if (scope->ios_padding[i] != 0)
+			return -EINVAL;
+	}
+
+	switch (scope->ios_scope) {
+	case LL_IO_SCOPE_FILE:
+	case LL_IO_SCOPE_MIRROR:
+		break;
+	case LL_IO_SCOPE_STRIPE:
+	case LL_IO_SCOPE_OBJECT:
+		return -EOPNOTSUPP;
+	default:
+		return -EINVAL;
+	}
+
+	if (scope->ios_comp_id != 0 || scope->ios_stripe_idx != 0 ||
+	    !fid_is_zero(&scope->ios_obj_fid) ||
+	    scope->ios_obj_fid.f_ver != 0)
+		return -EINVAL;
+
+	if (scope->ios_scope == LL_IO_SCOPE_FILE) {
+		if (scope->ios_mirror_id != 0 ||
+		    scope->ios_layout_version != 0)
+			return -EINVAL;
+	} else if (scope->ios_mirror_id == 0 ||
+		   scope->ios_mirror_id > MIRROR_ID_MAX) {
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+/**
+ * ll_file_io_scope_set() - Validate and store @scope on the file
+ * @file: open file
+ * @scope: I/O scope from the ioctl
+ *
+ * Non-FILE scopes are only accepted on an O_DIRECT file.
+ *
+ * Return: 0 on success, negative errno on failure
+ */
+static int ll_file_io_scope_set(struct file *file,
+				const struct ll_ioc_io_scope *scope)
 {
 	struct ll_file_data *lfd = file->private_data;
+	int rc;
+
+	BUILD_BUG_ON(LL_IO_SCOPE_FILE != 0);
+
+	rc = ll_io_scope_validate(scope);
+	if (rc < 0)
+		return rc;
+
+	if (scope->ios_scope == LL_IO_SCOPE_FILE) {
+		memset(&lfd->fd_io_scope, 0, sizeof(lfd->fd_io_scope));
+		return 0;
+	}
+	if (!(file->f_flags & O_DIRECT))
+		return -EINVAL;
+
+	lfd->fd_io_scope = *scope;
+	return 0;
+}
+
+/**
+ * ll_io_scope_init() - Initialize @io from the fd I/O scope
+ * @io: I/O to initialize
+ * @file: open file
+ *
+ * Only scopes accepted by ll_io_scope_validate() reach here.
+ */
+void ll_io_scope_init(struct cl_io *io, const struct file *file)
+{
+	struct ll_file_data *lfd = file->private_data;
+	struct ll_ioc_io_scope *ios = &lfd->fd_io_scope;
 
 	/* clear layout version for generic(non-resync) I/O in case it carries
 	 * stale layout version due to I/O restart
 	 */
 	io->ci_layout_version = 0;
 
-	/* FLR: disable non-delay for designated mirror I/O because obviously
-	 * only one mirror is available
-	 */
-	if (lfd->fd_designated_mirror > 0) {
+	switch (ios->ios_scope) {
+	case LL_IO_SCOPE_MIRROR:
+		/* designated I/O has only one source; do not retry other
+		 * mirrors
+		 */
 		io->ci_ndelay = 0;
-		io->ci_designated_mirror = lfd->fd_designated_mirror;
-		io->ci_layout_version = lfd->fd_layout_version;
+		io->ci_designated_mirror = ios->ios_mirror_id;
+		if (ios->ios_layout_version != 0)
+			io->ci_layout_version = ios->ios_layout_version;
+		else
+			io->ci_layout_version = lfd->fd_layout_version;
+		break;
+	default:
+		break;
 	}
 
-	CDEBUG(D_VFSTRACE, DNAME": desiginated mirror: %d\n",
-	       encode_fn_file(file), io->ci_designated_mirror);
+	CDEBUG(D_VFSTRACE,
+	       DNAME": scope %u mirror %u comp %u stripe %u fid "DFID"\n",
+	       encode_fn_file(file), ios->ios_scope, ios->ios_mirror_id,
+	       ios->ios_comp_id, ios->ios_stripe_idx,
+	       PFID(&ios->ios_obj_fid));
 }
 
 /* This is relatime_need_update() from Linux 5.17, which is not exported */
@@ -1983,7 +2076,7 @@ void ll_io_init(struct cl_io *io, struct file *file, enum cl_io_type iot,
 	if (args)
 		io->ci_hybrid_switched = args->via_hybrid_switched;
 
-	ll_io_set_mirror(io, file);
+	ll_io_scope_init(io, file);
 }
 
 static void ll_heat_add(struct inode *inode, enum cl_io_type iot,
@@ -5197,14 +5290,25 @@ out_ladvise:
 		RETURN(rc);
 	}
 	case LL_IOC_FLR_SET_MIRROR: {
-		/* mirror I/O must be direct to avoid polluting page cache
-		 * with stale or parity data.
-		 */
-		if (!(file->f_flags & O_DIRECT))
+		struct ll_ioc_io_scope scope;
+
+		if (arg > MIRROR_ID_MAX)
 			RETURN(-EINVAL);
 
-		lfd->fd_designated_mirror = arg;
-		RETURN(0);
+		memset(&scope, 0, sizeof(scope));
+		if (arg != 0) {
+			scope.ios_scope = LL_IO_SCOPE_MIRROR;
+			scope.ios_mirror_id = arg;
+		}
+		RETURN(ll_file_io_scope_set(file, &scope));
+	}
+	case LL_IOC_SET_IO_SCOPE: {
+		struct ll_ioc_io_scope scope;
+
+		if (copy_from_user(&scope, uarg, sizeof(scope)))
+			RETURN(-EFAULT);
+
+		RETURN(ll_file_io_scope_set(file, &scope));
 	}
 	case LL_IOC_HEAT_GET: {
 		struct lu_heat uheat;
@@ -5344,7 +5448,7 @@ static loff_t ll_lseek(struct file *file, loff_t offset, int whence)
 
 	io = vvp_env_new_io(env);
 	io->ci_obj = ll_i2info(inode)->lli_clob;
-	ll_io_set_mirror(io, file);
+	ll_io_scope_init(io, file);
 
 	lsio = &io->u.ci_lseek;
 	lsio->ls_start = offset;
@@ -6736,7 +6840,7 @@ static int cl_falloc(struct file *file, struct inode *inode, int mode,
 
 	io = vvp_env_new_io(env);
 	io->ci_obj = ll_i2info(inode)->lli_clob;
-	ll_io_set_mirror(io, file);
+	ll_io_scope_init(io, file);
 
 	io->ci_verify_layout = 1;
 	io->u.ci_setattr.sa_parent_fid = lu_object_fid(&io->ci_obj->co_lu);

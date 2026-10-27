@@ -4909,6 +4909,69 @@ test_212b() {
 }
 run_test 212b "Testing lfs mirror verify --stale option"
 
+test_213a() {
+	local tf=$DIR/$tfile
+	local rc
+	# io_scope exits with the errno from llapi_io_scope_set()
+	local EOPNOTSUPP=95
+	local EINVAL=22
+	local mid
+
+	$LFS mirror create -N2 -c1 $tf || error "mirror create failed"
+
+	# STRIPE is reserved
+	io_scope -s STRIPE $tf
+	rc=$?
+	[[ $rc -eq $EOPNOTSUPP ]] ||
+		error "STRIPE should return EOPNOTSUPP, got $rc"
+
+	# OBJECT is reserved
+	io_scope -s OBJECT $tf
+	rc=$?
+	[[ $rc -eq $EOPNOTSUPP ]] ||
+		error "OBJECT should return EOPNOTSUPP, got $rc"
+
+	io_scope -s FILE $tf || error "FILE set_scope failed"
+
+	# MIRROR needs a mirror ID in [1, 0x7FFF]
+	io_scope -s MIRROR -i 1 $tf || error "MIRROR id 1 set_scope failed"
+	io_scope -s MIRROR -i 32767 $tf ||
+		error "MIRROR id 0x7FFF set_scope failed"
+	for mid in 0 32768 4294967295; do
+		io_scope -s MIRROR -i $mid $tf
+		rc=$?
+		[[ $rc -eq $EINVAL ]] ||
+			error "MIRROR id $mid should return EINVAL, got $rc"
+	done
+
+	# SET_MIRROR remains the {MIRROR, id} alias
+	dd if=/dev/zero of=$tf bs=64k count=1 conv=notrunc oflag=direct \
+		2>/dev/null || error "dd failed"
+	$LFS mirror resync $tf || error "mirror resync failed"
+}
+run_test 213a "I/O scope SET ioctl"
+
+test_213b() {
+	local tf=$DIR/$tfile
+	local olv
+
+	stack_trap "rm -f $tf"
+	$LFS setstripe -c1 $tf || error "setstripe $tf failed"
+
+	# a non-FLR file has no generation to check the version against
+	io_scope -s MIRROR -i 1 -v 0x3fffffff -w $tf ||
+		error "MIRROR write with layout version failed"
+	olv=$(get_ost_layout_version $tf)
+	(( olv == 0 )) || error "non-FLR write set OST layout version $olv"
+
+	$LFS mirror extend -N $tf || error "mirror extend $tf failed"
+	dd if=/dev/zero of=$tf bs=4k count=1 conv=notrunc oflag=direct ||
+		error "write to mirrored $tf failed"
+	$LFS mirror resync $tf || error "mirror resync $tf failed"
+	verify_ost_layout_version $tf
+}
+run_test 213b "I/O scope layout version is not sent for non-FLR file"
+
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status
