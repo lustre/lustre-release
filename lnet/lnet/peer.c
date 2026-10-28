@@ -4303,7 +4303,7 @@ __must_hold(&lp->lp_lock)
 
 	rc = LNetPut(&lp->lp_disc_src_nid, lp->lp_push_mdh,
 		     LNET_ACK_REQ, &id, LNET_RESERVED_PORTAL,
-		     LNET_PROTO_PING_MATCHBITS, 0, 0);
+		     LNET_PROTO_PING_MATCHBITS, 0, 0, 0);
 
 	/*
 	 * reset the discovery nid. There is no need to restrict sending

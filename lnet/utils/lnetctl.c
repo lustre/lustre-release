@@ -6652,7 +6652,8 @@ report_reply_error:
 }
 
 static int yaml_lnet_ping(char *group, int timeout, struct lnet_nid *src_nid,
-			  int start, int end, char **nids, int flags)
+			  bool urgent, int start, int end, char **nids,
+			  int flags)
 {
 	struct nid_node head, *entry;
 	struct nl_sock *sk = NULL;
@@ -6767,6 +6768,25 @@ static int yaml_lnet_ping(char *group, int timeout, struct lnet_nid *src_nid,
 			goto emitter_error;
 	}
 
+	if (urgent) {
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_STR_TAG,
+					     (yaml_char_t *)"urgent",
+					     strlen("urgent"), 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+
+		yaml_scalar_event_initialize(&event, NULL,
+					     (yaml_char_t *)YAML_INT_TAG,
+					     (yaml_char_t *)"1", 1, 1, 0,
+					     YAML_PLAIN_SCALAR_STYLE);
+		rc = yaml_emitter_emit(&output, &event);
+		if (rc == 0)
+			goto emitter_error;
+	}
+
 	yaml_scalar_event_initialize(&event, NULL,
 				     (yaml_char_t *)YAML_STR_TAG,
 				     (yaml_char_t *)"nids",
@@ -6858,14 +6878,16 @@ static int jt_ping(int argc, char **argv)
 	struct cYAML *err_rc = NULL;
 	struct cYAML *show_rc = NULL;
 	struct lnet_nid src = { };
+	bool urgent = false;
 	int timeout = 1000;
 	int rc = 0, opt;
 	char *src_nidstr = NULL;
-	const char *const short_options = "hs:t:";
+	const char *const short_options = "hs:t:u";
 	const struct option long_options[] = {
 		{ .name = "help",	.has_arg = no_argument,		.val = 'h' },
 		{ .name = "timeout",	.has_arg = required_argument,	.val = 't' },
 		{ .name = "source",	.has_arg = required_argument,	.val = 's' },
+		{ .name = "urgent",	.has_arg = no_argument,	.val = 'u' },
 		{ .name = NULL }
 	};
 
@@ -6879,10 +6901,14 @@ static int jt_ping(int argc, char **argv)
 		case 't':
 			timeout = 1000 * atol(optarg);
 			break;
+		case 'u':
+			urgent = true;
+			break;
 		case 'h':
 			printf("ping nid[,nid,...]\n"
 			       "\t --source: source nid\n"
 			       "\t --timeout: ping timeout\n"
+			       "\t --urgent: send without waiting for tx credits\n"
 			       "\t --help: display this help\n");
 			return 0;
 		default:
@@ -6892,11 +6918,16 @@ static int jt_ping(int argc, char **argv)
 	if (rc < 0)
 		return rc;
 
-	rc = yaml_lnet_ping("ping", timeout, src_nidstr ? &src : NULL, optind,
-			    argc, argv, NLM_F_DUMP);
+	rc = yaml_lnet_ping("ping", timeout, src_nidstr ? &src : NULL, urgent,
+			    optind, argc, argv, NLM_F_DUMP);
 	if (rc <= 0) {
 		if (rc != -EOPNOTSUPP)
 			return rc;
+		/* the ioctl interface has no way to pass the urgent flag */
+		if (urgent) {
+			fprintf(stderr, "ping: --urgent needs Netlink support\n");
+			return rc;
+		}
 	}
 
 	for (; optind < argc; optind++) {
@@ -6957,7 +6988,7 @@ static int jt_discover(int argc, char **argv)
 		return -1;
 	}
 
-	rc = yaml_lnet_ping("discover", 1000, NULL, optind, argc, argv,
+	rc = yaml_lnet_ping("discover", 1000, NULL, false, optind, argc, argv,
 			    flags);
 	if (rc <= 0) {
 		if (rc != -EOPNOTSUPP)

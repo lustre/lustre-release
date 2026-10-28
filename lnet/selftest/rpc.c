@@ -460,11 +460,11 @@ srpc_post_active_rdma(int portal, __u64 matchbits, void *buf, int len,
 	 */
 	if ((options & LNET_MD_OP_PUT) != 0) {
 		rc = LNetPut(self, *mdh, LNET_NOACK_REQ, peer,
-			     portal, matchbits, 0, 0);
+			     portal, matchbits, 0, 0, 0);
 	} else {
 		LASSERT((options & LNET_MD_OP_GET) != 0);
 
-		rc = LNetGet(self, *mdh, peer, portal, matchbits, 0, false);
+		rc = LNetGet(self, *mdh, peer, portal, matchbits, 0, 0);
 	}
 
 	if (rc != 0) {

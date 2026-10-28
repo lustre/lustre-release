@@ -1,6 +1,6 @@
 .\" SPDX-License-Identifier: GPL-2.0
 .
-.TH lnetctl 8 "2017 Jan 12" Lustre "configuration utilities"
+.TH lnetctl 8 2026-11-15 Lustre "configuration utilities"
 .
 .SH "SYNOPSIS"
 \fBlnetctl\fR
@@ -521,6 +521,36 @@ Delete user-defined selection policy.
 \fBlnetctl udsp\fR show
 Show all user-defined selection policies in the system\. The policies are dumped in YAML form\.
 .
+.SS "Ping and Discovery"
+.
+.TP
+\fBlnetctl ping\fR [\-\-source \fInid\fR] [\-\-timeout \fIseconds\fR] [\-\-urgent] \fInid\fR[,\fInid\fR,\.\.\.]
+Send an LNet ping to each of the given NIDs and show the NIDs each peer replies with\.
+.
+.br
+\-\-source: local NID to send the ping from\.
+By default LNet selects the source NID\.
+.
+.br
+\-\-timeout: seconds to wait for the reply (default 1)\.
+.
+.br
+\-\-urgent: send the ping without taking or waiting for LNet transmit credits to the peer or on the local network interface\.
+Use this to check whether a peer is reachable while other messages hold all of the credits to it, for example after the peer has rebooted and the messages in flight to it have not yet timed out\.
+Only the LNet credits on the sending node are bypassed; an LND with its own credits (o2iblnd) and routers on the path still apply them\.
+It requires the Netlink interface of the LNet module\.
+.
+.br
+.
+.TP
+\fBlnetctl discover\fR [\-\-force] \fInid\fR[,\fInid\fR,\.\.\.]
+Discover the interfaces of the peers with the given NIDs and show them\.
+.
+.br
+\-\-force: discover the peer again even if it is already up to date\.
+.
+.br
+.
 .SS "Debugging"
 .
 .TP
@@ -879,6 +909,33 @@ peer:
 .
 .br
           state: NA
+.
+.br
+.
+.SS "Pinging a peer"
+.
+.IP "\\(bu" 4
+lnetctl ping 10\.148\.0\.8@o2ib
+.
+.IP "\\(bu" 4
+lnetctl ping \-\-timeout 10 \-\-urgent 10\.148\.0\.8@o2ib
+.
+.IP "" 0
+.
+.P
+ping:
+.
+.br
+    \- primary nid: 10\.148\.0\.8@o2ib
+.
+.br
+      Multi\-Rail: True
+.
+.br
+      peer_ni:
+.
+.br
+        \- nid: 10\.148\.0\.8@o2ib
 .
 .br
 .

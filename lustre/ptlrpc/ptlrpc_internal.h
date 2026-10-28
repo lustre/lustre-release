@@ -423,6 +423,21 @@ static inline bool ptlrpc_req_is_connect(struct ptlrpc_request *req)
 		return false;
 }
 
+/*
+ * RPCs that re-establish a connection are sent without waiting for LNet
+ * tx credits, so a reconnect to a restarted target is not queued behind
+ * bulk RPCs that may hold all the peer credits until they time out
+ * (LU-21058).  With a GSS flavor the client has to set up a new security
+ * context before it can connect, so SEC_CTX_INIT* count as well.
+ */
+static inline bool ptlrpc_req_is_urgent(struct ptlrpc_request *req)
+{
+	__u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
+
+	return ptlrpc_req_is_connect(req) ||
+	       opc == SEC_CTX_INIT || opc == SEC_CTX_INIT_CONT;
+}
+
 static inline bool ptlrpc_req_is_disconnect(struct ptlrpc_request *req)
 {
 	if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_DISCONNECT ||

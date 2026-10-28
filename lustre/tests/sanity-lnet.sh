@@ -6121,6 +6121,60 @@ test_257() {
 }
 run_test 257 "Test graceful router shutdown/startup"
 
+test_259() {
+	$LNETCTL ping --help | grep -q -- --urgent ||
+		skip "lnetctl ping does not support --urgent"
+
+	setup_health_test false || return $?
+
+	local lnid=${LNIDS[0]}
+	local rnid=${RNIDS[0]}
+	local pcs=$($LNETCTL peer show -v --nid $rnid |
+		    awk '/max_ni_tx_credits:/{print $NF; exit}')
+
+	[[ -n $pcs ]] || error "Cannot find peer credits for $rnid"
+
+	# Hold all our peer credits for $rnid with delayed replies to pings
+	# from $rnid, so our own pings to $rnid have to wait for a credit
+	add_delay_rule -s $lnid -d $rnid -r 1 -m REPLY -l 60
+
+	local cmd="for ((i = 0; i < $pcs; i++)); do"
+
+	cmd+=" $LNETCTL ping --timeout 70 $lnid > /dev/null & done; wait"
+	do_node --quiet $RNODE "$cmd" &
+
+	wait_update $HOSTNAME "$LNETCTL peer show -v --nid $rnid |
+		grep -cw 'available_tx_credits: 0'" "1" "20"
+	local rc_held=$?
+
+	# A normal ping waits for a credit until the delayed replies are sent
+	$LNETCTL ping --timeout 10 $rnid > /dev/null &
+	local pid_normal=$!
+	local queued=false
+
+	sleep 2
+	kill -0 $pid_normal 2> /dev/null && queued=true
+
+	# "lnetctl ping --urgent" sends the ping with msg_urgent
+	local start=$SECONDS
+
+	do_lnetctl ping --urgent --timeout 10 $rnid
+	local rc_urgent=$?
+
+	local elapsed=$((SECONDS - start))
+
+	del_delay_rule -a
+	wait
+
+	((rc_held == 0)) || error "peer credits for $rnid were not all held"
+	$queued || error "normal ping to $rnid did not wait for a credit"
+	((rc_urgent == 0)) || error "urgent ping $rnid failed: rc = $rc_urgent"
+	((elapsed < 20)) || error "urgent ping $rnid took $elapsed seconds"
+
+	cleanup_health_test
+}
+run_test 259 "Urgent message should not wait for peer credits"
+
 check_sysctl() {
 	while IFS= read -r line; do
 		# Couldn't find a way to break this line

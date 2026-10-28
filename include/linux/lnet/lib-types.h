@@ -173,6 +173,7 @@ struct lnet_msg {
 	unsigned int          msg_onactivelist:1; /* on the activelist */
 	unsigned int	      msg_rdma_get:1;
 	unsigned int	      msg_p2pdma:1;	  /* MD is P2PDMA memory */
+	unsigned int	      msg_urgent:1;	  /* no local tx credits */
 
 	struct lnet_peer_ni  *msg_txpeer;         /* peer I'm sending to */
 	struct lnet_peer_ni  *msg_rxpeer;         /* peer I received from */

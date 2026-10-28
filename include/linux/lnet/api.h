@@ -127,6 +127,20 @@ void lnet_assert_handler_unused(lnet_handler_t handler);
  * The LNet API provides two data movement operations: LNetPut()
  * and LNetGet().
  * @{ */
+
+/**
+ * enum lnet_send_flags - flags for LNetPut() and LNetGet()
+ * @LNET_SEND_RECOVERY: the message is a health recovery ping
+ * @LNET_SEND_URGENT: send without taking or waiting for LNet peer or NI
+ *                    tx credits.  Only the LNet credits on the sending
+ *                    node are bypassed: an LND with its own credits
+ *                    (o2iblnd) and routers on the path still apply them.
+ */
+enum lnet_send_flags {
+	LNET_SEND_RECOVERY	= BIT(0),
+	LNET_SEND_URGENT	= BIT(1),
+};
+
 int LNetPut(struct lnet_nid		*self,
 	    struct lnet_handle_md	md_in,
 	    enum lnet_ack_req		ack_req_in,
@@ -134,7 +148,8 @@ int LNetPut(struct lnet_nid		*self,
 	    unsigned int		portal_in,
 	    __u64			match_bits_in,
 	    unsigned int		offset_in,
-	    __u64			hdr_data_in);
+	    __u64			hdr_data_in,
+	    unsigned int		flags);
 
 int LNetGet(struct lnet_nid		*self,
 	    struct lnet_handle_md	md_in,
@@ -142,7 +157,7 @@ int LNetGet(struct lnet_nid		*self,
 	    unsigned int		portal_in,
 	    __u64			match_bits_in,
 	    unsigned int		offset_in,
-	    bool			recovery);
+	    unsigned int		flags);
 /** @} lnet_data */
 
 

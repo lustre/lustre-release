@@ -245,6 +245,7 @@ struct lnet_genl_ping_list {
 	unsigned int			lgpl_failed_count;
 	signed long			lgpl_timeout;
 	struct lnet_nid			lgpl_src_nid;
+	bool				lgpl_urgent;
 
 	GENRADIX(struct lnet_fail_ping)	lgpl_failed;
 	GENRADIX(struct lnet_processid)	lgpl_list;
@@ -252,7 +253,7 @@ struct lnet_genl_ping_list {
 
 static int lnet_ping(struct lnet_processid *id, struct lnet_nid *src_nid,
 		     signed long timeout, struct lnet_genl_ping_list *plist,
-		     int n_ids);
+		     int n_ids, bool urgent);
 
 static int lnet_discover(struct lnet_processid *id, u32 force,
 			 struct lnet_genl_ping_list *dlists);
@@ -5092,7 +5093,7 @@ LNetCtl(unsigned int cmd, void *arg)
 		id.pid = ping->ping_id.pid;
 		lnet_nid4_to_nid(ping->ping_id.nid, &id.nid);
 		rc = lnet_ping(&id, &src_nid, timeout, &plist,
-			       ping->ping_count);
+			       ping->ping_count, false);
 		if (rc < 0)
 			goto report_ping_err;
 		count = rc;
@@ -8777,6 +8778,7 @@ static int lnet_ping_show_start(struct netlink_callback *cb)
 	genradix_init(&plist->lgpl_list);
 	plist->lgpl_timeout = cfs_time_seconds(DEFAULT_PEER_TIMEOUT);
 	plist->lgpl_src_nid = LNET_ANY_NID;
+	plist->lgpl_urgent = false;
 	plist->lgpl_index = 0;
 	plist->lgpl_list_count = 0;
 	cb->args[0] = (long)plist;
@@ -8831,6 +8833,15 @@ static int lnet_ping_show_start(struct netlink_callback *cb)
 					GOTO(report_err, rc);
 				}
 				rc = 0;
+			} else if (nla_strcmp(top, "urgent") == 0) {
+				top = nla_next(top, &rem);
+				if (nla_type(top) != LN_SCALAR_ATTR_INT_VALUE) {
+					NL_SET_ERR_MSG(extack,
+						       "invalid urgent param");
+					GOTO(report_err, rc = -EINVAL);
+				}
+
+				plist->lgpl_urgent = !!nla_get_s64(top);
 			}
 			break;
 		case LN_SCALAR_ATTR_LIST:
@@ -8983,7 +8994,7 @@ static int lnet_ping_show_dump(struct sk_buff *msg,
 						   NULL);
 
 		rc = lnet_ping(id, &plist->lgpl_src_nid, plist->lgpl_timeout,
-			       &peers, lnet_interfaces_max);
+			       &peers, lnet_interfaces_max, plist->lgpl_urgent);
 		if (rc < 0) {
 			struct lnet_fail_ping *fail;
 
@@ -11338,7 +11349,7 @@ EXPORT_SYMBOL(lnet_discover_nid_metadata);
 
 static int lnet_ping(struct lnet_processid *id, struct lnet_nid *src_nid,
 		     signed long timeout, struct lnet_genl_ping_list *plist,
-		     int n_ids)
+		     int n_ids, bool urgent)
 {
 	int id_bytes = sizeof(struct lnet_ni_status); /* For 0@lo */
 	struct lnet_md md = { NULL };
@@ -11394,7 +11405,8 @@ static int lnet_ping(struct lnet_processid *id, struct lnet_nid *src_nid,
 	}
 
 	rc = LNetGet(src_nid, pd.mdh, id, LNET_RESERVED_PORTAL,
-		     LNET_PROTO_PING_MATCHBITS, 0, false);
+		     LNET_PROTO_PING_MATCHBITS, 0,
+		     urgent ? LNET_SEND_URGENT : 0);
 	if (rc != 0) {
 		/* Don't CERROR; this could be deliberate! */
 		rc2 = LNetMDUnlink(pd.mdh);
