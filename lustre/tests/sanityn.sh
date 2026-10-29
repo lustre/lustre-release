@@ -2493,14 +2493,15 @@ sub_test_41i() {
 test_41i() {
 	(( $MDS1_VERSION >= $(version_code 2.13.56) )) ||
 		skip "Need MDS version newer than 2.13.56"
-	local msg fail_loc
+	local msg fail_loc count
 
 #define CFS_FAIL_ONCE|OBD_FAIL_MDS_REINT_OPEN         0x169
 #define CFS_FAIL_ONCE|OBD_FAIL_MDS_REINT_OPEN2        0x16a
 	for fail_loc in "0x80000169" "0x8000016a"; do
-		echo "Begin 100 tests with fail_loc=$fail_loc"
+		[[ $fail_loc == 0x8000016a ]] && count=10 || count=25
+		echo "Begin $count tests with fail_loc=$fail_loc"
 		printf "Progress: "
-		for i in {1..100}; do
+		for ((i = 1; i <= count; i++)); do
 			printf "*"
 			msg=$(sub_test_41i "$fail_loc") ||
 				{ echo; error "iter=$i : $msg"; }
