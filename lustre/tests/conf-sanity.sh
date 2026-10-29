@@ -9276,6 +9276,18 @@ run_test 102 "obdclass module cleanup upon error"
 
 test_renamefs() {
 	local newname=$1
+	local facets="mgs,$(get_facets MDS),$(get_facets OST)"
+	local facet
+
+	# Earlier repetitions create mappings in a different subshell.
+	for facet in ${facets//,/ }; do
+		local dm_dev=$(dm_facet_devpath $facet)
+
+		if is_dm_dev $facet $dm_dev &&
+		   [[ $(facet_device $facet) != "$dm_dev" ]]; then
+			export_dm_dev $facet $dm_dev
+		fi
+	done
 
 	echo "rename $FSNAME to $newname"
 
@@ -9382,19 +9394,25 @@ test_103() {
 
 	stopall
 
-	test_renamefs tfs
-
-	FSNAME="tfs"
-	setupall
-
-	test_103_check_pool $save_fsname 17
-
-	stopall
-
 	test_renamefs $save_fsname
 
 	FSNAME=$save_fsname
 	setupall
+
+	test_103_check_pool $save_fsname 17
+	if (( OSTCOUNT >= 2 )); then
+		do_facet mgs $LCTL pool_list $FSNAME.$save_fsname |
+			grep ${FSNAME}-OST0001 ||
+			error "(18) OST0001 missing from $FSNAME.$save_fsname"
+	fi
+
+	local pname=$($LFS getstripe --pool $DIR/$tdir/f0)
+
+	[[ "$pname" == "$save_fsname" ]] ||
+		error "(19) Unexpected f0 pool name $pname"
+	destroy_pool $FSNAME.pool1 || error "(20) Fail to destroy pool1"
+	destroy_pool $FSNAME.$save_fsname ||
+		error "(21) Fail to destroy $save_fsname"
 	KEEP_ZPOOL=false
 }
 run_test 103 "rename filesystem name"
