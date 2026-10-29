@@ -2645,6 +2645,8 @@ nodemap_exercise_fileset_cleanup() {
 
 stopall_restart_servers() {
 	stopall || error "unable to stop"
+	# Unload modules so that llog filesets are replayed from the params
+	# llog, not copied from the old in-memory nodemap
 	LOAD_MODULES_REMOTE=true unload_modules ||
 		error "unable to unload modules"
 	LOAD_MODULES_REMOTE=true load_modules ||
@@ -2652,6 +2654,17 @@ stopall_restart_servers() {
 	mountmgs || error "unable to start mgs"
 	mountmds || error "unable to start mds"
 	mountoss || error "unable to start oss"
+}
+
+restart_mgs() {
+	zconf_umount_clients ${CLIENTS:-$HOSTNAME} $MOUNT ||
+		error "unable to umount clients"
+	stop mds1 -f || error "unable to stop mds1"
+	combined_mgs_mds || stop mgs -f || error "unable to stop mgs"
+	mountmgs || error "unable to start mgs"
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS ||
+		error "unable to start mds1"
+	wait_osc_import_ready mds mds1
 }
 
 nodemap_exercise_fileset() {
@@ -2727,8 +2740,12 @@ nodemap_exercise_fileset() {
 		wait_nm_sync $nm deny_unknown
 	fi
 
-	# re-start all components to verify persistence of fileset after restart
-	stopall_restart_servers
+	# re-start servers to verify persistence of fileset after restart
+	if $have_persistent_fset_cmd; then
+		restart_mgs
+	else
+		stopall_restart_servers
+	fi
 
 	stack_trap nodemap_exercise_fileset_cleanup EXIT
 
@@ -2910,6 +2927,7 @@ test_27ab() { #LU-18109
 	(( MDS1_VERSION > $(version_code 2.16.50.170) )) ||
 		skip "need MDS > 2.16.50.170 for nodemap range offset"
 
+	stack_trap nodemap_exercise_fileset_cleanup
 	do_facet mgs $LCTL nodemap_add $nm1 ||
 		error "unable to add $nm1 as nodemap"
 	stack_trap "do_facet mgs $LCTL nodemap_del $nm1 || true"
@@ -3111,8 +3129,7 @@ test_27ab() { #LU-18109
 			error "gid $id should be mapped to $expected"
 	fi
 
-	stopall || error "failed to unmount servers"
-	setupall || error "failed to remount servers"
+	restart_mgs
 
 	offset=$(do_facet mgs $LCTL get_param nodemap.$nm1.offset |
 		 grep start_uid)
@@ -3137,8 +3154,7 @@ test_27ab() { #LU-18109
 	[[ "$offset" == *"limit_uid: 0"* ]] ||
 		error "expected limit_uid 0, found $offset"
 
-	stopall || error "failed to unmount servers"
-	setupall || error "failed to remount servers"
+	restart_mgs
 
 	offset=$(do_facet mgs $LCTL get_param nodemap.$nm1.offset |
 		 grep start_uid)
@@ -3187,14 +3203,14 @@ test_27ac() {
 	do_facet mgs $LCTL nodemap_set_fileset --name $nm \
 		--fileset $fileset_iam ||
 		error "unable to set fileset $fileset_iam on $nm"
-	wait_nm_sync_fileset $nm "$iam_fileset" "$iam_fileset" "primary" ||
-		error "fileset $iam_fileset not synced"
+	wait_nm_sync_fileset $nm "$fileset_iam" "$fileset_iam" "primary" ||
+		error "fileset $fileset_iam not synced"
 
 	# quickly delete and re-add nodemap in one synchronization step
 	do_facet mgs "$LCTL nodemap_del $nm ; $LCTL nodemap_add $nm" ||
 		error "unable to del and add $nm nodemap"
 	# 1. IAM fileset should be removed
-	wait_nm_sync_fileset $nm "$iam_fileset" "" "primary" ||
+	wait_nm_sync_fileset $nm "$fileset_iam" "" "primary" ||
 		error "fileset not cleared"
 
 	# set llog fileset
@@ -3202,8 +3218,8 @@ test_27ac() {
 		error "unable to set fileset $fileset_llog on $nm locally"
 	do_facet mgs $LCTL set_param -P nodemap.$nm.fileset=$fileset_llog ||
 		error "unable to set fileset $fileset_llog on $nm persistently"
-	wait_nm_sync_fileset $nm "$llog_fileset" "$llog_fileset" "primary" ||
-		error "fileset $llog_fileset not synced"
+	wait_nm_sync_fileset $nm "$fileset_llog" "$fileset_llog" "primary" ||
+		error "fileset $fileset_llog not synced"
 
 	# re-start all components to verify persistence of fileset after restart
 	stopall_restart_servers
@@ -3217,8 +3233,8 @@ test_27ac() {
 	do_facet mgs $LCTL nodemap_set_fileset --name $nm \
 		--fileset $fileset_iam ||
 		error "unable to set fileset $fileset_iam on $nm"
-	wait_nm_sync_fileset $nm "$iam_fileset" "$iam_fileset" "primary" ||
-		error "fileset $iam_fileset not synced"
+	wait_nm_sync_fileset $nm "$fileset_iam" "$fileset_iam" "primary" ||
+		error "fileset $fileset_iam not synced"
 
 	# 3. setting llog fileset should be denied. We omit set_param -P since
 	# it follows the same logic but can't be verified as the error is
@@ -3229,12 +3245,12 @@ test_27ac() {
 	# reset fileset (allows setting an llog fileset)
 	do_facet mgs $LCTL nodemap_set_fileset --name $nm --fileset clear ||
 		error "unable to clear fileset on $nm"
-	wait_nm_sync_fileset $nm "$iam_fileset" "" "primary" ||
+	wait_nm_sync_fileset $nm "$fileset_iam" "" "primary" ||
 		error "fileset not cleared"
 
 	# 4. Restart and verify fileset is still cleared
 	stopall_restart_servers
-	wait_nm_sync_fileset $nm "$iam_fileset" "" "primary" ||
+	wait_nm_sync_fileset $nm "$fileset_iam" "" "primary" ||
 		error "fileset not cleared"
 
 	# 5. Verify fileset can be set
@@ -3242,14 +3258,14 @@ test_27ac() {
 		error "unable to set fileset $fileset_llog on $nm locally"
 	do_facet mgs $LCTL set_param -P nodemap.$nm.fileset=$fileset_llog ||
 		error "unable to set fileset $fileset_llog on $nm persistently"
-	wait_nm_sync_fileset $nm "$llog_fileset" "$llog_fileset" "primary" ||
-		error "fileset $llog_fileset not synced"
+	wait_nm_sync_fileset $nm "$fileset_llog" "$fileset_llog" "primary" ||
+		error "fileset $fileset_llog not synced"
 
 	# delete and re-add nodemap
 	do_facet mgs "$LCTL nodemap_del $nm ; $LCTL nodemap_add $nm" ||
 		error "unable to del and add $nm nodemap"
 	# 6. llog fileset should be removed
-	wait_nm_sync_fileset $nm "$llog_fileset" "" "primary" ||
+	wait_nm_sync_fileset $nm "$fileset_llog" "" "primary" ||
 		error "fileset not cleared"
 }
 run_test 27ac "test nodemap llog and IAM fileset compatibility"
