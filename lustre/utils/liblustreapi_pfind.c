@@ -936,9 +936,15 @@ static int find_check_layout(struct find_param *param)
 		if (comp_v1)
 			v1 = lov_comp_entry(comp_v1, i);
 
-		/* foreign file have a special magic but no pattern field */
-		if (v1->lmm_magic == LOV_USER_MAGIC_FOREIGN)
+		/* a foreign layout or component has no pattern field */
+		if (v1->lmm_magic == LOV_USER_MAGIC_FOREIGN) {
+			valid = true;
+			if (param->fp_layout & LOV_PATTERN_FOREIGN) {
+				found = true;
+				break;
+			}
 			continue;
+		}
 
 		if (v1->lmm_pattern == LOV_PATTERN_INVALID)
 			continue;
@@ -961,8 +967,37 @@ static int find_check_layout(struct find_param *param)
 }
 
 /*
+ * Find a foreign component, e.g. a PCC-RO mirror, of the type to check,
+ * or else the first foreign component, so that a file with only foreign
+ * components of other types is handled like a foreign layout of another
+ * type.  Return NULL if the layout has no foreign component.
+ */
+static struct lov_foreign_md *find_foreign_comp(struct find_param *param)
+{
+	struct lov_comp_md_v1 *comp_v1 = (void *)&param->fp_lmd->lmd_lmm;
+	struct lov_foreign_md *first = NULL;
+	struct lov_foreign_md *lfm;
+	int i;
+
+	for (i = 0; i < comp_v1->lcm_entry_count; i++) {
+		lfm = (void *)lov_comp_entry(comp_v1, i);
+		if (lfm->lfm_magic != LOV_USER_MAGIC_FOREIGN)
+			continue;
+		if (param->fp_foreign_type == LU_FOREIGN_TYPE_UNKNOWN ||
+		    lfm->lfm_type == param->fp_foreign_type)
+			return lfm;
+		if (!first)
+			first = lfm;
+	}
+
+	return first;
+}
+
+/*
  * if no type specified, check/exclude all foreign
  * if type specified, check all foreign&type and exclude !foreign + foreign&type
+ * so "! --foreign=TYPE" matches only foreign objects of other types
+ * a composite layout counts as foreign if it has a foreign component
  */
 static int find_check_foreign(struct find_param *param)
 {
@@ -970,7 +1005,9 @@ static int find_check_foreign(struct find_param *param)
 		struct lov_foreign_md *lfm;
 
 		lfm = (void *)&param->fp_lmd->lmd_lmm;
-		if (lfm->lfm_magic != LOV_USER_MAGIC_FOREIGN) {
+		if (lfm->lfm_magic == LOV_USER_MAGIC_COMP_V1)
+			lfm = find_foreign_comp(param);
+		if (!lfm || lfm->lfm_magic != LOV_USER_MAGIC_FOREIGN) {
 			if (param->fp_foreign_type == LU_FOREIGN_TYPE_UNKNOWN)
 				return param->fp_exclude_foreign ? 1 : -1;
 			return -1;
@@ -2644,28 +2681,6 @@ static __u64 find_want(struct find_param *param, int checked_type,
 }
 
 /*
- * `! --foreign` on a directory with no stripe of its own: accepted on the
- * LMV alone.  Nothing between here and the print reads what the getattr
- * fetches, so it is not asked for -- as it was not before this became a
- * record.  -printf is the exception: those attributes are what it prints.
- *
- * True of the path actually taken, and only because it is a shortcut: the
- * predicates that would read the getattr -- -uid, -type, -perm, --projid,
- * the time checks -- are jumped over with it, so
- * `lfs find $DIR ! --foreign --uid 0` prints an unstriped directory
- * whatever its owner.  That is upstream's own `goto print` and not new
- * here, though this patch widens what reaches it: llapi_scan_get_lmv()
- * now lets ENOTTY through, so a directory off Lustre takes the shortcut
- * too.  Fixing the skip belongs in a patch of its own.
- */
-static bool find_foreign_accepts(const struct find_param *param,
-				 bool have_lmv, bool gather_all)
-{
-	return param->fp_get_lmv && !have_lmv && !gather_all &&
-	       param->fp_check_foreign && param->fp_exclude_foreign;
-}
-
-/*
  * The checks that need only the directory's LMV.  Run before the stat RPC,
  * so a directory they reject costs no more than the LMV fetch.
  *
@@ -2678,9 +2693,13 @@ static bool find_lmv_rejects(const struct find_param *param, bool have_lmv)
 	if (!param->fp_get_lmv)
 		return false;
 
-	/* no stripe of its own: rejected unless --foreign is negated */
-	if (!have_lmv && param->fp_check_foreign)
-		return !param->fp_exclude_foreign;
+	/*
+	 * No stripe of its own, so not foreign: rejected by --foreign, while
+	 * with "! --foreign" the other checks still apply.
+	 */
+	if (!have_lmv && param->fp_check_foreign &&
+	    !param->fp_exclude_foreign)
+		return true;
 
 	if (param->fp_check_mdt_count) {
 		if (lmv_is_foreign(lmv->lum_magic))
@@ -2792,15 +2811,6 @@ static int find_decide(struct find_ctx *fc, struct find_param *param)
 	int decision = 1;	/* 1 is accepted; -1 is rejected. */
 	int ret = 0;
 	__u64 flags;
-
-	/*
-	 * An unstriped directory answered ENODATA, or one off Lustre answered
-	 * ENOTTY: no stripe of its own either way.
-	 */
-	if (param->fp_get_lmv && param->fp_check_foreign &&
-	    param->fp_exclude_foreign &&
-	    !(fc->fc_rec->lfsr_valid & LLAPI_SCAN_LMV))
-		goto print;
 
 	/* Check the file permissions from the stat info */
 	if (param->fp_perm_sign) {
@@ -3180,7 +3190,6 @@ obd_matches:
 			return 0;
 	}
 
-print:
 	if (param->fp_skip_percent && find_skip_file(param))
 		return 0;
 
@@ -3235,9 +3244,6 @@ int cb_find_init(char *path, int p, int *dp, struct find_param *param,
 		ret = scan_rec_gather_begin(param, path, d, want, &have_lmv);
 		if (ret == 0 && find_lmv_rejects(param, have_lmv))
 			goto decided;
-		if (ret == 0 &&
-		    find_foreign_accepts(param, have_lmv, gather_all))
-			goto run_decide;
 		if (ret == 0)
 			ret = scan_rec_gather_finish(param, path, p, d, &fd,
 						     want, have_lmv, &rec);
@@ -3274,7 +3280,6 @@ int cb_find_init(char *path, int p, int *dp, struct find_param *param,
 			goto decided;
 	}
 
-run_decide:
 	fc.fc_rec = &rec;
 	fc.fc_path = path;
 	fc.fc_de = de;

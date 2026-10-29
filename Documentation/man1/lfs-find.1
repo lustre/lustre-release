@@ -67,7 +67,7 @@ lfs-find \- Lustre client utility to list files with specific attributes
 .br
 .RB [[ ! ]
 .BR --layout | -L
-.BR mdt | raid0 | released ]
+.BR foreign | mdt | raid0 | released ]
 .RB [ --lazy | -l ]
 .RB [ --ls ]
 .br
@@ -294,11 +294,16 @@ The file has component start offset
 (in bytes) for any component.
 .TP
 .BR --foreign
-File has a foreign (non-Lustre/free format) layout and is of the given
+File has a foreign (non-Lustre/free format) layout, or a foreign component
+such as the mirror of a PCC-RO file, and is of the given
 .IR TYPE ,
-if specified. Presently only
-.B none
-or
+if specified. Presently
+.BR none ,
+.BR posix ,
+.BR pccrw ,
+.BR pccro ,
+.B S3
+and
 .B symlink
 are defined types, though 32-bit numeric types can also be used.
 .TP
@@ -318,6 +323,12 @@ Print usage message.
 .BR -L ", " --layout
 File has a layout of the given type, one of:
 .RS 1.2i
+.TP
+.B foreign
+Files with a foreign layout, or with a foreign component such as the
+mirror of a PCC-RO file.  A file whose whole layout is foreign has none
+of the other layout types, so it matches a negated type such as
+.BR "! -L raid0" .
 .TP
 .B raid0
 Traditional Lustre RAID-0 striping format.
@@ -931,9 +942,11 @@ Recursively list all out-of-sync mirrored files:
 .RE
 .EE
 .PP
-Recursively list all but foreign files/dirs of
+Recursively list foreign files/dirs that are not of
 .B symlink
-type:
+type, while
+.B ! --foreign
+without a type lists all files/dirs that are not foreign:
 .EX
 .RS
 .B # lfs find ! --foreign=symlink /mnt/lustre

@@ -2015,6 +2015,45 @@ test_21b() {
 }
 run_test 21b "PCC-RO stroing as a plain HSM mirror component for FLR layouts"
 
+test_21ba() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tdir/$tfile
+	local out
+
+	$LCTL get_param -n mdc.*.connect_flags | grep -q pcc_ro ||
+		skip "Server does not support PCC-RO"
+
+	setup_loopdev client $loopfile $mntpt 60
+	mkdir $hsm_root || error "mkdir $hsm_root failed"
+	setup_pcc_mapping client \
+		"projid={0}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1"
+
+	# PCC-RO attach adds a foreign component to the layout of the file
+	test_mkdir $DIR/$tdir
+	echo "QQQQQ" > $file || error "echo $file failed"
+	echo "QQQQQ" > $file.plain || error "echo $file.plain failed"
+	$LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file ||
+		error "attach $file failed"
+	stack_trap "$LFS pcc detach $file"
+
+	# both checks used to skip the foreign component
+	out=$($LFS find $DIR/$tdir --foreign -type f)
+	[[ "$out" == "$file" ]] || error "find --foreign: '$out' != $file"
+	out=$($LFS find $DIR/$tdir --foreign=pccro -type f)
+	[[ "$out" == "$file" ]] || error "find --foreign=pccro: '$out'"
+	out=$($LFS find $DIR/$tdir --foreign=symlink -type f)
+	[[ -z "$out" ]] || error "find --foreign=symlink: '$out'"
+	out=$($LFS find $DIR/$tdir ! --foreign -type f)
+	[[ "$out" == "$file.plain" ]] || error "find ! --foreign: '$out'"
+	out=$($LFS find $DIR/$tdir -L foreign -type f)
+	[[ "$out" == "$file" ]] || error "find -L foreign: '$out' != $file"
+	out=$($LFS find $DIR/$tdir ! -L foreign -type f)
+	[[ "$out" == "$file.plain" ]] || error "find ! -L foreign: '$out'"
+}
+run_test 21ba "lfs find files with a foreign component"
+
 test_21c() {
 	local loopfile="$TMP/$tfile"
 	local mntpt="/mnt/pcc.$tdir"

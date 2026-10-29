@@ -10765,6 +10765,62 @@ test_56y() {
 }
 run_test 56y "lfs find -L raid0|released"
 
+test_56ya() {
+	(( $MDS1_VERSION >= $(version_code v2_12_53-15-gfdad38781c) )) ||
+		skip "Need MDS >= 2.12.53.15 for foreign LMV directory"
+
+	local dir=$DIR/$tdir
+	local uuid=$(cat /proc/sys/kernel/random/uuid)
+	local res
+
+	test_mkdir $dir
+	touch $dir/$tfile.plain || error "touch $dir/$tfile.plain failed"
+	$LFS setstripe --foreign=none -x "$uuid" $dir/$tfile.foreign ||
+		error "create foreign file $dir/$tfile.foreign failed"
+	mkdir $dir/$tdir.plain || error "mkdir $dir/$tdir.plain failed"
+	# type 1 is posix
+	create_foreign_dir -d $dir/$tdir.foreign -x "$uuid" -t 1 ||
+		error "create foreign dir $dir/$tdir.foreign failed"
+
+	res=$($LFS find $dir --foreign -type f)
+	[[ "$res" == "$dir/$tfile.foreign" ]] ||
+		error "find --foreign -type f: '$res'"
+	res=$($LFS find $dir ! --foreign -type f)
+	[[ "$res" == "$dir/$tfile.plain" ]] ||
+		error "find ! --foreign -type f: '$res'"
+	res=$($LFS find $dir --foreign=none -type f)
+	[[ "$res" == "$dir/$tfile.foreign" ]] ||
+		error "find --foreign=none -type f: '$res'"
+	res=$($LFS find $dir --foreign=symlink -type f)
+	[[ -z "$res" ]] || error "find --foreign=symlink -type f: '$res'"
+	# with a type, the negation matches only foreign files of other types
+	res=$($LFS find $dir ! --foreign=symlink -type f)
+	[[ "$res" == "$dir/$tfile.foreign" ]] ||
+		error "find ! --foreign=symlink -type f: '$res'"
+	res=$($LFS find $dir -L foreign -type f)
+	[[ "$res" == "$dir/$tfile.foreign" ]] ||
+		error "find -L foreign -type f: '$res'"
+	res=$($LFS find $dir ! -L raid0 -type f)
+	[[ "$res" == "$dir/$tfile.foreign" ]] ||
+		error "find ! -L raid0 -type f: '$res'"
+
+	res=$($LFS find $dir --foreign -type d)
+	[[ "$res" == "$dir/$tdir.foreign" ]] ||
+		error "find --foreign -type d: '$res'"
+	res=$($LFS find $dir -mindepth 1 ! --foreign -type d)
+	[[ "$res" == "$dir/$tdir.plain" ]] ||
+		error "find ! --foreign -type d: '$res'"
+	res=$($LFS find $dir --foreign=posix -type d)
+	[[ "$res" == "$dir/$tdir.foreign" ]] ||
+		error "find --foreign=posix -type d: '$res'"
+	res=$($LFS find $dir --foreign=none -type d)
+	[[ -z "$res" ]] || error "find --foreign=none -type d: '$res'"
+	res=$($LFS find $dir ! --foreign=none -type d)
+	[[ "$res" == "$dir/$tdir.foreign" ]] ||
+		error "find ! --foreign=none -type d: '$res'"
+}
+run_test 56ya "lfs find --foreign and -L foreign"
+
 test_56z() { # LU-4824
 	# This checks to make sure 'lfs find' continues after errors
 	# There are two classes of errors that should be caught:
