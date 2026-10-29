@@ -416,6 +416,8 @@ enum dt_format_type {
 	DFT_INDEX,
 	/** for symbolic link */
 	DFT_SYM,
+	/** unrecognized file type */
+	DFT_INVALID,
 };
 
 /*
@@ -443,6 +445,12 @@ struct dt_object_format {
 };
 
 enum dt_format_type dt_mode_to_dft(__u32 mode);
+
+/* True if @mode has a file type the backend can create an object for. */
+static inline bool dt_mode_is_valid(__u32 mode)
+{
+	return dt_mode_to_dft(mode) != DFT_INVALID;
+}
 
 typedef __u64 dt_obj_version_t;
 

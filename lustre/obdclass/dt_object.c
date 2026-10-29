@@ -222,8 +222,7 @@ enum dt_format_type dt_mode_to_dft(__u32 mode)
 		result = DFT_NODE;
 		break;
 	default:
-		LASSERTF(0, "invalid mode %o\n", mode);
-		result = 0; /* Just for satisfying compiler. */
+		result = DFT_INVALID;
 		break;
 	}
 	return result;
@@ -317,6 +316,13 @@ int dt_declare_create(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(dt);
 	LASSERT(dt->do_ops);
 
+	if (unlikely(dof != NULL && dof->dof_type == DFT_INVALID)) {
+		CERROR("%s: "DFID" invalid object type: rc = %d\n",
+		       lu_dev_name(dt->do_lu.lo_dev),
+		       PFID(lu_object_fid(&dt->do_lu)), -EINVAL);
+		return -EINVAL;
+	}
+
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_DECLARE_CREATE))
 		return cfs_fail_err;
 
@@ -338,6 +344,13 @@ int dt_create(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(dt);
 	LASSERT(dt->do_ops);
 	LASSERT(dt->do_ops->do_create);
+
+	if (unlikely(dof != NULL && dof->dof_type == DFT_INVALID)) {
+		CERROR("%s: "DFID" invalid object type: rc = %d\n",
+		       lu_dev_name(dt->do_lu.lo_dev),
+		       PFID(lu_object_fid(&dt->do_lu)), -EINVAL);
+		return -EINVAL;
+	}
 
 	if (CFS_FAULT_CHECK(OBD_FAIL_DT_CREATE))
 		return cfs_fail_err;
