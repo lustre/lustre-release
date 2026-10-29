@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <getopt.h>
+#include <signal.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -31,13 +32,15 @@
 static void usage(const char *prog)
 {
 	printf(
-	       "usage: %s {-o [-k] [-x <size>]|-m|-d|-l<tgt>} [-u[<unlinkfmt>]] [-i mdt_index] [-t seconds] filenamefmt [[start] count]\n",
+	       "usage: %s {-o [-k [-p]] [-x <size>]|-m|-d|-l<tgt>} [-u[<unlinkfmt>]] [-i mdt_index] [-t seconds] filenamefmt [[start] count]\n",
 	       prog);
 	printf("\t-i\tMDT to create the directories on\n"
 	       "\t-l\tlink files to existing <tgt> file\n"
 	       "\t-m\tmknod regular files (don't create OST objects)\n"
 	       "\t-o\topen+create files with path and printf format\n"
 	       "\t-k\t    keep files open until all files are opened\n"
+	       "\t-p\t    with -k, stop (SIGSTOP) once all files are opened,\n"
+	       "\t\t    and close them after SIGCONT\n"
 	       "\t-x\t    set an xattr with <size> length on the files\n"
 	       "\t-u\tunlink file/dir (with optional <unlinkfmt>)\n");
 	printf("\t-d\tuse directories instead of regular files\n"
@@ -76,6 +79,7 @@ static double now(void)
 int main(int argc, char **argv)
 {
 	bool do_open = false, do_keep = false, do_link = false;
+	bool do_pause = false;
 	bool do_unlink = false, do_mknod = false, do_mkdir = false;
 	bool do_setsize = false, do_chuid = false, do_chgid = false;
 	bool do_write = false;
@@ -115,7 +119,7 @@ int main(int argc, char **argv)
 	else
 		progname = argv[0];
 
-	while ((c = getopt(argc, argv, "i:dG:l:kmor::S:t:u::U:W:x:")) != -1) {
+	while ((c = getopt(argc, argv, "i:dG:l:kmopr::S:t:u::U:W:x:")) != -1) {
 		switch (c) {
 		case 'd':
 			do_mkdir = true;
@@ -144,6 +148,9 @@ int main(int argc, char **argv)
 			break;
 		case 'o':
 			do_open = true;
+			break;
+		case 'p':
+			do_pause = true;
 			break;
 		case 'P':
 			do_chprj = true;
@@ -200,6 +207,11 @@ int main(int argc, char **argv)
 	}
 	if (do_mkdir && do_unlink)
 		do_rmdir = true;
+
+	if (do_pause && !do_keep) {
+		fprintf(stderr, "error: can only use -p with -k\n");
+		usage(progname);
+	}
 
 	if (!do_open && (do_keep || do_xattr)) {
 		fprintf(stderr, "error: can only use -k|-x with -o\n");
@@ -434,6 +446,12 @@ int main(int argc, char **argv)
 
 	if (!do_keep)
 		return rc;
+
+	if (do_pause) {
+		fflush(stdout);
+		raise(SIGSTOP);
+		last_t = now();
+	}
 
 	stderr_fd = fileno(stderr);
 	start = last_t;
