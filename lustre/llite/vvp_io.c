@@ -187,11 +187,18 @@ static int vvp_prep_size(const struct lu_env *env, struct cl_object *obj,
 		 * size might to be wrong due lock cancelation in middle.
 		 * b=11081
 		 */
-		i_size_write(inode, kms);
-		CDEBUG(D_VFSTRACE,
-		       DFID" updating i_size %llu\n",
-		       PFID(lu_object_fid(&obj->co_lu)),
-		       (__u64)i_size_read(inode));
+		/*
+		 * Parity I/O uses ci_parity_eof, derived from i_size. KMS is
+		 * only a lower bound of the data size, so writing it here
+		 * would shrink ci_parity_eof for later parity I/O.
+		 */
+		if (!io->ci_parity_io) {
+			i_size_write(inode, kms);
+			CDEBUG(D_VFSTRACE,
+			       DFID" updating i_size %llu\n",
+			       PFID(lu_object_fid(&obj->co_lu)),
+			       (__u64)i_size_read(inode));
+		}
 	}
 
 	vvp_object_size_unlock(obj);

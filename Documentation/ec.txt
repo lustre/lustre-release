@@ -65,9 +65,12 @@ Raid stride:
     The raid stride is the same for all raid sets in a comp.
     The raid stride is data_comp->llc_stripe_count.
 Parity stride:
-    This is the number of stripes in the parity mirror until a specific
-    OST object is repeated.
-    It is the same as the number of parities times the number of raid sets.
+    Offset from one stripe set to the next in the parity mirror offset
+    space. That is raidset_count * stripe_size (one stripe_size per
+    raid set in the stripe set), which is stripe_width() for a parity
+    entry. On a given parity object, consecutive stripe sets are one
+    stripe_size apart. The parity component has raidset_count * p
+    OST objects.
 
 
 2. Command interface
@@ -154,7 +157,7 @@ Examples:
     lcme_extent.e_end:   EOF
       lmm_stripe_count:  2
       lmm_stripe_size:   1048576
-      lmm_pattern:       raid0,parity
+      lmm_pattern:       parity
       lmm_layout_gen:    0
       lmm_stripe_offset: 3
       lmm_objects:
@@ -208,7 +211,7 @@ that are not used for data.
     lcme_extent.e_end:   EOF
       lmm_stripe_count:  8
       lmm_stripe_size:   1048576
-      lmm_pattern:       raid0,parity
+      lmm_pattern:       parity
       lmm_layout_gen:    0
       lmm_stripe_offset: 10
       lmm_objects:
@@ -263,9 +266,9 @@ one data mirror with 8 stripes and one parity mirror.
   lcme_cstripe_count:  2
   lcme_extent.e_start: 0
   lcme_extent.e_end:   EOF
-    lmm_stripe_count:  2
+    lmm_stripe_count:  4
     lmm_stripe_size:   1048576
-    lmm_pattern:       raid0,parity
+    lmm_pattern:       parity
     lmm_layout_gen:    0
     lmm_stripe_offset: 2
     lmm_objects:
@@ -370,19 +373,182 @@ comp and thus the llc_extend.e_start and llc_extent.e_end must match
 between the two. Additionally the EC comp and its data comp must also have
 the same stripe size.
 
-The number of stripes in the EC comp must be equal or less than the number
-of stripes in the data comp, or else the parity data will not fit.
-I.e. there would be more parity data than would fit in the range
-llc_extend.e_start to llc_extent.e_start + llc_extent.e_end.
-Thus for example we can not do 2.8 encoding as the parities would
-take up 4 times more data than the actual data and the corresponding range
-of the file.
+EC parity uses LOV_PATTERN_PARITY. The layout is like RAID10, in that it
+has the same two axes:
+
+  - Across the raid sets of one stripe set: like RAID0.
+    The raid sets are striped through the parity mirror,
+    one stripe size each.
+
+  - Within one raid set: like RAID1.
+    The raid set survives the loss of any p of its k + p
+    stripes, as a RAID1 of p + 1 copies survives the loss of
+    any p copies; with k == 1 each parity is a copy of the
+    data and this is RAID1. The p parities protect the same
+    data, so they share its offset (the same object_off).
+    For k > 1 each one holds a different parity and a lost
+    stripe is rebuilt from any k survivors, so a RAID1
+    fan-out write would be wrong.
+
+  ec_off(row, raidset) =
+      O + (row - row of e_start) * (raidset_count * stripe_size)
+	+ raidset * stripe_size
+
+O is the parity origin, defined below; when e_start is a multiple of
+the stripe width, O is e_start, except when every raid set has one data
+stripe (see below). The parity index (0 .. p-1) selects
+which object of the raid set is written, not the offset. raidset_count
+is c0 + c1 (esc_n0 + esc_n1 from ec_split_stripes()), the number of
+raid sets in one row.
+
+The parity mirror is divided into stripe-size slots counted from O,
+slot = (ec_off - O) / stripe_size. Each raid set uses one slot per row,
+so slot % raidset_count is the raid set.
+
+RAID0 places data rows from file offset 0, not from e_start, so the row
+and the raid set of a data offset are taken from the absolute offset,
+and rows are counted from the one holding e_start. In that row the raid
+sets before the one holding e_start lie wholly before e_start, and the
+raid set holding e_start may start before it. Data before e_start
+belongs to no stripe of the component and is taken as zero.
+
+Zero data has zero parity, which is not stored. O is the parity offset
+of slot 0: e_start minus the parity space that the zero data before
+e_start would take in the row of e_start:
+
+  c      = data stripe count, ss = stripe size, W = c * ss
+  j      = e_start / ss % c        stripe of e_start in its row
+  s0     = raidset(j)              raid set of e_start
+  first  = first stripe of s0 in the row
+  ks     = stripes in s0 (k0 or k1)
+  x0     = j == first + ks - 1 ? e_start % ss : 0
+  O      = e_start - x0 - s0 * ss
+
+raidset() maps a stripe in a row to its raid set (ec_stripe_to_raidset(),
+see below). For a data offset off of the component:
+
+  row0   = e_start / W              data row of slot 0
+  ec_off = O + ((off / W - row0) * raidset_count
+		+ raidset(off / ss % c)) * ss + off % ss
+
+x0 is non-zero only when e_start is unaligned and in the last stripe of
+its raid set. Then in every data stripe of that raid set, bytes
+[0, x0) lie before e_start and are zero, so parity [0, x0) is zero too
+and is skipped. When e_start is in an earlier stripe of its raid set,
+the later stripes of that raid set hold data at [0, e_start % ss), so
+that parity is needed and x0 is 0. With 1 raid set of 4 stripes and
+ss = 1M:
+
+  e_start = 1.5M, in stripe 1: x0 = 0, O = 1.5M
+    byte in slot          0 ........ 512K ........ 1M
+    stripe 0 [0, 1M)      | zero        | zero        |
+    stripe 1 [1M, 2M)     | zero        | data        |
+    stripe 2 [2M, 3M)     | data        | data        |
+    stripe 3 [3M, 4M)     | data        | data        |
+
+  e_start = 3.5M, in stripe 3, the last: x0 = 512K, O = 3M
+    stripes 0 .. 2        | zero        | zero        |
+    stripe 3 [3M, 4M)     | zero        | data        |
+
+When every raid set has one data stripe (k == 1, i.e. 1+N, or c == 1)
+there is one parity slot per data stripe and nothing to pack, so rows
+count from file offset 0 instead of the row of e_start, and O is 0, as
+for RAID0:
+
+  ec_off = off
+
+Each parity object then holds a copy of its data object at the same
+object offsets, so it can stand in for the data object.
+
+With several raid sets, e.g. -E 4M -c 1 -E eof -S 1M -c 8 --ec 4+1:
+the second component has e_start = 4M, c = 8, ss = 1M and 2 raid sets
+of 4 stripes. Offset 4M is stripe j = 4, the first stripe of raid set 1,
+so x0 = 0 and O = 4M - 1 * 1M = 3M:
+
+  slot 0  [3M, 4M)   raid set 0, row 0, data [0, 4M), before e_start
+  slot 1  [4M, 5M)   raid set 1, row 0, data [4M, 8M)
+  slot 2  [5M, 6M)   raid set 0, row 1, data [8M, 12M)
+
+Slots and bytes in [O, e_start) are never written; reads of the parity
+object there return zero, as the data before e_start does. That range
+is in the extents of earlier components, so resync and verify leave
+it alone, and lfs mirror read dumps the first slot from e_start.
+
+The parity of a component fits in [e_start, e_end) when any of these
+holds (ec_parity_fits()):
+
+  - e_start is a multiple of ss: the slot of e_start starts at e_start.
+  - e_start is in the last stripe of its raid set, which includes every
+    single-stripe component: x0 trims the slot of e_start, so the
+    parity fits however short the component is.
+  - the component is at least one stripe long, e_end >= e_start + ss,
+    or ends at LUSTRE_EOF.
+
+Then every stored parity byte protects at least one data byte of the
+component, and a row of parity (raidset_count * ss) is never wider than
+a row of data (c * ss), so the parity ends by e_end. Common DoM and PFL
+layouts fit (--ec applies to every component):
+
+  -E 64K -L mdt -E 1M -c 1 -S 1M -E eof -c 4 -S 4M --ec 4+2
+  -E 1M -c 1 -S 1M -E 64M -c 1 -S 4M -E eof -c 4 -S 4M --ec 4+2
+
+[64K, 1M) and [1M, 64M) have a single data stripe: x0 = e_start % ss,
+O = 0, and the parity is kept in [e_start, e_end). This is the --ec 1+N
+case, where ec_off is the data offset itself, as in a FLR mirror. The
+eof components end at LUSTRE_EOF.
+
+The only layout where none of these holds is a component shorter than
+one stripe (e_end < e_start + ss) whose raid set continues past e_end, so
+its later stripes are never reached. All the data of such a component
+is in one stripe, so striping it over several OSTs gains nothing, and
+it has no room for a full stripe-size parity slot from e_start. Such a
+layout is refused. For example [64K, 1M) with -S 1M -c 2 --ec 2+2, one
+raid set of 2 stripes:
+
+  data    stripe 0 [0, 1M)     [0, 64K) zero, [64K, 1M) data
+          stripe 1 [1M, 2M)    past e_end, never reached
+  parity  slot 0 at O = 64K; byte x of the slot is byte x of each stripe
+          [64K, 128K)          slot bytes [0, 64K), zero
+          [128K, 1M + 64K)     slot bytes [64K, 1M), passes e_end = 1M
+
+x0 is 0 because e_start is not in the last stripe of its raid set. O
+depends only on e_start, not on e_end (see below), so the slot is not
+moved back even though stripe 1 holds no data here. [1M, 4M) with
+-S 4M -c 2 --ec 2+2 is refused the same way: slot 0 is [1M, 5M). The
+same layouts with -c 1, or ending at least one stripe after e_start
+(e.g. [64K, 2M), where slot 0 ends at 1M + 64K), fit.
+
+ec_parity_fits() detects such a layout:
+  - llapi_layout_sanity() refuses it with LSE_EC_PARITY_FIT when the
+    layout is set, and lfs setstripe reports that error;
+  - llapi_ec_check_comp_match() refuses to resync or verify it;
+  - lod_comp_prep_create() on the MDS checks it again with the final
+    data stripe count when the parity component is instantiated, also
+    for lfs mirror extend --ec.
+
+This mapping is part of the on-disk format: O depends only on e_start,
+the data stripe count, k and the stripe size, all fixed once the
+component is instantiated, and not on e_end. Changing it, or the split
+of ec_split_stripes(), makes the parity of existing files invalid.
+ec_parity_geom_init(), ec_data_to_parity() and ec_parity_to_data() in
+lustre_user.h are its only implementation; the client caches O in
+lsme_parity_origin.
+
+ec_off is a position in the parity mirror, not a data-file offset:
+a data row of stripe_count * stripe_size maps to
+raidset_count * stripe_size of parity-mirror offsets, whatever p is,
+while keeping the raid set structure visible for holes, SEEK, and
+locking.
+
+Limits: p <= k unless k == 1, k+p <= 256 and p <= 15. EC components
+followed by extension space (SEL) are not tested.
 
 As a special case, if there is only a single data stripe then we just store
-a copy of the data as the first (and only) parity instead of computing it
+a copy of the data as each parity instead of computing it,
 just as if it was a normal mirror component of a single stripe.
-In this case there can only be a single "parity" stripe for the same reason
-as above.
+A recovery read of such a raid set has to copy a surviving parity
+instead of decoding it, as only parity 0 equals the data under the
+Cauchy encode matrix.
 
 The data stripe consist of llc_stripe_count number of stripes.
 This might be a large number, much larger than what we want to compute the
@@ -390,7 +556,7 @@ erasure code data over, so we need to split it into smaller raid sets.
 
 Example: we have a stripe set 11 data stripes:
 
- +-----------------+  \  <- mirror offset: llc_extent.e_start
+ +-----------------+  \  <- file offset 0
  | Data stripe #0  |  |
  +-----------------+  |
  | Data stripe #1  |  |
@@ -415,13 +581,16 @@ Example: we have a stripe set 11 data stripes:
  +-----------------+  /
  ... Repeated until llc_extent.e_end.
 
+Rows start at file offset 0; the component holds only the part of them
+in [e_start, e_end).
+
 Assume we want to use 4.2 erasure coding.
 I.e. 2 parities for raid sets of at most 4 stripes each.
 
 Each row is then split into smaller raid sets using the
 function ec_split_stripes().
 This splits into 2 x 4 stripes + 1 x 3 stripes, like this:
- +-----------------+  \  <- mirror offset: llc_extent.e_start
+ +-----------------+  \  <- file offset 0
  | Data stripe #0  |  |
  +-----------------+  |
  | Data stripe #1  |  |
@@ -449,8 +618,8 @@ This splits into 2 x 4 stripes + 1 x 3 stripes, like this:
  | Data stripe #10 |  |
  +-----------------+  /
 
- +-----------------+  \  <- mirror offset: llc_extent.e_start
- | Data stripe #11 |  |     + the raid stride * stripe size
+ +-----------------+  \  <- file offset: the raid stride * stripe size
+ | Data stripe #11 |  |     (stripe_width)
  +-----------------+  |
  | Data stripe #12 |  |
  +-----------------+  | RAID set #0, row #1
@@ -460,66 +629,58 @@ This splits into 2 x 4 stripes + 1 x 3 stripes, like this:
  +-----------------+  /
  ...
 
-For a give data stripe ds, the row it belongs to is:
+For a given data stripe ds, counted from file offset 0, the row it
+belongs to is:
   row = ds / data_comp->llc_stripe_count
 
-and which raid set rs it belongs to is given by:
-   _o = ds % data_comp->llc_stripe_count
-   if (_o <= c0 * k0)
-      rs = _o / k0
+and which raid set rs it belongs to is given by ec_stripe_to_raidset():
+   stripe_in_row = ds % data_comp->llc_stripe_count
+   if (stripe_in_row < c0 * k0)
+      rs = stripe_in_row / k0
    else
-      rs = c0 + (_o - c0 * k0) / k1
+      rs = c0 + (stripe_in_row - c0 * k0) / k1
 
 
-For each RAID set 2 parities will be computed and they will be laid out
-sequentially in the ec comp as this:
+For each RAID set 2 parities are computed. Within the raid set the two
+parities share one offset (RAID1-like) but hold different data, and
+consecutive raid sets are one stripe size apart (RAID0-like), so the ec
+comp is laid out as this (ss is the stripe size):
 
- +---------------------------+ \  <- mirror offset: llc_extent.e_start
- | Parity #0 for RAID set #0 | |
- +---------------------------+ | Parity set #0, row #0
- | Parity #1 for RAID set #0 | |
- +---------------------------+ X
- | Parity #0 for RAID set #1 | |
- +---------------------------+ | Parity set #1, row #0
- | Parity #1 for RAID set #1 | |
- +---------------------------+ X
- | Parity #0 for RAID set #2 | |
- +---------------------------+ | Parity set #2, row #0
- | Parity #1 for RAID set #2 | |
- +---------------------------+ X  <- mirror offset: llc_extent.e_start
- | Parity #0 for RAID set #0 | |     + parity_stride * stripe size
- +---------------------------+ | Parity set #0, row #1
- | Parity #1 for RAID set #0 | |
- +---------------------------+ X
- ...
+  offset            objects at that offset
+  O + 0*ss          [Parity #0] [Parity #1]   RAID set #0, row #0
+  O + 1*ss          [Parity #0] [Parity #1]   RAID set #1, row #0
+  O + 2*ss          [Parity #0] [Parity #1]   RAID set #2, row #0
+  O + 3*ss          [Parity #0] [Parity #1]   RAID set #0, row #1
+  ...
 
-Parity #0 and Parity #1 will be stored in two OST objects for RAID set #0,
-two different objects on different OSTs for RAID set #1, and yet two more
-objects for RAID set #2.  This ensures that the data and parity stripes will
-always be on different OSTs, regardless of the RAID geometry used by each file.
+Rows are counted here from the row of e_start (from row 0 when every
+raid set has one data stripe). The slots in [O, e_start) are never
+written (see above).
 
- parity-stripe = row * parity-stride
-                 + raid-set * number-of-parities
+This uses 6 OST objects: 2 for each of the 3 RAID sets. Each pair is on
+different OSTs from the other pairs, and from the data stripes they
+protect. This ensures that the data and parity stripes will always be on
+different OSTs, regardless of the RAID geometry used by each file.
+
+ parity-offset = O + (row - row0) * raidset-count *
+                 stripe-size + raid-set * stripe-size
+ parity-object = raid-set * number-of-parities
                  + parity
 
 
 If there is a hole that spans the entire raid set then we can skip
 computing the parities and leave it as a hole in the ec comp as well.
-Example, assume there is a hole spanning the entire RAID set #1 above, this
-will result in a parity layout as:
- +---------------------------+      <- file offset: start of stripe-set
- | Parity #0 for RAID set #0 |
- +-----------------+---------+
- | Parity #1 for RAID set #0 |
+Example, assume there is a hole spanning the entire RAID set #1 above.
+Both of its parities live at one offset, so this leaves a single stripe
+size hole:
+ +---------------------------+      <- mirror offset: O
+ | RAID set #0: Parity #0/#1 |      (2 objects at this offset)
  +---------------------------+
- |           hole            |
- +---------------------------+ No data in RAID set #1 so
- |           hole            | no need to store the parities either.
- +-----------------+---------+
- | Parity #0 for RAID set #2 |
- +-----------------+---------+
- | Parity #1 for RAID set #2 |
- +-----------------+---------+
+ |           hole            | No data in RAID set #1 so
+ |                           | no need to store the parities either.
+ +---------------------------+
+ | RAID set #2: Parity #0/#1 |
+ +---------------------------+
  |    hole until e_end       |
  ...
 

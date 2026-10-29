@@ -538,6 +538,74 @@ lsme_unpack_foreign(struct lov_obd *lov, void *buf, size_t buf_size,
 	RETURN(lsme);
 }
 
+/**
+ * lsm_parity_origin_init() - Set the slot origin of each parity component
+ * @lsm: unpacked composite layout
+ *
+ * The origin depends on the stripe count of the data component the parity
+ * protects (ec_parity_geom_init()), found by mirror link id and extent.
+ * Without an instantiated data component, or with a parity stripe count
+ * that does not match its raid sets, slots count from e_start.
+ */
+static void lsm_parity_origin_init(struct lov_stripe_md *lsm)
+{
+	unsigned int i;
+	unsigned int j;
+
+	for (i = 0; i < lsm->lsm_entry_count; i++) {
+		struct lov_stripe_md_entry *parity_entry = lsm->lsm_entries[i];
+		struct lov_stripe_md_entry *data_entry = NULL;
+		struct ec_parity_geom g;
+
+		if (!lsme_is_parity(parity_entry))
+			continue;
+		parity_entry->lsme_parity_origin =
+			parity_entry->lsme_extent.e_start;
+		if (parity_entry->lsme_magic == LOV_MAGIC_FOREIGN ||
+		    lsme_parity_single_slot(parity_entry))
+			continue;
+
+		for (j = 0; j < lsm->lsm_entry_count; j++) {
+			struct lov_stripe_md_entry *entry = lsm->lsm_entries[j];
+
+			if (!lsme_is_parity(entry) &&
+			    entry->lsme_magic != LOV_MAGIC_FOREIGN &&
+			    mirror_id_of(entry->lsme_id) ==
+			    parity_entry->lsme_mirror_link_id &&
+			    lu_extent_is_equal(&entry->lsme_extent,
+					       &parity_entry->lsme_extent)) {
+				data_entry = entry;
+				break;
+			}
+		}
+		if (!data_entry || !lsme_inited(data_entry) ||
+		    lsme_is_dom(data_entry) || !data_entry->lsme_stripe_count)
+			continue;
+
+		ec_parity_geom_init(&g, data_entry->lsme_stripe_count,
+				    parity_entry->lsme_dstripe_count,
+				    parity_entry->lsme_stripe_size,
+				    parity_entry->lsme_extent.e_start);
+		if (data_entry->lsme_stripe_size !=
+		    parity_entry->lsme_stripe_size ||
+		    ec_raidset_count(&g.epg_split) !=
+		    lsme_slot_count(parity_entry)) {
+			/* lov_parity_geom_init() fails degraded reads of it */
+			CDEBUG(D_LAYOUT,
+			       "lov: parity comp %u "DEXT" does not match data comp %u: stripe size %u/%u, raidsets %u, slots %u, origin stays at e_start\n",
+			       parity_entry->lsme_id,
+			       PEXT(&parity_entry->lsme_extent),
+			       data_entry->lsme_id,
+			       parity_entry->lsme_stripe_size,
+			       data_entry->lsme_stripe_size,
+			       ec_raidset_count(&g.epg_split),
+			       lsme_slot_count(parity_entry));
+			continue;
+		}
+		parity_entry->lsme_parity_origin = g.epg_origin;
+	}
+}
+
 static struct lov_stripe_md_entry *
 lsme_unpack_comp(struct lov_obd *lov, struct lov_mds_md *lmm,
 		 size_t lmm_buf_size, bool inited, loff_t *maxbytes)
@@ -720,6 +788,19 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 		}
 		lu_extent_le_to_cpu(&lsme->lsme_extent, &lcme->lcme_extent);
 
+		/* the parity geometry follows the flag, so the pattern must
+		 * agree with it
+		 */
+		if (lsme->lsme_magic != LOV_MAGIC_FOREIGN &&
+		    !(lsme->lsme_flags & LCME_FL_PARITY) !=
+		    !(lov_pattern(lsme->lsme_pattern) & LOV_PATTERN_PARITY)) {
+			CDEBUG(D_LAYOUT,
+			       "component %#x: flags %#x do not match pattern %#x\n",
+			       lsme->lsme_id, lsme->lsme_flags,
+			       lsme->lsme_pattern);
+			GOTO(out_lsm, rc = -EINVAL);
+		}
+
 		if (lsme->lsme_pattern & LOV_PATTERN_COMPRESS) {
 			lsme->lsme_compr_type = lcme->lcme_compr_type;
 			lsme->lsme_compr_lvl = lcme->lcme_compr_lvl;
@@ -739,6 +820,9 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 			     lsm->lsm_maxbytes <
 			     (loff_t)lsme->lsme_extent.e_start))
 				lsm->lsm_maxbytes = MAX_LFS_FILESIZE;
+
+			/* every component is unpacked now */
+			lsm_parity_origin_init(lsm);
 		}
 	}
 

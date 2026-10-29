@@ -2503,8 +2503,6 @@ static void dump_comp_ec_raidsets(struct find_param *param,
 	struct lov_comp_md_entry_v1 *data_entry;
 	struct lov_user_md *data_lmm;
 	struct ec_split_comp sc;
-	int data_start = 0;
-	int parity_start = 0;
 	uint8_t k, p;
 	int num_raidsets;
 	int i;
@@ -2546,7 +2544,7 @@ static void dump_comp_ec_raidsets(struct find_param *param,
 		return;
 
 	ec_split_stripes(data_lmm->lmm_stripe_count, k, &sc);
-	num_raidsets = sc.esc_n0 + sc.esc_n1;
+	num_raidsets = ec_raidset_count(&sc);
 
 	llapi_printf(LLAPI_MSG_NORMAL, "%s", *separator);
 	/* Top-level EC geometry (k+p), same form as --ec DATA+PARITY */
@@ -2556,23 +2554,15 @@ static void dump_comp_ec_raidsets(struct find_param *param,
 		     " ", num_raidsets);
 
 	llapi_printf(LLAPI_MSG_NORMAL, "%4slcme_ec_raidsets:\n", " ");
-	for (i = 0; i < sc.esc_n0; i++) {
+	for (i = 0; i < num_raidsets; i++) {
+		unsigned int data_start, data_count;
+
+		data_start = ec_raidset_first(&sc, i, &data_count);
 		llapi_printf(LLAPI_MSG_NORMAL,
 			     "%6s- %d: { ec_data_count: %u, data_stripes: \"%u-%u\", parity_stripes: \"%u-%u\" }\n",
-			     " ", i, sc.esc_k0,
-			     data_start, data_start + sc.esc_k0 - 1,
-			     parity_start, parity_start + p - 1);
-		data_start += sc.esc_k0;
-		parity_start += p;
-	}
-	for (i = 0; i < sc.esc_n1; i++) {
-		llapi_printf(LLAPI_MSG_NORMAL,
-			     "%6s- %d: { ec_data_count: %u, data_stripes: \"%u-%u\", parity_stripes: \"%u-%u\" }\n",
-			     " ", sc.esc_n0 + i, sc.esc_k1,
-			     data_start, data_start + sc.esc_k1 - 1,
-			     parity_start, parity_start + p - 1);
-		data_start += sc.esc_k1;
-		parity_start += p;
+			     " ", i, data_count,
+			     data_start, data_start + data_count - 1,
+			     i * p, i * p + p - 1);
 	}
 	/* Lines above already end with '\n'; don't force another. */
 	*separator = "";

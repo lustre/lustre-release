@@ -412,7 +412,38 @@ static bool lov_find_comp_with_ec(struct lov_io *lio, struct lov_object *lov,
 }
 
 /**
- * lov_io_parity_size_comp() - Parity byte span for one data/parity pair
+ * lov_parity_geom_init() - Parity placement of a data/parity component pair
+ * @data_lsme: data component
+ * @parity_lsme: parity component protecting @data_lsme
+ * @g: geometry (output)
+ *
+ * The parity objects are addressed from lsme_stripe_origin(), set when the
+ * layout is unpacked, so offsets mapped with @g must count from the same
+ * origin. lsm_parity_origin_init() leaves the origin at e_start while
+ * @data_lsme is not instantiated, or when the pair does not match; the
+ * layout is unpacked again once the data component is instantiated.
+ *
+ * Return: 0, or -EIO if the pair does not match: no raid sets, another
+ * stripe size, slot count or origin.
+ */
+static int lov_parity_geom_init(const struct lov_stripe_md_entry *data_lsme,
+				const struct lov_stripe_md_entry *parity_lsme,
+				struct ec_parity_geom *g)
+{
+	ec_parity_geom_init(g, data_lsme->lsme_stripe_count,
+			    parity_lsme->lsme_dstripe_count,
+			    data_lsme->lsme_stripe_size,
+			    data_lsme->lsme_extent.e_start);
+	if (!ec_raidset_count(&g->epg_split) ||
+	    data_lsme->lsme_stripe_size != parity_lsme->lsme_stripe_size ||
+	    ec_raidset_count(&g->epg_split) != lsme_slot_count(parity_lsme) ||
+	    g->epg_origin != lsme_stripe_origin(parity_lsme))
+		return -EIO;
+	return 0;
+}
+
+/**
+ * lov_io_parity_span() - Parity byte span for one data/parity pair
  * @data_lsme: data component stripe metadata
  * @parity_lsme: parity component stripe metadata
  * @data_end: exclusive end of data in file offset space
@@ -420,37 +451,47 @@ static bool lov_find_comp_with_ec(struct lov_io *lio, struct lov_object *lov,
  * Returns how many bytes of parity are written for data in
  * [data_lsme->lsme_extent.e_start, data_end).
  * May overestimate (holes) but must not be short.
+ *
+ * The return is a length in the parity-mirror offset space (added to
+ * e_start by the caller). EC: one stripe_size per raidset.
  */
-static loff_t lov_io_parity_size_comp(struct lov_stripe_md_entry *data_lsme,
-				      struct lov_stripe_md_entry *parity_lsme,
-				      loff_t data_end)
+static loff_t lov_io_parity_span(struct lov_stripe_md_entry *data_lsme,
+				 struct lov_stripe_md_entry *parity_lsme,
+				 loff_t data_end)
 {
-	struct ec_split_comp sc;
+	struct ec_parity_geom g;
 	loff_t comp_start = data_lsme->lsme_extent.e_start;
-	loff_t data_upto;
-	__u64 stripe_set_size;
-	__u64 num_stripe_sets;
-	__u64 data_in_extent;
-	int num_raid_sets;
+	__u64 data_upto;
+	__u64 width;
+	loff_t size;
 
 	if (data_end <= comp_start)
 		return 0;
 
 	data_upto = min_t(__u64, (__u64)data_end,
 			  data_lsme->lsme_extent.e_end);
-	ec_split_stripes(data_lsme->lsme_stripe_count,
-			 parity_lsme->lsme_dstripe_count, &sc);
-	num_raid_sets = sc.esc_n0 + sc.esc_n1;
+	ec_parity_geom_init(&g, data_lsme->lsme_stripe_count,
+			    parity_lsme->lsme_dstripe_count,
+			    data_lsme->lsme_stripe_size, comp_start);
+	if (!ec_raidset_count(&g.epg_split))
+		return 0;
+	/* up to the end of the parity row holding the last data byte */
+	size = ec_data_to_parity_row_end(&g, data_upto - 1) - comp_start;
+	if (g.epg_origin == lsme_stripe_origin(parity_lsme))
+		return size;
 
-	stripe_set_size = (__u64)data_lsme->lsme_stripe_count *
-			  data_lsme->lsme_stripe_size;
-	data_in_extent = data_upto - comp_start;
-	num_stripe_sets = (data_in_extent + stripe_set_size - 1) /
-			  stripe_set_size;
-
-	return num_stripe_sets * num_raid_sets *
-	       lsme_parity_slots_per_raidset(parity_lsme) *
-	       parity_lsme->lsme_stripe_size;
+	/*
+	 * Slots count from e_start (see lov_parity_geom_init()), so the parity
+	 * may also lie within one parity row per data stripe set from
+	 * e_start: take the larger bound, never an underestimate. The
+	 * stripe width can reach 4GiB, more than do_div() can divide by.
+	 */
+	width = (__u64)data_lsme->lsme_stripe_count *
+		data_lsme->lsme_stripe_size;
+	return max_t(loff_t, size,
+		     div64_u64(data_upto - comp_start + width - 1, width) *
+		     ec_parity_width(ec_raidset_count(&g.epg_split),
+				     parity_lsme->lsme_stripe_size));
 }
 
 /**
@@ -482,10 +523,10 @@ lov_io_find_data_comp(struct lov_object *obj, struct lov_mirror_entry *data_lre,
  * @mirror_index: parity mirror index
  * @data_size: data mirror file size
  *
- * For each parity component below @data_size, add lov_io_parity_size_comp() to
+ * For each parity component below @data_size, add lov_io_parity_span() to
  * its extent start; return the maximum. May overestimate but not underestimate.
  *
- * Return: parity EOF in file offset space, or 0 on error
+ * Return: EOF in the parity-mirror offset space, or 0 on error
  */
 static loff_t lov_io_parity_eof(struct lov_object *obj, int mirror_index,
 				loff_t data_size)
@@ -505,7 +546,7 @@ static loff_t lov_io_parity_eof(struct lov_object *obj, int mirror_index,
 	parity_lre = lov_mirror_entry(obj, mirror_index);
 	parity_lle = lov_entry(obj, parity_lre->lre_start);
 
-	if (!(parity_lle->lle_lsme->lsme_pattern & LOV_PATTERN_PARITY))
+	if (!lsme_is_parity(parity_lle->lle_lsme))
 		return 0;
 
 	data_mirror_id = parity_lle->lle_lsme->lsme_mirror_link_id;
@@ -535,9 +576,9 @@ static loff_t lov_io_parity_eof(struct lov_object *obj, int mirror_index,
 		 * prefer not to do this here.
 		 */
 		seg_eof = ext->e_start +
-			  lov_io_parity_size_comp(data_lle->lle_lsme,
-						  parity_lle->lle_lsme,
-						  data_size);
+			  lov_io_parity_span(data_lle->lle_lsme,
+					     parity_lle->lle_lsme,
+					     data_size);
 		if (seg_eof > parity_eof)
 			parity_eof = seg_eof;
 	}
@@ -1303,7 +1344,7 @@ static int lov_io_iter_init(const struct lu_env *env,
 			}
 
 			/* The trunc stripe intersects and gets a sub-io here
-			 * (wrap case). For lsme_parity_raid10() the stored
+			 * (wrap case). For lsme_is_parity() the stored
 			 * stripe is the last of its raidset; all p share one
 			 * offset, so the whole raidset is handled by now.
 			 */
@@ -1325,8 +1366,8 @@ static int lov_io_iter_init(const struct lu_env *env,
 
 		/* The prev stripe did not intersect [size, EOF) but its OST
 		 * object size must still be set (LU-14128). Same predicate as
-		 * lov_lock_sub_init(): lsme_parity_raid10() covers the whole
-		 * previous raidset; RAID0|PARITY is that stripe alone.
+		 * lov_lock_sub_init(): parity covers the whole previous
+		 * raidset; RAID0 is that stripe alone.
 		 */
 		if (is_trunc && lio->lis_trunc_stripe_index[index] != -1) {
 			struct cl_io *io = ios->cis_io;
@@ -1619,7 +1660,8 @@ static int lov_ecio_add_data_sub(const struct lu_env *env, struct lov_io *lio,
 
 static int lov_ecio_add_parity_sub(const struct lu_env *env, struct lov_io *lio,
 				   struct lu_extent *ext,
-				   struct ec_split_comp *sc, int nr)
+				   struct lov_stripe_md_entry *data_lsme,
+				   int nr)
 {
 	struct lov_object *lov = lio->lis_object;
 	struct lov_device *dev = lov_object_dev(lov);
@@ -1647,12 +1689,12 @@ static int lov_ecio_add_parity_sub(const struct lu_env *env, struct lov_io *lio,
 	lov_foreach_io_layout_mirror(index, lio, ext, parity_mir_idx) {
 		struct lov_stripe_md_entry *lsme;
 		struct lov_io_sub *sub;
-		u64 offset;
-		u64 base_poff;
-		u64 dswidth;
+		struct ec_parity_geom g;
+		u64 pswidth;
+		u64 poff;
 		u64 sub_start;
 		u64 sub_end;
-		u16 dcount;
+		u64 end;
 		int stripe;
 		int added = 0;
 
@@ -1679,55 +1721,27 @@ static int lov_ecio_add_parity_sub(const struct lu_env *env, struct lov_io *lio,
 		}
 
 		lsme = lle->lle_lsme;
-		/*
-		 * Parity sub-objects use lov_stripe_offset() addressing:
-		 * file offset e_start maps to sub-object offset
-		 * ((e_start - origin) / stripe_width) * stripe_size, where
-		 * origin is lsme_stripe_origin().  The base is 0 when the
-		 * slots count from e_start.
-		 */
-		base_poff = div64_u64(lle->lle_extent->e_start -
-				      lsme_stripe_origin(lsme),
-				      stripe_width(lsm, index)) *
-			    lsme->lsme_stripe_size;
-
-		/*
-		 * Map data file offsets to parity sub-object offsets.
-		 * Each data RAID row (data_stripe_count * stripe_size
-		 * bytes) produces exactly one stripe_size of parity
-		 * per parity sub-object, so:
-		 *   sub_obj_offset = data_row * stripe_size
-		 *
-		 * The original code divided by parity swidth instead
-		 * of data swidth, producing wildly wrong offsets when
-		 * data_stripe_count != parity_stripe_count.
-		 */
-		dcount = sc->esc_k0 * sc->esc_n0 +
-			 sc->esc_k1 * sc->esc_n1;
-		dswidth = (u64)dcount * lsme->lsme_stripe_size;
-		/* Defense-in-depth: a non-EC cycle reaches here with a zeroed
-		 * @sc (all esc_* == 0), giving dcount == 0 and dswidth == 0.
-		 * lov_io_ec_rd_iter_init() now skips this function for
-		 * dstripe_count == 0, but guard the div64_u64() below so a
-		 * bad caller cannot trap on a divide by zero.
-		 */
-		if (dswidth == 0)
+		/* without a usable geometry, degraded reads fail later */
+		if (lov_parity_geom_init(data_lsme, lsme, &g)) {
+			CDEBUG(D_LAYOUT, DFID": no parity geometry for comp %d\n",
+			       PFID(lu_object_fid(lov2lu(lov))), index);
 			continue;
+		}
 
-		/* sub_start: floor(data_offset / data_swidth) rows */
-		offset = ext->e_start - lle->lle_extent->e_start;
-		sub_start = base_poff +
-			    div64_u64(offset, dswidth) *
+		/*
+		 * Map the data range to parity sub-object offsets: each
+		 * parity row (one stripe_width of the parity component,
+		 * counted from lsme_stripe_origin()) is one stripe_size on
+		 * every parity sub-object.
+		 */
+		pswidth = stripe_width(lsm, index);
+		ec_data_to_parity(&g, ext->e_start, &poff);
+		sub_start = div64_u64(poff - g.epg_origin, pswidth) *
 			    lsme->lsme_stripe_size;
 
-		/* sub_end: ceil(data_offset / data_swidth) rows */
-		if (ext->e_end > lle->lle_extent->e_end)
-			offset = lle->lle_extent->e_end -
-				 lle->lle_extent->e_start;
-		else
-			offset = ext->e_end - lle->lle_extent->e_start;
-		sub_end = base_poff +
-			  div64_u64(offset + dswidth - 1, dswidth) *
+		end = min(ext->e_end, lle->lle_extent->e_end);
+		ec_data_to_parity(&g, end - 1, &poff);
+		sub_end = (div64_u64(poff - g.epg_origin, pswidth) + 1) *
 			  lsme->lsme_stripe_size;
 
 		for (stripe = 0; stripe < r0->lo_nr; stripe++) {
@@ -1786,10 +1800,10 @@ static int lov_io_ec_rd_iter_init(const struct lu_env *env,
 	lsme = lov_lse(lov, index);
 	next = MAX_LFS_FILESIZE;
 	if (lsme->lsme_dstripe_count >= 1) {
-		u64 offset;
-		u64 offset_i;
-		u64 row;
-		u64 cnt;
+		u64 rs_start;
+		unsigned int last;
+		unsigned int set;
+		unsigned int k;
 
 		/* set next read offset to next raid set with different EC
 		 * parameter
@@ -1797,28 +1811,20 @@ static int lov_io_ec_rd_iter_init(const struct lu_env *env,
 		ec_split_stripes(lsme->lsme_stripe_count,
 				 lsme->lsme_dstripe_count, &sc);
 
-		offset = start - lsme->lsme_extent.e_start;
-		row = div64_u64(offset, (u64)lsme->lsme_stripe_size *
-					lsme->lsme_stripe_count);
-		offset_i = div64_u64(offset, lsme->lsme_stripe_size) %
-			   lsme->lsme_stripe_count;
-		/* cnt is the stripe number from the component start to the
-		 * end of the raid set where @offset locates.
-		 */
-		if (offset_i < sc.esc_k0 * sc.esc_n0) {
-			cnt = row * lsme->lsme_stripe_count +
-			      sc.esc_k0 * sc.esc_n0;
-		} else {
-			cnt = row * lsme->lsme_stripe_count +
-			      sc.esc_k0 * sc.esc_n0 + sc.esc_k1 * sc.esc_n1;
-		}
-		next = lsme->lsme_extent.e_start + cnt * lsme->lsme_stripe_size;
+		rs_start = ec_off_to_raidset_offset(&sc,
+						    lsme->lsme_stripe_count,
+						    lsme->lsme_stripe_size,
+						    start, &set, &k);
+		/* end of the esc_k0 raid sets, or of the row */
+		last = set < sc.esc_n0 ? sc.esc_n0 : ec_raidset_count(&sc);
+		next = rs_start + (u64)(last - set) * k *
+				  lsme->lsme_stripe_size;
 
 		CDEBUG(D_INFO, DFID
-		       " next sc(%d/%d/%d/%d), row %lld, offset_i %lld, cnt %lld, next %llu\n",
+		       " next sc(%d/%d/%d/%d), set %u, next %lld\n",
 		       PFID(lu_object_fid(lov2lu(lov))),
 		       sc.esc_k0, sc.esc_n0, sc.esc_k1, sc.esc_n1,
-		       row, offset_i, cnt, next);
+		       set, next);
 	}
 	next = min_t(__u64, next, lsme->lsme_extent.e_end);
 	next = min_t(loff_t, next, lio->lis_io_endpos);
@@ -1848,7 +1854,7 @@ static int lov_io_ec_rd_iter_init(const struct lu_env *env,
 	 * OSCs have no DLM lock enqueued.
 	 */
 	if (lsme->lsme_dstripe_count >= 1) {
-		rc = lov_ecio_add_parity_sub(env, lio, &ext, &sc, err_nr);
+		rc = lov_ecio_add_parity_sub(env, lio, &ext, lsme, err_nr);
 		if (rc < 0)
 			RETURN(rc);
 	}
@@ -1996,7 +2002,7 @@ static void lov_io_end(const struct lu_env *env, const struct cl_io_slice *ios)
 }
 
 enum ec_data_pg_state {
-	EC_DPG_ZERO,		/* beyond EOF/RG */
+	EC_DPG_ZERO,		/* before comp, beyond EOF/RG */
 	EC_DPG_UPTODATE,	/* already in page cache */
 	EC_DPG_READ,		/* read successfully */
 	EC_DPG_ERROR,		/* stripe dead or read failed */
@@ -2142,7 +2148,9 @@ lov_ec_read_stripe_pages(const struct lu_env *env, struct lov_io *lio,
 
 		index = ((soff + stripe_i * ss) >> PAGE_SHIFT) + pg_start + j;
 
-		if ((index << PAGE_SHIFT) >= eoff ||
+		/* raid set objects before e_start hold no data of @lsme */
+		if ((index << PAGE_SHIFT) < lsme->lsme_extent.e_start ||
+		    (index << PAGE_SHIFT) >= eoff ||
 		    (index << PAGE_SHIFT) >= io->u.ci_ec.ec_inode_size) {
 			out_states[j] = EC_DPG_ZERO;
 			continue;
@@ -3111,9 +3119,12 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 	struct lov_ec_rd_state state = { 0 };
 	struct ec_recover_ctx recover_ctx = { 0 };
 	struct ec_split_comp sc = { 0 };
+	struct ec_parity_geom geom = { { 0 } };
 	unsigned int dcount;	/* erasure parameters: data stripe count */
 	unsigned int pcount;	/* erasure parameters: parity stripe count */
 	unsigned int raid_set = 0; /* raid set number we are reading from */
+	loff_t rs_start;	/* start of the first raid set */
+	unsigned long long poff = 0;	/* parity offset of a raid set */
 	unsigned long ss;		/* stripe size */
 	unsigned int pgs_per_stripe;	/* pages per stripe */
 	unsigned long RGs;		/* recovery group size */
@@ -3187,27 +3198,13 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 	lsme_d = lle_d->lle_lsme;
 	dcount = lsme_d->lsme_dstripe_count;
 	if (dcount > 0) {
-		u64 offset;
-		u64 offset_i;
-		u64 row;
-
 		ec_split_stripes(lsme_d->lsme_stripe_count, dcount, &sc);
-		/* determine the raid set count and its stripe count */
-		offset = lio->lis_pos - lsme_d->lsme_extent.e_start;
-		row = div64_u64(offset, (u64)lsme_d->lsme_stripe_size *
-					lsme_d->lsme_stripe_count);
-		offset_i = div64_u64(offset, lsme_d->lsme_stripe_size) %
-			   lsme_d->lsme_stripe_count;
-		if (offset_i < sc.esc_k0 * sc.esc_n0) {
-			dcount = sc.esc_k0;
-			raid_set = row * (sc.esc_n0 + sc.esc_n1) +
-				   offset_i / sc.esc_k0;
-		} else {
-			dcount = sc.esc_k1;
-			raid_set = row * (sc.esc_n0 + sc.esc_n1) + sc.esc_n0 +
-				   (offset_i - sc.esc_k0 * sc.esc_n0) /
-				   sc.esc_k1;
-		}
+		/* the raid set holding e_start may start before it */
+		rs_start = ec_off_to_raidset_offset(&sc,
+						    lsme_d->lsme_stripe_count,
+						    lsme_d->lsme_stripe_size,
+						    lio->lis_pos, NULL,
+						    &dcount);
 		pcount = lsme_d->lsme_cstripe_count;
 	} else {
 		/* with stripes with no EC, dcount == 0, set it to 4 */
@@ -3216,6 +3213,7 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 		else
 			dcount = lsme_d->lsme_stripe_count;
 		pcount = 0;
+		rs_start = lio->lis_pos;
 	}
 	size = min_t(__u64,
 		     lsme_d->lsme_extent.e_end - lsme_d->lsme_extent.e_start,
@@ -3248,6 +3246,14 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 		}
 		lle_p = &comp->lo_entries[pindex];
 		lsme_p = lle_p->lle_lsme;
+		rc = lov_parity_geom_init(lsme_d, lsme_p, &geom);
+		if (rc) {
+			CWARN("%s: "DFID": parity component %d does not match data component %d: rc = %d\n",
+			      lov2obd(dev->ld_lov)->obd_name,
+			      PFID(lu_object_fid(lov2lu(lov))), pindex, index,
+			      rc);
+			GOTO(out_ptrs, rc);
+		}
 	}
 
 	CDEBUG(D_INODE, DFID": ec read comp %d (dcount %d pcount %d) from %llu to %llu, RGs %lu pgs_per_stripe %d\n",
@@ -3255,7 +3261,8 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 	       lio->lis_pos, lio->lis_pos + size, RGs, pgs_per_stripe);
 
 	/* read size is within the raid sets of the same EC parameters */
-	for (i = 0; i < DIV_ROUND_UP(size, RGs); i++, raid_set++) {
+	for (i = 0; i < DIV_ROUND_UP(lio->lis_pos + size - rs_start, RGs);
+	     i++) {
 		loff_t soff; /* start offset of a recovery group */
 		loff_t eoff; /* end offset of a recovery group */
 		unsigned int pg_seq_start;
@@ -3267,11 +3274,18 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 				  io->u.ci_ec.ec_outer.crw_bytes;
 
 		/* soff is at the beginning of a recovery group/raid set */
-		soff = lio->lis_pos + i * RGs;
+		soff = rs_start + i * RGs;
 		eoff = soff + RGs;
 
 		if (eoff > lio->lis_pos + size)
 			eoff = lio->lis_pos + size;
+
+		/* in the row of e_start, @poff may be before e_start: that
+		 * part of the parity object is never written and reads as
+		 * zero, as the data before e_start does
+		 */
+		if (lsme_d->lsme_dstripe_count > 0)
+			raid_set = ec_data_to_parity(&geom, soff, &poff);
 
 		/* each recovery groups contains dcount stripes, each page
 		 * in these dcount stripes are calculated to get each page
@@ -3372,10 +3386,10 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 		 * and we return -EAGAIN instead of zeros.
 		 */
 		if (err_nr >= LOV_EC_MAX_CODING_STRIPES || err_nr > pcount) {
-			CWARN("%s: "DFID": too many unrecoverable stripes in raid set %d: err_nr %d > pcount %d: rc = %d\n",
+			CWARN("%s: "DFID": too many unrecoverable stripes in raid set %u at %lld: err_nr %d > pcount %d: rc = %d\n",
 			      lov2obd(dev->ld_lov)->obd_name,
 			      PFID(lu_object_fid(lov2lu(lov))),
-			      raid_set, err_nr, pcount, -EIO);
+			      raid_set, soff, err_nr, pcount, -EIO);
 			io->u.ci_ec.ec_recovery_failed = true;
 			GOTO(rg_cleanup, rc = -EAGAIN);
 		}
@@ -3403,12 +3417,7 @@ static int lov_io_ec_rd_start(const struct lu_env *env,
 		 */
 		par_arr_cnt = nfolios * err_nr;
 		if (err_nr > 0 && err_nr <= pcount) {
-			unsigned long long poff;
 			int pi, ps;
-
-			poff = lsme_p->lsme_extent.e_start + raid_set *
-				(u64)lsme_parity_slots_per_raidset(lsme_p) *
-				lsme_p->lsme_stripe_size;
 
 			OBD_ALLOC_PTR_ARRAY_LARGE(par_folios, par_arr_cnt);
 			OBD_ALLOC_PTR_ARRAY_LARGE(par_clpages, par_arr_cnt);

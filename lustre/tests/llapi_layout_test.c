@@ -2569,12 +2569,12 @@ static void __verify_parity_comp(struct llapi_layout *layout,
 	ASSERTF(!(flags & LCME_FL_IS_LINK_ID),
 		"%s: IS_LINK_ID flag set on EC component", comp_desc);
 
-	/* Verify pattern has LOV_PATTERN_PARITY bit set */
+	/* Verify pattern is LLAPI_LAYOUT_PARITY */
 	rc = llapi_layout_pattern_get(layout, &pattern);
 	ASSERTF(rc == 0, "%s: failed to get pattern, errno = %d", comp_desc,
 		errno);
-	ASSERTF(pattern & LOV_PATTERN_PARITY,
-		"%s: LOV_PATTERN_PARITY not set in pattern 0x%lx", comp_desc,
+	ASSERTF(pattern == LLAPI_LAYOUT_PARITY,
+		"%s: expected LLAPI_LAYOUT_PARITY, got 0x%lx", comp_desc,
 		pattern);
 
 	rc = llapi_layout_ec_dstripe_count_get(layout, &dstripe);
@@ -2636,12 +2636,12 @@ static void __verify_ec_data_comp(struct llapi_layout *layout,
 	ASSERTF(!(flags & LCME_FL_PARITY),
 		"%s: PARITY flag set on data component", comp_desc);
 
-	/* Verify pattern does not have LOV_PATTERN_PARITY bit set */
+	/* Verify pattern is not LLAPI_LAYOUT_PARITY */
 	rc = llapi_layout_pattern_get(layout, &pattern);
 	ASSERTF(rc == 0, "%s: failed to get pattern, errno = %d", comp_desc,
 		errno);
-	ASSERTF(!(pattern & LOV_PATTERN_PARITY),
-		"%s: LOV_PATTERN_PARITY set in pattern 0x%lx", comp_desc,
+	ASSERTF(pattern != LLAPI_LAYOUT_PARITY,
+		"%s: LLAPI_LAYOUT_PARITY set in pattern 0x%lx", comp_desc,
 		pattern);
 
 	/* Verify tight binding to expected parity mirror */
@@ -4718,6 +4718,89 @@ static void test67(void)
 		rc, errno);
 }
 
+/* Parity of every 64K of data in [s, e) is in [s, e) and maps back */
+static void t68_check_extent(unsigned int c, unsigned int k, __u64 ss,
+			     __u64 s, __u64 e)
+{
+	struct ec_parity_geom g;
+	__u64 off, poff, doff;
+	unsigned int n, set, rs_k;
+	__u64 hi = 0;
+
+	ec_parity_geom_init(&g, c, k, ss, s);
+	n = ec_raidset_count(&g.epg_split);
+	ASSERTF(g.epg_origin <= s, "c %u k %u [%ju, %ju) origin %ju",
+		c, k, (uintmax_t)s, (uintmax_t)e, (uintmax_t)g.epg_origin);
+	for (off = s; off < e; off += 64 * 1024) {
+		set = ec_data_to_parity(&g, off, &poff);
+		ASSERTF(poff >= s && (poff - g.epg_origin) / ss % n == set,
+			"c %u k %u [%ju, %ju) off %ju poff %ju set %u",
+			c, k, (uintmax_t)s, (uintmax_t)e, (uintmax_t)off,
+			(uintmax_t)poff, set);
+		ASSERTF(ec_parity_to_data(&g, poff, &doff, &rs_k) == set &&
+			off >= doff && off < doff + rs_k * ss,
+			"c %u k %u [%ju, %ju) off %ju doff %ju",
+			c, k, (uintmax_t)s, (uintmax_t)e, (uintmax_t)off,
+			(uintmax_t)doff);
+		/* a 1-data raid set copy is at its data object offsets */
+		ASSERTF(g.epg_split.esc_k0 != 1 || g.epg_split.esc_n1 ||
+			(poff - g.epg_origin) / (n * ss) * ss + poff % ss ==
+			off / (c * ss) * ss + off % ss,
+			"c %u k %u [%ju, %ju) off %ju poff %ju origin %ju",
+			c, k, (uintmax_t)s, (uintmax_t)e, (uintmax_t)off,
+			(uintmax_t)poff, (uintmax_t)g.epg_origin);
+		if (poff - off % ss + ss > hi)
+			hi = poff - off % ss + ss;
+	}
+	ASSERTF(ec_parity_fits(&g, e) == (hi <= e),
+		"c %u k %u [%ju, %ju) parity end %ju fits %d",
+		c, k, (uintmax_t)s, (uintmax_t)e, (uintmax_t)hi,
+		ec_parity_fits(&g, e));
+}
+
+#define T68_DESC	"EC parity placement keeps parity within the extent"
+static void test68(void)
+{
+	const __u64 mb = 1ULL << 20;
+	struct ec_parity_geom g;
+	__u64 ss, s, e, poff;
+	unsigned int c, k, set;
+
+	/* -E 64M -c 1 -S 4M --ec 1+2 after -E 1M: parity offset is data's */
+	ec_parity_geom_init(&g, 1, 1, 4 * mb, mb);
+	ASSERTF(g.epg_origin == 0, "origin %ju", (uintmax_t)g.epg_origin);
+	ec_data_to_parity(&g, 63 * mb + 1, &poff);
+	ASSERTF(poff == 63 * mb + 1, "poff %ju", (uintmax_t)poff);
+
+	/* 1-data raid sets count from 0, also after a 1M component */
+	ec_parity_geom_init(&g, 1, 1, mb, mb);
+	ASSERTF(g.epg_origin == 0, "origin %ju", (uintmax_t)g.epg_origin);
+	ec_parity_geom_init(&g, 4, 1, mb, 4 * mb + mb / 2);
+	ASSERTF(g.epg_origin == 0, "origin %ju", (uintmax_t)g.epg_origin);
+	ec_data_to_parity(&g, 9 * mb + 1, &poff);
+	ASSERTF(poff == 9 * mb + 1, "poff %ju", (uintmax_t)poff);
+
+	/* -c 4 -S 1M --ec 2+1 over [2M, 8M): [2M, 4M) is raid set 1 */
+	ec_parity_geom_init(&g, 4, 2, mb, 2 * mb);
+	ASSERTF(g.epg_origin == mb, "origin %ju", (uintmax_t)g.epg_origin);
+	set = ec_data_to_parity(&g, 4 * mb, &poff);
+	ASSERTF(set == 0 && poff == 3 * mb, "set %u poff %ju", set,
+		(uintmax_t)poff);
+
+	/* -c 2 -S 4M --ec 2+2 over [1M, 4M) has no room for its parity */
+	ec_parity_geom_init(&g, 2, 2, 4 * mb, mb);
+	ASSERTF(!ec_parity_fits(&g, 4 * mb), "[1M, 4M) fits");
+
+	for (ss = mb; ss <= 4 * mb; ss *= 2)
+		for (c = 1; c <= 9; c++)
+			for (k = 1; k <= c; k++)
+				for (s = 0; s < 24 * mb; s += 192 * 1024)
+					for (e = (s / ss + 1) * ss;
+					     e <= s + 16 * mb; e += ss)
+						t68_check_extent(c, k, ss, s,
+								 e);
+}
+
 static struct test_tbl_entry test_tbl[] = {
 	TEST_REGISTER(0),
 	TEST_REGISTER(1),
@@ -4786,6 +4869,7 @@ static struct test_tbl_entry test_tbl[] = {
 	TEST_REGISTER(65),
 	TEST_REGISTER(66),
 	TEST_REGISTER(67),
+	TEST_REGISTER(68),
 	TEST_REGISTER_END
 };
 

@@ -1483,6 +1483,7 @@ int llapi_layout_merge(struct llapi_layout **dst_layout,
 #define LLAPI_LAYOUT_OVERSTRIPING	0x00000004ULL
 #define LLAPI_LAYOUT_FOREIGN		0x00000008ULL
 #define LLAPI_LAYOUT_COMPRESS		0x00000010ULL
+#define LLAPI_LAYOUT_PARITY		0x00000020ULL
 
 /**
  * The layout includes a specific set of OSTs on which to allocate.

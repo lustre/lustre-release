@@ -4404,6 +4404,65 @@ static int build_prev_component(struct llapi_layout **layout,
 	return 0;
 }
 
+/*
+ * Parse the pattern of a YAML layout as "lfs getstripe -y" prints it:
+ * comma-separated flags such as "raid0", "raid0,overstriped", "mdt" or
+ * "parity,overstriped".  Only mdt and overstriped select a pattern.
+ * raid0 is the default, parity is set by the component flags, and the
+ * other names llapi_lov_pattern_string() prints describe the file the
+ * layout came from, not the one to create.
+ */
+static int yaml_str2pattern(const char *string, unsigned long long *pattern)
+{
+	static const char * const ignored[] = {
+		"raid0", "raid1", "parity", "foreign", "compress", "hole",
+		"released", "bad", "default",
+	};
+	char *dup_string;
+	char *name;
+	int rc = 0;
+
+	if (!string || !string[0])
+		return -EINVAL;
+
+	dup_string = strdup(string);
+	if (!dup_string) {
+		llapi_printf(LLAPI_MSG_ERROR, "%s: insufficient memory\n",
+			     progname);
+		return -ENOMEM;
+	}
+
+	*pattern = LLAPI_LAYOUT_RAID0;
+	for (name = strtok(dup_string, ","); name; name = strtok(NULL, ",")) {
+		int i;
+
+		if (strcmp(name, "mdt") == 0) {
+			*pattern = LLAPI_LAYOUT_MDT;
+			continue;
+		}
+		if (strcmp(name, "overstriped") == 0 ||
+		    strcmp(name, "overstriping") == 0) {
+			*pattern |= LLAPI_LAYOUT_OVERSTRIPING;
+			continue;
+		}
+		for (i = 0; i < ARRAY_SIZE(ignored); i++)
+			if (strcmp(name, ignored[i]) == 0)
+				break;
+		if (i < ARRAY_SIZE(ignored) ||
+		    strncmp(name, "unknown_", 8) == 0)
+			continue;
+
+		llapi_printf(LLAPI_MSG_ERROR,
+			     "%s: layout pattern '%s' not supported\n",
+			     progname, name);
+		rc = -EINVAL;
+		break;
+	}
+
+	free(dup_string);
+	return rc;
+}
+
 static int build_layout_from_yaml_node(struct cYAML *node,
 				       struct llapi_layout **layout,
 				       struct lfs_setstripe_args *lsa,
@@ -4454,12 +4513,11 @@ static int build_layout_from_yaml_node(struct cYAML *node,
 				} else if (!strcmp(string, "pool")) {
 					lsa->lsa_pool_name = node->cy_valuestring;
 				} else if (!strcmp(string, "pattern")) {
-					if (!strcmp(node->cy_valuestring, "mdt"))
-						lsa->lsa_pattern = LLAPI_LAYOUT_MDT;
-					if (!strcmp(node->cy_valuestring,
-						    "raid0,overstriped"))
-						lsa->lsa_pattern =
-							LLAPI_LAYOUT_OVERSTRIPING;
+					rc = yaml_str2pattern(
+						node->cy_valuestring,
+						&lsa->lsa_pattern);
+					if (rc)
+						return rc;
 				} else if (!strcmp(string, "lcme_flags")) {
 					rc = comp_str2flags(node->cy_valuestring,
 							    &lsa->lsa_comp_flags,
@@ -5094,12 +5152,12 @@ static int create_ec_parity_mirror(struct llapi_layout *layout,
 		}
 	}
 
-	/* Validate the layout */
+	/* Validate the layout; a positive rc names the sanity error */
 	rc = llapi_layout_sanity(layout, false, false);
-	if (rc)
-		goto out_free;
-
-	rc = 0;
+	if (rc > 0) {
+		llapi_layout_sanity_perror(rc);
+		rc = -EINVAL;
+	}
 
 out_free:
 	free(comp_info);
@@ -15277,6 +15335,51 @@ static inline int check_same_file(int fd, const char *f2)
 	return 1;
 }
 
+/*
+ * Read a parity mirror as a concatenated RAID0 dump (getstripe order) for
+ * 'lfs mirror read'. Not a public llapi — keeps the pre-RAID10 dump layout.
+ */
+static ssize_t mirror_dump_parity(int fd, unsigned int mirror_id,
+				  struct llapi_layout *layout,
+				  uint64_t data_size, void *buf, size_t count,
+				  off_t pos)
+{
+	ssize_t result = 0;
+
+	if (pos < 0)
+		return -EINVAL;
+
+	while (count > 0) {
+		unsigned int stripe;
+		uint64_t ec_pos;
+		uint64_t chunk;
+		size_t to_read;
+		ssize_t bytes_read;
+		int rc;
+
+		rc = llapi_layout_parity_pos_to_io(layout, mirror_id, data_size,
+						   pos, &stripe, &ec_pos,
+						   &chunk);
+		if (rc < 0)
+			return rc == -ENOENT ? result : rc;
+
+		to_read = MIN((size_t)chunk, count);
+		bytes_read = llapi_mirror_read_parity(fd, mirror_id, stripe,
+						      buf, to_read, ec_pos);
+		if (bytes_read < 0)
+			return bytes_read;
+
+		result += bytes_read;
+		pos += bytes_read;
+		buf += bytes_read;
+		count -= bytes_read;
+		if ((size_t)bytes_read < to_read)
+			return result;
+	}
+
+	return result;
+}
+
 static inline int lfs_mirror_read(int argc, char **argv)
 {
 	int rc = CMD_HELP;
@@ -15289,6 +15392,9 @@ static inline int lfs_mirror_read(int argc, char **argv)
 	void *buf;
 	const size_t buflen = DEFAULT_IO_BUFLEN;
 	ssize_t page_size;
+	struct llapi_layout *layout = NULL;
+	uint64_t data_size = 0;
+	int is_parity = 0;
 	off_t pos;
 	struct option long_opts[] = {
 	{ .val = 'h',	.name = "help",		.has_arg = no_argument },
@@ -15389,12 +15495,46 @@ static inline int lfs_mirror_read(int argc, char **argv)
 	}
 	(void)mlock(buf, buflen);
 
+	/*
+	 * Layout is constant for the dump. Decide parity once, not
+	 * per buffer.
+	 */
+	layout = llapi_layout_get_by_fd(fd, 0);
+	if (layout && llapi_layout_is_composite(layout))
+		is_parity = llapi_layout_is_parity_mirror(layout, mirror_id);
+	if (is_parity < 0) {
+		rc = -errno;
+		fprintf(stderr,
+			"%s %s: cannot check if mirror %u of '%s' is parity: %s\n",
+			progname, argv[0], mirror_id, fname, strerror(-rc));
+		goto free_buf;
+	}
+	if (is_parity > 0) {
+		struct stat st;
+
+		if (fstat(fd, &st) < 0) {
+			rc = -errno;
+			goto free_buf;
+		}
+		data_size = st.st_size;
+	} else {
+		/* Known non-parity: drop the layout and use the cheap path. */
+		llapi_layout_free(layout);
+		layout = NULL;
+	}
+
 	pos = 0;
 	while (1) {
 		ssize_t bytes_read;
 		ssize_t written = 0;
 
-		bytes_read = llapi_mirror_read(fd, mirror_id, buf, buflen, pos);
+		if (is_parity)
+			bytes_read = mirror_dump_parity(fd, mirror_id, layout,
+							data_size, buf, buflen,
+							pos);
+		else
+			bytes_read = llapi_mirror_read(fd, mirror_id, buf,
+						       buflen, pos);
 		if (bytes_read < 0) {
 			rc = bytes_read;
 			fprintf(stderr,
@@ -15438,6 +15578,7 @@ static inline int lfs_mirror_read(int argc, char **argv)
 	rc = 0;
 
 free_buf:
+	llapi_layout_free(layout);
 	(void)munlock(buf, buflen);
 	free(buf);
 close_outfd:

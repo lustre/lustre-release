@@ -162,7 +162,7 @@ int lov_stripe_offset(struct lov_stripe_md *lsm, int index, loff_t lov_off,
 		return -1;
 	}
 	/* parity stops at e_end, clamp back like lov_size_to_stripe() */
-	if (lsme_parity_raid10(entry) &&
+	if (lsme_is_parity(entry) &&
 	    (u64)lov_off >= entry->lsme_extent.e_end) {
 		*obdoff = lov_size_to_stripe(lsm, index,
 					     entry->lsme_extent.e_end,
@@ -236,7 +236,7 @@ loff_t lov_size_to_stripe(struct lov_stripe_md *lsm, int index, u64 file_size,
 		return 0;
 
 	/* parity stops at e_end */
-	if (lsme_parity_raid10(lse) && file_size > lse->lsme_extent.e_end)
+	if (lsme_is_parity(lse) && file_size > lse->lsme_extent.e_end)
 		file_size = lse->lsme_extent.e_end;
 
 	swidth = stripe_width(lsm, index);
@@ -329,8 +329,8 @@ int lov_stripe_intersects(struct lov_stripe_md *lsm, int index, int stripeno,
  * @index: layout component index
  * @lov_off: LOV file offset
  *
- * RAID0 and RAID0|PARITY: the unique stripe covering @lov_off.
- * Bare-PARITY EC (lsme_parity_raid10()): first stripe of that raidset
+ * RAID0: the unique stripe covering @lov_off.
+ * EC parity (lsme_is_parity()): first stripe of that raidset
  * (0, p, 2p, ...).
  *
  * Return: stripe index

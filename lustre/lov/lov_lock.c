@@ -173,7 +173,12 @@ static struct lov_lock *lov_lock_sub_init(const struct lu_env *env,
 		struct lov_stripe_md_entry *lsme;
 
 		lsme = lov->lo_lsm->lsm_entries[index];
-		if (!lov_io_designated_stripe_valid(io, lsme))
+		/* A glimpse spans every component for the size. The
+		 * designated stripe only binds the components the I/O
+		 * itself covers, which lov_io_iter_init() has checked.
+		 */
+		if (!(lock->cll_descr.cld_enq_flags & CEF_GLIMPSE) &&
+		    !lov_io_designated_stripe_valid(io, lsme))
 			RETURN(ERR_PTR(-EINVAL));
 		lov_foreach_io_stripe(io, lsme, i, r0->lo_nr) {
 			if (unlikely(!r0->lo_sub[i]))

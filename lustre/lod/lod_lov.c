@@ -1664,9 +1664,9 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 		if (!lov_pattern_available(pattern))
 			GOTO(out, rc = -EINVAL);
 
-		/* paranoidly set parity component pattern */
+		/* set parity component pattern */
 		if (lod_comp->llc_flags & LCME_FL_PARITY)
-			pattern |= LOV_PATTERN_PARITY;
+			lod_comp_set_ec_pattern(&pattern);
 
 		if (pattern & LOV_PATTERN_MDT) {
 			if (lod_comp->llc_extent.e_start != 0) {
@@ -2536,6 +2536,18 @@ recheck:
 				RETURN(-EINVAL);
 			}
 			continue;
+		}
+
+		/* LCME_FL_PARITY and LOV_PATTERN_PARITY must agree */
+		if (!(le32_to_cpu(ent->lcme_flags) & LCME_FL_PARITY) !=
+		    !(lov_pattern(le32_to_cpu(lum->lmm_pattern)) &
+		      LOV_PATTERN_PARITY)) {
+			CDEBUG(D_LAYOUT,
+			       "component %#x: flags %#x do not match pattern %#x\n",
+			       le32_to_cpu(ent->lcme_id),
+			       le32_to_cpu(ent->lcme_flags),
+			       le32_to_cpu(lum->lmm_pattern));
+			RETURN(-EINVAL);
 		}
 
 		if (le32_to_cpu(ent->lcme_flags) & LCME_FL_PARITY) {

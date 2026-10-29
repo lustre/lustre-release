@@ -6,7 +6,6 @@
 set -e
 set +o posix
 
-
 ONLY=${ONLY:-"$*"}
 
 LUSTRE=${LUSTRE:-$(dirname $0)/..}
@@ -349,20 +348,22 @@ check_raidset_fdoms() {
 }
 
 #
-# Read from parity mirror and check for zeros.
-# Usage: check_parity_read <file> <mirror_id> <offset> <expect_zeros>
+# Check up to 4K of a parity dump at @offset for zeros / non-zeros.
+# Usage: check_parity_dump <dump> <offset> <yes|no>
 #
-check_parity_read() {
-	local file=$1
-	local mirror_id=$2
-	local offset=$3
-	local expect_zeros=$4
-	local rc
+check_parity_dump() {
+	local dump=$1
+	local offset=$2
+	local expect_zeros=$3
+	local sz n rc=0
 
-	# test_parity_read returns 0 if all zeros, 1 if non-zero bytes found
-	$LUSTRE/tests/test_parity_read $file $mirror_id $offset > /dev/null 2>&1
-	rc=$?
+	sz=$(stat -c%s $dump)
+	n=$((sz > offset ? sz - offset : 0))
+	(( n > 0 )) || error "offset $offset: past dump end ($sz)"
+	(( n > 4096 )) && n=4096
 
+	# cmp: 0 all zeros, 1 some data, 2 trouble
+	cmp -s -i $offset:0 -n $n $dump /dev/zero || rc=$?
 	if [[ $expect_zeros == "yes" ]]; then
 		(( rc == 0 )) || error "offset $offset: expected zeros"
 	else
@@ -3439,7 +3440,6 @@ test_12a() {
 	(( OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
 	enable_ec
 
-
 	test_mkdir $DIR/$tdir
 
 	$LFS setstripe -E -1 -S 4M -c 4 --ec 2+2 $tf ||
@@ -3572,7 +3572,8 @@ test_12c() {
 	local tf=${DIR}/${tdir}/$tfile
 	local stripe_size=$((4 * 1024 * 1024))
 	local stripe_set_size=$((4 * stripe_size))
-	local ec_set_size=$((2 * stripe_size))
+	# EC with one raidset (--ec 4+2): one stripe set is one stripe_size
+	local ec_set_size=$stripe_size
 
 	test_mkdir $DIR/$tdir
 	stack_trap "rm -f $tf"
@@ -3624,7 +3625,8 @@ test_12d() {
 	local tf=${DIR}/${tdir}/$tfile
 	local stripe_size=$((1024 * 1024))
 	local raidset_size=$((3 * stripe_size))
-	local ec_raidset_size=$((2 * stripe_size))
+	# RAID10-like: p parities share one offset, so one raidset is ss
+	local ec_raidset_size=$stripe_size
 
 	test_mkdir $DIR/$tdir
 	stack_trap "rm -f $tf"
@@ -5212,13 +5214,10 @@ test_31e() {
 
 	$LFS mirror resync $tf || error "mirror resync failed"
 
-	# Parity lsme_extent matches data lsme_extent (same file offsets, not
-	# packed parity bytes).
-	# ec_raidset_size = 2 parities * stripe_size = 262144.
-	# Parity comp 1 (ext [1M, EOF), data 512k):
-	# comp_eof = 1M + 262144 = 1310720
-	local ec_raidset_size=$((2 * stripe_size))
-	local expected=$((1024 * 1024 + ec_raidset_size))
+	# RAID0 dump concatenates each component: p objects per raidset.
+	# Comp 0 [0, 1M): 2 stripe sets * 1 raidset * 2p * 128k = 512k
+	# Comp 1 [1M, EOF): 1 stripe set * 1 raidset * 2p * 128k = 256k
+	local expected=$((768 * 1024))
 	$LFS mirror read --mirror-id 2 -o $TMP/$tfile.parity $tf ||
 		error "mirror read from parity failed"
 	stat $TMP/$tfile.parity | grep "Size: $expected" ||
@@ -5419,81 +5418,122 @@ test_34c() {
 
 	test_mkdir $DIR/$tdir
 
-	# Test with data sizes that span at least one full stripe.
-	# Reed-Solomon parity is a linear code over GF(2^8), so parity
-	# bytes at byte offset i are 0 whenever every data stripe is 0
-	# at offset i.  A sub-stripe file has zero input at every offset
-	# past the data tail across all data stripes, so its parity is
-	# correctly zero there and "expect parity bytes" cannot succeed.
-	# - 4M     (exactly one stripe)
-	# - 4.5M   (one stripe + partial)
-	# - 8.5M   (two stripes + partial)
-	local -a test_sizes=($((4 * 1024 * 1024)) \
-			     $((4 * 1024 * 1024 + 512 * 1024)) \
-			     $((8 * 1024 * 1024 + 512 * 1024)))
-	local size
-	local i
+	# -c 8 --ec 3+2 -S 4M => 3 raidsets ([3,2][3,2][2,2]).
+	# RAID0 dump: rs0p0@0, rs0p1@4M, rs1p0@8M, rs1p1@12M,
+	# rs2p0@16M, rs2p1@20M; one row of 24M per 32M stripe set.
+	#
+	# Raidset 0 holds the first 12M of a stripe set, raidset 1 the
+	# next 12M and raidset 2 the last 8M.  Sizes cover the edges:
+	# - 4M     exactly one stripe
+	# - 12M    raidset 0 full, raidsets 1 and 2 without parity
+	# - 16.5M  partial stripe reaching raidset 1
+	local stripe_size=$((4 * 1024 * 1024))
+	local -a test_sizes=($stripe_size \
+			     $((3 * stripe_size)) \
+			     $((4 * stripe_size + 512 * 1024)))
+	local size rs1_zeros
 	local parity_mirror_id
+	local tf=$DIR/$tdir/$tfile
+	local dump=$TMP/$tfile.parity_dump
+
+	stack_trap "rm -f $dump"
 
 	for size in "${test_sizes[@]}"; do
 		echo "Testing with data size: $size bytes"
+		rs1_zeros=yes
+		(( size > 3 * stripe_size )) && rs1_zeros=no
 
-		rm -f $DIR/$tdir/$tfile
-		$LFS setstripe -E -1 -S 4M -c 8 --ec 3+2 \
-			$DIR/$tdir/$tfile ||
+		rm -f $tf
+		$LFS setstripe -E -1 -S 4M -c 8 --ec 3+2 $tf ||
 			error "setstripe --ec 3+2 failed"
 
-		# Write data
-		dd if=/dev/urandom of=$DIR/$tdir/$tfile bs=$size \
-			count=1 2>/dev/null ||
+		dd if=/dev/urandom of=$tf bs=$size count=1 2>/dev/null ||
 			error "failed to write $size bytes"
 
-		# Resync to write parity
-		$LFS mirror resync $DIR/$tdir/$tfile ||
+		$LFS mirror resync $tf ||
 			error "failed to resync ec mirror"
 
-		# Get parity mirror ID
-		parity_mirror_id=$($LFS getstripe $DIR/$tdir/$tfile | \
-			grep -B1 "lcme_flags.*parity" | \
+		parity_mirror_id=$($LFS getstripe $tf |
+			grep -B1 "lcme_flags.*parity" |
 			grep "lcme_mirror_id" | awk '{print $2}')
 
 		echo "Parity mirror ID: $parity_mirror_id"
+		rm -f $dump
+		$LFS mirror read --mirror-id $parity_mirror_id -o $dump $tf ||
+			error "mirror read failed"
 
-		# Test reads at various offsets
-		# For 3+2 EC with 4M stripes, we have 2 parity stripes
-		# Each parity stripe should have parity data up to $size,
-		# then zeros
-
-		# Test start of first parity stripe (should have data)
-		echo "  Checking offset 0 (start of first parity stripe)..."
-		check_parity_read $DIR/$tdir/$tfile $parity_mirror_id \
-			0 "no"
-
-		# Parity is computed at block granularity, covering
-		# only the data range.  Offsets within a parity stripe
-		# but past the data range read as zeros.
-
-		# Only check offset 1M if data extends into that range
-		if (( size > 1024 * 1024 )); then
-			echo "  Checking offset 1M (within first parity stripe)..."
-			check_parity_read $DIR/$tdir/$tfile \
-				$parity_mirror_id $((1024 * 1024)) "no"
-		fi
-
-		# Test start of second parity stripe at 4M: always has
-		# data as long as any data was written (each coding stripe
-		# gets parity for the same data range)
-		echo "  Checking offset 4M (start of second parity stripe)..."
-		check_parity_read $DIR/$tdir/$tfile $parity_mirror_id \
-			$((4 * 1024 * 1024)) "no"
-
-		# Test past all parity stripes (should be zeros)
-		echo "  Checking offset 8M (past all parity)..."
-		check_parity_read $DIR/$tdir/$tfile $parity_mirror_id \
-			$((8 * 1024 * 1024)) "yes"
+		echo "  Checking offset 0 (rs0 p0)..."
+		check_parity_dump $dump 0 "no"
+		echo "  Checking offset 1M (within rs0 p0)..."
+		check_parity_dump $dump $((1024 * 1024)) "no"
+		echo "  Checking offset 4M (rs0 p1, same raidset)..."
+		check_parity_dump $dump $stripe_size "no"
+		echo "  Checking offset 8M (rs1 p0, zeros: $rs1_zeros)..."
+		check_parity_dump $dump $((2 * stripe_size)) $rs1_zeros
+		echo "  Checking offset 16M (rs2 p0, no data)..."
+		check_parity_dump $dump $((4 * stripe_size)) "yes"
+		# One stripe set of data: the dump is one RAID0 row
+		(( $(stat -c%s $dump) == 6 * stripe_size )) ||
+			error "dump size $(stat -c%s $dump) != one RAID0 row"
 	done
 }
 run_test 34c "test that reading past parity data returns zeros"
+
+test_34d() {
+	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local dump=$TMP/$tfile.parity_dump
+	local stripe_size=$((1024 * 1024))
+	local ids off
+
+	stack_trap "rm -f $tf $dump"
+
+	# [0, 3M) -c 2 --ec 1+2: 2 raidsets of 1, p=2, stripe set 2M, so
+	# the second row only has raidset 0 in this component. The dump
+	# stops at e_end: 3 slots * 2 = 6M, not 2 rows * 2 * 2 = 8M.
+	# [3M, EOF) -c 1 --ec 1+1: p=1, one 1M slot for 1M of data.
+	# Reading parity stripe 1 of the first component glimpses the
+	# whole file, including the second component with p=1.
+	$LFS setstripe -E 3M -S 1M -c 2 --ec 1+2 -E eof -S 1M -c 1 --ec 1+1 \
+		$tf || error "setstripe failed"
+	dd if=/dev/urandom of=$tf bs=1M count=4 conv=fsync ||
+		error "write 4M failed"
+	$LFS mirror resync $tf || error "resync failed"
+	ids=($($LFS getstripe $tf | awk '/lcme_id/ { print $2 }'))
+	verify_comp_parity $tf ${ids[2]}
+	verify_comp_parity $tf ${ids[3]}
+	(( $($LFS getstripe -I${ids[2]} -c $tf) == 4 )) ||
+		error "first parity component is not 2 raidsets of p=2"
+	(( $($LFS getstripe -I${ids[3]} -c $tf) == 1 )) ||
+		error "second parity component is not 1 raidset of p=1"
+
+	$LFS mirror read --mirror-id 2 -o $dump $tf ||
+		error "mirror read of a mixed-p parity mirror failed"
+	(( $(stat -c%s $dump) == 7 * stripe_size )) ||
+		error "dump size $(stat -c%s $dump) != 7M"
+	for off in 0 1 2 3 4 5 6; do
+		check_parity_dump $dump $((off * stripe_size)) "no"
+	done
+
+	# [512K, 3M) -S 1M starts inside a stripe: its 2.5M hold two 1M
+	# slots and a 512K one, so the dump is 512K + 2.5M + 1M.
+	rm -f $tf $dump
+	$LFS setstripe -E 512K -S 512K -c 1 --ec 1+1 -E 3M -S 1M -c 1 --ec 1+1 \
+		-E eof -S 1M -c 1 --ec 1+1 $tf || error "setstripe 512K failed"
+	dd if=/dev/urandom of=$tf bs=1M count=4 conv=fsync ||
+		error "write 4M failed"
+	$LFS mirror resync $tf || error "resync failed"
+	$LFS mirror read --mirror-id 2 -o $dump $tf ||
+		error "mirror read of an unaligned start failed"
+	(( $(stat -c%s $dump) == 4 * stripe_size )) ||
+		error "dump size $(stat -c%s $dump) != 4M"
+	for off in 0 512 1536 2560 3072; do
+		check_parity_dump $dump $((off * 1024)) "no"
+	done
+}
+run_test 34d "parity dump stops at e_end and reads a mixed-p mirror"
 
 test_35a() {
 	(( $OSTCOUNT >= 8 )) || skip "needs >= 8 OSTs"
@@ -5659,7 +5699,6 @@ test_35a() {
 	done
 }
 run_test 35a "test raidset OSTs allocations using failure domains"
-
 
 test_35b() {
 	(( $OSTCOUNT >= 8 )) || skip "needs >= 8 OSTs"
@@ -8837,17 +8876,26 @@ test_63d() {
 	enable_ec
 
 	local tf=$DIR/$tfile
+	local ids
 
 	stack_trap "rm -f $tf"
 
-	# PFL: [0,4M) 4+2, [4M,EOF) 4+2
+	# PFL: [0,4M) 2+1, [4M,EOF) 2+1 with two raidsets per stripe set,
+	# so recovery reads parity of raidset 1 at a non-zero e_start.
+	# A wider first component leaves too few OSTs on 8 OSTs, and lod
+	# shrinks the second one to a single raidset.
 	$LFS setstripe \
-		-E 4M -S 1M -c 4 --ec 4+2 \
-		-E eof -S 1M -c 4 --ec 4+2 $tf ||
+		-E 4M -S 1M -c 2 --ec 2+1 \
+		-E eof -S 1M -c 4 --ec 2+1 $tf ||
 		error "setstripe PFL failed"
+	ids=($($LFS getstripe $tf | awk '/lcme_id/ { print $2 }'))
+	verify_comp_parity $tf ${ids[3]}
 	dd if=/dev/urandom of=$tf bs=1M count=12 ||
 		error "dd 12M failed"
 	$LFS mirror resync $tf || error "resync failed"
+	# parity is instantiated by the resync
+	(( $($LFS getstripe -I${ids[3]} -c $tf) == 2 )) ||
+		error "second parity component is not 2 raidsets"
 
 	local sum=$(md5sum $tf | awk '{print $1}')
 	ec_classify_osts $tf
@@ -8872,7 +8920,7 @@ test_63d() {
 	[[ -n "$prev" ]] && ec_reactivate_ost $prev
 	echo "** PFL OST cycling OK"
 }
-run_test 63d "EC recovery cycling OSTs with PFL layout"
+run_test 63d "EC recovery cycling OSTs with PFL multi-raidset layout"
 
 test_64a() {
 	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
@@ -10734,6 +10782,363 @@ test_75f() {
 	echo "** stripe rotation across $nfiles files: OK"
 }
 run_test 75f "EC stripe rotation across files"
+
+test_301() {
+	(( OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local ids out
+
+	stack_trap "rm -f $tf"
+
+	# --ec 2+2 -c 2 over [1M, 4M) ends within the stripe of e_start,
+	# which is not the last of its raidset: the parity of the whole
+	# stripe [1M, 5M) would end past e_end.
+	out=$($LFS setstripe -E 1M -S 1M -c 1 -E 4M -S 4M -c 2 \
+		-E -1 -S 4M -c 2 --ec 2+2 $tf 2>&1) &&
+		error "setstripe with parity past e_end succeeded"
+	echo "$out"
+	[[ "$out" == *"shorter than one stripe at an unaligned start"* ]] ||
+		error "parity past e_end refused for another reason"
+	rm -f $tf
+
+	# Second component e_start=1M is not a multiple of stripe_size=4M.
+	# Parity I/O must chunk at e_start + n*ss so [4M, 8M) splits at 5M.
+	# First component uses -c 1: -c 2 would be shrunk to 1 by LOD
+	# (extent 1M / stripe_size 1M) while dstripe_count stays 2, and
+	# resync then fails llapi_ec_check_comp_match ("too many parities").
+	$LFS setstripe -E 1M -S 1M -c 1 -E -1 -S 4M -c 4 --ec 2+2 $tf ||
+		error "setstripe PFL --ec 2+2 with unaligned e_start failed"
+
+	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
+	verify_comp_extent $tf ${ids[1]} 1048576 EOF
+	verify_comp_parity $tf ${ids[3]}
+	verify_comp_extent $tf ${ids[3]} 1048576 EOF
+
+	# Rows count from offset 0: 9M covers raidset 0 [0, 8M), whose
+	# [0, 1M) is before e_start, and raidset 1 [8M, 16M).
+	dd if=/dev/urandom of=$tf bs=1M count=9 conv=fsync ||
+		error "write 9M failed"
+
+	$LFS mirror resync $tf || error "resync across unaligned raidset failed"
+	$LFS mirror verify $tf || error "verify across unaligned raidset failed"
+
+	rm -f $tf
+	$LFS setstripe -E 1M -S 1M -c 1 -E -1 -S 4M -c 4 --ec 2+2 $tf ||
+		error "setstripe for hole test failed"
+
+	# Row [0, 16M) holds data; row [16M, 32M) is a full stripe set of
+	# holes, punched or verified in one transfer of ec_size.
+	dd if=/dev/urandom of=$tf bs=1M count=1 conv=fsync ||
+		error "write first megabyte failed"
+	dd if=/dev/urandom of=$tf bs=1M count=1 seek=33 conv=fsync ||
+		error "write at 33M failed"
+
+	$LFS mirror resync $tf ||
+		error "resync of unaligned hole stripe sets failed"
+	$LFS mirror verify $tf ||
+		error "verify of unaligned hole stripe sets failed"
+}
+run_test 301 "EC unaligned e_start: layout check, resync and verify"
+
+test_302() {
+	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local ids layout
+
+	stack_trap "rm -f $tf"
+
+	# Common PFL layouts with an unaligned mid component need 4 data +
+	# 2 parity OSTs. [1M, 64M) with -S 4M and [64K, 1M) with -S 1M
+	# (as after a 64K DoM component) hold their parity within the
+	# extent, from e_start.
+	local layouts=(
+		"-E 1M -c 1 -S 1M -E 64M -c 1 -S 4M -E eof -c 4 -S 4M --ec 4+2"
+		"-E 64K -c 1 -S 64K -E 1M -c 1 -S 1M -E eof -c 4 -S 4M --ec 4+2"
+	)
+
+	for layout in "${layouts[@]}"; do
+		local osts sum got o
+
+		rm -f $tf
+		$LFS setstripe $layout $tf || error "setstripe $layout failed"
+		ids=($($LFS getstripe $tf | awk '/lcme_id/ { print $2 }'))
+
+		dd if=/dev/urandom of=$tf bs=1M count=2 conv=fsync ||
+			error "write [0, 2M) failed"
+		dd if=/dev/urandom of=$tf bs=1M count=10 seek=60 \
+			conv=fsync,notrunc || error "write [60M, 70M) failed"
+		sum=$(md5sum < $tf)
+
+		$LFS mirror resync $tf || error "resync of '$layout' failed"
+		$LFS mirror verify $tf || error "verify of '$layout' failed"
+
+		# Read back through the parity of the unaligned component
+		osts=($($LFS getstripe -I${ids[1]} $tf |
+			awk '/l_ost_idx:/ { print $5 }'))
+		o=${osts[0]%,}
+		ec_classify_osts $tf
+		if [[ " ${safe_osts[*]} " != *" $o "* ]]; then
+			echo "OST $o also holds parity, skip degraded read"
+			continue
+		fi
+		ec_deactivate_ost $o
+		cancel_lru_locks osc
+		got=$(md5sum < $tf)
+		ec_reactivate_ost $o
+		[[ "$got" == "$sum" ]] ||
+			error "'$layout' degraded read: $got != $sum"
+	done
+}
+run_test 302 "EC unaligned e_start in common PFL layouts, degraded read"
+
+test_303() {
+	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local ids data_id parity_id dosts costs sum got o set first total
+	local tc start layout kstr
+	local -A seen
+	local -a ks
+	# start MB, layout, data stripes of each raid set. Each layout
+	# keeps data + parity objects within 8 OSTs, as lod would shrink
+	# a larger geometry (-c 8 --ec 4+1 becomes 6 stripes).
+	local cases=(
+		# e_start=3M, stripe width=6*1M: not aligned. Absolute RAID0
+		# puts offset 3M on object 3 (raid set 1). An e_start-relative
+		# mapping treats it as set 0, so resync encodes set-1 data
+		# into set-0 parity; taking down a set-0 data OST then
+		# reconstructs garbage.
+		"3|-E 3M -c 1 -E -1 -S 1M -c 6 --ec 3+1|3 3"
+		# e_start=3M, stripe width=5*1M, split 3+2: e_start is in the
+		# second, smaller raid set, which ends the row, so the read
+		# cycle and the parity row end with the k1 sets.
+		"3|-E 3M -c 1 -E -1 -S 1M -c 5 --ec 3+1|3 2"
+	)
+
+	stack_trap "rm -f $tf"
+
+	for tc in "${cases[@]}"; do
+		IFS='|' read -r start layout kstr <<< "$tc"
+		ks=($kstr)
+		total=0
+		for o in "${ks[@]}"; do
+			total=$((total + o))
+		done
+
+		rm -f $tf
+		$LFS setstripe $layout $tf ||
+			error "setstripe $layout failed"
+
+		ids=($($LFS getstripe $tf | awk '/lcme_id/ { print $2 }'))
+		verify_comp_count $tf 4
+		data_id=${ids[1]}
+		parity_id=${ids[3]}
+		verify_comp_parity $tf $parity_id
+
+		# Leave [0, e_start) sparse so only the EC component is at
+		# risk. 16M from e_start spans the partial first RAID0 row
+		# and full rows after it.
+		dd if=/dev/urandom of=$tf bs=1M seek=$start count=16 \
+			conv=fsync || error "write 16M at ${start}M failed"
+		$LFS mirror resync $tf || error "resync of '$layout' failed"
+		sum=$(md5sum < $tf)
+
+		# the raid sets below assume the requested stripe count
+		o=$($LFS getstripe -I$data_id $tf |
+			awk '/lmm_stripe_count:/ { print $2 }')
+		(( o == total )) ||
+			error "'$layout' has $o data stripes, not $total"
+
+		# Per raid set: the parity OST is none of the set's data OSTs
+		first=0
+		for ((set = 0; set < ${#ks[@]}; set++)); do
+			dosts=$(get_osts_by_comp $tf $data_id $first ${ks[set]})
+			costs=$(get_osts_by_comp $tf $parity_id $set 1)
+			seen=()
+			for o in $dosts $costs; do
+				seen[$o]=1
+			done
+			(( ${#seen[@]} == ks[set] + 1 )) ||
+				error "'$layout' set $set: [$dosts] + [$costs]"
+			first=$((first + ks[set]))
+		done
+
+		for o in $(get_osts_by_comp $tf $data_id 0 $total); do
+			ec_deactivate_ost $o
+			cancel_lru_locks osc
+			got=$(md5sum < $tf)
+			ec_reactivate_ost $o
+			[[ "$got" == "$sum" ]] ||
+				error "'$layout' degraded OST$o: $got != $sum"
+		done
+	done
+}
+run_test 303 "EC recovery when e_start is not a multiple of stripe width"
+
+test_304() {
+	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local ids data_id parity_id dosts costs sum got o
+	local -A seen
+
+	stack_trap "rm -f $tf"
+
+	# e_start=3M, -S 2M, -c 4 --ec 2+2: first raidset has stripe 0
+	# wholly before the component ([0, 2M)) and stripe 1 live only in
+	# [3M, 4M). Taking stripe 1 down forces recovery to zero-fill
+	# stripe 0 and to use the parity slot after its 1M skip.
+	$LFS setstripe -E 3M -c 1 -S 1M -E -1 -S 2M -c 4 --ec 2+2 $tf ||
+		error "setstripe e_start=3M -S 2M -c 4 --ec 2+2 failed"
+
+	ids=($($LFS getstripe $tf | awk '/lcme_id/ { print $2 }'))
+	verify_comp_count $tf 4
+	data_id=${ids[1]}
+	parity_id=${ids[3]}
+	verify_comp_parity $tf $parity_id
+	verify_comp_extent $tf $data_id 3145728 EOF
+	verify_comp_extent $tf $parity_id 3145728 EOF
+
+	# Non-zero in [0, e_start) so a mistaken prior-component read
+	# cannot hide behind a hole. The write instantiates the data
+	# component and resync the parity component.
+	dd if=/dev/urandom of=$tf bs=1M count=8 conv=fsync ||
+		error "write 8M failed"
+	$LFS mirror resync $tf || error "resync failed"
+	$LFS mirror verify $tf || error "verify failed"
+
+	o=$($LFS getstripe -I$data_id $tf |
+		awk '/lmm_stripe_count:/ { print $2 }')
+	(( o == 4 )) || error "data stripes $o != 4"
+
+	# Like test_303: only the EC component's own raidset must keep
+	# data and parity on distinct OSTs. Prefix or other-set parity
+	# may share (extents do not overlap / multi-set reuse).
+	dosts=$(get_osts_by_comp $tf $data_id 0 2)
+	costs=$(get_osts_by_comp $tf $parity_id 0 2)
+	seen=()
+	for o in $dosts $costs; do
+		seen[$o]=1
+	done
+	(( ${#seen[@]} == 4 )) || error "raidset 0: [$dosts] + [$costs]"
+
+	# EC extent only: prefix may share an OST with EC data.
+	sum=$(dd if=$tf bs=1M skip=3 count=5 2>/dev/null | md5sum)
+	o=$(get_osts_by_comp $tf $data_id 1 1)
+	ec_deactivate_ost $o
+	cancel_lru_locks osc
+	got=$(dd if=$tf bs=1M skip=3 count=5 2>/dev/null | md5sum)
+	ec_reactivate_ost $o
+	[[ "$got" == "$sum" ]] ||
+		error "degraded OST$o: $got != $sum"
+}
+run_test 304 "EC unaligned e_start: zero-fill and parity slot skip"
+
+test_305() {
+	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local c wk tk pk layout sum expect_sz prefix_bytes tail sz bytes got
+	# write_KiB truncate_KiB layout
+	local cases=(
+		# expand to a raidset boundary
+		"512 1024 -S 1M -c 4 --ec 2+2"
+		# shrink before the second component e_start
+		"4096 1024 -E 2M -S 1M -c 2 --ec 2+1 -E -1 -S 1M -c 4 --ec 2+2"
+		# expand to a data stripe_width boundary
+		"3584 4096 -S 1M -c 4 --ec 2+2"
+	)
+
+	stack_trap "rm -f $tf"
+	for c in "${cases[@]}"; do
+		read -r wk tk layout <<< "$c"
+		pk=$((wk < tk ? wk : tk))
+		echo "write ${wk}K, truncate to ${tk}K: $layout"
+
+		rm -f $tf
+		$LFS setstripe $layout $tf || error "setstripe $layout failed"
+		dd if=/dev/urandom of=$tf bs=512K count=$((wk / 512)) \
+			conv=fsync || error "write ${wk}K failed"
+		$LFS mirror resync $tf || error "resync failed"
+		sum=$(head -c $((pk * 1024)) $tf | md5sum | awk '{print $1}')
+
+		expect_sz=$((tk * 1024))
+		prefix_bytes=$((pk * 1024))
+		tail=$((expect_sz - prefix_bytes))
+		$TRUNCATE $tf $expect_sz ||
+			error "truncate to ${tk}K failed"
+
+		sz=$(stat -c%s $tf)
+		(( sz == expect_sz )) ||
+			error "size $sz != $expect_sz after truncate"
+		bytes=$(cat $tf | wc -c)
+		(( bytes == expect_sz )) ||
+			error "read $bytes bytes, expected $expect_sz"
+		got=$(head -c $prefix_bytes $tf | md5sum | awk '{print $1}')
+		[[ "$got" == "$sum" ]] ||
+			error "prefix changed by truncate"
+		cmp -s -i $prefix_bytes:0 -n $tail $tf /dev/zero ||
+			error "extended tail is not zeros"
+		$LFS mirror resync $tf ||
+			error "resync after truncate failed"
+		$LFS mirror verify $tf ||
+			error "verify after truncate failed"
+	done
+}
+run_test 305 "EC truncate at raidset and component boundaries"
+
+test_306() {
+	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local pa=${TESTNAME}_a
+	local pb=${TESTNAME}_b
+	local ids a_ost b_ost sum got
+
+	# The first component [0, 5M) has 2 stripes, so its last raid set
+	# [4M, 6M) runs past its e_end into the second component, whose raid
+	# set [4M, 8M) starts before its e_start 5M and ends after 6M.  A
+	# degraded read of [4.5M, 5M) is widened to [4M, 6M), but must not
+	# rebuild [5.5M, 6M) of the second component without its data in
+	# [6M, 8M).  Separate pools keep the two raid sets on separate OSTs.
+	create_pool $FSNAME.$pa || error "create pool $pa failed"
+	stack_trap destroy_test_pools
+	pool_add_targets $pa 0 2 || error "add OST0-2 to pool $pa failed"
+	create_pool $FSNAME.$pb || error "create pool $pb failed"
+	pool_add_targets $pb 3 7 || error "add OST3-7 to pool $pb failed"
+
+	stack_trap "rm -f $tf"
+	$LFS setstripe -E 5M -S 1M -c 2 --ec 2+1 -p $pa \
+		-E -1 -S 1M -c 4 --ec 4+1 -p $pb $tf ||
+		error "setstripe failed"
+	dd if=/dev/urandom of=$tf bs=1M count=8 conv=fsync ||
+		error "write 8M failed"
+	$LFS mirror resync $tf || error "resync failed"
+	$LFS mirror verify $tf || error "verify failed"
+	sum=$(dd if=$tf bs=512K skip=11 count=1 status=none | md5sum)
+
+	ids=($($LFS getstripe $tf | awk '/lcme_id/ { print $2 }'))
+	a_ost=$(get_osts_by_comp $tf ${ids[0]} 0 1)
+	b_ost=$(get_osts_by_comp $tf ${ids[1]} 1 1)
+	ec_deactivate_ost $a_ost
+	ec_deactivate_ost $b_ost
+	dd if=$tf of=/dev/null bs=512K skip=9 count=1 ||
+		error "read of [4.5M, 5M) with OST$a_ost, OST$b_ost down failed"
+	# read [5.5M, 6M) with both OSTs still down: from the cache if the
+	# read above left pages there, else rebuilt from parity
+	got=$(dd if=$tf bs=512K skip=11 count=1 status=none | md5sum)
+	[[ "$got" == "$sum" ]] ||
+		error "[5.5M, 6M) after a degraded read of [4.5M, 5M) differs"
+}
+run_test 306 "EC read ending before the raid set of the next component"
 
 test_310() {
 	(( OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs"

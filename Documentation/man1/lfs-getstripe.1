@@ -1,4 +1,4 @@
-.TH LFS-GETSTRIPE 1 2026-08-15 Lustre "Lustre User Utilities"
+.TH LFS-GETSTRIPE 1 2026-11-01 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-getstripe \- Lustre client command to print layout parameters of a file
 .SH SYNOPSIS
@@ -219,6 +219,28 @@ Files that store the first data component on the MDT holding the inode.
 .B overstriped
 Files have more than one stripe per OST for improved lock scalability.
 .TP
+.B parity
+Erasure-coded parity component
+.RB ( LOV_PATTERN_PARITY ).
+The
+.B lmm_objects
+list is in RAID0 order: parity stripe 0 of RAID set 0, then parity
+stripe 1 of RAID set 0, and so on.
+.B lcme_cstripe_count
+is the number of parity stripes
+.I p
+per RAID set, so
+.I stripe_count
+is
+.I nraidsets
+times
+.IR p .
+.BR lfs-mirror-read (1)
+dumps this RAID0 of all parity stripes; the kernel I/O path is
+RAID10 (the
+.I p
+parity stripes of one RAID set share one offset).
+.TP
 .B raid0
 Traditional Lustre RAID-0 striping format.
 .TP
@@ -437,5 +459,6 @@ filesystem package since release 0.10.0
 .BR lfs (1),
 .BR lfs-find (1),
 .BR lfs-getdirstripe (1),
+.BR lfs-mirror-read (1),
 .BR lfs-setstripe (1),
 .BR lustre (7)

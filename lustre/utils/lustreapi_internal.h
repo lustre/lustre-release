@@ -189,6 +189,15 @@ int get_lmd_info_fd(const char *path, int parentfd, int dirfd,
 int lov_comp_md_size(struct lov_comp_md_v1 *lcm);
 bool lov_comp_md_is_ec(const struct lov_comp_md_v1 *comp_v1);
 
+/*
+ * For 'lfs mirror read' RAID0 dump of a parity mirror only (not public).
+ * Fold concatenated dump @pos into STRIPE scope @stripe and RAID10 @ec_pos.
+ */
+int llapi_layout_parity_pos_to_io(struct llapi_layout *layout,
+				  uint32_t mirror_id, uint64_t data_size,
+				  uint64_t pos, unsigned int *stripe,
+				  uint64_t *ec_pos, uint64_t *chunk);
+
 int open_parent(const char *path);
 
 static inline bool is_mgs(void)

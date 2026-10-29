@@ -2965,29 +2965,8 @@ static int lod_declare_layout_add(const struct lu_env *env,
 
 		/* set parity component pattern */
 		if (lod_comp->llc_flags & LCME_FL_PARITY)
-			lod_comp->llc_pattern |= LOV_PATTERN_PARITY;
-		/**
-		 * limit stripe count so that it's less than/equal to
-		 * extent_size / stripe_size.
-		 *
-		 * Note: extension size reused llc_stripe_size field and
-		 * uninstantiated component could be defined with
-		 * extent_start == extent_end as extension component will
-		 * expand it later.
-		 */
-		if (!(lod_comp->llc_flags & LCME_FL_EXTENSION) &&
-		    (lod_comp_inited(lod_comp) ||
-		     lod_comp->llc_extent.e_start <
-		     lod_comp->llc_extent.e_end) &&
-		    !(lod_comp->llc_stripe_count <= LOV_ALL_STRIPES &&
-		      lod_comp->llc_stripe_count >= LOV_ALL_STRIPES_WIDE) &&
-		    ext->e_end != OBD_OBJECT_EOF &&
-		    (__u64)(lod_comp->llc_stripe_count *
-			    lod_comp->llc_stripe_size) >
-		    (ext->e_end - ext->e_start))
-			lod_comp->llc_stripe_count =
-				DIV_ROUND_UP(ext->e_end - ext->e_start,
-					     lod_comp->llc_stripe_size);
+			lod_comp_set_ec_pattern(&lod_comp->llc_pattern);
+		lod_comp_shrink_to_extent(lod_comp);
 		lod_adjust_stripe_info(lod_comp, desc, 0);
 
 		if (v1->lmm_magic == LOV_USER_MAGIC_V3) {
@@ -5697,7 +5676,7 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 
 		/* set parity component pattern */
 		if (want_composite && (llc->llc_flags & LCME_FL_PARITY))
-			llc->llc_pattern |= LOV_PATTERN_PARITY;
+			lod_comp_set_ec_pattern(&llc->llc_pattern);
 
 		if (append_stripe_count != 0)
 			llc->llc_stripe_count = append_stripe_count;

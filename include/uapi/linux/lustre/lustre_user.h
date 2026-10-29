@@ -29,6 +29,8 @@
 # define __USE_XOPEN2K8  1
 # define FILEID_LUSTRE 0x97 /* for name_to_handle_at() (and llapi_fd2fid()) */
 # define U32_MAX	UINT32_MAX
+#else
+# include <linux/math64.h>
 #endif /* !__KERNEL__ */
 
 #include <linux/fs.h>
@@ -852,6 +854,7 @@ enum lov_pattern {
 	LOV_PATTERN_NONE =		0x000,
 	LOV_PATTERN_RAID0 =		0x001,
 	LOV_PATTERN_RAID1 =		0x002,
+	/* EC: like RAID10 - RAID0 across raidsets, one offset within */
 	LOV_PATTERN_PARITY	 =	0x004,
 	LOV_PATTERN_MDT =		0x100,
 	LOV_PATTERN_OVERSTRIPING =	0x200,
@@ -882,10 +885,14 @@ static inline bool lov_pattern_supported(enum lov_pattern pattern)
 	    pattern_base == (LOV_PATTERN_RAID0 | LOV_PATTERN_COMPRESS))
 		return true;
 
-	/* raid0 could be combined with overstriping and/or parity,
-	 * not others at least for now
+	/* PARITY stands alone (like RAID10). RAID0|PARITY is not kept.
+	 * raid0 may combine with overstriping; PARITY may too.
 	 */
-	pattern_base &= ~(LOV_PATTERN_OVERSTRIPING | LOV_PATTERN_PARITY);
+	if (pattern_base == LOV_PATTERN_PARITY ||
+	    pattern_base == (LOV_PATTERN_PARITY | LOV_PATTERN_OVERSTRIPING))
+		return true;
+
+	pattern_base &= ~LOV_PATTERN_OVERSTRIPING;
 	return pattern_base == LOV_PATTERN_RAID0;
 }
 
@@ -3402,6 +3409,385 @@ ec_split_stripes(int total, int suggested, struct ec_split_comp *sc)
 	sc->esc_k0 = total / num_buckets + 1;  /* bs + 1 */
 	sc->esc_n1 = num_buckets - sc->esc_n0; /* nb - r */
 	sc->esc_k1 = total / num_buckets;      /* bs     */
+}
+
+/**
+ * ec_parity_width() - Parity-mirror bytes of one stripe set
+ * @raidset_count: raidsets in one stripe set
+ * @stripe_size: stripe size
+ *
+ * One @stripe_size per raidset, the p parities of a raidset share it.
+ */
+static inline __u64 ec_parity_width(__u64 raidset_count, __u64 stripe_size)
+{
+	return raidset_count * stripe_size;
+}
+
+/* number of raid sets in one row */
+static inline unsigned int ec_raidset_count(const struct ec_split_comp *split)
+{
+	return split->esc_n0 + split->esc_n1;
+}
+
+/**
+ * ec_raidset_first() - First data object of a raid set
+ * @split: split from ec_split_stripes()
+ * @set: raid set in the row
+ * @k: data objects in @set (output, may be NULL)
+ *
+ * Return: index in the row of the first data object of @set.
+ */
+static inline unsigned int ec_raidset_first(const struct ec_split_comp *split,
+					    unsigned int set, unsigned int *k)
+{
+	unsigned int n0 = split->esc_n0;
+
+	if (set < n0) {
+		if (k)
+			*k = split->esc_k0;
+		return set * split->esc_k0;
+	}
+	if (k)
+		*k = split->esc_k1;
+	return n0 * split->esc_k0 + (set - n0) * split->esc_k1;
+}
+
+/**
+ * ec_stripe_to_raidset() - Map a stripe in a row to its raid set
+ * @split: split from ec_split_stripes()
+ * @stripe_in_row: data stripe index in the row (0..stripe_count-1)
+ * @first: first data stripe of the raid set (output, may be NULL)
+ * @k: data stripes in the raid set (output, may be NULL)
+ *
+ * The first esc_n0 raid sets have esc_k0 stripes, the rest esc_k1. A split
+ * without raid sets (all zero) gives raid set 0 with no stripes.
+ *
+ * Return: raid set in the row that @stripe_in_row belongs to.
+ */
+static inline unsigned int
+ec_stripe_to_raidset(const struct ec_split_comp *split,
+		     unsigned int stripe_in_row, unsigned int *first,
+		     unsigned int *k)
+{
+	unsigned int k0_end = split->esc_n0 * split->esc_k0;
+	unsigned int set;
+	unsigned int start;
+
+	if (stripe_in_row < k0_end) {
+		set = stripe_in_row / split->esc_k0;
+	} else if (split->esc_k1) {
+		set = split->esc_n0 + (stripe_in_row - k0_end) / split->esc_k1;
+	} else {
+		if (first)
+			*first = 0;
+		if (k)
+			*k = 0;
+		return 0;
+	}
+
+	start = ec_raidset_first(split, set, k);
+	if (first)
+		*first = start;
+	return set;
+}
+
+/* 64-bit division of the parity placement helpers, for 32-bit kernels */
+#ifdef __KERNEL__
+static inline __u64 ec_div64(__u64 n, __u64 d)
+{
+	return div64_u64(n, d);
+}
+
+static inline __u64 ec_rem64(__u64 n, __u64 d)
+{
+	__u64 rem;
+
+	div64_u64_rem(n, d, &rem);
+	return rem;
+}
+#else
+static inline __u64 ec_div64(__u64 n, __u64 d)
+{
+	return n / d;
+}
+
+static inline __u64 ec_rem64(__u64 n, __u64 d)
+{
+	return n % d;
+}
+#endif
+
+/**
+ * ec_off_to_raidset_offset() - Absolute start offset of the raid set of @off
+ * @split: split of @stripe_count from ec_split_stripes()
+ * @stripe_count: data stripe count
+ * @stripe_size: stripe size
+ * @off: data file offset
+ * @raidset: raid set in the row (output, may be NULL)
+ * @k: data stripes in the raid set (output, may be NULL)
+ *
+ * Maps @off to the raid set that holds it, then to the absolute file offset
+ * of that set's first data stripe: (global stripe of first) * @stripe_size.
+ * RAID0 places data rows from file offset 0, so in the row of e_start the
+ * raid set may start before e_start.
+ *
+ * Return: absolute file offset of the first data stripe of the raid set.
+ */
+static inline __u64
+ec_off_to_raidset_offset(const struct ec_split_comp *split, __u32 stripe_count,
+			 __u32 stripe_size, __u64 off, unsigned int *raidset,
+			 unsigned int *k)
+{
+	__u64 stripe = ec_div64(off, stripe_size);
+	unsigned int stripe_in_row = ec_rem64(stripe, stripe_count);
+	unsigned int first;
+	unsigned int rs;
+
+	rs = ec_stripe_to_raidset(split, stripe_in_row, &first, k);
+	if (raidset)
+		*raidset = rs;
+	return (stripe - stripe_in_row + first) * stripe_size;
+}
+
+/**
+ * struct ec_parity_geom - Placement of the parity of one EC component
+ * @epg_split: raid-set split of epg_stripe_count from ec_split_stripes()
+ * @epg_e_start: extent start of the data and parity components
+ * @epg_origin: parity origin O, the file offset of parity slot 0
+ * @epg_stripe_count: data stripe count c
+ * @epg_stripe_size: stripe size
+ * @epg_x0: zero prefix of the e_start raid-set slot; non-zero only when
+ *	e_start falls in that set's last data object (then e_start %%
+ *	stripe_size)
+ * @epg_row0: data row of parity slot 0, the row of e_start, or 0 when every
+ *	raid set has one data stripe
+ *
+ * Each raid set uses one stripe-size slot per data row, counted from
+ * epg_origin, so slot %% ec_raidset_count() is the raid set. Raid sets of
+ * the first row that end before e_start hold only zero data, as do the
+ * first e_start %% stripe_size bytes of the raid set of e_start when
+ * e_start is in its last data object. That parity is zero and is not
+ * stored: O moves back over it, below e_start. When every raid set has one
+ * data stripe, the parity is not packed and rows and O count from file
+ * offset 0, as RAID0 does. See Documentation/ec.txt.
+ */
+struct ec_parity_geom {
+	struct ec_split_comp	epg_split;
+	__u64			epg_e_start;
+	__u64			epg_origin;
+	__u32			epg_stripe_count;
+	__u32			epg_stripe_size;
+	__u32			epg_x0;
+	__u64			epg_row0;
+};
+
+/**
+ * ec_parity_geom_init() - Compute the parity placement of a component
+ * @g: geometry (output)
+ * @stripe_count: data stripe count
+ * @dstripe_count: k, data objects per raid set
+ * @stripe_size: stripe size
+ * @e_start: extent start of the data and parity components
+ *
+ * Without raid sets (@stripe_count, @dstripe_count or @stripe_size zero)
+ * the origin is @e_start. When every raid set has one data stripe the
+ * origin is 0.
+ */
+static inline void ec_parity_geom_init(struct ec_parity_geom *g,
+				       __u32 stripe_count, __u32 dstripe_count,
+				       __u32 stripe_size, __u64 e_start)
+{
+	unsigned int stripe_in_row;
+	unsigned int first;
+	unsigned int raidset;
+	unsigned int k;
+
+	g->epg_e_start = e_start;
+	g->epg_origin = e_start;
+	g->epg_stripe_count = stripe_count;
+	g->epg_stripe_size = stripe_size;
+	g->epg_x0 = 0;
+	g->epg_row0 = 0;
+	if (!stripe_count || !dstripe_count || !stripe_size) {
+		g->epg_split.esc_n0 = 0;
+		g->epg_split.esc_k0 = 0;
+		g->epg_split.esc_n1 = 0;
+		g->epg_split.esc_k1 = 0;
+		return;
+	}
+
+	ec_split_stripes(stripe_count, dstripe_count, &g->epg_split);
+	stripe_in_row = ec_rem64(ec_div64(e_start, stripe_size), stripe_count);
+	raidset = ec_stripe_to_raidset(&g->epg_split, stripe_in_row, &first,
+				       &k);
+	/*
+	 * A raid set stacks its k data objects vertically onto one parity
+	 * slot: byte x of each object folds into P[x] (x = off % stripe_size).
+	 * Example: 1 raid set of k = 4 objects, stripe_size = 1M:
+	 *
+	 * e_start = 1.5M (in obj1, rem = 512K) -> epg_x0 = 0:
+	 *   slot x:        0 ----------- 512K ------------ 1M
+	 *   obj0 [0,1M)    | 000000000000 | 000000000000 |  (< 1.5M, zero)
+	 *   obj1 [1M,2M)   | 000000000000 | DATA........ |  (starts at 1.5M)
+	 *   obj2 [2M,3M)   | DATA........ | DATA........ |  (>= 1.5M, data)
+	 *   obj3 [3M,4M)   | DATA........ | DATA........ |  (>= 1.5M, data)
+	 *                    ^^^^^^^^^^^^
+	 *   P[0,512K) still encodes obj2 and obj3, so it cannot be skipped.
+	 *
+	 * e_start = 3.5M (in last obj3, rem = 512K) -> epg_x0 = 512K:
+	 *   slot x:        0 ----------- 512K ------------ 1M
+	 *   obj0 [0,1M)    | 000000000000 | 000000000000 |
+	 *   obj1 [1M,2M)   | 000000000000 | 000000000000 |
+	 *   obj2 [2M,3M)   | 000000000000 | 000000000000 |
+	 *   obj3 [3M,4M)   | 000000000000 | DATA........ |  (starts at 3.5M)
+	 *                    ^^^^^^^^^^^^
+	 *   All k layers are zero on [0,512K), so P[0,512K) is all zero and
+	 *   omitted by shifting origin back by epg_x0.
+	 */
+	if (k && stripe_in_row == first + k - 1)
+		g->epg_x0 = ec_rem64(e_start, stripe_size);
+	g->epg_origin = e_start - g->epg_x0 - (__u64)raidset * stripe_size;
+	g->epg_row0 = ec_div64(e_start, (__u64)stripe_count * stripe_size);
+	/*
+	 * With one data stripe in every raid set (1+N, or a single stripe)
+	 * there is one parity slot per data stripe and nothing to pack, so
+	 * count rows and the origin from file offset 0, as RAID0 does: each
+	 * parity object is then a copy of its data object at the same object
+	 * offsets, so it can stand in for the data object.
+	 */
+	if (g->epg_split.esc_k0 == 1 && !g->epg_split.esc_n1) {
+		g->epg_origin = 0;
+		g->epg_row0 = 0;
+	}
+}
+
+/**
+ * ec_data_to_parity() - Map a data offset to its offset in the parity comp
+ * @g: geometry from ec_parity_geom_init()
+ * @off: data file offset in the component, or in the raid set of e_start
+ *	 before it
+ * @poff: offset of the parity of @off in the parity component (output)
+ *
+ * RAID0 places data rows from file offset 0, so the row and data object of
+ * @off come from the absolute offset. Parity slots are counted from
+ * epg_origin, starting with data row epg_row0:
+ *
+ *   poff = origin
+ *        + ((off/row_width - epg_row0) * nraidsets + raidset)
+ *          * stripe_size
+ *        + off % stripe_size
+ *
+ * where row_width is c * stripe_size. The p parity objects of a raid set
+ * share that @poff (object index raidset * p + pi is chosen by the caller).
+ *
+ * Return: raid set in the row of @off.
+ */
+static inline unsigned int ec_data_to_parity(const struct ec_parity_geom *g,
+					     __u64 off, __u64 *poff)
+{
+	__u32 stripe_size = g->epg_stripe_size;
+	__u64 row_width = (__u64)g->epg_stripe_count * stripe_size;
+	unsigned int nraidsets = ec_raidset_count(&g->epg_split);
+	unsigned int raidset;
+
+	raidset = ec_stripe_to_raidset(&g->epg_split,
+				       ec_rem64(ec_div64(off, stripe_size),
+						g->epg_stripe_count),
+				       NULL, NULL);
+	*poff = g->epg_origin +
+		((ec_div64(off, row_width) - g->epg_row0) * nraidsets +
+		 raidset) * stripe_size + ec_rem64(off, stripe_size);
+	return raidset;
+}
+
+/**
+ * ec_data_to_parity_row_end() - Exclusive end of the parity row of a data off
+ * @g: geometry from ec_parity_geom_init(); must have raid sets
+ * @off: data file offset, in the component
+ *
+ * Maps @off through ec_data_to_parity(), then rounds up to the next
+ * parity-row boundary counted from the origin. A parity row is
+ * ec_parity_width() bytes (nraidsets * stripe_size), not the data row
+ * width c * stripe_size.
+ *
+ * Return: absolute exclusive-end offset in the parity component.
+ */
+static inline __u64
+ec_data_to_parity_row_end(const struct ec_parity_geom *g, __u64 off)
+{
+	unsigned int nraidsets = ec_raidset_count(&g->epg_split);
+	__u64 parity_row_width = ec_parity_width(nraidsets,
+						 g->epg_stripe_size);
+	__u64 poff;
+
+	ec_data_to_parity(g, off, &poff);
+	return g->epg_origin +
+	       (ec_div64(poff - g->epg_origin, parity_row_width) + 1) *
+	       parity_row_width;
+}
+
+/**
+ * ec_parity_to_data() - Map a parity offset to the data of its raid set
+ * @g: geometry from ec_parity_geom_init()
+ * @poff: offset in the parity component, not before the origin
+ * @doff: file offset of the first data object of that raid set (output);
+ *	  in the row of e_start this may be before e_start
+ * @k: data objects in that raid set (output, may be NULL)
+ *
+ * Inverse of ec_data_to_parity() for the start of a raid set.
+ *
+ * Return: raid set in the row.
+ */
+static inline unsigned int ec_parity_to_data(const struct ec_parity_geom *g,
+					     __u64 poff, __u64 *doff,
+					     unsigned int *k)
+{
+	__u32 stripe_size = g->epg_stripe_size;
+	__u64 row_width = (__u64)g->epg_stripe_count * stripe_size;
+	__u64 slot = ec_div64(poff - g->epg_origin, stripe_size);
+	unsigned int nraidsets = ec_raidset_count(&g->epg_split);
+	unsigned int raidset = ec_rem64(slot, nraidsets);
+	__u64 first = ec_raidset_first(&g->epg_split, raidset, k);
+
+	*doff = (g->epg_row0 + ec_div64(slot, nraidsets)) * row_width +
+		first * stripe_size;
+	return raidset;
+}
+
+/**
+ * ec_parity_fits() - Check that the parity of a component fits its extent
+ * @g: geometry from ec_parity_geom_init()
+ * @e_end: extent end of the data and parity components, a multiple of the
+ *	   stripe size or LUSTRE_EOF
+ *
+ * The parity slot for the raid set of e_start spans
+ * [e_start - epg_x0, e_start - epg_x0 + stripe_size):
+ * - When e_start is stripe-aligned, or lies in the last data object of its
+ *   raid set (epg_x0 = e_start % stripe_size), this slot ends right at the
+ *   end of e_start's stripe, which is always <= @e_end.
+ * - When e_start is unaligned and earlier in its raid set, later data
+ *   stripes in that raid set have data at stripe offsets
+ *   [0, e_start % stripe_size), so those leading parity bytes cannot be
+ *   omitted (epg_x0 = 0). The full stripe_size slot starts at e_start and
+ *   extends to e_start + stripe_size, past the end of e_start's stripe.
+ *
+ * Since every subsequent row uses at least as much data space as parity
+ * space, parity overflows [e_start, @e_end) only in this second case when
+ * @e_end < e_start + stripe_size (i.e. the component ends at the end of
+ * e_start's stripe, before the first parity slot finishes).
+ *
+ * Return: true if the parity of [e_start, @e_end) ends by @e_end.
+ */
+static inline bool ec_parity_fits(const struct ec_parity_geom *g, __u64 e_end)
+{
+	__u64 e_start = g->epg_e_start;
+
+	if (e_end == LUSTRE_EOF || e_end <= e_start || !g->epg_stripe_size ||
+	    !ec_raidset_count(&g->epg_split))
+		return true;
+	if (g->epg_x0 || ec_rem64(e_start, g->epg_stripe_size) == 0)
+		return true;
+	return e_end >= e_start + g->epg_stripe_size;
 }
 
 #define GSSIAM_DOWNCALL_MAGIC 0x1A2B3C4D

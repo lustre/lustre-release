@@ -1,4 +1,4 @@
-.TH LFS-MIRROR-READ 1 2024-08-20 Lustre "Lustre User Utilities"
+.TH LFS-MIRROR-READ 1 2026-11-01 Lustre "Lustre User Utilities"
 .SH NAME
 lfs-mirror-read \- read a mirror's content of a mirrored file
 .SH SYNOPSIS
@@ -20,6 +20,23 @@ If an
 .I OUTPUT_FILE
 is specified, the content will be written to the file,
 otherwise the standard output stream will be used.
+.P
+For an erasure-coded parity mirror the dump is the concatenation of
+each initialized parity component's parity stripes, cut at that
+component's
+.IR e_end ,
+in the RAID0 order
+.BR lfs-getstripe (1)
+lists them (parity stripe 0 of RAID set 0, then parity stripe 1 of
+that set, and so on).
+Each component uses its own
+.IR p ,
+so the dump is not the kernel's RAID10 address space, and a component
+whose extent is not a multiple of the data stripe set does not dump a
+full last row of stripe sets.
+A component's first and last slots may also be shorter than
+.IR stripe_size .
+No extra option is needed to pick a parity stripe.
 .SH OPTIONS
 .TP
 .BR -N ", " --mirror-id " \fIMIRROR_ID"

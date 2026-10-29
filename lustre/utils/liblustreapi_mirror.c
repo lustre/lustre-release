@@ -127,7 +127,7 @@ out:
 }
 
 /**
- * llapi_mirror_read() - Read data from a specified mirror with @id.
+ * llapi_mirror_read() - Read data from a specified non-parity mirror with @id.
  * @fd: file descriptor, should be opened with O_DIRECT
  * @id: mirror id to be read from
  * @buf: read buffer
@@ -137,6 +137,9 @@ out:
  * Read data from a specified mirror with @id. This function won't read
  * partial read result; either file end is reached, or number of @count bytes
  * is read, or an error will be returned.
+ *
+ * This is the non-parity path: it does not fetch or inspect the layout.
+ * 'lfs mirror read' of a parity mirror uses a local RAID0 dump helper.
  *
  * Return:
  * * %>=0 Number of bytes has been read

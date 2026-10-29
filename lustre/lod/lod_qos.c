@@ -516,17 +516,6 @@ out:
 }
 
 /**
- * ec_raidset_count() - Number of raid sets in an EC split.
- * @sc: split information
- *
- * Return: the total number of raid sets.
- */
-static inline int ec_raidset_count(const struct ec_split_comp *sc)
-{
-	return sc->esc_n0 + sc->esc_n1;
-}
-
-/**
  * lod_stripe_count_min() - Calculate a minimum acceptable stripe count.
  * @lod_comp: the component we are allocating
  * @flags: 0 or LOD_USES_DEFAULT_STRIPE (plain components only)
@@ -986,18 +975,12 @@ static int lod_ec_data_range_for_parity(struct ec_split_comp *sc,
 					struct lod_layout_component *parity_comp,
 					int idx, int *start, int *num)
 {
+	unsigned int k;
 	int cur_rs;
 
 	cur_rs = idx / parity_comp->llc_cstripe_count;
-
-	if (cur_rs < sc->esc_n0) {
-		*start = cur_rs * sc->esc_k0;
-		*num = sc->esc_k0;
-	} else {
-		*start = (sc->esc_n0 * sc->esc_k0) +
-		  (cur_rs - sc->esc_n0) * sc->esc_k1;
-		*num = sc->esc_k1;
-	}
+	*start = ec_raidset_first(sc, cur_rs, &k);
+	*num = k;
 
 	return cur_rs;
 }
@@ -1201,9 +1184,8 @@ static bool lod_ec_check_data_usable(struct lod_object *lo,
  * @start/@num both refer to @lod_comp itself (data or parity, whichever
  * is passed in) - not to a different, linked component.
  *
- * For a data component the split may mix esc_k0 and esc_k1 sized sets.
- * Map via the k0 region length, then the k1 region - not nfound / esc_k0,
- * which is only valid while still inside the k0 sets.
+ * For a data component the split may mix esc_k0 and esc_k1 sized sets,
+ * see ec_stripe_to_raidset().
  *
  * Parity components have one fixed-size block of llc_cstripe_count stripes
  * per raid set, so a simple division is enough.
@@ -1214,32 +1196,18 @@ static int lod_ec_comp_raidset_range(struct lod_layout_component *lod_comp,
 				    struct ec_split_comp *sc, __u32 nfound,
 				    int *start, int *num)
 {
+	unsigned int first;
+	unsigned int k;
 	int cur_rs;
-	int k0_end;
 
 	if (!(lod_comp->llc_flags & LCME_FL_PARITY)) {
 		/*
-		 * Data: sets are [0 .. n0) of size k0, then [n0 .. n0+n1)
-		 * of size k1.  --ec 3+2 -C 7 -> n0=1 k0=3, n1=2 k1=2 so
-		 * sets are [0-2] [3-4] [5-6]; nfound=5 is set 2, not set 1.
+		 * Data: --ec 3+2 -C 7 -> n0=1 k0=3, n1=2 k1=2 so sets are
+		 * [0-2] [3-4] [5-6]; nfound=5 is set 2, not set 1.
 		 */
-		k0_end = sc->esc_n0 * sc->esc_k0;
-		if (sc->esc_k0 > 0 && nfound < k0_end) {
-			cur_rs = nfound / sc->esc_k0;
-			*start = cur_rs * sc->esc_k0;
-			*num = sc->esc_k0;
-		} else if (sc->esc_k1 > 0) {
-			cur_rs = sc->esc_n0 +
-				 (nfound - k0_end) / sc->esc_k1;
-			*start = k0_end +
-				 (cur_rs - sc->esc_n0) * sc->esc_k1;
-			*num = sc->esc_k1;
-		} else {
-			/* Degenerate / not yet split geometry */
-			cur_rs = 0;
-			*start = 0;
-			*num = 0;
-		}
+		cur_rs = ec_stripe_to_raidset(sc, nfound, &first, &k);
+		*start = first;
+		*num = k;
 	} else {
 		/* Parity: every raid set has llc_cstripe_count stripes */
 		cur_rs = nfound / lod_comp->llc_cstripe_count;
@@ -3609,31 +3577,9 @@ int lod_use_defined_striping(const struct lu_env *env,
 
 		/* set parity component pattern */
 		if (lod_comp->llc_flags & LCME_FL_PARITY)
-			lod_comp->llc_pattern |= LOV_PATTERN_PARITY;
-		/**
-		 * limit stripe count so that it's less than/equal to
-		 * extent_size / stripe_size.
-		 *
-		 * Note: extension size reused llc_stripe_size field and
-		 * uninstantiated component could be defined with
-		 * extent_start == extent_end as extension component will
-		 * expand it later.
-		 */
-		if (mo->ldo_is_composite &&
-		    !(lod_comp->llc_flags & LCME_FL_EXTENSION) &&
-		    (lod_comp_inited(lod_comp) ||
-		     lod_comp->llc_extent.e_start <
-						lod_comp->llc_extent.e_end) &&
-		    !(lod_comp->llc_stripe_count <= LOV_ALL_STRIPES &&
-		      lod_comp->llc_stripe_count >= LOV_ALL_STRIPES_WIDE) &&
-		    lod_comp->llc_extent.e_end != OBD_OBJECT_EOF &&
-		    (__u64)lod_comp->llc_stripe_count *
-			   lod_comp->llc_stripe_size >
-		    (lod_comp->llc_extent.e_end - lod_comp->llc_extent.e_start))
-			lod_comp->llc_stripe_count =
-				DIV_ROUND_UP(lod_comp->llc_extent.e_end -
-					     lod_comp->llc_extent.e_start,
-					     lod_comp->llc_stripe_size);
+			lod_comp_set_ec_pattern(&lod_comp->llc_pattern);
+		if (mo->ldo_is_composite)
+			lod_comp_shrink_to_extent(lod_comp);
 		lod_comp->llc_layout_gen = le16_to_cpu(v1->lmm_layout_gen);
 		/**
 		 * The stripe_offset of an uninit-ed component is stored in
@@ -3920,30 +3866,9 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 		}
 		/* set parity component pattern */
 		if (lod_comp->llc_flags & LCME_FL_PARITY)
-			lod_comp->llc_pattern |= LOV_PATTERN_PARITY;
-		/**
-		 * limit stripe count so that it's less than/equal to
-		 * extent_size / stripe_size.
-		 *
-		 * Note: extension size reused llc_stripe_size field and
-		 * uninstantiated component could be defined with
-		 * extent_start == extent_end as extension component will
-		 * expand it later.
-		 */
-		if (lo->ldo_is_composite &&
-		    !(lod_comp->llc_flags & LCME_FL_EXTENSION) &&
-		    !(lod_comp->llc_stripe_count <= LOV_ALL_STRIPES &&
-		      lod_comp->llc_stripe_count >= LOV_ALL_STRIPES_WIDE) &&
-		    (lod_comp_inited(lod_comp) ||
-		     lod_comp->llc_extent.e_start <
-						lod_comp->llc_extent.e_end) &&
-		    lod_comp->llc_extent.e_end != OBD_OBJECT_EOF &&
-		    lod_comp->llc_stripe_count * lod_comp->llc_stripe_size >
-		    (lod_comp->llc_extent.e_end - lod_comp->llc_extent.e_start))
-			lod_comp->llc_stripe_count =
-				DIV_ROUND_UP(lod_comp->llc_extent.e_end -
-					     lod_comp->llc_extent.e_start,
-					     lod_comp->llc_stripe_size);
+			lod_comp_set_ec_pattern(&lod_comp->llc_pattern);
+		if (lo->ldo_is_composite)
+			lod_comp_shrink_to_extent(lod_comp);
 
 		if ((lov_pattern(lod_comp->llc_pattern) & LOV_PATTERN_COMPRESS) &&
 		    lcme) {
@@ -4032,6 +3957,37 @@ static int lod_prepare_avoidance(const struct lu_env *env,
 	}
 
 	return 0;
+}
+
+/**
+ * lod_ec_check_parity_fits() - Check that a parity fits its extent
+ * @lo: LOD object
+ * @parity: parity component
+ * @data_stripe_count: stripe count of the data component @parity protects
+ *
+ * See ec_parity_fits(). llapi checks this when the layout is set, but a
+ * data component that shrank its EC geometry for lack of OSTs, or a
+ * layout from another client, may still not fit.
+ *
+ * Return: 0 if the parity fits, -EINVAL otherwise.
+ */
+static int lod_ec_check_parity_fits(struct lod_object *lo,
+				    struct lod_layout_component *parity,
+				    __u16 data_stripe_count)
+{
+	struct ec_parity_geom g;
+
+	ec_parity_geom_init(&g, data_stripe_count, parity->llc_dstripe_count,
+			    parity->llc_stripe_size,
+			    parity->llc_extent.e_start);
+	if (ec_parity_fits(&g, parity->llc_extent.e_end))
+		return 0;
+
+	CDEBUG(D_LAYOUT,
+	       DFID": EC parity of "DEXT" does not fit, data stripe count %u, stripe size %u: rc = %d\n",
+	       PFID(lu_object_fid(lod2lu_obj(lo))), PEXT(&parity->llc_extent),
+	       data_stripe_count, parity->llc_stripe_size, -EINVAL);
+	return -EINVAL;
 }
 
 /*
@@ -4352,10 +4308,15 @@ int lod_comp_prep_create(const struct lu_env *env, struct lod_object *lo,
 			ec_split_stripes(data->llc_stripe_count,
 					 parity->llc_dstripe_count, &sc);
 			if (is_parity) {
+				rc = lod_ec_check_parity_fits(lo, parity,
+							data->llc_stripe_count);
+				if (rc)
+					GOTO(out, rc);
+
 				/* one OST per raid set and parity */
 				data_comp = data;
 				lod_comp->llc_stripe_count =
-					(sc.esc_n0 + sc.esc_n1) *
+					ec_raidset_count(&sc) *
 					lod_comp->llc_cstripe_count;
 			} else if (data->llc_pattern &
 				   LOV_PATTERN_OVERSTRIPING) {
@@ -4378,6 +4339,11 @@ int lod_comp_prep_create(const struct lu_env *env, struct lod_object *lo,
 			    data_stripe_count == 0)
 				GOTO(out, rc = -EINVAL);
 
+			rc = lod_ec_check_parity_fits(lo, lod_comp,
+						      data_stripe_count);
+			if (rc)
+				GOTO(out, rc);
+
 			/*
 			 * The data component lives in the file this parity is
 			 * merged into, not in this volatile file, so the
@@ -4389,7 +4355,7 @@ int lod_comp_prep_create(const struct lu_env *env, struct lod_object *lo,
 			ec_split_stripes(data_stripe_count,
 					 lod_comp->llc_dstripe_count, &sc);
 			lod_comp->llc_stripe_count =
-				(sc.esc_n0 + sc.esc_n1) *
+				ec_raidset_count(&sc) *
 				lod_comp->llc_cstripe_count;
 			GOTO(out, rc = 0);
 		}

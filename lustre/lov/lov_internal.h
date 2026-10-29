@@ -26,6 +26,7 @@
 
 struct lov_stripe_md_entry {
 	struct lu_extent	lsme_extent;
+	u64			lsme_parity_origin;	/* parity slot 0 */
 	u32			lsme_id;
 	u32			lsme_magic;
 	u32			lsme_flags;
@@ -109,32 +110,29 @@ static inline bool lsme_is_parity(const struct lov_stripe_md_entry *lsme)
 	return lsme->lsme_flags & LCME_FL_PARITY;
 }
 
-/*
- * Parity in the RAID10-like encoding: LOV_PATTERN_PARITY without RAID0.
- * RAID0|PARITY parity keeps the RAID0 geometry.
- */
+/* every parity component uses the RAID10-like LOV_PATTERN_PARITY encoding */
 static inline bool lsme_parity_raid10(const struct lov_stripe_md_entry *lsme)
 {
-	return lsme_is_parity(lsme) &&
-	       !(lov_pattern(lsme->lsme_pattern) & LOV_PATTERN_RAID0);
+	return lsme_is_parity(lsme);
 }
 
 /*
  * Stripe geometry: lsme_slot_count() slots of stripe_size make one
  * stripe_width, repeated from lsme_stripe_origin(). RAID0 has one stripe
  * per slot and counts from file offset 0. Parity has one raidset per slot,
- * whose p stripes share the same offset, and counts from e_start.
+ * whose p stripes share the same offset, and counts from the origin set by
+ * lsm_parity_origin_init(), at or before e_start.
  */
 static inline u64 lsme_stripe_origin(const struct lov_stripe_md_entry *lsme)
 {
-	return lsme_parity_raid10(lsme) ? lsme->lsme_extent.e_start : 0;
+	return lsme_is_parity(lsme) ? lsme->lsme_parity_origin : 0;
 }
 
 /* stripes sharing one slot */
 static inline unsigned int
 lsme_stripes_per_slot(const struct lov_stripe_md_entry *lsme)
 {
-	if (lsme_parity_raid10(lsme) && lsme->lsme_cstripe_count)
+	if (lsme_is_parity(lsme) && lsme->lsme_cstripe_count)
 		return lsme->lsme_cstripe_count;
 	return 1;
 }
@@ -143,7 +141,7 @@ lsme_stripes_per_slot(const struct lov_stripe_md_entry *lsme)
 static inline bool
 lsme_parity_single_slot(const struct lov_stripe_md_entry *lsme)
 {
-	return lsme_parity_raid10(lsme) &&
+	return lsme_is_parity(lsme) &&
 	       (!lsme->lsme_cstripe_count ||
 		lsme->lsme_stripe_count < lsme->lsme_cstripe_count);
 }
@@ -163,13 +161,6 @@ lsme_stripe_slot(const struct lov_stripe_md_entry *lsme, int stripeno)
 	if (lsme_parity_single_slot(lsme))
 		return 0;
 	return (unsigned int)stripeno / lsme_stripes_per_slot(lsme);
-}
-
-/* slots the p parities of one raidset take: p, or 1 when they share it */
-static inline unsigned int
-lsme_parity_slots_per_raidset(const struct lov_stripe_md_entry *lsme)
-{
-	return lsme->lsme_cstripe_count / lsme_stripes_per_slot(lsme);
 }
 
 static inline bool lsm_entry_is_parity(const struct lov_stripe_md *lsm,

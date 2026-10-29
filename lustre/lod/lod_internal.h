@@ -18,6 +18,7 @@
 #define _LOD_INTERNAL_H
 
 #include <uapi/linux/lustre/lustre_cfg.h>
+#include <uapi/linux/lustre/lustre_user.h>
 #include <obd.h>
 #include <dt_object.h>
 
@@ -718,6 +719,54 @@ static inline bool
 lod_comp_inited(const struct lod_layout_component *entry)
 {
 	return entry->llc_flags & LCME_FL_INIT;
+}
+
+/**
+ * lod_comp_set_ec_pattern() - Set a component pattern to EC parity.
+ * @pattern: layout pattern to update
+ *
+ * OVERSTRIPING stays: an overstriped data component copies it onto parity.
+ * COMPRESS is dropped; parity compression is not a layout pattern.
+ */
+static inline void lod_comp_set_ec_pattern(__u32 *pattern)
+{
+	*pattern &= ~(LOV_PATTERN_RAID0 | LOV_PATTERN_RAID1 |
+		      LOV_PATTERN_COMPRESS);
+	*pattern |= LOV_PATTERN_PARITY;
+}
+
+/**
+ * lod_comp_shrink_to_extent() - Cap the stripe count by the extent
+ * @lod_comp: component to adjust
+ *
+ * Limit the stripe count so that stripe_count * stripe_size does not
+ * exceed the extent.  Skipped for an extension component, whose
+ * llc_stripe_size holds the extension size, for an uninstantiated
+ * component with e_start == e_end, which an extension component will
+ * expand later, for a wide stripe count, for an unbounded extent, and
+ * for EC parity, whose p objects share an offset so that
+ * p * stripe_size may exceed the extent.
+ */
+static inline void
+lod_comp_shrink_to_extent(struct lod_layout_component *lod_comp)
+{
+	struct lu_extent *ext = &lod_comp->llc_extent;
+
+	if (lod_comp->llc_flags & (LCME_FL_EXTENSION | LCME_FL_PARITY))
+		return;
+	if (!lod_comp_inited(lod_comp) && ext->e_start >= ext->e_end)
+		return;
+	if (lod_comp->llc_stripe_count <= LOV_ALL_STRIPES &&
+	    lod_comp->llc_stripe_count >= LOV_ALL_STRIPES_WIDE)
+		return;
+	if (ext->e_end == OBD_OBJECT_EOF)
+		return;
+	if ((__u64)lod_comp->llc_stripe_count * lod_comp->llc_stripe_size <=
+	    ext->e_end - ext->e_start)
+		return;
+
+	lod_comp->llc_stripe_count = DIV_ROUND_UP(ext->e_end - ext->e_start,
+						  lod_comp->llc_stripe_size);
 }
 
 /**
