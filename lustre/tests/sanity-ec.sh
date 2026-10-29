@@ -1451,7 +1451,7 @@ test_4e() {
 	stack_trap "rm -f $tf"
 
 	# --ec without -E should automatically create [0,EOF] component
-	$LFS setstripe --ec 4+2 $tf || error "setstripe failed"
+	$LFS setstripe $EC_ARG $tf || error "setstripe failed"
 
 	verify_mirror_count $tf 2
 	verify_comp_count $tf 2
@@ -1464,7 +1464,7 @@ test_4e() {
 
 	# Verify parity component
 	verify_comp_parity $tf ${ids[1]}
-	verify_ec_stripe_count $tf ${ids[1]} 4 2
+	verify_ec_stripe_count $tf ${ids[1]} $EC_DSTRIPE $EC_CSTRIPE
 	verify_comp_extent $tf ${ids[1]} 0 EOF
 }
 run_test 4e "auto-create [0,EOF] component when --ec without -E"
@@ -1590,7 +1590,7 @@ test_5b() {
 	# Create EC file with lfs setstripe
 	# Layout: Mirror 1 has 3 data components [0,128M], [128M,1G], [1G,EOF]
 	#         Mirror 2 has 3 EC components at same extents
-	$LFS setstripe -E 128M -E 1G -E -1 --ec 4+2 $tf ||
+	$LFS setstripe -E 128M -E 1G -E -1 $EC_ARG $tf ||
 		error "setstripe failed"
 
 	# Verify file starts in RDONLY state
@@ -1602,11 +1602,11 @@ test_5b() {
 
 	# Verify EC parameters on parity components (mirror 2)
 	verify_comp_parity $tf ${ids[3]}
-	verify_ec_stripe_count $tf ${ids[3]} 4 2
+	verify_ec_stripe_count $tf ${ids[3]} $EC_DSTRIPE $EC_CSTRIPE
 	verify_comp_parity $tf ${ids[4]}
-	verify_ec_stripe_count $tf ${ids[4]} 4 2
+	verify_ec_stripe_count $tf ${ids[4]} $EC_DSTRIPE $EC_CSTRIPE
 	verify_comp_parity $tf ${ids[5]}
-	verify_ec_stripe_count $tf ${ids[5]} 4 2
+	verify_ec_stripe_count $tf ${ids[5]} $EC_DSTRIPE $EC_CSTRIPE
 
 	# Write to first component (0-1M, within [0,128M] extent)
 	dd if=/dev/zero of=$tf conv=notrunc bs=1M count=1 ||
@@ -1911,7 +1911,7 @@ test_6d() {
 	stack_trap "rm -f $tf"
 
 	# Create EC file: data mirror + parity mirror
-	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf ||
+	$LFS setstripe -E -1 -c $EC_DSTRIPE $EC_ARG $tf ||
 		error "create EC file failed"
 
 	verify_mirror_count $tf 2
@@ -1934,7 +1934,7 @@ test_6d() {
 
 	# Verify EC parameters on parity component
 	verify_comp_parity $tf $parity_comp_id
-	verify_ec_stripe_count $tf $parity_comp_id 4 2
+	verify_ec_stripe_count $tf $parity_comp_id $EC_DSTRIPE $EC_CSTRIPE
 
 	# Write and resync to get both mirrors in sync
 	dd if=/dev/urandom of=$tf bs=1M count=2 ||
@@ -1985,7 +1985,7 @@ test_6e() {
 	stack_trap "rm -f $tf"
 
 	# Create EC file: data mirror + parity mirror
-	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf ||
+	$LFS setstripe -E -1 -c $EC_DSTRIPE $EC_ARG $tf ||
 		error "create EC file failed"
 
 	verify_mirror_count $tf 2
@@ -2008,7 +2008,7 @@ test_6e() {
 
 	# Verify EC parameters on parity component
 	verify_comp_parity $tf $parity_comp_id
-	verify_ec_stripe_count $tf $parity_comp_id 4 2
+	verify_ec_stripe_count $tf $parity_comp_id $EC_DSTRIPE $EC_CSTRIPE
 
 	# Write and resync to get both mirrors in sync
 	dd if=/dev/urandom of=$tf bs=1M count=2 ||
@@ -2085,7 +2085,8 @@ test_6f() {
 	# Recreate as an EC file and retry against its data component to make
 	# sure the rejection also holds within an EC layout.
 	rm -f $tf
-	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf || error "create EC file failed"
+	$LFS setstripe -E -1 -c $EC_DSTRIPE $EC_ARG $tf ||
+		error "create EC file failed"
 
 	# Find the data component (the one without the parity flag)
 	data_comp_id=$($LFS getstripe $tf |
@@ -2132,7 +2133,7 @@ test_7a() {
 	stack_trap "rm -f $tf"
 
 	# Create EC file: data mirror + parity mirror
-	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf ||
+	$LFS setstripe -E -1 -c $EC_DSTRIPE $EC_ARG $tf ||
 		error "create EC file failed"
 
 	verify_mirror_count $tf 2
@@ -2152,7 +2153,7 @@ test_7a() {
 
 	# Verify EC parameters on parity component
 	verify_comp_parity $tf $parity_comp_id
-	verify_ec_stripe_count $tf $parity_comp_id 4 2
+	verify_ec_stripe_count $tf $parity_comp_id $EC_DSTRIPE $EC_CSTRIPE
 
 	# Write initial data and resync
 	dd if=/dev/urandom of=$tf bs=1M count=2 ||
@@ -4221,7 +4222,7 @@ test_23a() {
 	stack_trap "rm -rf $DIR/$tdir"
 
 	# Create EC file and write data
-	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf ||
+	$LFS setstripe -E -1 -c $EC_DSTRIPE $EC_ARG $tf ||
 		error "setstripe failed"
 	dd if=/dev/urandom of=$tf bs=1M count=5 ||
 		error "write failed"
@@ -4276,7 +4277,7 @@ test_23b() {
 	stack_trap "rm -rf $DIR/$tdir"
 
 	# Create EC file and write data
-	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf ||
+	$LFS setstripe -E -1 -c $EC_DSTRIPE $EC_ARG $tf ||
 		error "setstripe failed"
 	dd if=/dev/urandom of=$tf bs=1M count=2 ||
 		error "write failed"
@@ -4338,7 +4339,7 @@ test_23c() {
 	stack_trap "rm -rf $DIR/$tdir"
 
 	# Create EC file
-	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf ||
+	$LFS setstripe -E -1 -c $EC_DSTRIPE $EC_ARG $tf ||
 		error "setstripe failed"
 
 	# fallocate space - preallocate without writing data
@@ -4373,7 +4374,7 @@ test_23c() {
 	[[ "$file_sum" == "$data_sum" ]] ||
 		error "data mirror content mismatch after fallocate+write"
 
-	# For multi-stripe EC (4+2), parity is XOR across stripes and
+	# For multi-stripe EC (k >= 2), parity is computed across stripes and
 	# must differ from data content.
 	local parity_sum=$($LFS mirror read -N2 $tf | md5sum)
 	[[ "$data_sum" != "$parity_sum" ]] ||
@@ -4391,12 +4392,12 @@ test_24a() {
 	stack_trap "rm -rf $DIR/$tdir"
 
 	# Create EC file
-	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf ||
+	$LFS setstripe -E -1 -c $EC_DSTRIPE $EC_ARG $tf ||
 		error "setstripe failed"
 
 	# Attempting --comp-add with --ec should be rejected
 	local output
-	output=$($LFS setstripe --comp-add -E -1 --ec 4+2 $tf 2>&1) &&
+	output=$($LFS setstripe --comp-add -E -1 $EC_ARG $tf 2>&1) &&
 		error "should reject --ec with --comp-add"
 	echo "$output" | grep -q "cannot be used with" ||
 		error "unexpected error message: $output"
@@ -4456,7 +4457,7 @@ test_25a() {
 	stack_trap "rm -rf $td"
 
 	# Create EC file
-	$LFS setstripe -E -1 -c 4 --ec 4+2 $td/ec_file ||
+	$LFS setstripe -E -1 -c $EC_DSTRIPE $EC_ARG $td/ec_file ||
 		error "setstripe EC failed"
 
 	# Create plain file
@@ -4498,13 +4499,13 @@ test_26a() {
 	test_mkdir $DIR/$tdir
 	stack_trap "rm -rf $DIR/$tdir"
 
-	# Create EC file with 4 data stripes and 2 parity stripes
-	# Use 1M stripe size so 20M of data spans 5 full stripe rows
-	$LFS setstripe -E -1 -S 1M -c 4 --ec 4+2 $tf ||
+	# Create EC file with EC_DSTRIPE data and EC_CSTRIPE parity stripes
+	# Use 1M stripe size so the data spans 5 full stripe rows
+	$LFS setstripe -E -1 -S 1M -c $EC_DSTRIPE $EC_ARG $tf ||
 		error "setstripe failed"
 
-	# Write 20M of random data (5 full rows of 4x1M stripes)
-	dd if=/dev/urandom of=$tf bs=1M count=20 ||
+	# Write 5 full rows of EC_DSTRIPE x 1M stripes of random data
+	dd if=/dev/urandom of=$tf bs=1M count=$((EC_DSTRIPE * 5)) ||
 		error "write failed"
 
 	local old_chksum=$(md5sum $tf | awk '{print $1}')
@@ -4526,8 +4527,9 @@ test_26a() {
 	# Save parity checksum before overwrite
 	local parity_sum_before=$($LFS mirror read -N2 $tf | md5sum)
 
-	# Overwrite part of the file (middle 4M of 20M)
-	dd if=/dev/urandom of=$tf bs=1M count=4 seek=8 conv=notrunc ||
+	# Overwrite 4M in the middle of the file
+	dd if=/dev/urandom of=$tf bs=1M count=4 seek=$((EC_DSTRIPE * 2)) \
+		conv=notrunc ||
 		error "overwrite failed"
 
 	# After overwrite, parity should be stale
@@ -4550,7 +4552,7 @@ test_26a() {
 	echo "$final_chksum  $tf_data" | md5sum -c - ||
 		error "data mirror content mismatch after overwrite"
 }
-run_test 26a "multi-stripe EC data integrity with 20M file"
+run_test 26a "multi-stripe EC data integrity with 5-row file"
 
 test_26b() {
 	enable_ec
@@ -4915,7 +4917,7 @@ test_28a() {
 	stack_trap "rm -rf $DIR/$tdir"
 
 	# Create EC file with data and sync parity
-	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf ||
+	$LFS setstripe -E -1 -c $EC_DSTRIPE $EC_ARG $tf ||
 		error "setstripe failed"
 	dd if=/dev/urandom of=$tf bs=1M count=2 ||
 		error "write failed"
