@@ -6737,12 +6737,11 @@ test_73e() {
 		do_node $rnode "$LNETCTL lnet configure"
 		do_node $rnode "$LNETCTL set discovery 0"
 
-		for ((n = 10; n <= 50; n++)); do
-			net=${NETTYPE}$n
-			do_rpc_nodes $rnode "$LNETCTL net add --net $net --if $rinf" ||
-			echo "can't add network $net on $rnode"
-		done
+		do_node $rnode "for n in {10..50}; do
+			$LNETCTL net add --net ${NETTYPE}\\\$n --if $rinf ||
+			echo can not add network ${NETTYPE}\\\$n on $rnode; done" &
 	done
+	wait
 
 	net=${NETTYPE}50
 	$LNETCTL net add --net $net --if $inf
