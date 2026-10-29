@@ -33755,6 +33755,9 @@ run_test 398l "test enospc on intermediate stripe/RPC"
 test_398m() { #  LU-13798
 	$LFS setstripe -o 0,1,0,1 -S 1M $DIR/$tfile
 
+	stack_trap "$LCTL set_param $($LCTL get_param -b osc.*.resend_count)"
+	$LCTL set_param osc.*.resend_count=1
+
 	# Set up failure on OST0, the first stripe:
 	#define OBD_FAIL_OST_BRW_WRITE_BULK     0x20e
 	#NB: Fail val is ost # + 1, because we cannot use cfs_fail_val = 0
