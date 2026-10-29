@@ -6165,17 +6165,29 @@ test_81d() {
 			error "createmany failed for $d1/_temporary"
 	done
 
-	for ((mds = 0; mds < $MDSCOUNT; mds++)); do
-		local d1=$DIR1/$tdir-$mds
-		local d2=$DIR2/$tdir-$mds
+	# rename on all MDTs from both mounts at once, but keep at most
+	# $threads mrename processes running so that small clients do not OOM.
+	# Once $threads are started, wait for the oldest before starting more.
+	local threads=${SANITYN_81d_THR:-256}
+	local dirs=($DIR1 $DIR2)
+	local pids=()
+	local n=0
 
-		for ((i = 0; i < COUNT; i++)); do
-			mrename $d1/_temporary/$tfile.$i $d1/$tfile.$i &
-			((i++))
-			mrename $d2/_temporary/$tfile.$i $d2/$tfile.$i &
+	for ((i = 0; i < COUNT; i++)); do
+		for ((mds = 0; mds < $MDSCOUNT; mds++)); do
+			local d=${dirs[i % 2]}/$tdir-$mds
+			local slot=$((n++ % threads))
+
+			if [[ -n "${pids[slot]}" ]]; then
+				wait ${pids[slot]} || error "rename failed"
+			fi
+			mrename $d/_temporary/$tfile.$i $d/$tfile.$i &
+			pids[slot]=$!
 		done
 	done
-	wait || error "rename failed"
+	for pid in ${pids[@]}; do
+		wait $pid || error "rename failed"
+	done
 
 	cleanup_81d
 	local stats=$DIR1/md_stats
