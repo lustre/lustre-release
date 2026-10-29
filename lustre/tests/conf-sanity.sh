@@ -4488,7 +4488,8 @@ cleanup_46a() {
 
 test_46a() {
 	echo "Testing with $OSTCOUNT OSTs"
-	reformat_and_config
+	reformat
+	combined_mgs_mds || start_mgs
 	start_mds || error "unable to start MDS"
 	#first client should see only one ost
 	start_ost || error "Unable to start OST1"
@@ -4503,10 +4504,24 @@ test_46a() {
 			error "start_ost$i $(ostdevname $i) failed"
 	done
 
-	# wait until osts in sync
+	# wait until osts in sync, one wait per MDS host
+	local -A mdsparams
+	local host num
+	for ((num = 1; num <= MDSCOUNT; num++)); do
+		host=$(facet_active_host mds$num)
+		for ((i = 2; i <= OSTCOUNT; i++)); do
+			mdsparams[$host]+=" os[cp].$(get_osc_import_name \
+				mds$num ost$i).ost_server_uuid"
+		done
+	done
+	local maxtime=$((2 * $(request_timeout mds1)))
+	for host in "${!mdsparams[@]}"; do
+		do_rpc_nodes $host wait_import_state FULL \
+			$(comma_list ${mdsparams[$host]}) $maxtime ||
+			error "$host: OST imports are not FULL"
+	done
 	for (( i=2; i<=$OSTCOUNT; i++ )); do
-	    wait_osc_import_state mds ost$i FULL
-	    wait_osc_import_ready client ost$i
+		wait_osc_import_ready client ost$i
 	done
 
 	#second client see all ost's
