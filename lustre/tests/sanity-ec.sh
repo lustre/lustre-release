@@ -768,58 +768,6 @@ test_1i() {
 }
 run_test 1i "default EC layout on directory"
 
-test_1j() {
-	(( $OSTCOUNT >= 6 )) || skip "needs >= 6 OSTs"
-
-	enable_ec
-	local tf=$DIR/$tfile
-	local ids
-	local data_stripe_size
-	local ec_stripe_size
-
-	stack_trap "rm -f $tf"
-
-	# Test with explicit stripe size
-	$LFS setstripe -E -1 -S 4M -c 4 --ec 4+2 $tf ||
-		error "setstripe with explicit stripe size failed"
-
-	verify_mirror_count $tf 2
-	verify_comp_count $tf 2
-
-	# Get component IDs
-	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
-
-	# Verify data mirror (mirror 1, component 0)
-	verify_comp_extent $tf ${ids[0]} 0 EOF
-
-	# Verify parity mirror (mirror 2, component 1)
-	verify_comp_parity $tf ${ids[1]}
-	verify_ec_stripe_count $tf ${ids[1]} 4 2
-	verify_comp_extent $tf ${ids[1]} 0 EOF
-
-	# Verify stripe size matches between data and EC components
-	verify_ec_stripe_size $tf ${ids[0]} ${ids[1]}
-
-	# Verify the stripe size is what we set (4M)
-	data_stripe_size=$($LFS getstripe -I${ids[0]} $tf | \
-			awk '/lmm_stripe_size:/ { print $2 }')
-	ec_stripe_size=$($LFS getstripe -I${ids[1]} $tf | \
-			awk '/lmm_stripe_size:/ { print $2 }')
-
-	[[ $data_stripe_size = 4194304 ]] || {
-		$LFS getstripe -v $tf
-		error "data component stripe size should be 4M (4194304)," \
-		      "got $data_stripe_size"
-	}
-
-	[[ $ec_stripe_size = 4194304 ]] || {
-		$LFS getstripe -v $tf
-		error "EC component stripe size should be 4M (4194304)," \
-		      "got $ec_stripe_size"
-	}
-}
-run_test 1j "verify EC component inherits stripe size from data component"
-
 test_1k() {
 	local td=$DIR/$tdir
 	local subdir=$td/subdir
@@ -3934,40 +3882,37 @@ test_13() {
 run_test 13 "parity of single stripe data is just a copy"
 
 test_20() {
-	local tf=${DIR}/${tdir}/$tfile
-
-	(( OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
 	enable_ec
+
+	local tf=$DIR/$tdir/$tfile
+	local ssize ids size
 
 	test_mkdir $DIR/$tdir
 
-	# 4M stripe size
-	$LFS setstripe -E -1 -S 4M -c 1 --ec 3+1 $tf ||
-	    error "setstripe -c 1 -S 4M --ec 3+1 failed"
+	# The parity component must get the data component's stripe size
+	for ssize in 4194304 1048576 65536; do
+		rm -f $tf
+		$LFS setstripe -E -1 -S $ssize -c $EC_DSTRIPE $EC_ARG $tf ||
+			error "setstripe -S $ssize $EC_ARG failed"
 
-	$LFS getstripe $tf | grep lmm_stripe_size | grep -v 4194304 2>/dev/null &&
-		error "Stripe size mismatch for -S 4M"
-	rm -f $tf
+		verify_mirror_count $tf 2
+		verify_comp_count $tf 2
+		ids=($($LFS getstripe $tf | awk '/lcme_id/ { print $2 }'))
+		verify_comp_extent $tf ${ids[0]} 0 EOF
+		verify_comp_parity $tf ${ids[1]}
+		verify_ec_stripe_count $tf ${ids[1]} $EC_DSTRIPE $EC_CSTRIPE
+		verify_comp_extent $tf ${ids[1]} 0 EOF
+		verify_ec_stripe_size $tf ${ids[0]} ${ids[1]}
 
-	# 1M stripe size
-	$LFS setstripe -E -1 -S 1M -c 1 --ec 3+1 $tf ||
-	    error "setstripe -c 1 -S 1M --ec 3+1 failed"
-
-	$LFS getstripe $tf |
-	    grep lmm_stripe_size | grep -v 1048576 2>/dev/null &&
-	    error "Stripe size mismatch for -S 1M"
-	rm -f $tf
-
-	# 64k stripe size
-	$LFS setstripe -E -1 -S 64k -c 1 --ec 3+1 $tf ||
-	    error "setstripe -c 1 -S 64k --ec 3+1 failed"
-
-	$LFS getstripe $tf | grep lmm_stripe_size | grep -v 65536 2>/dev/null &&
-		error "Stripe size mismatch for -S 64k"
-
-	return 0
+		size=$($LFS getstripe -I${ids[1]} $tf |
+			awk '/lmm_stripe_size:/ { print $2 }')
+		[[ $size == $ssize ]] || {
+			$LFS getstripe -v $tf
+			error "parity stripe size $size != $ssize"
+		}
+	done
 }
-run_test 20 "test that stripe size of parity mirror is set correctly"
+run_test 20 "parity component gets the stripe size of the data component"
 
 # Test 21: lfs migrate with EC layouts
 test_21a() {
@@ -5054,55 +4999,6 @@ test_30b() {
 }
 run_test 30b "resync succeeds after parity OST recovery"
 
-test_30c() {
-	# Test that resync correctly recomputes parity after an OST
-	# that was down comes back. The sequence is:
-	# 1. Create EC file, write data, resync parity (all good)
-	# 2. Stop a data-mirror OST
-	# 3. Start it back
-	# 4. Verify data is intact and resync still works
-	(( OSTCOUNT >= 4 )) || skip "need >= 4 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf" EXIT
-
-	$LFS setstripe -E -1 -S 1M -c 2 --ec 2+1 $tf ||
-		error "setstripe failed"
-
-	dd if=/dev/urandom of=$tf bs=1M count=4 || error "write failed"
-	$LFS mirror resync $tf || error "initial resync failed"
-	verify_flr_state $tf "ro"
-
-	local cksum_before=$(md5sum $tf | awk '{print $1}')
-
-	# Stop a data OST and bring it back
-	local data_ost_idx=$($LFS getstripe --mirror-id=1 $tf |
-		awk '/l_ost_idx:/ {print $5; exit}' | tr -d ',')
-	local data_facet=ost$((data_ost_idx + 1))
-
-	echo "Cycling $data_facet (data OST index $data_ost_idx)"
-	stop $data_facet
-	wait_osc_import_state client $data_facet "\(DISCONN\|IDLE\)"
-
-	start $data_facet $(ostdevname $((data_ost_idx + 1))) $OST_MOUNT_OPTS
-	wait_recovery_complete $data_facet
-
-	# Data should still be readable and correct
-	drop_client_cache
-	local cksum_after=$(md5sum $tf | awk '{print $1}')
-	[[ "$cksum_before" == "$cksum_after" ]] ||
-		error "data corrupted after OST cycle: $cksum_before != $cksum_after"
-
-	# Write new data and resync - everything should still work
-	dd if=/dev/urandom of=$tf bs=1M count=2 conv=notrunc ||
-		error "write after OST recovery failed"
-	$LFS mirror resync $tf || error "resync after OST recovery failed"
-	verify_flr_state $tf "ro"
-}
-run_test 30c "data survives OST restart cycle, resync works after recovery"
-
 test_30d() {
 	# test that reading from ec mirror reads the full set of parities
 	(( OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
@@ -5400,174 +5296,105 @@ test_31g() {
 run_test 31g "test getstripe --ec-map empty and uninstantiated"
 
 test_32a() {
-	# Verify that after an OST goes down and comes back, a full
-	# write+resync cycle produces correct parity. This validates
-	# the end-to-end recovery path.
-	(( OSTCOUNT >= 4 )) || skip "need >= 4 OSTs"
+	# Stop a data OST and start it again, then check that the data is
+	# intact and that a new write and resync give correct parity.
+	# Repeat to exercise the stale tracking across several cycles.
 	enable_ec
 
 	local tf=$DIR/$tdir/$tfile
 
 	test_mkdir $DIR/$tdir
-	stack_trap "rm -rf $DIR/$tdir" EXIT
+	stack_trap "rm -rf $DIR/$tdir"
 
-	$LFS setstripe -E -1 -S 1M -c 2 --ec 2+1 $tf ||
+	$LFS setstripe -E -1 -S 1M -c $EC_DSTRIPE $EC_ARG $tf ||
 		error "setstripe failed"
 
-	# Write known pattern and resync to establish good parity
-	dd if=/dev/urandom of=$tf bs=1M count=4 || error "write 1 failed"
-	$LFS mirror resync $tf || error "resync 1 failed"
+	# Write known data and resync to establish good parity
+	dd if=/dev/urandom of=$tf bs=1M count=4 || error "write 0 failed"
+	$LFS mirror resync $tf || error "resync 0 failed"
 	verify_flr_state $tf "ro"
 
-	# Save parity checksum
-	local parity_sum_1=$($LFS mirror read -N2 $tf | md5sum)
-
-	# Stop a data OST, restart it
-	local data_ost_idx=$($LFS getstripe --mirror-id=1 $tf |
-		awk '/l_ost_idx:/ {print $5; exit}' | tr -d ',')
-	local data_facet=ost$((data_ost_idx + 1))
-
-	stop $data_facet
-	wait_osc_import_state client $data_facet "\(DISCONN\|IDLE\)"
-	start $data_facet $(ostdevname $((data_ost_idx + 1))) $OST_MOUNT_OPTS
-	wait_recovery_complete $data_facet
-
-	# Write new data and resync
-	dd if=/dev/urandom of=$tf bs=1M count=4 conv=notrunc ||
-		error "write 2 after recovery failed"
-	$LFS mirror resync $tf || error "resync 2 after recovery failed"
-	verify_flr_state $tf "ro"
-
-	# Parity must have changed (new data -> new parity)
-	local parity_sum_2=$($LFS mirror read -N2 $tf | md5sum)
-	[[ "$parity_sum_1" != "$parity_sum_2" ]] ||
-		error "parity unchanged after writing new data post-recovery"
-
-	# Verify data is readable and consistent
 	local cksum=$(md5sum $tf | awk '{print $1}')
-	local mirror_cksum
-	mirror_cksum=$($LFS mirror read --mirror-id 1 $tf | md5sum |
-		awk '{print $1}')
-	[[ "$cksum" == "$mirror_cksum" ]] ||
-		error "data mirror inconsistent after recovery cycle"
-}
-run_test 32a "full write+resync cycle correct after OST recovery"
+	local parity_sum=$($LFS mirror read -N2 $tf | md5sum)
+	local i data_ost_idx data_facet got parity_new
 
-test_33a() {
-	# Multiple writes and resyncs with an intermittent OST failure
-	# in between. This exercises the stale tracking and resync logic
-	# across multiple failure/recovery cycles.
-	(( OSTCOUNT >= 4 )) || skip "need >= 4 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-	local i
-
-	stack_trap "rm -f $tf" EXIT
-
-	$LFS setstripe -E -1 -S 1M -c 2 --ec 2+1 $tf ||
-		error "setstripe failed"
-
-	for i in 1 2 3; do
+	for i in 1 2; do
 		echo "=== Cycle $i ==="
 
-		dd if=/dev/urandom of=$tf bs=1M count=4 conv=notrunc ||
-			error "write $i failed"
-		verify_flr_state $tf "wp"
+		# Stop a data OST and restart it
+		data_ost_idx=$($LFS getstripe --mirror-id=1 $tf |
+			awk '/l_ost_idx:/ {print $5; exit}' | tr -d ',')
+		data_facet=ost$((data_ost_idx + 1))
+		echo "Cycling $data_facet (data OST index $data_ost_idx)"
+		stop $data_facet
+		wait_osc_import_state client $data_facet "\(DISCONN\|IDLE\)"
+		start $data_facet $(ostdevname $((data_ost_idx + 1))) \
+			$OST_MOUNT_OPTS
+		wait_recovery_complete $data_facet
 
-		# Resync parity
-		$LFS mirror resync $tf || error "resync $i failed"
+		# Data must be intact right after the restart
+		drop_client_cache
+		got=$(md5sum $tf | awk '{print $1}')
+		[[ "$cksum" == "$got" ]] ||
+			error "data changed by OST cycle $i: $cksum != $got"
+
+		# Write new data and resync
+		dd if=/dev/urandom of=$tf bs=1M count=4 conv=notrunc ||
+			error "write $i after OST cycle failed"
+		verify_flr_state $tf "wp"
+		$LFS mirror resync $tf || error "resync $i after cycle failed"
 		verify_flr_state $tf "ro"
 
-		# Cycle a random data OST
-		local ost_idx=$($LFS getstripe --mirror-id=1 $tf |
-			awk '/l_ost_idx:/ {print $5; exit}' | tr -d ',')
-		local facet=ost$((ost_idx + 1))
+		# Parity must have changed (new data -> new parity)
+		parity_new=$($LFS mirror read -N2 $tf | md5sum)
+		[[ "$parity_sum" != "$parity_new" ]] ||
+			error "parity unchanged after write $i"
+		parity_sum=$parity_new
 
-		stop $facet
-		wait_osc_import_state client $facet "\(DISCONN\|IDLE\)"
-		start $facet $(ostdevname $((ost_idx + 1))) $OST_MOUNT_OPTS
-		wait_recovery_complete $facet
+		# The file and the data mirror must agree
+		cksum=$(md5sum $tf | awk '{print $1}')
+		got=$($LFS mirror read --mirror-id 1 $tf | md5sum |
+			awk '{print $1}')
+		[[ "$cksum" == "$got" ]] ||
+			error "data mirror inconsistent after cycle $i"
 	done
-
-	# Final data integrity check
-	drop_client_cache
-	md5sum $tf > /dev/null || error "final read failed"
-	echo "Survived $i write+resync+OST-cycle iterations"
 }
-run_test 33a "EC survives repeated write/resync/OST-failure cycles"
+run_test 32a "EC data and resync correct across OST restart cycles"
 
 test_34a() {
-	# test resyncing a stale ec mirror
-	(( OSTCOUNT >= 5 )) || skip_env "needs >= 5 OSTs"
-
+	# a mirror resync, read or verify must not change the file size
 	enable_ec
 
-	test_mkdir $DIR/$tdir
+	local tf=$DIR/$tdir/$tfile
 
-	$LFS setstripe -E -1 -S 4M -c 4 --ec 3+2 $DIR/$tdir/$tfile ||
-	    error "setstripe --ec 3+2 failed"
+	test_mkdir $DIR/$tdir
+	$LFS setstripe -E -1 -S 4M -c $EC_DSTRIPE $EC_ARG $tf ||
+		error "setstripe $EC_ARG failed"
 
 	# create a small file
-	echo "hello" > $DIR/$tdir/$tfile
-	SIZE1=`stat -c "%s" $DIR/$tdir/$tfile`
+	echo "hello" > $tf
+	local size1=$(stat -c %s $tf)
+	local size2
 
-	# resync the ec mirror:
-	$LFS mirror resync $DIR/$tdir/$tfile ||
-	    error "failed to resync ec mirror"
-	SIZE2=`stat -c "%s" $DIR/$tdir/$tfile`
-	(( SIZE1 == SIZE2 )) ||
-		error "mirror resync changed eof: ${SIZE1} vs ${SIZE2}"
+	stat -c "after write: size=%s blocks=%b" $tf
+	$LFS mirror resync $tf || error "failed to resync ec mirror"
+	size2=$(stat -c %s $tf)
+	(( size1 == size2 )) ||
+		error "mirror resync changed eof: $size1 vs $size2"
 
-	# read from the ec mirror:
-	$LFS mirror read -N 2 $DIR/$tdir/$tfile >/dev/null ||
-	    error "failed to read ec mirror"
-	SIZE3=`stat -c "%s" $DIR/$tdir/$tfile`
+	$LFS mirror read -N 2 $tf > /dev/null ||
+		error "failed to read ec mirror"
+	size2=$(stat -c %s $tf)
+	(( size1 == size2 )) ||
+		error "mirror read changed eof: $size1 vs $size2"
 
-	(( SIZE1 == SIZE3 )) ||
-		error "mirror read changed eof: ${SIZE1} vs ${SIZE3}"
+	$LFS mirror verify $tf || error "failed to verify ec mirror"
+	size2=$(stat -c %s $tf)
+	(( size1 == size2 )) ||
+		error "mirror verify changed eof: $size1 vs $size2"
+	stat -c "after verify: size=%s blocks=%b" $tf
 }
-run_test 34a "test that lfs mirror read from ec does not change eof"
-
-test_34b() {
-	# test resyncing a stale ec mirror
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
-
-	enable_ec
-	test_mkdir $DIR/$tdir
-
-	$LFS setstripe -E -1 -S 4M -c 4 --ec 4+2 $DIR/$tdir/$tfile ||
-	    error "setstripe --ec 4+2 failed"
-
-	# create a small file
-	echo "hello" > $DIR/$tdir/$tfile
-	SIZE1=$(stat -c "%s" $DIR/$tdir/$tfile)
-	BLOCKS1=$(stat -c "%b" $DIR/$tdir/$tfile)
-	APPARENT1=$(stat -c "%B" $DIR/$tdir/$tfile)
-	echo "After write: size=$SIZE1 blocks=$BLOCKS1 apparent_blksize=$APPARENT1"
-
-	# resync the ec mirror:
-	$LFS mirror resync $DIR/$tdir/$tfile ||
-	    error "failed to resync ec mirror"
-	SIZE2=$(stat -c "%s" $DIR/$tdir/$tfile)
-	BLOCKS2=$(stat -c "%b" $DIR/$tdir/$tfile)
-	APPARENT2=$(stat -c "%B" $DIR/$tdir/$tfile)
-	echo "After resync: size=$SIZE2 blocks=$BLOCKS2 apparent_blksize=$APPARENT2"
-	(( SIZE1 == SIZE2 )) ||
-		error "mirror resync changed eof: ${SIZE1} vs ${SIZE2}"
-
-	# verify the ec mirror:
-	$LFS mirror verify $DIR/$tdir/$tfile ||
-	    error "failed to verify ec mirror"
-	SIZE3=$(stat -c "%s" $DIR/$tdir/$tfile)
-	BLOCKS3=$(stat -c "%b" $DIR/$tdir/$tfile)
-	APPARENT3=$(stat -c "%B" $DIR/$tdir/$tfile)
-	echo "After verify: size=$SIZE3 blocks=$BLOCKS3 apparent_blksize=$APPARENT3"
-
-	(( SIZE1 == SIZE3 )) ||
-		error "mirror verify changed eof: ${SIZE1} vs ${SIZE3}"
-}
-run_test 34b "test that lfs mirror verify for ec does not change eof"
+run_test 34a "lfs mirror resync, read and verify of EC keep eof"
 
 test_34c() {
 	# test that reading past parity data returns zeros, not garbage
@@ -6308,6 +6135,52 @@ ec_stop_read_fault() {
 	ec_restore_resend_count
 }
 
+# Read a file with data OSTs failed and compare its md5sum each time.
+# Only data OSTs that hold no parity are failed, taken in stripe order,
+# so a file smaller than one row still loses the stripe with its data.
+#   each: fail every such OST, one at a time
+#   one:  fail the first such OST
+#   two:  fail the first such OST, then the first two together; only
+#         for a layout with at least 2 parity stripes
+# Callers push stack_trap "ec_stop_read_fault" themselves.
+# Usage: ec_check_degraded <file> <md5sum> <each|one|two>
+ec_check_degraded() {
+	local tf=$1
+	local sum=$2
+	local mode=$3
+	local osts=()
+	local down=()
+	local ost got
+
+	ec_classify_osts $tf
+	for ost in "${data_osts[@]}"; do
+		[[ " ${safe_osts[*]} " == *" $ost "* ]] || continue
+		[[ " ${osts[*]} " == *" $ost "* ]] || osts+=($ost)
+	done
+	(( ${#osts[@]} > 0 )) || error "$tf: no data OST free of parity"
+	[[ $mode == each ]] || osts=(${osts[@]:0:2})
+
+	for ost in "${osts[@]}"; do
+		ec_start_read_fault $tf $ost
+		got=$(md5sum $tf | awk '{print $1}')
+		ec_stop_read_fault
+		[[ "$got" == "$sum" ]] || error "$tf OST$ost down: $got != $sum"
+		down+=($ost)
+		[[ $mode == each ]] || break
+	done
+	echo "  1-down OK on OST ${down[*]}"
+
+	[[ $mode == two ]] || return 0
+	(( ${#osts[@]} == 2 )) || error "$tf: need 2 data OSTs free of parity"
+
+	ec_start_read_fault $tf "${osts[@]}"
+	got=$(md5sum $tf | awk '{print $1}')
+	ec_stop_read_fault
+	[[ "$got" == "$sum" ]] ||
+		error "$tf OST${osts[0]}+OST${osts[1]} down: $got != $sum"
+	echo "  2-down OK on OST ${osts[*]}"
+}
+
 # ec_start_all_reads_fail injects a persistent (non-ONCE) fault so every
 # subsequent OST BRW_READ bulk fails on every OST.  EC recovery cannot
 # succeed because parity reads also hit the fault.  Use this for tests
@@ -6402,205 +6275,50 @@ test_40d() {
 run_test 40d "test recovery read with 4+1 EC"
 
 test_41a() {
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
 	enable_ec
 
 	local tf=$DIR/$tfile
+	local ref=$TMP/$tfile.ref
+	local k=1024
+	local m=1048576
+	local row=$((EC_DSTRIPE * m))
+	local size=$((4 * row))
+	# offset and length of each read: aligned and unaligned reads, and
+	# reads spanning several rows (raid sets)
+	local reads=(
+		"0 $size" "0 $m" "$((3 * m)) $((2 * m))" "$((size - m)) $m"
+		"$((2 * m)) $((2 * m))" "$((512 * k)) $((2 * m))"
+		"$((1280 * k)) $((2 * m))" "$((64 * k)) $((128 * k))"
+		"0 $((2 * row))" "$row $((3 * row))"
+		"$((row - 512 * k)) $row"
+	)
 
-	stack_trap "rm -f $tf"
-
-	# Create EC file with 4+2 configuration
-	$LFS setstripe -E eof -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe --ec 4+2 failed"
-
-	# Write 8MB of data (2 raid sets)
-	dd if=/dev/urandom of=$tf bs=1M count=8 || error "dd failed"
-
-	# Resync to update parity
+	stack_trap "rm -f $tf $ref"
+	$LFS setstripe -S 1M -c $EC_DSTRIPE $EC_ARG $tf ||
+		error "setstripe failed"
+	dd if=/dev/urandom of=$tf bs=1M count=$((size / m)) || error "dd failed"
 	$LFS mirror resync $tf || error "mirror resync failed"
-
-	# Get checksums of different portions before failure
-	local sum_full=$(md5sum $tf | awk '{print $1}')
-	local sum_first_1m=$(dd if=$tf bs=1M count=1 2>/dev/null | md5sum |
-		awk '{print $1}')
-	local sum_middle_2m=$(dd if=$tf bs=1M skip=3 count=2 2>/dev/null |
-		md5sum | awk '{print $1}')
-	local sum_last_1m=$(dd if=$tf bs=1M skip=7 count=1 2>/dev/null |
-		md5sum | awk '{print $1}')
+	cp $tf $ref || error "cp $ref failed"
 
 	ec_start_read_fault $tf
 	stack_trap "ec_stop_read_fault"
 
-	# Verify partial reads still work
-	local sum_full_after=$(md5sum $tf | awk '{print $1}')
-	[[ "$sum_full" == "$sum_full_after" ]] ||
-		error "full file checksum changed: $sum_full vs $sum_full_after"
-
-	# The full-file read above left all 8M uptodate in the page cache,
-	# so without dropping the locks again each partial read is a cache
-	# hit: no BRW RPC, no fault, and nothing to reconstruct.
-	cancel_lru_locks osc
-	local sum_first_1m_after=$(dd if=$tf bs=1M count=1 2>/dev/null |
-		md5sum | awk '{print $1}')
-	[[ "$sum_first_1m" == "$sum_first_1m_after" ]] ||
-		error "first 1M checksum changed: $sum_first_1m vs" \
-			"$sum_first_1m_after"
-
-	cancel_lru_locks osc
-	local sum_middle_2m_after=$(dd if=$tf bs=1M skip=3 count=2 \
-		2>/dev/null | md5sum | awk '{print $1}')
-	[[ "$sum_middle_2m" == "$sum_middle_2m_after" ]] ||
-		error "middle 2M checksum changed: $sum_middle_2m vs" \
-			"$sum_middle_2m_after"
-
-	cancel_lru_locks osc
-	local sum_last_1m_after=$(dd if=$tf bs=1M skip=7 count=1 \
-		2>/dev/null | md5sum | awk '{print $1}')
-	[[ "$sum_last_1m" == "$sum_last_1m_after" ]] ||
-		error "last 1M checksum changed: $sum_last_1m vs" \
-			"$sum_last_1m_after"
-
-	echo "** All partial read checksums match after OST failures"
+	# Drop the locks before every read: a cached read issues no BRW
+	# RPC, so it never hits the fault and reconstructs nothing.
+	local r off len exp got
+	for r in "${reads[@]}"; do
+		read -r off len <<< "$r"
+		exp=$(dd if=$ref bs=64K iflag=skip_bytes,count_bytes \
+			skip=$off count=$len 2>/dev/null | md5sum)
+		cancel_lru_locks osc
+		got=$(dd if=$tf bs=64K iflag=skip_bytes,count_bytes \
+			skip=$off count=$len 2>/dev/null | md5sum)
+		[[ "$exp" == "$got" ]] ||
+			error "read $len at $off: ${exp% *} != ${got% *}"
+	done
+	echo "** aligned, unaligned and multi-row reads match"
 }
-run_test 41a "test partial reads with recovery"
-
-test_41b() {
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	# Create EC file with 4+2 configuration
-	$LFS setstripe -E eof -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe --ec 4+2 failed"
-
-	# Write 32MB of data (8 raid sets of 4MB each)
-	dd if=/dev/urandom of=$tf bs=1M count=32 || error "dd failed"
-
-	# Resync to update parity
-	$LFS mirror resync $tf || error "mirror resync failed"
-
-	# Get checksums of reads spanning multiple raid sets
-	local sum_full=$(md5sum $tf | awk '{print $1}')
-	# Read spanning raid sets 1-2 (0-8MB)
-	local sum_span_1_2=$(dd if=$tf bs=1M count=8 2>/dev/null |
-		md5sum | awk '{print $1}')
-	# Read spanning raid sets 3-5 (8MB-20MB)
-	local sum_span_3_5=$(dd if=$tf bs=1M skip=8 count=12 2>/dev/null |
-		md5sum | awk '{print $1}')
-	# Read spanning raid sets 6-8 (20MB-32MB)
-	local sum_span_6_8=$(dd if=$tf bs=1M skip=20 count=12 2>/dev/null |
-		md5sum | awk '{print $1}')
-
-	ec_start_read_fault $tf
-	stack_trap "ec_stop_read_fault"
-
-	# Verify reads spanning multiple raid sets still work
-	local sum_full_after=$(md5sum $tf | awk '{print $1}')
-	[[ "$sum_full" == "$sum_full_after" ]] ||
-		error "full file checksum changed: $sum_full vs $sum_full_after"
-
-	# Drop the locks between reads: the full-file read above cached the
-	# whole 32M, and a cached read issues no BRW RPC and so never hits
-	# the injected fault.
-	cancel_lru_locks osc
-	local sum_span_1_2_after=$(dd if=$tf bs=1M count=8 2>/dev/null |
-		md5sum | awk '{print $1}')
-	[[ "$sum_span_1_2" == "$sum_span_1_2_after" ]] ||
-		error "raid sets 1-2 checksum changed: $sum_span_1_2 vs" \
-			"$sum_span_1_2_after"
-
-	cancel_lru_locks osc
-	local sum_span_3_5_after=$(dd if=$tf bs=1M skip=8 count=12 \
-		2>/dev/null | md5sum | awk '{print $1}')
-	[[ "$sum_span_3_5" == "$sum_span_3_5_after" ]] ||
-		error "raid sets 3-5 checksum changed: $sum_span_3_5 vs" \
-			"$sum_span_3_5_after"
-
-	cancel_lru_locks osc
-	local sum_span_6_8_after=$(dd if=$tf bs=1M skip=20 count=12 \
-		2>/dev/null | md5sum | awk '{print $1}')
-	[[ "$sum_span_6_8" == "$sum_span_6_8_after" ]] ||
-		error "raid sets 6-8 checksum changed: $sum_span_6_8 vs" \
-			"$sum_span_6_8_after"
-
-	echo "** All multi-raid-set read checksums match after OST failures"
-}
-run_test 41b "test reads spanning multiple raid sets with recovery"
-
-test_41c() {
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	# Create EC file with 4+2 configuration
-	$LFS setstripe -E eof -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe --ec 4+2 failed"
-
-	# Write 8MB of data
-	dd if=/dev/urandom of=$tf bs=1M count=8 || error "dd failed"
-
-	# Resync to update parity
-	$LFS mirror resync $tf || error "mirror resync failed"
-
-	# Baseline checksums at aligned and unaligned offsets, so the
-	# post-failure reads below can be compared against them.
-
-	# Aligned to stripe size (1M) - offset 2M, length 2M
-	local sum_aligned=$(dd if=$tf bs=1M skip=2 count=2 2>/dev/null |
-		md5sum | awk '{print $1}')
-	# Unaligned offset (512K) - offset 512K, length 2M
-	local sum_unaligned_512k=$(dd if=$tf bs=512K skip=1 count=4 \
-		2>/dev/null | md5sum | awk '{print $1}')
-	# Unaligned offset (256K) - offset 1.25M, length 2M
-	local sum_unaligned_256k=$(dd if=$tf bs=256K skip=5 count=8 \
-		2>/dev/null | md5sum | awk '{print $1}')
-	# Small unaligned read (64K offset, 128K size)
-	local sum_small_unaligned=$(dd if=$tf bs=64K skip=1 count=2 \
-		2>/dev/null | md5sum | awk '{print $1}')
-
-	ec_start_read_fault $tf
-	stack_trap "ec_stop_read_fault"
-
-	# Drop caches to force re-read from OSTs (not from cache)
-	sync; echo 3 > /proc/sys/vm/drop_caches
-
-	# Verify reads at various offsets still work
-	local sum_aligned_after=$(dd if=$tf bs=1M skip=2 count=2 \
-		2>/dev/null | md5sum | awk '{print $1}')
-	[[ "$sum_aligned" == "$sum_aligned_after" ]] ||
-		error "aligned read (offset 2M) checksum changed after" \
-			"OST failure: $sum_aligned vs $sum_aligned_after"
-
-	local sum_unaligned_512k_after=$(dd if=$tf bs=512K skip=1 count=4 \
-		2>/dev/null | md5sum | awk '{print $1}')
-	[[ "$sum_unaligned_512k" == "$sum_unaligned_512k_after" ]] ||
-		error "512K unaligned read (offset 512K) checksum" \
-			"changed after OST failure: $sum_unaligned_512k vs" \
-			"$sum_unaligned_512k_after"
-
-	local sum_unaligned_256k_after=$(dd if=$tf bs=256K skip=5 count=8 \
-		2>/dev/null | md5sum | awk '{print $1}')
-	[[ "$sum_unaligned_256k" == "$sum_unaligned_256k_after" ]] ||
-		error "256K unaligned read (offset 1.25M) checksum" \
-			"changed after OST failure: $sum_unaligned_256k vs" \
-			"$sum_unaligned_256k_after"
-
-	local sum_small_unaligned_after=$(dd if=$tf bs=64K skip=1 count=2 \
-		2>/dev/null | md5sum | awk '{print $1}')
-	[[ "$sum_small_unaligned" == "$sum_small_unaligned_after" ]] ||
-		error "small unaligned read (offset 64K, size 128K)" \
-			"checksum changed after OST failure:" \
-			"$sum_small_unaligned vs $sum_small_unaligned_after"
-
-	echo "** aligned and unaligned read checksums match after OST failure"
-}
-run_test 41c "test reads at different offsets with recovery"
+run_test 41a "EC degraded reads at various offsets and lengths"
 
 test_41d() {
 	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
@@ -7048,73 +6766,6 @@ test_42a() {
 }
 run_test 42a "test recovery with file smaller than stripe size"
 
-test_42b() {
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	# Create EC file with 4+2 configuration, 1M stripe size
-	$LFS setstripe -E eof -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe --ec 4+2 failed"
-
-	# Write file with partial stripes (1.5M = 1 full + 0.5 partial)
-	# This tests if recovery handles partial stripe reconstruction
-	dd if=/dev/urandom of=$tf bs=512K count=3 || error "dd failed"
-
-	# Resync to update parity
-	$LFS mirror resync $tf || error "mirror resync failed"
-
-	# Get checksum before failure
-	local sum1=$(md5sum $tf | awk '{print $1}')
-
-	ec_start_read_fault $tf
-	stack_trap "ec_stop_read_fault"
-
-	# Verify read still succeeds
-	local sum2=$(md5sum $tf | awk '{print $1}')
-	[[ "$sum1" == "$sum2" ]] ||
-		error "data changed after OST failure: $sum1 vs $sum2"
-	echo "** File with partial stripes: recovery successful"
-}
-run_test 42b "test recovery with partial stripes"
-
-test_42c() {
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	# Create EC file with 4+2 configuration, 1M stripe size
-	# With 4+2 EC, a complete raid set is 4MB (4 data stripes * 1M)
-	$LFS setstripe -E eof -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe --ec 4+2 failed"
-
-	# Write 3M - doesn't complete a raid set (< 4MB)
-	# This tests if recovery works with incomplete raid sets
-	dd if=/dev/urandom of=$tf bs=1M count=3 || error "dd failed"
-
-	# Resync to update parity
-	$LFS mirror resync $tf || error "mirror resync failed"
-
-	# Get checksum before failure
-	local sum1=$(md5sum $tf | awk '{print $1}')
-
-	ec_start_read_fault $tf
-	stack_trap "ec_stop_read_fault"
-
-	# Verify read still succeeds
-	local sum2=$(md5sum $tf | awk '{print $1}')
-	[[ "$sum1" == "$sum2" ]] ||
-		error "data changed after OST failure: $sum1 vs $sum2"
-	echo "** File with incomplete raid set: recovery successful"
-}
-run_test 42c "test recovery with incomplete raid set"
-
 test_42d() {
 	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
 	enable_ec
@@ -7219,42 +6870,6 @@ test_43a() {
 }
 run_test 43a "test recovery with single OST failure (1 of 6 OSTs)"
 
-test_43b() {
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	# Create EC file with 4+2 configuration
-	$LFS setstripe -E eof -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe --ec 4+2 failed"
-
-	# Write 8MB of data
-	dd if=/dev/urandom of=$tf bs=1M count=8 || error "dd failed"
-
-	# Resync to update parity
-	$LFS mirror resync $tf || error "mirror resync failed"
-
-	# Get checksum before failure
-	local sum_before=$(md5sum $tf | awk '{print $1}')
-
-	# 4+2 tolerates two lost objects; fail exactly that many.
-	ec_data_stripe_osts $tf 0 1
-	ec_start_read_fault $tf "${EC_STRIPE_OSTS[@]}"
-	stack_trap "ec_stop_read_fault"
-
-	# Verify read still succeeds at the recovery limit
-	local sum_after=$(md5sum $tf | awk '{print $1}')
-	[[ "$sum_before" == "$sum_after" ]] ||
-		error "checksum changed at max failures: $sum_before vs" \
-			"$sum_after"
-
-	echo "** Maximum recoverable failure (2 OSTs) recovery successful"
-}
-run_test 43b "test recovery at maximum (2 OST failures with 4+2 EC)"
-
 test_44a() {
 	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
 	enable_ec
@@ -7289,173 +6904,6 @@ test_44a() {
 		"after clear"
 }
 run_test 44a "test error handling with too many OST failures"
-
-test_45b() {
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	# Create EC file with 4+2 configuration
-	$LFS setstripe -E eof -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe --ec 4+2 failed"
-
-	# Write 8MB of data
-	dd if=/dev/urandom of=$tf bs=1M count=8 || error "dd failed"
-
-	# Resync to update parity
-	$LFS mirror resync $tf || error "mirror resync failed"
-
-	# Get checksum before failure
-	local sum_before=$(md5sum $tf | awk '{print $1}')
-
-	ec_data_stripe_osts $tf 0 3
-	ec_start_read_fault $tf "${EC_STRIPE_OSTS[@]}"
-	stack_trap "ec_stop_read_fault"
-
-	# Verify read succeeds with non-consecutive OST failures
-	local sum_after=$(md5sum $tf | awk '{print $1}')
-	[[ "$sum_before" == "$sum_after" ]] ||
-		error "Non-consecutive OST failure recovery failed"
-
-	echo "** Non-consecutive OST failure recovery successful"
-}
-run_test 45b "test recovery with non-consecutive OST failures (OST0 and OST3)"
-
-test_45d() {
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	# Create EC file with 4+2 configuration
-	$LFS setstripe -E eof -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe --ec 4+2 failed"
-
-	# Write 8MB of data
-	dd if=/dev/urandom of=$tf bs=1M count=8 || error "dd failed"
-
-	# Resync to update parity
-	$LFS mirror resync $tf || error "mirror resync failed"
-
-	# Get checksum before failure
-	local sum_before=$(md5sum $tf | awk '{print $1}')
-
-	ec_data_stripe_osts $tf 0 2
-	ec_start_read_fault $tf "${EC_STRIPE_OSTS[@]}"
-	stack_trap "ec_stop_read_fault"
-
-	# Verify read succeeds with specific data OST failures
-	local sum_after=$(md5sum $tf | awk '{print $1}')
-	[[ "$sum_before" == "$sum_after" ]] ||
-		error "Specific data OST failure recovery failed"
-
-	echo "** Specific data OST (0,2) failure recovery successful"
-}
-run_test 45d "test recovery with specific data OST failures (OST0 and OST2)"
-
-test_46a() {
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	# Create EC file with 4+2 configuration and 64K stripe size
-	$LFS setstripe -E eof -S 64K -c 4 --ec 4+2 $tf ||
-		error "setstripe --ec 4+2 -S 64K failed"
-
-	# Write 1MB of data (16 stripes across 4 OSTs with 64K stripe)
-	dd if=/dev/urandom of=$tf bs=1M count=1 || error "dd failed"
-
-	# Resync to update parity
-	$LFS mirror resync $tf || error "mirror resync failed"
-
-	# Get checksum before failure
-	local sum_before=$(md5sum $tf | awk '{print $1}')
-
-	ec_start_read_fault $tf
-	stack_trap "ec_stop_read_fault"
-
-	# Verify read succeeds with correct data
-	local sum_after=$(md5sum $tf | awk '{print $1}')
-	[[ "$sum_before" == "$sum_after" ]] ||
-		error "64K stripe recovery failed: $sum_before vs $sum_after"
-
-	echo "** 64K stripe size recovery successful"
-}
-run_test 46a "test EC recovery with 64K stripe size"
-
-test_46b() {
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	# Create EC file with 4+2 configuration and 256K stripe size
-	$LFS setstripe -E eof -S 256K -c 4 --ec 4+2 $tf ||
-		error "setstripe --ec 4+2 -S 256K failed"
-
-	# Write 4MB of data (16 stripes across 4 OSTs with 256K stripe)
-	dd if=/dev/urandom of=$tf bs=1M count=4 || error "dd failed"
-
-	# Resync to update parity
-	$LFS mirror resync $tf || error "mirror resync failed"
-
-	# Get checksum before failure
-	local sum_before=$(md5sum $tf | awk '{print $1}')
-
-	ec_start_read_fault $tf
-	stack_trap "ec_stop_read_fault"
-
-	# Verify read succeeds with correct data
-	local sum_after=$(md5sum $tf | awk '{print $1}')
-	[[ "$sum_before" == "$sum_after" ]] ||
-		error "256K stripe recovery failed: $sum_before vs $sum_after"
-
-	echo "** 256K stripe size recovery successful"
-}
-run_test 46b "test EC recovery with 256K stripe size"
-
-test_46c() {
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	# Create EC file with 4+2 configuration and 4M stripe size
-	$LFS setstripe -E eof -S 4M -c 4 --ec 4+2 $tf ||
-		error "setstripe --ec 4+2 -S 4M failed"
-
-	# Write 16MB of data (4 stripes across 4 OSTs with 4M stripe)
-	dd if=/dev/urandom of=$tf bs=1M count=16 || error "dd failed"
-
-	# Resync to update parity
-	$LFS mirror resync $tf || error "mirror resync failed"
-
-	# Get checksum before failure
-	local sum_before=$(md5sum $tf | awk '{print $1}')
-
-	ec_start_read_fault $tf
-	stack_trap "ec_stop_read_fault"
-
-	# Verify read succeeds with correct data
-	local sum_after=$(md5sum $tf | awk '{print $1}')
-	[[ "$sum_before" == "$sum_after" ]] ||
-		error "4M stripe recovery failed: $sum_before vs $sum_after"
-
-	echo "** 4M stripe size recovery successful"
-}
-run_test 46c "test EC recovery with 4M stripe size"
 
 test_46d() {
 	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
@@ -8470,43 +7918,6 @@ test_51a() {
 }
 run_test 51a "test EC recovery with EOF inside RAID / stripe sets"
 
-test_52a() {
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	# 4+2 EC: pcount=2, so max recoverable = 2 data OSTs
-	$LFS setstripe -E eof -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe --ec 4+2 failed"
-	dd if=/dev/urandom of=$tf bs=1M count=8 ||
-		error "dd failed"
-	$LFS mirror resync $tf || error "resync failed"
-
-	local sum_before=$(md5sum $tf | awk '{print $1}')
-
-	ec_classify_osts $tf
-	(( ${#safe_osts[@]} >= 2 )) ||
-		skip_env "not enough safe data OSTs (${#safe_osts[@]})"
-
-	echo "** Max degradation: disabling 2 data OSTs:" \
-		"${safe_osts[0]} and ${safe_osts[1]}"
-
-	ec_deactivate_ost ${safe_osts[0]}
-	ec_deactivate_ost ${safe_osts[1]}
-	cancel_lru_locks osc
-
-	local sum_after=$(md5sum $tf | awk '{print $1}')
-	[[ "$sum_before" == "$sum_after" ]] ||
-		error "max degradation recovery failed:" \
-			"$sum_before vs $sum_after"
-
-	echo "** Max degradation (2 of 4 data OSTs down) passed"
-}
-run_test 52a "test EC recovery at max degradation (pcount data OSTs down)"
-
 test_52b() {
 	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
 	enable_ec
@@ -8783,50 +8194,58 @@ test_56a() {
 run_test 56a "test EC recovery of an encrypted file"
 
 test_58a() {
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
+	(( OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs for 2+2"
 	enable_ec
 
-	# Test parity_used[] with every 2-OST combination in
-	# a 4+2 layout. With 2 parity OSTs, degrading 2 data
-	# OSTs exercises parity selection and coefficient matrix
-	# construction in lov_recover_data().
+	# Test parity_used[] with every 2-OST combination.  With 2 parity
+	# OSTs, degrading 2 data OSTs exercises parity selection and
+	# coefficient matrix construction in lov_recover_data().  Every
+	# pair also covers each pair of stripe positions in a row.
 	local tf=$DIR/$tfile
+	# data stripes, parity stripes, file size in MiB
+	local geoms=("2 2 6")
+
+	(( EC_CSTRIPE < 2 )) ||
+		geoms+=("$EC_DSTRIPE $EC_CSTRIPE $((2 * EC_DSTRIPE))")
 
 	stack_trap "rm -f $tf"
+	stack_trap "ec_stop_read_fault"
 
-	$LFS setstripe -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe 4+2 failed"
-	dd if=/dev/urandom of=$tf bs=1M count=8 ||
-		error "dd 8M failed"
-	$LFS mirror resync $tf || error "resync failed"
+	local g dstripe cstripe mb sum got i j n
+	for g in "${geoms[@]}"; do
+		read -r dstripe cstripe mb <<< "$g"
+		rm -f $tf
+		$LFS setstripe -S 1M -c $dstripe --ec $dstripe+$cstripe $tf ||
+			error "setstripe $dstripe+$cstripe failed"
+		dd if=/dev/urandom of=$tf bs=1M count=$mb ||
+			error "dd ${mb}M failed"
+		$LFS mirror resync $tf ||
+			error "resync $dstripe+$cstripe failed"
 
-	local sum=$(md5sum $tf | awk '{print $1}')
+		sum=$(md5sum $tf | awk '{print $1}')
 
-	ec_classify_osts $tf
-	local n=${#safe_osts[@]}
-	(( n >= 2 )) || skip_env "need >= 2 safe data OSTs"
+		ec_classify_osts $tf
+		n=${#safe_osts[@]}
+		(( n >= 2 )) || error "$dstripe+$cstripe: $n safe data OSTs"
 
-	local i j
-	for ((i = 0; i < n - 1; i++)); do
-		for ((j = i + 1; j < n; j++)); do
-			ec_deactivate_ost ${safe_osts[$i]}
-			ec_deactivate_ost ${safe_osts[$j]}
-			cancel_lru_locks osc
-
-			local got=$(md5sum $tf | awk '{print $1}')
-			ec_reactivate_ost ${safe_osts[$j]}
-			ec_reactivate_ost ${safe_osts[$i]}
-
-			[[ "$sum" == "$got" ]] ||
-				error "2-of-${n} OST${safe_osts[$i]}+" \
-					"OST${safe_osts[$j]}:" \
-					"$sum != $got"
-			echo "  OST${safe_osts[$i]}+" \
-				"OST${safe_osts[$j]} OK"
+		for ((i = 0; i < n - 1; i++)); do
+			for ((j = i + 1; j < n; j++)); do
+				ec_start_read_fault $tf ${safe_osts[i]} \
+					${safe_osts[j]}
+				got=$(md5sum $tf | awk '{print $1}')
+				ec_stop_read_fault
+				[[ "$sum" == "$got" ]] ||
+					error "$dstripe+$cstripe" \
+					      "OST${safe_osts[i]}+" \
+					      "OST${safe_osts[j]}:" \
+					      "$sum != $got"
+				echo "  $dstripe+$cstripe OST${safe_osts[i]}+" \
+				     "OST${safe_osts[j]} OK"
+			done
 		done
 	done
 }
-run_test 58a "EC parity_used[] with 2-OST combos in 4+2 layout"
+run_test 58a "EC parity_used[] with every pair of failed data OSTs"
 
 test_58b() {
 	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
@@ -8934,164 +8353,88 @@ test_59a() {
 run_test 59a "EC recovery with sparse PFL file spanning components"
 
 test_60a() {
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
 	enable_ec
 
 	local tf=$DIR/$tfile
+	local k=$EC_DSTRIPE
+	local m=1048576
+	local nd=one
 
+	(( EC_CSTRIPE < 2 )) || nd=two
 	stack_trap "rm -f $tf"
+	stack_trap "ec_stop_read_fault"
 
-	# 4+2 layout, 1M stripes, swidth=4M
-	$LFS setstripe -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe failed"
+	# mid: truncate 2 rows to 2.5M, in the middle of a stripe
+	# row: truncate 3 rows to the first row boundary
+	# zero: truncate 2 rows to 0, read it degraded, write a partial row
+	# extend: truncate 2 rows to 2M, resync, extend to 3 rows
+	local recipe mb size sum sum_row got
+	for recipe in mid row zero extend; do
+		echo "truncate recipe $recipe"
+		rm -f $tf
+		$LFS setstripe -S 1M -c $k $EC_ARG $tf ||
+			error "setstripe failed"
+		mb=$((2 * k))
+		[[ $recipe != row ]] || mb=$((3 * k))
+		dd if=/dev/urandom of=$tf bs=1M count=$mb ||
+			error "dd $recipe ${mb}M failed"
+		$LFS mirror resync $tf || error "resync $recipe 1 failed"
 
-	# Write 8M (2 full stripe sets), resync parity
-	dd if=/dev/urandom of=$tf bs=1M count=8 ||
-		error "dd write failed"
-	$LFS mirror resync $tf || error "resync failed"
+		case $recipe in
+		mid)
+			size=$((2 * m + m / 2))
+			$TRUNCATE $tf $size || error "truncate $recipe failed"
+			;;
+		row)
+			sum_row=$(dd if=$tf bs=1M count=$k 2>/dev/null | md5sum)
+			size=$((k * m))
+			$TRUNCATE $tf $size || error "truncate $recipe failed"
+			[[ "$(md5sum < $tf)" == "$sum_row" ]] ||
+				error "first row changed by truncate"
+			;;
+		zero)
+			$TRUNCATE $tf 0 || error "truncate $recipe failed"
+			ec_start_read_fault $tf
+			(( $(stat -c %s $tf) == 0 )) ||
+				error "size $(stat -c %s $tf) != 0"
+			# read through the client rather than asking fstat:
+			# wc -c on a regular file takes the stat shortcut
+			got=$(dd if=$tf bs=1M 2>/dev/null | wc -c)
+			ec_stop_read_fault
+			(( got == 0 )) ||
+				error "read $got bytes from truncated file"
 
-	# Truncate mid-stripe to 2.5M while healthy
-	$TRUNCATE $tf $((2 * 1024 * 1024 + 512 * 1024)) ||
-		error "truncate to 2.5M failed"
-	# Resync so parity reflects truncated state
-	$LFS mirror resync $tf || error "resync after trunc failed"
+			size=$(((k + 1) * m))
+			dd if=/dev/urandom of=$tf bs=1M count=$((k + 1)) ||
+				error "dd $recipe rewrite failed"
+			;;
+		extend)
+			$TRUNCATE $tf $((2 * m)) ||
+				error "truncate $recipe failed"
+			$LFS mirror resync $tf ||
+				error "resync $recipe 2 failed"
+			size=$((3 * k * m))
+			dd if=/dev/urandom of=$tf bs=1M count=$((3 * k - 2)) \
+				seek=2 || error "dd $recipe extend failed"
+			;;
+		esac
+		$LFS mirror resync $tf || error "resync $recipe failed"
 
-	# Capture reference checksum
-	local sum=$(md5sum $tf | awk '{print $1}')
+		# the size must not depend on the OST that is down
+		ec_start_read_fault $tf
+		(( $(stat -c %s $tf) == size )) ||
+			error "$recipe size $(stat -c %s $tf) != $size"
+		ec_stop_read_fault
 
-	# Now degrade and verify EC recovery
-	ec_classify_osts $tf
-	(( ${#safe_osts[@]} >= 1 )) ||
-		skip_env "need >= 1 safe data OST"
-	local victim=${safe_osts[0]}
-	echo "** Deactivating data OST $victim"
-
-	ec_deactivate_ost $victim
-	cancel_lru_locks osc
-
-	local sz=$(stat -c %s $tf)
-	(( sz == 2 * 1024 * 1024 + 512 * 1024 )) ||
-		error "size mismatch: $sz != 2621440"
-
-	local got=$(md5sum $tf | awk '{print $1}')
-	[[ "$sum" == "$got" ]] ||
-		error "60a: mid-stripe truncate recovery failed:" \
-			"$sum != $got"
-
-	echo "** EC recovery after mid-stripe truncate OK"
+		sum=$(md5sum $tf | awk '{print $1}')
+		if [[ $recipe == extend ]]; then
+			ec_check_degraded $tf $sum $nd
+		else
+			ec_check_degraded $tf $sum one
+		fi
+	done
 }
-run_test 60a "EC recovery after mid-stripe truncate"
-
-test_60b() {
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	$LFS setstripe -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe failed"
-
-	# Write 12M (3 stripe sets), resync
-	dd if=/dev/urandom of=$tf bs=1M count=12 ||
-		error "dd write failed"
-	$LFS mirror resync $tf || error "resync failed"
-
-	# Save checksum of first 4M (one swidth)
-	local sum_4m=$(dd if=$tf bs=1M count=4 2>/dev/null |
-		md5sum | awk '{print $1}')
-
-	# Truncate to swidth boundary while healthy
-	$TRUNCATE $tf $((4 * 1024 * 1024)) ||
-		error "truncate to 4M failed"
-	$LFS mirror resync $tf ||
-		error "resync after trunc failed"
-
-	local sum=$(md5sum $tf | awk '{print $1}')
-	# First 4M should be unchanged
-	[[ "$sum_4m" == "$sum" ]] ||
-		error "data changed by truncate: $sum_4m != $sum"
-
-	# Degrade and verify recovery
-	ec_classify_osts $tf
-	(( ${#safe_osts[@]} >= 1 )) ||
-		skip_env "need >= 1 safe data OST"
-	local victim=${safe_osts[0]}
-	echo "** Deactivating data OST $victim"
-
-	ec_deactivate_ost $victim
-	cancel_lru_locks osc
-
-	local got=$(md5sum $tf | awk '{print $1}')
-	[[ "$sum" == "$got" ]] ||
-		error "60b: stripe-boundary truncate recovery" \
-			"failed: $sum != $got"
-
-	local sz=$(stat -c %s $tf)
-	(( sz == 4 * 1024 * 1024 )) ||
-		error "size mismatch: $sz != 4194304"
-
-	echo "** EC recovery after stripe-boundary truncate OK"
-}
-run_test 60b "EC recovery after stripe-boundary truncate"
-
-test_60c() {
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	$LFS setstripe -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe failed"
-
-	# Write 8M, resync, then truncate to zero
-	dd if=/dev/urandom of=$tf bs=1M count=8 ||
-		error "dd write failed"
-	$LFS mirror resync $tf || error "resync failed"
-	$TRUNCATE $tf 0 || error "truncate to 0 failed"
-
-	# Degrade and verify file reads as empty
-	ec_classify_osts $tf
-	(( ${#safe_osts[@]} >= 1 )) ||
-		skip_env "need >= 1 safe data OST"
-	local victim=${safe_osts[0]}
-	echo "** Deactivating data OST $victim"
-
-	ec_deactivate_ost $victim
-	cancel_lru_locks osc
-
-	local sz=$(stat -c %s $tf)
-	(( sz == 0 )) || error "size not 0 after truncate: $sz"
-
-	# read through the client rather than asking fstat: wc -c on a
-	# regular file takes the stat shortcut and issues no read at all
-	local bytes=$(dd if=$tf bs=1M 2>/dev/null | wc -c)
-	(( bytes == 0 )) ||
-		error "read returned $bytes bytes from truncated file"
-
-	# Re-write while still degraded should fail or succeed
-	# depending on whether victim stripe is used; just verify
-	# recovery works after reactivate+write+resync
-	ec_reactivate_ost $victim
-	dd if=/dev/urandom of=$tf bs=1M count=4 ||
-		error "dd re-write failed"
-	$LFS mirror resync $tf || error "resync failed"
-
-	local sum=$(md5sum $tf | awk '{print $1}')
-	ec_deactivate_ost $victim
-	cancel_lru_locks osc
-
-	local got=$(md5sum $tf | awk '{print $1}')
-	[[ "$sum" == "$got" ]] ||
-		error "60c: re-write after truncate recovery" \
-			"failed: $sum != $got"
-
-	echo "** EC recovery after truncate-to-zero OK"
-}
-run_test 60c "EC recovery after truncate to zero and re-write"
+run_test 60a "EC recovery after truncate"
 
 test_60d() {
 	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
@@ -9159,92 +8502,45 @@ test_60d() {
 run_test 60d "EC recovery after PFL component-boundary truncate"
 
 test_61a() {
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
 	enable_ec
 
 	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	# 4+2 layout, 1M stripes: test various sub-stripe sizes
-	local -a sizes=(4096 32768 65536 524288 $((1048576 - 1)))
-	local -a labels=(
-		"4K" "32K" "64K" "512K" "1M-1"
+	local k=1024
+	local m=1048576
+	local row=$((EC_DSTRIPE * m))
+	# stripe size and file size: sub-stripe sizes, a partial second
+	# stripe, an incomplete row, and several full rows
+	local cases=(
+		"$m $((4 * k))" "$m $((32 * k))" "$m $((64 * k))"
+		"$m $((512 * k))" "$m $((m - 1))" "$m $((m * 3 / 2))"
+		"$m $((row - m))"
+		"$((64 * k)) 1" "$((64 * k)) $((4 * k))"
+		"$((64 * k)) $((64 * k - 1))" "$((64 * k)) $m"
+		"$((256 * k)) $row"
+		"$((4 * m)) $((4 * row))"
 	)
 
-	local i
-	for ((i = 0; i < ${#sizes[@]}; i++)); do
-		rm -f $tf
-		$LFS setstripe -S 1M -c 4 --ec 4+2 $tf ||
-			error "setstripe failed"
-		dd if=/dev/urandom of=$tf \
-			bs=${sizes[$i]} count=1 ||
-			error "dd ${labels[$i]} failed"
-		$LFS mirror resync $tf ||
-			error "resync ${labels[$i]} failed"
-		local sum=$(md5sum $tf | awk '{print $1}')
-
-		# Every size here is under one 1M stripe, so the data lives
-		# on stripe 0 alone; safe_osts[0] is the lowest OST index
-		# and usually holds none of it.
-		ec_data_stripe_osts $tf 0
-		local victim=${EC_STRIPE_OSTS[0]}
-
-		ec_deactivate_ost $victim
-		cancel_lru_locks osc
-		local got=$(md5sum $tf | awk '{print $1}')
-		ec_reactivate_ost $victim
-		[[ "$sum" == "$got" ]] ||
-			error "${labels[$i]} OST$victim:" \
-				"$sum != $got"
-		echo "  ${labels[$i]} OK"
-	done
-}
-run_test 61a "EC recovery with various sub-stripe file sizes"
-
-test_61b() {
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
 	stack_trap "rm -f $tf"
+	stack_trap "ec_stop_read_fault"
 
-	# 64K stripe: sub-stripe means < 64K
-	local -a sizes=(1 4096 $((65536 - 1)))
-	local -a labels=("1-byte" "4K" "64K-1")
-
-	local i
-	for ((i = 0; i < ${#sizes[@]}; i++)); do
+	local c ssize fsize sum
+	for c in "${cases[@]}"; do
+		read -r ssize fsize <<< "$c"
+		echo "stripe size $ssize, file size $fsize"
 		rm -f $tf
-		$LFS setstripe -S 64K -c 4 --ec 4+2 $tf ||
-			error "setstripe 64K failed"
-		dd if=/dev/urandom of=$tf \
-			bs=${sizes[$i]} count=1 ||
-			error "dd ${labels[$i]} failed"
-		$LFS mirror resync $tf ||
-			error "resync ${labels[$i]} failed"
-		local sum=$(md5sum $tf | awk '{print $1}')
+		$LFS setstripe -S $ssize -c $EC_DSTRIPE $EC_ARG $tf ||
+			error "setstripe -S $ssize failed"
+		dd if=/dev/urandom of=$tf bs=$fsize count=1 iflag=fullblock ||
+			error "dd $fsize failed"
+		$LFS mirror resync $tf || error "resync $ssize/$fsize failed"
+		sum=$(md5sum $tf | awk '{print $1}')
 
-		ec_classify_osts $tf
-		(( ${#safe_osts[@]} >= 1 )) ||
-			skip_env "no safe data OSTs"
-
-		local ost
-		for ost in "${safe_osts[@]}"; do
-			ec_deactivate_ost $ost
-			cancel_lru_locks osc
-			local got=$(md5sum $tf | awk '{print $1}')
-			ec_reactivate_ost $ost
-			[[ "$sum" == "$got" ]] ||
-				error "${labels[$i]} " \
-					"OST$ost:" \
-					"$sum != $got"
-		done
-		echo "  ${labels[$i]} OK (all safe OSTs)"
+		# fail the OST of the first data stripe, which a file of any
+		# size has data on
+		ec_check_degraded $tf $sum one
 	done
 }
-run_test 61b "EC recovery with sub-stripe files and 64K stripe"
+run_test 61a "EC recovery with various file and stripe sizes"
 
 test_61c() {
 	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
@@ -9325,112 +8621,69 @@ test_61d() {
 run_test 61d "EC recovery sub-stripe file with 2 OST failures"
 
 test_62a() {
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
 	enable_ec
 
 	local tf=$DIR/$tfile
+	local nd=one
+	local m=1048576
 
+	(( EC_CSTRIPE < 2 )) || nd=two
 	stack_trap "rm -f $tf"
+	stack_trap "ec_stop_read_fault"
 
-	# 4+2 layout, 1M stripes
-	$LFS setstripe -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe failed"
+	local recipe size sum i
+	for recipe in staged unaligned small; do
+		echo "append recipe $recipe"
+		rm -f $tf
+		$LFS setstripe -S 1M -c $EC_DSTRIPE $EC_ARG $tf ||
+			error "setstripe failed"
 
-	# Append in multiple stages, resync after each
-	local stage
-	for stage in 1 2 3; do
-		dd if=/dev/urandom of=$tf bs=1M count=2 \
-			oflag=append conv=notrunc ||
-			error "append stage $stage failed"
-		$LFS mirror resync $tf ||
-			error "resync stage $stage failed"
-	done
+		case $recipe in
+		staged)	# 3 appends of 2M, resync after each
+			for i in 1 2 3; do
+				dd if=/dev/urandom of=$tf bs=1M count=2 \
+					oflag=append conv=notrunc ||
+					error "append $i failed"
+				$LFS mirror resync $tf ||
+					error "resync $i failed"
+			done
+			size=$((6 * m))
+			;;
+		unaligned) # 3M, 1M, 512K, 3M, then a single resync
+			dd if=/dev/urandom of=$tf bs=1M count=3 ||
+				error "write 3M failed"
+			dd if=/dev/urandom of=$tf bs=1M count=1 \
+				oflag=append conv=notrunc ||
+				error "append 1M failed"
+			dd if=/dev/urandom of=$tf bs=512K count=1 \
+				oflag=append conv=notrunc ||
+				error "append 512K failed"
+			dd if=/dev/urandom of=$tf bs=1M count=3 \
+				oflag=append conv=notrunc ||
+				error "append last 3M failed"
+			size=$((7 * m + m / 2))
+			;;
+		small)	# 10 appends of 100K, all inside stripe 0
+			for ((i = 0; i < 10; i++)); do
+				dd if=/dev/urandom of=$tf bs=100K count=1 \
+					oflag=append conv=notrunc ||
+					error "append $i failed"
+			done
+			size=$((1000 * 1024))
+			;;
+		esac
+		$LFS mirror resync $tf || error "resync $recipe failed"
 
-	# File should be 6M total
-	local sz=$(stat -c %s $tf)
-	(( sz == 6 * 1048576 )) ||
-		error "size mismatch: $sz != 6291456"
-
-	local sum=$(md5sum $tf | awk '{print $1}')
-	ec_classify_osts $tf
-	(( ${#safe_osts[@]} >= 1 )) ||
-		skip_env "no safe data OSTs"
-
-	local ost
-	for ost in "${safe_osts[@]}"; do
-		ec_deactivate_ost $ost
-		cancel_lru_locks osc
-		local got=$(md5sum $tf | awk '{print $1}')
-		ec_reactivate_ost $ost
-		[[ "$sum" == "$got" ]] ||
-			error "append OST$ost: $sum != $got"
-		echo "  OST$ost OK"
+		(( $(stat -c %s $tf) == size )) ||
+			error "$recipe size $(stat -c %s $tf) != $size"
+		sum=$(md5sum $tf | awk '{print $1}')
+		case $recipe in
+		staged) ec_check_degraded $tf $sum each ;;
+		*) ec_check_degraded $tf $sum $nd ;;
+		esac
 	done
 }
-run_test 62a "EC recovery after multiple append writes"
-
-test_62b() {
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	# 4+2 layout, 1M stripes: append non-aligned amounts
-	# with a single resync after the last one
-	$LFS setstripe -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe failed"
-
-	# Append 3M, 1M, 512K, 3M = 7.5M total (unaligned)
-
-	dd if=/dev/urandom of=$tf bs=1M count=3 ||
-		error "append 3M failed"
-	dd if=/dev/urandom of=$tf bs=1M count=1 \
-		oflag=append conv=notrunc ||
-		error "append 1M failed"
-	dd if=/dev/urandom of=$tf bs=512K count=1 \
-		oflag=append conv=notrunc ||
-		error "append 512K failed"
-	dd if=/dev/urandom of=$tf bs=1M count=3 \
-		oflag=append conv=notrunc ||
-		error "append last 3M failed"
-	$LFS mirror resync $tf || error "resync failed"
-
-	local sum=$(md5sum $tf | awk '{print $1}')
-	local sz=$(stat -c %s $tf)
-	echo "  file size: $sz"
-
-	ec_classify_osts $tf
-	(( ${#safe_osts[@]} >= 2 )) ||
-		skip_env "need >= 2 safe data OSTs"
-
-	# 1-down
-	local victim=${safe_osts[0]}
-	ec_deactivate_ost $victim
-	cancel_lru_locks osc
-	local got=$(md5sum $tf | awk '{print $1}')
-	ec_reactivate_ost $victim
-	[[ "$sum" == "$got" ]] ||
-		error "unaligned append 1-down:" \
-			"$sum != $got"
-	echo "  1-down OK"
-
-	# 2-down
-	local v1=${safe_osts[0]}
-	local v2=${safe_osts[1]}
-	ec_deactivate_ost $v1
-	ec_deactivate_ost $v2
-	cancel_lru_locks osc
-	got=$(md5sum $tf | awk '{print $1}')
-	ec_reactivate_ost $v2
-	ec_reactivate_ost $v1
-	[[ "$sum" == "$got" ]] ||
-		error "unaligned append 2-down:" \
-			"$sum != $got"
-	echo "** unaligned append with 2-down OK"
-}
-run_test 62b "EC recovery after unaligned append writes"
+run_test 62a "EC recovery after append writes"
 
 test_62c() {
 	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
@@ -9475,62 +8728,6 @@ test_62c() {
 	done
 }
 run_test 62c "EC recovery after append crossing PFL boundary"
-
-test_62d() {
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	# 4+2 layout, 1M stripes
-	$LFS setstripe -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe failed"
-
-	# Append sub-stripe amounts repeatedly
-	local i
-	for ((i = 0; i < 10; i++)); do
-		dd if=/dev/urandom of=$tf bs=100K count=1 \
-			oflag=append conv=notrunc ||
-			error "append $i failed"
-	done
-	# Total: 1000K, which is still inside the first 1M stripe
-	$LFS mirror resync $tf || error "resync failed"
-
-	local sum=$(md5sum $tf | awk '{print $1}')
-
-	# All 1000K sit on stripe 0, so both victims are chosen from the
-	# stripe map rather than from the numerically sorted safe_osts,
-	# whose first entries usually hold none of this file's data.
-	ec_data_stripe_osts $tf 0 1
-
-	# Single degradation
-	local victim=${EC_STRIPE_OSTS[0]}
-	ec_deactivate_ost $victim
-	cancel_lru_locks osc
-	local got=$(md5sum $tf | awk '{print $1}')
-	ec_reactivate_ost $victim
-	[[ "$sum" == "$got" ]] ||
-		error "sub-stripe appends 1-down:" \
-			"$sum != $got"
-	echo "  1-down OK"
-
-	# Double degradation
-	local v1=${EC_STRIPE_OSTS[0]}
-	local v2=${EC_STRIPE_OSTS[1]}
-	ec_deactivate_ost $v1
-	ec_deactivate_ost $v2
-	cancel_lru_locks osc
-	got=$(md5sum $tf | awk '{print $1}')
-	ec_reactivate_ost $v2
-	ec_reactivate_ost $v1
-	[[ "$sum" == "$got" ]] ||
-		error "sub-stripe appends 2-down:" \
-			"$sum != $got"
-	echo "** sub-stripe appends with 2-down OK"
-}
-run_test 62d "EC recovery after many sub-stripe appends"
 
 test_63a() {
 	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
@@ -10169,99 +9366,6 @@ test_67a() {
 }
 run_test 67a "EC write to available stripes with one OST unreadable"
 
-test_67c() {
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	# PFL layout
-	$LFS setstripe -E 4M -S 1M -c 4 --ec 4+2 \
-		-E eof -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe PFL failed"
-
-	dd if=/dev/urandom of=$tf bs=1M count=8 ||
-		error "dd initial failed"
-	$LFS mirror resync $tf || error "resync initial failed"
-
-	# Overwrite just comp1 (first 4M), resync, verify
-	dd if=/dev/urandom of=$tf bs=1M count=4 \
-		conv=notrunc || error "dd overwrite comp1 failed"
-	$LFS mirror resync $tf ||
-		error "resync after comp1 overwrite failed"
-
-	local sum=$(md5sum $tf | awk '{print $1}')
-
-	ec_classify_osts $tf
-	(( ${#safe_osts[@]} >= 1 )) ||
-		skip_env "no safe data OSTs"
-	local victim=${safe_osts[0]}
-
-	ec_deactivate_ost $victim
-	cancel_lru_locks osc
-	local got=$(md5sum $tf | awk '{print $1}')
-	ec_reactivate_ost $victim
-
-	[[ "$sum" == "$got" ]] ||
-		error "PFL partial overwrite recovery:" \
-			"$sum != $got"
-	echo "** PFL partial overwrite + recovery OK"
-}
-run_test 67c "EC recovery after partial overwrite of PFL component"
-
-test_67d() {
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	$LFS setstripe -E eof -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe failed"
-
-	dd if=/dev/urandom of=$tf bs=1M count=8 ||
-		error "dd initial failed"
-	$LFS mirror resync $tf || error "resync initial failed"
-
-	# Overwrite first 2M (partial RAID set), resync
-	dd if=/dev/urandom of=$tf bs=1M count=2 \
-		conv=notrunc || error "dd overwrite 2M failed"
-	$LFS mirror resync $tf ||
-		error "resync after partial overwrite failed"
-
-	local sum=$(md5sum $tf | awk '{print $1}')
-
-	ec_classify_osts $tf
-	(( ${#safe_osts[@]} >= 2 )) ||
-		skip_env "need >= 2 safe data OSTs"
-	local v1=${safe_osts[0]}
-	local v2=${safe_osts[1]}
-
-	# Single OST down
-	ec_deactivate_ost $v1
-	cancel_lru_locks osc
-	local got=$(md5sum $tf | awk '{print $1}')
-	ec_reactivate_ost $v1
-	[[ "$sum" == "$got" ]] ||
-		error "partial overwrite 1-down: $sum != $got"
-	echo "** 1-OST down after partial overwrite OK"
-
-	# Two OSTs down
-	ec_deactivate_ost $v1
-	ec_deactivate_ost $v2
-	cancel_lru_locks osc
-	got=$(md5sum $tf | awk '{print $1}')
-	ec_reactivate_ost $v2
-	ec_reactivate_ost $v1
-	[[ "$sum" == "$got" ]] ||
-		error "partial overwrite 2-down: $sum != $got"
-	echo "** 2-OSTs down after partial overwrite OK"
-}
-run_test 67d "EC recovery after partial overwrite with 1 and 2 OST failures"
-
 test_68a() {
 	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
 	enable_ec
@@ -10296,48 +9400,6 @@ test_68a() {
 	done
 }
 run_test 68a "EC 2+1 recovery cycling all safe data OSTs"
-
-test_68b() {
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	# 2+2: 2 data stripes, 2 parity, max 2 failures
-	$LFS setstripe -E eof -S 1M -c 2 --ec 2+2 $tf ||
-		error "setstripe 2+2 failed"
-
-	dd if=/dev/urandom of=$tf bs=1M count=6 ||
-		error "dd 6M failed"
-	$LFS mirror resync $tf || error "resync failed"
-
-	local sum=$(md5sum $tf | awk '{print $1}')
-	ec_classify_osts $tf
-	(( ${#safe_osts[@]} >= 2 )) ||
-		skip_env "need >= 2 safe data OSTs for 2+2"
-
-	# Test all 2-OST failure combinations
-	local i j
-	for ((i = 0; i < ${#safe_osts[@]}; i++)); do
-		for ((j = i + 1; j < ${#safe_osts[@]}; j++)); do
-			local v1=${safe_osts[$i]}
-			local v2=${safe_osts[$j]}
-			ec_deactivate_ost $v1
-			ec_deactivate_ost $v2
-			cancel_lru_locks osc
-			local got=$(md5sum $tf | awk '{print $1}')
-			ec_reactivate_ost $v2
-			ec_reactivate_ost $v1
-			[[ "$sum" == "$got" ]] ||
-				error "2+2 OST$v1+$v2:" \
-					"$sum != $got"
-			echo "  2+2 OST$v1+OST$v2 OK"
-		done
-	done
-}
-run_test 68b "EC 2+2 recovery with all 2-OST failure pairs"
 
 test_68c() {
 	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
@@ -10573,186 +9635,67 @@ test_69d() {
 run_test 69d "EC recovery after O_DIRECT write to PFL layout"
 
 test_70a() {
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
 	enable_ec
 
 	local tf=$DIR/$tfile
+	local k=$EC_DSTRIPE
+	local nd=one
 
+	(( EC_CSTRIPE < 2 )) || nd=two
 	stack_trap "rm -f $tf"
+	stack_trap "ec_stop_read_fault"
 
-	$LFS setstripe -E eof -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe failed"
+	# recipe name, MiB to write first, then the overwrite dd arguments
+	local recipes=(
+		"mid $((2 * k)) bs=1M count=2 seek=$((k - 1))"
+		"unaligned $((2 * k)) bs=512K count=1 seek=3"
+		"extend $k bs=1M count=$k"
+		"partial $((2 * k)) bs=1M count=$(((k + 1) / 2))"
+		"pfl1 $((2 * k)) bs=1M count=$k"
+		"pfl2 $((3 * k)) bs=1M count=$k seek=$k"
+	)
+	# mid: 2M across the first row boundary
+	# unaligned: 512K at 1.5M, ending on a stripe boundary
+	# extend: write a row, extend by 2 rows, rewrite the first row
+	# partial: the first half of the first row
+	# pfl1, pfl2: the first or the second PFL component only
 
-	# Write 8M, resync, then overwrite middle 2M
-	dd if=/dev/urandom of=$tf bs=1M count=8 ||
-		error "dd initial failed"
-	$LFS mirror resync $tf || error "resync 1 failed"
+	local r recipe mb args sum
+	for r in "${recipes[@]}"; do
+		read -r recipe mb args <<< "$r"
+		echo "overwrite recipe $recipe"
+		rm -f $tf
+		if [[ $recipe == pfl* ]]; then
+			$LFS setstripe -E ${k}M -S 1M -c $k $EC_ARG \
+				-E eof -S 1M -c $k $EC_ARG $tf ||
+				error "setstripe PFL failed"
+		else
+			$LFS setstripe -S 1M -c $k $EC_ARG $tf ||
+				error "setstripe failed"
+		fi
 
-	dd if=/dev/urandom of=$tf bs=1M count=2 seek=3 \
-		conv=notrunc || error "dd mid-overwrite failed"
-	$LFS mirror resync $tf || error "resync 2 failed"
+		dd if=/dev/urandom of=$tf bs=1M count=$mb ||
+			error "dd $recipe ${mb}M failed"
+		$LFS mirror resync $tf || error "resync $recipe 1 failed"
+		if [[ $recipe == extend ]]; then
+			dd if=/dev/urandom of=$tf bs=1M count=$((2 * k)) \
+				seek=$k || error "dd $recipe extend failed"
+			$LFS mirror resync $tf ||
+				error "resync $recipe 2 failed"
+		fi
+		dd if=/dev/urandom of=$tf $args conv=notrunc ||
+			error "dd $recipe overwrite failed"
+		$LFS mirror resync $tf || error "resync $recipe failed"
 
-	local sum=$(md5sum $tf | awk '{print $1}')
-
-	ec_classify_osts $tf
-	(( ${#safe_osts[@]} >= 1 )) ||
-		skip_env "no safe data OSTs"
-
-	local ost
-	for ost in "${safe_osts[@]}"; do
-		ec_deactivate_ost $ost
-		cancel_lru_locks osc
-		local got=$(md5sum $tf | awk '{print $1}')
-		ec_reactivate_ost $ost
-		[[ "$sum" == "$got" ]] ||
-			error "mid-overwrite OST$ost:" \
-				"$sum != $got"
-		echo "  mid-overwrite OST$ost OK"
+		sum=$(md5sum $tf | awk '{print $1}')
+		case $recipe in
+		mid|pfl2) ec_check_degraded $tf $sum each ;;
+		extend|partial) ec_check_degraded $tf $sum $nd ;;
+		*) ec_check_degraded $tf $sum one ;;
+		esac
 	done
 }
-run_test 70a "EC recovery after mid-file overwrite"
-
-test_70b() {
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	$LFS setstripe -E eof -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe failed"
-
-	# Write 8M, resync, overwrite with non-aligned size
-	dd if=/dev/urandom of=$tf bs=1M count=8 ||
-		error "dd initial failed"
-	$LFS mirror resync $tf || error "resync 1 failed"
-
-	# Overwrite 512K at offset 1.5M, inside stripe 1, ending
-	# exactly on the 2M stripe boundary
-	dd if=/dev/urandom of=$tf bs=512K count=1 \
-		seek=3 conv=notrunc ||
-		error "dd unaligned overwrite failed"
-	$LFS mirror resync $tf || error "resync 2 failed"
-
-	local sum=$(md5sum $tf | awk '{print $1}')
-
-	ec_classify_osts $tf
-	(( ${#safe_osts[@]} >= 1 )) ||
-		skip_env "no safe data OSTs"
-	local victim=${safe_osts[0]}
-
-	ec_deactivate_ost $victim
-	cancel_lru_locks osc
-	local got=$(md5sum $tf | awk '{print $1}')
-	ec_reactivate_ost $victim
-
-	[[ "$sum" == "$got" ]] ||
-		error "unaligned overwrite: $sum != $got"
-	echo "** non-aligned overwrite + recovery OK"
-}
-run_test 70b "EC recovery after non-stripe-aligned overwrite"
-
-test_70c() {
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	$LFS setstripe -E eof -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe failed"
-
-	# Write 4M (1 RAID set), resync, extend to 12M,
-	# resync, then overwrite first 4M again
-	dd if=/dev/urandom of=$tf bs=1M count=4 ||
-		error "dd 4M failed"
-	$LFS mirror resync $tf || error "resync 1 failed"
-
-	dd if=/dev/urandom of=$tf bs=1M count=8 seek=4 ||
-		error "dd extend failed"
-	$LFS mirror resync $tf || error "resync 2 failed"
-
-	dd if=/dev/urandom of=$tf bs=1M count=4 \
-		conv=notrunc ||
-		error "dd re-overwrite failed"
-	$LFS mirror resync $tf || error "resync 3 failed"
-
-	local sum=$(md5sum $tf | awk '{print $1}')
-
-	ec_classify_osts $tf
-	(( ${#safe_osts[@]} >= 2 )) ||
-		skip_env "need >= 2 safe data OSTs"
-	local v1=${safe_osts[0]}
-	local v2=${safe_osts[1]}
-
-	# 1-down
-	ec_deactivate_ost $v1
-	cancel_lru_locks osc
-	local got=$(md5sum $tf | awk '{print $1}')
-	ec_reactivate_ost $v1
-	[[ "$sum" == "$got" ]] ||
-		error "extend+re-overwrite 1-down:" \
-			"$sum != $got"
-	echo "** 1-down after extend + re-overwrite OK"
-
-	# 2-down
-	ec_deactivate_ost $v1
-	ec_deactivate_ost $v2
-	cancel_lru_locks osc
-	got=$(md5sum $tf | awk '{print $1}')
-	ec_reactivate_ost $v2
-	ec_reactivate_ost $v1
-	[[ "$sum" == "$got" ]] ||
-		error "extend+re-overwrite 2-down:" \
-			"$sum != $got"
-	echo "** 2-down after extend + re-overwrite OK"
-}
-run_test 70c "EC recovery after extend then re-overwrite original data"
-
-test_70d() {
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	# PFL: overwrite only comp2, leave comp1 untouched
-	$LFS setstripe -E 4M -S 1M -c 4 --ec 4+2 \
-		-E eof -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe PFL failed"
-
-	dd if=/dev/urandom of=$tf bs=1M count=12 ||
-		error "dd 12M failed"
-	$LFS mirror resync $tf || error "resync 1 failed"
-
-	# Overwrite only in comp2 (offsets 4M-8M)
-	dd if=/dev/urandom of=$tf bs=1M count=4 seek=4 \
-		conv=notrunc ||
-		error "dd overwrite comp2 failed"
-	$LFS mirror resync $tf || error "resync 2 failed"
-
-	local sum=$(md5sum $tf | awk '{print $1}')
-
-	ec_classify_osts $tf
-	(( ${#safe_osts[@]} >= 1 )) ||
-		skip_env "no safe data OSTs"
-
-	local ost
-	for ost in "${safe_osts[@]}"; do
-		ec_deactivate_ost $ost
-		cancel_lru_locks osc
-		local got=$(md5sum $tf | awk '{print $1}')
-		ec_reactivate_ost $ost
-		[[ "$sum" == "$got" ]] ||
-			error "PFL comp2-overwrite OST$ost:" \
-				"$sum != $got"
-		echo "  comp2-overwrite OST$ost OK"
-	done
-}
-run_test 70d "EC recovery after overwriting only PFL comp2"
+run_test 70a "EC recovery after overwrite and resync"
 
 test_71a() {
 	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
@@ -11088,98 +10031,6 @@ test_73b() {
 	echo "** fallocate EC recovery OK"
 }
 run_test 73b "EC recovery after fallocate"
-
-test_73c() {
-	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
-	enable_ec
-
-	local tf=$DIR/$tfile
-
-	stack_trap "rm -f $tf"
-
-	$LFS setstripe -E eof -S 1M -c 4 --ec 4+2 $tf ||
-		error "setstripe failed"
-
-	# Write 8M, resync
-	dd if=/dev/urandom of=$tf bs=1M count=8 ||
-		error "dd 8M failed"
-	$LFS mirror resync $tf || error "resync 1 failed"
-
-	# Truncate to 2M.  $TRUNCATE is $LUSTRE/tests/truncate, which takes
-	# "PATH LENGTH" rather than the coreutils --size option.
-	$TRUNCATE $tf 2097152 ||
-		error "truncate to 2M failed"
-	$LFS mirror resync $tf || error "resync 2 failed"
-
-	# Extend back to 12M with new data
-	dd if=/dev/urandom of=$tf bs=1M count=10 seek=2 ||
-		error "dd extend to 12M failed"
-	$LFS mirror resync $tf || error "resync 3 failed"
-
-	local sum=$(md5sum $tf | awk '{print $1}')
-
-	ec_classify_osts $tf
-	(( ${#safe_osts[@]} >= 2 )) ||
-		skip_env "need >= 2 safe data OSTs"
-
-	# 1-down
-	local v1=${safe_osts[0]}
-	ec_deactivate_ost $v1
-	cancel_lru_locks osc
-	local got=$(md5sum $tf | awk '{print $1}')
-	ec_reactivate_ost $v1
-	# NOTE: failure may indicate a bug in EC recovery
-	# when file size changes between parity syncs
-	# (truncate invalidates old parity, extend adds
-	# new stripes that need fresh parity).
-	[[ "$sum" == "$got" ]] ||
-		error "truncate-extend 1-down: $sum != $got"
-	echo "  1-down after truncate+extend OK"
-
-	# 2-down
-	ec_deactivate_ost ${safe_osts[0]}
-	ec_deactivate_ost ${safe_osts[1]}
-	cancel_lru_locks osc
-	got=$(md5sum $tf | awk '{print $1}')
-	ec_reactivate_ost ${safe_osts[1]}
-	ec_reactivate_ost ${safe_osts[0]}
-	[[ "$sum" == "$got" ]] ||
-		error "truncate-extend 2-down: $sum != $got"
-	echo "  2-down after truncate+extend OK"
-
-	# Additional: truncate to zero then extend
-	local tf2=$DIR/${tfile}.zero
-	stack_trap "rm -f $tf2"
-	$LFS setstripe -E eof -S 1M -c 4 --ec 4+2 $tf2 ||
-		error "setstripe tf2 failed"
-	dd if=/dev/urandom of=$tf2 bs=1M count=4 ||
-		error "dd tf2 failed"
-	$LFS mirror resync $tf2 || error "resync tf2 1 failed"
-	$TRUNCATE $tf2 0 ||
-		error "truncate to 0 failed"
-	dd if=/dev/urandom of=$tf2 bs=1M count=6 ||
-		error "dd tf2 re-extend failed"
-	$LFS mirror resync $tf2 ||
-		error "resync tf2 2 failed"
-
-	local sum2=$(md5sum $tf2 | awk '{print $1}')
-
-	# safe_osts still describes $tf; $tf2 has its own object placement,
-	# so classify it before picking a victim or the OST failed here may
-	# hold none of $tf2's stripes.
-	ec_data_stripe_osts $tf2 0
-	ec_deactivate_ost ${EC_STRIPE_OSTS[0]}
-	cancel_lru_locks osc
-	local got2=$(md5sum $tf2 | awk '{print $1}')
-	ec_reactivate_ost ${EC_STRIPE_OSTS[0]}
-	# NOTE: truncate-to-zero then extend is a special
-	# case — all parity from the first write is gone.
-	[[ "$sum2" == "$got2" ]] ||
-		error "truncate-zero-extend: $sum2 != $got2"
-
-	echo "** truncate-then-extend recovery OK"
-}
-run_test 73c "EC truncate-then-extend recovery"
 
 test_73d() {
 	(( OSTCOUNT >= 8 )) || skip_env "needs >= 8 OSTs"
