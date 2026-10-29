@@ -9427,11 +9427,9 @@ test_56wa() {
 		done
 	done
 
-	# $LFS_MIGRATE will fail if hard link migration is unsupported
-	if (( MDS1_VERSION > $(version_code 2.5.55) )); then
-		createmany -l$dir/dir1/file1 $dir/dir1/link 200 ||
-			error "creating links to $dir/dir1/file1 failed"
-	fi
+	# lfs find | lfs migrate below must handle a hard-linked file
+	createmany -l$dir/dir1/file1 $dir/dir1/link 2 ||
+		error "creating links to $dir/dir1/file1 failed"
 
 	# lfs migrate file
 	local cmd="$LFS migrate -v -c $expected $dir/file1"
