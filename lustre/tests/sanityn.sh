@@ -6143,12 +6143,15 @@ test_81c() {
 run_test 81c "rename revoke LOOKUP lock for remote object"
 
 cleanup_81d() {
+	local pids=()
+
 	for ((mds = 0; mds < $MDSCOUNT; mds++)); do
 		local d2=$DIR2/$tdir-$mds
 
 		rm -rf $d2 &
+		pids+=($!)
 	done
-	wait || error "rm failed"
+	wait_pids ${pids[@]} || error "rm failed"
 }
 
 test_81d() {

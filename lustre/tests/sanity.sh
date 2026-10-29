@@ -7511,11 +7511,14 @@ test_51b() {
 
 	# create files
 	local nrdirs_pp=$((nrdirs / nproc))
+	local pids=()
 	for ((i = 0; i < $nproc; i++)); do
 		stack_trap "unlinkmany -d $dir/d.$i. $nrdirs_pp || true"
 		createmany -d $dir/d.$i. $nrdirs_pp &
+		pids+=($!)
 	done
-	wait || error "failed to create $nrdirs subdirs in $mdtname:/$dir"
+	wait_pids ${pids[@]} ||
+		error "failed to create $nrdirs subdirs in $mdtname:/$dir"
 
 	# really created :
 	nrdirs=$(ls -U $dir | wc -l)
@@ -7531,10 +7534,12 @@ test_51b() {
 	# and so this is listed for informational purposes only
 	echo "nlink before: $(stat -c %h $dir), created before: $nrdirs"
 	local delete_pp=$((delete / nproc))
+	pids=()
 	for ((i = 0; i < $nproc; i++)); do
 		unlinkmany -d $dir/d.$i. $delete_pp &
+		pids+=($!)
 	done
-	wait || error "unlink of first $delete subdirs failed"
+	wait_pids ${pids[@]} || error "unlink of first $delete subdirs failed"
 
 	echo "nlink between: $(stat -c %h $dir)"
 	local found=$(ls -U $dir | wc -l)
@@ -7542,10 +7547,12 @@ test_51b() {
 		error "can't find subdirs: found only $found, expected $left"
 
 	local left_pp=$((left / nproc))
+	pids=()
 	for ((i = 0; i < $nproc; i++)); do
 		unlinkmany -d $dir/d.$i. $delete_pp $left_pp &
+		pids+=($!)
 	done
-	wait || error "unlink of second $left subdirs failed"
+	wait_pids ${pids[@]} || error "unlink of second $left subdirs failed"
 	# regardless of whether the backing filesystem tracks nlink accurately
 	# or not, the nlink count shouldn't be more than "." and ".." here
 	local after=$(stat -c %h $dir)
@@ -7577,11 +7584,13 @@ test_51c() {
 	# round $nrdirs to an even multiple of the number of processes
 	nrdirs=$((nrdirs / nproc * nproc))
 	local nrdirs_pp=$((nrdirs / nproc))
+	local pids=()
 	for ((i = 0; i < $nproc; i++)); do
 		stack_trap "unlinkmany -d $dir/d.$i. $nrdirs_pp || true"
 		createmany -d $dir/d.$i. $nrdirs_pp &
+		pids+=($!)
 	done
-	wait || error "failed to create $nrdirs subdirs in $dir"
+	wait_pids ${pids[@]} || error "failed to create $nrdirs subdirs in $dir"
 	# nlink for the striped dir should be either 1
 	# (ldiskfs, nlink is overflowed at least in one stripe)
 	# or $ndirs + 2
@@ -7589,10 +7598,12 @@ test_51c() {
 	(( nlinks == 1 || nlinks == nrdirs + 2 )) ||
 		error "Wrong nlink count of $nlinks"
 
+	pids=()
 	for ((i = 0; i < $nproc; i++)); do
 		unlinkmany -d $dir/d.$i. $nrdirs_pp &
+		pids+=($!)
 	done
-	wait || error "Removal of $nrdirs subdirs failed"
+	wait_pids ${pids[@]} || error "Removal of $nrdirs subdirs failed"
 	rmdir $dir && echo "removed emtpy $dir" || error "rmdir failed"
 }
 run_test 51c "exceed 64k subdirectory count per dir stripe, verify nlink count"
@@ -25550,13 +25561,14 @@ test_165a() {
 
 	setup_165
 	do_facet ost1 ofd_access_log_reader --debug=- --trace=- > "${trace}" &
+	local pid=$!
 	sleep 5
 
 	do_facet ost1 ofd_access_log_reader --list
 	stop ost1
 
 	do_facet ost1 killall -TERM ofd_access_log_reader
-	wait
+	wait $pid
 	rc=$?
 
 	if ((rc != 0)); then
@@ -25586,6 +25598,7 @@ test_165b() {
 
 	setup_165
 	do_facet ost1 ofd_access_log_reader --debug=- --trace=- > "${trace}" &
+	local pid=$!
 	sleep 5
 
 	do_facet ost1 ofd_access_log_reader --list
@@ -25596,7 +25609,7 @@ test_165b() {
 
 	sleep 5
 	do_facet ost1 killall -TERM ofd_access_log_reader
-	wait
+	wait $pid
 	rc=$?
 
 	if ((rc != 0)); then
@@ -25629,6 +25642,7 @@ test_165b() {
 	fi
 
 	do_facet ost1 ofd_access_log_reader --debug=- --trace=- > "${trace}" &
+	pid=$!
 	sleep 5
 
 	$MULTIOP "${file}" oO_CREAT:O_DIRECT:O_RDONLY:r524288c ||
@@ -25636,7 +25650,7 @@ test_165b() {
 	sleep 5
 
 	do_facet ost1 killall -TERM ofd_access_log_reader
-	wait
+	wait $pid
 	rc=$?
 
 	if ((rc != 0)); then
@@ -25676,6 +25690,7 @@ test_165c() {
 
 	setup_165
 	do_facet ost1 ofd_access_log_reader --debug=- --trace=- > "${trace}" &
+	local pid=$!
 	sleep 5
 
 	lfs setstripe -c 1 -i 0 "${DIR}/${tdir}"
@@ -25689,7 +25704,7 @@ test_165c() {
 	sync
 
 	do_facet ost1 killall -TERM ofd_access_log_reader
-	wait
+	wait $pid
 	rc=$?
 	if ((rc != 0)); then
 		error "ofd_access_log_reader exited with rc = '${rc}'"
@@ -25742,6 +25757,7 @@ test_165d() {
 
 	setup_165
 	do_facet ost1 ofd_access_log_reader --stats="${stats}" &
+	local pid=$!
 	sleep 5
 
 	lfs setstripe -c 1 -i 0 "${file}"
@@ -25783,7 +25799,7 @@ test_165d() {
 	oal_expect_read_count "${stats}" 4
 
 	do_facet ost1 killall -TERM ofd_access_log_reader
-	wait
+	wait $pid
 	rc=$?
 	if ((rc != 0)); then
 		error "ofd_access_log_reader exited with rc = '${rc}'"
@@ -25809,6 +25825,7 @@ test_165e() {
 
 	setup_165
 	do_facet ost1 ofd_access_log_reader -I 1 --stats="${stats}" &
+	local pid=$!
 	sleep 5
 
 	$MULTIOP "${file0}" oO_CREAT:O_WRONLY:w512c ||
@@ -25822,7 +25839,7 @@ test_165e() {
 	oal_expect_read_count "${stats}" 1
 
 	do_facet ost1 killall -TERM ofd_access_log_reader
-	wait
+	wait $pid
 	rc=$?
 	if ((rc != 0)); then
 		error "ofd_access_log_reader exited with rc = '${rc}'"
@@ -25838,10 +25855,11 @@ test_165f() {
 	setup_165
 	do_facet ost1 timeout 60 ofd_access_log_reader \
 		--exit-on-close --debug=- --trace=- > "${trace}" &
+	local pid=$!
 	sleep 5
 	stop ost1
 
-	wait
+	wait $pid
 	rc=$?
 
 	if ((rc != 0)); then
@@ -25863,11 +25881,12 @@ test_165g() {
 	setup_165
 	do_facet ost1 timeout 60 ofd_access_log_reader \
 		--keepalive=3 --batch-interval=4 --debug=- > "${trace}" &
+	local pid=$!
 	sleep 40
 	stop ost1
 
 	do_facet ost1 killall -TERM ofd_access_log_reader
-	wait
+	wait $pid
 	rc=$?
 
 	if ((rc != 0)); then

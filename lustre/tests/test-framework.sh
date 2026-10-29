@@ -6050,6 +6050,25 @@ format_ost() {
 		$(ostvdevname ${num}) ${quiet:+>/dev/null} || exit 10
 }
 
+# Usage: wait_pids <pid> [pid ...]
+# Wait for every background <pid>, and return the exit status of the first
+# one that failed, or 0 if all of them succeeded.  Plain "wait" always
+# returns 0, and "wait <pid1> <pid2> ..." returns only the last PID status.
+wait_pids() {
+	local rc=0
+	local rc2
+	local pid
+
+	for pid in "$@"; do
+		wait $pid && continue
+		rc2=$?
+		echo "PID $pid failed: rc = $rc2" >&2
+		(( rc != 0 )) || rc=$rc2
+	done
+
+	return $rc
+}
+
 # Usage: parallel_enabled_for <operation> <target_type>
 #   operation: FORMAT, MOUNT, TUNEFS
 #   target_type: mgs, mdt, ost

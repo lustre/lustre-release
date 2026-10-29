@@ -5996,12 +5996,13 @@ test_48b() {
 	cp /bin/sleep $DIR/$tdir/
 	cancel_lru_locks osc ; cancel_lru_locks mdc
 	$DIR/$tdir/sleep 30 &
+	local pid=$!
 	# mount and IOs must be done in the same shell session, otherwise
 	# encryption key in session keyring is missing
 	do_node $othercli "$MOUNT_CMD -o ${MOUNT_OPTS},test_dummy_encryption \
 			   $MGSNID:/$FSNAME $MOUNT && \
 			   $TRUNCATE $DIR/$tdir/sleep 7"
-	wait || error "wait error"
+	wait $pid || error "$tdir/sleep failed"
 	cmp --silent /bin/sleep $DIR/$tdir/sleep ||
 		error "/bin/sleep and $DIR/$tdir/sleep differ"
 }

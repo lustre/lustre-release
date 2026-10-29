@@ -10358,7 +10358,7 @@ test_110()
 		group=$((group + 1))
 	done
 	echo "waiting for PIDs$pids to complete"
-	wait $pids || error "createmany failed after $group groups"
+	wait_pids $pids || error "createmany failed after $group groups"
 
 	stopall
 
@@ -10455,7 +10455,7 @@ test_111() {
 			group=$((group + 1))
 		done
 		echo "waiting for PIDs$pids to complete"
-		wait $pids || error "createmany failed after $group groups"
+		wait_pids $pids || error "createmany failed after $group groups"
 
 		dirsize=$(stat -c %s $DIR/$tdir)
 		taken=$((SECONDS - start))

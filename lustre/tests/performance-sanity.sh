@@ -72,8 +72,10 @@ test_5a() {
 	stack_trap "rm $tmpfile || true" EXIT
 
 	do_nodes $CLIENTS flocks_test 6 $DIR/$tfile $tmpfile &
+	local pids=($!)
 	do_nodes $CLIENTS flocks_test 6 $DIR2/$tfile $tmpfile &
-	wait || error "flocks_test failed"
+	pids+=($!)
+	wait_pids ${pids[@]} || error "flocks_test failed"
 }
 run_test 5a "enqueue 20k no overlap flocks on same file"
 
@@ -87,8 +89,10 @@ test_5b() {
 	stack_trap "rm $tmpfile || true" EXIT
 
 	do_nodes $CLIENTS flocks_test 6 $DIR/$tfile $tmpfile &
+	local pids=($!)
 	do_nodes $CLIENTS flocks_test 6 $DIR2/$tfile $tmpfile &
-	wait || error "flocks_test failed"
+	pids+=($!)
+	wait_pids ${pids[@]} || error "flocks_test failed"
 }
 run_test 5b "split a flock 20k times"
 
@@ -102,8 +106,10 @@ test_5c() {
 	stack_trap "rm $tmpfile || true" EXIT
 
 	do_nodes $CLIENTS flocks_test 6 $DIR/$tfile $tmpfile &
+	local pids=($!)
 	do_nodes $CLIENTS flocks_test 6 $DIR2/$tfile $tmpfile &
-	wait || error "flocks_test failed"
+	pids+=($!)
+	wait_pids ${pids[@]} || error "flocks_test failed"
 }
 run_test 5c "merge 20k flocks"
 
@@ -120,8 +126,10 @@ test_5d() {
 	stack_trap "rm $tmpfile || true" EXIT
 
 	do_nodes $CLIENTS flocks_test 6 $DIR/$tfile $tmpfile &
+	local pids=($!)
 	do_nodes $CLIENTS flocks_test 6 $DIR2/$tfile $tmpfile &
-	wait || error "flocks_test failed"
+	pids+=($!)
+	wait_pids ${pids[@]} || error "flocks_test failed"
 }
 run_test 5d "Enqueue 20k same range flocks, then expand them"
 

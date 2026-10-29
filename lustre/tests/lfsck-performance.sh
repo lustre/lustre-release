@@ -735,13 +735,15 @@ namespace_gen_one() {
 	local count=$((UNIT * 78 / 100)) # 78% regular files
 	local sub_count=$((count / NTHREADS))
 	echo "Creating $count regular files under $show_dir at: $(date)"
+	local pids=()
 	for ((m = 0; m < $NTHREADS; m++)); do
 		local sub_dir="${base_mntpt}_${m}/$tdir/${idx1}/${idx2}"
 
 		createmany -o ${sub_dir}/f_${m}_ $sub_count > /dev/null &
+		pids+=($!)
 	done
 
-	wait || {
+	wait_pids ${pids[@]} || {
 		error_noexit "(21) Fail to gen regular files under $show_dir"
 		return 21
 	}
