@@ -52,7 +52,7 @@ do {									\
 		libcfs_debug_msg(&__msg_data,				\
 				 "ASSERTION( %s ) failed: " fmt, #cond,	\
 				 ## __VA_ARGS__);			\
-		lbug_with_loc(&__msg_data);				\
+		LBUG_WITH_LOC(&__msg_data);				\
 	}								\
 } while (0)
 
@@ -67,7 +67,7 @@ do {									\
 		libcfs_debug_msg(&__msg_data,				\
 				 "ASSERTION( %s ) failed: " fmt, #cond,	\
 				 ## __VA_ARGS__);			\
-		lbug_with_loc(&__msg_data);				\
+		LBUG_WITH_LOC(&__msg_data);				\
 	}								\
 } while (0)
 
@@ -96,11 +96,20 @@ __noreturn
 #endif
 lbug_with_loc(struct libcfs_debug_msg_data *msg);
 
+/*
+ * objtool needs a UD2 after lbug_with_loc() if it is declared without
+ * __noreturn
+ */
+#ifdef HAVE_LBUG_WITH_LOC_IN_OBJTOOL
+#define LBUG_WITH_LOC(msg)	lbug_with_loc(msg)
+#else
+#define LBUG_WITH_LOC(msg)	do { lbug_with_loc(msg); BUG(); } while (0)
+#endif
+
 #define LBUG()                                                          \
 do {                                                                    \
 	LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_EMERG, NULL);             \
-	lbug_with_loc(&msgdata);                                        \
-	break;                                                          \
+	LBUG_WITH_LOC(&msgdata);                                        \
 } while(0)
 
 /*

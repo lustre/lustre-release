@@ -556,10 +556,6 @@ lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
 	set_current_state(TASK_UNINTERRUPTIBLE);
 	while (1)
 		schedule();
-#ifndef HAVE_LBUG_WITH_LOC_IN_OBJTOOL
-	/* not reached */
-	panic("LBUG after schedule.");
-#endif
 }
 EXPORT_SYMBOL(lbug_with_loc);
 
