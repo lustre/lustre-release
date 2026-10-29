@@ -31541,8 +31541,8 @@ test_276() {
 		done) & pid=\\\$!; echo \\\$pid > $TMP/sanity_276_pid" &
 	pid=$!
 
-	local end=$(($SECONDS + 120))
-	[[ "$SLOW" == "yes" ]] && ((end += 600))
+	local end=$(($SECONDS + 30))
+	[[ "$SLOW" == "yes" ]] && ((end += 690))
 
 	while (($SECONDS < end)); do
 		stop ost1
