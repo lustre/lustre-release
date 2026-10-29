@@ -12889,14 +12889,13 @@ run_test 65j "set default striping on root directory (bug 6367)="
 cleanup_65k() {
 	rm -rf $DIR/$tdir
 	wait_delete_completed
-	do_facet $SINGLEMDS "lctl set_param -n \
-		osp.$ost*MDT0000.max_create_count=$max_count"
-	do_facet $SINGLEMDS "lctl set_param -n \
-		osp.$ost*MDT0000.create_count=$count"
-	do_facet $SINGLEMDS lctl --device  %$INACTIVE_OSC activate
+	do_facet $SINGLEMDS "$LCTL set_param -n \
+		osp.$ost*MDT0000.max_create_count=$max_count \
+		osp.$ost*MDT0000.create_count=$count;
+		$LCTL --device %$INACTIVE_OSC activate"
 	echo $INACTIVE_OSC "is Activate"
 
-	wait_osc_import_state mds ost$(( ostnum + 1 )) FULL
+	wait_osc_import_state $SINGLEMDS ost$(( ostnum + 1 )) FULL
 }
 
 test_65k() { # bug11679
@@ -12910,7 +12909,9 @@ test_65k() { # bug11679
 
 	echo "Check OST status: "
 	local MDS_OSCS=$(do_facet $SINGLEMDS lctl dl |
-		awk '/[oO][sS][cC].*md[ts]/ { print $4 }')
+		awk '/[oO][sS][cC]-MDT0000.*md[ts]/ { print $4 }')
+	local targets=$(do_facet $SINGLEMDS lctl get_param -n \
+			lov.*md*.target_obd)
 
 	for OSC in $MDS_OSCS; do
 		echo $OSC "is active"
@@ -12919,24 +12920,22 @@ test_65k() { # bug11679
 
 	for INACTIVE_OSC in $MDS_OSCS; do
 		local ost=$(osc_to_ost $INACTIVE_OSC)
-		local ostnum=$(do_facet $SINGLEMDS lctl get_param -n \
-			       lov.*md*.target_obd |
-			       awk -F: /$ost/'{ print $1 }' | head -n 1)
+		local ostnum=$(awk -F: /$ost/'{ print $1 }' <<< "$targets" |
+			       head -n 1)
 
-		mkdir -p $DIR/$tdir
+		mkdir_on_mdt0 $DIR/$tdir
 		$LFS setstripe -i $ostnum -c 1 $DIR/$tdir
 		createmany -o $DIR/$tdir/$tfile.$ostnum. 1000
 
 		echo "Deactivate: " $INACTIVE_OSC
-		do_facet $SINGLEMDS lctl --device %$INACTIVE_OSC deactivate
-
-		local count=$(do_facet $SINGLEMDS "lctl get_param -n \
-			      osp.$ost*MDT0000.create_count")
-		local max_count=$(do_facet $SINGLEMDS "lctl get_param -n \
-				  osp.$ost*MDT0000.max_create_count")
-		$disable_precreate &&
-			do_facet $SINGLEMDS "lctl set_param -n \
-				osp.$ost*MDT0000.max_create_count=0"
+		local vals=($(do_facet $SINGLEMDS "$LCTL --device \
+			%$INACTIVE_OSC deactivate; $LCTL get_param -n \
+			osp.$ost*MDT0000.create_count \
+			osp.$ost*MDT0000.max_create_count;
+			$disable_precreate && $LCTL set_param -n \
+			osp.$ost*MDT0000.max_create_count=0"))
+		local count=${vals[0]}
+		local max_count=${vals[1]}
 
 		for idx in $(seq 0 $((OSTCOUNT - 1))); do
 			[ -f $DIR/$tdir/$idx ] && continue
@@ -12949,14 +12948,13 @@ test_65k() { # bug11679
 		unlinkmany $DIR/$tdir/$tfile.$ostnum. 1000
 		rmdir $DIR/$tdir
 
-		do_facet $SINGLEMDS "lctl set_param -n \
-			osp.$ost*MDT0000.max_create_count=$max_count"
-		do_facet $SINGLEMDS "lctl set_param -n \
-			osp.$ost*MDT0000.create_count=$count"
-		do_facet $SINGLEMDS lctl --device  %$INACTIVE_OSC activate
+		do_facet $SINGLEMDS "$LCTL set_param -n \
+			osp.$ost*MDT0000.max_create_count=$max_count \
+			osp.$ost*MDT0000.create_count=$count;
+			$LCTL --device %$INACTIVE_OSC activate"
 		echo $INACTIVE_OSC "is Activate"
 
-		wait_osc_import_state mds ost$(( ostnum + 1 )) FULL
+		wait_osc_import_state $SINGLEMDS ost$(( ostnum + 1 )) FULL
 	done
 }
 run_test 65k "validate manual striping works properly with deactivated OSCs"
