@@ -7250,7 +7250,7 @@ test_51b() {
 	wait || error "failed to create $nrdirs subdirs in $mdtname:/$dir"
 
 	# really created :
-	nrdirs=$(find $dir -maxdepth 1 | wc -l)
+	nrdirs=$(ls -U $dir | wc -l)
 
 	# unlink all but ~100 subdirectories, then check it still works
 	local left=$((100 / nproc * nproc))
