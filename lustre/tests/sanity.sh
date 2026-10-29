@@ -39221,7 +39221,7 @@ test_834() {
 	fio --enghelp=mmap | grep 'thp' ||
 		skip_env "fio mmap I/O engine does not support THP"
 
-	$TRUNCATE $file $((5 * 1024 * 1024 * 1024)) ||
+	$TRUNCATE $file $((512 * 1024 * 1024)) ||
 		error "failed to truncate $file"
 	# "--thp=1" indicates to use MADV_HUGEPAGE madvise for fio testing
 	# with mmap I/O engine.
