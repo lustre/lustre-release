@@ -275,7 +275,7 @@ diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
  		goto fail;
  	}
  
-@@ -1276,6 +1286,70 @@ static inline int search_dirblock(struct buffer_head *bh,
+@@ -1276,6 +1286,74 @@ static inline int search_dirblock(struct buffer_head *bh,
  /*
   * Directory block splitting, compacting
   */
@@ -327,7 +327,11 @@ diff --git a/fs/ext4/namei.c b/fs/ext4/namei.c
 +	int data_offset = de->name_len + 1;
 +	if (data) {
 +		de->name[de->name_len] = 0;
-+		memcpy(&de->name[de->name_len + 1], data, *(char *)data);
++		/* Dirdata bytes lie past the EXT4_NAME_LEN bound but within
++		 * the directory entry's rec_len; use unsafe_memcpy to avoid
++		 * a FORTIFY_SOURCE false positive. */
++		unsafe_memcpy(&de->name[de->name_len + 1], data,
++			      *(char *)data, /* dirdata within rec_len */);
 +		de->file_type |= EXT4_DIRENT_LUFID;
 +		data_offset += *(char *)data + 1;
 +	}
