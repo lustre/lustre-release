@@ -7989,9 +7989,8 @@ run_test 55a "OBD device life cycle unit tests"
 test_55b() {
 	local dev_count="$($LCTL dl | wc -l)"
 
-	# Set up a large number of devices, using the number
-	# that can be set up in about a minute (based on prior
-	# testing). We don't want to run this test forever.
+	# More than the old 8192 device limit, and enough for a
+	# device list well over the 64KB netlink buffer (LU-17451)
 	local num_dev_to_create="$(( 24000 - $dev_count))"
 
 	load_module kunit/obd_test || error "load_module failed"

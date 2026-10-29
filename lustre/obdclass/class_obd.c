@@ -874,10 +874,15 @@ static int __init obdclass_init(void)
 	if (err)
 		goto cleanup_zombie_impexp;
 
+	/* the device hash must exist before /dev/obd accepts ioctls */
+	err = obd_init_caches();
+	if (err)
+		goto cleanup_class_handle;
+
 	err = misc_register(&obd_psdev);
 	if (err) {
 		CERROR("cannot register OBD miscdevice: rc = %d\n", err);
-		goto cleanup_class_handle;
+		goto cleanup_caches;
 	}
 
 	/* Default the dirty page cache cap to 1/2 of system memory.
@@ -888,13 +893,9 @@ static int __init obdclass_init(void)
 	else
 		obd_max_dirty_pages = totalram_pages() / 2;
 
-	err = obd_init_caches();
-	if (err)
-		goto cleanup_deregister;
-
 	err = class_procfs_init();
 	if (err)
-		goto cleanup_caches;
+		goto cleanup_deregister;
 
 	err = lu_global_init();
 	if (err)
@@ -960,11 +961,11 @@ cleanup_lu_global:
 cleanup_class_procfs:
 	class_procfs_clean();
 
-cleanup_caches:
-	obd_cleanup_caches();
-
 cleanup_deregister:
 	misc_deregister(&obd_psdev);
+
+cleanup_caches:
+	obd_cleanup_caches();
 
 cleanup_class_handle:
 	class_handle_cleanup();

@@ -17,6 +17,7 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <linux/pid_namespace.h>
+#include <linux/stringhash.h>
 #include <lustre_compat/linux/rbtree.h>
 #include <linux/workqueue.h>
 #include <cfs_hash.h>
@@ -30,6 +31,7 @@ DEFINE_XARRAY_ALLOC(obd_devs);
 EXPORT_SYMBOL(obd_devs);
 
 static atomic_t obd_devs_count = ATOMIC_INIT(0);
+static struct rhashtable obd_devs_name_hash;
 
 static struct kmem_cache *obd_device_cachep;
 static struct kobj_type class_ktype;
@@ -455,33 +457,64 @@ void class_free_dev(struct obd_device *obd)
 	class_put_type(obd_type);
 }
 
-static int class_name2dev_nolock(const char *name)
+static u32 obd_name_hashfn(const void *data, u32 len, u32 seed)
 {
-	struct obd_device *obd = NULL;
-	unsigned long dev_no = 0;
-	int ret;
+	const char *name = data;
 
-	if (!name)
-		return -1;
-
-	obd_device_for_each(dev_no, obd) {
-		if (strcmp(name, obd->obd_name) == 0) {
-			/*
-			 * Make sure we finished attaching before we give
-			 * out any references
-			 */
-			LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-			if (test_bit(OBDF_ATTACHED, obd->obd_flags)) {
-				ret = obd->obd_minor;
-				return ret;
-			}
-			break;
-		}
-	}
-
-	return -1;
+	return hashlen_hash(hashlen_string((void *)(unsigned long)seed, name));
 }
 
+static int obd_name_cmpfn(struct rhashtable_compare_arg *arg, const void *obj)
+{
+	const struct obd_device *obd = obj;
+
+	return strcmp(arg->key, obd->obd_name);
+}
+
+static const struct rhashtable_params obd_name_hash_params = {
+	.key_len	= 1, /* actually variable */
+	.key_offset	= offsetof(struct obd_device, obd_name),
+	.head_offset	= offsetof(struct obd_device, obd_name_rhash),
+	.hashfn		= obd_name_hashfn,
+	.obj_cmpfn	= obd_name_cmpfn,
+	.automatic_shrinking = true,
+};
+
+static struct obd_device *class_name2obd_nolock(const char *name)
+{
+	struct obd_device *obd;
+
+	if (!name)
+		return NULL;
+
+	obd = rhashtable_lookup_fast(&obd_devs_name_hash, name,
+				     obd_name_hash_params);
+	if (!obd)
+		return NULL;
+
+	/* Make sure we finished attaching before we give out any references */
+	LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
+	if (!test_bit(OBDF_ATTACHED, obd->obd_flags))
+		return NULL;
+
+	return obd;
+}
+
+static int class_name2dev_nolock(const char *name)
+{
+	struct obd_device *obd = class_name2obd_nolock(name);
+
+	return obd ? obd->obd_minor : -1;
+}
+
+/**
+ * class_name2dev() - Find the minor number of an attached obd device.
+ * @name: obd device name
+ *
+ * Return:
+ * * device minor number on success
+ * * %-1 if no attached device has this name
+ */
 int class_name2dev(const char *name)
 {
 	int ret;
@@ -505,6 +538,9 @@ void class_unregister_device(struct obd_device *obd)
 	obd_device_lock();
 	if (obd->obd_minor >= 0) {
 		__xa_erase(&obd_devs, obd->obd_minor);
+		rhashtable_remove_fast(&obd_devs_name_hash,
+				       &obd->obd_name_rhash,
+				       obd_name_hash_params);
 		class_decref(obd, "obd_device_list", obd);
 		obd->obd_minor = -1;
 		atomic_dec(&obd_devs_count);
@@ -537,45 +573,46 @@ int class_register_device(struct obd_device *new_obd)
 		obd_zombie_barrier();
 
 	obd_device_lock();
-	if (class_name2dev_nolock(new_obd->obd_name) == -1) {
-		class_incref(new_obd, "obd_device_list", new_obd);
-		rc = __xa_alloc(&obd_devs, &dev_no, new_obd,
-				xa_limit_31b, GFP_ATOMIC);
+	rc = rhashtable_lookup_insert_fast(&obd_devs_name_hash,
+					   &new_obd->obd_name_rhash,
+					   obd_name_hash_params);
+	if (rc != 0)
+		goto out_unlock;
 
-		if (rc != 0)
-			goto out;
-
-		new_obd->obd_minor = dev_no;
-		atomic_inc(&obd_devs_count);
-	} else {
-		rc = -EEXIST;
+	rc = __xa_alloc(&obd_devs, &dev_no, new_obd, xa_limit_31b, GFP_ATOMIC);
+	if (rc != 0) {
+		rhashtable_remove_fast(&obd_devs_name_hash,
+				       &new_obd->obd_name_rhash,
+				       obd_name_hash_params);
+		goto out_unlock;
 	}
 
-out:
+	class_incref(new_obd, "obd_device_list", new_obd);
+	new_obd->obd_minor = dev_no;
+	atomic_inc(&obd_devs_count);
+
+out_unlock:
 	obd_device_unlock();
+out:
 	RETURN(rc);
 }
 
+/**
+ * class_name2obd() - Find an attached obd device by name.
+ * @name: obd device name
+ *
+ * No reference is taken on the returned device.
+ *
+ * Return:
+ * * obd device on success
+ * * %NULL if no attached device has this name
+ */
 struct obd_device *class_name2obd(const char *name)
 {
-	struct obd_device *obd = NULL;
-	unsigned long dev_no = 0;
-
-	if (!name)
-		return NULL;
+	struct obd_device *obd;
 
 	obd_device_lock();
-	obd_device_for_each(dev_no, obd) {
-		if (strcmp(name, obd->obd_name) == 0) {
-			/*
-			 * Make sure we finished attaching before we give
-			 * out any references
-			 */
-			LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-			if (test_bit(OBDF_ATTACHED, obd->obd_flags))
-				break;
-		}
-	}
+	obd = class_name2obd_nolock(name);
 	obd_device_unlock();
 
 	/*
@@ -760,6 +797,7 @@ void obd_cleanup_caches(void)
 		kmem_cache_destroy(obd_device_cachep);
 		obd_device_cachep = NULL;
 	}
+	rhashtable_destroy(&obd_devs_name_hash);
 
 	EXIT;
 }
@@ -769,6 +807,10 @@ int __init obd_init_caches(void)
 	int rc;
 
 	ENTRY;
+
+	rc = rhashtable_init(&obd_devs_name_hash, &obd_name_hash_params);
+	if (rc)
+		RETURN(rc);
 
 	LASSERT(obd_device_cachep == NULL);
 	obd_device_cachep = kmem_cache_create_usercopy("ll_obd_dev_cache",

@@ -706,6 +706,7 @@ struct obd_device {
 	/* common and UUID name of this device */
 	struct obd_uuid			 obd_uuid;
 	char				 obd_name[MAX_OBD_NAME];
+	struct rhash_head		 obd_name_rhash;
 
 	/* bitfield modification is protected by obd_dev_lock */
 	DECLARE_BITMAP(obd_flags, OBDF_NUM_FLAGS);
