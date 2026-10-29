@@ -4783,15 +4783,13 @@ test_49a()
 
 	echo "setquota for users and groups"
 	#define OBD_FAIL_QUOTA_NOSYNC		0xA09
+	stack_trap "do_facet mds1 $LCTL set_param fail_loc=0"
 	do_facet mds1 $LCTL set_param fail_loc=0xa09
-	for ((i = 1; i <= total_file_cnt; i++)); do
-		$LFS setquota -u $i -B ${u_blimit} -I ${u_ilimit} $MOUNT ||
-				error "failed to setquota for usr $i"
-		$LFS setquota -g $i -B ${g_blimit} -I ${g_ilimit} $MOUNT ||
-				error "failed to setquota for grp $i"
-		(( i % 1000 == 0)) &&
-			echo "lfs setquota: $i / $((SECONDS - start)) seconds"
-	done
+	seq $total_file_cnt | xargs -P 8 -I{} sh -c "
+		$LFS setquota -u {} -B $u_blimit -I $u_ilimit $MOUNT &&
+		$LFS setquota -g {} -B $g_blimit -I $g_ilimit $MOUNT" ||
+			error "failed to setquota"
+	echo "lfs setquota: $total_file_cnt / $((SECONDS - start)) seconds"
 	do_facet mds1 $LCTL set_param fail_loc=0
 
 	start=$SECONDS
@@ -4805,21 +4803,16 @@ test_49a()
 	for ((count = 10; count < total_file_cnt; count += step)); do
 		test_get_allquota $total_file_cnt $count $((count + step)) \
 			$u_blimit $u_ilimit $g_blimit $g_ilimit
-		test_get_allquota $total_file_cnt $count $((count + step)) \
-			$u_blimit $u_ilimit $g_blimit $g_ilimit
 
 		count=$((count + step))
 	done;
 
-	do_facet mds1 $LCTL set_param fail_loc=0xa08
-	for ((i = 1; i <= $total_file_cnt; i++)); do
-		$LFS setquota -u $i --delete $MOUNT
-		$LFS setquota -g $i --delete $MOUNT
-	done
+	do_facet mds1 $LCTL set_param fail_loc=0xa09
+	seq $total_file_cnt | xargs -P 8 -I{} sh -c "
+		$LFS setquota -u {} --delete $MOUNT &&
+		$LFS setquota -g {} --delete $MOUNT" ||
+			error "failed to delete quota"
 	do_facet mds1 $LCTL set_param fail_loc=0
-
-	formatall
-	setupall
 }
 run_test 49a "lfs quota -a prints the quota usage for all quota IDs"
 
