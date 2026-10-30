@@ -4209,8 +4209,46 @@ test_30b() {
 }
 run_test 30b "basic test of all different SSK flavors"
 
+# run tunefs with options $1 on all targets, and $2 also on mds1
+tunefs_all() {
+	local opts=$1
+	local mds1_opts=$2
+	local -a par_facets
+	local -a par_logs
+	local -a par_pids
+	local rc=0
+	local num facet_opts
+
+	for ((num = 1; num <= MDSCOUNT; num++)); do
+		facet_opts=$opts
+		(( num > 1 )) || facet_opts+=" $mds1_opts"
+		rm -f $TMP/mds${num}active
+		parallel_start TUNEFS mds$num do_facet mds$num $TUNEFS --quiet \
+			$facet_opts $(mdsdevname $num) || rc=$?
+	done
+	for ((num = 1; num <= OSTCOUNT; num++)); do
+		rm -f $TMP/ost${num}active
+		parallel_start TUNEFS ost$num do_facet ost$num $TUNEFS --quiet \
+			$opts $(ostdevname $num) || rc=$?
+	done
+	parallel_wait || rc=$?
+
+	return $rc
+}
+
+# on ZFS, a key erased and set in the same tunefs call gets a leading ':'
+tunefs_mgsnode_all() {
+	local mgsnid=$1
+	local mds1_erase=$2
+	local mds1_set=$3
+
+	tunefs_all "--erase-param mgsnode" "$mds1_erase" || return
+	tunefs_all "--mgsnode=$mgsnid --writeconf" "$mds1_set"
+}
+
 cleanup_31() {
-	local failover_mds1=$1
+	local failover_opt=$1
+	local failover_mds1=$2
 
 	# unmount client
 	zconf_umount $HOSTNAME $MOUNT || error "unable to umount client"
@@ -4223,35 +4261,24 @@ cleanup_31() {
 	LOAD_MODULES_REMOTE=true unload_modules
 	LOAD_MODULES_REMOTE=true load_modules
 
-	# restore mgsnid on targets
-	for ((num = 1; num <= $MDSCOUNT; num++)); do
-		do_facet mds$num $TUNEFS --erase-param mgsnode \
-			$(mdsdevname $num)
-		do_facet mds$num $TUNEFS --mgsnode=$MGSNID $(mdsdevname $num)
-	done
-	for ((num = 1; num <= $OSTCOUNT; num++)); do
-		do_facet ost$num $TUNEFS --erase-param mgsnode \
-			$(ostdevname $num)
-		do_facet ost$num $TUNEFS --mgsnode=$MGSNID $(ostdevname $num)
-	done
+	local mds1_erase mds1_set
 
-	do_facet mds1 $TUNEFS --erase-param failover.node $(mdsdevname 1)
 	if [ -n "$failover_mds1" ]; then
-		do_facet mds1 $TUNEFS \
-			--servicenode=$failover_mds1 $(mdsdevname 1)
+		mds1_erase="--erase-param failover.node"
+		mds1_set="$failover_opt=$failover_mds1"
 	else
 		# If no service node previously existed, setting one in test_31
 		# added the no_primnode flag to the target. To remove everything
 		# and clear the flag, add a meaningless failnode and remove it.
-		do_facet mds1 $TUNEFS \
-			--failnode=$(do_facet mds1 $LCTL list_nids | head -1) \
-			$(mdsdevname 1)
-		do_facet mds1 $TUNEFS \
-			--erase-param failover.node $(mdsdevname 1)
+		mds1_set="--failnode=$(do_facet mds1 $LCTL list_nids |
+				       head -1) --erase-param failover.node"
 	fi
 
+	# restore mgsnid on targets
+	tunefs_mgsnode_all $MGSNID "$mds1_erase" "$mds1_set" ||
+		echo "tunefs to restore mgsnode failed"
+
 	export SK_MOUNTED=false
-	writeconf_all
 	setupall || echo 1
 	export KEEP_ZPOOL="$KZPOOL"
 }
@@ -4265,6 +4292,7 @@ test_31() {
 	local addr1=${mdsnid%@*}
 	local nid2=${addr}@$net2
 	local addr2 failover_mds1
+	local failover_opt=--failnode
 	local all=$(all_nodes)
 	local mntpt opts
 
@@ -4307,12 +4335,14 @@ test_31() {
 	# save mds failover nids for restore at cleanup
 	failover_mds1=$(do_facet mds1 $TUNEFS --dryrun $(mdsdevname 1))
 	if [ -n "$failover_mds1" ]; then
+		[[ $failover_mds1 != *no_primnode* ]] ||
+			failover_opt=--servicenode
 		failover_mds1=${failover_mds1##*Parameters:}
 		failover_mds1=${failover_mds1%%exiting*}
 		failover_mds1=$(echo $failover_mds1 | tr ' ' '\n' |
 				grep failover.node | cut -d'=' -f2-)
 	fi
-	stack_trap "cleanup_31 $failover_mds1" EXIT
+	stack_trap "cleanup_31 $failover_opt $failover_mds1" EXIT
 
 	# umount client
 	if [ "$MOUNT_2" ] && $(grep -q $MOUNT2' ' /proc/mounts); then
@@ -4365,25 +4395,11 @@ test_31() {
 	MGSNID=$mgsnid_orig,$mgsnid_new
 	stack_trap "MGSNID=$mgsnid_orig" EXIT
 
-	# add mgsnid on @$net2 to targets
-	for ((num = 1; num <= $MDSCOUNT; num++)); do
-		do_facet mds$num $TUNEFS --erase-param mgsnode \
-			$(mdsdevname $num)
-		do_facet mds$num $TUNEFS --mgsnode=$MGSNID $(mdsdevname $num)
-	done
-	for ((num = 1; num <= $OSTCOUNT; num++)); do
-		do_facet ost$num $TUNEFS --erase-param mgsnode \
-			$(ostdevname $num)
-		do_facet ost$num $TUNEFS --mgsnode=$MGSNID $(ostdevname $num)
-	done
-
 	# necessary to do writeconf in order to register
 	# new @$net2 nid for targets
-	export SK_MOUNTED=false
-	writeconf_all || error "writeconf failed"
-
 	nids="${addr1}@$net,${addr1}@$net2:${addr2}@$net,${addr2}@$net2"
-	do_facet mds1 "$TUNEFS --servicenode="$nids" $(mdsdevname 1)" ||
+	export SK_MOUNTED=false
+	tunefs_mgsnode_all $MGSNID "" "--servicenode=$nids" ||
 		error "tunefs failed"
 
 	setupall server_only || error "setupall failed"

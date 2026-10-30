@@ -725,6 +725,8 @@ init_test_env() {
 	export PARALLEL_FORMAT_TYPES=${PARALLEL_FORMAT_TYPES:-$PARALLEL_FORMAT}
 	export PARALLEL_MOUNT=${PARALLEL_MOUNT:-$PARALLEL_OPS}
 	export PARALLEL_MOUNT_TARGETS=${PARALLEL_MOUNT_TARGETS:-"mdt ost"}
+	export PARALLEL_TUNEFS=${PARALLEL_TUNEFS:-$PARALLEL_OPS}
+	export PARALLEL_TUNEFS_TARGETS=${PARALLEL_TUNEFS_TARGETS:-"mdt ost"}
 
 	export BLCKSIZE=${BLCKSIZE:-4096}
 	export MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
@@ -5932,7 +5934,7 @@ format_ost() {
 }
 
 # Usage: parallel_enabled_for <operation> <target_type>
-#   operation: FORMAT, MOUNT
+#   operation: FORMAT, MOUNT, TUNEFS
 #   target_type: mgs, mdt, ost
 # Return 0 if <operation> should run concurrently on <target_type> targets
 parallel_enabled_for() {
