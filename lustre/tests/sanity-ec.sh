@@ -610,14 +610,18 @@ test_1e() {
 run_test 1e "setstripe with EC inheriting to second component"
 
 test_1f() {
-	(( $OSTCOUNT >= 6 )) || skip "needs >= 6 OSTs"
+	# needs >= 4 OSTs so the default EC layout differs from 2+1
+	(( OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
 
 	enable_ec
 	local tf=$DIR/$tfile
+	# boundary is a multiple of both row widths (2M and ${EC_DSTRIPE}M)
+	local end=$((32 * EC_DSTRIPE << 20))
 	local ids
 
-	# Different EC for different components: first 2+1, second 4+2 with -c 4
-	$LFS setstripe -E 128M --ec 2+1 -E -1 -c 4 --ec 4+2 $tf ||
+	# Different EC for different components: first 2+1, second the default
+	# EC layout with -c $EC_DSTRIPE
+	$LFS setstripe -E $end --ec 2+1 -E -1 -c $EC_DSTRIPE $EC_ARG $tf ||
 		error "setstripe failed"
 
 	verify_mirror_count $tf 2
@@ -627,19 +631,19 @@ test_1f() {
 	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
 
 	# Verify data mirror components (mirror 1)
-	verify_comp_extent $tf ${ids[0]} 0 134217728
-	verify_comp_extent $tf ${ids[1]} 134217728 EOF
+	verify_comp_extent $tf ${ids[0]} 0 $end
+	verify_comp_extent $tf ${ids[1]} $end EOF
 
 	# Verify parity mirror components (mirror 2)
 	# First component should have EC(2+1)
 	verify_comp_parity $tf ${ids[2]}
 	verify_ec_stripe_count $tf ${ids[2]} 2 1
-	verify_comp_extent $tf ${ids[2]} 0 134217728
+	verify_comp_extent $tf ${ids[2]} 0 $end
 
-	# Second component has EC adjusted to 4+2 (data component has -c 4)
+	# Second component has the default EC (data has -c $EC_DSTRIPE)
 	verify_comp_parity $tf ${ids[3]}
-	verify_ec_stripe_count $tf ${ids[3]} 4 2
-	verify_comp_extent $tf ${ids[3]} 134217728 EOF
+	verify_ec_stripe_count $tf ${ids[3]} $EC_DSTRIPE $EC_CSTRIPE
+	verify_comp_extent $tf ${ids[3]} $end EOF
 }
 run_test 1f "setstripe with different EC for different components"
 
@@ -680,25 +684,29 @@ test_1g() {
 run_test 1g "setstripe with different parity counts"
 
 test_1h() {
-	(( OSTCOUNT >= 7 )) || skip "needs >= 7 OSTs"
+	# needs >= 4 OSTs so the default EC layout differs from 2+1
+	(( OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
 
 	enable_ec
 	local tf=$DIR/$tfile
+	# boundary is a multiple of both row widths (2M and ${EC_DSTRIPE}M)
+	local end=$((2 * EC_DSTRIPE << 20))
 	local ids
 
 	# Test -N flag with explicit stripe counts and --ec
 	# This should create:
-	# Mirror 1: data mirror 2 comps ([0, 1M] with -c 1, [1M, EOF] with -c 1)
-	# Mirror 2: data mirror 2 comps ([0, 1M] with -c 4, [1M, EOF] with -c 2)
-	# Mirror 3: parity 2 EC comps ([0, 1M] EC(4+2), [1M, EOF] EC(2+1))
+	# Mirror 1: data mirror 2 comps ([0, end] -c 1, [end, EOF] -c 1)
+	# Mirror 2: data mirror 2 comps ([0, end] -c $EC_DSTRIPE,
+	#           [end, EOF] -c 2)
+	# Mirror 3: parity 2 EC comps ([0, end] $EC_ARG, [end, EOF] EC(2+1))
 	#
 	# This test verifies that when using -N with multiple mirrors and --ec,
 	# the EC parity components correctly bind to the data components in the
 	# mirror they were added with (Mirror 2), not to components from other
 	# mirrors (Mirror 1).
 
-	$LFS setstripe -N -E 1M -c 1 -E -1 -c 1 \
-		-N -E 1M -c 4 --ec 4+2 -E -1 -c 2 --ec 2+1 $tf ||
+	$LFS setstripe -N -E $end -c 1 -E -1 -c 1 \
+		-N -E $end -c $EC_DSTRIPE $EC_ARG -E -1 -c 2 --ec 2+1 $tf ||
 		error "setstripe failed"
 
 	verify_mirror_count $tf 3
@@ -708,23 +716,23 @@ test_1h() {
 	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
 
 	# Verify Mirror 1: data mirror without EC
-	verify_comp_extent $tf ${ids[0]} 0 1048576
-	verify_comp_extent $tf ${ids[1]} 1048576 EOF
+	verify_comp_extent $tf ${ids[0]} 0 $end
+	verify_comp_extent $tf ${ids[1]} $end EOF
 
 	# Verify Mirror 2: data mirror with explicit stripe counts
-	verify_comp_extent $tf ${ids[2]} 0 1048576
-	verify_comp_extent $tf ${ids[3]} 1048576 EOF
+	verify_comp_extent $tf ${ids[2]} 0 $end
+	verify_comp_extent $tf ${ids[3]} $end EOF
 
 	# Verify Mirror 3: parity mirror with EC
-	# First component should have EC(4+2) with dstripe=4
+	# First component should have the default EC layout
 	verify_comp_parity $tf ${ids[4]}
-	verify_ec_stripe_count $tf ${ids[4]} 4 2
-	verify_comp_extent $tf ${ids[4]} 0 1048576
+	verify_ec_stripe_count $tf ${ids[4]} $EC_DSTRIPE $EC_CSTRIPE
+	verify_comp_extent $tf ${ids[4]} 0 $end
 
 	# Second component should have EC(2+1) with dstripe=2
 	verify_comp_parity $tf ${ids[5]}
 	verify_ec_stripe_count $tf ${ids[5]} 2 1
-	verify_comp_extent $tf ${ids[5]} 1048576 EOF
+	verify_comp_extent $tf ${ids[5]} $end EOF
 }
 run_test 1h "setstripe with -N flag and explicit stripe counts with --ec"
 
@@ -775,14 +783,18 @@ test_1k() {
 	local ef=$subdir/explicit
 	local ids
 
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
+	# needs >= 4 OSTs so the default EC layout differs from 2+1
+	(( OSTCOUNT >= 4 )) || skip "needs >= 4 OSTs"
 
 	enable_ec
+
+	# boundary is a multiple of the ${EC_DSTRIPE}M row width
+	local end=$((32 * EC_DSTRIPE << 20))
 
 	test_mkdir $td
 
 	# Set default EC layout on the parent directory
-	$LFS setstripe -E 128M -E -1 --ec 4+2 $td ||
+	$LFS setstripe -E $end -E -1 $EC_ARG $td ||
 		error "setstripe for $td failed"
 
 	# create another dir layer to verify the link id is inherited correctly
@@ -798,17 +810,17 @@ test_1k() {
 	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
 
 	# Verify data mirror components (mirror 1)
-	verify_comp_extent $tf ${ids[0]} 0 134217728
-	verify_comp_extent $tf ${ids[1]} 134217728 EOF
+	verify_comp_extent $tf ${ids[0]} 0 $end
+	verify_comp_extent $tf ${ids[1]} $end EOF
 
 	# Verify parity mirror components (mirror 2)
 	verify_comp_parity $tf ${ids[2]}
-	verify_ec_stripe_count $tf ${ids[2]} 4 2
-	verify_comp_extent $tf ${ids[2]} 0 134217728
+	verify_ec_stripe_count $tf ${ids[2]} $EC_DSTRIPE $EC_CSTRIPE
+	verify_comp_extent $tf ${ids[2]} 0 $end
 
 	verify_comp_parity $tf ${ids[3]}
-	verify_ec_stripe_count $tf ${ids[3]} 4 2
-	verify_comp_extent $tf ${ids[3]} 134217728 EOF
+	verify_ec_stripe_count $tf ${ids[3]} $EC_DSTRIPE $EC_CSTRIPE
+	verify_comp_extent $tf ${ids[3]} $end EOF
 
 	# verify that explicit EC layouts on new files overwrite dir defaults
 	$LFS setstripe -E -1 --ec 2+1 $ef ||
@@ -911,14 +923,14 @@ test_2a() {
 run_test 2a "setstripe with -N and EC"
 
 test_2b() {
-	(( OSTCOUNT >= 7 )) || skip "needs >= 7 OSTs"
-
 	enable_ec
 	local tf=$DIR/$tfile
+	# boundary is a multiple of the ${EC_DSTRIPE}M row width
+	local end=$((32 * EC_DSTRIPE << 20))
 	local ids
 
 	# Two data mirrors, one with EC
-	$LFS setstripe -N -E 128M -E -1 --ec 4+2 \
+	$LFS setstripe -N -E $end -E -1 $EC_ARG \
 			-N -E 256M -E -1 $tf || error "setstripe failed"
 
 	verify_mirror_count $tf 3
@@ -928,17 +940,17 @@ test_2b() {
 	ids=($($LFS getstripe $tf | awk '/lcme_id/{print $2}' | tr '\n' ' '))
 
 	# Verify mirror 1 (data with EC)
-	verify_comp_extent $tf ${ids[0]} 0 134217728
-	verify_comp_extent $tf ${ids[1]} 134217728 EOF
+	verify_comp_extent $tf ${ids[0]} 0 $end
+	verify_comp_extent $tf ${ids[1]} $end EOF
 
 	# Verify mirror 2 (parity for mirror 1)
 	verify_comp_parity $tf ${ids[2]}
-	verify_ec_stripe_count $tf ${ids[2]} 4 2
-	verify_comp_extent $tf ${ids[2]} 0 134217728
+	verify_ec_stripe_count $tf ${ids[2]} $EC_DSTRIPE $EC_CSTRIPE
+	verify_comp_extent $tf ${ids[2]} 0 $end
 
 	verify_comp_parity $tf ${ids[3]}
-	verify_ec_stripe_count $tf ${ids[3]} 4 2
-	verify_comp_extent $tf ${ids[3]} 134217728 EOF
+	verify_ec_stripe_count $tf ${ids[3]} $EC_DSTRIPE $EC_CSTRIPE
+	verify_comp_extent $tf ${ids[3]} $end EOF
 
 	# Verify mirror 3 (data without EC)
 	verify_comp_extent $tf ${ids[4]} 0 268435456
@@ -1069,16 +1081,16 @@ test_2e() {
 run_test 2e "setstripe with -N: mixed regular and EC mirrors"
 
 test_2f() {
-	(( OSTCOUNT >= 8 )) || skip "needs >= 8 OSTs"
-
 	enable_ec
 	local td=$DIR/$tdir
+	# boundary is a multiple of the ${EC_DSTRIPE}M row width
+	local end=$((32 * EC_DSTRIPE << 20))
 	local ids
 
 	test_mkdir $td
 
 	# Set default EC layout on directory using mirror mode (-N)
-	$LFS setstripe -N -E 128M -E -1 --ec 4+2 $td ||
+	$LFS setstripe -N -E $end -E -1 $EC_ARG $td ||
 		error "setstripe with -N on directory failed"
 
 	# Create file in directory - should inherit EC layout
@@ -1091,21 +1103,21 @@ test_2f() {
 	ids=($($LFS getstripe $td/$tfile | awk '/lcme_id/{print $2}' | tr '\n' ' '))
 
 	# Verify data mirror (mirror 1)
-	verify_comp_extent $td/$tfile ${ids[0]} 0 134217728
-	verify_comp_extent $td/$tfile ${ids[1]} 134217728 EOF
+	verify_comp_extent $td/$tfile ${ids[0]} 0 $end
+	verify_comp_extent $td/$tfile ${ids[1]} $end EOF
 
 	# Verify parity mirror (mirror 2)
 	verify_comp_parity $td/$tfile ${ids[2]}
-	verify_ec_stripe_count $td/$tfile ${ids[2]} 4 2
-	verify_comp_extent $td/$tfile ${ids[2]} 0 134217728
+	verify_ec_stripe_count $td/$tfile ${ids[2]} $EC_DSTRIPE $EC_CSTRIPE
+	verify_comp_extent $td/$tfile ${ids[2]} 0 $end
 
 	verify_comp_parity $td/$tfile ${ids[3]}
-	verify_ec_stripe_count $td/$tfile ${ids[3]} 4 2
-	verify_comp_extent $td/$tfile ${ids[3]} 134217728 EOF
+	verify_ec_stripe_count $td/$tfile ${ids[3]} $EC_DSTRIPE $EC_CSTRIPE
+	verify_comp_extent $td/$tfile ${ids[3]} $end EOF
 
 	# Test with multiple data mirrors + EC
 	$LFS setstripe -d $td || error "delete default layout failed"
-	$LFS setstripe -N -E -1 -c 2 -N -E -1 --ec 4+2 $td ||
+	$LFS setstripe -N -E -1 -c 2 -N -E -1 $EC_ARG $td ||
 		error "setstripe with mixed mirrors on directory failed"
 
 	touch $td/${tfile}.mixed || error "touch mixed file failed"
@@ -2170,8 +2182,6 @@ test_7a() {
 run_test 7a "nosync flag on parity mirror prevents resync updates"
 
 test_7b() {
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
-
 	enable_ec
 
 	local tf=$DIR/$tfile
@@ -2179,7 +2189,7 @@ test_7b() {
 
 	stack_trap "rm -f $tf $victim"
 
-	$LFS setstripe -E -1 -c 4 --ec 4+2 $tf ||
+	$LFS setstripe -E -1 -c $EC_DSTRIPE $EC_ARG $tf ||
 		error "setstripe failed"
 	verify_mirror_count $tf 2
 
@@ -2209,17 +2219,17 @@ test_7b() {
 run_test 7b "mirror split of a parity mirror to a file is refused"
 
 test_7c() {
-	(( OSTCOUNT >= 6 )) || skip_env "needs >= 6 OSTs"
-
 	enable_ec
 
 	local tf=$DIR/$tfile
+	# boundary is a multiple of the ${EC_DSTRIPE}M row width
+	local end_mb=$((32 * EC_DSTRIPE))
 	local ids
 
 	stack_trap "rm -f $tf"
 
 	# Create file with multiple components and EC
-	$LFS setstripe -E 128M --ec 4+2 -E -1 --ec 4+2 $tf ||
+	$LFS setstripe -E ${end_mb}M $EC_ARG -E -1 $EC_ARG $tf ||
 		error "setstripe failed"
 	dd if=/dev/zero of=$tf bs=1M count=1 || error "write failed"
 
@@ -2253,7 +2263,8 @@ test_7c() {
 	verify_comp_count $tf 2
 
 	# The uninstantiated data tail must work without its former parity.
-	dd if=/dev/zero of=$tf bs=1M count=1 seek=129 conv=notrunc ||
+	dd if=/dev/zero of=$tf bs=1M count=1 seek=$((end_mb + 1)) \
+		conv=notrunc ||
 		error "cannot instantiate data tail after deleting parity"
 }
 run_test 7c "mirror split -d works for multi-component parity mirrors"
@@ -4001,6 +4012,7 @@ test_21b() {
 run_test 21b "migrate EC file to plain layout"
 
 test_21c() {
+	# needs >= 4 OSTs so the default EC layout differs from 2+1
 	(( OSTCOUNT >= 4 )) || skip_env "needs >= 4 OSTs"
 	enable_ec
 
@@ -4018,9 +4030,9 @@ test_21c() {
 
 	local old_chksum=$(md5sum $tf | awk '{print $1}')
 
-	# Migrate EC 2+1 to EC 3+1
-	$LFS migrate -E -1 -c 3 --ec 3+1 $tf ||
-		error "migrate (EC 2+1 -> EC 3+1) failed"
+	# Migrate EC 2+1 to the default EC layout
+	$LFS migrate -E -1 -c $EC_DSTRIPE $EC_ARG $tf ||
+		error "migrate (EC 2+1 -> $EC_ARG) failed"
 
 	# Verify new EC layout
 	verify_mirror_count $tf 2
@@ -4030,7 +4042,7 @@ test_21c() {
 		awk '/lcme_id/{print $2}' | tr '\n' ' '))
 
 	verify_comp_parity $tf ${ids[1]}
-	verify_ec_stripe_count $tf ${ids[1]} 3 1
+	verify_ec_stripe_count $tf ${ids[1]} $EC_DSTRIPE $EC_CSTRIPE
 
 	# Verify data integrity
 	local new_chksum=$(md5sum $tf | awk '{print $1}')
