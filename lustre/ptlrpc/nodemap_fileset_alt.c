@@ -6,7 +6,7 @@
  * Author: Marc Vef <mvef@whamcloud.com>
  */
 
-#include <lustre_compat/linux/rbtree.h>
+#include <linux/rbtree.h>
 
 #include <lustre_net.h>
 #include "nodemap_internal.h"
