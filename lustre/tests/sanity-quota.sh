@@ -304,7 +304,6 @@ wait_grace_time() {
 }
 
 setup_quota_test() {
-	wait_delete_completed
 	echo "Creating test directory"
 	mkdir_on_mdt0 $DIR/$tdir || return 1
 	chmod 0777 $DIR/$tdir || return 2

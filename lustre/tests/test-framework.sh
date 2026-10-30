@@ -3916,15 +3916,29 @@ sync_all_data() {
 	sync_all_data_osts
 }
 
+# Commit the facet's open TXG, or sleep for $2 seconds if given.
 wait_zfs_commit() {
-	local zfs_wait=${2:-5}
+	local facet=$1
+	local zfs_wait=$2
 
 	# the occupied disk space will be released
 	# only after TXGs are committed
-	if [[ $(facet_fstype $1) == zfs ]]; then
-		echo "sleep $zfs_wait for ZFS $(facet_type $1)"
+	[[ $(facet_fstype $facet) == zfs ]] || return 0
+	if [[ -n $zfs_wait ]]; then
+		echo "sleep $zfs_wait for ZFS $(facet_type $facet)"
 		sleep $zfs_wait
+	else
+		do_facet $facet \
+			"$LCTL set_param -n osd-zfs.*.force_sync=1" || true
 	fi
+}
+
+# Commit the open TXG on all ZFS targets, so that freed space is returned.
+wait_zfs_commit_all() {
+	[[ $mds1_FSTYPE == zfs || $ost1_FSTYPE == zfs ]] || return 0
+	do_nodes $(tgts_nodes) \
+		"$LCTL set_param -n osd-zfs.*.force_sync=1" 2>&1 |
+		grep -v 'Found no match' || true
 }
 
 fill_ost() {
@@ -4082,7 +4096,7 @@ wait_delete_completed_mds() {
 		mds2sync="$mds2sync $node"
 	done
 	if [ -z "$mds2sync" ]; then
-		wait_zfs_commit $SINGLEMDS
+		wait_zfs_commit_all
 		return 0
 	fi
 	mds2sync=$(comma_list $mds2sync)
@@ -4100,11 +4114,7 @@ wait_delete_completed_mds() {
 			"$LCTL get_param -n osc.*MDT*.sync_*" | calc_sum)
 		#echo "$node: $changes changes on all"
 		if [[ $changes -eq 0 ]]; then
-			wait_zfs_commit $SINGLEMDS
-
-			# the occupied disk space will be released
-			# only after TXGs are committed
-			wait_zfs_commit ost1
+			wait_zfs_commit_all
 			return 0
 		fi
 		sleep 1
@@ -4302,7 +4312,7 @@ wait_delete_completed() {
 		  "$LCTL get_param -n osc.*MDT*.sync_* \
 		   osp.*.destroys_in_flight 2>/dev/null" | calc_sum)
 	if (( pending == 0 )); then
-		wait_zfs_commit $SINGLEMDS
+		wait_zfs_commit_all
 	else
 		wait_delete_completed_mds $1 || return $?
 		wait_destroy_complete $1 || return $?
