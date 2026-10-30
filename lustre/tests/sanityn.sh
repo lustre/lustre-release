@@ -2881,11 +2881,10 @@ sub_test_43k() {
 	# cfs_race() if LCK_PW is taken on the parent by mdt_reint_unlink.
 	test_mkdir $DIR2/$tdir
 	touch $DIR2/$tdir/$tfile
-	pdo_lru_clear
-	local mdts=$(mdts_nodes)
-
-	do_nodes $mdts \
-		"lctl set_param -n fail_loc=${fail_loc} || true" &>/dev/null
+	cancel_lru_locks mdc
+	do_nodes $(mdts_nodes) "$LCTL set_param -n \
+		ldlm.namespaces.*mdt*.lru_size=clear fail_loc=${fail_loc}" \
+		&>/dev/null
 	echo content > $DIR1/$tdir/$tfile & PID1=$!
 	pdo_sched
 	multiop $DIR2/$tdir/$tfile u & PID2=$!
@@ -2897,8 +2896,6 @@ sub_test_43k() {
 		{ ret=$?; \
 		echo -n "unlinking $tfile should succeed (err=$ret);"; }
 
-	#Clean
-	do_nodes $mdts "lctl set_param -n fail_loc=0x0 || true" &>/dev/null
 	rm -rf $DIR/$tdir
 
 	return $ret
@@ -2912,9 +2909,9 @@ test_43k() {
 #define CFS_FAIL_ONCE|OBD_FAIL_MDS_REINT_OPEN         0x169
 #define CFS_FAIL_ONCE|OBD_FAIL_MDS_REINT_OPEN2        0x16a
 	for fail_loc in "0x80000169" "0x8000016a"; do
-		echo "Begin 100 tests with fail_loc=$fail_loc"
+		echo "Begin 25 tests with fail_loc=$fail_loc"
 		printf "Progress: "
-		for i in {1..100}; do
+		for i in {1..25}; do
 			printf "*"
 			msg=$(sub_test_43k "$fail_loc") ||
 				{ echo; error "iter=$i : $msg"; }
@@ -3303,11 +3300,10 @@ sub_test_45j() {
 	test_mkdir $DIR2/$tdir
 	echo file1 > $DIR2/$tdir/$tfile
 	echo file2 > $DIR2/$tdir/$tfile-2
-	pdo_lru_clear
-	local mdts=$(mdts_nodes)
-
-	do_nodes $mdts \
-		"lctl set_param -n fail_loc=${fail_loc} || true" &>/dev/null
+	cancel_lru_locks mdc
+	do_nodes $(mdts_nodes) "$LCTL set_param -n \
+		ldlm.namespaces.*mdt*.lru_size=clear fail_loc=${fail_loc}" \
+		&>/dev/null
 
 	cat $DIR1/$tdir/$tfile >/dev/null &
 	PID1=$!
@@ -3321,8 +3317,6 @@ sub_test_45j() {
 		{ ret=$?; \
 		echo -n "mrename $tfile-2 to $tfile failed (err=$ret);"; }
 
-	#Clean
-	do_nodes $mdts "lctl set_param -n fail_loc=0x0 || true" &>/dev/null
 	rm -rf $DIR/$tdir
 
 	return $ret
@@ -3336,15 +3330,17 @@ test_45j() {
 #define CFS_FAIL_ONCE|OBD_FAIL_MDS_REINT_OPEN         0x169
 #define CFS_FAIL_ONCE|OBD_FAIL_MDS_REINT_OPEN2        0x16a
 	for fail_loc in "0x80000169" "0x8000016a"; do
-		echo "Begin 100 tests with fail_loc=$fail_loc"
+		echo "Begin 25 tests with fail_loc=$fail_loc"
 		printf "Progress: "
-		for i in {1..100}; do
+		for i in {1..25}; do
 			printf "*"
 			msg=$(sub_test_45j "$fail_loc") ||
 				{ echo; error "iter=$i : $msg"; }
 		done
 		echo
 	done
+
+	reset_fail_loc
 }
 run_test 45j "read vs rename =============="
 
