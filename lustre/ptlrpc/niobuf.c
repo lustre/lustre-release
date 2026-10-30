@@ -85,9 +85,8 @@ static int ptl_send_buf(struct lnet_handle_md *mdh, void *base, int len,
 
 	rc = LNetMDBind(&md, LNET_UNLINK, mdh);
 	if (unlikely(rc != 0)) {
-		CERROR("LNetMDBind failed: %d\n", rc);
-		LASSERT(rc == -ENOMEM);
-		RETURN(-ENOMEM);
+		CERROR("LNetMDBind failed: rc = %d\n", rc);
+		RETURN(rc);
 	}
 
 	CDEBUG(D_NET, "Sending %d bytes to portal %d, xid %lld, offset %u\n",
