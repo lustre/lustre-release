@@ -1,9 +1,9 @@
 /* SPDX-License-Identifier: GPL-2.0+ */
 
-#include <lustre_compat/linux/vmalloc.h>
-#include <lustre_compat/linux/workqueue.h>
-#include <lustre_compat/linux/mm.h>
-#include <lustre_compat/linux/slab.h>
+#include <linux/mm.h>
+#include <linux/slab.h>
+#include <linux/vmalloc.h>
+#include <linux/workqueue.h>
 
 /*
  * This is opencoding of vfree_atomic from Linux kernel added in 4.10 with

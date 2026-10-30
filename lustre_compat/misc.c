@@ -18,24 +18,23 @@
  */
 #define COMPAT_BUILD	1
 
-#include <linux/module.h>
-#include <linux/kernel.h>
 #include <linux/fs.h>
+#include <linux/kallsyms.h>
+#include <linux/kernel.h>
+#include <linux/mm.h>
+#include <linux/module.h>
 #include <linux/sched.h>
 #include <linux/sched/mm.h>
+#include <linux/shrinker.h>
 #include <linux/slab.h>
 #include <linux/uaccess.h>
+#include <linux/vmalloc.h>
 #include <net/netlink.h>
 
 #if defined(CONFIG_KGDB)
 #include <asm/kgdb.h>
 #endif
 
-#include <lustre_compat/linux/kallsyms.h>
-#include <lustre_compat/linux/mm.h>
-#include <lustre_compat/linux/module.h>
-#include <lustre_compat/linux/shrinker.h>
-#include <lustre_compat/linux/vmalloc.h>
 #include <lustre_crypto.h>
 
 int __init cfs_arch_init(void)

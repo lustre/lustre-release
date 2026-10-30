@@ -14,13 +14,13 @@
  */
 #define COMPAT_BUILD	1
 
+#include <linux/kallsyms.h>
 #include <linux/kprobes.h>
 #include <linux/memcontrol.h>
-#include <lustre_compat/linux/kallsyms.h>
-#include <lustre_compat/linux/mm.h>
-#include <lustre_compat/linux/security.h>
-#include <lustre_compat/linux/vmalloc.h>
-#include <lustre_compat/linux/workqueue.h>
+#include <linux/mm.h>
+#include <linux/security.h>
+#include <linux/vmalloc.h>
+#include <linux/workqueue.h>
 
 #include <linux/libcfs/libcfs.h>
 

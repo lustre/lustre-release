@@ -17,7 +17,7 @@
 #include <linux/random.h>
 #include <linux/string.h>
 #include <linux/mount.h>
-#include <lustre_compat/linux/fs.h>
+#include <linux/fs.h>
 #include "llcrypt_private.h"
 
 /**

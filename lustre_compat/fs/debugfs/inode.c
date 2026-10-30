@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0+
 
-#include <lustre_compat/linux/debugfs.h>
+#include <linux/debugfs.h>
 
 #ifndef HAVE_DEBUGFS_LOOKUP_AND_REMOVE
 void debugfs_lookup_and_remove(const char *name, struct dentry *parent)

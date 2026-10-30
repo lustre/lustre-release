@@ -10,7 +10,7 @@
 #include <linux/debugfs.h>
 #include <linux/seq_file.h>
 #include <linux/memcontrol.h>
-#include <lustre_compat/linux/shrinker.h>
+#include <linux/shrinker.h>
 
 #include <linux/libcfs/libcfs_debug.h>
 #include <linux/libcfs/libcfs_private.h>
