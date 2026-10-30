@@ -20,7 +20,7 @@
 #ifndef _OSD_INTERNAL_H
 #define _OSD_INTERNAL_H
 
-#include <lustre_compat/linux/fs.h>
+#include <linux/fs.h>
 #include <linux/refcount.h>
 #include <dt_object.h>
 #include <md_object.h>

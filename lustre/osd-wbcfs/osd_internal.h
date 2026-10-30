@@ -15,7 +15,7 @@
 #include <linux/dcache.h>
 #include <linux/dirent.h>
 #include <linux/file.h>
-#include <lustre_compat/linux/fs.h>
+#include <linux/fs.h>
 #include <linux/mount.h>
 #include <linux/statfs.h>
 

@@ -18,10 +18,10 @@
 /* prerequisite for linux/xattr.h */
 #include <linux/types.h>
 /* prerequisite for linux/xattr.h */
-#include <lustre_compat/linux/fs.h>
+#include <linux/fs.h>
 /* XATTR_{REPLACE,CREATE} */
-#include <lustre_compat/linux/xattr.h>
-#include <lustre_compat/linux/dcache.h>
+#include <linux/xattr.h>
+#include <linux/dcache.h>
 /*
  * struct OBD_{ALLOC,FREE}*()
  */

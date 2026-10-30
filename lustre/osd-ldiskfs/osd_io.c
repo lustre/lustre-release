@@ -22,10 +22,10 @@
 #include <linux/types.h>
 /* prerequisite for linux/xattr.h */
 #include <linux/fs.h>
-#include <lustre_compat/linux/bio.h>
+#include <linux/bio.h>
 #include <linux/mm.h>
 #include <linux/swap.h>
-#include <lustre_compat/linux/folio_batch.h>
+#include <linux/folio_batch.h>
 #include <linux/blk_types.h>
 
 /*

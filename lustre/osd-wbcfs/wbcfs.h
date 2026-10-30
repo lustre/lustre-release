@@ -13,7 +13,7 @@
 #ifndef _OSD_WBCFS_H_
 #define _OSD_WBCFS_H_
 
-#include <lustre_compat/linux/mm.h>
+#include <linux/mm.h>
 #include <linux/spinlock.h>
 #include <linux/uidgid.h>
 #include <linux/percpu.h>

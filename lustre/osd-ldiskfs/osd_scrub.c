@@ -20,7 +20,7 @@
 #define DEBUG_SUBSYSTEM S_LFSCK
 
 #include <linux/kthread.h>
-#include <lustre_compat/linux/dcache.h>
+#include <linux/dcache.h>
 #include <uapi/linux/lustre/lustre_idl.h>
 #include <lustre_disk.h>
 #include <dt_object.h>

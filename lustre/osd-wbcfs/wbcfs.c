@@ -12,14 +12,14 @@
 #include <linux/file.h>
 #include <linux/uidgid.h>
 #include <linux/types.h>
-#include <lustre_compat/linux/fs.h>
+#include <linux/fs.h>
 #include <lustre_compat/linux/folio.h>
 #include <linux/dirent.h>
 #include <linux/xattr.h>
 #include <linux/swap.h>
 #include <linux/statfs.h>
 #include <linux/fs_context.h>
-#include <lustre_compat/linux/uio.h>
+#include <linux/uio.h>
 
 #include <lustre_compat.h>
 
