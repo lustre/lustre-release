@@ -6097,8 +6097,19 @@ writeconf_facet() {
 
 	stop ${facet} -f
 	rm -f $TMP/${facet}active
-	do_facet ${facet} "$TUNEFS --quiet --writeconf $dev" || return 1
-	return 0
+
+	local zfs=false
+	local rc=0
+
+	[[ $(facet_fstype $facet) != zfs ]] || zfs=true
+	if $zfs; then
+		import_zpool $facet || return 1
+	fi
+	do_facet ${facet} "$TUNEFS --quiet --writeconf $dev" || rc=1
+	if $zfs && [[ $KEEP_ZPOOL != true ]]; then
+		export_zpool $facet
+	fi
+	return $rc
 }
 
 writeconf_all () {
