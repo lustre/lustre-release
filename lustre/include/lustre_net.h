@@ -27,7 +27,7 @@
  * @{
  */
 #include <linux/kobject.h>
-#include <lustre_compat/linux/mm.h>
+#include <linux/mm.h>
 #include <linux/rhashtable.h>
 #include <linux/uio.h>
 #include <linux/lnet/api.h>

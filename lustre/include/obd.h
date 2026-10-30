@@ -18,10 +18,10 @@
 #include <lustre_compat/linux/folio.h>
 #include <linux/posix_acl.h>
 #include <linux/kobject.h>
-#include <lustre_compat/linux/mm.h>
+#include <linux/mm.h>
 #include <linux/spinlock.h>
 #include <linux/sysfs.h>
-#include <lustre_compat/linux/xarray.h>
+#include <linux/xarray.h>
 
 #include <linux/libcfs/libcfs.h>
 #include <linux/libcfs/libcfs_fail.h>

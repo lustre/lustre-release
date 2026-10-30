@@ -70,16 +70,16 @@
  * super-class definitions.
  */
 #include <linux/aio.h>
-#include <lustre_compat/linux/fs.h>
+#include <linux/fs.h>
 #include <lustre_compat/linux/folio.h>
 
 #include <linux/atomic.h>
 #include <linux/mutex.h>
 #include <linux/radix-tree.h>
 #include <linux/spinlock.h>
-#include <lustre_compat/linux/string.h>
+#include <linux/string.h>
 #include <linux/wait.h>
-#include <lustre_compat/linux/folio_batch.h>
+#include <linux/folio_batch.h>
 
 #include <lu_object.h>
 #include <lustre_dlm.h>

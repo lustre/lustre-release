@@ -15,7 +15,7 @@
 #define _LUSTRE_COMPAT_H
 
 #include <linux/aio.h>
-#include <lustre_compat/linux/fs.h>
+#include <linux/fs.h>
 #include <linux/namei.h>
 #include <linux/pagemap.h>
 #include <linux/posix_acl_xattr.h>
@@ -26,13 +26,11 @@
 #include <linux/backing-dev.h>
 #include <linux/slab.h>
 #include <linux/security.h>
-#include <lustre_compat/linux/folio_batch.h>
+#include <linux/folio_batch.h>
 #include <linux/workqueue.h>
-#include <lustre_compat/linux/shrinker.h>
-#include <lustre_compat/linux/xarray.h>
+#include <linux/shrinker.h>
+#include <linux/xarray.h>
 #include <lustre_compat/linux/folio.h>
-#include <lustre_compat/linux/blkdev.h>
-#include <lustre_compat/linux/posix_acl_xattr.h>
 #include <obd_support.h>
 
 #ifndef HAVE_IOV_ITER_IOVEC

@@ -16,7 +16,7 @@
 #ifndef _LUSTRE_NRS_ORR_H
 #define _LUSTRE_NRS_ORR_H
 
-#include <lustre_compat/linux/xarray.h>
+#include <linux/xarray.h>
 
 /**
  * ORR policy operations

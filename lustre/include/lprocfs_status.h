@@ -19,15 +19,15 @@
 #define _LPROCFS_STATUS_H
 
 #include <linux/fs.h>
-#include <lustre_compat/linux/debugfs.h>
+#include <linux/debugfs.h>
 #include <linux/kref.h>
-#include <lustre_compat/linux/proc_fs.h>
+#include <linux/proc_fs.h>
 #include <linux/rwsem.h>
 #include <linux/spinlock.h>
 #include <linux/string_helpers.h>
 #include <linux/seq_file.h>
 #include <linux/libcfs/libcfs.h>
-#include <lustre_compat/linux/sysfs.h>
+#include <linux/sysfs.h>
 
 #include <uapi/linux/lustre/lustre_idl.h>
 

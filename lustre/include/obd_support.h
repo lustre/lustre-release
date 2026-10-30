@@ -20,7 +20,7 @@
 #include <linux/slab.h>
 #include <linux/types.h>
 #include <linux/percpu_counter.h>
-#include <lustre_compat/linux/vmalloc.h>
+#include <linux/vmalloc.h>
 #include <linux/libcfs/libcfs_debug.h>
 #include <linux/libcfs/libcfs_private.h>
 
