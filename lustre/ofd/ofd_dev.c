@@ -3258,6 +3258,8 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 		ldlm_namespace_free_prior(m->ofd_namespace, NULL,
 			test_bit(OBDF_FORCE, d->ld_obd->obd_flags));
 
+	/* last_rcvd commit callbacks hold export references */
+	dt_sync(env, m->ofd_osd);
 	obd_exports_barrier(obd);
 	obd_zombie_barrier();
 

@@ -6599,6 +6599,8 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 			test_bit(OBDF_FORCE, d->ld_obd->obd_flags));
 	mdt_quota_fini(env, m);
 
+	/* last_rcvd commit callbacks hold export references */
+	dt_sync(env, m->mdt_bottom);
 	obd_exports_barrier(obd);
 	obd_zombie_barrier();
 
