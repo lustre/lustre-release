@@ -3241,7 +3241,7 @@ int mdd_create(const struct lu_env *env, struct md_object *pobj,
 	struct lu_attr *pattr = &info->mdi_pattr;
 	struct lu_buf acl_buf;
 	struct lu_buf def_acl_buf;
-	struct lu_buf hsm_buf;
+	struct lu_buf hsm_buf = { NULL, 0 };
 	struct lu_buf pin_buf = { NULL, 0 };
 	struct linkea_data *ldata = &info->mdi_link_data;
 	const char *name = lname->ln_name;
@@ -3333,7 +3333,11 @@ use_bigger_buffer:
 	}
 
 	if (spec->sp_cr_flags & MDS_OPEN_PCC) {
-		LASSERT(spec->sp_cr_flags & MDS_OPEN_HAS_EA);
+		/* A PCC create must carry a layout (MDS_OPEN_HAS_EA); reject a
+		 * request that sets MDS_OPEN_PCC without it.
+		 */
+		if (unlikely(!(spec->sp_cr_flags & MDS_OPEN_HAS_EA)))
+			GOTO(out_stop, rc = -EINVAL);
 
 		memset(&hsm_buf, 0, sizeof(hsm_buf));
 		lu_buf_alloc(&hsm_buf, sizeof(struct hsm_attrs));
