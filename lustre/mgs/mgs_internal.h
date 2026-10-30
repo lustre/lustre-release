@@ -14,7 +14,7 @@
 #ifndef _MGS_INTERNAL_H
 #define _MGS_INTERNAL_H
 
-#include <lustre_compat/linux/xarray.h>
+#include <linux/xarray.h>
 #include <lustre_log.h>
 #include <lustre_export.h>
 #include <lustre_nodemap.h>

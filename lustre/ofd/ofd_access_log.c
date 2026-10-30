@@ -29,7 +29,7 @@
 
 #include <linux/cdev.h>
 #include <linux/circ_buf.h>
-#include <lustre_compat/linux/device.h>
+#include <linux/device.h>
 #include <linux/fs.h>
 #include <linux/idr.h>
 #include <linux/kernel.h>
