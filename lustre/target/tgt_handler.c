@@ -405,6 +405,14 @@ static int tgt_handle_request0(struct tgt_session_info *tsi,
 	case SEC_CTX_INIT:
 	case SEC_CTX_INIT_CONT:
 	case SEC_CTX_FINI:
+		if (unlikely(!req->rq_ctx_init && !req->rq_ctx_fini)) {
+			rc = -EPROTO;
+			DEBUG_REQ(D_ERROR, req,
+				  "sec context request not negotiated by flavor %s: rc = %d",
+				  sptlrpc_flavor2name_base(req->rq_flvr.sf_rpc),
+				  rc);
+			GOTO(out, rc);
+		}
 		CFS_FAIL_TIMEOUT(OBD_FAIL_SEC_CTX_HDL_PAUSE, cfs_fail_val);
 		GOTO(out, rc = 0);
 	}
