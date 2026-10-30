@@ -93,10 +93,27 @@ int sptlrpc_unregister_policy(struct ptlrpc_sec_policy *policy)
 }
 EXPORT_SYMBOL(sptlrpc_unregister_policy);
 
+static struct ptlrpc_sec_policy *sptlrpc_policy_get_number(__u16 number)
+{
+	struct ptlrpc_sec_policy *policy;
+
+	read_lock(&policy_lock);
+	policy = policies[number];
+	if (policy && !try_module_get(policy->sp_owner))
+		policy = NULL;
+	read_unlock(&policy_lock);
+
+	return policy;
+}
+
+/* how long to wait before retrying a ptlrpc_gss load that failed */
+#define SPTLRPC_GSS_LOAD_RETRY_SEC	10
+
 static
 struct ptlrpc_sec_policy *sptlrpc_wireflavor2policy(__u32 flavor)
 {
 	static DEFINE_MUTEX(load_mutex);
+	static time64_t load_failed[SPTLRPC_POLICY_MAX];
 	struct ptlrpc_sec_policy *policy;
 	__u16 number = SPTLRPC_FLVR_POLICY(flavor);
 	int rc;
@@ -104,35 +121,41 @@ struct ptlrpc_sec_policy *sptlrpc_wireflavor2policy(__u32 flavor)
 	if (number >= SPTLRPC_POLICY_MAX)
 		return NULL;
 
-	while (1) {
-		read_lock(&policy_lock);
-		policy = policies[number];
-		if (policy && !try_module_get(policy->sp_owner))
-			policy = NULL;
-		read_unlock(&policy_lock);
+	policy = sptlrpc_policy_get_number(number);
+	if (policy || (number != SPTLRPC_POLICY_GSS &&
+		       number != SPTLRPC_POLICY_GSSIAM))
+		return policy;
 
-		if (policy != NULL || (number != SPTLRPC_POLICY_GSS &&
-				       number != SPTLRPC_POLICY_GSSIAM))
-			break;
+	/* Try to load ptlrpc_gss once per lookup.  If the policy is still
+	 * not registered afterwards (module not installed, or a policy the
+	 * module does not provide), fail the lookup and do not try again
+	 * for this policy for a while, so lookups do not each have to wait
+	 * for modprobe.  The policy is checked again after request_module()
+	 * because a return of 0 does not mean it has been registered, e.g.
+	 * while another thread is still loading the module; such a lookup
+	 * fails rather than waiting for the registration.
+	 */
+	mutex_lock(&load_mutex);
+	policy = sptlrpc_policy_get_number(number);
+	if (policy)
+		goto out;
+	if (load_failed[number] &&
+	    ktime_get_seconds() < load_failed[number] +
+				  SPTLRPC_GSS_LOAD_RETRY_SEC)
+		goto out;
 
-		/**
-		 * Try to load ptlrpc_gss module, happens only if policy at
-		 * index SPTLRPC_POLICY_GSS or SPTLRPC_POLICY_GSSIAM is not
-		 * already referenced in global array policies[]
-		 */
-		mutex_lock(&load_mutex);
-		/* The fact that request_module() returns 0 does not guarantee
-		 * the module has done its job. So we must check that the
-		 * requested policy is now available. This is done by checking
-		 * again for policies[number] in the loop.
-		 */
-		rc = request_module("ptlrpc_gss");
-		if (rc == 0)
-			CDEBUG(D_SEC, "module ptlrpc_gss loaded on demand\n");
-		else
-			CERROR("Unable to load module ptlrpc_gss: rc %d\n", rc);
-		mutex_unlock(&load_mutex);
+	rc = request_module("ptlrpc_gss");
+	policy = sptlrpc_policy_get_number(number);
+	if (policy) {
+		CDEBUG(D_SEC, "module ptlrpc_gss loaded on demand\n");
+		load_failed[number] = 0;
+	} else {
+		CERROR("%s: cannot load sec policy %u: rc = %d\n",
+		       "ptlrpc_gss", number, rc);
+		load_failed[number] = ktime_get_seconds();
 	}
+out:
+	mutex_unlock(&load_mutex);
 
 	return policy;
 }
