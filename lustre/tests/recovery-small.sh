@@ -1251,13 +1251,12 @@ test_50() {
 	sleep 10
 	FAILURE_MODE="SOFT"
 	fail $SINGLEMDS
-	# wait for client to reconnect to MDS
-	sleep 60
+	sleep 10
 	fail $SINGLEMDS
-	sleep 60
+	sleep 10
 	fail $SINGLEMDS
 	# client process should see no problems even though MDS went down
-	sleep $TIMEOUT
+	sleep 10
         kill -USR1 $CLIENT_PID
 	wait $CLIENT_PID
 	rc=$?
