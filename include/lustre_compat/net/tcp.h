@@ -3,7 +3,7 @@
 #ifndef __LIBCFS_NET_TCP_H__
 #define __LIBCFS_NET_TCP_H__
 
-#include <net/tcp.h>
+#include_next <net/tcp.h>
 
 #ifdef HAVE_KERNEL_SETSOCKOPT
 

@@ -7,7 +7,7 @@
 #ifndef __LIBCFS_LINUX_POSIX_ACL_XATTR_H__
 #define __LIBCFS_LINUX_POSIX_ACL_XATTR_H__
 
-#include <linux/posix_acl_xattr.h>
+#include_next <linux/posix_acl_xattr.h>
 
 #ifndef HAVE_POSIX_ACL_TO_XATTR_ALLOC_BUFFER
 static inline void *

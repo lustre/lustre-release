@@ -7,7 +7,7 @@
 #ifndef __LIBCFS_LINUX_RBTREE_H__
 #define __LIBCFS_LINUX_RBTREE_H__
 
-#include <linux/rbtree.h>
+#include_next <linux/rbtree.h>
 
 #ifndef HAVE_RB_FIND
 /**

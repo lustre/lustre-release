@@ -3,7 +3,7 @@
 #ifndef __COMPAT_SECURITY_H
 #define __COMPAT_SECURITY_H
 
-#include <linux/security.h>
+#include_next <linux/security.h>
 
 #ifdef CONFIG_SECURITY
 int compat_security_file_alloc(struct file *file);

@@ -9,7 +9,7 @@
 #ifndef __LUSTRE_COMPAT_LINUX_XATTR_H__
 #define __LUSTRE_COMPAT_LINUX_XATTR_H__
 
-#include <linux/xattr.h>
+#include_next <linux/xattr.h>
 
 #ifndef HAVE_USER_NAMESPACE_ARG
 #define ll_xattr_set_common(hd, ns, de, inode, name, value, size, flags) \

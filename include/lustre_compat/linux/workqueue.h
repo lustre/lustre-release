@@ -11,7 +11,7 @@
 #ifndef __LIBCFS_WORKQUEUE_H__
 #define __LIBCFS_WORKQUEUE_H__
 
-#include <linux/workqueue.h>
+#include_next <linux/workqueue.h>
 
 struct workqueue_attrs *compat_alloc_workqueue_attrs(void);
 void compat_free_workqueue_attrs(struct workqueue_attrs *attrs);

@@ -9,7 +9,7 @@
 #ifndef __LIBCFS_LINUX_PROC_FS_H__
 #define __LIBCFS_LINUX_PROC_FS_H__
 
-#include <linux/proc_fs.h>
+#include_next <linux/proc_fs.h>
 
 #ifdef HAVE_PROC_OPS
 #define PROC_OWNER(_fn)

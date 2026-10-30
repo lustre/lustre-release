@@ -9,10 +9,10 @@
 #ifndef __LIBCFS_LINUX_CFS_FS_H__
 #define __LIBCFS_LINUX_CFS_FS_H__
 
-#include <linux/fs.h>
+#include_next <linux/fs.h>
 #include <linux/dcache.h>
 #include <linux/posix_acl.h>
-#include <lustre_compat/linux/time64.h>
+#include <linux/time64.h>
 
 #ifndef HAVE_D_MAKE_PERSISTENT
 /*

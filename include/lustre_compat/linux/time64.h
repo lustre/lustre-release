@@ -6,8 +6,7 @@
 #ifndef _LUSTRE_COMPAT_LINUX_TIME64_H
 #define _LUSTRE_COMPAT_LINUX_TIME64_H
 
-#include <linux/ktime.h>
-#include <linux/time64.h>
+#include_next <linux/time64.h>
 
 /*
  * KTIME_SEC_MIN was added in Linux 5.15 along with the fix for a bug

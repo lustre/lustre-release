@@ -13,6 +13,11 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 
+/* No you can't turn this into a Makefile variable since this
+ * would be applied to the libcfs module.
+ */
+#define COMPAT_BUILD	1
+
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/fs.h>
@@ -25,11 +30,6 @@
 #if defined(CONFIG_KGDB)
 #include <asm/kgdb.h>
 #endif
-
-/* No you can't turn this into a Makefile variable since this
- * would be applied to the libcfs module.
- */
-#define COMPAT_BUILD	1
 
 #include <lustre_compat/linux/kallsyms.h>
 #include <lustre_compat/linux/mm.h>

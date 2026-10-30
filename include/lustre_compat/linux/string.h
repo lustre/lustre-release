@@ -7,8 +7,8 @@
 #ifndef __LIBCFS_LINUX_STRING_H__
 #define __LIBCFS_LINUX_STRING_H__
 
-#include <linux/string.h>
-#include <lustre_compat/linux/fortify-string.h>
+#include_next <linux/string.h>
+#include <linux/fortify-string.h>
 
 #ifndef memset_startat
 /** from linux 5.19 include/linux/string.h: */

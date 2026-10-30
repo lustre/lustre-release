@@ -14,6 +14,9 @@
 #ifndef _LUSTRE_COMPAT_LINUX_COMPILER_CONTEXT_ANALYSIS_H
 #define _LUSTRE_COMPAT_LINUX_COMPILER_CONTEXT_ANALYSIS_H
 
+#if __has_include_next("linux/compiler-context-analysis.h")
+#include_next <linux/compiler-context-analysis.h>
+#endif
 #include <linux/compiler_types.h>
 
 #ifndef __must_hold_shared

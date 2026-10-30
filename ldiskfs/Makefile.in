@@ -28,6 +28,8 @@ ldiskfs_sources := $(filter-out @EXT4_CRYPTO@ @EXT4_VERITY@, $(ldiskfs_patched_s
 
 ldiskfs-objs := $(filter %.o, $(ldiskfs_sources:.c=.o))
 
+# ldiskfs is kernel code and must see the kernel headers unchanged
+NOSTDINC_FLAGS := $(filter-out -I%/include/lustre_compat,$(NOSTDINC_FLAGS))
 ccflags-y += -I@LINUX@/fs -I@abs_top_srcdir@/ldiskfs
 
 obj-m += ldiskfs.o

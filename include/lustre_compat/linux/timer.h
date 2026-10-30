@@ -11,17 +11,11 @@
 #ifndef __LIBCFS_LINUX_LINUX_TIME_H__
 #define __LIBCFS_LINUX_LINUX_TIME_H__
 
-/* Portable time API */
-#include <linux/hrtimer.h>
-#include <linux/module.h>
-#include <linux/kernel.h>
-#include <linux/version.h>
-#include <linux/jiffies.h>
-#include <linux/hrtimer.h>
-#include <linux/types.h>
-#include <linux/time.h>
-#include <linux/timer.h>
-#include <asm/div64.h>
+/*
+ * <linux/timer.h> is included from deep inside other kernel headers
+ * (mm_types.h -> workqueue.h), so do not pull in heavy headers here.
+ */
+#include_next <linux/timer.h>
 
 #ifndef HAVE_TIMER_DESTROY_ON_STACK
 #define timer_destroy_on_stack(timer) destroy_timer_on_stack(timer)

@@ -10,8 +10,8 @@
 #ifndef _LUSTRE_COMPAT_FOLIO_BATCH_H
 #define _LUSTRE_COMPAT_FOLIO_BATCH_H
 
-#if __has_include(<linux/folio_batch.h>)
-# include <linux/folio_batch.h>
+#if __has_include_next("linux/folio_batch.h")
+# include_next <linux/folio_batch.h>
 #else
 # include <linux/pagevec.h>
 #endif

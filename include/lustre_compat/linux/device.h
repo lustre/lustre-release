@@ -7,7 +7,7 @@
 #ifndef __LIBCFS_LINUX_DEVICE_H__
 #define __LIBCFS_LINUX_DEVICE_H__
 
-#include <linux/device.h>
+#include_next <linux/device.h>
 
 #ifndef HAVE_CLASS_CREATE_NO_ARG
 # ifdef class_create

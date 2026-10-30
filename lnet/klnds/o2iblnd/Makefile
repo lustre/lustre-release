@@ -16,10 +16,13 @@ ccflags-y += $(EXTRA_KCFLAGS)
 
 lsrctree := $(realpath $(src)/../../..)
 
+# config.h must come before EXTRA_OFED_CONFIG and the kernel headers
+NOSTDINC_FLAGS += -include $(lsrctree)/config.h
+
 # Include the Lustre header paths
-ccflags-y += -include $(lsrctree)/config.h
 NOSTDINC_FLAGS += -I$(lsrctree)/lnet/include
 NOSTDINC_FLAGS += -I$(lsrctree)/lustre/include
+NOSTDINC_FLAGS += -I$(lsrctree)/include/lustre_compat
 NOSTDINC_FLAGS += -I$(lsrctree)/include
 NOSTDINC_FLAGS += -I$(lsrctree)/include/uapi
 

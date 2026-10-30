@@ -7,7 +7,7 @@
 #ifndef __LIBCFS_LINUX_UIO_H__
 #define __LIBCFS_LINUX_UIO_H__
 
-#include <linux/uio.h>
+#include_next <linux/uio.h>
 #include <linux/mm.h>
 
 /*

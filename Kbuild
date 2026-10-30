@@ -11,6 +11,8 @@ obj-$(CONFIG_LUSTRE_FS_LDISKFS) += ldiskfs/
 obj-m += lnet/
 obj-m += lustre/
 
+# lustre_compat shadows kernel headers, so it must come before them.
+NOSTDINC_FLAGS += -I$(lsrctree)/include/lustre_compat
 NOSTDINC_FLAGS += -include $(lsrctree)/config.h
 NOSTDINC_FLAGS += -I$(lsrctree)/include
 

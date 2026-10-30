@@ -5,7 +5,7 @@
 
 #include <linux/netdevice.h>
 #include <net/netlink.h>
-#include <net/genetlink.h>
+#include_next <net/genetlink.h>
 
 #ifndef HAVE_NLA_STRDUP
 char *nla_strdup(const struct nlattr *nla, gfp_t flags);

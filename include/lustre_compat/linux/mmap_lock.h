@@ -9,7 +9,7 @@
 #ifndef __LIBCFS_LINUX_MMAP_LOCK_H__
 #define __LIBCFS_LINUX_MMAP_LOCK_H__
 
-#include <linux/mmap_lock.h>
+#include_next <linux/mmap_lock.h>
 
 #ifndef HAVE_MMAP_LOCK
 static inline void mmap_write_lock(struct mm_struct *mm)

@@ -2,10 +2,21 @@
 #ifndef _LINUX_SHRINKER_LUSTRE_H
 #define _LINUX_SHRINKER_LUSTRE_H
 
-#include <linux/atomic.h>
-#include <linux/mm.h>
-#include <linux/shrinker.h>
+/*
+ * <linux/shrinker.h> is included from deep inside other kernel headers
+ * (fs.h -> list_lru.h), so do not pull in heavy headers such as mm.h here.
+ * The RHEL8 header is not self-contained: supply its prerequisites first.
+ */
 #include <linux/types.h>
+#include <linux/atomic.h>
+/* gcc 8 macro-expands "linux" in __has_include(<...>), so use "" */
+#if defined(__has_include)
+#if __has_include("linux/rh_kabi.h")
+#include <linux/rh_kabi.h>
+#endif
+#endif
+#include_next <linux/shrinker.h>
+#include <linux/printk.h>
 
 #if !defined(CONFIG_SHRINKER_DEBUG) || defined(HAVE_REGISTER_SHRINKER_FORMAT_NAMED)
 struct ll_shrinker {
@@ -37,21 +48,6 @@ struct shrinker *ll_shrinker_alloc(unsigned int flags,
 				   const char *fmt, ...);
 void ll_shrinker_register(struct shrinker *shrinker);
 void ll_shrinker_free(struct shrinker *shrinker);
-
-static inline const char *shrinker_debugfs_path(struct shrinker *shrinker)
-{
-#ifndef CONFIG_SHRINKER_DEBUG
- #ifndef HAVE_SHRINKER_ALLOC
-	struct ll_shrinker *s = container_of(shrinker, struct ll_shrinker,
-					     ll_shrinker);
- #else
-	struct ll_shrinker *s = shrinker->private_data;
- #endif
-#else /* !CONFIG_SHRINKER_DEBUG */
-	struct shrinker *s = shrinker;
-#endif /* CONFIG_SHRINKER_DEBUG */
-
-	return s->debugfs_entry->d_name.name;
-}
+const char *shrinker_debugfs_path(struct shrinker *shrinker);
 
 #endif /* _LINUX_SHRINKER_LUSTRE_H */

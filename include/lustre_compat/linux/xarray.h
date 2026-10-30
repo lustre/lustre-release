@@ -15,7 +15,7 @@
  *
  * See Documentation/core-api/xarray.rst for how to use the XArray.
  */
-#include <linux/xarray.h>
+#include_next <linux/xarray.h>
 
 /* Linux kernel version v5.0 commit fd9dc93e36231fb6d520e0edd467058fad4fd12d
  * ("XArray: Change xa_insert to return -EBUSY")

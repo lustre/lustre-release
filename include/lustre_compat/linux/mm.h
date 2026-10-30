@@ -3,7 +3,7 @@
 #ifndef _LINUX_MM_LUSTRE_H
 #define _LINUX_MM_LUSTRE_H
 
-#include <linux/mm.h>
+#include_next <linux/mm.h>
 
 unsigned long compat_totalram_pages(void);
 #ifndef COMPAT_BUILD

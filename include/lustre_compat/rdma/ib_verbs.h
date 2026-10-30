@@ -5,7 +5,7 @@
 #ifndef __LIBCFS_RDMA_IB_VERBS_H__
 #define __LIBCFS_RDMA_IB_VERBS_H__
 
-#include <rdma/ib_verbs.h>
+#include_next <rdma/ib_verbs.h>
 
 /* Linux 5.15 commit e945c653c8e97 ("RDMA: Split kernel-only global device
  * caps from uverbs device caps") moved SG_GAPS registration support out of

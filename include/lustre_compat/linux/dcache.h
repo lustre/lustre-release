@@ -7,7 +7,7 @@
 #ifndef __LIBCFS_LINUX_DCACHE_H__
 #define __LIBCFS_LINUX_DCACHE_H__
 
-#include <linux/dcache.h>
+#include_next <linux/dcache.h>
 
 #ifndef QSTR
 #define QSTR(name) QSTR_LEN((name), strlen((name)))

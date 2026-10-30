@@ -12,7 +12,7 @@ static inline void netdev_unlock_ops(struct net_device *dev)
 {
 }
 #else
-#include <net/netdev_lock.h>
+#include_next <net/netdev_lock.h>
 #endif
 
 #endif /* __LIBCFS_LINUX_NETDEV_LOCK_H__ */

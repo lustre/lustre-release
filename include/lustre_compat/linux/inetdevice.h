@@ -5,7 +5,7 @@
 #ifndef __LIBCFS_LINUX_INETDEVICE_H__
 #define __LIBCFS_LINUX_INETDEVICE_H__
 
-#include <linux/inetdevice.h>
+#include_next <linux/inetdevice.h>
 
 /*
  * kernel 5.3: commit ef11db3310e272d3d8dbe8739e0770820dd20e52
