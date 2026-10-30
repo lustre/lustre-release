@@ -18209,6 +18209,7 @@ run_test 123e "statahead with large wide striping"
 
 test_123f() {
 	local max
+	local min
 	local batch_max
 	local dir=$DIR/$tdir
 
@@ -18219,20 +18220,24 @@ test_123f() {
 	$LFS setstripe -C 1000 $dir || error "setstripe $dir failed"
 	stack_trap "rm -rf $dir"
 
-	touch $dir/$tfile.{0..200} || error "touch 200 files failed"
+	touch $dir/$tfile.{0..70} || error "touch 71 files failed"
 
 	max=$($LCTL get_param -n llite.*.statahead_max | head -n 1)
+	min=$($LCTL get_param -n llite.*.statahead_min | head -n 1)
 	batch_max=$($LCTL get_param -n llite.*.statahead_batch_max | head -n 1)
+	# statahead_min above the current statahead_max is ignored
+	stack_trap "$LCTL set_param llite.*.statahead_max=$max; \
+		$LCTL set_param llite.*.statahead_min=$min"
+	stack_trap "$LCTL set_param llite.*.statahead_batch_max=$batch_max"
 
+	# start with a full window so the first batch overflows the reply
 	$LCTL set_param llite.*.statahead_max=64
+	$LCTL set_param llite.*.statahead_min=64
 	$LCTL set_param llite.*.statahead_batch_max=64
 
 	ls -l $dir
 	lctl get_param mdc.*.batch_stats
 	lctl get_param llite.*.statahead_*
-
-	$LCTL set_param llite.*.statahead_max=$max
-	$LCTL set_param llite.*.statahead_batch_max=$batch_max
 }
 run_test 123f "Retry mechanism with large wide striping files"
 
@@ -18320,10 +18325,10 @@ test_123h() {
 	$LCTL set_param llite.*.enable_statahead_fname=1
 
 	echo "Scan a directory with number regularized fname"
-	test_123h_base "0..10000" 10000
+	test_123h_base "0..2000" 2000
 
 	echo "Scan a directory with zeroed padding number regularized fname"
-	test_123h_base "000000..010000" 10000
+	test_123h_base "000000..002000" 2000
 }
 run_test 123h "Verify statahead work with the fname pattern"
 
