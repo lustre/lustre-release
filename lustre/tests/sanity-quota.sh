@@ -1862,18 +1862,21 @@ test_3a() {
 
 	test_block_soft $testfile $grace $limit "u"
 
-	echo "Group quota (soft limit:$limit MB  grace:$grace seconds)"
-	testfile=$DIR/$tdir/$tfile-1
-	# make sure the system is clean
-	used=$(getquota -g $TSTUSR global curspace)
-	[ $used -ne 0 ] && error "Used space($used) for group $TSTUSR isn't 0."
+	if [[ $SLOW == yes ]]; then
+		echo "Group quota (soft limit:$limit MB  grace:$grace seconds)"
+		testfile=$DIR/$tdir/$tfile-1
+		# make sure the system is clean
+		used=$(getquota -g $TSTUSR global curspace)
+		[ $used -ne 0 ] &&
+			error "Used space($used) for group $TSTUSR isn't 0."
 
-	$LFS setquota -t -g --block-grace $grace --inode-grace \
-		$MAX_IQ_TIME $DIR || error "set group grace time failed"
-	$LFS setquota -g $TSTUSR -b ${limit}M -B 0 -i 0 -I 0 $DIR ||
-		error "set group quota failed"
+		$LFS setquota -t -g --block-grace $grace --inode-grace \
+			$MAX_IQ_TIME $DIR || error "set group grace time failed"
+		$LFS setquota -g $TSTUSR -b ${limit}M -B 0 -i 0 -I 0 $DIR ||
+			error "set group quota failed"
 
-	test_block_soft $testfile $grace $limit "g"
+		test_block_soft $testfile $grace $limit "g"
+	fi
 
 	if is_project_quota_supported; then
 		echo "Project quota (soft limit:$limit MB  grace:$grace sec)"
@@ -1945,23 +1948,27 @@ test_3b() {
 
 	test_block_soft $testfile $grace $limit "u" $qpool
 
-	echo "Group quota in $qpool(soft limit:$limit MB  grace:$grace seconds)"
-	testfile=$DIR/$tdir/$tfile-1
-	# make sure the system is clean
-	used=$(getquota -g $TSTUSR global curspace)
-	[ $used -ne 0 ] && error "Used space($used) for group $TSTUSR isn't 0."
+	if [[ $SLOW == yes ]]; then
+		echo "Group quota in $qpool(soft:$limit MB  grace:$grace sec)"
+		testfile=$DIR/$tdir/$tfile-1
+		# make sure the system is clean
+		used=$(getquota -g $TSTUSR global curspace)
+		[ $used -ne 0 ] &&
+			error "Used space($used) for group $TSTUSR isn't 0."
 
-	$LFS setquota -t -g --block-grace $glbl_grace --inode-grace \
-		$MAX_IQ_TIME $DIR || error "set group grace time failed"
-	$LFS setquota -t -g --block-grace $grace \
-		--pool $qpool $DIR || error "set group grace time failed"
+		$LFS setquota -t -g --block-grace $glbl_grace --inode-grace \
+			$MAX_IQ_TIME $DIR || error "set group grace time failed"
+		$LFS setquota -t -g --block-grace $grace \
+			--pool $qpool $DIR ||
+				error "set group grace time failed"
 
-	$LFS setquota -g $TSTUSR -b ${glbl_limit}M -B 0 -i 0 -I 0 $DIR ||
-		error "set group quota failed"
-	$LFS setquota -g $TSTUSR -b ${limit}M -B 0 --pool $qpool $DIR ||
-		error "set group quota failed"
+		$LFS setquota -g $TSTUSR -b ${glbl_limit}M -B 0 -i 0 -I 0 \
+			$DIR || error "set group quota failed"
+		$LFS setquota -g $TSTUSR -b ${limit}M -B 0 --pool $qpool $DIR ||
+			error "set group quota failed"
 
-	test_block_soft $testfile $grace $limit "g" $qpool
+		test_block_soft $testfile $grace $limit "g" $qpool
+	fi
 
 	if is_project_quota_supported; then
 		echo "Project quota in $qpool(soft:$limit MB  grace:$grace sec)"
