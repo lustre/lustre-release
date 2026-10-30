@@ -1480,9 +1480,15 @@ static inline void osc_finalize_bounce_page(struct folio **foliop, s32 *pgno)
 	}
 }
 #else /* !CONFIG_LL_ENCRYPTION */
-#define osc_encrypt_pagecache_blocks(inode, index, directio, src, p1, dst, p2,\
-				     len, offs, gfp_flags)		\
-	llcrypt_encrypt_pagecache_blocks(src, p1, len, offs, gfp_flags)
+static inline struct folio *
+osc_encrypt_pagecache_blocks(const struct inode *inode, pgoff_t index,
+			     bool directio, struct folio *src, s32 srcpg,
+			     struct folio *dst, s32 dstpg, unsigned int len,
+			     unsigned int offs, gfp_t gfp_flags)
+{
+	return llcrypt_encrypt_pagecache_blocks(src, srcpg, len, offs,
+						gfp_flags);
+}
 #define osc_finalize_bounce_page(folio, pgno)	\
 	llcrypt_finalize_bounce_page(folio, pgno)
 #endif
