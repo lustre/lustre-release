@@ -1106,6 +1106,8 @@ static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
 		ptlrpc_pinger_wake_up();
 }
 
+#define IMP_QUICK_RETRIES_MAX	5
+
 static int ptlrpc_busy_reconnect(int rc)
 {
 	return (rc == -EBUSY) || (rc == -EAGAIN);
@@ -1124,6 +1126,7 @@ static int ptlrpc_connect_set_flags(struct obd_import *imp,
 		  &imp->imp_conn_list);
 	imp->imp_last_success_conn =
 		imp->imp_conn_current->oic_last_attempt;
+	imp->imp_quick_retries = 0;
 
 	spin_unlock(&imp->imp_lock);
 
@@ -1650,11 +1653,20 @@ out:
 	smp_mb__after_atomic();
 
 	if (rc != 0) {
+		bool retry_soon = false;
 		bool inact = false;
 		time64_t now = ktime_get_seconds();
 		time64_t next_connect;
 
 		import_set_state_nolock(imp, LUSTRE_IMP_DISCON);
+		/* an MDT that is still starting up refuses its peers at once */
+		if (rc == -EAGAIN &&
+		    (imp->imp_connect_flags_orig & OBD_CONNECT_MDS_MDS) &&
+		    imp->imp_quick_retries < IMP_QUICK_RETRIES_MAX) {
+			imp->imp_quick_retries++;
+			imp->imp_quick_retry_at = now + 1;
+			retry_soon = true;
+		}
 		if (rc == -EACCES || rc == -EROFS) {
 			/*
 			 * -EACCES means client has no permission for connection
@@ -1760,9 +1772,12 @@ out:
 		 * was initiated outside of pinger, like
 		 * ptlrpc_set_import_discon().
 		 */
-		if (!test_bit(IMPF_FORCE_VERIFY, imp->imp_flags) &&
-		    (imp->imp_next_ping <= now ||
-		     imp->imp_next_ping > next_connect)) {
+		if (retry_soon) {
+			imp->imp_next_ping = now + 1;
+			ptlrpc_pinger_wake_up();
+		} else if (!test_bit(IMPF_FORCE_VERIFY, imp->imp_flags) &&
+			   (imp->imp_next_ping <= now ||
+			    imp->imp_next_ping > next_connect)) {
 			imp->imp_next_ping = max(now, next_connect) + 1;
 			ptlrpc_pinger_wake_up();
 		}

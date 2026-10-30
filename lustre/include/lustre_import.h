@@ -231,6 +231,10 @@ struct obd_import {
 	int			  imp_initiated_at;
 	/* Incremented every time we send reconnection request */
 	__u32			  imp_conn_cnt;
+	/* quick retries since the last successful connect */
+	int			  imp_quick_retries;
+	/* no retry that skips the connect timeout before this time */
+	time64_t		  imp_quick_retry_at;
 	/* see ptlrpc_free_committed remembers imp_generation value here
 	 * after a check to save on unnecessary replay list iterations
 	 */

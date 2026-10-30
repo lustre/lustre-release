@@ -164,6 +164,10 @@ static timeout_t pinger_check_timeout(time64_t time)
 	/* Process imports to find a nearest next ping */
 	list_for_each(iter, &pinger_imports) {
 		imp = list_entry(iter, struct obd_import, imp_pinger_chain);
+		/* this pass skipped a quick retry, which may be due already */
+		if (imp->imp_quick_retry_at > time &&
+		    timeout > imp->imp_quick_retry_at - time)
+			timeout = imp->imp_quick_retry_at - time;
 		if (!test_bit(IMPF_PINGABLE, imp->imp_flags) ||
 		    imp->imp_next_ping < now)
 			continue;
@@ -211,7 +215,8 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
 
 	force = test_and_clear_bit(IMPF_FORCE_VERIFY, imp->imp_flags);
 
-	if (imp->imp_next_ping - 5 >= this_ping && !force) {
+	if ((imp->imp_next_ping - 5 >= this_ping ||
+	     imp->imp_quick_retry_at > this_ping) && !force) {
 		spin_unlock(&imp->imp_lock);
 		return;
 	}
