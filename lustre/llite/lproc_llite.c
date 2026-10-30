@@ -14,7 +14,7 @@
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/version.h>
-#include <lustre_compat/linux/sysfs.h>
+#include <linux/sysfs.h>
 #include <linux/user_namespace.h>
 #include <linux/uidgid.h>
 

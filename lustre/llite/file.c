@@ -30,8 +30,8 @@
 #ifdef HAVE_LINUX_FILELOCK_HEADER
 #include <linux/filelock.h>
 #endif
-#include <lustre_compat/linux/uio.h>
-#include <lustre_compat/linux/dcache.h>
+#include <linux/uio.h>
+#include <linux/dcache.h>
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_kernelcomm.h>
 #include <lustre_swab.h>

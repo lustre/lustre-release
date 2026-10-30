@@ -11,11 +11,11 @@
  * This file is part of Lustre, http://www.lustre.org/
  */
 
-#include <lustre_compat/linux/fs.h>
+#include <linux/fs.h>
 #include <linux/sched.h>
 #include <linux/mm.h>
-#include <lustre_compat/linux/xattr.h>
-#include <lustre_compat/linux/posix_acl_xattr.h>
+#include <linux/xattr.h>
+#include <linux/posix_acl_xattr.h>
 
 
 #define DEBUG_SUBSYSTEM S_LLITE

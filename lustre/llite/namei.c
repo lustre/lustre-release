@@ -11,7 +11,7 @@
  * This file is part of Lustre, http://www.lustre.org/
  */
 
-#include <lustre_compat/linux/fs.h>
+#include <linux/fs.h>
 #include <linux/sched.h>
 #include <linux/mm.h>
 #include <linux/iversion.h>

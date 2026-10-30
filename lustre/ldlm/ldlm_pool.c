@@ -74,7 +74,7 @@
 #define DEBUG_SUBSYSTEM S_LDLM
 
 #include <linux/workqueue.h>
-#include <lustre_compat/linux/shrinker.h>
+#include <linux/shrinker.h>
 #include <lustre_dlm.h>
 #include <cl_object.h>
 #include <obd_class.h>

@@ -19,8 +19,8 @@
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <obd.h>
-#include <lustre_compat/linux/folio_batch.h>
-#include <lustre_compat/linux/mm.h>
+#include <linux/folio_batch.h>
+#include <linux/mm.h>
 #include <linux/memcontrol.h>
 #include <linux/falloc.h>
 

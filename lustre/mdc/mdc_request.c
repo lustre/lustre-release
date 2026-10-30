@@ -21,8 +21,8 @@
 #include <linux/utsname.h>
 #include <linux/delay.h>
 #include <linux/uidgid.h>
-#include <lustre_compat/linux/device.h>
-#include <lustre_compat/linux/xarray.h>
+#include <linux/device.h>
+#include <linux/xarray.h>
 
 #include <lustre_errno.h>
 

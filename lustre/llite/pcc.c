@@ -87,9 +87,9 @@
 #define DEBUG_SUBSYSTEM S_LLITE
 
 #include <linux/file.h>
-#include <lustre_compat/linux/fs.h>
-#include <lustre_compat/linux/dcache.h>
-#include <lustre_compat/linux/xattr.h>
+#include <linux/fs.h>
+#include <linux/dcache.h>
+#include <linux/xattr.h>
 #ifdef HAVE_FILEATTR_GET
 #include <linux/fileattr.h>
 #endif

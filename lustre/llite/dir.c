@@ -13,7 +13,7 @@
  * Directory code for lustre client.
  */
 
-#include <lustre_compat/linux/fs.h>
+#include <linux/fs.h>
 #include <linux/pagemap.h>
 #include <linux/mm.h>
 #include <linux/version.h>
@@ -22,7 +22,7 @@
 #include <linux/uidgid.h>
 #include <linux/uaccess.h>
 #include <linux/buffer_head.h>   // for wait_on_buffer
-#include <lustre_compat/linux/folio_batch.h>
+#include <linux/folio_batch.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
 

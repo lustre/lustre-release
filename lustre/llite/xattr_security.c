@@ -15,8 +15,8 @@
  */
 
 #include <linux/types.h>
-#include <lustre_compat/linux/security.h>
-#include <lustre_compat/linux/xattr.h>
+#include <linux/security.h>
+#include <linux/xattr.h>
 #include "llite_internal.h"
 
 /*

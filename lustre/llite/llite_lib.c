@@ -23,7 +23,7 @@
 #include <linux/mm.h>
 #include <linux/module.h>
 #include <linux/random.h>
-#include <lustre_compat/linux/security.h>
+#include <linux/security.h>
 #include <linux/statfs.h>
 #include <linux/time.h>
 #include <linux/types.h>

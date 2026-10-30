@@ -27,8 +27,8 @@
 #include <linux/aio.h>
 #include <linux/parser.h>
 #include <linux/seqlock.h>
-#include <lustre_compat/linux/xattr.h>
-#include <lustre_compat/linux/posix_acl_xattr.h>
+#include <linux/xattr.h>
+#include <linux/posix_acl_xattr.h>
 #include <lustre_compat.h>
 #include <lustre_crypto.h>
 #include <range_lock.h>

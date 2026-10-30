@@ -17,7 +17,7 @@
 #include <linux/kernel.h>
 #include <linux/rwsem.h>
 #include <linux/mm.h>
-#include <lustre_compat/linux/mmap_lock.h>
+#include <linux/mmap_lock.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
 

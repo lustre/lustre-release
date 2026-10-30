@@ -24,7 +24,7 @@
 #include <linux/unistd.h>
 #include <linux/writeback.h>
 #include <linux/migrate.h>
-#include <lustre_compat/linux/uio.h>
+#include <linux/uio.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
