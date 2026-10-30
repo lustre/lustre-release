@@ -444,10 +444,13 @@ static int tgt_handle_request0(struct tgt_session_info *tsi,
 	if (rc == 0 && h->th_flags & HAS_REPLY) {
 		/* Pack reply */
 		if (req_capsule_has_field(tsi->tsi_pill, &RMF_MDT_MD,
-					  RCL_SERVER))
+					  RCL_SERVER)) {
+			u32 md_size = min_t(u32, OBD_MAX_EA_SIZE,
+					    tsi->tsi_mdt_body->mbo_eadatasize);
+
 			req_capsule_set_size(tsi->tsi_pill, &RMF_MDT_MD,
-					     RCL_SERVER,
-					     tsi->tsi_mdt_body->mbo_eadatasize);
+					     RCL_SERVER, md_size);
+		}
 		if (req_capsule_has_field(tsi->tsi_pill, &RMF_LOGCOOKIES,
 					  RCL_SERVER))
 			req_capsule_set_size(tsi->tsi_pill, &RMF_LOGCOOKIES,

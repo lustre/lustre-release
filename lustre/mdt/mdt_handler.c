@@ -1590,7 +1590,11 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
 		 */
 		buffer->lb_len = 0;
 		if (reqbody->mbo_eadatasize > 0)
-			buffer->lb_len = reqbody->mbo_eadatasize - 1;
+			buffer->lb_len = min_t(u32, reqbody->mbo_eadatasize,
+					req_capsule_get_size(pill, &RMF_MDT_MD,
+							     RCL_SERVER));
+		if (buffer->lb_len > 0)
+			buffer->lb_len--;
 		rc = mo_readlink(env, next, buffer);
 		if (unlikely(rc <= 0)) {
 			CERROR("%s: readlink failed for "DFID": rc = %d\n",
