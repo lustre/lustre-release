@@ -5203,7 +5203,10 @@ do_nodes() {
 		echo "cannot run remote command on $rnodes with $myPDSH" &&
 		return 128
 
-	export FANOUT=$(get_node_count "${rnodes//,/ }")
+	local -a rlist
+
+	read -ra rlist <<< "${rnodes//,/ }"
+	export FANOUT=${#rlist[@]}
 	if $VERBOSE && [[ -z "$quiet" ]]; then
 		echo "CMD: $rnodes $*" >&2
 		$myPDSH $rnodes "$LCTL mark \"$*\"" > /dev/null 2>&1 || :
@@ -7281,9 +7284,11 @@ no_dsh() {
 # Convert a space-delimited list to a comma-delimited list.  If the input is
 # only whitespace, ensure the output is empty (i.e. "") so [ -n $list ] works
 comma_list() {
-	# echo is used to convert newlines to spaces, since it doesn't
-	# introduce a trailing space as using "tr '\n' ' '" does
-	echo $(tr -s ", " "\n" <<< $* | sort -b -u) | tr ' ' ','
+	local nodes="$*"
+	local -a list=($(sort -b -u <<< "${nodes//[, ]/$'\n'}"))
+	local IFS=,
+
+	echo "${list[*]}"
 }
 
 list_member () {
@@ -7343,10 +7348,12 @@ absolute_path() {
 get_facets() {
 	local types=${*:-"OST MDS MGS"}
 	local list=""
+	local entry
+	local i
 
 	for entry in $types; do
-		local name=$(echo $entry | tr "[:upper:]" "[:lower:]")
-		local type=$(echo $entry | tr "[:lower:]" "[:upper:]")
+		local name=${entry,,}
+		local type=${entry^^}
 
 		case $type in
 			MGS ) list="$list $name";;
@@ -8085,7 +8092,7 @@ run_test_must_fail() {
 
 log() {
 	echo "$*" >&2
-	load_module ../libcfs/libcfs/libcfs
+	[[ -d /sys/module/libcfs ]] || load_module ../libcfs/libcfs/libcfs
 
 	# rpc.sh runs on a node that do_rpc_nodes() already reached, so only
 	# mark the local debug log instead of starting pdsh to all nodes again
@@ -8164,9 +8171,10 @@ banner() {
 	msg="== ${TESTSUITE} $*"
 	last=${msg: -1:1}
 	[[ $last != "=" && $last != " " ]] && msg="$msg "
-	msg=$(printf '%s%.*s'  "$msg"  $((${#EQUALS} - ${#msg})) $EQUALS )
+	printf -v msg '%s%.*s' "$msg" $((${#EQUALS} - ${#msg})) $EQUALS
 	# always include at least == after the message
-	log "$msg== $(date +"%H:%M:%S (%s)")"
+	printf -v msg '%s== %(%H:%M:%S (%s))T' "$msg" -1
+	log "$msg"
 }
 
 # Print a remote command that prints dmesg errors on a node since the newest
@@ -8672,9 +8680,20 @@ facets_nodes() {
 	local facets=$1
 	local facet
 	local nodes
+	local activevar
+	local hostvar
 
+	# facet_active_host() forks twice, and this runs for every facet of
+	# every node list
 	for facet in ${facets//,/ }; do
-		nodes="$nodes $(facet_active_host $facet)"
+		activevar=${facet}active
+		[[ ! -f $TMP/$activevar ]] || source $TMP/$activevar
+		hostvar=${!activevar:-$facet}_HOST
+		if [[ -n "${!hostvar}" && $facet != client ]]; then
+			nodes+=" ${!hostvar}"
+		else
+			nodes+=" $(facet_active_host $facet)"
+		fi
 	done
 
 	comma_list $nodes
