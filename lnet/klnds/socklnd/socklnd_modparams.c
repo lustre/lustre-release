@@ -12,7 +12,7 @@
 
 #include "socklnd.h"
 
-#include <lustre_compat/linux/inetdevice.h>
+#include <linux/inetdevice.h>
 #include <linux/ethtool.h>
 #include <net/addrconf.h>
 

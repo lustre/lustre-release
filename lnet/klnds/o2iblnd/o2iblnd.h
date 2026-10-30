@@ -49,7 +49,7 @@
 
 #include <rdma/rdma_cm.h>
 #include <rdma/ib_cm.h>
-#include <lustre_compat/rdma/ib_verbs.h>
+#include <rdma/ib_verbs.h>
 #ifdef HAVE_OFED_FMR_POOL_API
 #include <rdma/ib_fmr_pool.h>
 #endif

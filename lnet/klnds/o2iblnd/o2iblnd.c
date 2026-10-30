@@ -11,8 +11,8 @@
  * Author: Eric Barton <eric@bartonsoftware.com>
  */
 #include <linux/ethtool.h>
-#include <lustre_compat/linux/inetdevice.h>
-#include <lustre_compat/net/netdev_lock.h>
+#include <linux/inetdevice.h>
+#include <net/netdev_lock.h>
 #include <linux/kernel.h>
 #include <linux/sunrpc/addr.h>
 #include <net/addrconf.h>

@@ -29,7 +29,7 @@
 #include <linux/list.h>
 #include <linux/mm.h>
 #include <linux/module.h>
-#include <lustre_compat/linux/net.h>
+#include <linux/net.h>
 #include <linux/pagemap.h>
 #include <linux/refcount.h>
 #include <linux/sched.h>
@@ -41,9 +41,9 @@
 #include <linux/uio.h>
 #include <linux/unistd.h>
 #include <linux/hashtable.h>
-#include <lustre_compat/net/sock.h>
-#include <lustre_compat/net/tcp.h>
-#include <lustre_compat/linux/compiler-context-analysis.h>
+#include <net/sock.h>
+#include <net/tcp.h>
+#include <linux/compiler-context-analysis.h>
 
 #include <linux/libcfs/libcfs.h>
 #include <linux/lnet/lib-lnet.h>

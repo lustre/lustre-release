@@ -16,7 +16,7 @@
 #include <linux/nmi.h>
 #include <linux/pagemap.h>
 
-#include <lustre_compat/linux/mmap_lock.h>
+#include <linux/mmap_lock.h>
 
 #include "gnilnd.h"
 
