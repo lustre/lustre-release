@@ -6389,7 +6389,16 @@ int lod_declare_striped_create(const struct lu_env *env, struct dt_object *dt,
 		 * happen during migrate, i.e. migrate process needs to create
 		 * remote regular file (mdd_migrate_create), then the migrate
 		 * process will provide stripeEA. */
-		LASSERT(lovea != NULL);
+		if (unlikely(lovea == NULL)) {
+			/* A declare for a remote striped object must carry the
+			 * layout, since LOD cannot pick OST objects here;
+			 * reject a request that reaches this with no layout.
+			 */
+			CERROR("%s: no layout for remote striped object "DFID": rc = %d\n",
+			       lod2obd(lu2lod_dev(dt->do_lu.lo_dev))->obd_name,
+			       PFID(lod_object_fid(lo)), -EINVAL);
+			GOTO(out, rc = -EINVAL);
+		}
 		info->lti_buf = *lovea;
 	}
 
