@@ -4157,6 +4157,13 @@ static int osd_destroy(const struct lu_env *env, struct dt_object *dt,
 
 	oh = container_of(th, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle);
+	/*
+	 * The object may already be gone if it was destroyed on another
+	 * path; return -ENOENT as osd-zfs osd_destroy() does, instead of
+	 * assuming it is still present.
+	 */
+	if (unlikely(obj->oo_destroyed))
+		RETURN(-ENOENT);
 	LASSERT(inode);
 	LASSERT(!lu_object_is_dying(dt->do_lu.lo_header));
 
