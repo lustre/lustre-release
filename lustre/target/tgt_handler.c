@@ -495,10 +495,16 @@ static int tgt_handle_request0(struct tgt_session_info *tsi,
 		rc = h->th_act(tsi);
 		if (!is_serious(rc) &&
 		    !req->rq_no_reply && req->rq_reply_state == NULL) {
+			/* A handler must pack a reply or return an error.
+			 * Returning success with no reply is normally a handler
+			 * bug, but a request can also drive a handler down such
+			 * a path, so send the client a protocol error and log
+			 * the handler instead of treating it as a bug.
+			 */
 			DEBUG_REQ(D_ERROR, req,
-				  "%s: %s handler did not pack reply but returned no error",
+				  "%s: %s handler packed no reply and returned no error, replying -EPROTO",
 				  tgt_name(tsi->tsi_tgt), h->th_name);
-			LBUG();
+			rc = err_serious(-EPROTO);
 		}
 		serious = is_serious(rc);
 		rc = clear_serious(rc);
