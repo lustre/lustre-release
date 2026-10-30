@@ -13126,8 +13126,10 @@ wait_nm_sync() {
 	local is_sync
 	local out1=""
 	local out2
-	local mgs_ip=$(host_nids_address $mgs_HOST $NETTYPE | cut -d' ' -f1)
-	local i
+	local do_node_cmd
+	local -A node_out
+	local line
+	local node
 
 	if [[ "$nodemap_name" == "active" ]]; then
 		proc_param="active"
@@ -13151,7 +13153,7 @@ wait_nm_sync() {
 		fi
 
 		out1=$(eval $do_node_cmd)
-		echo "On MGS ${mgs_ip}, ${proc_param} = $out1"
+		echo "On MGS $mgs_HOST, ${proc_param} = $out1"
 	else
 		out1=$value;
 	fi
@@ -13164,38 +13166,40 @@ wait_nm_sync() {
 	fi
 
 	local nodes=$(all_server_nodes)
+	local start
+	local end
 
-	# wait up to 10 seconds for other servers to sync with mgs
-	for i in {1..10}; do
+	# wait up to 40 seconds for other servers to sync with mgs
+	for ((start = SECONDS, end = start + 40; SECONDS < end; $(sleep 1))); do
+		is_sync=true
+		node_out=()
+		while IFS= read -r line; do
+			node_out[${line%%: *}]+="${line#*: }"$'\n'
+		done < <(do_nodes --verbose --quiet $nodes \
+			 "$LCTL get_param $opt nodemap.$proc_param" 2>/dev/null)
+
 		for node in ${nodes//,/ }; do
-			local node_ip=$(host_nids_address $node $NETTYPE |
-					cut -d' ' -f1)
+			[[ -n "$value" || $node != $mgs_HOST ]] || continue
 
-			is_sync=true
-			[[ -n "$value" || $node_ip != $mgs_ip ]] ||
-				continue
-
-			do_node_cmd="do_node $node $LCTL get_param $opt \
-			       nodemap.$proc_param 2>/dev/null"
+			do_node_cmd="printf '%s' \"\${node_out[$node]}\""
 			if [[ -n "$pipe" ]]; then
 				do_node_cmd="$do_node_cmd | $pipe"
 			fi
 
 			out2=$(eval $do_node_cmd)
-			echo "On $node ${node_ip}, ${proc_param} = $out2"
+			echo "On $node, ${proc_param} = $out2"
 			[[ "$out1" != "$out2" ]] && is_sync=false && break
 		done
 		$is_sync && break
-		sleep 1
 	done
 	if ! $is_sync; then
 		echo MGS
 		echo $out1
-		echo OTHER - IP: $node_ip
+		echo OTHER - node: $node
 		echo $out2
-		error "mgs and $nodemap_name ${key} mismatch, $i attempts"
+		error "mgs/$proc_param mismatch: $((SECONDS - start)) seconds"
 	fi
-	echo "waited $((i - 1)) seconds for sync"
+	echo "waited $((SECONDS - start)) seconds for sync"
 }
 
 consume_precreations() {
