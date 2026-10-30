@@ -23,7 +23,7 @@
 #include <linux/pagemap.h>
 #include <linux/poll.h>
 #include <linux/uaccess.h>
-#include <lustre_compat/linux/mm.h>
+#include <linux/mm.h>
 #include <linux/libcfs/libcfs.h>
 
 #define CREATE_TRACE_POINTS

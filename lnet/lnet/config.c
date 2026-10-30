@@ -17,7 +17,7 @@
 #include <net/net_namespace.h>
 #include <linux/lnet/lib-lnet.h>
 
-#include <lustre_compat/net/netdev_lock.h>
+#include <net/netdev_lock.h>
 
 /* tmp struct for parsing routes */
 struct lnet_text_buf {

@@ -13,7 +13,7 @@
  * Author: Isaac Huang <isaac@clusterfs.com>
  */
 
-#include <lustre_compat/linux/string.h>
+#include <linux/string.h>
 #include "selftest.h"
 
 static int brw_srv_workitems = SFW_TEST_WI_MAX;

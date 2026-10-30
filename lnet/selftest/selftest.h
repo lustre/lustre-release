@@ -19,7 +19,7 @@
 #define LNET_ONLY
 
 #include <linux/refcount.h>
-#include <lustre_compat/linux/mm.h>
+#include <linux/mm.h>
 #include <linux/libcfs/libcfs.h>
 #include <linux/lnet/api.h>
 #include <linux/lnet/lib-lnet.h>

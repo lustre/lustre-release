@@ -21,9 +21,9 @@
 /* For sys_open & sys_close */
 #include <linux/syscalls.h>
 #include <net/net_namespace.h>
-#include <lustre_compat/net/sock.h>
-#include <lustre_compat/net/tcp.h>
-#include <lustre_compat/linux/inetdevice.h>
+#include <net/sock.h>
+#include <net/tcp.h>
+#include <linux/inetdevice.h>
 
 #include <linux/libcfs/libcfs.h>
 #include <linux/lnet/lib-lnet.h>

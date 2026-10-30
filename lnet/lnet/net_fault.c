@@ -12,7 +12,7 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <linux/random.h>
-#include <lustre_compat/linux/timer.h>
+#include <linux/timer.h>
 
 #include <linux/lnet/lib-lnet.h>
 #include <uapi/linux/lnet/lnetctl.h>
