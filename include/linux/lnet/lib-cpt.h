@@ -72,7 +72,7 @@
 #include <linux/version.h>
 #include <linux/vmalloc.h>
 #include <linux/sched/mm.h>
-#include <lustre_compat/linux/workqueue.h>
+#include <linux/workqueue.h>
 
 /* any CPU partition */
 #define CFS_CPT_ANY		(-1)

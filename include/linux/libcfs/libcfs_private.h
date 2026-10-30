@@ -21,7 +21,7 @@
 #endif
 
 #include <linux/slab.h>
-#include <lustre_compat/linux/vmalloc.h>
+#include <linux/vmalloc.h>
 
 #ifdef LIBCFS_DEBUG
 
