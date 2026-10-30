@@ -617,8 +617,19 @@ static int osp_shutdown(const struct lu_env *env, struct osp_device *d)
 	 * lod_add_device()->obd_connect() failure.
 	 */
 	if (d->opd_disconnecting) {
-		wait_for_completion(&d->opd_disconnect_cmplt);
-		rc = d->opd_disconnect_res;
+		/* A stopped peer never replies. The abort only ends the wait
+		 * for the reply: completion still waits for the DISCONNECT to
+		 * be sent, and a peer that receives it acts on it.
+		 */
+		if (wait_for_completion_timeout(&d->opd_disconnect_cmplt,
+						cfs_time_seconds(1))) {
+			rc = d->opd_disconnect_res;
+		} else {
+			CDEBUG(D_HA, "%s: no reply to disconnect, aborting it\n",
+			       obd->obd_name);
+			ptlrpc_deactivate_import(imp);
+			wait_for_completion(&d->opd_disconnect_cmplt);
+		}
 
 		if (rc != 0)
 			CERROR("%s: can't disconnect: rc = %d\n",
