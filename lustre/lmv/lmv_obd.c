@@ -1552,24 +1552,79 @@ static int lmv_statfs_cb(void *cookie, int rc)
 	return rc;
 }
 
-/* update tgt statfs async if it's ld_qos_maxage old */
-int lmv_statfs_check_update(struct obd_device *obd, struct lmv_tgt_desc *tgt)
+/* seconds before another statfs request can be sent to the same MDT */
+#define LMV_STATFS_RETRY		2
+/* qos_maxage multiple for checking NOCREATE MDTs other than the parent */
+#define LMV_NOCREATE_MAXAGE_FACTOR	4
+
+/* an uninitialized statfs is never fresh, even if uptime is below maxage */
+static inline bool lmv_statfs_is_fresh(struct lmv_tgt_desc *tgt, time64_t now,
+				       time64_t maxage)
 {
+	return tgt->ltd_statfs_age && now - tgt->ltd_statfs_age < maxage;
+}
+
+/**
+ * lmv_statfs_check_age() - refresh the statfs of an MDT if it is old
+ * @obd: LMV device
+ * @tgt: MDT to check
+ * @maxage: age in seconds after which the statfs is refreshed
+ *
+ * Send an async statfs request to @tgt if its statfs is uninitialized or at
+ * least @maxage old, and no request was sent in the last LMV_STATFS_RETRY
+ * seconds.  At most one request is sent to @tgt every LMV_STATFS_RETRY
+ * seconds, even with a smaller @maxage, while a reply is pending, or after
+ * an error reply.
+ *
+ * Context: process context, without lmv_lock held.
+ * Return:
+ * * %0 - the request was sent, the statfs is recent enough, or a request
+ *   was sent less than LMV_STATFS_RETRY seconds ago
+ * * negative errno - the request could not be sent
+ */
+static int lmv_statfs_check_age(struct obd_device *obd,
+				struct lmv_tgt_desc *tgt, time64_t maxage)
+{
+	struct lmv_obd *lmv = &obd->u.lmv;
+	time64_t now = ktime_get_seconds();
 	struct obd_info oinfo = {
 		.oi_obd	= obd,
 		.oi_tgt = tgt,
 		.oi_cb_up = lmv_statfs_cb,
 	};
+	time64_t old;
 	int rc;
 
-	if (tgt->ltd_statfs_age &&
-	    ktime_get_seconds() - tgt->ltd_statfs_age <
-	    obd->u.lmv.lmv_mdt_descs.ltd_lmv_desc.ld_qos_maxage)
+	/* the common case, without lmv_lock */
+	if (lmv_statfs_is_fresh(tgt, now, maxage))
 		return 0;
 
+	spin_lock(&lmv->lmv_lock);
+	old = tgt->ltd_statfs_sent;
+	if (lmv_statfs_is_fresh(tgt, now, maxage) ||
+	    (old && now - old < LMV_STATFS_RETRY)) {
+		spin_unlock(&lmv->lmv_lock);
+		return 0;
+	}
+	tgt->ltd_statfs_sent = now;
+	spin_unlock(&lmv->lmv_lock);
+
 	rc = obd_statfs_async(tgt->ltd_exp, &oinfo, 0, NULL);
+	if (rc) {
+		spin_lock(&lmv->lmv_lock);
+		if (tgt->ltd_statfs_sent == now)
+			tgt->ltd_statfs_sent = old;
+		spin_unlock(&lmv->lmv_lock);
+	}
 
 	return rc;
+}
+
+/* update tgt statfs async if it is uninitialized or ld_qos_maxage old */
+int lmv_statfs_check_update(struct obd_device *obd, struct lmv_tgt_desc *tgt)
+{
+	return lmv_statfs_check_age(obd, tgt,
+			obd->u.lmv.lmv_mdt_descs.ltd_lmv_desc.ld_qos_maxage);
 }
 
 static int lmv_get_root(struct obd_export *exp, const char *fileset,
@@ -2151,6 +2206,7 @@ static struct lu_tgt_desc *lmv_locate_tgt_by_space(struct lmv_obd *lmv,
 						   struct lmv_tgt_desc *tgt)
 {
 	struct lmv_tgt_desc *tmp = tgt;
+	struct lmv_tgt_desc *nocreate;
 
 	tgt = lmv_locate_tgt_qos(lmv, op_data);
 	if (tgt == ERR_PTR(-EAGAIN)) {
@@ -2173,11 +2229,22 @@ static struct lu_tgt_desc *lmv_locate_tgt_by_space(struct lmv_obd *lmv,
 	if (!IS_ERR(tgt))
 		op_data->op_mds = tgt->ltd_index;
 
-	/* If space balance was called because the original target was marked
-	 * NOCREATE, periodically check whether the state has changed.
+	/* the QoS and RR allocators skip MDTs marked NOCREATE and never refresh
+	 * their statfs, so check here whether NOCREATE has been cleared
 	 */
-	if (tmp != tgt && tmp->ltd_statfs.os_state & OS_STATFS_NOCREATE)
-		lmv_statfs_check_update(lmv2obd_dev(lmv), tmp);
+	lmv_foreach_connected_tgt(lmv, nocreate) {
+		time64_t maxage = lmv->lmv_mdt_descs.ltd_lmv_desc.ld_qos_maxage;
+
+		if (nocreate == tgt || !nocreate->ltd_active ||
+		    !(nocreate->ltd_statfs.os_state & OS_STATFS_NOCREATE))
+			continue;
+		/* NOCREATE is usually set for a long time, so check MDTs other
+		 * than the parent or requested MDT less often
+		 */
+		if (nocreate != tmp)
+			maxage *= LMV_NOCREATE_MAXAGE_FACTOR;
+		lmv_statfs_check_age(lmv2obd_dev(lmv), nocreate, maxage);
+	}
 
 	return tgt;
 }

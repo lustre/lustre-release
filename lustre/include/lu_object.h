@@ -1643,6 +1643,7 @@ struct lu_tgt_desc {
 	struct lu_tgt_qos  ltd_qos; /* qos info per target */
 	struct obd_statfs  ltd_statfs;
 	time64_t	   ltd_statfs_age;
+	time64_t	   ltd_statfs_sent; /* LMV: last async statfs sent */
 	unsigned long      ltd_active:1,/* is target available for requests */
 			   ltd_activate:1,/* should LOV target be connected */
 			   ltd_reap:1,  /* should this target be deleted */
