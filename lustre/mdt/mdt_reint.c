@@ -2689,7 +2689,7 @@ lock_parent:
 		}
 
 		if (rc < 0)
-			GOTO(put_source, rc);
+			GOTO(unlock_parent, rc);
 
 		/*
 		 * RS_MAX_LOCKS is the limit of number of locks that can be

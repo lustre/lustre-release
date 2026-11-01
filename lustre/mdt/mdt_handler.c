@@ -4810,6 +4810,9 @@ void mdt_object_unlock(struct mdt_thread_info *info, struct mdt_object *o,
 {
 	ENTRY;
 
+	if (lh == NULL)
+		RETURN_EXIT;
+
 	if (lh->mlh_pdo_remote)
 		mdt_save_remote_lock(info, o, &lh->mlh_pdo_lh,
 				     lh->mlh_pdo_mode, decref);
@@ -5770,7 +5773,18 @@ static int mdt_intent_policy(const struct lu_env *env,
 			req_capsule_extend(pill, &RQF_LDLM_INTENT_BASIC);
 
 		it = req_capsule_client_get(pill, &RMF_LDLM_INTENT);
-		if (it != NULL) {
+		if (it == NULL) {
+			rc = err_serious(-EFAULT);
+		} else if (ldesc->l_resource.lr_type != LDLM_IBITS &&
+			   it->opc != IT_QUOTA_DQACQ &&
+			   it->opc != IT_QUOTA_CONN) {
+			/*
+			 * An MDT metadata intent uses an IBITS lock.  The
+			 * quota intents, and the quota master shares this
+			 * namespace, use a PLAIN lock, so allow those.
+			 */
+			rc = err_serious(-EPROTO);
+		} else {
 			mdt_ptlrpc_stats_update(req, it->opc);
 			info->mti_intent_lock = 1;
 			/*
@@ -5791,8 +5805,6 @@ static int mdt_intent_policy(const struct lu_env *env,
 			 */
 			LASSERT(ergo(ldesc->l_resource.lr_type == LDLM_IBITS,
 				ldesc->l_policy_data.l_inodebits.bits != 0));
-		} else {
-			rc = err_serious(-EFAULT);
 		}
 	} else if (ldesc->l_resource.lr_type == LDLM_IBITS &&
 		   ldesc->l_policy_data.l_inodebits.bits == MDS_INODELOCK_DOM) {
