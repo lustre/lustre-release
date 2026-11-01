@@ -292,6 +292,7 @@ struct kefa_ni {
 	bool initialized;		/* startup completed successfully */
 	struct kefa_obj_pool tx_pool;
 	DECLARE_HASHTABLE(conns, EFALND_CONN_HASH_BITS);
+	struct list_head deactivate_conns;	/* conns waiting for scan */
 	rwlock_t conn_lock;
 	struct list_head cleanup_conns;		/* conns pending cleanup by CM daemon */
 	struct kefa_peer_ni *self_peer_ni;	/* Only valid for small NID NI*/
@@ -331,7 +332,6 @@ struct kefa_conn {
 	atomic_t refcount;		/* active TX and lookup references */
 	struct hlist_node ni_node;	/* node on kefa_ni hashmap */
 	struct kefa_ni *efa_ni;
-	u64 hash_key;
 
 	/* Low frequency fields */
 	enum kefa_conn_type type;
@@ -340,8 +340,8 @@ struct kefa_conn {
 	u64 remote_caps;
 	u64 requests;
 
-	struct list_head abort_tx;	/* Only CM iterates this list */
-	struct list_head cleanup_node;	/* node on kefa_ni cleanup list */
+	struct list_head abort_tx;		/* Only CM iterates this list */
+	struct list_head cleanup_node;		/* node on kefa_ni cleanup/deactivate list */
 	enum lnet_msg_hstatus cleanup_hstatus;
 	int cleanup_status;
 };

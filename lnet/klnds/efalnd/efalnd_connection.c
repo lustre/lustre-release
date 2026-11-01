@@ -380,7 +380,6 @@ kefalnd_create_conn(struct kefa_ni *efa_ni, struct lnet_nid *peer_nid,
 	conn->efa_ni = efa_ni;
 	conn->proto_ver = EFALND_MAX_PROTO_VER;
 	conn->remote_nid = *peer_nid;
-	conn->hash_key = kefalnd_nid_to_key(&conn->remote_nid);
 	conn->local_nid = efa_ni->lnet_ni->ni_nid;
 	conn->remote_epoch = 0;
 	atomic64_set(&conn->last_use_time, ktime_get_seconds());
@@ -577,7 +576,8 @@ static void
 kefalnd_add_conn_locked(struct kefa_ni *efa_ni, struct kefa_conn *conn)
 __must_hold(&efa_ni->conn_lock)
 {
-	hash_add(efa_ni->conns, &conn->ni_node, conn->hash_key);
+	hash_add(efa_ni->conns, &conn->ni_node,
+		 kefalnd_nid_to_key(&conn->remote_nid));
 }
 
 struct kefa_conn *
@@ -906,19 +906,16 @@ __must_hold(&conn->efa_ni->conn_lock)
 		return;
 	}
 
+	/* Remove the connection from the hash table so it can't be found on
+	 * lookup anymore and queue it for the connection daemon to remove.
+	 */
 	kefalnd_remove_conn_locked(conn);
 
-	/* We set the connection's hash key to 0 so it won't be found on
-	 * lookup anymore and set its state to deactivating so the connection
-	 * daemon will remove it.
-	 */
 	conn->cleanup_hstatus = hstatus;
 	conn->cleanup_status = status;
 	kefalnd_set_conn_state_locked(conn, KEFA_CONN_DEACTIVATING);
-	conn->hash_key = 0;
+	list_move_tail(&conn->cleanup_node, &efa_ni->deactivate_conns);
 	spin_unlock_irqrestore(&conn->lock, flags);
-
-	kefalnd_add_conn_locked(efa_ni, conn);
 }
 
 void
@@ -1062,8 +1059,8 @@ kefalnd_handle_conn_probe(struct kefa_ni *efa_ni,
 		/* KEFA_CONN_PROBE_TCP/KEFA_CONN_PROBE_EFA - We don't expect to
 		 * find an RX connection in those states since a connection can
 		 * be in those states only if it is the initiator(TX connection).
-		 * KEFA_CONN_DEACTIVATING - Can't happen since connection with
-		 * deactivating state have 0 as NID so can't be fetched.
+		 * KEFA_CONN_DEACTIVATING - Can't happen since deactivated
+		 * connections are removed from the hash table.
 		 */
 		spin_unlock_irqrestore(&conn->lock, flags);
 		EFA_DEV_ERR(efa_ni->efa_dev,
@@ -1176,9 +1173,6 @@ __must_hold(&efa_ni->conn_lock)
 {
 	int timeout;
 
-	if (conn->state == KEFA_CONN_DEACTIVATING)
-		return true;
-
 	timeout = efa_ni->lnet_ni->ni_net->net_tunables.lct_peer_timeout;
 	if (conn->type == KEFA_CONN_TYPE_RESPONDER)
 		timeout += RESP_CONN_EXTRA_TIME;
@@ -1189,6 +1183,7 @@ __must_hold(&efa_ni->conn_lock)
 static void
 kefalnd_scan_ni_conns(struct kefa_ni *efa_ni)
 {
+	bool has_candidates, has_deactivate_conns;
 	struct kefa_conn *conn, *temp_conn;
 	LIST_HEAD(candidates);
 	unsigned long flags;
@@ -1197,17 +1192,20 @@ kefalnd_scan_ni_conns(struct kefa_ni *efa_ni)
 
 	now = ktime_get_seconds();
 
-	/* Collect idle/deactivating candidates under read lock onto a local
-	 * list to avoid touching cleanup_conns until validated.
+	/* Collect idle candidates under read lock onto a local list to avoid
+	 * touching cleanup_conns until validated.
 	 */
 	read_lock_irqsave(&efa_ni->conn_lock, flags);
 	hash_for_each(efa_ni->conns, bkt, conn, ni_node) {
 		if (kefalnd_conn_is_idle(efa_ni, conn, now))
 			list_add_tail(&conn->cleanup_node, &candidates);
 	}
+
+	has_candidates = !list_empty(&candidates);
+	has_deactivate_conns = !list_empty(&efa_ni->deactivate_conns);
 	read_unlock_irqrestore(&efa_ni->conn_lock, flags);
 
-	if (list_empty(&candidates))
+	if (!has_candidates && !has_deactivate_conns)
 		return;
 
 	/* Re-validate under write lock and remove confirmed idle connections
@@ -1220,15 +1218,14 @@ kefalnd_scan_ni_conns(struct kefa_ni *efa_ni)
 			continue;
 		}
 
-		if (conn->state != KEFA_CONN_DEACTIVATING) {
-			conn->cleanup_hstatus = LNET_MSG_STATUS_LOCAL_ABORTED;
-			conn->cleanup_status = -ETIMEDOUT;
-			kefalnd_set_conn_state(conn, KEFA_CONN_DEACTIVATING);
-		}
-
+		conn->cleanup_hstatus = LNET_MSG_STATUS_LOCAL_ABORTED;
+		conn->cleanup_status = -ETIMEDOUT;
+		kefalnd_set_conn_state(conn, KEFA_CONN_DEACTIVATING);
 		kefalnd_remove_conn_locked(conn);
 		list_move_tail(&conn->cleanup_node, &efa_ni->cleanup_conns);
 	}
+
+	list_splice_init(&efa_ni->deactivate_conns, &efa_ni->cleanup_conns);
 	write_unlock_irqrestore(&efa_ni->conn_lock, flags);
 }
 

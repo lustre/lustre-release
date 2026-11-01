@@ -2073,6 +2073,13 @@ kefalnd_destroy_all_conns(struct kefa_ni *efa_ni)
 		kefalnd_destroy_conn(conn, LNET_MSG_STATUS_LOCAL_ABORTED,
 				     -ENODEV);
 	}
+
+	list_for_each_entry_safe(conn, temp_conn, &efa_ni->deactivate_conns,
+				 cleanup_node) {
+		list_del_init(&conn->cleanup_node);
+		kefalnd_destroy_conn(conn, LNET_MSG_STATUS_LOCAL_ABORTED,
+				     -ENODEV);
+	}
 }
 
 static int
@@ -3246,6 +3253,7 @@ kefalnd_startup(struct lnet_ni *ni)
 	hash_init(efa_ni->conns);
 	rwlock_init(&efa_ni->conn_lock);
 	INIT_LIST_HEAD(&efa_ni->cleanup_conns);
+	INIT_LIST_HEAD(&efa_ni->deactivate_conns);
 	INIT_LIST_HEAD(&efa_ni->cm_node);
 
 	kefalnd_tunables_setup(ni);
