@@ -452,6 +452,9 @@ struct ldlm_namespace {
 	/** Flag indicating if namespace is on client instead of server */
 	enum ldlm_side		ns_client;
 
+	/** Which kind of device this namespace serves (MDT, OST, ...). */
+	enum ldlm_ns_type	ns_type;
+
 	/** name of this namespace */
 	char			*ns_name;
 

@@ -1050,6 +1050,7 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 	ns->ns_obd = obd;
 	ns->ns_appetite = apt;
 	ns->ns_client = client;
+	ns->ns_type = ns_type;
 	ns->ns_name = kstrdup(name, GFP_KERNEL);
 	if (!ns->ns_name)
 		GOTO(out_hash, rc = -ENOMEM);

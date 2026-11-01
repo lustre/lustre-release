@@ -1017,7 +1017,13 @@ int ldlm_flock_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 	ENTRY;
 
 	LASSERT(lock);
-	LASSERT(flag == LDLM_CB_CANCELING);
+
+	/* A flock blocking AST is only ever a cancellation; a lock that
+	 * reaches this callback with any other flag has nothing to unlink
+	 * from the deadlock-detection list, so there is nothing to do.
+	 */
+	if (flag != LDLM_CB_CANCELING)
+		RETURN(0);
 
 	/* take lock off the deadlock detection hash list. */
 	lock_res_and_lock(lock);

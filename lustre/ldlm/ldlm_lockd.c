@@ -1308,6 +1308,29 @@ struct ldlm_lock *ldlm_request_lock(struct ptlrpc_request *req)
 }
 EXPORT_SYMBOL(ldlm_request_lock);
 
+/*
+ * A server namespace serves only certain lock types to clients: an MDT
+ * grants metadata (IBITS), file locks (FLOCK) and quota (PLAIN, the quota
+ * master shares the MDT namespace); an OST grants data extents (EXTENT);
+ * the MGS grants configuration locks (PLAIN).  Any other type is rejected,
+ * since the resource and the per-type processing policy do not need to
+ * handle a lock whose type the namespace does not serve.
+ */
+static bool ldlm_ns_serves_type(struct ldlm_namespace *ns, enum ldlm_type type)
+{
+	switch (ns->ns_type) {
+	case LDLM_NS_TYPE_MDT:
+		return type == LDLM_IBITS || type == LDLM_FLOCK ||
+		       type == LDLM_PLAIN;
+	case LDLM_NS_TYPE_OST:
+		return type == LDLM_EXTENT;
+	case LDLM_NS_TYPE_MGT:
+		return type == LDLM_PLAIN;
+	default:
+		return true;
+	}
+}
+
 /**
  * ldlm_handle_enqueue() - Main server-side entry point into LDLM for enqueue.
  * @ns: Pointer to the LDLM namespace
@@ -1382,6 +1405,14 @@ int ldlm_handle_enqueue(struct ldlm_namespace *ns,
 		GOTO(out, rc = -EFAULT);
 	}
 
+	if (unlikely(!ldlm_ns_serves_type(ns,
+			dlm_req->lock_desc.l_resource.lr_type))) {
+		DEBUG_REQ(D_ERROR, req,
+			  "lock request type %d not served by this namespace",
+			  dlm_req->lock_desc.l_resource.lr_type);
+		GOTO(out, rc = -EPROTO);
+	}
+
 	if (unlikely((flags & LDLM_FL_REPLAY) ||
 		     (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT))) {
 		/* Find an existing lock in the per-export lock hash */
@@ -1427,6 +1458,19 @@ int ldlm_handle_enqueue(struct ldlm_namespace *ns,
 	 * lvb is available (lr_lvb_data != NULL).
 	 */
 	res = lock->l_resource;
+	/* A request can name an existing resource but a lock type that does
+	 * not match it (the resource keeps the type of its first user).  The
+	 * resource type, not the requested one, drives how the lock is linked
+	 * and processed later, so an incorrect type would route the lock
+	 * through per-type handling that is never useful.  Reject it here.
+	 */
+	if (unlikely(res->lr_type != dlm_req->lock_desc.l_resource.lr_type)) {
+		LDLM_DEBUG(lock,
+			   "enqueue type %d does not match resource type %d",
+			   dlm_req->lock_desc.l_resource.lr_type, res->lr_type);
+		GOTO(out, rc = -EPROTO);
+	}
+
 	if (!(flags & LDLM_FL_REPLAY)) {
 		/* non-replayed lock, delayed lvb init may need to be done */
 		rc = ldlm_lvbo_init(res);
@@ -1498,6 +1542,18 @@ existing_lock:
 		if ((int)err < 0)
 			rc = (int)err;
 		GOTO(out, err);
+	}
+
+	/*
+	 * A plain enqueue packs its reply above; an intent enqueue has its
+	 * reply packed by the intent policy run from ldlm_lock_enqueue().  A
+	 * request that sets the intent flag but carries no intent for the
+	 * server to handle leaves no reply to fill, so reject it rather than
+	 * fetching a reply that was never packed.
+	 */
+	if (unlikely(req->rq_repmsg == NULL)) {
+		DEBUG_REQ(D_ERROR, req, "enqueue reply not packed");
+		GOTO(out, rc = -EPROTO);
 	}
 
 	dlm_rep = req_capsule_server_get(pill, &RMF_DLM_REP);

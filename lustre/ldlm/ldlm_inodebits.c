@@ -690,6 +690,12 @@ void ldlm_inodebits_add_lock(struct ldlm_resource *res, struct list_head *head,
 	if (!ldlm_is_ns_srv(lock))
 		return;
 
+	/* A server lock without an inodebits node has nothing to track on
+	 * the inodebits queues; skip it early rather than scanning the list.
+	 */
+	if (lock->l_ibits_node == NULL)
+		return;
+
 	if (head == &res->lr_waiting) {
 		for (i = 0; i < MDS_INODELOCK_NUMBITS; i++) {
 			if (!(lock->l_policy_data.l_inodebits.bits & BIT(i)))
@@ -730,6 +736,13 @@ void ldlm_inodebits_unlink_lock(struct ldlm_lock *lock)
 
 	ldlm_unlink_lock_skiplist(lock);
 	if (!ldlm_is_ns_srv(lock))
+		return;
+
+	/*
+	 * The waiting-queue node is freed once the lock is granted, so a
+	 * granted lock being removed has none and is not on any queue.
+	 */
+	if (lock->l_ibits_node == NULL)
 		return;
 
 	for (i = 0; i < MDS_INODELOCK_NUMBITS; i++)
