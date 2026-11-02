@@ -26,7 +26,7 @@
 #include <lustre_acl.h>
 #include <uapi/linux/lustre/lustre_ioctl.h>
 #include <lustre_net.h>
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 # include <md_object.h>
 
 #define ETI_NAME_LEN	20
@@ -51,7 +51,7 @@ struct echo_device {
 	struct lu_device	 *ed_next;
 	int			  ed_next_ismd;
 	struct lu_client_seq	 *ed_cl_seq;
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	struct local_oid_storage *ed_los;
 	struct lu_fid		  ed_root_fid;
 #endif /* CONFIG_LUSTRE_FS_SERVER */
@@ -71,7 +71,7 @@ struct echo_object_conf {
 	struct lov_oinfo      **eoc_oinfo;
 };
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 static const char echo_md_root_dir_name[] = "ROOT_ECHO";
 
 /*
@@ -135,7 +135,7 @@ static struct echo_object_conf *cl2echo_conf(const struct cl_object_conf *c)
 	return container_of(c, struct echo_object_conf, eoc_cl);
 }
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 static struct echo_md_device *lu2emd_dev(struct lu_device *d)
 {
 	return container_of_safe(d, struct echo_md_device,
@@ -167,7 +167,7 @@ struct echo_thread_info {
 	struct lustre_md        eti_md;
 	struct lu_fid           eti_fid;
 	struct lu_fid		eti_fid2;
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	struct md_op_spec       eti_spec;
 	struct lov_mds_md_v3    eti_lmm;
 	struct lov_user_md_v3   eti_lum;
@@ -456,7 +456,7 @@ static struct lu_context_key echo_session_key = {
 
 LU_TYPE_INIT_FINI(echo, &echo_thread_key, &echo_session_key);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 # define ECHO_SEQ_WIDTH 0xffffffff
 static int echo_fid_init(struct echo_device *ed, char *obd_name,
 			 struct seq_server_site *ss)
@@ -649,7 +649,7 @@ static struct lu_device *echo_device_alloc(const struct lu_env *env,
 	cleanup = 4;
 
 	if (ed->ed_next_ismd) {
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 		/* Suppose to connect to some Metadata layer */
 		struct lu_site		*ls = NULL;
 		struct lu_device	*ld = NULL;
@@ -830,7 +830,7 @@ static struct lu_device *echo_device_free(const struct lu_env *env,
 	CDEBUG(D_INFO, "No object exists, exiting...\n");
 
 	echo_client_cleanup(d->ld_obd);
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	echo_fid_fini(d->ld_obd);
 	echo_ed_los_fini(env, ed);
 #endif
@@ -971,7 +971,7 @@ static int cl_echo_object_put(struct echo_object *eco)
 
 static u64 last_object_id;
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 static void echo_md_build_name(struct lu_name *lname, char *name,
 				      __u64 id)
 {
@@ -2246,7 +2246,7 @@ static int
 echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		      void *karg, void __user *uarg)
 {
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	struct tgt_session_info *tsi;
 #endif
 	struct obd_device *obd = exp->exp_obd;
@@ -2288,7 +2288,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	if (rc)
 		GOTO(out_put, rc);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	if (cmd == OBD_IOC_ECHO_MD || cmd == OBD_IOC_ECHO_ALLOC_SEQ)
 		env_tags = ECHO_MD_CTX_TAG;
 	else
@@ -2299,7 +2299,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	if (rc != 0)
 		GOTO(out, rc);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	tsi = tgt_ses_info(env);
 	/* treat as local operation */
 	tsi->tsi_exp = NULL;
@@ -2314,7 +2314,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 		rc = echo_create_object(env, ed, oa);
 		GOTO(out, rc);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	case OBD_IOC_ECHO_MD: {
 		int count;
 		int cmd;
@@ -2454,7 +2454,7 @@ static int echo_client_setup(const struct lu_env *env,
 	lu_session_tags_update(ECHO_SES_TAG);
 
 	if (!strcmp(tgt->obd_type->typ_name, LUSTRE_MDT_NAME)) {
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 		lu_context_tags_update(ECHO_MD_CTX_TAG);
 #else
 		CERROR(
@@ -2507,7 +2507,7 @@ static int echo_client_cleanup(struct obd_device *obd)
 	lu_session_tags_clear(ECHO_SES_TAG & ~LCT_SESSION);
 	lu_context_tags_clear(ECHO_DT_CTX_TAG);
 	if (ed->ed_next_ismd) {
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 		lu_context_tags_clear(ECHO_MD_CTX_TAG);
 #else
 		CERROR(
@@ -2579,7 +2579,7 @@ static int __init obdecho_init(void)
 	if (rc)
 		return rc;
 
-# ifdef CONFIG_LUSTRE_FS_SERVER
+# if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	rc = echo_persistent_pages_init();
 	if (rc != 0)
 		goto failed_0;
@@ -2599,7 +2599,7 @@ static int __init obdecho_init(void)
 			lu_kmem_fini(echo_caches);
 	}
 
-# ifdef CONFIG_LUSTRE_FS_SERVER
+# if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	if (rc == 0)
 		RETURN(0);
 
@@ -2616,7 +2616,7 @@ static void __exit obdecho_exit(void)
 	class_unregister_type(LUSTRE_ECHO_CLIENT_NAME);
 	lu_kmem_fini(echo_caches);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	class_unregister_type(LUSTRE_ECHO_NAME);
 	echo_persistent_pages_fini();
 #endif

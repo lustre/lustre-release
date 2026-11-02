@@ -21,7 +21,7 @@
 /* block size to use for data verification */
 #define OBD_ECHO_BLOCK_SIZE	(4<<10)
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 extern const struct obd_ops echo_obd_ops;
 extern struct lu_device_type echo_srv_type;
 int echo_persistent_pages_init(void);
