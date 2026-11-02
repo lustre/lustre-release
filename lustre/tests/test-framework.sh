@@ -2271,15 +2271,23 @@ set_default_debug_nodes () {
 	local debug="${2:-"$PTLDEBUG"}"
 	local subsys="${3:-"$SUBSYSTEM"}"
 	local debug_size="${4:-$DEBUG_SIZE}"
+	local cmd
 
 	if [[ ,$nodes, = *,$HOSTNAME,* ]]; then
 		nodes=$(exclude_items_from_list "$nodes" "$HOSTNAME")
 		set_default_debug
 	fi
 
-	[[ -z "$nodes" ]] ||
-		do_rpc_nodes "$nodes" set_default_debug \
-			\\\"$debug\\\" \\\"$subsys\\\" $debug_size || true
+	[[ -n "$nodes" ]] || return 0
+
+	[[ -n "$debug" ]] &&
+		cmd+="$LCTL set_param debug=\\\"$debug\\\";"
+	[[ -n "$subsys" ]] &&
+		cmd+="$LCTL set_param subsystem_debug=\\\"${subsys# }\\\";"
+	[[ -n "$debug_size" ]] &&
+		cmd+="$LCTL set_param debug_mb=$debug_size;"
+
+	do_nodes --quiet "$nodes" "$cmd" > /dev/null || true
 }
 
 set_default_debug_facet () {
@@ -2854,7 +2862,7 @@ mount_facet() {
 	# commit the device label change to disk
 	if [[ $devicelabel =~ (:[A-Z]{3}[0-9a-f]{4}) ]]; then
 		echo "Commit the device label on ${!dev}"
-		do_facet $facet "sync; sleep 1; sync"
+		do_facet $facet sync
 	fi
 
 
