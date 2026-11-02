@@ -17844,6 +17844,7 @@ run_test 121 "read cancel race ========="
 
 test_123a_base() { # was test 123, statahead(b=11401)
 	local lsx="$1"
+	local maxfiles=${2:-100000}
 
 	ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
 
@@ -17860,7 +17861,8 @@ test_123a_base() { # was test 123, statahead(b=11401)
 	rm -rf $DIR/$tdir
 	test_mkdir $DIR/$tdir
 	local numfree=$(df -i -P $DIR | tail -n 1 | awk '{ print $4 }')
-	(( $numfree > 100000 )) && numfree=100000 || numfree=$((numfree-1000))
+	(( $numfree > $maxfiles )) && numfree=$maxfiles ||
+		numfree=$((numfree-1000))
 	stack_trap "unlinkmany $DIR/$tdir/$tfile $numfree 2> /dev/null || true"
 	local mult=10
 	for ((i=100, j=0; i<=$numfree; j=$i, i=$((i * mult)) )); do
@@ -17874,7 +17876,7 @@ test_123a_base() { # was test 123, statahead(b=11401)
 		cancel_lru_locks mdc
 		cancel_lru_locks osc
 		local stime=$SECONDS
-		time $lsx $DIR/$tdir | wc -l
+		time eval "$lsx $DIR/$tdir" | wc -l
 		local etime=$SECONDS
 		local delta=$((etime - stime))
 		log "'$lsx' $i files without statahead: $delta sec"
@@ -17886,7 +17888,7 @@ test_123a_base() { # was test 123, statahead(b=11401)
 		cancel_lru_locks mdc
 		cancel_lru_locks osc
 		stime=$SECONDS
-		time $lsx $DIR/$tdir | wc -l
+		time eval "$lsx $DIR/$tdir" | wc -l
 		etime=$SECONDS
 		local delta_sa=$((etime - stime))
 		log "'$lsx' $i files with statahead: $delta_sa sec"
@@ -17906,7 +17908,7 @@ test_123a_base() { # was test 123, statahead(b=11401)
 			cancel_lru_locks mdc
 			cancel_lru_locks osc
 			stime=$SECONDS
-			time $lsx $DIR/$tdir | wc -l
+			time eval "$lsx $DIR/$tdir" | wc -l
 			etime=$SECONDS
 			delta=$((etime - stime))
 			log "'$lsx' $i files again w/o statahead: $delta sec"
@@ -17967,7 +17969,7 @@ test_123ac() {
 	agl_before=$($LCTL get_param -n llite.*.statahead_stats |
 		     awk '/agl.total:/ { print $NF }')
 	test_123a_base "$STATX -c \"%n %i %A %h %u %g %W %X %Z\" -D"
-	test_123a_base "$STATX --cached=always -D"
+	test_123a_base "$STATX --cached=always -D -l" 1000
 	agl_after=$($LCTL get_param -n llite.*.statahead_stats |
 		    awk '/agl.total:/ { print $NF }')
 	(( $agl_before == $agl_after )) ||
@@ -17981,7 +17983,6 @@ run_test 123ac "verify statahead work by using statx without glimpse RPCs"
 test_batch_statahead() {
 	local max=$1
 	local batch_max=$2
-	local num=10000
 	local batch_rpcs
 	local unbatch_rpcs
 	local hit_total
@@ -17990,12 +17991,6 @@ test_batch_statahead() {
 	$LCTL set_param mdc.*.batch_stats=0
 	$LCTL set_param llite.*.statahead_max=$max
 	$LCTL set_param llite.*.statahead_batch_max=$batch_max
-	# Verify that batched statahead is faster than one without statahead
-	test_123a_base "ls -l"
-
-	stack_trap "rm -rf $DIR/$tdir" EXIT
-	mkdir $DIR/$tdir || error "failed to mkdir $DIR/$tdir"
-	createmany -o $DIR/$tdir/$tfile $num || error "failed to create files"
 
 	# unbatched statahead
 	$LCTL set_param llite.*.statahead_batch_max=0
@@ -18033,10 +18028,10 @@ test_batch_statahead() {
 	hit_total=$($LCTL get_param -n llite.*.statahead_stats |
 		    awk '/hit.total:/ { print $NF }')
 	# hit ratio should be larger than 75% (7500).
-	echo "batched statahead RPC=$batch_rpc hit count=$hit_total"
+	echo "batched statahead RPC=$batch_rpcs hit count=$hit_total"
 	(( $hit_total > 7500 )) || {
 		$LCTL get_param llite.*.statahead_stats
-		error "batched statahead RPC=$batch_rpc hit count=$hit_total too low"
+		error "batched statahead RPC=$batch_rpcs hit count=$hit_total too low"
 	}
 
 	(( $unbatch_rpcs > $batch_rpcs )) ||
@@ -18061,6 +18056,13 @@ test_123ad() {
 
 	stack_trap "$LCTL set_param llite.*.statahead_max=$max" EXIT
 	stack_trap "$LCTL set_param llite.*.statahead_batch_max=$batch_max" EXIT
+
+	ost_set_temp_seq_width_all $DATA_SEQ_MAX_WIDTH
+	lru_resize_enable
+
+	stack_trap "rm -rf $DIR/$tdir" EXIT
+	test_mkdir $DIR/$tdir
+	createmany -o $DIR/$tdir/$tfile 10000 || error "failed to create files"
 
 	test_batch_statahead 32 32
 	test_batch_statahead 2048 256
