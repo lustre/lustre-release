@@ -32,7 +32,7 @@
 #include <linux/blkdev.h>
 /* XATTR_{REPLACE,CREATE} */
 #include <linux/xattr.h>
-#include <linux/workqueue.h>
+#include <lustre_compat/linux/workqueue.h>
 
 #include <ldiskfs/ldiskfs.h>
 #include <ldiskfs/xattr.h>
@@ -8733,7 +8733,7 @@ static int osd_device_init0(const struct lu_env *env,
 		 */
 		o->od_integrityd_wq = alloc_workqueue("%s-integrityd",
 						WQ_MEM_RECLAIM | WQ_HIGHPRI |
-						WQ_CPU_INTENSIVE, 1,
+						WQ_CPU_INTENSIVE | WQ_PERCPU, 1,
 						osd_name(o));
 		if (!o->od_integrityd_wq)
 			GOTO(out_mnt, rc = -ENOMEM);

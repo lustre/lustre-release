@@ -61,6 +61,7 @@
 #include <linux/umh.h>
 
 #include <linux/hash.h>
+#include <lustre_compat/linux/workqueue.h>
 
 #include <obd.h>
 #include <obd_class.h>
@@ -1117,7 +1118,7 @@ int __init gss_init_svc_upcall(void)
 	 */
 	get_random_bytes(&__ctx_index, sizeof(__ctx_index));
 
-	gss_cleanup_wq = alloc_workqueue("gss_cleanup_wq", 0, 0);
+	gss_cleanup_wq = alloc_workqueue("gss_cleanup_wq", WQ_PERCPU, 0);
 	if (!gss_cleanup_wq)
 		return -ENOMEM;
 

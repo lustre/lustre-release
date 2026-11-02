@@ -30,6 +30,11 @@ int compat_apply_workqueue_attrs(struct workqueue_struct *wq,
 	compat_apply_workqueue_attrs(wq, attrs)
 #endif
 
+/* per-CPU is the implicit default on kernels without WQ_PERCPU */
+#ifndef HAVE_WQ_PERCPU
+#define WQ_PERCPU	0
+#endif
+
 #ifndef HAVE_FLUSH___WORKQUEUE
 #define __flush_workqueue(wq)  flush_scheduled_work()
 #endif

@@ -84,6 +84,7 @@
 
 #include <linux/seq_file.h>
 #include <linux/log2.h>
+#include <lustre_compat/linux/workqueue.h>
 
 #include <cfs_hash.h>
 #include <obd_class.h>
@@ -100,7 +101,7 @@ int __init cfs_hash_init(void)
 {
 	int rc = 0;
 
-	cfs_rehash_wq = alloc_workqueue("cfs_rh", WQ_SYSFS, 4);
+	cfs_rehash_wq = alloc_workqueue("cfs_rh", WQ_SYSFS | WQ_PERCPU, 4);
 	if (!cfs_rehash_wq) {
 		rc = -ENOMEM;
 		CERROR("obdclass: failed to start rehash workqueue: rc = %d\n",

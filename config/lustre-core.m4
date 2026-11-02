@@ -3952,6 +3952,30 @@ AC_DEFUN([LC_HAVE_IOPS_CREATE_NO_EXCL], [
 ]) # LC_HAVE_IOPS_CREATE_NO_EXCL
 
 #
+# LC_HAVE_WQ_PERCPU
+#
+# Linux commit v6.15-2-g930c2ea566af
+#   workqueue: Add new WQ_PERCPU flag
+# Linux 7.2 warns when alloc_workqueue() gets neither WQ_PERCPU nor
+# WQ_UNBOUND (v7.1-rc1-855-g21c05ca88a54)
+#
+AC_DEFUN([LC_SRC_HAVE_WQ_PERCPU], [
+	LB2_LINUX_TEST_SRC([wq_percpu], [
+		#include <linux/workqueue.h>
+	],[
+		unsigned int flags = WQ_PERCPU;
+
+		(void)flags;
+	],[-Werror])
+])
+AC_DEFUN([LC_HAVE_WQ_PERCPU], [
+	LB2_MSG_LINUX_TEST_RESULT([if WQ_PERCPU is available],
+	[wq_percpu], [
+		AC_DEFINE(HAVE_WQ_PERCPU, 1, [WQ_PERCPU is available])
+	])
+]) # LC_HAVE_WQ_PERCPU
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -4146,6 +4170,7 @@ AC_DEFUN([LC_PROG_LINUX_SRC], [
 	LC_SRC_FS_STRUCT_HAS_SEQLOCK
 	LC_SRC_HAVE_NETIF_GET_FLAGS
 	LC_SRC_HAVE_VFS_MMAP_PREPARE
+	LC_SRC_HAVE_WQ_PERCPU
 
 	# 6.18
 	LC_SRC_HAVE_INODE_JUST_DROP
@@ -4381,6 +4406,7 @@ AC_DEFUN([LC_PROG_LINUX_RESULTS], [
 	LC_FS_STRUCT_HAS_SEQLOCK
 	LC_HAVE_NETIF_GET_FLAGS
 	LC_HAVE_VFS_MMAP_PREPARE
+	LC_HAVE_WQ_PERCPU
 
 	# 6.18
 	LC_HAVE_INODE_JUST_DROP

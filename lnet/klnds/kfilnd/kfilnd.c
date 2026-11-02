@@ -11,6 +11,7 @@
  */
 
 #include <linux/delay.h>
+#include <lustre_compat/linux/workqueue.h>
 #include "kfilnd.h"
 #include "kfilnd_tn.h"
 #include "kfilnd_dev.h"
@@ -609,7 +610,7 @@ static int __init kfilnd_init(void)
 		goto err;
 	}
 
-	flags = WQ_MEM_RECLAIM | WQ_SYSFS;
+	flags = WQ_MEM_RECLAIM | WQ_SYSFS | WQ_PERCPU;
 	if (wq_cpu_intensive)
 		flags = flags | WQ_CPU_INTENSIVE;
 	if (wq_high_priority)
