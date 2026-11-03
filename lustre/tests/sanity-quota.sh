@@ -117,9 +117,6 @@ resetquota() {
 		error "resetquota: wrong quota type '$1' passed"
 
 	resetquota_one "$1" "$2"
-
-	# give a chance to slave to release space
-	sleep 1
 }
 
 quota_scan() {
@@ -397,8 +394,6 @@ reset_quota_settings() {
 	is_project_quota_supported &&
 		$LFS setquota -P -b 0 -B 0 -i 0 -I 0 $MOUNT ||
 			error "failed to reset default project quota"
-
-	sleep 1
 }
 
 get_quota_on_qsd() {
@@ -2779,7 +2774,7 @@ test_8() {
 	fi
 
 	local duration=""
-	[ "$SLOW" = "no" ] && duration=" -t 120"
+	[ "$SLOW" = "no" ] && duration=" -t 30"
 	$RUNAS -G0 bash rundbench -D $DIR/$tdir 3 $duration ||
 		quota_error a $TSTUSR "dbench failed!"
 
