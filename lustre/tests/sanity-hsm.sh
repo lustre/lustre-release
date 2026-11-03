@@ -589,8 +589,9 @@ cdt_check_state enabled
 echo "Set sanity-hsm HSM policy"
 cdt_set_sanity_policy
 
-# finished requests are quickly removed from list
+# finished requests are quickly removed from list, also after an MDT restart
 set_hsm_param grace_delay 10
+set_hsm_param grace_delay 10 -P
 
 CLIENT_NIDS=( $($LCTL list_nids all) )
 
@@ -6512,6 +6513,7 @@ test_607e()
 }
 run_test 607e "release file migrated after archive (blocking migrate)"
 
+set_hsm_param grace_delay "" "-P -d"
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

@@ -12916,14 +12916,28 @@ mdts_check_param() {
 }
 
 cdt_set_mount_state() {
-	mdts_set_param "-P" hsm_control "$1"
-	# set_param -P is asynchronous operation and could race with set_param.
-	# In such case configs could be retrieved and applied at mgc after
-	# set_param -P completion. Sleep here to avoid race with set_param.
-	# We need at least 20 seconds. 10 for mgc_requeue_thread to wake up
-	# MGC_TIMEOUT_MIN_SECONDS + MGC_TIMEOUT_RAND_CENTISEC(5 + 5)
-	# and 10 seconds to retrieve config from server.
-	sleep 20
+	local state=$1
+	local target=$state
+	local visible=true
+	local mdtno
+
+	[[ $state == shutdown ]] && target=stopped
+	for ((mdtno = 0; mdtno < MDSCOUNT; mdtno++)); do
+		[[ $(do_facet mds$((mdtno + 1)) $LCTL get_param -n \
+		     ${MDT_PREFIX}${mdtno}.hsm_control) == $target ]] &&
+			visible=false
+	done
+
+	mdts_set_param "-P" hsm_control "$state"
+	# set_param -P is applied later by the MGC and would undo a plain
+	# set_param made before it lands.  Wait for the state to change, or
+	# when no change will show, for the MGC requeue (5 to 10 s) and the
+	# config fetch.
+	if $visible; then
+		mdts_check_param hsm_control "$target" 40
+	else
+		sleep 20
+	fi
 }
 
 cdt_check_state() {
