@@ -1211,6 +1211,7 @@ load_modules_local() {
 	load_module osc/osc
 	load_module lov/lov
 	load_module mdc/mdc
+	MODOPTS_MGC=${MODOPTS_MGC:-"mgc_requeue_timeout_min=1"}
 	load_module mgc/mgc
 	load_module obdecho/obdecho
 	if ! client_only; then
