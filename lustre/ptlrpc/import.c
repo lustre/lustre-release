@@ -1659,9 +1659,10 @@ out:
 		time64_t next_connect;
 
 		import_set_state_nolock(imp, LUSTRE_IMP_DISCON);
-		/* an MDT that is still starting up refuses its peers at once */
+		/* a target still starting up refuses connects at once */
 		if (rc == -EAGAIN &&
-		    (imp->imp_connect_flags_orig & OBD_CONNECT_MDS_MDS) &&
+		    (imp->imp_connect_flags_orig &
+		     (OBD_CONNECT_MDS_MDS | OBD_CONNECT_MDS)) &&
 		    imp->imp_quick_retries < IMP_QUICK_RETRIES_MAX) {
 			imp->imp_quick_retries++;
 			imp->imp_quick_retry_at = now + 1;
