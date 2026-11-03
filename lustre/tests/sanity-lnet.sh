@@ -1354,6 +1354,59 @@ test_42() {
 }
 run_test 42 "LNetAddPeer merges a new NID into a locked multi-NID peer"
 
+peer_primary_nid() {
+	$LNETCTL peer show --nid $1 2>/dev/null |
+		awk '/primary nid:/{print $NF}'
+}
+
+test_43() {
+	# lock_prim_nid is read-only, so reload LNet to clear it
+	cleanup_lnet || error "Failed to unload modules before test execution"
+	configure_dlc $MODOPTS_LNET lock_prim_nid=0 ||
+		error "configure_dlc failed $?"
+
+	add_net "${NETTYPE}" "${INTERFACES[0]}" || return $?
+	add_net "${NETTYPE}1" "${INTERFACES[0]}" || return $?
+
+	local primary=$($LCTL list_nids | grep -m 1 "@${NETTYPE}$")
+	local secondary=$($LCTL list_nids | grep -m 1 "@${NETTYPE}1$")
+	local uuid="lnet_add_peer_uuid"
+
+	[[ -n $primary && -n $secondary ]] ||
+		error "Missing NID: primary '$primary' secondary '$secondary'"
+
+	do_lnetctl discover ${primary} ||
+		error "Failed to discover $primary"
+
+	local nid=$(peer_primary_nid ${secondary})
+
+	[[ $nid == $primary ]] ||
+		error "Peer of $secondary has primary '$nid', not $primary"
+
+	# With discovery on, discovery moves a moved primary NID back
+	# within a millisecond. Turn it off to keep the result.
+	do_lnetctl set discovery 0 ||
+		error "Failed to disable discovery"
+
+	# Need Lustre modules for add_uuid
+	load_modules_local ||
+		error "Failed to load modules rc=$?"
+
+	# Add the non-primary NID of the unlocked peer
+	$LCTL add_uuid ${uuid} ${secondary} ||
+		error "add_uuid $secondary failed $?"
+
+	nid=$(peer_primary_nid ${secondary})
+
+	$LCTL del_uuid ${uuid} || error "del_uuid failed $?"
+	unload_modules_local
+	cleanup_lnet
+
+	[[ $nid == $primary ]] ||
+		error "Primary NID moved from $primary to '$nid'"
+}
+run_test 43 "LNetAddPeer keeps the primary NID of an unlocked peer"
+
 test_50() {
 	# The default pool is LNET_NRB_LARGE 1 MiB buffers, about 1 GiB,
 	# which a small test node cannot spare. The *_router_buffers

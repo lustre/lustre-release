@@ -1865,15 +1865,13 @@ lnet_peer_add(struct lnet_nid *nid, unsigned int flags)
 				rc = -EALREADY;
 			goto out;
 		} else if (!(flags & (LNET_PEER_LOCK_PRIMARY | LNET_PEER_CONFIGURED))) {
-			/* if not recreating peer as configured and
-			 * not locking primary nid, no need to
-			 * do anything if primary nid is not being changed
+			/* Adopt the existing peer, also when @nid is not its
+			 * primary NID. A recreate moves the primary NID of a
+			 * live peer. Discovery can then move it back.
 			 */
-			if (nid_same(&lp->lp_primary_nid, nid)) {
-				spin_unlock(&lp->lp_lock);
-				rc = -EEXIST;
-				goto out;
-			}
+			spin_unlock(&lp->lp_lock);
+			rc = -EEXIST;
+			goto out;
 		}
 		spin_unlock(&lp->lp_lock);
 		/* Delete and recreate the peer.
