@@ -54,8 +54,20 @@ set_fail_client() {
 	echo "fail $FAIL_CLIENT, next is $FAIL_NEXT"
 }
 
+# umount -f sends no disconnect, and the targets would take about
+# 100 seconds to evict the client, blocking the live client on its locks
+evict_failed_client() {
+	local uuid=$1
+
+	[[ -n "$uuid" ]] || return 0
+	do_nodes $(mdts_nodes) "$LCTL set_param -n mdt.*.evict_client=$uuid"
+	do_nodes $(osts_nodes) \
+		"$LCTL set_param -n obdfilter.*.evict_client=$uuid"
+}
+
 fail_clients() {
 	num=$1
+	local uuid
 
 	log "Request fail clients: $num, to fail: $FAIL_NUM, failed: $DOWN_NUM"
 	if [ -z "$num"  ] || [ "$num" -gt $((FAIL_NUM - DOWN_NUM)) ]; then
@@ -73,7 +85,9 @@ fail_clients() {
 		set_fail_client
 		client=$FAIL_CLIENT
 		DOWN_CLIENTS="$DOWN_CLIENTS $client"
+		uuid=$(do_node $client "$LFS getname -u $MOUNT")
 		shutdown_client $client
+		evict_failed_client $uuid
 	done
 
 	echo "down clients: $DOWN_CLIENTS"
