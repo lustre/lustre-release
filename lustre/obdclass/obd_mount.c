@@ -599,6 +599,9 @@ SERVER_ONLY int lustre_stop_mgc(struct super_block *sb)
 	set_bit(OBDF_NO_RECOV, obd->obd_flags);
 
 	if (obd->u.cli.cl_mgc_mgsexp) {
+		/* the MGS may have stopped already */
+		set_bit(IMPF_DISCONNECT_BOUNDED,
+			obd->u.cli.cl_import->imp_flags);
 		/*
 		 * An error is not fatal, if we are unable to send the
 		 * disconnect mgs ping evictor cleans up the export

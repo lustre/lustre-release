@@ -2189,7 +2189,18 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
 
 	rc = ptlrpc_disconnect_import_async(imp, noclose, &cmpl, &rc);
 
-	wait_for_completion(&cmpl);
+	/* A stopped peer never replies. The abort only ends the wait for the
+	 * reply: a peer that receives the DISCONNECT still acts on it.
+	 */
+	if (!test_bit(IMPF_DISCONNECT_BOUNDED, imp->imp_flags)) {
+		wait_for_completion(&cmpl);
+	} else if (!wait_for_completion_timeout(&cmpl, cfs_time_seconds(1))) {
+		CDEBUG(D_HA, "%s: no reply to disconnect, aborting it\n",
+		       imp->imp_obd->obd_name);
+		ptlrpc_deactivate_import(imp);
+		wait_for_completion(&cmpl);
+		rc = 0;
+	}
 
 	RETURN(rc);
 }

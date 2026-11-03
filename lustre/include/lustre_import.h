@@ -152,6 +152,7 @@ enum import_flags {
 	IMPF_NO_CACHED_DATA,	/* no data from the server has been cached
 				 * on the client.
 				 */
+	IMPF_DISCONNECT_BOUNDED, /* abort DISCONNECT if no reply in 1s */
 	IMPF_NUM_FLAGS
 };
 
