@@ -910,6 +910,27 @@ out:
 	RETURN(rc);
 }
 
+static int lustre_lwp_config(struct obd_device *lwp,
+			     struct lustre_cfg_bufs *bufs, int cmd)
+{
+	struct lustre_cfg *lcfg;
+	int rc;
+
+	lustre_cfg_bufs_reset(bufs, lwp->obd_name);
+	lustre_cfg_bufs_set_string(bufs, 1, NULL);
+	OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount, bufs->lcfg_buflen));
+	if (!lcfg)
+		return -ENOMEM;
+	lustre_cfg_init(lcfg, cmd, bufs);
+
+	/* NULL is passed for the '@env', since it will not be used */
+	rc = lwp->obd_lu_dev->ld_ops->ldo_process_config(NULL, lwp->obd_lu_dev,
+							 lcfg);
+	OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount, lcfg->lcfg_buflens));
+
+	return rc;
+}
+
 static int lustre_disconnect_lwp(struct super_block *sb)
 {
 	struct lustre_sb_info *lsi = s2lsi(sb);
@@ -952,31 +973,18 @@ static int lustre_disconnect_lwp(struct super_block *sb)
 		GOTO(out, rc = -ENOMEM);
 
 	mutex_lock(&lsi->lsi_lwp_mutex);
+	/* send every DISCONNECT before waiting for any reply */
 	list_for_each_entry(lwp, &lsi->lsi_lwp_list, obd_lwp_list) {
-		struct lustre_cfg *lcfg;
-
 		if (likely(lwp->obd_lwp_export)) {
 			class_export_put(lwp->obd_lwp_export);
 			lwp->obd_lwp_export = NULL;
 		}
 
-		lustre_cfg_bufs_reset(bufs, lwp->obd_name);
-		lustre_cfg_bufs_set_string(bufs, 1, NULL);
-		OBD_ALLOC(lcfg, lustre_cfg_len(bufs->lcfg_bufcount,
-					       bufs->lcfg_buflen));
-		if (!lcfg) {
-			rc = -ENOMEM;
-			break;
-		}
-		lustre_cfg_init(lcfg, LCFG_CLEANUP, bufs);
+		lustre_lwp_config(lwp, bufs, LCFG_PRE_CLEANUP);
+	}
 
-		/* Disconnect import first. NULL is passed for the '@env',
-		 * since it will not be used.
-		 */
-		rc = lwp->obd_lu_dev->ld_ops->ldo_process_config(NULL,
-							lwp->obd_lu_dev, lcfg);
-		OBD_FREE(lcfg, lustre_cfg_len(lcfg->lcfg_bufcount,
-					      lcfg->lcfg_buflens));
+	list_for_each_entry(lwp, &lsi->lsi_lwp_list, obd_lwp_list) {
+		rc = lustre_lwp_config(lwp, bufs, LCFG_CLEANUP);
 		if (rc != 0 && rc != -ETIMEDOUT && rc != -ENODEV &&
 		    rc != -ENOTCONN && rc != -ESHUTDOWN) {
 			CERROR("%s: fail to disconnect LWP: rc = %d\n",

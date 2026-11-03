@@ -33,6 +33,10 @@ struct lwp_device {
 	struct obd_export      *lpd_exp;   /* export of LWP */
 	struct task_struct     *lpd_notify_task; /* notify thread */
 	int			lpd_connects; /* use count, 0 or 1 */
+	struct completion	lpd_disconnect_cmplt;
+	int			lpd_disconnect_res;
+	unsigned long		lpd_disconnect_deadline; /* jiffies */
+	bool			lpd_disconnecting;
 };
 
 static inline struct lwp_device *lu2lwp_dev(struct lu_device *d)
@@ -163,17 +167,22 @@ out:
 }
 
 /**
- * lwp_disconnect() - Disconnect the import from LWP.
+ * lwp_disconnect_start() - Send the DISCONNECT of the LWP import.
  * @d: LWP device to be disconnected
+ *
+ * Does not wait for the reply, so that the LWPs of a target disconnect
+ * together; lwp_disconnect() waits for it.
  *
  * Return:
  * * %0 on success
  * * %negative number on error
  */
-static int lwp_disconnect(struct lwp_device *d)
+static int lwp_disconnect_start(struct lwp_device *d)
 {
 	struct obd_import *imp;
-	int rc = 0;
+
+	if (d->lpd_disconnecting)
+		return 0;
 
 	imp = d->lpd_obd->u.cli.cl_import;
 
@@ -194,7 +203,44 @@ static int lwp_disconnect(struct lwp_device *d)
 	 * never added.)
 	 */
 	ptlrpc_pinger_del_import(imp);
-	rc = ptlrpc_disconnect_import(imp, 0);
+
+	init_completion(&d->lpd_disconnect_cmplt);
+	d->lpd_disconnect_deadline = jiffies + cfs_time_seconds(1);
+	d->lpd_disconnecting = true;
+
+	return ptlrpc_disconnect_import_async(imp, 0, &d->lpd_disconnect_cmplt,
+					      &d->lpd_disconnect_res);
+}
+
+/**
+ * lwp_disconnect() - Disconnect the import from LWP.
+ * @d: LWP device to be disconnected
+ *
+ * Return:
+ * * %0 on success
+ * * %negative number on error
+ */
+static int lwp_disconnect(struct lwp_device *d)
+{
+	struct obd_import *imp = d->lpd_obd->u.cli.cl_import;
+	long left;
+	int rc = 0;
+
+	lwp_disconnect_start(d);
+
+	/* A stopped peer never replies. The abort only ends the wait for the
+	 * reply: a peer that receives the DISCONNECT still acts on it.
+	 */
+	left = max_t(long, d->lpd_disconnect_deadline - jiffies, 1);
+	if (wait_for_completion_timeout(&d->lpd_disconnect_cmplt, left)) {
+		rc = d->lpd_disconnect_res;
+	} else {
+		CDEBUG(D_HA, "%s: no reply to disconnect, aborting it\n",
+		       d->lpd_obd->obd_name);
+		ptlrpc_deactivate_import(imp);
+		wait_for_completion(&d->lpd_disconnect_cmplt);
+	}
+	d->lpd_disconnecting = false;
 	ptlrpc_invalidate_import(imp);
 
 	RETURN(rc);
@@ -223,6 +269,8 @@ static int lwp_process_config(const struct lu_env *env,
 
 	switch (lcfg->lcfg_command) {
 	case LCFG_PRE_CLEANUP:
+		rc = lwp_disconnect_start(d);
+		break;
 	case LCFG_CLEANUP:
 		rc = lwp_disconnect(d);
 		break;
@@ -398,6 +446,10 @@ static struct lu_device *lwp_device_fini(const struct lu_env *env,
 		kthread_stop(task);
 		class_export_put(m->lpd_exp);
 	}
+
+	/* a DISCONNECT sent at LCFG_PRE_CLEANUP may still be in flight */
+	if (m->lpd_disconnecting)
+		lwp_disconnect(m);
 
 	if (m->lpd_exp != NULL)
 		class_disconnect(m->lpd_exp);
