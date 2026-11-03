@@ -8777,12 +8777,12 @@ test_56oe() {
 		stat -c "%Z" $dir/$tfile-c.$val
 		touch --date="$val $unit ago" -a $dir/$tfile-a.$val
 		touch --date="$val $unit ago" -m $dir/$tfile-m.$val
-		(( val % 5 != 2 )) || sleep 60
+		(( val % 5 != 2 )) || sleep 20
 	done
 
 	local now=$(date +%s)
-	local lower_bound=$(( now - $(stat -c "%Z" $dir/$tfile-c.8) + 30 ))
-	local upper_bound=$(( now - $(stat -c "%Z" $dir/$tfile-c.2) - 30 ))
+	local lower_bound=$(( now - $(stat -c "%Z" $dir/$tfile-c.8) + 10 ))
+	local upper_bound=$(( now - $(stat -c "%Z" $dir/$tfile-c.2) - 10 ))
 
 	cmd="$LFS find $dir -ctime -${upper_bound}s -ctime +${lower_bound}s"
 	nums=$($cmd | grep -c c.*)
@@ -27839,8 +27839,6 @@ test_228a() {
 	local IDX=$(($SEQ % 64))
 
 	do_facet $SINGLEMDS sync
-	# Make sure journal flushed.
-	sleep 6
 	local blk1=$(do_facet $SINGLEMDS \
 		     "$DEBUGFS -c -R \\\"stat oi.16.${IDX}\\\" $MDT_DEV" |
 		     grep Blockcount | awk '{print $4}')
@@ -27850,8 +27848,6 @@ test_228a() {
 	# Create new files, idle OI blocks should be reused.
 	createmany -o $myDIR/t- 2000
 	do_facet $SINGLEMDS sync
-	# Make sure journal flushed.
-	sleep 6
 	local blk2=$(do_facet $SINGLEMDS \
 		     "$DEBUGFS -c -R \\\"stat oi.16.${IDX}\\\" $MDT_DEV" |
 		     grep Blockcount | awk '{print $4}')
@@ -27880,8 +27876,6 @@ test_228b() {
 	local IDX=$(($SEQ % 64))
 
 	do_facet $SINGLEMDS sync
-	# Make sure journal flushed.
-	sleep 6
 	local blk1=$(do_facet $SINGLEMDS \
 		     "$DEBUGFS -c -R \\\"stat oi.16.${IDX}\\\" $MDT_DEV" |
 		     grep Blockcount | awk '{print $4}')
@@ -27899,8 +27893,6 @@ test_228b() {
 	# Create new files, idle OI blocks should be reused.
 	createmany -o $myDIR/t- 2000
 	do_facet $SINGLEMDS sync
-	# Make sure journal flushed.
-	sleep 6
 	local blk2=$(do_facet $SINGLEMDS \
 		     "$DEBUGFS -c -R \\\"stat oi.16.${IDX}\\\" $MDT_DEV" |
 		     grep Blockcount | awk '{print $4}')
@@ -27931,8 +27923,6 @@ test_228c() {
 	local IDX=$(($SEQ % 64))
 
 	do_facet $SINGLEMDS sync
-	# Make sure journal flushed.
-	sleep 6
 	local blk1=$(do_facet $SINGLEMDS \
 		     "$DEBUGFS -c -R \\\"stat oi.16.${IDX}\\\" $MDT_DEV" |
 		     grep Blockcount | awk '{print $4}')
@@ -27945,8 +27935,6 @@ test_228c() {
 	# Create new files, idle OI blocks should be reused.
 	createmany -o $myDIR/t- 2000
 	do_facet $SINGLEMDS sync
-	# Make sure journal flushed.
-	sleep 6
 	local blk2=$(do_facet $SINGLEMDS \
 		     "$DEBUGFS -c -R \\\"stat oi.16.${IDX}\\\" $MDT_DEV" |
 		     grep Blockcount | awk '{print $4}')
