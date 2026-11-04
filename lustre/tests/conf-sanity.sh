@@ -3634,7 +3634,8 @@ test_35a() { # bug 12459
 	log "Stopping the MDT: $device"
 	stop_mdt 1 || error "MDT0 stop fail"
 
-	df $MOUNT > /dev/null 2>&1 &
+	# lfs df, unlike df, sends a statfs to MDT0000 itself
+	$LFS df $MOUNT > /dev/null 2>&1 &
 	DFPID=$!
 	log "Restarting the MDT: $device"
 	start_mdt 1 || error "MDT0 start fail"
