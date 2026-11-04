@@ -27,6 +27,7 @@
 #include <linux/mutex.h>
 #include <linux/list.h>
 #include <linux/timer.h>
+#include <linux/workqueue.h>
 
 #include <obd.h>
 #include <obd_class.h>
@@ -116,12 +117,15 @@ static inline void key_invalidate_unlink_locked(struct key *key)
 	}
 }
 
-static void ctx_upcall_timeout_kr(struct timer_list *data)
+static void ctx_upcall_timeout_work(struct work_struct *work)
 {
-	struct gss_cli_ctx_keyring *gctx_kr = timer_container_of(gctx_kr, data,
-								 gck_timer);
-	struct ptlrpc_cli_ctx *ctx = &(gctx_kr->gck_base.gc_base);
+	struct gss_cli_ctx_keyring *gctx_kr =
+		container_of(work, struct gss_cli_ctx_keyring, gck_work);
+	struct ptlrpc_cli_ctx *ctx = &gctx_kr->gck_base.gc_base;
 	struct obd_import *imp = ctx->cc_sec->ps_import;
+
+	/* fail any connect request associated with this ctx */
+	ptlrpc_fail_connecting_import(imp, ctx->cc_impconncnt);
 
 	CDEBUG(D_SEC,
 	       "%s: GSS context (%p) negotiation timeout, expiring it, key (%p)\n",
@@ -131,6 +135,17 @@ static void ctx_upcall_timeout_kr(struct timer_list *data)
 	 * invisible to lookups, but leave it linked and referenced.
 	 */
 	cli_ctx_expire(ctx);
+}
+
+static void ctx_upcall_timeout_kr(struct timer_list *data)
+{
+	struct gss_cli_ctx_keyring *gctx_kr = timer_container_of(gctx_kr, data,
+								 gck_timer);
+
+	/* imp_lock must not be taken from this softirq so fail any connect
+	 * request associated with this ctx in a worker
+	 */
+	schedule_work(&gctx_kr->gck_work);
 }
 
 static void ctx_start_timer_kr(struct ptlrpc_cli_ctx *ctx, time64_t timeout)
@@ -158,7 +173,13 @@ void ctx_clear_timer_kr(struct ptlrpc_cli_ctx *ctx)
 
 	CDEBUG(D_SEC, "ctx %p, key %p\n", ctx, gctx_kr->gck_key);
 
-	timer_delete_sync(timer);
+	/* no timer is armed, and thus no work item is queued, for a
+	 * reverse context
+	 */
+	if (!sec_is_reverse(ctx->cc_sec)) {
+		timer_delete_sync(timer);
+		cancel_work_sync(&gctx_kr->gck_work);
+	}
 }
 
 static
@@ -173,6 +194,7 @@ struct ptlrpc_cli_ctx *ctx_create_kr(struct ptlrpc_sec *sec,
 		return NULL;
 
 	timer_setup(&gctx_kr->gck_timer, NULL, 0);
+	INIT_WORK(&gctx_kr->gck_work, ctx_upcall_timeout_work);
 
 	ctx = &gctx_kr->gck_base.gc_base;
 

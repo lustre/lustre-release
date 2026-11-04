@@ -36,6 +36,7 @@ void ptlrpc_deactivate_import(struct obd_import *imp);
 void ptlrpc_invalidate_import(struct obd_import *imp);
 void ptlrpc_fail_import(struct obd_import *imp, __u32 conn_cnt);
 void ptlrpc_pinger_force(struct obd_import *imp);
+void ptlrpc_fail_connecting_import(struct obd_import *imp, __u32 conn_cnt);
 /** @} ha */
 
 #endif

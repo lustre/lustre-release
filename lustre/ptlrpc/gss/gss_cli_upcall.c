@@ -214,6 +214,7 @@ int gss_do_ctx_init_rpc(char *buffer, unsigned long count)
 	char obdname[64];
 	long lsize;
 	__s64 status;
+	__u32 conn_cnt;
 	int rc;
 
 	if (count != sizeof(param)) {
@@ -329,9 +330,18 @@ int gss_do_ctx_init_rpc(char *buffer, unsigned long count)
 	}
 
 	ptlrpc_request_set_replen(req);
+	spin_lock(&imp->imp_lock);
+	conn_cnt = imp->imp_conn_cnt;
+	spin_unlock(&imp->imp_lock);
 
 	rc = ptlrpc_queue_wait(req);
 	if (rc) {
+		/* rc is still the RPC status */
+		if (rc == -ETIMEDOUT || rc == -ENOTCONN) {
+			/* fail the pending CONNECT for this connection epoch */
+			ptlrpc_fail_connecting_import(imp, conn_cnt);
+		}
+
 		/* If any _real_ denial be made, we expect server return
 		 * -EACCES reply or return success but indicate gss error
 		 * inside reply messsage. All other errors are treated as

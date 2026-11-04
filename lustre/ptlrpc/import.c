@@ -436,6 +436,55 @@ void ptlrpc_fail_import(struct obd_import *imp, __u32 conn_cnt)
 	EXIT;
 }
 
+/**
+ * ptlrpc_fail_connecting_import() - fail the CONNECT request for this epoch
+ * @imp: import whose context negotiation failed
+ * @conn_cnt: connection epoch captured when that negotiation started
+ *
+ * Do not change the import state here. The CONNECT completion callback is
+ * the place that moves CONNECTING to DISCON, and it then lets the pinger
+ * select another connection. Must be called in process context.
+ */
+void ptlrpc_fail_connecting_import(struct obd_import *imp, __u32 conn_cnt)
+{
+	struct ptlrpc_request *req;
+
+	spin_lock(&imp->imp_lock);
+	if (conn_cnt != imp->imp_conn_cnt) {
+		spin_unlock(&imp->imp_lock);
+		CDEBUG(D_HA,
+		       "%s: stale context negotiation failure: conn %u, now %u\n",
+		       imp->imp_obd->obd_name, conn_cnt, imp->imp_conn_cnt);
+		return;
+	}
+
+	list_for_each_entry(req, &imp->imp_sending_list, rq_list) {
+		if (req->rq_send_state != LUSTRE_IMP_CONNECTING ||
+		    !ptlrpc_req_is_connect(req))
+			continue;
+		spin_lock(&req->rq_lock);
+		req->rq_err = 1;
+		req->rq_status = -ETIMEDOUT;
+		ptlrpc_client_wake_req(req);
+		spin_unlock(&req->rq_lock);
+	}
+	list_for_each_entry(req, &imp->imp_delayed_list, rq_list) {
+		if (req->rq_send_state != LUSTRE_IMP_CONNECTING ||
+		    !ptlrpc_req_is_connect(req))
+			continue;
+		spin_lock(&req->rq_lock);
+		req->rq_err = 1;
+		req->rq_status = -ETIMEDOUT;
+		ptlrpc_client_wake_req(req);
+		spin_unlock(&req->rq_lock);
+	}
+	spin_unlock(&imp->imp_lock);
+
+	CDEBUG(D_HA, "%s: context negotiation failed for connect epoch %u\n",
+	       imp->imp_obd->obd_name, conn_cnt);
+}
+EXPORT_SYMBOL(ptlrpc_fail_connecting_import);
+
 int ptlrpc_reconnect_import(struct obd_import *imp)
 {
 	int rc = 0;
