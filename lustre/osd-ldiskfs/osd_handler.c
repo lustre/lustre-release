@@ -8240,6 +8240,10 @@ static int osd_index_ea_lookup(const struct lu_env *env, struct dt_object *dt,
 	if (rc)
 		RETURN(rc);
 
+	/* ldiskfs cannot store it, and osd_olc_save() cannot cache it */
+	if (unlikely(ln.ln_namelen > LDISKFS_NAME_LEN))
+		GOTO(out, rc = -ENAMETOOLONG);
+
 	/*
 	 * grab version before actual lookup, so that we recognize potential
 	 * insert between osd_ea_lookup_rec() and osd_olc_save()

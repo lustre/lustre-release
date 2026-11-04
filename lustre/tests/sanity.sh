@@ -16510,6 +16510,13 @@ test_110() {
 		error "create with 255 char failed"
 	touch $DIR/$tdir/$(str_repeat 'y' 256) &&
 		error "create with 256 char should fail, but did not"
+	# some clients pass a long rename target to the MDT, where a name
+	# over 256 chars hit an LASSERT in osd_olc_save() (LU-21118)
+	if (( MDS1_VERSION >= $(version_code 2.17.61.1) )); then
+		mv $DIR/$tdir/$(str_repeat 'x' 255) \
+			$DIR/$tdir/$(str_repeat 'z' 257) &&
+			error "rename to 257 char should fail, but did not"
+	fi
 
 	ls -l $DIR/$tdir
 	rm -rf $DIR/$tdir
