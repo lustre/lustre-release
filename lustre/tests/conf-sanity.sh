@@ -13392,7 +13392,7 @@ test_200b() {
 		error "partition 0 is missing CPUs from pattern: '$pattern'"
 	}
 
-	(( $(echo $table | wc -l) == 1 )) || {
+	(( $(wc -l <<< "$table") == 1 )) || {
 		echo -e "layout wrong\n$table"
 		error "layout has too many partitions from pattern: '$pattern'"
 	}
@@ -13430,7 +13430,7 @@ test_200c() {
 	$LCTL get_param -n cpu_partition_table
 	local expected=$nodes
 	local table=$($LCTL get_param -n cpu_partition_table)
-	local actual=$(echo $table | wc -l)
+	local actual=$(wc -l <<< "$table")
 
 	(( actual == expected )) ||
 		error "CPU partitions not $expected, found: $actual"
@@ -13465,7 +13465,7 @@ test_200c() {
 	load_modules_local libcfs
 	$LCTL get_param -n cpu_partition_table
 	local table=$($LCTL get_param -n cpu_partition_table)
-	actual=$(echo $table | wc -l)
+	actual=$(wc -l <<< "$table")
 	(( actual == partitions )) ||
 		error "setting npartitions=$partitions did not override NUMA layout"
 }
