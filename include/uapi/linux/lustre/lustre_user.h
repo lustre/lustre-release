@@ -33,6 +33,7 @@
 # include <linux/math64.h>
 #endif /* !__KERNEL__ */
 
+#include <asm/byteorder.h>
 #include <linux/fs.h>
 #include <linux/limits.h>
 #include <linux/kernel.h>
@@ -981,7 +982,22 @@ static inline bool lov_pool_is_reserved(const char *pool)
 
 /* EC (Erasure Coding) stripe count limits */
 #define LOV_EC_MAX_DATA_STRIPES   255  /* max data stripes for EC */
-#define LOV_EC_MAX_CODING_STRIPES 15   /* max coding/parity stripes for EC */
+#define LOV_EC_MAX_CODING_STRIPES 15   /* lcme_cstripe_count is 4 bits */
+/*
+ * lcme_ec_version names how a parity component maps to its data: the
+ * raid-set split (ec_split_stripes()), the parity stripe placement and the
+ * encoding matrix.  It is LCME_EC_NONE in a data component.  Version 1 is
+ * the mapping released in 2.18.0, which a parity written before the
+ * version existed (LCME_EC_NONE) also uses.  A component with a later
+ * version must not be reconstructed, resynced or have its parity written
+ * by code that only knows up to LCME_EC_VERSION_MAX; its data stripes can
+ * still be read as plain RAID0.
+ */
+enum lcme_ec_version {
+	LCME_EC_NONE		= 0,
+	LCME_EC_VERSION_1	= 1,
+	LCME_EC_VERSION_MAX	= LCME_EC_VERSION_1,
+};
 /*
  * data + coding cap from Cauchy matrix theory over GF(2^8): the
  * construction requires k+m distinct field elements and GF(2^8) has 256.
@@ -1221,9 +1237,16 @@ struct lov_comp_md_entry_v1 {
 	__u8			lcme_dstripe_count;	/* data stripe count,
 							 * k value in EC
 							 */
-	__u8			lcme_cstripe_count;	/* code stripe count,
-							 * p value in EC
-							 */
+	/* code stripe count, p value in EC, in the low 4 bits of the byte,
+	 * and the EC layout version (LCME_EC_VERSION_*) in the high 4 bits
+	 */
+#ifdef __BIG_ENDIAN_BITFIELD
+	__u8			lcme_ec_version:4;
+#endif
+	__u8			lcme_cstripe_count:4;
+#ifndef __BIG_ENDIAN_BITFIELD
+	__u8			lcme_ec_version:4;
+#endif
 	__u8			lcme_compr_type;	/* compress type */
 	__u8			lcme_compr_lvl:4;	/* compress level */
 	__u8			lcme_compr_chunk_lum_bits:4;

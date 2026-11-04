@@ -15146,6 +15146,7 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			   bool force_resync)
 {
 	struct llapi_resync_comp stale_comp_array[1024] = { { 0 } };
+	struct llapi_layout *new_layout;
 	struct llapi_layout *layout;
 	struct stat stbuf;
 	int stale_data_comp_count = 0;
@@ -15245,7 +15246,8 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			 * Check if mirrors are consistent - if not, error
 			 */
 			rc = lfs_mirror_verify_file(fname, NULL, 0, 0, 0);
-			if (rc < 0) {
+			/* a parity of a later EC version is left as is */
+			if (rc < 0 && rc != -EOPNOTSUPP) {
 				/* mirrors inconsistent but no stale flags */
 				fprintf(stderr,
 					"%s: mirrors are inconsistent but no stale components marked in '%s'. Use 'lfs mirror resync --only %d --force-resync' to force resync.\n",
@@ -15260,7 +15262,8 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			 * Check if mirrors are consistent - if not, error
 			 */
 			rc = lfs_mirror_verify_file(fname, NULL, 0, 0, 0);
-			if (rc < 0) {
+			/* a parity of a later EC version is left as is */
+			if (rc < 0 && rc != -EOPNOTSUPP) {
 				/* file has inconsistency but no stale flags */
 				fprintf(stderr,
 					"%s: mirrors are inconsistent but no stale components marked in '%s'. Use 'lfs mirror resync --only N --force-resync' to force resync specific mirrors.\n",
@@ -15286,6 +15289,20 @@ int lfs_mirror_resync_file(const char *fname, struct ll_ioc_lease *ioc,
 			goto free_layout;
 		}
 	}
+
+	/* The MDS instantiates the stale components for the resync lease,
+	 * and gives a new parity its EC layout version, which may be one
+	 * this lfs does not know, so resync with the layout it has now.
+	 */
+	new_layout = llapi_layout_get_by_fd(fd, 0);
+	if (!new_layout) {
+		rc = -errno;
+		fprintf(stderr, "%s: '%s' llapi_layout_get_by_fd failed: %s.\n",
+			progname, fname, strerror(-rc));
+		goto free_layout;
+	}
+	llapi_layout_free(layout);
+	layout = new_layout;
 
 	/*
 	 * There are no data replicas to resync but there might be ec mirrors

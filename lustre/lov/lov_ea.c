@@ -652,6 +652,12 @@ lsme_unpack_comp(struct lov_obd *lov, struct lov_mds_md *lmm,
  * Keep a data component's link id and stripe counts only while a parity
  * component, which such a server never wrote, links to it, and keep the
  * timestamp only for a NOSYNC component or an EC layout.
+ *
+ * A later server may split or place the stripes differently, which the
+ * parity names in lcme_ec_version.  Clear the data stripe count of data
+ * linked only to a parity of an unknown version, so its stripes are read
+ * as plain RAID0 and never reconstructed from parity paired with the
+ * wrong data, but keep its EC fields, which a copy of the layout needs.
  */
 static void lsm_clear_stale_ec(struct lov_stripe_md *lsm)
 {
@@ -663,6 +669,7 @@ static void lsm_clear_stale_ec(struct lov_stripe_md *lsm)
 
 	for (i = 0; i < lsm->lsm_entry_count; i++) {
 		struct lov_stripe_md_entry *lsme = lsm->lsm_entries[i];
+		bool unknown = false;
 		bool linked = false;
 
 		if (!is_ec && !(lsme->lsme_flags & LCME_FL_NOSYNC))
@@ -683,18 +690,30 @@ static void lsm_clear_stale_ec(struct lov_stripe_md *lsm)
 			    mirror_id_of(lsme->lsme_id) &&
 			    lu_extent_is_equal(&parity->lsme_extent,
 					       &lsme->lsme_extent)) {
+				if (!lsme_is_foreign(parity) &&
+				    parity->lsme_ec_version >
+				    LCME_EC_VERSION_MAX) {
+					unknown = true;
+					continue;
+				}
 				linked = true;
 				break;
 			}
 		}
 		if (linked)
 			continue;
+		if (unknown && !lsme_is_foreign(lsme)) {
+			lsme->lsme_ec_unknown_dcount = lsme->lsme_dstripe_count;
+			lsme->lsme_dstripe_count = 0;
+			continue;
+		}
 
 		lsme->lsme_mirror_link_id = 0;
 		if (lsme_is_foreign(lsme))
 			continue;
 		lsme->lsme_dstripe_count = 0;
 		lsme->lsme_cstripe_count = 0;
+		lsme->lsme_ec_version = LCME_EC_NONE;
 	}
 }
 
@@ -785,6 +804,7 @@ lsm_unpackmd_comp_md_v1(struct lov_obd *lov, void *buf, size_t buf_size)
 		if (!lsme_is_foreign(lsme)) {
 			lsme->lsme_dstripe_count = lcme->lcme_dstripe_count;
 			lsme->lsme_cstripe_count = lcme->lcme_cstripe_count;
+			lsme->lsme_ec_version = lcme->lcme_ec_version;
 		}
 		lu_extent_le_to_cpu(&lsme->lsme_extent, &lcme->lcme_extent);
 

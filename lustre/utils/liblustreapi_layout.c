@@ -75,7 +75,8 @@ struct llapi_layout_comp {
 			 * EC parity comp specific fields.
 			 */
 			uint8_t		llc_dstripe_count;
-			uint8_t		llc_cstripe_count;
+			uint8_t		llc_cstripe_count:4;
+			uint8_t		llc_ec_version:4;
 			struct lov_user_ost_data_v1 *llc_objects;
 		};
 		struct { /* For FOREIGN/HSM layout. */
@@ -689,6 +690,7 @@ struct llapi_layout *llapi_layout_get_by_xattr(void *lov_xattr,
 				lcme_timestamp_id_unpack(ent->lcme_time_and_id);
 			comp->llc_dstripe_count = ent->lcme_dstripe_count;
 			comp->llc_cstripe_count = ent->lcme_cstripe_count;
+			comp->llc_ec_version = ent->lcme_ec_version;
 		} else {
 			comp->llc_extent.e_start = 0;
 			comp->llc_extent.e_end = LUSTRE_EOF;
@@ -1058,6 +1060,7 @@ llapi_layout_to_lum(const struct llapi_layout *layout)
 					     comp->llc_mirror_link_id);
 			ent->lcme_dstripe_count = comp->llc_dstripe_count;
 			ent->lcme_cstripe_count = comp->llc_cstripe_count;
+			ent->lcme_ec_version = comp->llc_ec_version;
 			ent->lcme_extent.e_start = comp->llc_extent.e_start;
 			ent->lcme_extent.e_end = comp->llc_extent.e_end;
 			ent->lcme_size = blob_size;
@@ -4092,6 +4095,7 @@ int llapi_layout_merge(struct llapi_layout **dst_layout,
 		new->llc_flags = comp->llc_flags;
 		new->llc_dstripe_count = comp->llc_dstripe_count;
 		new->llc_cstripe_count = comp->llc_cstripe_count;
+		new->llc_ec_version = comp->llc_ec_version;
 
 		/* offset mirror ids on the src layout */
 		new->llc_mirror_id = comp->llc_mirror_id + mirror_id_offset;
@@ -5941,6 +5945,16 @@ stripeset_with_data:
 	return rc;
 }
 
+/*
+ * Whether this library knows how the EC parity maps to its data.  A parity
+ * without objects gets the MDS version when it is instantiated.
+ */
+static bool llapi_ec_version_known(struct llapi_layout_comp *ec_comp)
+{
+	return !(ec_comp->llc_flags & LCME_FL_INIT) ||
+	       ec_comp->llc_ec_version <= LCME_EC_VERSION_MAX;
+}
+
 /**
  * llapi_ec_check_comp_match() - Verify an EC parity component is compatible
  * with its data component
@@ -6256,6 +6270,17 @@ int llapi_ec_resync_many_params(int fd, struct llapi_layout *layout,
 			goto out;
 		}
 
+		/* leave parity of a later EC version stale, but resync
+		 * the rest of the file
+		 */
+		if (!llapi_ec_version_known(ec_comp)) {
+			llapi_err_noerrno(LLAPI_MSG_WARN,
+			      "ec comp 0x%08x has unknown EC layout version %u, need a newer lfs to resync it",
+			      ec_comp->llc_id, ec_comp->llc_ec_version);
+			comp_array[i].lrc_synced = false;
+			continue;
+		}
+
 		/* Find the data comp that matches the same region */
 		data_comp = __llapi_layout_find_data_comp_by_parity(layout,
 								    ec_comp);
@@ -6318,15 +6343,18 @@ out:
  * For each EC parity component id in @ecs, locate the matching data component
  * in @layout, recompute the parities from the data, and compare them against
  * the on-disk parities. Returns the first failure encountered; remaining
- * components in @ecs are not checked.
+ * components in @ecs are not checked.  A parity of an EC layout version
+ * this library does not know is skipped.
  *
- * Return: 0 on success, negative errno on failure.
+ * Return: 0 on success, -EOPNOTSUPP if only a parity of an unknown version
+ * could not be verified, other negative errno on failure.
  */
 int llapi_ec_verify_comps(int fd, struct llapi_layout *layout, __u32 *ecs,
 			  int ec_count)
 {
 	struct llapi_layout_comp *data_comp;
 	struct llapi_layout_comp *ec_comp;
+	int unknown = 0;
 	int rc = 0;
 	int i;
 
@@ -6337,6 +6365,16 @@ int llapi_ec_verify_comps(int fd, struct llapi_layout *layout, __u32 *ecs,
 			llapi_error(LLAPI_MSG_ERROR, rc,
 				    "ec component is missing");
 			goto out;
+		}
+		/* verify the rest of the file, and report the parity of
+		 * a later EC version only if nothing else failed
+		 */
+		if (!llapi_ec_version_known(ec_comp)) {
+			llapi_error(LLAPI_MSG_WARN, -EOPNOTSUPP,
+				    "ec comp 0x%08x has unknown EC layout version %u, need a newer lfs to verify it",
+				    ec_comp->llc_id, ec_comp->llc_ec_version);
+			unknown = -EOPNOTSUPP;
+			continue;
 		}
 		data_comp = __llapi_layout_find_data_comp_by_parity(layout,
 								    ec_comp);
@@ -6366,6 +6404,7 @@ int llapi_ec_verify_comps(int fd, struct llapi_layout *layout, __u32 *ecs,
 		}
 	}
 
+	rc = unknown;
 out:
 	return rc;
 }

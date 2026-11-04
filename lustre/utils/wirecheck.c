@@ -954,7 +954,8 @@ check_lov_comp_md_entry_v1(void)
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_layout_gen);
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_time_and_id);
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_dstripe_count);
-	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_cstripe_count);
+	CHECK_BITFIELD(lov_comp_md_entry_v1, lcme_cstripe_count);
+	CHECK_BITFIELD(lov_comp_md_entry_v1, lcme_ec_version);
 	CHECK_MEMBER(lov_comp_md_entry_v1, lcme_compr_type);
 	CHECK_BITFIELD(lov_comp_md_entry_v1, lcme_compr_lvl);
 	CHECK_BITFIELD(lov_comp_md_entry_v1, lcme_compr_chunk_lum_bits);
@@ -973,6 +974,8 @@ check_lov_comp_md_entry_v1(void)
 	CHECK_CVALUE_X(LCME_FL_NOCOMPR);
 	CHECK_CVALUE_X(LCME_FL_IS_LINK_ID);
 	CHECK_CVALUE_X(LCME_FL_NEG);
+	CHECK_CVALUE(LCME_EC_NONE);
+	CHECK_CVALUE(LCME_EC_VERSION_1);
 }
 
 static void

@@ -23,6 +23,13 @@ each mirror and decide which one is correct and then invoke
 .B lfs mirror resync
 to repair it manually.
 .P
+The parity of an erasure coded mirror is not verified if its EC layout version
+is later than this
+.B lfs
+knows, and the command fails with
+.BR EOPNOTSUPP ,
+since it could not map the parity to its data.
+.P
 If
 .B --only
 .IR MIRROR_ID [, MIRROR_ID2 ,...]

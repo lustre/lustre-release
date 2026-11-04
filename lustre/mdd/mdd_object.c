@@ -1820,6 +1820,7 @@ static inline void mdd_lcme_clear_link_id(struct lov_comp_md_entry_v1 *entry)
 	if (!(le32_to_cpu(entry->lcme_flags) & LCME_FL_PARITY)) {
 		entry->lcme_dstripe_count = 0;
 		entry->lcme_cstripe_count = 0;
+		entry->lcme_ec_version = LCME_EC_NONE;
 	}
 }
 

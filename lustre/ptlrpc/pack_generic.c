@@ -2521,6 +2521,8 @@ void lustre_print_user_md(unsigned int lvl, struct lov_user_md *lum,
 			       ent->lcme_dstripe_count);
 			CDEBUG(lvl, "\tlcme_cstripe_count: %u\n",
 			       ent->lcme_cstripe_count);
+			CDEBUG(lvl, "\tlcme_ec_version: %u\n",
+			       ent->lcme_ec_version);
 		}
 		CDEBUG(lvl, "\tlcme_extent.e_start: %llu\n",
 		       ent->lcme_extent.e_start);

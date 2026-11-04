@@ -192,7 +192,8 @@ struct lod_layout_component {
 			__u32			 *llc_ost_indices;
 			/* EC component */
 			__u8			  llc_dstripe_count;
-			__u8			  llc_cstripe_count;
+			__u8			  llc_cstripe_count:4;
+			__u8			  llc_ec_version:4;
 		};
 		struct { /* Foreign mirror layout component */
 			__u32			  llc_length;

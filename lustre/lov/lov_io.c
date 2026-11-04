@@ -372,6 +372,11 @@ static bool lov_find_comp_with_ec(struct lov_io *lio, struct lov_object *lov,
 			if (!(lle->lle_lsme->lsme_flags & LCME_FL_PARITY))
 				continue;
 
+			/* a later server may map parity to data differently */
+			if (lle->lle_lsme->lsme_ec_version >
+			    LCME_EC_VERSION_MAX)
+				continue;
+
 			/* parity component */
 			if (lu_extent_is_overlapped(&ext, lle->lle_extent)) {
 				if (lle->lle_lsme->lsme_flags & LCME_FL_STALE) {
@@ -559,6 +564,13 @@ static loff_t lov_io_parity_eof(struct lov_object *obj, int mirror_index,
 
 		ext = &parity_lle->lle_lsme->lsme_extent;
 		if (data_size <= ext->e_start)
+			continue;
+
+		/* a later server may map parity to data differently, so
+		 * its size cannot be computed here: leave it out
+		 */
+		if (parity_lle->lle_lsme->lsme_ec_version >
+		    LCME_EC_VERSION_MAX)
 			continue;
 
 		data_lle = lov_io_find_data_comp(obj, data_lre, ext);

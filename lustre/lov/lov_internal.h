@@ -51,7 +51,14 @@ struct lov_stripe_md_entry {
 			u16	lsme_stripe_count;
 			u16	lsme_layout_gen;
 			u8	lsme_dstripe_count;
-			u8	lsme_cstripe_count;
+			u8	lsme_cstripe_count:4;
+			u8	lsme_ec_version:4;
+			/* lsme_dstripe_count of data paired only with
+			 * parity of an unknown lcme_ec_version, kept for
+			 * lov_lsm_pack() while the stripes are read as
+			 * plain RAID0 with lsme_dstripe_count 0
+			 */
+			u8	lsme_ec_unknown_dcount;
 			char	lsme_pool_name[LOV_MAXPOOLNAME + 1];
 			struct lov_oinfo	*lsme_oinfo[];
 		};

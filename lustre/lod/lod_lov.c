@@ -1038,6 +1038,17 @@ static int lod_generate_lovea_flags(const struct lu_env *env,
 
 		lcme->lcme_dstripe_count = lod_comp->llc_dstripe_count;
 		lcme->lcme_cstripe_count = lod_comp->llc_cstripe_count;
+		/* the parity names the mapping for both of the pair, and a
+		 * parity without objects will be mapped as this MDS does it
+		 */
+		if (!(lod_comp->llc_flags & LCME_FL_PARITY))
+			lcme->lcme_ec_version = LCME_EC_NONE;
+		else if (lod_comp->llc_flags & LCME_FL_INIT)
+			lcme->lcme_ec_version = lod_comp->llc_ec_version;
+		else
+			lcme->lcme_ec_version = min_t(__u8,
+						      lod_comp->llc_ec_version,
+						      LCME_EC_VERSION_MAX);
 
 		lcme->lcme_extent.e_start =
 			cpu_to_le64(lod_comp->llc_extent.e_start);
@@ -1469,6 +1480,7 @@ void lod_lovea_scrub(struct lov_comp_md_v1 *lcm, size_t size)
 			id = 0;
 			lcme->lcme_dstripe_count = 0;
 			lcme->lcme_cstripe_count = 0;
+			lcme->lcme_ec_version = LCME_EC_NONE;
 		}
 pack:
 		lcme->lcme_time_and_id =
@@ -1612,6 +1624,8 @@ int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
 				comp_v1->lcm_entries[i].lcme_dstripe_count;
 			lod_comp->llc_cstripe_count =
 				comp_v1->lcm_entries[i].lcme_cstripe_count;
+			lod_comp->llc_ec_version =
+				comp_v1->lcm_entries[i].lcme_ec_version;
 			lod_comp->llc_id = le32_to_cpu(ent->lcme_id);
 			if (lod_comp->llc_id == LCME_ID_INVAL)
 				GOTO(out, rc = -EINVAL);

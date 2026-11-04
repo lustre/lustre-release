@@ -3565,6 +3565,8 @@ int lod_use_defined_striping(const struct lu_env *env,
 				comp_v1->lcm_entries[i].lcme_dstripe_count;
 			lod_comp->llc_cstripe_count =
 				comp_v1->lcm_entries[i].lcme_cstripe_count;
+			lod_comp->llc_ec_version =
+				comp_v1->lcm_entries[i].lcme_ec_version;
 			lod_comp->llc_id = le32_to_cpu(ent->lcme_id);
 			if (lod_comp->llc_id == LCME_ID_INVAL)
 				GOTO(out, rc = -EINVAL);
@@ -3838,6 +3840,7 @@ int lod_qos_parse_config(const struct lu_env *env, struct lod_object *lo,
 
 			lod_comp->llc_dstripe_count = lcme->lcme_dstripe_count;
 			lod_comp->llc_cstripe_count = lcme->lcme_cstripe_count;
+			lod_comp->llc_ec_version = lcme->lcme_ec_version;
 		}
 
 		pool_name = NULL;
@@ -4251,6 +4254,7 @@ int lod_comp_prep_create(const struct lu_env *env, struct lod_object *lo,
 	int stripe_len;
 	int i, rc = 0;
 	bool is_parity;
+	bool is_ec;
 	struct ec_split_comp sc = {0};
 	ENTRY;
 
@@ -4284,7 +4288,17 @@ int lod_comp_prep_create(const struct lu_env *env, struct lod_object *lo,
 	 * the allocators need.
 	 */
 	is_parity = lod_comp->llc_flags & LCME_FL_PARITY;
-	if (is_parity || lod_comp->llc_dstripe_count) {
+	/*
+	 * The objects of a parity of a later EC version, e.g. given by a
+	 * layout swap or open replay, were laid out as that MDS does it,
+	 * so only declare them below.
+	 */
+	if (is_parity && lod_comp->llc_stripe &&
+	    lod_comp->llc_ec_version > LCME_EC_VERSION_MAX)
+		is_ec = false;
+	else
+		is_ec = is_parity || lod_comp->llc_dstripe_count;
+	if (is_ec) {
 		struct lod_layout_component *linked, *data, *parity;
 		__u16 data_stripe_count = lod_comp->llc_stripe_count;
 
@@ -4303,6 +4317,15 @@ int lod_comp_prep_create(const struct lu_env *env, struct lod_object *lo,
 		if (lod_comp->llc_dstripe_count == 0 ||
 		    (is_parity && lod_comp->llc_cstripe_count == 0))
 			GOTO(out, rc = -EINVAL);
+
+		/* new parity stripes use the version the user or template
+		 * asked for, or the latest one this MDS knows if none or
+		 * later, also for a layout copied from another file
+		 */
+		if (is_parity && !lod_comp->llc_stripe &&
+		    (lod_comp->llc_ec_version == LCME_EC_NONE ||
+		     lod_comp->llc_ec_version > LCME_EC_VERSION_MAX))
+			lod_comp->llc_ec_version = LCME_EC_VERSION_MAX;
 
 		linked = lod_comp_find_linked(lo, lod_comp);
 		if (linked) {

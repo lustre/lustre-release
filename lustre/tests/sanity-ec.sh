@@ -1007,6 +1007,169 @@ test_1l() {
 }
 run_test 1l "default EC layout inherited through nested dirs (complex)"
 
+test_1m() {
+	(( MDS1_VERSION > $(version_code 2.17.60) )) ||
+		skip "need MDS > 2.17.60 to check lcme_ec_version"
+	which getfattr setfattr > /dev/null ||
+		skip_env "could not find getfattr/setfattr"
+
+	enable_ec
+
+	local td=$DIR/$tdir
+	local value
+	local count
+	local bad
+	local pos
+	local i
+
+	stack_trap "rm -rf $td"
+	test_mkdir $td
+	$LFS setstripe -E 1M -c 1 -E -1 -c 2 --ec 2+1 $td ||
+		error "setstripe default --ec 2+1 on $td failed"
+	value=$(getfattr -e hex -n lustre.lov $td 2> /dev/null |
+		sed -n 's/^lustre.lov=//p')
+	[[ -n "$value" ]] || error "getfattr lustre.lov on $td failed"
+
+	# the unmodified layout is accepted
+	test_mkdir $td/good
+	setfattr -n lustre.lov -v $value $td/good ||
+		error "setfattr lustre.lov on $td/good failed"
+
+	# "0x" + 32-byte lov_comp_md_v1 header, 48-byte entries, and
+	# lcme_cstripe_count at byte 45 of each entry; the high 4 bits of
+	# that byte are lcme_ec_version.  The MDS limits version 2 from a
+	# template to the latest one it knows when it allocates the parity.
+	count=$($LFS getstripe --component-count $td)
+	(( count == 4 )) || error "$td has $count components, not 4"
+	bad=$value
+	for ((i = 0; i < count; i++)); do
+		pos=$((2 + (32 + i * 48 + 45) * 2))
+		bad=${bad:0:pos}$(printf "%02x" \
+			$((16#${bad:pos:2} & 0x0f | 0x20)))${bad:pos+2}
+	done
+	test_mkdir $td/bad
+	setfattr -n lustre.lov -v $bad $td/bad ||
+		error "setfattr lustre.lov on $td/bad failed"
+	dd if=/dev/urandom of=$td/bad/$tfile bs=1M count=2 status=none ||
+		error "write $td/bad/$tfile failed"
+	$LFS getstripe -v $td/bad/$tfile | grep "lcme_ec_version" &&
+		error "$td/bad/$tfile parity has a nonzero lcme_ec_version"
+	$LFS mirror resync $td/bad/$tfile ||
+		error "resync $td/bad/$tfile failed"
+	$LFS mirror verify $td/bad/$tfile ||
+		error "verify $td/bad/$tfile failed"
+}
+run_test 1m "MDS limits lcme_ec_version of a new parity"
+
+test_1n() {
+	(( MDS1_VERSION > $(version_code 2.17.60) )) ||
+		skip "need MDS > 2.17.60 to keep lcme_ec_version"
+	(( OSTCOUNT >= 3 )) || skip_env "needs >= 3 OSTs"
+	[[ "$mds1_FSTYPE" == ldiskfs ]] || skip_env "ldiskfs only"
+	which getfattr setfattr > /dev/null ||
+		skip_env "could not find getfattr/setfattr"
+
+	enable_ec
+
+	local tf=$DIR/$tfile
+	local mntpt=$(facet_mntpt mds1)
+	local lov=$mntpt/ROOT/$tfile
+	local value
+	local count
+	local ids
+	local sum
+	local pos
+	local i
+
+	stack_trap "rm -f $tf"
+
+	# only the first extent and its parity are instantiated
+	$LFS setstripe -E 4M -c 2 --ec 2+1 -E -1 -c 2 --ec 2+1 $tf ||
+		error "setstripe --ec 2+1 $tf failed"
+	dd if=/dev/urandom of=$tf bs=1M count=4 conv=fsync status=none ||
+		error "write $tf failed"
+	$LFS mirror resync $tf || error "resync $tf failed"
+	count=$($LFS getstripe --component-count $tf)
+	identify_ec_mirrors $tf
+	ids=($($LFS getstripe --mirror-id=$ec_parity_id $tf |
+	       awk '/lcme_id:/ { print $2 }'))
+	(( ${#ids[@]} == 2 )) || error "expected 2 parity components"
+
+	# a later MDS may have written the layout with another EC mapping:
+	# set lcme_ec_version = 2, the high 4 bits of byte 45 of each
+	# 48-byte entry after the 32-byte lov_comp_md_v1 header
+	stop mds1 || error "stop mds1 failed"
+	mount_fstype mds1 || error "mount mds1 as $mds1_FSTYPE failed"
+	value=$(do_facet mds1 getfattr -e hex -n trusted.lov $lov 2> /dev/null |
+		sed -n 's/^trusted.lov=//p')
+	for ((i = 0; i < count && ${#value} > 0; i++)); do
+		pos=$((2 + (32 + i * 48 + 45) * 2))
+		value=${value:0:pos}$(printf "%02x" \
+			$((16#${value:pos:2} & 0x0f | 0x20)))${value:pos+2}
+	done
+	[[ -n "$value" ]] &&
+		do_facet mds1 setfattr -n trusted.lov -v $value $lov
+	unmount_fstype mds1 || error "unmount mds1 failed"
+	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS || error "start mds1 failed"
+	[[ -n "$value" ]] || error "getfattr trusted.lov on $lov failed"
+	wait_recovery_complete mds1
+	# the client may still cache the layout from before the change
+	remount_client $MOUNT || error "remount $MOUNT failed"
+	enable_ec
+
+	$LFS getstripe -v -I${ids[0]} $tf |
+		grep -q "lcme_ec_version: *2 (unknown)" ||
+		error "lcme_ec_version 2 not reported for $tf"
+
+	# an in-sync file is not resynced, though its parity is not verified
+	$LFS mirror verify $tf &&
+		error "verify of unknown EC version $tf succeeded"
+	$LFS mirror resync $tf || error "resync of in-sync $tf failed"
+
+	# a copy of the layout, as tar or rsync restore it, gets new parity
+	# objects of the version this MDS knows
+	local copy=$(getfattr -e hex -n lustre.lov $tf 2> /dev/null |
+		     sed -n 's/^lustre.lov=//p')
+
+	stack_trap "rm -f $tf.copy"
+	$MCREATE $tf.copy || error "mcreate $tf.copy failed"
+	setfattr -n lustre.lov -v $copy $tf.copy ||
+		error "setfattr lustre.lov copy of $tf failed"
+	$LFS getstripe -v $tf.copy | grep "lcme_ec_version" &&
+		error "copy of $tf kept the unknown lcme_ec_version"
+	cp $tf $tf.copy || error "cp $tf $tf.copy failed"
+	$LFS mirror resync $tf.copy || error "resync of $tf.copy failed"
+	$LFS mirror verify $tf.copy || error "verify of $tf.copy failed"
+
+	# the data is read as plain RAID0, but its parity is not used
+	cancel_lru_locks osc
+	sum=$(md5sum < $tf)
+	dd if=/dev/urandom of=$tf bs=1M count=1 seek=1 conv=notrunc,fsync \
+		status=none || error "overwrite of $tf failed"
+	$LFS mirror verify $tf &&
+		error "verify of unknown EC version $tf succeeded"
+
+	# the parity of the second extent, instantiated by the resync, is
+	# laid out as this MDS does it; only the parity of the unknown
+	# version is left stale
+	dd if=/dev/urandom of=$tf bs=1M count=1 seek=5 conv=notrunc,fsync \
+		status=none || error "write of second extent of $tf failed"
+	$LFS mirror resync $tf || error "resync of $tf failed"
+	$LFS getstripe -v -I${ids[1]} $tf | grep "lcme_ec_version" &&
+		error "new parity of $tf kept lcme_ec_version"
+	$LFS getstripe -I${ids[0]} $tf | grep -q "lcme_flags:.*stale" ||
+		error "parity of unknown EC version resynced"
+	$LFS getstripe -I${ids[1]} $tf | grep -q "lcme_flags:.*stale" &&
+		error "new parity of $tf was not resynced"
+	sum=$(md5sum < $tf)
+	cancel_lru_locks osc
+	[[ "$(md5sum < $tf)" == "$sum" ]] || error "reread of $tf differs"
+	$LFS getstripe -v -I${ids[0]} $tf | grep -q "lcme_ec_version: *2" ||
+		error "lcme_ec_version of $tf changed"
+	rm -f $tf || error "unlink of unknown EC version $tf failed"
+}
+run_test 1n "do not use or rewrite parity of an unknown lcme_ec_version"
+
 test_2a() {
 	enable_ec
 	local tf=$DIR/$tfile

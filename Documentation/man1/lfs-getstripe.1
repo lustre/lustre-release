@@ -372,6 +372,12 @@ With
 only the selected component is shown: a parity component uses its
 linked data component, and a data component reverse-looks up its
 linked parity to print the same map.
+If the parity component has an EC layout version that this
+.B lfs
+does not know, no raid sets are listed, and
+.B lcme_ec_version
+is printed with
+.BR (unknown) .
 .TP
 .BR -y ", " --yaml
 Always print the layout in YAML format, rather than only using this

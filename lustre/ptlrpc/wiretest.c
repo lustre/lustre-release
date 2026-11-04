@@ -2050,10 +2050,8 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_dstripe_count));
 	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_dstripe_count) == 1, "found %lld\n",
 		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_dstripe_count));
-	LASSERTF((int)offsetof(struct lov_comp_md_entry_v1, lcme_cstripe_count) == 45, "found %lld\n",
-		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_cstripe_count));
-	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_cstripe_count) == 1, "found %lld\n",
-		 (long long)(int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_cstripe_count));
+	/* lov_comp_md_entry_v1.lcme_cstripe_count is a bitfield and cannot be checked */
+	/* lov_comp_md_entry_v1.lcme_ec_version is a bitfield and cannot be checked */
 	LASSERTF((int)offsetof(struct lov_comp_md_entry_v1, lcme_compr_type) == 46, "found %lld\n",
 		 (long long)(int)offsetof(struct lov_comp_md_entry_v1, lcme_compr_type));
 	LASSERTF((int)sizeof(((struct lov_comp_md_entry_v1 *)0)->lcme_compr_type) == 1, "found %lld\n",
@@ -2074,6 +2072,8 @@ void lustre_assert_wire_constants(void)
 	BUILD_BUG_ON(LCME_FL_NOCOMPR != 0x00000400);
 	BUILD_BUG_ON(LCME_FL_IS_LINK_ID != 0x40000000);
 	BUILD_BUG_ON(LCME_FL_NEG != 0x80000000);
+	BUILD_BUG_ON(LCME_EC_NONE != 0);
+	BUILD_BUG_ON(LCME_EC_VERSION_1 != 1);
 
 	/* Checks for struct lov_comp_md_v1 */
 	LASSERTF((int)sizeof(struct lov_comp_md_v1) == 32, "found %lld\n",

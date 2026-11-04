@@ -2521,6 +2521,24 @@ static void dump_comp_ec_raidsets(struct find_param *param,
 	if (k == 0 || p == 0)
 		return;
 
+	/* a later MDS may split the raid sets differently */
+	if (parity_entry->lcme_ec_version > LCME_EC_VERSION_MAX) {
+		llapi_printf(LLAPI_MSG_NORMAL, "%s", *separator);
+		llapi_printf(LLAPI_MSG_NORMAL,
+			     "%4slcme_ec:             %u+%u\n",
+			     " ", k, p);
+		llapi_printf(LLAPI_MSG_NORMAL,
+			     "%4slcme_ec_version:     %u (unknown)\n",
+			     " ", parity_entry->lcme_ec_version);
+		llapi_printf(LLAPI_MSG_NORMAL,
+			     "%4slcme_ec_raidset_count: %d\n",
+			     " ", 0);
+		llapi_printf(LLAPI_MSG_NORMAL,
+			     "%4slcme_ec_raidsets: []\n", " ");
+		*separator = "";
+		return;
+	}
+
 	/* Later PFL components are templates until first write; k+p is on
 	 * the parity entry, but raidsets need instantiated data stripes.
 	 * Keep lcme_ec_raidsets a YAML sequence (not a string / null).

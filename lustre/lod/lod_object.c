@@ -2958,6 +2958,8 @@ static int lod_declare_layout_add(const struct lu_env *env,
 			comp_v1->lcm_entries[i].lcme_dstripe_count;
 		lod_comp->llc_cstripe_count =
 			comp_v1->lcm_entries[i].lcme_cstripe_count;
+		lod_comp->llc_ec_version =
+			comp_v1->lcm_entries[i].lcme_ec_version;
 
 		lod_comp->llc_stripe_size = v1->lmm_stripe_size;
 		lod_comp->llc_stripe_count = v1->lmm_stripe_count;
@@ -5650,6 +5652,7 @@ static int lod_get_default_lov_striping(const struct lu_env *env,
 			}
 			llc->llc_dstripe_count = lcme->lcme_dstripe_count;
 			llc->llc_cstripe_count = lcme->lcme_cstripe_count;
+			llc->llc_ec_version = lcme->lcme_ec_version;
 		}
 
 		CDEBUG(D_LAYOUT,
