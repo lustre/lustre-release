@@ -19,6 +19,7 @@
 #include <linux/delay.h>
 #include <linux/kobject.h>
 #include <linux/string.h>
+#include <linux/umh.h>
 
 #ifdef CONFIG_LUSTRE_FS_SERVER
 #include <cfs_hash.h>

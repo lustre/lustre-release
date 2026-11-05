@@ -21,6 +21,7 @@
 #include <linux/stacktrace.h>
 #include <linux/utsname.h>
 #include <linux/delay.h>
+#include <linux/umh.h>
 #ifdef HAVE_PANIC_NOTIFIER_H
 #include <linux/panic_notifier.h>
 #endif

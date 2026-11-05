@@ -19,6 +19,7 @@
 #include <linux/uidgid.h>
 #include <linux/crypto.h>
 #include <linux/key.h>
+#include <linux/umh.h>
 
 #include <linux/lnet/lnet_crypto.h>
 #include <obd.h>

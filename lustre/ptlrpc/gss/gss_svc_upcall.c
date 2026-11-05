@@ -58,6 +58,7 @@
 #include <linux/binfmts.h>
 #include <net/sock.h>
 #include <linux/un.h>
+#include <linux/umh.h>
 
 #include <linux/hash.h>
 

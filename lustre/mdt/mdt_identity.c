@@ -16,6 +16,8 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <linux/umh.h>
+
 #include "mdt_internal.h"
 
 static void mdt_identity_entry_init(struct upcall_cache_entry *entry,

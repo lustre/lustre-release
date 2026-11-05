@@ -49,6 +49,7 @@
 #include <linux/random.h>
 #include <linux/user_namespace.h>
 #include <linux/uidgid.h>
+#include <linux/umh.h>
 #include <obd.h>
 #include <obd_class.h>
 #include <lustre_net.h>
