@@ -3419,6 +3419,8 @@ test_147() {
 
 
 	ost_evict_client
+	# statfs is served from cache for OBD_STATFS_CACHE_SECONDS
+	sleep 2
 	# force reconnect
 	$LFS df $MOUNT > /dev/null 2>&1 &
 	sleep $((obd_timeout * 3 / 4))
