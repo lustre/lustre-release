@@ -2542,7 +2542,7 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 	/* do not rebalance quota if the caller needs to release memory
 	 * otherwise qsd_refresh_usage() may went into a new ldiskfs
 	 * transaction and risk to deadlock - LU-12178 */
-	if (current->flags & (PF_MEMALLOC | PF_KSWAPD))
+	if (current->flags & PF_MEMALLOC)
 		return;
 
 	if (obj->oo_destroyed) {
