@@ -105,6 +105,7 @@ if NO_STRINGOP_OVERFLOW
 badarea_io_CFLAGS=-Wno-stringop-overflow
 endif # NO_STRINGOP_OVERFLOW
 
+mmap_sanity_SOURCES = mmap_sanity.c llapi_test_utils.c llapi_test_utils.h
 mmap_sanity_LDADD = $(LIBLUSTREAPI) $(PTHREAD_LIBS)
 multiop_LDADD = $(LIBLUSTREAPI) $(PTHREAD_LIBS)
 llapi_layout_test_SOURCES = llapi_layout_test.c llapi_test_utils.c llapi_test_utils.h

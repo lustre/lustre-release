@@ -25,6 +25,7 @@
 #include <errno.h>
 
 #include <libcfs/util/param.h>
+#include "llapi_test_utils.h"
 
 char *dir = NULL, *dir2 = NULL;
 long page_size;
@@ -1056,96 +1057,94 @@ static int remote_tst(int tc, char *mnt)
 	return rc;
 }
 
-struct test_case {
-	int tc;                     /* test case number */
-	char *desc;                 /* test description */
-	int (*test_fn)(char *mnt);  /* test function */
-	int node_cnt;               /* node count */
-	int skipped;                /* skipped by caller */
-};
+#define MMAP_TEST_WRAPPER(n)			\
+static void test##n(void)			\
+{						\
+	int rc = mmap_tst##n(dir);		\
+						\
+	if (rc)					\
+		exit(EXIT_FAILURE);		\
+}
 
-struct test_case tests[] = {
+MMAP_TEST_WRAPPER(1)
+MMAP_TEST_WRAPPER(2)
+MMAP_TEST_WRAPPER(3)
+MMAP_TEST_WRAPPER(4)
+MMAP_TEST_WRAPPER(5)
+MMAP_TEST_WRAPPER(6)
+MMAP_TEST_WRAPPER(7)
+MMAP_TEST_WRAPPER(8)
+MMAP_TEST_WRAPPER(9)
+MMAP_TEST_WRAPPER(10)
+MMAP_TEST_WRAPPER(11)
+MMAP_TEST_WRAPPER(12)
+
+static struct test_tbl_entry test_tbl[] = {
 	{
-		.tc		= 1,
-		.desc		= "mmap test1: basic mmap operation",
-		.test_fn	= mmap_tst1,
-		.node_cnt	= 1
+		.tte_fn = test1,
+		.tte_desc = "mmap test1: basic mmap operation",
+		.tte_num = 1,
 	},
 	{
-		.tc		= 2,
-		.desc		= "mmap test2: MAP_PRIVATE not write back",
-		.test_fn	= mmap_tst2,
-		.node_cnt	= 1
+		.tte_fn = test2,
+		.tte_desc = "mmap test2: MAP_PRIVATE not write back",
+		.tte_num = 2,
 	},
 	{
-		.tc		= 3,
-		.desc		= "mmap test3: concurrent mmap ops on two nodes",
-		.test_fn	= mmap_tst3,
-		.node_cnt	= 2
+		.tte_fn = test3,
+		.tte_desc = "mmap test3: concurrent mmap ops on two nodes",
+		.tte_num = 3,
 	},
 	{
-		.tc		= 4,
-		.desc		= "mmap test4: c1 write to f1 from mmapped f2, c2 write to f1 from mmapped f1",
-		.test_fn	= mmap_tst4,
-		.node_cnt	= 2
+		.tte_fn = test4,
+		.tte_desc = "mmap test4: cross-mount concurrent mmap writes",
+		.tte_num = 4,
 	},
 	{
-		.tc		= 5,
-		.desc		= "mmap test5: read/write file to/from the buffer which mmapped to just this file",
-		.test_fn	= mmap_tst5,
-		.node_cnt	= 1
+		.tte_fn = test5,
+		.tte_desc = "mmap test5: read/write file to/from mmapped buffer",
+		.tte_num = 5,
 	},
 	{
-		.tc		= 6,
-		.desc		= "mmap test6: check mmap write/read content on two nodes",
-		.test_fn	= mmap_tst6,
-		.node_cnt	= 2
+		.tte_fn = test6,
+		.tte_desc = "mmap test6: check mmap write/read content on two nodes",
+		.tte_num = 6,
 	},
 	{
-		.tc		= 7,
-		.desc		= "mmap test7: file i/o with an unmapped buffer",
-		.test_fn	= mmap_tst7,
-		.node_cnt	= 1
+		.tte_fn = test7,
+		.tte_desc = "mmap test7: file i/o with an unmapped buffer",
+		.tte_num = 7,
 	},
 	{
-		.tc		= 8,
-		.desc		= "mmap test8: SIGBUS for beyond file size",
-		.test_fn	= mmap_tst8,
-		.node_cnt	= 1
+		.tte_fn = test8,
+		.tte_desc = "mmap test8: SIGBUS for beyond file size",
+		.tte_num = 8,
 	},
 	{
-		.tc		= 9,
-		.desc		= "mmap test9: SIGBUS for negative file offset",
-		.test_fn	= mmap_tst9,
-		.node_cnt	= 1
+		.tte_fn = test9,
+		.tte_desc = "mmap test9: SIGBUS for negative file offset",
+		.tte_num = 9,
 	},
 	{
-		.tc		= 10,
-		.desc		= "mmap test10: multi-thread mmap access",
-		.test_fn	= mmap_tst10,
-		.node_cnt	= 1
+		.tte_fn = test10,
+		.tte_desc = "mmap test10: multi-thread mmap access",
+		.tte_num = 10,
 	},
 	{
-		.tc		= 11,
-		.desc		= "mmap test11: multi-thread shared mmap",
-		.test_fn	= mmap_tst11,
-		.node_cnt	= 1
+		.tte_fn = test11,
+		.tte_desc = "mmap test11: multi-thread shared mmap",
+		.tte_num = 11,
 	},
 	{
-		.tc		= 12,
-		.desc		= "mmap test10: mtime not change for readonly mmap access",
-		.test_fn	= mmap_tst12,
-		.node_cnt	= 1
+		.tte_fn = test12,
+		.tte_desc = "mmap test12: mtime not change for readonly mmap access",
+		.tte_num = 12,
 	},
-	{
-		.tc		= 0
-	}
+	TEST_REGISTER_END
 };
 
 int main(int argc, char **argv)
 {
-	struct test_case *test;
-	int nr_cases = sizeof(tests) / sizeof(*test);
 	int c, rc = 0;
 
 	while ((c = getopt(argc, argv, "d:m:e:")) != -1) {
@@ -1156,16 +1155,9 @@ int main(int argc, char **argv)
 		case 'm':
 			dir2 = optarg;
 			break;
-		case 'e': {
-			char *endptr = NULL;
-
-			rc = strtol(optarg, &endptr, 10);
-			if (endptr && *endptr != '\0')
-				usage();
-			if (rc > 0 && rc < nr_cases)
-				tests[rc - 1].skipped = 1;
+		case 'e':
+			set_tests_to_skip(optarg, test_tbl);
 			break;
-		}
 		default:
 			usage();
 			break;
@@ -1175,33 +1167,19 @@ int main(int argc, char **argv)
 	if (!dir)
 		usage();
 
+	if (!dir2) {
+		test_tbl[2].tte_skip = true;
+		test_tbl[3].tte_skip = true;
+		test_tbl[5].tte_skip = true;
+	}
+
 	if (mmap_initialize(argv[0]) != 0) {
 		fprintf(stderr, "mmap_initialize failed!\n");
 		return -EINVAL;
 	}
 
-	rc = 0;
-	for (test = tests; test->tc; test++) {
-		double duration = 0.0;
-		char *rs = "SKIPPED";
-
-		if (!test->skipped && (test->node_cnt == 1 || dir2)) {
-			struct timeval start, end;
-
-			gettimeofday(&start, NULL);
-			rc = test->test_fn(dir);
-			gettimeofday(&end, NULL);
-
-			duration = (double)(end.tv_sec - start.tv_sec) +
-				(double)(end.tv_usec - start.tv_usec) / 1000000;
-			rs = rc ? "FAIL" : "PASS";
-		}
-
-		fprintf(stderr, "%s (%s, %.5gs)\n", test->desc, rs, duration);
-		if (rc)
-			break;
-	}
-
+	rc = run_tests(dir, test_tbl);
 	mmap_finalize();
-	return -rc;
+
+	return rc;
 }
