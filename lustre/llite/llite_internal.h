@@ -928,6 +928,8 @@ struct ll_sb_info {
 	atomic_t		  ll_sa_wrong;   /* sa stopped low hit ratio */
 	atomic_t		  ll_sa_running; /* running sa thread count */
 	atomic_t		  ll_sa_refcnt;	 /* inuse reference count */
+	spinlock_t		  ll_sa_lock;	 /* protects ll_sa_list */
+	struct list_head	  ll_sa_list;	 /* running sa threads' sai */
 	atomic_t		  ll_agl_total;  /* AGL thread started count */
 	atomic_t		  ll_sa_hit_total;  /* total hit count */
 	atomic_t		  ll_sa_miss_total; /* total miss count */
@@ -1801,6 +1803,7 @@ void ll_ra_stats_inc(struct inode *inode, enum ra_stat which);
 struct ll_statahead_info {
 	pid_t			sai_pid;
 	struct list_head	sai_item;
+	struct list_head	sai_sbi_item;	/* on ll_sa_list */
 	struct dentry		*sai_dentry;
 	atomic_t		sai_refcount;   /* On access, hold refcount */
 	atomic_t		sai_inuse_count;/* inuse entry count */
@@ -1871,6 +1874,7 @@ int ll_revalidate_statahead(struct inode *dir, struct dentry **dentry,
 int ll_start_statahead(struct inode *dir, struct dentry *dentry, bool agl);
 void ll_authorize_statahead(struct inode *dir, void *key);
 void ll_deauthorize_statahead(struct inode *dir, void *key);
+void ll_statahead_stop_all(struct ll_sb_info *sbi);
 void ll_statahead_enter(struct inode *dir, struct dentry *dentry);
 
 /* glimpse.c */

@@ -188,6 +188,8 @@ static struct ll_sb_info *ll_init_sbi(struct lustre_sb_info *lsi)
 	atomic_set(&sbi->ll_sa_wrong, 0);
 	atomic_set(&sbi->ll_sa_running, 0);
 	atomic_set(&sbi->ll_sa_refcnt, 0);
+	spin_lock_init(&sbi->ll_sa_lock);
+	INIT_LIST_HEAD(&sbi->ll_sa_list);
 	atomic_set(&sbi->ll_agl_total, 0);
 	atomic_set(&sbi->ll_sa_hit_total, 0);
 	atomic_set(&sbi->ll_sa_miss_total, 0);
@@ -1123,6 +1125,7 @@ void ll_kill_super(struct super_block *sb)
 		sb->s_dev = sbi->ll_sdev_orig;
 
 		/* wait running statahead threads to quit */
+		ll_statahead_stop_all(sbi);
 		while (atomic_read(&sbi->ll_sa_running) > 0 ||
 		       atomic_read(&sbi->ll_sa_refcnt) > 0)
 			schedule_timeout_uninterruptible(

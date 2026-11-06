@@ -371,7 +371,7 @@ static void sa_put(struct inode *dir, struct ll_statahead_info *sai,
 			if (!is_omitted_entry(sai, tmp->se_index))
 				break;
 
-			/* ll_sa_lock is dropped by sa_kill(), restart list */
+			/* lli_sa_lock is dropped by sa_kill(), restart list */
 			sa_kill(sai, tmp, true, false);
 		}
 	}
@@ -614,6 +614,7 @@ static struct ll_statahead_info *ll_sai_alloc(struct dentry *dentry)
 	init_waitqueue_head(&sai->sai_waitq);
 
 	INIT_LIST_HEAD(&sai->sai_item);
+	INIT_LIST_HEAD(&sai->sai_sbi_item);
 	INIT_LIST_HEAD(&sai->sai_entries);
 	INIT_LIST_HEAD(&sai->sai_agls);
 
@@ -1627,6 +1628,10 @@ out_stop_agl:
 	spin_unlock(&lli->lli_sa_lock);
 	wake_up(&sai->sai_waitq);
 
+	spin_lock(&sbi->ll_sa_lock);
+	list_del_init(&sai->sai_sbi_item);
+	spin_unlock(&sbi->ll_sa_lock);
+
 	atomic_add(sai->sai_hit, &sbi->ll_sa_hit_total);
 	atomic_add(sai->sai_miss, &sbi->ll_sa_miss_total);
 
@@ -1663,6 +1668,42 @@ out_stop_agl:
 		ll_sax_put(ctx);
 
 	return rc;
+}
+
+static void ll_statahead_add(struct ll_sb_info *sbi,
+			     struct ll_statahead_info *sai)
+{
+	spin_lock(&sbi->ll_sa_lock);
+	list_add_tail(&sai->sai_sbi_item, &sbi->ll_sa_list);
+	spin_unlock(&sbi->ll_sa_lock);
+}
+
+/**
+ * ll_statahead_stop_all() - stop every statahead thread of a mount
+ * @sbi: super block info of the mount being unmounted
+ *
+ * Wake each thread so it exits rather than sleep out statahead_timeout
+ * waiting for a stat() that will not come.
+ */
+void ll_statahead_stop_all(struct ll_sb_info *sbi)
+{
+	struct ll_statahead_info *sai;
+
+	spin_lock(&sbi->ll_sa_lock);
+	list_for_each_entry(sai, &sbi->ll_sa_list, sai_sbi_item) {
+		struct ll_inode_info *lli = ll_i2info(sai->sai_dentry->d_inode);
+
+		spin_lock(&lli->lli_sa_lock);
+		if (sai->sai_task) {
+			struct task_struct *task = sai->sai_task;
+
+			/* matches smp_load_acquire() in the thread */
+			smp_store_release(&sai->sai_task, NULL);
+			wake_up_process(task);
+		}
+		spin_unlock(&lli->lli_sa_lock);
+	}
+	spin_unlock(&sbi->ll_sa_lock);
 }
 
 /* authorize opened dir handle @key to statahead */
@@ -2491,6 +2532,7 @@ static int start_statahead_thread(struct inode *dir, struct dentry *dentry,
 	else if (lli->lli_sa_pattern & LSA_PATTERN_FNAME)
 		atomic_inc(&sbi->ll_sa_fname_total);
 
+	ll_statahead_add(sbi, sai);
 	sai->sai_task = task;
 	wake_up_process(task);
 	/*
@@ -2756,6 +2798,7 @@ int ll_ioctl_ahead(struct file *file, struct llapi_lu_ladvise2 *ladvise)
 		ll_start_agl(dentry, sai);
 
 	atomic_inc(&sbi->ll_sa_total);
+	ll_statahead_add(sbi, sai);
 	sai->sai_task = task;
 	wake_up_process(task);
 
