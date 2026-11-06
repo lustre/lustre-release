@@ -593,7 +593,7 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 			GOTO(out_uclose, rc);
 	}
 
-	/* find and clear any orphan changelog records (1st record index <
+	/* find and clear any orphan changelog records (1st record index <=
 	 * smallest of all users current index), likely to come from an
 	 * interrupted manual or GC-thread purge, as its user record had
 	 * been deleted first
@@ -618,7 +618,11 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 		       obd->obd_name, rc);
 		GOTO(out_uclose, rc);
 	}
-	if (unlikely(clod.clod_index < user_orphan.clod_index)) {
+	/* @endrec is cleared inclusively, so a first record at @endrec is
+	 * an orphan too
+	 */
+	if (unlikely(clod.clod_index != -1 &&
+		     clod.clod_index <= user_orphan.clod_index)) {
 		struct changelog_cancel_cookie cl_cookie = {
 			.endrec = user_orphan.clod_index,
 			.mdd = mdd,
