@@ -181,10 +181,14 @@ static int mgc_target_register(struct obd_export *exp,
 	size_t bufsize;
 	int rc;
 	bool nidlist, large_nids;
+	bool must_reach = mti->mti_flags & (LDD_F_UPDATE | LDD_F_NEED_INDEX);
 
 	ENTRY;
 
 	server_mti_print("mgc_target_register: req", mti);
+
+	if (!must_reach && mgc_mgs_unreachable(exp->exp_obd))
+		RETURN(-ETIMEDOUT);
 
 	nidlist = exp_connect_flags(exp) & OBD_CONNECT_MGS_NIDLIST;
 	large_nids = target_supports_large_nid(mti);
@@ -285,10 +289,12 @@ static int mgc_target_register(struct obd_export *exp,
 	 * another MGS (or try again with the same MGS) for the target (server)
 	 * will fail and exit if the request expired due to delay limit.
 	 */
-	if (mti->mti_flags & (LDD_F_UPDATE | LDD_F_NEED_INDEX))
+	if (must_reach)
 		req->rq_delay_limit_ns = ktime_set(MGC_TARGET_REG_LIMIT_MAX, 0);
 
 	rc = ptlrpc_queue_wait(req);
+	if (rc == -ETIMEDOUT)
+		mgc_mgs_note_unreachable(exp->exp_obd);
 	if (ptlrpc_client_replied(req)) {
 		reply_mti = req_capsule_server_get(&req->rq_pill,
 						   &RMF_MGS_TARGET_INFO);

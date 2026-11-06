@@ -40,6 +40,26 @@ int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
 
 extern unsigned int mgc_requeue_timeout_min;
 
+/* A target that could not reach the MGS starts from its local logs, and
+ * waits for the MGS once rather than once for every request.
+ */
+static inline bool mgc_mgs_unreachable(struct obd_device *mgc)
+{
+	return READ_ONCE(mgc->u.cli.cl_mgc_unreachable) &&
+	       READ_ONCE(mgc->u.cli.cl_import->imp_state) != LUSTRE_IMP_FULL;
+}
+
+static inline void mgc_mgs_note_unreachable(struct obd_device *mgc)
+{
+	struct obd_import *imp = mgc->u.cli.cl_import;
+
+	/* IMP_EVENT_ACTIVE clears the flag after the import is FULL */
+	spin_lock(&imp->imp_lock);
+	if (imp->imp_state != LUSTRE_IMP_FULL)
+		WRITE_ONCE(mgc->u.cli.cl_mgc_unreachable, true);
+	spin_unlock(&imp->imp_lock);
+}
+
 static inline bool cld_is_sptlrpc(struct config_llog_data *cld)
 {
 	return cld->cld_type == MGS_CFG_T_SPTLRPC;

@@ -365,6 +365,8 @@ struct client_obd {
 	atomic_t		cl_mgc_refcount;
 	/* number of targets currently processing their config logs */
 	atomic_t		cl_mgc_tgt_processing;
+	/* a target's request timed out before the MGS was reached */
+	bool			cl_mgc_unreachable;
 
 	/* in-flight control list and total RPCs counter */
 	struct list_head	cl_flight_waiters;

@@ -1106,6 +1106,8 @@ int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
 	};
 	struct ptlrpc_request *req;
 	int short_limit = cld_is_sptlrpc(cld);
+	struct client_obd *cli;
+	bool tgt_processing;
 	u64 delay_limit;
 	int rc;
 
@@ -1113,6 +1115,13 @@ int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
 
 	if (!exp)
 		RETURN(-EBADR);
+
+	cli = &exp->exp_obd->u.cli;
+	tgt_processing = atomic_read(&cli->cl_mgc_tgt_processing);
+	if (tgt_processing && mgc_mgs_unreachable(exp->exp_obd) &&
+	    !(cld->cld_cfg.cfg_sb &&
+	      (s2lsi(cld->cld_cfg.cfg_sb)->lsi_flags & LDD_F_NO_LOCAL_LOGS)))
+		RETURN(-ETIMEDOUT);
 
 	CDEBUG(D_MGC, "Enqueue for %s (res %#llx)\n", cld->cld_logname,
 	       cld->cld_resid.name[0]);
@@ -1130,7 +1139,7 @@ int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
 	ptlrpc_request_set_replen(req);
 
 	/* processing target config logs */
-	if (atomic_read(&exp->exp_obd->u.cli.cl_mgc_tgt_processing))
+	if (tgt_processing)
 		short_limit = 1;
 
 	/* Limit how long we will wait for the enqueue to complete */
@@ -1138,6 +1147,8 @@ int mgc_enqueue(struct obd_export *exp, enum ldlm_type type,
 	req->rq_delay_limit_ns = ktime_set(delay_limit, 0);
 	rc = ldlm_cli_enqueue(exp, &req, &einfo, &cld->cld_resid, NULL, flags,
 			      NULL, 0, LVB_T_NONE, lockh, 0);
+	if (tgt_processing && rc == -ETIMEDOUT)
+		mgc_mgs_note_unreachable(exp->exp_obd);
 	/* A failed enqueue should still call the mgc_blocking_ast,
 	 * where it will be requeued if needed ("grant failed").
 	 */
@@ -1307,6 +1318,7 @@ static int mgc_import_event(struct obd_device *obd,
 		CDEBUG(D_INFO, "%s: Reactivating import\n", obd->obd_name);
 		/* Clearing OBDF_NO_RECOV allows us to continue pinging */
 		clear_bit(OBDF_NO_RECOV, obd->obd_flags);
+		WRITE_ONCE(obd->u.cli.cl_mgc_unreachable, false);
 		mgc_notify_active(obd);
 		if (OCD_HAS_FLAG(&imp->imp_connect_data, IMP_RECOV))
 			ptlrpc_pinger_ir_up();
@@ -1961,6 +1973,8 @@ restart:
 			wait_event_idle_timeout(imp->imp_recovery_waitq,
 						!mgc_import_in_recovery(imp),
 						timeout);
+			if (atomic_read(&mgc->u.cli.cl_mgc_tgt_processing))
+				mgc_mgs_note_unreachable(mgc);
 
 			if (imp->imp_state == LUSTRE_IMP_FULL) {
 				retry = true;
