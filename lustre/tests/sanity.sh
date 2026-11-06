@@ -10651,7 +10651,8 @@ test_56xk() {
 
 	stack_trap "rm -f $file1"
 	$LFS setstripe -c 1 $file1
-	dd if=/dev/zero of=$file1 bs=1M count=$size_mb ||
+	# zeros can become holes (ZFS compression) that resync skips
+	dd if=/dev/urandom of=$file1 bs=1M count=$size_mb ||
 		error "error creating $file1"
 	$LFS mirror extend -N $file1 || error "can't mirror"
 	dd if=/dev/zero of=$file1 bs=4k count=1 conv=notrunc ||
