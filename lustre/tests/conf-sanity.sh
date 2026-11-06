@@ -12365,40 +12365,44 @@ test_153b() {
 	local IPv4_3="162.32.0.100"
 
 	local mgslist
+	local mgs=$mgs_HOST
+
+	# hostnames resolve to IPv4 only, so use the NID on an IPv6 network
+	[[ $MGSNID == *:* ]] && mgs=$MGSNID
 
 	umount $MOUNT
 
-	mgslist="$IPv6_1:$mgs_HOST"
+	mgslist="$IPv6_1:$mgs"
 	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
 		error "mount failed with $mgslist:/$FSNAME $MOUNT"
 	umount $MOUNT
 
-	mgslist="$mgs_HOST:$mgs_HOST:$mgs_HOST"
+	mgslist="$mgs:$mgs:$mgs"
 	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
 		error "mount failed with $mgslist:/$FSNAME $MOUNT"
 	umount $MOUNT
 
-	mgslist="$mgs_HOST:$IPv6_1"
+	mgslist="$mgs:$IPv6_1"
 	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
 		error "mount failed with $mgslist:/$FSNAME $MOUNT"
 	umount $MOUNT
 
-	mgslist="$mgs_HOST:$IPv4_1"
+	mgslist="$mgs:$IPv4_1"
 	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
 		error "mount failed with $mgslist:/$FSNAME $MOUNT"
 	umount $MOUNT
 
-	mgslist="$IPv4_1:$mgs_HOST"
+	mgslist="$IPv4_1:$mgs"
 	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
 		error "mount failed with $mgslist:/$FSNAME $MOUNT"
 	umount $MOUNT
 
-	mgslist="$IPv4_2:$IPv4_1:$mgs_HOST"
+	mgslist="$IPv4_2:$IPv4_1:$mgs"
 	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
 		error "mount failed with $mgslist:/$FSNAME $MOUNT"
 	umount $MOUNT
 
-	mgslist="$IPv6_1,$IPv4_2,$IPv4_1:$mgs_HOST"
+	mgslist="$IPv6_1,$IPv4_2,$IPv4_1:$mgs"
 	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
 		error "mount failed with $mgslist:/$FSNAME $MOUNT"
 	umount $MOUNT
@@ -12408,12 +12412,12 @@ test_153b() {
 :$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1\
 :$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1\
 :$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1:$IPv4_1\
-:$IPv4_1:$IPv4_1:$mgs_HOST"
+:$IPv4_1:$IPv4_1:$mgs"
 	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
 		error "mount failed with $mgslist:/$FSNAME $MOUNT"
 	umount $MOUNT
 
-	mgslist="$IPv6_1,$IPv4_2,$IPv4_1:$IPv6_3,$IPv4_3,$IPv6_2:$mgs_HOST"
+	mgslist="$IPv6_1,$IPv4_2,$IPv4_1:$IPv6_3,$IPv4_3,$IPv6_2:$mgs"
 	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
 		error "mount failed with $mgslist:/$FSNAME $MOUNT"
 	umount $MOUNT
@@ -12422,7 +12426,7 @@ test_153b() {
 ,$IPv6_1,$IPv4_2,$IPv4_1:$IPv6_3,$IPv4_3:$IPv6_2,$IPv6_1,$IPv4_2\
 ,$IPv4_1:$IPv6_3,$IPv4_3:$IPv6_2,$IPv6_1,$IPv4_2,$IPv4_1:$IPv6_3\
 ,$IPv4_3:$IPv6_2,$IPv6_1,$IPv4_2,$IPv4_1:$IPv6_3,$IPv4_3:$IPv6_2\
-:$mgs_HOST"
+:$mgs"
 	mount -t lustre $mgslist:/$FSNAME $MOUNT ||
 		error "mount failed with $mgslist:/$FSNAME $MOUNT"
 	umount $MOUNT
