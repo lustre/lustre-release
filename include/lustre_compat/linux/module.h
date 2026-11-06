@@ -9,6 +9,14 @@
 
 #include_next <linux/module.h>
 
+#ifdef CONFIG_LUSTRE_FS_SERVER
+#define SERVER_ONLY_EXPORT_SYMBOL(symbol)       EXPORT_SYMBOL(symbol)
+#define SERVER_ONLY
+#else
+#define SERVER_ONLY static
+#define SERVER_ONLY_EXPORT_SYMBOL(symbol)
+#endif
+
 int cfs_arch_init(void);
 void cfs_arch_exit(void);
 

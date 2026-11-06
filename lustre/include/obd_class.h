@@ -17,6 +17,7 @@
 #define __CLASS_OBD_H
 
 #include <linux/kobject.h>
+#include <lustre_compat/linux/module.h>
 #include <obd_support.h>
 #include <lustre_import.h>
 #include <lustre_net.h>
@@ -28,14 +29,6 @@
 #include <lu_target.h>
 #include <obd_target.h>
 #include <dt_object.h>
-#endif
-
-#ifdef CONFIG_LUSTRE_FS_SERVER
-#define SERVER_ONLY_EXPORT_SYMBOL(symbol)	EXPORT_SYMBOL(symbol)
-#define SERVER_ONLY
-#else
-#define SERVER_ONLY static
-#define SERVER_ONLY_EXPORT_SYMBOL(symbol)
 #endif
 
 #define OBD_STATFS_NODELAY	0x0001	/* requests should be send without delay

@@ -490,6 +490,8 @@ AS_IF([test x$enable_server = xyes], [
 	AS_IF([test "x$enable_modules" = xyes], [
 		AC_DEFINE(CONFIG_LUSTRE_FS_SERVER, 1,
 			  [build lustre server kernel support])
+		AC_DEFINE(CONFIG_LUSTRE_FS_SERVER_MODULE, 1,
+			  [build lustre server kernel module support])
 	])
 	AC_DEFINE(HAVE_SERVER_SUPPORT, 1, [support server])
 	AC_SUBST(ENABLE_SERVER, yes)

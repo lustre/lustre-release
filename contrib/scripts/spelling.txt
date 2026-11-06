@@ -39,8 +39,11 @@ from_timer||timer_container_of
 ft_nob||ft_bytes
 [^_]get_seconds||ktime_get_real_seconds
 GPL[vV]3||Using GPLv3 is usually wrong
-HAVE_SERVER_SUPPORT||CONFIG_LUSTRE_FS_SERVER
 HZ||cfs_time_seconds
+ifdef HAVE_SERVER_SUPPORT||if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
+ifdef CONFIG_LUSTRE_FS_SERVER||if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
+ifndef HAVE_SERVER_SUPPORT||if !IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
+ifndef CONFIG_LUSTRE_FS_SERVER||if !IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 imp_connect_tried||IMPF_CONNECT_TRIED
 imp_connected||IMPF_CONNECTED
 imp_deactive||IMPF_DEACTIVE
