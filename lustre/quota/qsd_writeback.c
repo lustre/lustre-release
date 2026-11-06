@@ -420,10 +420,13 @@ void qsd_adjust_schedule(struct lquota_entry *lqe, bool defer, bool cancel)
 	lqe_getref(lqe);
 	spin_lock(&qsd->qsd_adjust_lock);
 
-	/* the lqe is being queued for the per-ID lock cancel, we should
-	 * cancel the lock cancel and re-add it for quota adjust */
+	/* an lqe queued for the per-ID lock cancel, or for a deferred
+	 * adjust when an immediate one is wanted, is requeued below
+	 */
 	if (!list_empty(&lqe->lqe_link) &&
-	    lqe->lqe_adjust_time == 0) {
+	    (lqe->lqe_adjust_time == 0 ||
+	     (!defer && !cancel &&
+	      lqe->lqe_adjust_time > ktime_get_seconds()))) {
 		list_del_init(&lqe->lqe_link);
 		lqe_putref(lqe);
 	}

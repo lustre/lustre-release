@@ -8525,6 +8525,33 @@ test_98() {
 }
 run_test 98 "Verify MDT retry on -EDQUOT during mkdir"
 
+test_100() {
+	local limit=20 # MB
+	local testfile=$DIR/$tdir/$tfile
+
+	setup_quota_test || error "setup quota failed with $?"
+	set_ost_qtype $QTYPE || error "enable ost quota failed"
+
+	$LFS setstripe -c 1 -i 0 $testfile || error "setstripe $testfile failed"
+	chown $TSTUSR.$TSTUSR $testfile || error "chown $testfile failed"
+	$LFS setquota -u $TSTUSR -b 0 -B ${limit}M $DIR ||
+		error "set quota failed"
+
+	# a recoverable DQACQ error makes the slave defer its next adjust
+	#define OBD_FAIL_QUOTA_RECOVERABLE_ERR 0xa04
+	do_facet mds1 $LCTL set_param fail_val=115 fail_loc=0x80000a04
+	$RUNAS $DD of=$testfile count=$((limit / 2)) oflag=sync ||
+		quota_error u $TSTUSR "write failed"
+	do_facet mds1 $LCTL set_param fail_val=0 fail_loc=0
+	$LFS quota -v -u $TSTUSR $DIR
+
+	rm -f $testfile
+	sync_all_data || true
+	wait_delete_completed
+	wait_quota_released u $TSTUSR $((limit * 1024 / 2 - 1024)) ost1
+}
+run_test 100 "release quota after a deferred adjust"
+
 # test inode quota with MDT directory migration
 test_300() {
 	(( $MDS1_VERSION >= $(version_code 2.17.53) )) ||
