@@ -11293,6 +11293,9 @@ test_123_restore() {
 }
 
 test_123F() {
+	(( MGS_VERSION >= $(version_code v2_16_53-79-g1811e77562) )) ||
+		skip "Need MGS >= v2_16_53-79-g1811e77562 for set_param -F"
+
 	local yaml_file
 	local cfgfiles
 	local orig_val
