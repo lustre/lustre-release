@@ -14408,15 +14408,31 @@ test_79() { # bug 12743
 
 	wait_delete_completed
 
-	local bktotal=$(calc_osc_kbytes kbytestotal)
-	local bkfree=$(calc_osc_kbytes kbytesfree)
-	local bkavail=$(calc_osc_kbytes kbytesavail)
-	local string=($(df -P $MOUNT | tail -n 1))
-	local dftotal=${string[1]}
-	local dfused=${string[2]}
-	local dfavail=${string[3]}
-	local dffree=$(($dftotal - $dfused))
 	local allowance=$((64 * $OSTCOUNT))
+	local bktotal bkfree bkavail
+	local dftotal dfused dfavail dffree
+	local string
+	local tries
+
+	# df is summed on the MDT from its cached OST statfs, which can lag
+	# the OSCs for a few seconds after the space changes
+	for ((tries = 10; tries > 0; tries--)); do
+		bktotal=$(calc_osc_kbytes kbytestotal)
+		bkfree=$(calc_osc_kbytes kbytesfree)
+		bkavail=$(calc_osc_kbytes kbytesavail)
+		string=($(df -P $MOUNT | tail -n 1))
+		dftotal=${string[1]}
+		dfused=${string[2]}
+		dfavail=${string[3]}
+		dffree=$((dftotal - dfused))
+		(( dftotal - bktotal <= allowance &&
+		   bktotal - dftotal <= allowance &&
+		   dffree - bkfree <= allowance &&
+		   bkfree - dffree <= allowance &&
+		   dfavail - bkavail <= allowance &&
+		   bkavail - dfavail <= allowance )) && break
+		sleep 1
+	done
 
 	$LFS df $MOUNT
 	echo ${string[*]}
