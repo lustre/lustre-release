@@ -83,8 +83,10 @@ guide is https://wiki.lustre.org/Lustre_Coding_Style_Guidelines.
   FID, NID or values needed to diagnose:
   `CERROR("%s: cannot open "DFID": rc = %d\n", obd->obd_name,
   PFID(fid), rc);`.
-  Use `CDEBUG_LIMIT()` rather than `CDEBUG(D_ERROR|D_RPCTRACE, ...)`
-  if the debug level is variable, otherwise prefer `CERROR()`, `CWARN()`.
+  If the debug level is variable, use `CDEBUG_LIMIT()`, e.g.
+  `CDEBUG_LIMIT(rc == -ESHUTDOWN ? D_DLMTRACE : D_ERROR, ...)`, rather
+  than `CDEBUG(D_ERROR|D_RPCTRACE, ...)`; otherwise prefer `CERROR()`,
+  `CWARN()`.
 - `ENTRY`, `EXIT`, `RETURN(rc)` and `GOTO(label, rc = -EFOO)` trace
   function flow.  Use them where the surrounding file does (most of
   `lustre/`, rarely `lnet/`).  A function with `ENTRY` leaves through
@@ -106,7 +108,7 @@ guide is https://wiki.lustre.org/Lustre_Coding_Style_Guidelines.
   `OBD_ALLOC_PTR_ARRAY(ptr, n)`, `OBD_ALLOC(ptr, size)`/`OBD_FREE(ptr,
   size)` with matching sizes, and `OBD_ALLOC_LARGE()`/`OBD_FREE_LARGE()`
   for buffers that may exceed a few pages.  The memory is zeroed and
-  allocated with `GFP_NOFS` unless a `OBD_ALLOC*_GFP()` variant is used.
+  allocated with `GFP_NOFS` unless an `OBD_ALLOC*_GFP()` variant is used.
 - In `lnet/`: `LIBCFS_ALLOC()`/`LIBCFS_FREE()` and `CFS_ALLOC_PTR()`.
 - Pointers stored in objects that outlive the caller (xarray, global
   list, netlink dump state) must be owned (copied) or explicitly pinned.
@@ -180,7 +182,8 @@ guide is https://wiki.lustre.org/Lustre_Coding_Style_Guidelines.
   If kernel version compat wrappers are needed they should go in the header
   and function name matching upstream and use `#include_next <linux/...>`.
 - Use kernel APIs through the Lustre wrappers where they exist, but prefer
-  new compatibility wrappers transparently map to existing kernel functions.
+  new compatibility wrappers that transparently map to existing kernel
+  functions.
 - Each `HAVE_*` check is a pair of macros, mostly in
   `config/lustre-core.m4`: `LC_SRC_xxx` builds a test with
   `LB2_LINUX_TEST_SRC`, and `LC_xxx` uses `LB2_MSG_LINUX_TEST_RESULT` and
@@ -210,8 +213,9 @@ guide is https://wiki.lustre.org/Lustre_Coding_Style_Guidelines.
 
 ## LNet code
 - The `lnet/klnds/socklnd/` module is always built and tested.  For code
-  modifying `lnet/klnds/o2iblnd/` the o2ib module must be enabled with
-  `configure --with-o2ib[=...]` to ensure it is at least build-tested.
+  modifying `lnet/klnds/o2iblnd/`, check that configure reports o2iblnd
+  will be built (the default when the kernel has IB support), or give
+  the OFED path with `--with-o2ib=<path>`, so it is at least build-tested.
 - LNet code never includes Lustre headers (apart from `lustre_ver.h`) or
   calls `lustre/` functions.
 
@@ -228,11 +232,18 @@ guide is https://wiki.lustre.org/Lustre_Coding_Style_Guidelines.
 - A new or changed command or option updates the man page
   `Documentation/man{1,8}/<cmd>-<subcmd>.{1,8}`; a new or changed tunable
   gets or updates `Documentation/man4/<param>.4`.
+- Create `.4` pages only for parameters that actually exist, named as
+  they appear, e.g. `mdc.<param>.4`.  Don't add a top-level `<param>.4`
+  for the `.so` links of per-device pages to point at unless there is
+  also a global parameter of that name: `at_min.4` exists only because
+  `at_min` is both a global and a per-device parameter.
 
 ## Man pages
 
-- `.TH NAME SECTION YYYY-MM-DD ...` with the date of the change.  A new
-  page is also added to its directory's `Makefile.am` where there is one.
+- `.TH NAME SECTION YYYY-MM-DD ...` with the date of the change.  When
+  changing an existing page, update the date only if it is more than 4
+  weeks old, to reduce conflicts with other patches.  A new page is also
+  added to its directory's `Makefile.am` where there is one.
 - One sentence per source line.
 - Examples in `.EX`/`.EE` with prompts showing where to run them:
   `.RB client# " lctl get_param ..."`, `mgs#`.

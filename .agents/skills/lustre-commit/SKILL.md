@@ -21,7 +21,7 @@ ln -sf ../../contrib/git-hooks/{prepare-,}commit-msg .git/hooks/
    `git diff` and ask what belongs in the commit.
 2. Get the LU ticket from the context, or ask for it.  `LU-0000` is only
    a placeholder until the real ticket is known, never pushed to CI (even
-   for test patches, which should use their parent LU ticket then abandoned).
+   for test patches, which should use the parent's LU ticket, then abandoned).
 3. Choose the component (below), write the message, and commit with a
    heredoc or `git commit -F file` so the formatting survives.
 4. Amend the existing commit for later changes; never add fixup commits.
@@ -57,7 +57,10 @@ ln -sf ../../contrib/git-hooks/{prepare-,}commit-msg .git/hooks/
   it; lines containing a URL are exempt).  ASCII only: no curly quotes
   or long dashes.  Two spaces after a period.
 - First paragraph: the problem, concretely: what fails, under what
-  conditions, and the error message or stack if there is one.
+  conditions, and the error message or stack if there is one.  Write
+  the behaviour the patch changes in the past tense ("held", "called",
+  "would fail"), since it is no longer true once the patch lands, so
+  it is not mistaken for what the patch implements.
 - Then the fix, in the imperative ("Add ...", "Fix ...", "Allow ...").
   Name the key functions or tunables, not every function touched.  Use
   "Also fix ..." for small adjacent fixes.
@@ -166,6 +169,10 @@ Choosing:
   sanity-lnet, or a specified `testlist=SCRIPT` session, including the
   patch's own new or changed test, which the subtest-change sessions
   exercise heavily (for example, changing when an error message is printed).
+- A patch that changes only userspace tools or libraries (`lfs`, `lctl`,
+  liblustreapi) and no kernel module can use `trivial` with a
+  `testlist=` for the scripts that exercise the changed code; a full run
+  adds little coverage for it.
 - The Gerrit Janitor flags "suspicious trivial usage" on any code change
   marked `trivial`; that alone is no reason to drop `trivial` when the
   previous point applies.
@@ -180,6 +187,11 @@ Choosing:
   parallel.  Given the setup time, make each run at least 30 minutes:
   `ONLY_MINUTES=30` for fast subtests, or `ONLY_REPEAT=N` for slow ones,
   where N >= ln(0.01) / ln(1 - p) for a historical failure rate p.
+- `testgroup=G testlist=S` does not limit group G to script S: it runs
+  all of G and then S again, and a script that cannot run twice in one
+  session (e.g. sanity-sec) then times out.  For N more runs of a group,
+  repeat the bare `testgroup=G` line N times; identical lines are not
+  merged.
 - Use the keyword parameters (`ostcount=`, `mdtcount=`, `fstype=`,
   `ostsizegb=`), not `env=OSTCOUNT=...`.
 - `fortestonly` runs only the listed sessions and stops the patch from

@@ -112,7 +112,7 @@ run_test 123b "open after foo is set does not fail"
   ZFS, too few MDTs or OSTs) or for missing hardware.
 - Known failures are excluded at the top of the suite with
   `always_except LU-NNNNN 42a 42c` until fixed, not by editing the test.
-- Patches that fix an excepted test removes it from `always_except`.
+- Patches that fix an excepted test remove it from `always_except`.
 - A new suite or helper binary is added to `lustre/tests/Makefile.am`.
 - New test suites should be rarely added, only for major code features,
   since they need to be added separately to the CI list of test suites.

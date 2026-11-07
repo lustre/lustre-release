@@ -81,6 +81,10 @@ https://github.com/lustre/lustre-test-vms.
   `autom4te.cache` before rebuilding so the version string is current,
   and confirm it with `lctl get_param -n version` on the VM.
 - Run the tests that cover the change, not only the new subtest.
+- For a patch that touches `PAGE_SIZE` handling or the data path (page
+  cache, bulk IO, encryption, compression), also test on a node with
+  large pages when possible: aarch64 with 64 KiB pages, or with 16 KiB
+  pages such as an ltvm VM on macOS.
 - A new or changed regression test must fail without the fix and pass
   with it; see the lustre-test-scripts skill for how to show that.
 - Clean up after yourself on shared test nodes: unmount, remove test
@@ -110,7 +114,10 @@ https://github.com/lustre/lustre-test-vms.
   without the fix and the passing run with it).  Wait for their explicit
   instruction to push that patch.  A dry run is fine before then.
 - Right before pushing a new patchset, re-read the change for comments
-  posted since you last looked, and address them in the same round.
+  posted since you last looked, including comments on older patchsets
+  (review bots may post on the previous patchset after a new upload),
+  and address them in the same round.  Mark a thread resolved only when
+  the new patchset or your reply actually addresses it.
 - Push to `refs/for/<branch>`:
   `git push ssh://<user>@review.whamcloud.com:29418/fs/lustre-release
   HEAD:refs/for/master`, or `gc upload` (see the gerrit-patch-workflow
@@ -148,7 +155,10 @@ lustre-ci-triage skill covers reading the results.
   failure to an existing LU ticket, or raise a new one, then retest an
   unrelated or intermittent failure.  Never retest a failure that points
   at the patch; fix the patch.  Failures in tests the patch modifies are
-  the patch's to fix.
+  the patch's to fix.  Retest only enforced sessions: failures in
+  optional sessions don't block landing, so retesting them only adds
+  load to the test queue (with a backlog of over 100 sessions, optional
+  sessions are not run at all).
 - When refreshing a change that is still in development or has been
   modified, rebase it onto the tip of master.  Don't rebase when it
   depends on unlanded patches that shouldn't be refreshed (patches that
@@ -179,7 +189,7 @@ lustre-ci-triage skill covers reading the results.
   can be pushed directly on its original parent without refreshing later
   patches if they are already (substantially) ready to land (Maloo +1,
   one or more Code-Review + 1).
-- Retest or refresh failed sessions must be done within about 2-3 weeks,
+- Retest failed sessions, or refresh the patch, within about 2-3 weeks,
   before the build expires.  Retesting with an older build is not harmful,
   but will report an error if the build no longer exists.  In the latter
   case, if the patch has not yet been reviewed it should be refreshed to
