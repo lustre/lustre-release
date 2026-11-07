@@ -11273,15 +11273,18 @@ test_312() {
 		     /lcme_flags:.*parity/ {print id; exit}')
 	[[ -n "$parity_mirror_id" ]] || error "no parity mirror"
 
-	# Drop cache so the read goes through lov_page_init_composite(),
-	# not fast read. Clear O_DIRECT after the MIRROR scope is set.
+	# A read of RAID10-like parity must name one stripe of the slot,
+	# so use the STRIPE scope: a MIRROR scope read is refused for that
+	# reason alone.  Drop cache so the read goes through
+	# lov_page_init_composite(), not fast read.  Clear O_DIRECT after
+	# the scope is set.
 	cancel_lru_locks osc
-	io_scope -s MIRROR -i $parity_mirror_id -b -r $tf
+	io_scope -s STRIPE -i $parity_mirror_id -x 0 -b -r $tf
 	rc=$?
 	(( rc == EINVAL )) ||
 		error "buffered parity read: expected $EINVAL, got $rc"
 
-	io_scope -s MIRROR -i $parity_mirror_id -r $tf ||
+	io_scope -s STRIPE -i $parity_mirror_id -x 0 -r $tf ||
 		error "direct parity read failed"
 }
 run_test 312 "buffered designated parity read is refused"
