@@ -3195,7 +3195,7 @@ test_27D() {
 	(( $MDS1_VERSION >= $(version_code $mirror_id_ver) )) ||
 		SKIP27D+=" -s 37"
 	(( $MDS1_VERSION >= $(version_code $flr_ec_ver) )) ||
-		SKIP27D+=" -s 52,53,54,56,57,58,63,64,65,67"
+		SKIP27D+=" -s 52,53,54,55,56,57,58,60,63,64,65,67"
 
 	local ec_enable=$($LCTL get_param -n llite.*.enable_erasure_coding)
 	$LCTL set_param llite.*.enable_erasure_coding=1
