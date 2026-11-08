@@ -2082,13 +2082,17 @@ random_fail_mdt() {
 	local start_ts=$(date +%s)
 	local num_failovers=0
 	local fail_index
+	local interval=30
+
+	# HARD failovers are slower and trigger the 70c/70d hang more
+	[[ "$FAILURE_MODE" != HARD ]] || interval=120
 
 	elapsed=$(($(date +%s) - start_ts))
 	while [ $elapsed -lt $duration ]; do
 		fail_index=$((RANDOM%max_index+1))
 		kill -0 $monitor_pid ||
 			error "$monitor_pid stopped"
-		sleep 120
+		sleep $interval
 		replay_barrier mds$fail_index
 		sleep 10
 		# Increment the number of failovers
