@@ -2773,6 +2773,10 @@ mount_facet() {
 		error "unknown fstype!";;
 	esac
 
+	# wbcfs keeps no config, so its targets register at every mount
+	allow_register_mount "$devicelabel" "$opts" \
+		$([[ $fstype == wbcfs ]] && echo always)
+
 	# for testing LU-482 error handling in mount_facets() and test_0a()
 	if [ -f $TMP/test-lu482-trigger ]; then
 		RC=2
@@ -2899,6 +2903,53 @@ allow_register_open() {
 
 	do_facet mgs "$LCTL set_param allow_register=$window" \
 		&>/dev/null || true
+}
+
+# usage: allow_register_mount <device label> <mount options> [always]
+# Open a registration window before mounting a target that registers with the
+# MGS at this mount: a new target ("FSNAME:MDT0000" label), one marked for
+# writeconf ("FSNAME=MDT0000" label, or the writeconf mount option), or with
+# "always" any target.  A module
+# reload since add() or writeconf_all() opened a window closes it again, and
+# some tests run tunefs --writeconf directly.  Tests that check how the MGS
+# handles allow_register set ALLOW_REGISTER_AT_MOUNT=false.
+allow_register_mount() {
+	local label=$1
+	local opts=$2
+	local node
+
+	[[ "${ALLOW_REGISTER_AT_MOUNT:-true}" == true ]] || return 0
+	[[ -z "$MGS_VERSION" ]] ||
+		(( MGS_VERSION >= $(version_code 2.17.60) )) || return 0
+	[[ -n "$(facet_host mgs)" ]] || return 0
+	[[ "$3" == always || "$opts" =~ writeconf ||
+	   "$label" =~ [:=](MDT|OST)[0-9a-f]{4} ]] || return 0
+
+	# the window is kept by obdclass, which the MGS node may not have yet
+	node=$(facet_active_host mgs)
+	do_node --quiet $node "lsmod | grep -q '^obdclass '" ||
+		do_rpc_nodes --quiet $node load_modules_local &>/dev/null ||
+		true
+	allow_register_open
+}
+
+# usage: rpc_allow_register_compat
+# rpc.sh runs this on the servers for client test scripts before 2.18.0,
+# which never open an allow_register window (LU-18857) around format or
+# writeconf, so keep registration open for them until the modules are
+# unloaded.  Scripts from 2.18.0 on pass RPC_CALLER_FEATURES=allow_register
+# from do_rpc_nodes().  Remove this once interop testing with clients before
+# 2.18.0 has ended.
+rpc_allow_register_compat() {
+	local val
+
+	[[ " $RPC_CALLER_FEATURES " == *" allow_register "* ]] && return 0
+	val=$($LCTL get_param -n allow_register 2>/dev/null) || return 0
+	[[ "$val" == "unlimited" ]] && return 0
+
+	$LCTL set_param allow_register=unlimited &>/dev/null &&
+		log "$HOSTNAME: scripts before 2.18.0, allow_register=unlimited"
+	return 0
 }
 
 # start facet device options
@@ -9779,8 +9830,12 @@ do_rpc_nodes () {
 	local LIBPATH="/usr/lib/lustre/tests:/usr/lib64/lustre/tests:"
 	local TESTPATH="$RLUSTRE/tests:"
 	local RPATH="PATH=${TESTPATH}${LIBPATH}${PATH}:/sbin:/bin:/usr/sbin:"
+	# RPC_CALLER_FEATURES lists what these scripts do, so that rpc.sh from
+	# a newer server can adapt to older clients, see rpc_*_compat().
+	# allow_register: opens allow_register windows, since 2.18.0
 	do_nodes ${quiet:-"--verbose"} $list "${RPATH} NAME=${NAME} \
 		TESTLOG_PREFIX=$TESTLOG_PREFIX TESTNAME=$TESTNAME \
+		RPC_CALLER_FEATURES=allow_register \
 		CONFIG=${CONFIG} bash rpc.sh $* "
 }
 

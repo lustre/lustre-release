@@ -20,3 +20,8 @@ trap - ERR
 log "$HOSTNAME: executing $*"
 # Execute the command
 "$@"
+rc=$?
+
+# for client test scripts before 2.18.0, after the command loaded modules
+rpc_allow_register_compat
+exit $rc

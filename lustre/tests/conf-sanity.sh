@@ -3876,6 +3876,8 @@ test_37() {
 	fi
 
 	load_modules
+	# mounted without mount_facet(), may still be marked for writeconf
+	allow_register_mount "$(devicelabel $SINGLEMDS $mdsdev)" "$opts"
 	mount_op=$(do_facet $SINGLEMDS $MOUNT_TGT -v $opts \
 		   $mdsdev_sym $mntpt 2>&1)
 	rc=${PIPESTATUS[0]}
@@ -12696,6 +12698,8 @@ test_157a() {
 	(( $MGS_VERSION >= $(version_code 2.17.60) )) ||
 		skip "need MGS >= 2.17.60 for timed 'allow_register' tunable"
 
+	local ALLOW_REGISTER_AT_MOUNT=false # sets allow_register itself
+
 	stopall
 	stack_trap "cleanup_157a"
 
@@ -12809,6 +12813,8 @@ test_157b() {
 	(( $MGS_VERSION >= $(version_code 2.17.60) )) ||
 		skip "need MGS >= 2.17.60 for timed 'allow_register' tunable"
 
+	local ALLOW_REGISTER_AT_MOUNT=false # sets allow_register itself
+
 	stack_trap "cleanup_157b"
 	setup
 
@@ -12903,6 +12909,8 @@ cleanup_157c() {
 test_157c() {
 	(( $MGS_VERSION >= $(version_code 2.17.60) )) ||
 		skip "need MGS >= 2.17.60 for timed 'allow_register' tunable"
+
+	local ALLOW_REGISTER_AT_MOUNT=false # sets allow_register itself
 
 	stack_trap "cleanup_157c"
 	setup
@@ -13249,6 +13257,8 @@ cleanup_157f() {
 test_157f() {
 	(( $MGS_VERSION >= $(version_code 2.17.60) )) ||
 		skip "need MGS >= 2.17.60 for timed 'allow_register' tunable"
+
+	local ALLOW_REGISTER_AT_MOUNT=false # sets allow_register itself
 
 	[[ "$mds1_FSTYPE" == ldiskfs ]] || skip "ldiskfs only test"
 
