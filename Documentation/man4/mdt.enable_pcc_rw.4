@@ -1,0 +1,82 @@
+.TH MDT.ENABLE_PCC_RW 4 2026-10-16 "Lustre" "Lustre Kernel Interfaces"
+.SH NAME
+mdt.enable_pcc_rw, mdt.enable_pcc_ro \- allow Persistent Client Cache modes
+.SH SYNOPSIS
+.SY
+.RI "lctl set_param mdt." FSNAME *.enable_pcc_rw= ENABLE
+.SY
+.RI "lctl set_param mdt." FSNAME *.enable_pcc_ro= ENABLE
+.YS
+.SS PROPERTIES
+.TP
+.B Access Permissions
+.br
+.BR 644 " | " -rw-r--r--
+.TP
+.B Scope
+.br
+Per-MDT device.
+.TP
+.B Config
+.br
+.B enable_pcc_rw
+and
+.B enable_pcc_ro
+are always present for MDT devices.
+.TP
+.B Default
+.br
+.RB enable_pcc_rw= 0
+.br
+.RB enable_pcc_ro= 1
+.SH DESCRIPTION
+These boolean parameters control whether the MDT allows clients to attach
+files to the read-write (PCC-RW) and read-only (PCC-RO) modes of the
+Persistent Client Cache.
+When a mode is disabled, the MDT refuses the attach, and the creation of a
+new file directly in a PCC-RW cache, with
+.BR EOPNOTSUPP ,
+and a console message names the parameter that enables it.
+A client then creates the new file in Lustre without PCC, and does not
+try to attach a file automatically in PCC-RO mode again after the MDT
+refused it, until the client drops the file from its inode cache.
+Clients older than release 2.18.0 do not fall back: on them, creating a file
+that matches a PCC-RW rule fails with
+.B EOPNOTSUPP
+until the rule is removed or
+.B enable_pcc_rw
+is set.
+Files that are already attached are not affected.
+The MDT is asked for PCC-RO only when a file enters the read-only state,
+so clients can still attach a file that is already read-only unless
+.BR llite.enable_pcc_ro (4)
+is disabled on them.
+.PP
+PCC-RW is a proof of concept that is not intended for production use.
+It moves the only copy of the file data into the cache of a single client,
+so if that client or its cache is lost, the file data is lost with it.
+It is disabled by default, and should only be enabled for testing.
+Clients also need
+.BR llite.enable_pcc_rw (4)
+to use PCC-RW.
+.SH EXAMPLES
+Allow PCC-RW for testing on all MDTs of the
+.B testfs
+filesystem:
+.EX
+.RB "mgs# " "lctl set_param -P mdt.testfs-MDT*.enable_pcc_rw=1"
+.EE
+.SH AVAILABILITY
+The
+.B mdt.enable_pcc_rw
+and
+.B mdt.enable_pcc_ro
+parameters are part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" Added in commit v2_17_59-xx-gxxxxxxxxxx
+.SH SEE ALSO
+.BR lfs-pcc-attach (1),
+.BR llite.enable_pcc_rw (4),
+.BR lctl-pcc (8),
+.BR lctl-set_param (8)

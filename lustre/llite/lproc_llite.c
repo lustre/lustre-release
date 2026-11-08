@@ -882,6 +882,64 @@ static ssize_t pcc_async_affinity_store(struct kobject *kobj,
 LUSTRE_RW_ATTR(pcc_async_affinity);
 
 static ssize_t
+enable_pcc_rw_show(struct kobject *kobj, struct attribute *attr, char *buffer)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return scnprintf(buffer, PAGE_SIZE, "%d\n",
+			 sbi->ll_pcc_super.pccs_enable_rw);
+}
+
+static ssize_t
+enable_pcc_rw_store(struct kobject *kobj, struct attribute *attr,
+		    const char *buffer, size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	sbi->ll_pcc_super.pccs_enable_rw = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(enable_pcc_rw);
+
+static ssize_t
+enable_pcc_ro_show(struct kobject *kobj, struct attribute *attr, char *buffer)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+
+	return scnprintf(buffer, PAGE_SIZE, "%d\n",
+			 sbi->ll_pcc_super.pccs_enable_ro);
+}
+
+static ssize_t
+enable_pcc_ro_store(struct kobject *kobj, struct attribute *attr,
+		    const char *buffer, size_t count)
+{
+	struct ll_sb_info *sbi = container_of(kobj, struct ll_sb_info,
+					      ll_kset.kobj);
+	bool val;
+	int rc;
+
+	rc = kstrtobool(buffer, &val);
+	if (rc)
+		return rc;
+
+	sbi->ll_pcc_super.pccs_enable_ro = val;
+
+	return count;
+}
+LUSTRE_RW_ATTR(enable_pcc_ro);
+
+static ssize_t
 pcc_attach_thread_max_show(struct kobject *kobj, struct attribute *attr,
 			   char *buffer)
 {
@@ -2710,6 +2768,8 @@ static struct attribute *llite_attrs[] = {
 	&lustre_attr_pcc_attach_thread_max.attr,
 	&lustre_attr_pcc_mode.attr,
 	&lustre_attr_pcc_async_affinity.attr,
+	&lustre_attr_enable_pcc_rw.attr,
+	&lustre_attr_enable_pcc_ro.attr,
 	&lustre_attr_read_ahead_async_file_threshold_mb.attr,
 	&lustre_attr_read_ahead_range_kb.attr,
 	&lustre_attr_stat_blocksize.attr,

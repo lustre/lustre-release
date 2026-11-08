@@ -1455,6 +1455,30 @@ static void mdt_pack_attr_acl(struct mdt_thread_info *info,
 #endif
 }
 
+int mdt_pcc_check(struct mdt_thread_info *info, enum lu_pcc_type type)
+{
+	struct ptlrpc_request *req = mdt_info_req(info);
+	struct mdt_device *mdt = info->mti_mdt;
+	int rc = -EOPNOTSUPP;
+
+	/* a replay must not fail where the original succeeded */
+	if (req_is_replay(req))
+		return 0;
+
+	if (type == LU_PCC_READWRITE && !mdt->mdt_enable_pcc_rw)
+		CWARN("%s: PCC-RW from %s refused, PCC-RW is a proof of concept, not for production use. Enable it for testing with 'lctl set_param mdt.%s.enable_pcc_rw=1': rc = %d\n",
+		      mdt_obd_name(mdt), obd_export_nid2str(info->mti_exp),
+		      mdt_obd_name(mdt), rc);
+	else if (type == LU_PCC_READONLY && !mdt->mdt_enable_pcc_ro)
+		CWARN("%s: PCC-RO from %s refused. Enable it with 'lctl set_param mdt.%s.enable_pcc_ro=1': rc = %d\n",
+		      mdt_obd_name(mdt), obd_export_nid2str(info->mti_exp),
+		      mdt_obd_name(mdt), rc);
+	else
+		rc = 0;
+
+	return rc;
+}
+
 int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 {
 	struct mdt_device *mdt = info->mti_mdt;
@@ -1662,6 +1686,12 @@ again_pw:
 		if (!fid_is_md_operative(rr->rr_fid1) &&
 		    (open_flags & MDS_OPEN_VOLATILE) == 0)
 			GOTO(out_child, result = -EPERM);
+
+		if (open_flags & MDS_OPEN_PCC) {
+			result = mdt_pcc_check(info, LU_PCC_READWRITE);
+			if (result)
+				GOTO(out_child, result);
+		}
 
 		/* save versions in reply */
 		mdt_version_get_save(info, parent, 0);
@@ -2024,6 +2054,12 @@ static int mdt_hsm_release(struct mdt_thread_info *info, struct mdt_object *o,
 
 	if (lease_broken) /* don't perform release task */
 		GOTO(out_unlock, rc = -ESTALE);
+
+	if (ma->ma_attr_flags & MDS_PCC_ATTACH) {
+		rc = mdt_pcc_check(info, LU_PCC_READWRITE);
+		if (rc)
+			GOTO(out_unlock, rc);
+	}
 
 	if (fid_is_zero(&data->cd_fid) || !fid_is_sane(&data->cd_fid))
 		GOTO(out_unlock, rc = -EINVAL);

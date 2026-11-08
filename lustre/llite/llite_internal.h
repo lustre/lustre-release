@@ -473,6 +473,8 @@ enum ll_file_internal_flags {
 	LLIF_XATTR_CACHE_FILLED	= 7,
 	/* ciphertext written with O_CIPHERTEXT, clear text size unknown */
 	LLIF_CIPHERTEXT_WRITTEN	= 8,
+	/* MDT refused PCC-RO for this file, skip auto attach */
+	LLIF_PCC_RO_REFUSED	= 9,
 	/* New flags added to this enum potentially need to be handled in
 	 * ll_inode2ext_flags/ll_set_inode_flags
 	 */

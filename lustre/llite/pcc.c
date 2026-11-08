@@ -116,6 +116,8 @@ int pcc_super_init(struct pcc_super *super)
 	super->pccs_generation = 1;
 	super->pccs_async_threshold = PCC_DEFAULT_ASYNC_THRESHOLD;
 	super->pccs_mode = 0400;
+	super->pccs_enable_rw = false;
+	super->pccs_enable_ro = true;
 	atomic_set(&super->pccs_attach_thread, 0);
 	super->pccs_attach_thread_max = PCC_ATTACH_THREAD_MAX_DEFAULT;
 
@@ -919,6 +921,34 @@ pcc_cond_match(struct pcc_match_rule *rule, struct pcc_matcher *matcher)
 	return 0;
 }
 
+static inline bool pcc_type_enabled(struct pcc_super *super,
+				    enum lu_pcc_type type)
+{
+	if (type == LU_PCC_READWRITE)
+		return super->pccs_enable_rw;
+
+	return super->pccs_enable_ro;
+}
+
+static int pcc_type_check(struct pcc_super *super, enum lu_pcc_type type)
+{
+	struct ll_sb_info *sbi = container_of(super, struct ll_sb_info,
+					      ll_pcc_super);
+	int rc = -EOPNOTSUPP;
+
+	if (pcc_type_enabled(super, type))
+		return 0;
+
+	if (type == LU_PCC_READWRITE)
+		CWARN("%s: PCC-RW is a proof of concept, not for production use, and is disabled. Enable it for testing with 'lctl set_param llite.%s.enable_pcc_rw=1': rc = %d\n",
+		      sbi->ll_fsname, kobject_name(&sbi->ll_kset.kobj), rc);
+	else
+		CWARN("%s: PCC-RO is disabled. Enable it with 'lctl set_param llite.%s.enable_pcc_ro=1': rc = %d\n",
+		      sbi->ll_fsname, kobject_name(&sbi->ll_kset.kobj), rc);
+
+	return rc;
+}
+
 static inline bool
 pcc_dataset_attach_allowed(struct pcc_dataset *dataset, enum lu_pcc_type type)
 {
@@ -937,6 +967,9 @@ pcc_dataset_match_get(struct pcc_super *super, enum lu_pcc_type type,
 {
 	struct pcc_dataset *dataset;
 	struct pcc_dataset *selected = NULL;
+
+	if (!pcc_type_enabled(super, type))
+		return NULL;
 
 	down_read(&super->pccs_rw_sem);
 	list_for_each_entry(dataset, &super->pccs_datasets, pccd_linkage) {
@@ -961,6 +994,7 @@ static int
 pcc_dataset_flags_check(struct pcc_super *super, struct pcc_cmd *cmd)
 {
 	struct ll_sb_info *sbi;
+	int rc;
 
 	sbi = container_of(super, struct ll_sb_info, ll_pcc_super);
 
@@ -975,6 +1009,18 @@ pcc_dataset_flags_check(struct pcc_super *super, struct pcc_cmd *cmd)
 	} else if ((cmd->u.pccc_add.pccc_flags & PCC_DATASET_PCC_ALL) == 0) {
 		cmd->u.pccc_add.pccc_flags |= PCC_DATASET_PCC_DEFAULT;
 	} /* else RWPCC or ROPCC must have been given */
+
+	if (cmd->u.pccc_add.pccc_flags & PCC_DATASET_PCCRW) {
+		rc = pcc_type_check(super, LU_PCC_READWRITE);
+		if (rc)
+			return rc;
+	}
+
+	if (cmd->u.pccc_add.pccc_flags & PCC_DATASET_PCCRO) {
+		rc = pcc_type_check(super, LU_PCC_READONLY);
+		if (rc)
+			return rc;
+	}
 
 	if (cmd->u.pccc_add.pccc_rwid == 0 &&
 	    cmd->u.pccc_add.pccc_roid == 0)
@@ -1719,6 +1765,11 @@ static int pcc_try_datasets_attach(struct inode *inode, enum pcc_io_type iot,
 
 	ENTRY;
 
+	if (!pcc_type_enabled(super, type)) {
+		lli->lli_pcc_dsflags = PCC_DATASET_NONE;
+		RETURN(0);
+	}
+
 	down_read(&super->pccs_rw_sem);
 	list_for_each_entry_safe(dataset, tmp,
 				 &super->pccs_datasets, pccd_linkage) {
@@ -1970,6 +2021,9 @@ static int pcc_try_readonly_open_attach(struct inode *inode, struct file *file,
 
 	if (ll_i2info(inode)->lli_pcc_state & PCC_STATE_FL_ATTACHING)
 		RETURN(-EINPROGRESS);
+
+	if (test_bit(LLIF_PCC_RO_REFUSED, &ll_i2info(inode)->lli_flags))
+		RETURN(0);
 
 	item.pm_uid = from_kuid(&init_user_ns, current_uid());
 	item.pm_gid = from_kgid(&init_user_ns, current_gid());
@@ -3864,6 +3918,10 @@ int pcc_readwrite_attach(struct file *file, struct inode *inode,
 
 	ENTRY;
 
+	rc = pcc_type_check(super, LU_PCC_READWRITE);
+	if (rc)
+		RETURN(rc);
+
 	rc = pcc_attach_check_set(inode);
 	if (rc)
 		RETURN(rc);
@@ -3924,8 +3982,13 @@ int pcc_readwrite_attach_fini(struct file *file, struct inode *inode,
 	pcc_inode_lock(inode);
 	pcci = ll_i2pcci(inode);
 	if (rc || lease_broken) {
-		if (attached && pcci)
+		if (attached && pcci) {
+			/* The MDT refused before the file was released */
+			if (rc == -EOPNOTSUPP && !pcci->pcci_unlinked)
+				(void) pcc_inode_remove(inode,
+						pcci->pcci_path.dentry);
 			pcc_inode_put(pcci);
+		}
 
 		GOTO(out_unlock, rc);
 	}
@@ -4015,9 +4078,12 @@ repeat:
 	if (!clt.cl_is_rdonly) {
 		rc = ll_layout_write_intent(inode, LAYOUT_INTENT_PCCRO_SET,
 					    &ext);
+		if (rc == -EOPNOTSUPP)
+			set_bit(LLIF_PCC_RO_REFUSED, &lli->lli_flags);
 		if (rc)
 			RETURN(rc);
 
+		clear_bit(LLIF_PCC_RO_REFUSED, &lli->lli_flags);
 		rc = ll_layout_refresh(inode, gen);
 	} else { /* Readonly layout */
 		struct pcc_inode *pcci;
@@ -4185,7 +4251,10 @@ int pcc_ioctl_attach(struct file *file, struct inode *inode,
 		rc = -EOPNOTSUPP;
 		break;
 	case LU_PCC_READONLY:
-		rc = pcc_readonly_attach_sync(file, inode, attach->pcca_id);
+		rc = pcc_type_check(ll_i2pccs(inode), LU_PCC_READONLY);
+		if (!rc)
+			rc = pcc_readonly_attach_sync(file, inode,
+						      attach->pcca_id);
 		break;
 	default:
 		rc = -EINVAL;

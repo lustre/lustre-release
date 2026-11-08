@@ -166,6 +166,8 @@ struct pcc_super {
 	/* Size threshold for asynchrous PCC-RO attach in background. */
 	__u64			 pccs_async_threshold;
 	bool			 pccs_async_affinity;
+	bool			 pccs_enable_rw;
+	bool			 pccs_enable_ro;
 	umode_t			 pccs_mode;
 	atomic_t		 pccs_attach_thread;
 	unsigned int		 pccs_attach_thread_max;

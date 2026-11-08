@@ -1,4 +1,4 @@
-.TH LFS-PCC 1 2025-12-20 "Lustre" "Lustre User Utilities"
+.TH LFS-PCC 1 2026-10-16 "Lustre" "Lustre User Utilities"
 .SH NAME
 lfs-pcc \- commands used to interact with the Persistent Client Cache (PCC).
 .SH SYNOPSIS
@@ -60,11 +60,22 @@ Specify the Lustre mount point.
 Attach the file(s) in readonly mode (RO-PCC).
 .TP
 .BR --write ", " -w
-Attach the file(s) in read-write mode (RW-PCC). This is the default if neither
+Attach the file(s) in read-write mode (RW-PCC).
+RW-PCC is a proof of concept that is not intended for production use, as it
+moves the only copy of the file data into the cache of one client.
+It is disabled by default, and needs
+.B llite.*.enable_pcc_rw=1
+on the client,
+.B mdt.*.enable_pcc_rw=1
+on the MDS, and
+.B LFS_PCC_RW_OK=yes
+in the environment, see
+.BR llite.enable_pcc_rw (4).
+If neither
 .B --readonly
 nor
 .B --write
-is specified.
+is specified, the file is attached in read-only mode.
 Before using RW-PCC, you need to configure HSM root and Archive ID mapping properly:
 .B lfs pcc add $MNTPATH $PCCPATH \ "$PARAM"
 Add one PCC backend to the Lustre client. For RW-PCC, when a file is being
@@ -106,14 +117,6 @@ either 500 or 1000 and the suffix of the file name is “h5” or the user ID is
 .EX
 .RS
 .B # lfs pcc add /mnt/lustre /mnt/pcc \ "projid={500,1000}&fname={*.h5},uid=1001 rwid=1"
-.RE
-.EE
-.PP
-Attach an existing file into PCC and migrate data from lustre to Cache Device,
-any I/O to the Lustre file will direct to the RW-PCC copy:
-.EX
-.RS
-.B $ lfs pcc attach -i 1 /mnt/lustre/file
 .RE
 .EE
 .PP

@@ -182,6 +182,29 @@ cdt_set_sanity_policy
 # finished requests are quickly removed from list
 set_hsm_param grace_delay 10
 
+# PCC-RW is disabled by default. A remount resets it, so setup_pcc_mapping
+# enables it for every test.
+LFS_NO_PCC_RW="env -u LFS_PCC_RW_OK $LFS"
+LFS="env LFS_PCC_RW_OK=yes $LFS"
+
+pcc_rw_client_set() {
+	do_nodes $1 $LCTL set_param llite.*.enable_pcc_rw=$2
+}
+
+pcc_rw_set() {
+	local val=$1
+
+	pcc_rw_client_set $CLIENTS $val
+	if do_facet mds1 $LCTL list_param mdt.*.enable_pcc_rw &> /dev/null; then
+		do_nodes $(mdts_nodes) $LCTL set_param mdt.*.enable_pcc_rw=$val
+	fi
+}
+
+pcc_ro_set() {
+	do_nodes $CLIENTS $LCTL set_param llite.*.enable_pcc_ro=$1
+	do_nodes $(mdts_nodes) $LCTL set_param mdt.*.enable_pcc_ro=$1
+}
+
 cleanup_pcc_mapping() {
 	local facet=${1:-$SINGLEAGT}
 
@@ -195,8 +218,10 @@ setup_pcc_mapping() {
 	local param="$2"
 
 	[ -z "$param" ] && param="projid={100}\ rwid=$HSM_ARCHIVE_NUMBER"
+	pcc_rw_set 1
 	stack_trap "cleanup_pcc_mapping $facet" EXIT
-	do_facet $facet $LCTL pcc add $MOUNT $hsm_root -p "$param" ||
+	do_facet $facet env LFS_PCC_RW_OK=yes $LCTL pcc add $MOUNT $hsm_root \
+		-p "$param" ||
 		error "Setup PCC backend $hsm_root on $MOUNT failed"
 }
 
@@ -569,6 +594,112 @@ test_1g() {
 }
 run_test 1g "General permission test for RW-PCC"
 
+test_1h() {
+	local loopfile="$TMP/$tfile"
+	local mntpt="/mnt/pcc.$tdir"
+	local hsm_root="$mntpt/$tdir"
+	local file=$DIR/$tfile
+	local agthost=${SINGLEAGT}_HOST
+	local mdts=$(mdts_nodes)
+	local param="projid={100}\ rwid=$HSM_ARCHIVE_NUMBER\ pccrw=1\ pccro=1"
+	local lru="ldlm.namespaces.*mdc*.lru_size"
+
+	do_facet mds1 $LCTL list_param mdt.*.enable_pcc_rw ||
+		skip "MDS does not have mdt.*.enable_pcc_rw"
+
+	# an LRU resize cancel of the layout lock detaches PCC-RO files
+	stack_trap "do_facet $SINGLEAGT $LCTL set_param -n $lru=0"
+	do_facet $SINGLEAGT $LCTL set_param -n $lru=10000
+
+	setup_loopdev $SINGLEAGT $loopfile $mntpt 50
+	copytool setup -m "$MOUNT" -a "$HSM_ARCHIVE_NUMBER"
+
+	do_facet $SINGLEAGT env -u LFS_PCC_RW_OK $LCTL pcc add $MOUNT \
+		$hsm_root -p "$param" &&
+		error "(0) PCC-RW rule added without LFS_PCC_RW_OK"
+
+	stack_trap "pcc_rw_client_set ${!agthost} 1"
+	pcc_rw_client_set ${!agthost} 0
+	do_facet $SINGLEAGT env LFS_PCC_RW_OK=yes $LCTL pcc add $MOUNT \
+		$hsm_root -p "$param" &&
+		error "(1) PCC-RW rule added with llite enable_pcc_rw=0"
+
+	pcc_rw_client_set ${!agthost} 1
+	setup_pcc_mapping $SINGLEAGT "$param"
+	echo -n file_data > $file || error "(2) write $file failed"
+	do_facet $SINGLEAGT $LFS_NO_PCC_RW pcc attach -w \
+		-i $HSM_ARCHIVE_NUMBER $file &&
+		error "(3) PCC-RW attach without LFS_PCC_RW_OK"
+
+	pcc_rw_client_set ${!agthost} 0
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file &&
+		error "(4) PCC-RW attach with llite enable_pcc_rw=0"
+	check_lpcc_state $file "none"
+	pcc_rw_client_set ${!agthost} 1
+
+	stack_trap "do_nodes $mdts $LCTL set_param mdt.*.enable_pcc_rw=1"
+	do_nodes $mdts $LCTL set_param mdt.*.enable_pcc_rw=0
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER $file &&
+		error "(5) PCC-RW attach with mdt enable_pcc_rw=0"
+	check_lpcc_state $file "none"
+	[[ -z "$(do_facet $SINGLEAGT find $hsm_root -type f)" ]] ||
+		error "(5a) PCC-RW attach refused by the MDT left a cache copy"
+	check_file_data $SINGLEAGT $file "file_data"
+
+	test_mkdir $DIR/$tdir
+	touch $DIR/$tdir/$tfile.old || error "(6) touch $tfile.old failed"
+	$LFS project -sp 100 $DIR/$tdir || error "(7) set project failed"
+	do_facet $SINGLEAGT touch $DIR/$tdir/$tfile.old ||
+		error "(8) open existing file failed with mdt enable_pcc_rw=0"
+	do_facet $SINGLEAGT touch $DIR/$tdir/$tfile.new ||
+		error "(9) create with mdt enable_pcc_rw=0 failed"
+	check_lpcc_state $DIR/$tdir/$tfile.new "none"
+	check_hsm_flags $DIR/$tdir/$tfile.new "0x00000000"
+	[[ -z "$(do_facet $SINGLEAGT find $hsm_root -type f)" ]] ||
+		error "(9a) PCC-RW create refused by the MDT left a cache copy"
+
+	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file ||
+		error "(10) PCC-RO attach $file failed"
+	check_lpcc_state $file "readonly"
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
+		error "(11) PCC detach $file failed"
+
+	stack_trap "pcc_ro_set 1"
+	do_nodes $CLIENTS $LCTL set_param llite.*.enable_pcc_ro=0
+	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file &&
+		error "(12) PCC-RO attach with llite enable_pcc_ro=0"
+	check_lpcc_state $file "none"
+	pcc_ro_set 1
+
+	file=$file.new
+	echo -n file_data > $file || error "(13) write $file failed"
+	do_nodes $mdts $LCTL set_param mdt.*.enable_pcc_ro=0
+	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file
+	(( $? == 95 )) ||
+		error "(14) PCC-RO MDT rejection did not return EOPNOTSUPP"
+	check_lpcc_state $file "none"
+	check_file_data $SINGLEAGT $file "file_data"
+
+	do_facet $SINGLEAGT $LCTL pcc clear $MOUNT
+	do_facet $SINGLEAGT $LCTL pcc add $MOUNT $hsm_root \
+		-p "fname={*.dat}\ roid=$HSM_ARCHIVE_NUMBER\ pccro=1" ||
+		error "(15) add PCC-RO rule failed"
+	file=$DIR/$tfile.dat
+	echo -n file_data > $file || error "(16) write $file failed"
+	check_file_data $SINGLEAGT $file "file_data"
+	check_lpcc_state $file "none"
+	# the client does not ask again for a file the MDT refused
+	pcc_ro_set 1
+	check_file_data $SINGLEAGT $file "file_data"
+	check_lpcc_state $file "none"
+	do_facet $SINGLEAGT $LFS pcc attach -r -i $HSM_ARCHIVE_NUMBER $file ||
+		error "(17) PCC-RO attach $file failed"
+	check_lpcc_state $file "readonly"
+	do_facet $SINGLEAGT $LFS pcc detach $file ||
+		error "(18) PCC detach $file failed"
+}
+run_test 1h "PCC-RW and PCC-RO are refused unless enabled"
+
 #
 # When a process created a LPCC file and holding the open,
 # another process on the same client should be able to open the file.
@@ -649,7 +780,7 @@ test_2b() {
 	rm -f $file
 
 	do_facet $SINGLEAGT "echo -n file_data > $file"
-	do_facet $SINGLEAGT lfs pcc attach -w -i $HSM_ARCHIVE_NUMBER \
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER \
 		$file || error "PCC attach $file failed"
 	check_lpcc_state $file "readwrite"
 
@@ -687,7 +818,7 @@ test_2c() {
 	rm -f $file
 
 	do_facet $SINGLEAGT "echo -n file_data > $file"
-	do_facet $SINGLEAGT lfs pcc attach -w -i $HSM_ARCHIVE_NUMBER \
+	do_facet $SINGLEAGT $LFS pcc attach -w -i $HSM_ARCHIVE_NUMBER \
 		$file || error "PCC attach $file failed"
 	check_lpcc_state $file "readwrite"
 
@@ -4808,6 +4939,7 @@ test_204c() {
 }
 run_test 204c "PCC pin/unpin without attach ID specified"
 
+pcc_rw_set 0
 complete_test $SECONDS
 check_and_cleanup_lustre
 exit_status

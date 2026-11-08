@@ -7357,6 +7357,33 @@ int jt_changelog_deregister(int argc, char **argv)
 }
 #endif /* HAVE_SERVER_SUPPORT */
 
+/* Return true if the PCC rule @param enables PCC-RW. */
+static bool pcc_param_has_rw(const char *param)
+{
+	char *buf, *tok, *val, *save = NULL;
+	bool rw = false;
+
+	buf = strdup(param);
+	if (!buf)
+		return false;
+
+	for (tok = strtok_r(buf, " ", &save); tok;
+	     tok = strtok_r(NULL, " ", &save)) {
+		val = strchr(tok, '=');
+		if (!val)
+			continue;
+		*val++ = '\0';
+		if (strcmp(tok, PCC_CMDNAME_RWPCC) != 0 &&
+		    strcmp(tok, PCC_CMDNAME_PCCRW) != 0)
+			continue;
+		rw = (val[0] != '\0' && strchr("1yYtT", val[0])) ||
+		     strcasecmp(val, "on") == 0;
+	}
+	free(buf);
+
+	return rw;
+}
+
 int jt_pcc_add(int argc, char **argv)
 {
 	struct option long_opts[] = {
@@ -7390,6 +7417,12 @@ int jt_pcc_add(int argc, char **argv)
 			"%s: must specify mount path and PCC path\n",
 			jt_cmdname(argv[0]));
 		return CMD_HELP;
+	}
+
+	if (pcc_param_has_rw(param)) {
+		rc = llapi_pcc_rw_ok(jt_cmdname(argv[0]));
+		if (rc)
+			return rc;
 	}
 
 	mntpath = argv[optind++];

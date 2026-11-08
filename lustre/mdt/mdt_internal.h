@@ -280,6 +280,8 @@ struct mdt_device {
 				   mdt_enable_parallel_rename_file:1,
 				   mdt_enable_parallel_rename_crossdir:1,
 				   mdt_enable_parallel_rename_remote:1,
+				   mdt_enable_pcc_ro:1,
+				   mdt_enable_pcc_rw:1,
 				   mdt_enable_remote_dir:1,
 				   mdt_enable_remote_rename:1,
 				   mdt_enable_rename_trylock:1,
@@ -954,6 +956,7 @@ int mdt_lock_new_child(struct mdt_thread_info *info,
 		       struct mdt_lock_handle *child_lockh);
 void mdt_mfd_set_mode(struct mdt_file_data *mfd, enum mds_open_flags o_flags);
 int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc);
+int mdt_pcc_check(struct mdt_thread_info *info, enum lu_pcc_type type);
 struct mdt_file_data *mdt_open_handle2mfd(struct mdt_export_data *med,
 					const struct lustre_handle *open_handle,
 					bool is_replay);

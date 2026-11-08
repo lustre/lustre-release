@@ -1477,6 +1477,14 @@ static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
 
 	/* Dentry added to dcache tree in ll_lookup_it */
 	de = ll_lookup_it(dir, dentry, it, &pca, open_flags);
+	/* the MDT refused PCC-RW, create the file in Lustre only */
+	if (PTR_ERR_OR_ZERO(de) == -EOPNOTSUPP && pca.pca_dataset) {
+		pcc_create_attach_cleanup(dir->i_sb, &pca);
+		pca.pca_dataset = NULL;
+		ll_intent_release(it);
+		it->it_open_flags &= ~MDS_OPEN_PCC;
+		de = ll_lookup_it(dir, dentry, it, &pca, open_flags);
+	}
 	if (IS_ERR(de))
 		rc = PTR_ERR(de);
 	else if (de != NULL)

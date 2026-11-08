@@ -1,4 +1,4 @@
-.TH LCTL-PCC 8 2024-08-14 Lustre "Lustre Configuration Utilities"
+.TH LCTL-PCC 8 2026-10-16 Lustre "Lustre Configuration Utilities"
 .SH NAME
 lctl-pcc \- commands used to interact with PCC features
 .SH SYNOPSIS
@@ -35,6 +35,12 @@ The example rule means that new files are only auto cached
 if the project ID is 500 and the suffix of the file name is "h5".
 "rwid" represents the read-write attach id (2) which value is same
 as the archive ID of the copytool agent running on this PCC node.
+PCC-RW is a proof of concept that is not intended for production use,
+and is disabled by default, see
+.BR llite.enable_pcc_rw (4).
+Adding a backend with "pccrw=1" needs
+.B LFS_PCC_RW_OK=yes
+set in the environment.
 In addition to the equal (=) operator,
 it also supports greater than (>) and less than (<) comparison operators.
 The following rule expressions are supported:
@@ -75,7 +81,6 @@ just removes the PCC backend from the Lustre client,
 and retains the data on the cache. In this way,
 the PCC-RW backend falls back as a tranditional HSM storage solution
 since the copytool is still running at this client.
-.TP
 .SH AVAILABILITY
 .B lctl pcc
 is part of the
@@ -85,4 +90,5 @@ filesystem package since release 2.13.0
 .SH SEE ALSO
 .BR lfs (1),
 .BR lfs-hsm (1),
-.BR lfs-pcc (1)
+.BR lfs-pcc (1),
+.BR llite.enable_pcc_rw (4)

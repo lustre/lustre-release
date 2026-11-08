@@ -1,4 +1,4 @@
-.TH LFS-PCC-ATTACH 1 2026-03-19 "Lustre" "Lustre User Utilities"
+.TH LFS-PCC-ATTACH 1 2026-10-16 "Lustre" "Lustre User Utilities"
 .SH NAME
 lfs-pcc-attach \- attach file to local cache filesystem
 .SH SYNOPSIS
@@ -40,6 +40,13 @@ Attach the file in read-only mode.  This is the default.
 .TP
 .BR -w ", " --write
 Attach the file in read-write mode.
+PCC-RW is a proof of concept that is not intended for production use,
+as it moves the only copy of the file data into the cache of one client.
+It is disabled by default, see
+.BR llite.enable_pcc_rw (4),
+and
+.B LFS_PCC_RW_OK=yes
+must be set in the environment to use it.
 .SH EXAMPLES
 Attach an existing file into PCC with archive ID 1 and copy data from Lustre
 to cache device. Reads from the Lustre file will direct to the PCC-RO copy:
@@ -71,5 +78,6 @@ filesystem package since release 2.13.0.
 .BR lfs-pcc-pin (1),
 .BR lfs-pcc-state (1),
 .BR llapi_pcc_attach (3),
+.BR llite.enable_pcc_rw (4),
 .BR llite.pcc_attach_thread_max (4),
 .BR lctl-pcc (8)

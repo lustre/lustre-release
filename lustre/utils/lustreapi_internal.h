@@ -640,4 +640,5 @@ int llapi_name_verify(const char *name, const char *extra_char,
 	llapi_name_verify(pool, "-_", LOV_MAXPOOLNAME, "Pool")
 #define llint_lqa_name_verify(lqa) \
 	llapi_name_verify(lqa, "_", LQA_NAME_MAX, "LQA")
+int llapi_pcc_rw_ok(const char *cmd);
 #endif /* _LUSTREAPI_INTERNAL_H_ */

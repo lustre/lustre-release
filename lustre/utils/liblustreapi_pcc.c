@@ -28,6 +28,19 @@
 #include "lustreapi_internal.h"
 #include "libhsm_scanner.h"
 
+/* Make the user acknowledge PCC-RW risks before it is used. */
+int llapi_pcc_rw_ok(const char *cmd)
+{
+	if (getenv("LFS_PCC_RW_OK"))
+		return 0;
+
+	fprintf(stderr,
+		"%s: WARNING: PCC-RW is a proof of concept and not intended for production use. To use PCC-RW for testing, set LFS_PCC_RW_OK=yes to acknowledge this limitation, and set llite.*.enable_pcc_rw=1 on the client and mdt.*.enable_pcc_rw=1 on the MDS.\n",
+		cmd);
+
+	return -EOPNOTSUPP;
+}
+
 /*
  * Fetch and attach a file to readwrite PCC.
  */
