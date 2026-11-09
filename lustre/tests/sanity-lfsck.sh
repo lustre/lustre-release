@@ -5574,6 +5574,15 @@ test_32a()
 
 	start ost1 $(ostdevname 1) $MOUNT_OPTS_NOSCRUB > /dev/null ||
 		error "(5) Fail to start ost1"
+
+	# ost1 resumes its paused layout LFSCK once mounted, and while that
+	# runs it refuses to join a later "lfsck_start -o"
+	wait_update_facet_cond ost1 "$LCTL get_param -n \
+		obdfilter.${OST_DEV}.lfsck_layout |
+		awk '/^status/ { print \\\$2 }'" "!=" "paused" ||
+		error "(6) ost1 did not resume layout LFSCK"
+	do_facet ost1 $LCTL lfsck_stop -M ${OST_DEV} ||
+		error "(7) Fail to stop LFSCK on ost1"
 }
 run_test 32a "stop LFSCK when some OST failed"
 
