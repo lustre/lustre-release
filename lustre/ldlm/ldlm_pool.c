@@ -1252,7 +1252,7 @@ static void ldlm_pools_recalc_task(struct work_struct *ws)
 {
 	/* seconds of sleep if no active namespaces */
 	time64_t delay;
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	struct ldlm_namespace *ns;
 	unsigned long nr_l = 0, nr_p = 0, l;
 	int equal = 0;
@@ -1346,7 +1346,7 @@ int ldlm_pools_init(void)
 
 	ENTRY;
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	delay = min(LDLM_POOL_SRV_DEF_RECALC_PERIOD,
 		    LDLM_POOL_CLI_DEF_RECALC_PERIOD);
 #else

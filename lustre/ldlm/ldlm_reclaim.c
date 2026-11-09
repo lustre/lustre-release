@@ -35,7 +35,7 @@
  * to 0, the feature is disabled.
  */
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 
 /* Lock count is stored in ldlm_reclaim_threshold & ldlm_lock_limit */
 __u64 ldlm_reclaim_threshold;

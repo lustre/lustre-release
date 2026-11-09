@@ -853,7 +853,7 @@ out_disconnect:
 }
 EXPORT_SYMBOL(client_disconnect_export);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 int server_disconnect_export(struct obd_export *exp)
 {
 	int rc;
@@ -3692,7 +3692,7 @@ void ldlm_dump_export_locks(struct obd_export *exp)
 }
 #endif
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 static inline const char *bulk2type(struct ptlrpc_request *req)
 {
 	if (req->rq_bulk_read)

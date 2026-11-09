@@ -33,7 +33,7 @@
 
 #include "ldlm_internal.h"
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 /**
  * Determine if the lock is compatible with all locks on the queue.
  *

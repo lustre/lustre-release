@@ -1596,7 +1596,7 @@ struct ldlm_callback_suite {
 };
 
 /* ldlm_lockd.c */
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 /** \defgroup ldlm_srv_ast Server AST handlers
  * These are AST handlers used by server code.
  * Their property is that they are just preparing RPCs to be sent to clients.
@@ -1640,7 +1640,7 @@ void ldlm_destroy_export(struct obd_export *exp);
 struct ldlm_lock *ldlm_request_lock(struct ptlrpc_request *req);
 
 /* ldlm_lock.c */
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 ldlm_processing_policy ldlm_get_processing_policy(struct ldlm_resource *res);
 ldlm_reprocessing_policy
 ldlm_get_reprocessing_policy(struct ldlm_resource *res);

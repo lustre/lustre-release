@@ -124,7 +124,7 @@ static inline void extent_replace(struct ldlm_lock *in_tree,
 		tree->rb_leftmost = &new->l_rb;
 }
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 # define LDLM_MAX_GROWN_EXTENT (32 * 1024 * 1024 - 1)
 
 /**

@@ -597,7 +597,7 @@ static ssize_t lfru_sample_window_size_show(struct kobject *kobj,
 }
 LUSTRE_RO_ATTR(lfru_sample_window_size);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 static ssize_t ctime_age_limit_show(struct kobject *kobj,
 				    struct attribute *attr, char *buf)
 {
@@ -792,7 +792,7 @@ static struct attribute *ldlm_ns_attrs[] = {
 	&lustre_attr_lru_priv_ratio_limit.attr,
 	&lustre_attr_lock_cache_policy.attr,
 	&lustre_attr_lfru_sample_window_size.attr,
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	&lustre_attr_ctime_age_limit.attr,
 	&lustre_attr_lock_timeouts.attr,
 	&lustre_attr_contention_events.attr,

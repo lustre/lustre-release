@@ -35,7 +35,7 @@
 
 #include "ldlm_internal.h"
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 
 /**
  * ldlm_reprocess_inodebits_queue() - Iterate through the waiting locks of

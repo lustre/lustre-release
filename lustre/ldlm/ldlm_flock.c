@@ -153,7 +153,7 @@ ldlm_flock_destroy(struct ldlm_lock *lock, enum ldlm_mode mode, __u64 flags)
 	EXIT;
 }
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 /**
  * POSIX locks deadlock detection code.
  *
@@ -324,7 +324,7 @@ ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags,
 	int splitted = 0;
 	__u64 start = START(req), end = LAST(req);
 	const struct ldlm_callback_suite null_cbs = { NULL };
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	struct list_head *grant_work = (intention == LDLM_PROCESS_ENQUEUE ?
 					NULL : work_list);
 #endif
@@ -364,7 +364,7 @@ reprocess:
 		/* This loop determines where this processes locks start
 		 * in the resource lr_granted list.
 		 */
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 		list_for_each_entry(lock, &res->lr_waiting, l_res_link) {
 			LASSERT(lock->l_req_mode != LCK_NL);
 
@@ -413,7 +413,7 @@ reprocess:
 				ownlocks_end = &lock->l_same_owner;
 			}
 	}
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	else {
 		lockmode_verify(mode);
 
@@ -632,7 +632,7 @@ reprocess:
 	}
 
 	if (*flags != LDLM_FL_WAIT_NOREPROC) {
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 		if (intention == LDLM_PROCESS_ENQUEUE) {
 			/* If this is an unlock, reprocess the waitq and
 			 * send completions ASTs for locks that can now be
