@@ -20,7 +20,7 @@
 
 #include <linux/module.h>
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 #include <dt_object.h>
 #endif
 #include <obd_support.h>
@@ -124,7 +124,7 @@ struct ldebugfs_vars fld_client_debugfs_list[] = {
 	{ NULL }
 };
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 struct fld_seq_param {
 	struct lu_env		fsp_env;
 	struct dt_it		*fsp_it;

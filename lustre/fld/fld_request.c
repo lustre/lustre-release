@@ -437,7 +437,7 @@ again:
 	res->lsr_start = seq;
 	fld_range_set_type(res, flags);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	if (target->ft_srv) {
 		LASSERT(env != NULL);
 		rc = fld_server_lookup(env, target->ft_srv, seq, res);
@@ -491,7 +491,7 @@ static int __init fld_init(void)
 	if (rc)
 		return rc;
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	rc = fld_server_mod_init();
 	if (rc)
 		return rc;
@@ -504,7 +504,7 @@ static int __init fld_init(void)
 
 static void __exit fld_exit(void)
 {
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	fld_server_mod_exit();
 #endif /* CONFIG_LUSTRE_FS_SERVER */
 	debugfs_remove_recursive(fld_debugfs_dir);
