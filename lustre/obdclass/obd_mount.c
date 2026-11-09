@@ -775,7 +775,7 @@ int server_name2fsname(const char *svname, char *fsname, const char **endptr)
 }
 EXPORT_SYMBOL(server_name2fsname);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 /**
  * server_name2svname() - Get service name (svname) from string (server)
  * @label: server name from which to extract service name

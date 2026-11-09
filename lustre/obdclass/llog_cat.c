@@ -108,13 +108,13 @@ int llog_cat_close(const struct lu_env *env, struct llog_handle *cathandle)
 	ENTRY;
 	list_for_each_entry_safe(loghandle, n, &cathandle->u.chd.chd_head,
 				 u.phd.phd_entry) {
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 		struct llog_log_hdr *llh = loghandle->lgh_hdr;
 		int index;
 #endif
 		/* unlink open-not-created llogs */
 		list_del_init(&loghandle->u.phd.phd_entry);
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 		if (loghandle->lgh_obj != NULL && llh != NULL &&
 		    (llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
 		    (llh->llh_count == 1)) {
@@ -129,7 +129,7 @@ int llog_cat_close(const struct lu_env *env, struct llog_handle *cathandle)
 #endif
 		llog_close(env, loghandle);
 	}
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	/* if handle was stored in ctxt, remove it too */
 	if (cathandle->lgh_ctxt->loc_handle == cathandle)
 		cathandle->lgh_ctxt->loc_handle = NULL;
@@ -145,7 +145,7 @@ llog_cat_process_common(const struct lu_env *env, struct llog_handle *cat_llh,
 			struct llog_rec_hdr *rec, struct llog_handle **llhp)
 {
 	struct llog_logid_rec *lir = container_of(rec, typeof(*lir), lid_hdr);
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	struct llog_log_hdr *hdr;
 #endif
 	int rc;
@@ -163,7 +163,7 @@ llog_cat_process_common(const struct lu_env *env, struct llog_handle *cat_llh,
 
 	rc = llog_cat_id2handle(env, cat_llh, llhp, &lir->lid_id);
 	if (rc) {
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 		/* After a server crash, a stub of index record in catlog could
 		 * be kept, because plain log destroy + catlog index record
 		 * deletion are not atomic. So we end up with an index but no
@@ -178,7 +178,7 @@ llog_cat_process_common(const struct lu_env *env, struct llog_handle *cat_llh,
 #endif
 		RETURN(rc);
 	}
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	/* clean old empty llogs, do not consider current llog in use */
 	/* ignore remote (lgh_obj == NULL) llogs */
 	hdr = (*llhp)->lgh_hdr;
@@ -234,7 +234,7 @@ static int llog_cat_process_cb(const struct lu_env *env,
 		rc = llog_process_or_fork(env, llh, d->lpd_cb, d->lpd_data,
 					  NULL, false);
 	}
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	if (rc == -ENOENT && (cat_llh->lgh_hdr->llh_flags & LLOG_F_RM_ON_ERR)) {
 		/*
 		 * plain llog is reported corrupted, so better to just remove
@@ -246,7 +246,7 @@ static int llog_cat_process_cb(const struct lu_env *env,
 	}
 #endif
 out:
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	/* The empty plain log was destroyed while processing */
 	if (rc == LLOG_DEL_PLAIN || rc == LLOG_DEL_RECORD)
 		/* clear wrong catalog entry */

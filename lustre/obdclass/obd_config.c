@@ -21,7 +21,7 @@
 #include <linux/string.h>
 #include <linux/umh.h>
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 #include <cfs_hash.h>
 #endif
 #include <llog_swab.h>
@@ -34,7 +34,7 @@
 
 #include "llog_internal.h"
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 static struct cfs_hash_ops gen_hash_ops;
 #endif /* CONFIG_LUSTRE_FS_SERVER */
 
@@ -111,7 +111,7 @@ void obd_uuid_del(struct obd_device *obd, struct obd_export *export)
 }
 EXPORT_SYMBOL(obd_uuid_del);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 /* obd_uuid_lookup() is used only server side by target_handle_connect(),
  * mdt_hsm_agent_send(), and obd_export_evict_by_uuid().
  */
@@ -870,7 +870,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	if (err)
 		GOTO(err_starting, err);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	/* create a nid-export lustre hash */
 	err = rhltable_init(&obd->obd_nid_hash, &nid_hash_params);
 	if (err)
@@ -895,7 +895,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 	err = obd_setup(obd, lcfg);
 	if (err)
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 		GOTO(err_gen_hash, err);
 #else
 		GOTO(err_uuid_hash, err);
@@ -913,7 +913,7 @@ int class_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
 	RETURN(0);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 err_gen_hash:
 	if (obd->obd_gen_hash) {
 		cfs_hash_putref(obd->obd_gen_hash);
@@ -1019,7 +1019,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 					 obd->obd_name);
 				spin_lock(&obd->obd_dev_lock);
 				set_bit(OBDF_FAIL, obd->obd_flags);
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 				set_bit(OBDF_NO_TRANSNO, obd->obd_flags);
 #endif
 				set_bit(OBDF_NO_RECOV, obd->obd_flags);
@@ -1052,7 +1052,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	/* destroy an uuid-export hash body */
 	rhashtable_free_and_destroy(&obd->obd_uuid_hash, obd_export_exit,
 				    NULL);
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	/* destroy a nid-export hash body */
 	rhltable_free_and_destroy(&obd->obd_nid_hash, nid_export_exit, NULL);
 
@@ -1351,7 +1351,7 @@ EXPORT_SYMBOL(class_del_profiles);
  * We can't call lquota_process_config directly because
  * it lives in a module that must be loaded after this one.
  */
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 static int (*quota_process_config)(struct lustre_cfg *lcfg);
 #endif /* CONFIG_LUSTRE_FS_SERVER */
 
@@ -1527,7 +1527,7 @@ static ssize_t process_param2_config(struct lustre_cfg *lcfg)
 	RETURN(rc);
 }
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 void lustre_register_quota_process_config(int (*qpc)(struct lustre_cfg *lcfg))
 {
 	quota_process_config = qpc;
@@ -1673,7 +1673,7 @@ int class_process_config(struct lustre_cfg *lcfg, struct kobject *kobj)
 				CWARN("Ignoring unknown param %s\n", tmp);
 
 			GOTO(out, err = 0);
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 		} else if ((class_match_param(lustre_cfg_string(lcfg, 1),
 					      PARAM_QUOTA, &tmp) == 0) &&
 			   quota_process_config) {
@@ -2042,7 +2042,7 @@ int class_config_llog_handler(const struct lu_env *env,
 			}
 		}
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 		/* newer MDS replaces LOV/OSC with LOD/OSP */
 		if ((lcfg->lcfg_command == LCFG_ATTACH ||
 		     lcfg->lcfg_command == LCFG_SET_PARAM ||
@@ -2234,7 +2234,7 @@ parse_out:
 }
 EXPORT_SYMBOL(class_config_parse_llog);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 /*
  * Get marker cfg_flag
  */
@@ -2582,7 +2582,7 @@ out:
 }
 EXPORT_SYMBOL(class_manual_cleanup);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 /*
  * client_generation<->export hash operations
  */

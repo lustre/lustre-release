@@ -1681,7 +1681,7 @@ struct lu_qos {
 	__u32			 lq_active_svr_count;
 	unsigned int		 lq_prio_free;   /* priority for free space */
 	unsigned int		 lq_threshold_rr;/* priority for rr */
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	struct lu_qos_rr	 lq_rr;          /* round robin qos data */
 	atomic_t		 lq_rr_gen;	/* RR array changes */
 	atomic_t		 lq_active_gen;	/* targets becoming active */

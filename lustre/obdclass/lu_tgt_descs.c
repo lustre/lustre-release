@@ -139,7 +139,7 @@ int lu_qos_add_tgt(struct lu_qos *qos, struct lu_tgt_desc *tgt)
 	list_add_tail(&svr->lsq_svr_list, &tempsvr->lsq_svr_list);
 
 	set_bit(LQ_DIRTY, &qos->lq_flags);
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	set_bit(LQ_DIRTY, &qos->lq_rr.lqr_flags);
 #endif
 out:
@@ -182,7 +182,7 @@ int lu_qos_del_tgt(struct lu_qos *qos, struct lu_tgt_desc *ltd)
 	}
 
 	set_bit(LQ_DIRTY, &qos->lq_flags);
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	set_bit(LQ_DIRTY, &qos->lq_rr.lqr_flags);
 #endif
 out:
@@ -191,7 +191,7 @@ out:
 }
 EXPORT_SYMBOL(lu_qos_del_tgt);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 /**
  * lu_qos_rr_init() - Initialize round-robin allocation state
  * @lqr: round-robin state

@@ -683,7 +683,7 @@ enum {
 	OBDF_CHECKSUM_DUMP,	/* dump pages upon cksum error */
 	OBDF_DYNAMIC_NIDS,	/* Allow dynamic NIDs on device */
 	OBDF_READ_ONLY,		/* device is read-only */
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	/* start of the server start range */
 	OBDF_SERVER_OPTS = 65,
 

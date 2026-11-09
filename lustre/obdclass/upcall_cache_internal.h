@@ -43,7 +43,7 @@ static inline void put_entry(struct upcall_cache *cache,
 	}
 }
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 void refresh_entry_internal(struct upcall_cache *cache,
 			    struct upcall_cache_entry *entry,
 			    __u32 fsgid, struct group_info **ginfo);

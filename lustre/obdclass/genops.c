@@ -94,7 +94,7 @@ SERVER_ONLY struct obd_type *class_get_type(const char *name)
 		bool retry = true;
 		int rc;
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 		if (strcmp(modname, "obdfilter") == 0 ||
 		    strcmp(modname, LUSTRE_OSS_NAME) == 0)
 			modname = "ofd";
@@ -183,7 +183,7 @@ static struct kobj_type class_ktype = {
 	.release        = class_sysfs_release,
 };
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 struct obd_type *class_add_symlinks(const char *name, bool enable_proc)
 {
 	struct dentry *symlink;
@@ -241,7 +241,7 @@ int class_register_type(const struct obd_ops *dt_ops,
 
 	type = class_search_type(name);
 	if (type) {
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 		if (type->typ_sym_filter)
 			goto dir_exist;
 #endif /* CONFIG_LUSTRE_FS_SERVER */
@@ -257,14 +257,14 @@ int class_register_type(const struct obd_ops *dt_ops,
 	type->typ_lu = ldt ? OBD_LU_TYPE_SETUP : NULL;
 	type->typ_kobj.kset = lustre_kset;
 	kobject_init(&type->typ_kobj, &class_ktype);
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 dir_exist:
 #endif /* CONFIG_LUSTRE_FS_SERVER */
 
 	type->typ_dt_ops = dt_ops;
 	type->typ_md_ops = md_ops;
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	if (type->typ_sym_filter) {
 		type->typ_sym_filter = false;
 		kobject_put(&type->typ_kobj);
@@ -288,7 +288,7 @@ dir_exist:
 	rc = kobject_add(&type->typ_kobj, &lustre_kset->kobj, "%s", name);
 	if (rc)
 		GOTO(failed, rc);
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 setup_ldt:
 #endif
 	if (ldt) {
@@ -1205,7 +1205,7 @@ void class_unlink_export(struct obd_export *exp)
 	if (exp != exp->exp_obd->obd_self_export)
 		obd_uuid_del(exp->exp_obd, exp);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	if (!hlist_unhashed(&exp->exp_gen_hash)) {
 		struct tg_export_data	*ted = &exp->exp_target_data;
 		struct cfs_hash		*hash;
@@ -1508,7 +1508,7 @@ int class_disconnect(struct obd_export *export)
 	spin_lock(&export->exp_lock);
 	already_disconnected = export->exp_disconnected;
 	export->exp_disconnected = 1;
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	/*  We hold references of export for uuid hash and nid_hash and export
 	 *  link at least. So it is safe to call rh*table_remove_fast in there.
 	 */
@@ -1711,7 +1711,7 @@ void class_fail_export(struct obd_export *exp)
 }
 EXPORT_SYMBOL(class_fail_export);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 
 static int take_first(struct obd_export *exp, void *data)
 {

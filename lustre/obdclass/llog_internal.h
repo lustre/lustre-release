@@ -67,7 +67,7 @@ int llog_handle_put(const struct lu_env *env, struct llog_handle *loghandle);
 int class_config_dump_handler(const struct lu_env *env,
 			      struct llog_handle *handle,
 			      struct llog_rec_hdr *rec, void *data);
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 int llog_cat_id2handle(const struct lu_env *env, struct llog_handle *cathandle,
 		       struct llog_handle **res, struct llog_logid *logid);
 void llog_get_marker_cfg_flags(struct llog_rec_hdr *rec,

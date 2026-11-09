@@ -40,7 +40,7 @@ static struct handle_bucket {
  * For clients, it is not clear how much an individual client will consume.
  * Let's consider 10M locks. Even if more, the client side is not so critical.
  */
-#ifdef HAVE_SERVER_SUPPORT
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 #define HANDLE_HASH_SIZE	\
 	max_t(unsigned long,	\
 	      1 << 18,		\

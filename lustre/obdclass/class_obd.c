@@ -26,7 +26,7 @@
 #include <lustre_kernelcomm.h>
 #include <lprocfs_status.h>
 #include <cl_object.h>
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 # include <dt_object.h>
 # include <md_object.h>
 #endif /* CONFIG_LUSTRE_FS_SERVER */
@@ -534,7 +534,7 @@ static long obd_class_ioctl(struct file *filp, unsigned int cmd,
 /* Serializes at_min updates (and at_min_disable_autotune on servers) */
 static DEFINE_SPINLOCK(at_bounds_lock);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 static bool at_min_disable_autotune;
 #endif
 
@@ -546,7 +546,7 @@ static bool at_min_disable_autotune;
 void class_at_min_set(unsigned int val)
 {
 	if (val == 0) {
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 		spin_lock(&at_bounds_lock);
 		at_min_disable_autotune = false;
 		spin_unlock(&at_bounds_lock);
@@ -561,14 +561,14 @@ void class_at_min_set(unsigned int val)
 
 	spin_lock(&at_bounds_lock);
 	at_min = val;
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	at_min_disable_autotune = true;
 #endif
 	spin_unlock(&at_bounds_lock);
 }
 EXPORT_SYMBOL(class_at_min_set);
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 static unsigned int class_calc_at_min_from_clients(unsigned int expected)
 {
 	unsigned int calculated_at_min;
@@ -943,7 +943,7 @@ static int __init obdclass_init(void)
 	err = cfs_hash_init();
 	if (err)
 		goto cleanup_obd_pool;
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	err = dt_global_init();
 	if (err != 0)
 		goto cleanup_cfs_hash;
@@ -964,7 +964,7 @@ static int __init obdclass_init(void)
 	return 0;
 
 cleanup_all:
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	lu_ucred_global_fini();
 
 cleanup_dt_global:
@@ -1044,7 +1044,7 @@ static void __exit obdclass_exit(void)
 	ENTRY;
 
 	misc_deregister(&obd_psdev);
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	lu_ucred_global_fini();
 	dt_global_fini();
 #endif /* CONFIG_LUSTRE_FS_SERVER */
