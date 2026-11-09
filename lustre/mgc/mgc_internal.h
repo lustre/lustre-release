@@ -18,7 +18,7 @@
 #include <lustre_dlm.h>
 #include <lustre_log.h>
 #include <lustre_export.h>
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 #include <lustre_nodemap.h>
 #endif
 
@@ -72,7 +72,7 @@ static inline bool cld_is_recover(struct config_llog_data *cld)
 
 static inline bool cld_is_nodemap(struct config_llog_data *cld)
 {
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	return cld->cld_type == MGS_CFG_T_NODEMAP;
 #else
 	return false;
@@ -81,14 +81,14 @@ static inline bool cld_is_nodemap(struct config_llog_data *cld)
 
 static inline bool cld_is_barrier(struct config_llog_data *cld)
 {
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 	return cld->cld_type == MGS_CFG_T_BARRIER;
 #else
 	return false;
 #endif
 }
 
-#ifdef CONFIG_LUSTRE_FS_SERVER
+#if IS_ENABLED(CONFIG_LUSTRE_FS_SERVER)
 int mgc_set_info_async_server(const struct lu_env *env,
 			      struct obd_export *exp,
 			      u32 keylen, void *key,
