@@ -34810,6 +34810,9 @@ run_test 398j "test parallel dio where stripe size > rpc_size"
 test_398k() { #  LU-13798
 	wait_delete_completed
 	wait_mds_ost_sync
+	# Leave the MDS with an accurate view of OST space for later tests
+	stack_trap wait_mds_ost_sync
+	stack_trap wait_delete_completed
 
 	# 4 stripe file; we will cause out of space on OST0
 	$LFS setstripe -o 0,1,0,1 -S 1M $DIR/$tfile
@@ -34843,9 +34846,10 @@ run_test 398k "test enospc on first stripe"
 test_398l() { #  LU-13798
 	wait_delete_completed
 	wait_mds_ost_sync
-	# Clean up after the test
-	stack_trap wait_delete_completed
+	# Clean up after the test, traps run in reverse order: deletes
+	# must complete before the MDS can see the freed OST space
 	stack_trap wait_mds_ost_sync
+	stack_trap wait_delete_completed
 
 	# 4 stripe file; we will cause out of space on OST0
 	# Note the 1M stripe size and the > 1M i/o size mean this ENOSPC
@@ -34888,7 +34892,18 @@ test_398l() { #  LU-13798
 run_test 398l "test enospc on intermediate stripe/RPC"
 
 test_398m() { #  LU-13798
-	$LFS setstripe -o 0,1,0,1 -S 1M $DIR/$tfile
+	wait_delete_completed
+	wait_mds_ost_sync
+
+	# An earlier test may leave OST0 or OST1 looking full to the MDS
+	local i
+	for ((i = 0; i < 30; i++)); do
+		$LFS setstripe -o 0,1,0,1 -S 1M $DIR/$tfile && break
+		rm -f $DIR/$tfile
+		sleep 1
+	done
+	(( i < 30 )) || error "setstripe -o 0,1,0,1 failed"
+	stack_trap "rm -f $DIR/$tfile"
 
 	stack_trap "$LCTL set_param $($LCTL get_param -b osc.*.resend_count)"
 	$LCTL set_param osc.*.resend_count=1
