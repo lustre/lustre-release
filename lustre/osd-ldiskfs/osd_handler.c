@@ -1916,8 +1916,13 @@ static inline void osd_trans_commit_cb(struct osd_thandle *oh,
 static int cmp_key_txn(const void *transaction, const struct rb_node *node)
 {
 	struct osd_thandle *oh = container_of(node, typeof(*oh), ot_node);
+	void *ot = oh->ot_transaction;
 
-	return (transaction - (void *)oh->ot_transaction);
+	if (transaction < ot)
+		return -1;
+	else if (transaction > ot)
+		return 1;
+	return 0;
 }
 
 static int cmp_node_txn(struct rb_node *left, const struct rb_node *node)
