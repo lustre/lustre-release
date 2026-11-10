@@ -285,14 +285,20 @@ mdc_intent_open_pack(struct obd_export *exp, struct lookup_intent *it,
 						   MDS_INODELOCK_OPEN);
 	}
 
-	/* If CREATE, cancel parent's UPDATE lock. */
-	if (it->it_op & IT_CREAT)
-		mode = LCK_EX;
-	else
-		mode = LCK_CR;
-	count += mdc_resource_cancel_unused(exp, &op_data->op_fid1,
-					    &cancels, mode,
-					    MDS_INODELOCK_UPDATE);
+	/*
+	 * If CREATE, cancel parent's UPDATE lock. Not for a volatile file,
+	 * which is not linked into the parent: the MDT takes no parent lock
+	 * for it (mdt_open_lock_mode()).
+	 */
+	if (!(op_data->op_bias & MDS_CREATE_VOLATILE)) {
+		if (it->it_op & IT_CREAT)
+			mode = LCK_EX;
+		else
+			mode = LCK_CR;
+		count += mdc_resource_cancel_unused(exp, &op_data->op_fid1,
+						    &cancels, mode,
+						    MDS_INODELOCK_UPDATE);
+	}
 
 	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
 				   &RQF_LDLM_INTENT_OPEN);
