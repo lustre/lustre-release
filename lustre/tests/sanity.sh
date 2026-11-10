@@ -6959,12 +6959,18 @@ test_44b() {
 	(( $OST1_VERSION >= $(version_code 2.15.61.137) )) ||
 		skip "Need OST >= 2.15.61.137 for large object handling"
 
-	$LFS setstripe -c 1 $DIR/$tfile || error "setstripe failed"
+	local osc_tgt="$FSNAME-OST0000-osc-$($LFS getname -i $DIR)"
+	local max_object_bytes=$(import_param $osc_tgt max_object_bytes)
 	local off=$((2**32*4096-8192))
+
+	# a server with larger pages has a smaller limit, rounded to PAGE_SIZE
+	(( off < max_object_bytes )) || off=$((max_object_bytes - 8192))
+
+	$LFS setstripe -c 1 $DIR/$tfile || error "setstripe failed"
 	dd if=/dev/zero of=$DIR/$tfile bs=1 count=1 seek=$off conv=notrunc ||
 		error "dd failed"
 	cancel_lru_locks osc
-	$CHECKSTAT -s $((2**32*4096-8192+1)) $DIR/$tfile || error "wrong size"
+	$CHECKSTAT -s $((off + 1)) $DIR/$tfile || error "wrong size"
 }
 run_test 44b "write one byte at offset 0xfffffffe000"
 

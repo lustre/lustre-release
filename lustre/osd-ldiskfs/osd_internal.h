@@ -373,6 +373,21 @@ struct osd_device {
 	struct workqueue_struct	*od_integrityd_wq;
 };
 
+/**
+ * osd_maxbytes() - largest object size the OSD accepts
+ * @maxbytes: size limit of the backing filesystem
+ *
+ * The page cache and the block mapping work in whole pages, so a last
+ * page that the filesystem can only partly address cannot be written.
+ * Round the limit down to PAGE_SIZE (LU-21182).
+ *
+ * Return: @maxbytes rounded down to a multiple of PAGE_SIZE
+ */
+static inline loff_t osd_maxbytes(loff_t maxbytes)
+{
+	return round_down(maxbytes, PAGE_SIZE);
+}
+
 static inline struct qsd_instance *osd_def_qsd(struct osd_device *osd)
 {
 	if (osd->od_is_ost)

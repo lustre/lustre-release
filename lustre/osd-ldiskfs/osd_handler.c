@@ -2638,9 +2638,10 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
 	sfs->os_state |= osd->od_nonrotational ? OS_STATFS_NONROT : 0;
 
 	if (ldiskfs_has_feature_extents(sb))
-		sfs->os_maxbytes = sb->s_maxbytes;
+		sfs->os_maxbytes = osd_maxbytes(sb->s_maxbytes);
 	else
-		sfs->os_maxbytes = LDISKFS_SB(sb)->s_bitmap_maxbytes;
+		sfs->os_maxbytes =
+			osd_maxbytes(LDISKFS_SB(sb)->s_bitmap_maxbytes);
 
 	/*
 	 * Reserve some space so to avoid fragmenting the filesystem too much.
@@ -2758,9 +2759,10 @@ static void osd_conf_get(const struct lu_env *env,
 	param->ddp_symlink_max  = sb->s_blocksize;
 	param->ddp_mount_type   = LDD_MT_LDISKFS;
 	if (ldiskfs_has_feature_extents(sb))
-		param->ddp_maxbytes = sb->s_maxbytes;
+		param->ddp_maxbytes = osd_maxbytes(sb->s_maxbytes);
 	else
-		param->ddp_maxbytes = LDISKFS_SB(sb)->s_bitmap_maxbytes;
+		param->ddp_maxbytes =
+			osd_maxbytes(LDISKFS_SB(sb)->s_bitmap_maxbytes);
 	/*
 	 * inode are statically allocated, so per-inode space consumption
 	 * is the space consumed by the directory entry
