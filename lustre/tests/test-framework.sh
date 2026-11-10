@@ -13020,6 +13020,21 @@ rmultiop_stop() {
 }
 
 sleep_maxage() {
+	local refresh="$LCTL set_param -n"
+	local want=$(version_code 2.17.61.1)
+
+	# statfs_refresh must exist on every node, else sleep instead.
+	# Each layer refreshes from the one below, so the order matters.
+	(( MDS1_VERSION >= want && OST1_VERSION >= want &&
+	   CLIENT_VERSION >= want )) &&
+	{ do_nodes $(osts_nodes) "$refresh obdfilter.*.statfs_refresh=1" &&
+	  do_nodes $(mdts_nodes) "$refresh osp.*.statfs_refresh=1" &&
+	  do_nodes $(mdts_nodes) "$refresh lod.*.statfs_refresh=1" &&
+	  $refresh osc.*.statfs_refresh=1 &&
+	  $refresh lov.*.statfs_refresh=1 &&
+	  $refresh mdc.*.statfs_refresh=1 &&
+	  $refresh lmv.*.statfs_refresh=1; } 2>/dev/null && return
+
 	local delay=$(do_facet mds1 lctl get_param -n lod.*.qos_maxage |
 		      awk '{ print $1 + 5; exit; }')
 	sleep $delay

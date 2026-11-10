@@ -242,6 +242,10 @@ struct osp_device {
 	ktime_t				 opd_statfs_fresh_till;
 	struct timer_list		 opd_statfs_timer;
 	int				 opd_statfs_update_in_progress;
+	/* counts finished statfs RPCs, for waiters on opd_statfs_waitq */
+	atomic_t			 opd_statfs_done;
+	int				 opd_statfs_rc;
+	wait_queue_head_t		 opd_statfs_waitq;
 	/* how often to update statfs data */
 	time64_t			 opd_statfs_maxage;
 
@@ -787,6 +791,7 @@ void osp_precreate_fini(struct osp_device *d);
 int osp_object_truncate(const struct lu_env *env, struct dt_object *dt, __u64);
 void osp_pre_update_status(struct osp_device *d, int rc);
 void osp_statfs_need_now(struct osp_device *d);
+int osp_statfs_refresh(struct osp_device *d);
 int osp_reset_last_used(const struct lu_env *env, struct osp_device *osp);
 int osp_write_last_oid_seq_files(struct lu_env *env, struct osp_device *osp,
 				 struct lu_fid *fid, int sync);

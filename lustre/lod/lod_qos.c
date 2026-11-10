@@ -171,6 +171,30 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 	RETURN(rc);
 }
 
+static void lod_qos_statfs_read(const struct lu_env *env,
+				struct lod_device *lod,
+				struct lu_tgt_descs *ltd)
+{
+	struct lu_tgt_desc *tgt;
+	u64 avail;
+	int rc;
+
+	lod_getref(ltd);
+	ltd_foreach_tgt(ltd, tgt) {
+		avail = tgt->ltd_statfs.os_bavail;
+		rc = lod_statfs_and_check(env, lod, ltd, tgt, 0);
+		/* a reconnecting target still has its cached data */
+		if (rc && rc != -EAGAIN)
+			continue;
+
+		if (tgt->ltd_statfs.os_bavail != avail)
+			/* recalculate weigths */
+			set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
+	}
+	lod_putref(lod, ltd);
+	lod2obd(lod)->obd_osfs_age = ktime_get_seconds();
+}
+
 /**
  * lod_qos_statfs_update() - Maintain per-target statfs data.
  * @env: execution environment for this thread
@@ -185,10 +209,7 @@ void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
 			   struct lu_tgt_descs *ltd)
 {
 	struct obd_device *obd = lod2obd(lod);
-	struct lu_tgt_desc *tgt;
 	time64_t max_age;
-	u64 avail;
-	int rc;
 	ENTRY;
 
 	max_age = ktime_get_seconds() - 2 * ltd->ltd_lov_desc.ld_qos_maxage;
@@ -205,20 +226,7 @@ void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
 		clear_bit(LQ_SF_PROGRESS, &ltd->ltd_qos.lq_flags);
 		RETURN_EXIT;
 	}
-	lod_getref(ltd);
-	ltd_foreach_tgt(ltd, tgt) {
-		avail = tgt->ltd_statfs.os_bavail;
-		rc = lod_statfs_and_check(env, lod, ltd, tgt, 0);
-		/* a reconnecting target still has its cached data */
-		if (rc && rc != -EAGAIN)
-			continue;
-
-		if (tgt->ltd_statfs.os_bavail != avail)
-			/* recalculate weigths */
-			set_bit(LQ_DIRTY, &ltd->ltd_qos.lq_flags);
-	}
-	lod_putref(lod, ltd);
-	obd->obd_osfs_age = ktime_get_seconds();
+	lod_qos_statfs_read(env, lod, ltd);
 
 	clear_bit(LQ_SF_PROGRESS, &ltd->ltd_qos.lq_flags);
 	EXIT;
@@ -290,6 +298,19 @@ static bool lod_qos_rr_write_lock(struct lu_tgt_descs *ltd,
 	set_bit(LQ_REBUILD, &lqr->lqr_flags);
 
 	return true;
+}
+
+/**
+ * lod_qos_statfs_refresh() - Read statfs data from all targets now
+ * @env: execution environment for this thread
+ * @lod: LOD device
+ *
+ * Unlike lod_qos_statfs_update() this does not wait for qos_maxage to pass.
+ */
+void lod_qos_statfs_refresh(const struct lu_env *env, struct lod_device *lod)
+{
+	lod_qos_statfs_read(env, lod, &lod->lod_ost_descs);
+	lod_qos_statfs_read(env, lod, &lod->lod_mdt_descs);
 }
 
 /**

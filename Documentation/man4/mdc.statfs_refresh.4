@@ -1,0 +1,99 @@
+.TH MDC.STATFS_REFRESH 4 2026-11-07 Lustre "Lustre Kernel Interfaces"
+.SH NAME
+mdc.statfs_refresh, osc.statfs_refresh, lov.statfs_refresh, lmv.statfs_refresh, obdfilter.statfs_refresh, osp.statfs_refresh, lod.statfs_refresh \- replace cached space usage of a device now
+.SH SYNOPSIS
+.SY
+.BI "lctl set_param obdfilter." FSNAME "*.statfs_refresh=1"
+.SY
+.BI "lctl set_param osp." FSNAME "*.statfs_refresh=1"
+.SY
+.BI "lctl set_param lod." FSNAME "*.statfs_refresh=1"
+.SY
+.BI "lctl set_param " "DEVICE" "." FSNAME "*.statfs_refresh=1"
+.YS
+.SS PROPERTIES
+.TP
+.B Perms
+.br
+.BR 200 " | " --w-------
+.TP
+.B Scope
+.br
+Per device
+.TP
+.B Config
+.br
+Always present on
+.BR obdfilter ,
+.BR osp ,
+.BR lod ,
+.BR osc ,
+.BR lov ,
+.B mdc
+and
+.B lmv
+devices
+.SH DESCRIPTION
+Each of these devices caches the space usage and state of the storage
+below it, and reads it again only when the cached copy is older than its
+maximum age.  Any write to
+.B statfs_refresh
+replaces the cached copy now.  The value written is ignored.
+.TP
+.B obdfilter
+reads the space usage of the OST backing filesystem.
+.TP
+.B osp
+sends a statfs RPC to its target and waits for the reply.  A deactivated
+device is skipped.
+.TP
+.B lod
+reads the space usage cached by each of its
+.B osp
+devices and recalculates the object allocation weights, rather than
+waiting up to
+.B qos_maxage
+seconds to do so.  It does not refresh the
+.B osp
+devices themselves.
+.TP
+.BR osc ", " mdc ", " lov ", " lmv
+send a statfs RPC to each target.
+.PP
+Each device reads the cache of the device below it, so to see a change of
+OST space or state in object allocation, write
+.B obdfilter
+on the OSS first, then
+.B osp
+and
+.B lod
+on the MDS.  Test scripts do this in place of a sleep of
+.B qos_maxage
+seconds.
+.PP
+On
+.BR osp ,
+the write fails with
+.B EAGAIN
+at once if the target is not connected or the MDT is read only, and with
+.B ETIMEDOUT
+if the target does not reply within 5 seconds.  The other devices do not
+wait for a target that is not connected.
+.SH EXAMPLES
+Make object allocation on all MDTs of the
+.B testfs
+filesystem use the current OST space usage:
+.EX
+.RB "oss# " "lctl set_param obdfilter.testfs-*.statfs_refresh=1"
+.RB "mds# " "lctl set_param osp.testfs-*.statfs_refresh=1"
+.RB "mds# " "lctl set_param lod.testfs-*.statfs_refresh=1"
+.EE
+.SH AVAILABILITY
+.B statfs_refresh
+is part of the
+.BR lustre (7)
+filesystem package since release 2.18.0.
+.\" Added in commit 2.17.61
+.SH SEE ALSO
+.BR lctl-get_param (8),
+.BR lctl-set_param (8)

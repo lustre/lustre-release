@@ -98,6 +98,18 @@ void osp_pre_update_status(struct osp_device *d, int rc)
 	osp_pre_update_status_msfs(d, &d->opd_statfs, rc);
 }
 
+static void osp_statfs_finished(struct osp_device *d, int rc)
+{
+	d->opd_statfs_rc = rc;
+	/* the new count publishes opd_statfs and opd_statfs_rc */
+	smp_mb__before_atomic();
+	atomic_inc(&d->opd_statfs_done);
+	/* osp_statfs_refresh() must see the new count once none is in flight */
+	smp_mb__after_atomic();
+	d->opd_statfs_update_in_progress = 0;
+	wake_up(&d->opd_statfs_waitq);
+}
+
 /**
  * osp_statfs_interpret() - RPC interpret callback for OST_STATFS RPC
  * @env: LU environment provided by the caller
@@ -147,7 +159,7 @@ static int osp_statfs_interpret(const struct lu_env *env,
 	d->opd_statfs_fresh_till = ktime_add_ns(ktime_get(), maxage_ns);
 	mod_timer(&d->opd_statfs_timer,
 		  jiffies + cfs_time_seconds(d->opd_statfs_maxage));
-	d->opd_statfs_update_in_progress = 0;
+	osp_statfs_finished(d, 0);
 
 	/*
 	 * we begin with status=EAGAIN after mount and the precreate thread
@@ -170,7 +182,7 @@ static int osp_statfs_interpret(const struct lu_env *env,
 out:
 	/* couldn't update statfs, try again with a small delay */
 	d->opd_statfs_fresh_till = ktime_add_ns(ktime_get(), 10 * NSEC_PER_SEC);
-	d->opd_statfs_update_in_progress = 0;
+	osp_statfs_finished(d, rc);
 	if (d->opd_pre && d->opd_pre_task)
 		wake_up(&d->opd_pre_waitq);
 
@@ -287,6 +299,47 @@ void osp_statfs_need_now(struct osp_device *d)
 		timer_delete(&d->opd_statfs_timer);
 		wake_up(&d->opd_pre_waitq);
 	}
+}
+
+/**
+ * osp_statfs_refresh() - Wait for statfs data newer than this call
+ * @d: OSP device where statfs data needs to be refreshed
+ *
+ * An RPC already in flight can hold data older than what the caller wants to
+ * see, so that one does not count.
+ *
+ * Return:
+ * * %0 on success
+ * * %-EAGAIN if no statfs RPC can be sent now
+ * * %-ETIMEDOUT if no statfs RPC finished in time
+ * * %negative error from the statfs RPC
+ */
+int osp_statfs_refresh(struct osp_device *d)
+{
+	long timeout = cfs_time_seconds(5);
+	int done;
+
+	if (!READ_ONCE(d->opd_pre_task) || !READ_ONCE(d->opd_imp_connected))
+		return -EAGAIN;
+
+	timeout = wait_event_idle_timeout(d->opd_statfs_waitq,
+					  !d->opd_statfs_update_in_progress,
+					  timeout);
+	if (!timeout)
+		return -ETIMEDOUT;
+
+	/* pairs with the barrier in osp_statfs_finished() */
+	smp_rmb();
+	done = atomic_read(&d->opd_statfs_done);
+	osp_statfs_need_now(d);
+	if (!wait_event_idle_timeout(d->opd_statfs_waitq,
+				     atomic_read(&d->opd_statfs_done) != done,
+				     timeout))
+		return -ETIMEDOUT;
+
+	/* pairs with smp_mb__before_atomic() in osp_statfs_finished() */
+	smp_rmb();
+	return d->opd_statfs_rc;
 }
 
 /**
@@ -1825,6 +1878,8 @@ int osp_init_statfs(struct osp_device *d)
 	 * Initialize statfs-related things
 	 */
 	d->opd_statfs_maxage = 5; /* defaultupdate interval */
+	atomic_set(&d->opd_statfs_done, 0);
+	init_waitqueue_head(&d->opd_statfs_waitq);
 	d->opd_statfs_fresh_till = ktime_sub_ns(ktime_get(),
 						1000 * NSEC_PER_SEC);
 	CDEBUG(D_OTHER, "current %lldns, fresh till %lldns\n",

@@ -24,6 +24,7 @@ SERVER_MANFILES =				\
 	nodemap.%				\
 	obdfilter.%				\
 	osd-%					\
+	osp.%					\
 	ost.%
 
 man4_MANS = $(filter-out $(SERVER_MANFILES),$(MANFILES))

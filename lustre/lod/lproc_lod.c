@@ -858,6 +858,28 @@ static ssize_t qos_maxage_store(struct kobject *kobj, struct attribute *attr,
 LUSTRE_RW_ATTR(mdt_qos_maxage);
 LUSTRE_RW_ATTR(qos_maxage);
 
+/* any write reads target statfs now, rather than within qos_maxage */
+static ssize_t statfs_refresh_store(struct kobject *kobj,
+				    struct attribute *attr,
+				    const char *buffer, size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct lod_device *lod = dt2lod_dev(dt);
+	struct lu_env env;
+	int rc;
+
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc)
+		return rc;
+
+	lod_qos_statfs_refresh(&env, lod);
+	lu_env_fini(&env);
+
+	return count;
+}
+LUSTRE_WO_ATTR(statfs_refresh);
+
 static void *lod_tgts_seq_start(struct seq_file *p, loff_t *pos, bool is_mdt)
 {
 	struct obd_device *obd = p->private;
@@ -1393,6 +1415,7 @@ static struct attribute *lod_attrs[] = {
 	&lustre_attr_lmv_failout.attr,
 	&lustre_attr_numobd.attr,
 	&lustre_attr_qos_maxage.attr,
+	&lustre_attr_statfs_refresh.attr,
 	&lustre_attr_qos_prio_free.attr,
 	&lustre_attr_qos_threshold_rr.attr,
 	&lustre_attr_mdt_stripecount.attr,

@@ -891,6 +891,7 @@ __u16 lod_get_stripe_count_plain(struct lod_device *lod, struct lod_object *lo,
 __u16 lod_get_stripe_count(struct lod_device *lod, struct lod_object *lo,
 			   int comp_idx, __u16 stripe_count, bool overstriping,
 			   enum lod_uses_hint *flags);
+void lod_qos_statfs_refresh(const struct lu_env *env, struct lod_device *lod);
 void lod_qos_statfs_update(const struct lu_env *env, struct lod_device *lod,
 			   struct lu_tgt_descs *ltd);
 

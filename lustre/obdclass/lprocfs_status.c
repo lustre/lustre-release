@@ -457,6 +457,25 @@ static ssize_t statfs_state_show(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RO_ATTR(statfs_state);
 
+/* any write replaces the cached statfs data, here and in the layers below */
+static ssize_t statfs_refresh_store(struct kobject *kobj,
+				    struct attribute *attr,
+				    const char *buffer, size_t count)
+{
+	struct obd_device *obd = container_of(kobj, struct obd_device,
+					      obd_kset.kobj);
+	struct obd_statfs osfs;
+	int rc;
+
+	/* the cache serves SUM requests only if it holds aggregated data */
+	rc = obd_statfs(NULL, obd->obd_self_export, &osfs,
+			ktime_get_seconds() + 1,
+			OBD_STATFS_NODELAY | OBD_STATFS_SUM);
+
+	return rc ?: count;
+}
+LUSTRE_WO_ATTR(statfs_refresh);
+
 ssize_t conn_uuid_show(struct kobject *kobj, struct attribute *attr, char *buf)
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
@@ -1303,6 +1322,7 @@ static const struct attribute *obd_def_attrs[] = {
 	&lustre_attr_kbytesavail.attr,
 	&lustre_attr_maxbytes.attr,
 	&lustre_attr_namelen_max.attr,
+	&lustre_attr_statfs_refresh.attr,
 	&lustre_attr_statfs_state.attr,
 	&lustre_attr_uuid.attr,
 	NULL,

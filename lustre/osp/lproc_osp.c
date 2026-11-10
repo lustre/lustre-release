@@ -778,6 +778,31 @@ static ssize_t maxage_store(struct kobject *kobj, struct attribute *attr,
 }
 LUSTRE_RW_ATTR(maxage);
 
+/* any write fetches statfs from the target now, rather than within maxage */
+static ssize_t statfs_refresh_store(struct kobject *kobj,
+				    struct attribute *attr,
+				    const char *buffer, size_t count)
+{
+	struct dt_device *dt = container_of(kobj, struct dt_device,
+					    dd_kobj);
+	struct osp_device *osp = dt2osp_dev(dt);
+	struct obd_import *imp;
+	bool deactive = false;
+	int rc;
+
+	with_imp_locked(osp->opd_obd, imp, rc)
+		deactive = test_bit(IMPF_DEACTIVE, imp->imp_flags);
+	if (rc)
+		return rc;
+	if (deactive)
+		return count;
+
+	rc = osp_statfs_refresh(osp);
+
+	return rc ?: count;
+}
+LUSTRE_WO_ATTR(statfs_refresh);
+
 /**
  * prealloc_status_show() - Show current precreation status: output 0 means
  * success, otherwise negative number is printed
@@ -1307,6 +1332,7 @@ static struct attribute *osp_obd_attrs[] = {
 	&lustre_attr_ost_conn_uuid.attr,
 	&lustre_attr_ping.attr,
 	&lustre_attr_prealloc_status.attr,
+	&lustre_attr_statfs_refresh.attr,
 	&lustre_attr_prealloc_next_id.attr,
 	&lustre_attr_prealloc_last_id.attr,
 	&lustre_attr_prealloc_next_seq.attr,
@@ -1343,6 +1369,7 @@ static struct attribute *osp_md_attrs[] = {
 	&lustre_attr_mdt_conn_uuid.attr,
 	&lustre_attr_ping.attr,
 	&lustre_attr_prealloc_status.attr,
+	&lustre_attr_statfs_refresh.attr,
 	&lustre_attr_reserved_mb_high.attr,
 	&lustre_attr_reserved_mb_low.attr,
 	&lustre_attr_reserved_ino_high.attr,
