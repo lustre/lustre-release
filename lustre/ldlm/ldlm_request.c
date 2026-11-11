@@ -2969,9 +2969,10 @@ static void ldlm_cancel_unused_locks_for_replay(struct ldlm_namespace *ns)
 	/*
 	 * We don't need to care whether or not LRU resize is enabled
 	 * because the LDLM_LRU_FLAG_NO_WAIT policy doesn't use the
-	 * count parameter
+	 * count parameter.  Ask for INT_MAX locks so that the privileged
+	 * list is demoted in full and scanned as well.
 	 */
-	canceled = ldlm_cancel_lru_local(ns, &cancels, ns->ns_nr_unused, 0,
+	canceled = ldlm_cancel_lru_local(ns, &cancels, INT_MAX, 0,
 					 LCF_LOCAL, LDLM_LRU_FLAG_NO_WAIT);
 
 	CDEBUG(D_DLMTRACE, "Canceled %d unused locks from namespace %s\n",
