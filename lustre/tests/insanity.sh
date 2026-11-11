@@ -354,7 +354,6 @@ test_5() {
 
 	clients_recover_osts ost1
 	clients_recover_osts ost2
-	sleep $TIMEOUT
 
 	wait $DFPIDA
 	wait $DFPIDB
@@ -435,10 +434,6 @@ test_7() {
 	$PDSH $LIVE_CLIENT "ls -l $TESTDIR"
 	$PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile"
 
-	#Sleep
-	echo "Wait 1 minutes"
-	sleep 60
-
 	#Create files
 	echo "Verify Lustre filesystem is up and running"
 	[ -z "$(mounted_lustre_filesystems)" ] && return 2
@@ -458,10 +453,6 @@ test_7() {
 	echo "Reintegrating CLIENTs"
 	reintegrate_clients || return 2
 	clients_up
-
-	#Sleep
-	echo "wait 1 minutes"
-	sleep 60
 }
 run_test 7 "Seventh Failure Mode: CLIENT/MDS `date`"
 ###################################################
@@ -486,10 +477,6 @@ test_8() {
 	clients_up
 	$PDSH $LIVE_CLIENT "ls -l $TESTDIR"
 	$PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile"
-
-	#Sleep
-	echo "Wait 1 minutes"
-	sleep 60
 
 	#Create files
 	echo "Verify Lustre filesystem is up and running"
@@ -519,10 +506,6 @@ test_8() {
 	wait $DFPID
 	clients_up || return 1
 	client_touch testfile2 || return 2
-
-	#Sleep
-	echo "Wait 1 minutes"
-	sleep 60
 }
 run_test 8 "Eighth Failure Mode: CLIENT/OST `date`"
 ###################################################
@@ -546,10 +529,6 @@ test_9() {
 	$PDSH $LIVE_CLIENT "ls -l $TESTDIR" || return 1
 	$PDSH $LIVE_CLIENT "rm -f $TESTDIR/*_testfile" || return 2
 
-	#Sleep
-	echo "Wait 1 minutes"
-	sleep 60
-
 	#Create files
 	echo "Verify Lustre filesystem is up and running"
 	client_up $LIVE_CLIENT || return 3
@@ -569,10 +548,6 @@ test_9() {
 	echo "Reintegrating  CLIENTs/CLIENTs"
 	reintegrate_clients || return 7
 	clients_up
-
-	#Sleep
-	echo "Wait 1 minutes"
-	sleep 60
 }
 run_test 9 "Ninth Failure Mode: CLIENT/CLIENT `date`"
 ###################################################
