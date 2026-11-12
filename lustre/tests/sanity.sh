@@ -39334,6 +39334,7 @@ test_805a() {
 	local old=$(do_facet mds1 zfs get -H -o value quota $fsset)
 
 	mkdir_on_mdt0 $DIR/$tdir || error "mkdir $tdir failed"
+	stack_trap "wait_delete_completed"
 	stack_trap "rm -rf $DIR/$tdir"
 
 	# limit available space on the MDT dataset to hit ENOSPC quickly,
