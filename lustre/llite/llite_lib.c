@@ -373,6 +373,36 @@ out_gssiam:
 	return rc;
 }
 
+/* ZFS OSTs report MAX_LFS_FILESIZE as their maximum object size, which
+ * no ldiskfs OST comes near. osd-wbcfs reports it too.
+ */
+#define LL_ZFS_OST_MAXBYTES	(1ULL << 60)
+
+/**
+ * ll_hybrid_io_check_ost() - turn hybrid IO off by default for a ZFS OST
+ * @sbi: client super block info
+ * @osc: OSC device that has just connected
+ *
+ * Each direct write RPC to a ZFS OST forces a transaction group sync, so
+ * hybrid IO is far slower there than the buffered IO it replaces
+ * (LU-21016). A value set through llite.*.hybrid_io is left alone.
+ */
+static void ll_hybrid_io_check_ost(struct ll_sb_info *sbi,
+				   struct obd_device *osc)
+{
+	struct obd_connect_data *ocd;
+
+	ocd = &osc->u.cli.cl_import->imp_connect_data;
+	if (!(ocd->ocd_connect_flags & OBD_CONNECT_MAXBYTES) ||
+	    ocd->ocd_maxbytes < LL_ZFS_OST_MAXBYTES)
+		return;
+
+	spin_lock(&sbi->ll_lock);
+	if (!sbi->ll_hybrid_io_set)
+		clear_bit(LL_SBI_HYBRID_IO, sbi->ll_flags);
+	spin_unlock(&sbi->ll_lock);
+}
+
 static int
 ll_upcall_notify(struct obd_device *host, struct obd_device *watched,
 		 enum obd_notify_event ev, void *owner)
@@ -403,8 +433,10 @@ ll_upcall_notify(struct obd_device *host, struct obd_device *watched,
 		RETURN(ll_upcall_notify_gssiam(watched, sb));
 
 	if (ev == OBD_NOTIFY_ACTIVE &&
-	    strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME) == 0)
+	    strcmp(watched->obd_type->typ_name, LUSTRE_OSC_NAME) == 0) {
+		ll_hybrid_io_check_ost(sbi, watched);
 		result = cl_ocd_update(host, watched, ev, &sbi->ll_lco);
+	}
 
 	RETURN(result);
 }

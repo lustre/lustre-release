@@ -17687,6 +17687,32 @@ test_119k()
 }
 run_test 119k "hybrid IO counting with stats and disabling"
 
+test_119l()
+{
+	[[ "$ost1_FSTYPE" == "zfs" ]] || skip "needs ZFS OSTs"
+
+	# earlier subtests have set hybrid_io on $MOUNT, so use a new mount
+	mount_client $MOUNT2 || error "mount $MOUNT2 failed"
+	stack_trap "umount_client $MOUNT2"
+
+	local inst=$($LFS getname -i $MOUNT2)
+	local hybrid="llite.$FSNAME-$inst.hybrid_io"
+	local osc="osc.$FSNAME-OST0000-osc-$inst"
+
+	# the OSTs connect after the mount returns
+	wait_update $HOSTNAME "$LCTL get_param -n $hybrid" 0 ||
+		error "hybrid IO is on by default with ZFS OSTs"
+
+	# a value set by the administrator survives an OST reconnect
+	$LCTL set_param $hybrid=1 || error "set $hybrid=1 failed"
+	$LCTL set_param $osc.active=0 || error "deactivate $osc failed"
+	$LCTL set_param $osc.active=1 || error "activate $osc failed"
+	wait_import_state "(FULL|IDLE)" $osc.ost_server_uuid
+	(( $($LCTL get_param -n $hybrid) == 1 )) ||
+		error "hybrid IO was turned off after OST reconnect"
+}
+run_test 119l "hybrid IO is off by default with ZFS OSTs"
+
 test_119m() {
 	dio_readv_writev_support
 

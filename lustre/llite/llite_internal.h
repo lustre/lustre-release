@@ -882,6 +882,7 @@ struct ll_sb_info {
 				 ll_dir_open_read:1,
 				 ll_enable_erasure_coding:1,
 				 ll_enable_statahead_fname:1,
+				 ll_hybrid_io_set:1, /* already set to 0/1 */
 				 ll_inode_cache_enabled:1,
 				 ll_intent_mkdir_enabled:1,
 				 ll_sync_on_close:1,

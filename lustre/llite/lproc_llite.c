@@ -1879,6 +1879,7 @@ static ssize_t hybrid_io_store(struct kobject *kobj, struct attribute *attr,
 		return rc;
 
 	spin_lock(&sbi->ll_lock);
+	sbi->ll_hybrid_io_set = 1;
 	if (val)
 		set_bit(LL_SBI_HYBRID_IO, sbi->ll_flags);
 	else
