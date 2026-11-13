@@ -1388,6 +1388,7 @@ fops_test_setup() {
 
 	do_facet mgs $LCTL nodemap_modify --name c0 --property admin --value 1
 	do_facet mgs $LCTL nodemap_modify --name c0 --property trusted --value 1
+	[[ $admin == 1 ]] || wait_nm_sync c0 admin_nodemap
 	wait_nm_sync c0 trusted_nodemap
 
 	do_nodes $(comma_list $clients) $LCTL set_param \
@@ -1401,6 +1402,7 @@ fops_test_setup() {
 		--property admin --value $admin
 	do_facet mgs $LCTL nodemap_modify --name c0 \
 		--property trusted --value $trust
+	[[ $admin == 1 ]] || wait_nm_sync c0 admin_nodemap
 	wait_nm_sync c0 trusted_nodemap
 
 	# flush MDT locks to make sure they are reacquired before test
