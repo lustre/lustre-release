@@ -3270,8 +3270,13 @@ test_89() {
 	rm -f $DIR/$tdir/$tfile
 	wait_mds_ost_sync || error "initial MDS-OST sync timed out"
 	wait_delete_completed || error "initial wait delete timed out"
+	# the OST and client statfs caches can predate the ZFS commit by 2s
+	[[ $(facet_fstype ost1) != zfs ]] || sleep 2
 	local before=$(calc_osc_kbytes kbytesfree)
-	local write_size=$(fs_log_size)
+	local margin=$(fs_log_size)
+	local write_size=$margin
+	local after
+	local i
 
 	$LFS setstripe -i 0 -c 1 $DIR/$tdir/$tfile
 	(( $write_size >= 1024 )) || write_size=1024
@@ -3294,11 +3299,15 @@ test_89() {
 
 	wait_mds_ost_sync || error "MDS-OST sync timed out"
 	wait_delete_completed || error "wait delete timed out"
-	local after=$(calc_osc_kbytes kbytesfree)
+	for ((i = 0; i < 10; i++)); do
+		after=$(calc_osc_kbytes kbytesfree)
+		(( before <= after + margin )) && break
+		sleep 1
+	done
 
 	log "free_before: $before free_after: $after"
-	(( $before <= $after + $(fs_log_size) )) ||
-		error "kbytesfree $before > $after + margin $(fs_log_size)"
+	(( before <= after + margin )) ||
+		error "kbytesfree $before > $after + margin $margin"
 }
 run_test 89 "no disk space leak on late ost connection"
 
