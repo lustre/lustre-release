@@ -132,7 +132,7 @@ int lov_page_init_composite(const struct lu_env *env, struct cl_object *obj,
 	bool stripe_cached = false;
 	int entry;
 	int stripe;
-	int rc;
+	int rc = 0;
 
 	ENTRY;
 

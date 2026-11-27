@@ -1180,7 +1180,7 @@ EXPORT_SYMBOL(ptlrpc_request_alloc_pack);
  */
 struct ptlrpc_request_set *ptlrpc_prep_set(void)
 {
-	struct ptlrpc_request_set *set;
+	struct ptlrpc_request_set *set = NULL;
 	int cpt;
 
 	ENTRY;

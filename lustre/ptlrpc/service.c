@@ -80,7 +80,7 @@ static struct ptlrpc_request_buffer_desc *
 ptlrpc_alloc_rqbd(struct ptlrpc_service_part *svcpt)
 {
 	struct ptlrpc_service		  *svc = svcpt->scp_service;
-	struct ptlrpc_request_buffer_desc *rqbd;
+	struct ptlrpc_request_buffer_desc *rqbd = NULL;
 
 	OBD_CPT_ALLOC_PTR(rqbd, svc->srv_cptable, svcpt->scp_cpt);
 	if (rqbd == NULL)
@@ -704,7 +704,7 @@ struct ptlrpc_service *ptlrpc_register_service(struct ptlrpc_service_conf *conf,
 {
 	struct ptlrpc_service_cpt_conf *cconf = &conf->psc_cpt;
 	struct ptlrpc_service *service;
-	struct ptlrpc_service_part *svcpt;
+	struct ptlrpc_service_part *svcpt = NULL;
 	struct cfs_cpt_table *cptable;
 	char param[MAX_OBD_NAME * 4];
 	u32 *cpts = NULL;
@@ -3636,7 +3636,7 @@ static int ptlrpc_start_threads(struct ptlrpc_service *svc)
 
 static int ptlrpc_start_thread(struct ptlrpc_service_part *svcpt, int wait)
 {
-	struct ptlrpc_thread *thread;
+	struct ptlrpc_thread *thread = NULL;
 	struct ptlrpc_service *svc;
 	struct task_struct *task;
 	int rc;

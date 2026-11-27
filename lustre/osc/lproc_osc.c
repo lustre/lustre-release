@@ -43,7 +43,7 @@ static ssize_t active_store(struct kobject *kobj, struct attribute *attr,
 {
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
-	struct obd_import *imp, *imp0;
+	struct obd_import *imp = NULL, *imp0;
 	bool val;
 	int rc;
 

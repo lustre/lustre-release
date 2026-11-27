@@ -489,7 +489,7 @@ static int lmv_check_connect(struct obd_device *obd)
 	struct lmv_obd *lmv = &obd->u.lmv;
 	struct lmv_tgt_desc *tgt;
 	int easize;
-	int rc;
+	int rc = 0;
 
 	ENTRY;
 

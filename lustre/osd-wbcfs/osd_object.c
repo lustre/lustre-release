@@ -512,7 +512,7 @@ typedef int (*osd_obj_type_f)(const struct lu_env *env,
 
 static osd_obj_type_f osd_create_type_f(enum dt_format_type type)
 {
-	osd_obj_type_f result;
+	osd_obj_type_f result = NULL;
 
 	switch (type) {
 	case DFT_DIR:

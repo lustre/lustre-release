@@ -665,7 +665,7 @@ out:
 static struct obd_device *lustre_find_lwp(struct lustre_sb_info *lsi,
 					  char **lwpname, u32 idx)
 {
-	struct obd_device *lwp;
+	struct obd_device *lwp = NULL;
 	int rc = 0;
 
 	ENTRY;

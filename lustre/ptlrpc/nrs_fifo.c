@@ -54,7 +54,7 @@
  */
 static int nrs_fifo_start(struct ptlrpc_nrs_policy *policy, char *arg)
 {
-	struct nrs_fifo_head *head;
+	struct nrs_fifo_head *head = NULL;
 
 	OBD_CPT_ALLOC_PTR(head, nrs_pol2cptab(policy), nrs_pol2cptid(policy));
 	if (head == NULL)

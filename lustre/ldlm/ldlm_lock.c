@@ -2532,7 +2532,7 @@ int ldlm_run_ast_work(struct ldlm_namespace *ns, struct list_head *rpc_list,
 		      ldlm_desc_ast_t ast_type)
 {
 	struct ldlm_cb_set_arg *arg;
-	set_producer_func work_ast_lock;
+	set_producer_func work_ast_lock = NULL;
 	int rc;
 
 	if (list_empty(rpc_list))

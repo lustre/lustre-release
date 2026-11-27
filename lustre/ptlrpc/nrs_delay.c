@@ -90,7 +90,7 @@ static struct binheap_ops nrs_delay_heap_ops = {
  */
 static int nrs_delay_start(struct ptlrpc_nrs_policy *policy, char *arg)
 {
-	struct nrs_delay_data *delay_data;
+	struct nrs_delay_data *delay_data = NULL;
 
 	ENTRY;
 
