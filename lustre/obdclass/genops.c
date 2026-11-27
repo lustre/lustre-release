@@ -2450,7 +2450,7 @@ __u16 obd_get_mod_rpc_slot(struct client_obd *cli, __u32 opc)
 		 * the end of the waitqueue for a close request.
 		 */
 		__wake_up_locked_key(&cli->cl_mod_rpcs_waitq, TASK_NORMAL,
-				     (void *)wait.close_req);
+				     (void *)(uintptr_t)wait.close_req);
 
 		while (wait.woken == false) {
 			spin_unlock_irq(&cli->cl_mod_rpcs_waitq.lock);
@@ -2515,7 +2515,7 @@ void obd_put_mod_rpc_slot(struct client_obd *cli, __u32 opc, __u16 tag)
 		LASSERTF(0, "%s: modify RPC tag %u already released\n",
 			 cli->cl_import->imp_obd->obd_name, tag);
 	__wake_up_locked_key(&cli->cl_mod_rpcs_waitq, TASK_NORMAL,
-			     (void *)close_req);
+			     (void *)(uintptr_t)close_req);
 	spin_unlock_irq(&cli->cl_mod_rpcs_waitq.lock);
 }
 EXPORT_SYMBOL(obd_put_mod_rpc_slot);

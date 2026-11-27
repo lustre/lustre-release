@@ -3505,7 +3505,7 @@ static int osc_statfs(const struct lu_env *env, struct obd_export *exp,
 	struct obd_device *obd = class_exp2obd(exp);
 	struct obd_statfs *msfs;
 	struct ptlrpc_request *req;
-	struct obd_import *imp, *imp0;
+	struct obd_import *imp = NULL, *imp0;
 	int rc;
 
 	ENTRY;

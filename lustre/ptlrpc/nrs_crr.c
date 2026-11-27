@@ -121,7 +121,7 @@ static void nrs_crrn_exit(void *vcli, void *data)
  */
 static int nrs_crrn_start(struct ptlrpc_nrs_policy *policy, char *arg)
 {
-	struct nrs_crrn_net    *net;
+	struct nrs_crrn_net    *net = NULL;
 	int			rc = 0;
 
 	ENTRY;

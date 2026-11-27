@@ -1934,7 +1934,7 @@ out:
  */
 static int nrs_tbf_start(struct ptlrpc_nrs_policy *policy, char *arg)
 {
-	struct nrs_tbf_head *head;
+	struct nrs_tbf_head *head = NULL;
 	enum nrs_tbf_flag flags;
 	char *name;
 	int rc = 0;

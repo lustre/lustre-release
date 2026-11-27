@@ -1324,7 +1324,7 @@ ssize_t ping_show(struct kobject *kobj, struct attribute *attr,
 	struct obd_device *obd = container_of(kobj, struct obd_device,
 					      obd_kset.kobj);
 	struct obd_import *imp;
-	struct ptlrpc_request *req;
+	struct ptlrpc_request *req = NULL;
 	int rc;
 
 	ENTRY;

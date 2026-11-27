@@ -1661,7 +1661,7 @@ static int mdc_statfs(const struct lu_env *env,
 	struct req_format *fmt;
 	struct ptlrpc_request *req;
 	struct obd_statfs *msfs;
-	struct obd_import *imp, *imp0;
+	struct obd_import *imp = NULL, *imp0;
 	int rc;
 
 	ENTRY;

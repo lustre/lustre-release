@@ -38,11 +38,11 @@ int gss_cli_ctx_wrap_bulk(struct ptlrpc_cli_ctx *ctx,
 			  struct ptlrpc_bulk_desc *desc)
 {
 	struct gss_cli_ctx              *gctx;
-	struct lustre_msg               *msg;
+	struct lustre_msg               *msg = NULL;
 	struct ptlrpc_bulk_sec_desc     *bsd;
 	rawobj_t                         token;
 	__u32                            maj;
-	int                              offset;
+	int                              offset = 0;
 	int                              rc;
 
 	ENTRY;
@@ -144,11 +144,11 @@ int gss_cli_ctx_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
 			    struct ptlrpc_bulk_desc *desc)
 {
 	struct gss_cli_ctx              *gctx;
-	struct lustre_msg               *rmsg, *vmsg;
+	struct lustre_msg               *rmsg = NULL, *vmsg = NULL;
 	struct ptlrpc_bulk_sec_desc     *bsdr, *bsdv;
 	rawobj_t                         token;
 	__u32                            maj;
-	int                              roff, voff;
+	int                              roff = 0, voff = 0;
 
 	ENTRY;
 

@@ -690,7 +690,7 @@ static int ptlrpcd_init(void)
 	__u32			*cpts = NULL;
 	int			ncpts;
 	int			cpt;
-	struct ptlrpcd		*pd;
+	struct ptlrpcd		*pd = NULL;
 
 	ENTRY;
 

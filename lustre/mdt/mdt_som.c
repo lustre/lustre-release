@@ -240,8 +240,8 @@ int mdt_lsom_update(struct mdt_thread_info *info,
 	 */
 	if (!mdt_lmm_dom_only(info->mti_big_lov) &&
 	    !(tmp_ma->ma_valid & MA_INODE && tmp_ma->ma_attr.la_nlink == 0)) {
-		__u64 size;
-		__u64 blocks;
+		__u64 size = 0;
+		__u64 blocks = 0;
 		bool changed = false;
 		struct md_som *som = &tmp_ma->ma_som;
 

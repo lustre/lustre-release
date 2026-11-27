@@ -158,7 +158,7 @@ static int mdt_getxattr_all(struct mdt_thread_info *info,
 	const struct lu_env *env = info->mti_env;
 	char *v, *b, *eadatahead, *eadatatail;
 	__u32 *sizes;
-	int eadatasize, eavallen = 0, eavallens = 0, rc;
+	int eadatasize = 0, eavallen = 0, eavallens = 0, rc;
 
 	ENTRY;
 

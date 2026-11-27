@@ -2252,7 +2252,7 @@ __must_hold(&the_lnet.ln_api_mutex)
 {
 	struct lnet_peer *lp = NULL;
 	struct lnet_peer_net *lpn = NULL;
-	struct lnet_peer_ni *lpni;
+	struct lnet_peer_ni *lpni = NULL;
 	unsigned int flags = 0;
 	int rc = 0;
 

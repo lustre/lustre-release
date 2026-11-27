@@ -4159,7 +4159,7 @@ mdd_layout_change(const struct lu_env *env, struct md_object *o,
 	struct thandle		*handle;
 	int flr_state;
 	int retried = 0;
-	int rc;
+	int rc = 0;
 
 	ENTRY;
 

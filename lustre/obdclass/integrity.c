@@ -194,9 +194,9 @@ static void obd_t10_performance_test(const char *obd_name,
 {
 	enum obd_t10_cksum_type index = obd_t10_cksum2type(cksum_type);
 	const int buf_len = max(PAGE_SIZE, 1048576UL);
-	unsigned long bcount;
-	unsigned long start;
-	unsigned long end;
+	unsigned long bcount = 0;
+	unsigned long start = 0;
+	unsigned long end = 0;
 	struct folio *folio;
 	int rc = 0;
 	void *buf;

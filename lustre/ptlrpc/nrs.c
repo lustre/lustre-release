@@ -780,7 +780,7 @@ out_unlock:
 static int nrs_policy_register(struct ptlrpc_nrs *nrs,
 			       struct ptlrpc_nrs_pol_desc *desc)
 {
-	struct ptlrpc_nrs_policy *policy;
+	struct ptlrpc_nrs_policy *policy = NULL;
 	struct ptlrpc_nrs_policy *tmp;
 	struct ptlrpc_service_part *svcpt = nrs->nrs_svcpt;
 	char *srv_name = svcpt->scp_service->srv_name;

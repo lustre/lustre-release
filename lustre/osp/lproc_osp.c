@@ -68,7 +68,7 @@ static ssize_t active_store(struct kobject *kobj, struct attribute *attr,
 					    dd_kobj);
 	struct lu_device *lu = dt2lu_dev(dt);
 	struct obd_device *obd = lu->ld_obd;
-	struct obd_import *imp, *imp0;
+	struct obd_import *imp = NULL, *imp0;
 	bool val;
 	int rc;
 
